@@ -314,6 +314,8 @@ def test_resume_missing_part_then_complete_and_replay(upload_api: UploadHarness)
     assert body["raw_asset"]["size_bytes"] == len(MCAP_BYTES)
     assert body["raw_asset"]["object_key"] == body["upload_session"]["object_key"]
     assert body["validation_job_id"]
+    assert len(body["upload_session"]["uploaded_parts"]) == len(materials)
+    assert body["upload_session"]["missing_part_numbers"] == []
 
     replay = _complete(
         harness,

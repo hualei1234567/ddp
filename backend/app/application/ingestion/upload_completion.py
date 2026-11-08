@@ -356,6 +356,7 @@ class UploadCompletionService:
             deduplicated=deduplicated,
             validation_job_id=job_id,
             replayed=False,
+            parts=tuple(local_parts),
         )
 
     # ------------------------------------------------------------------ 内部
@@ -702,6 +703,7 @@ class UploadCompletionService:
             deduplicated=session.deduplicated,
             validation_job_id=session.validation_job_id,
             replayed=replayed,
+            parts=tuple(self._parts.list(scope, session.upload_session_id)),
         )
 
     def _safe_delete(self, object_key: str) -> bool:

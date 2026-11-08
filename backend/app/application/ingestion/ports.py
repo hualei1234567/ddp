@@ -352,3 +352,4 @@ class CompleteUploadResult:
     deduplicated: bool
     validation_job_id: UUID
     replayed: bool
+    parts: tuple[UploadPart, ...] = ()

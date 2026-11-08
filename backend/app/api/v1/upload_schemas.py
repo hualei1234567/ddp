@@ -287,7 +287,13 @@ class CompleteUploadResponse(BaseModel):
     @classmethod
     def from_result(cls, result: CompleteUploadResult) -> CompleteUploadResponse:
         return cls(
-            upload_session=UploadSessionOut.from_session(result.session),
+            upload_session=_session_out(
+                result.session,
+                uploaded_bytes=result.session.uploaded_bytes,
+                uploaded_part_count=result.session.uploaded_part_count,
+                missing=[],
+                parts=[UploadPartSummaryOut.from_domain(part) for part in result.parts],
+            ),
             raw_asset=(
                 RawAssetOut.from_domain(result.raw_asset) if result.raw_asset is not None else None
             ),
