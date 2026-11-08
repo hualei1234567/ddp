@@ -1,0 +1,7 @@
+# 默认 Owner；后续按目录细分。
+* @hualei1234567
+
+/packages/contracts/ @hualei1234567
+/backend/migrations/ @hualei1234567
+/backend/app/core/ @hualei1234567
+/.github/ @hualei1234567

@@ -1,0 +1,74 @@
+openapi: 3.1.0
+info:
+  title: DDP API
+  version: 0.1.0
+  description: |
+    DDP（Embodied AI Data Platform）API 契约。
+    阶段 0 只有平台健康检查与元信息；业务契约按阶段追加。
+servers:
+  - url: http://localhost:8000
+    description: 本地开发
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: 服务健康检查
+      responses:
+        "200":
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service, version, env]
+                properties:
+                  status:
+                    type: string
+                    const: ok
+                  service:
+                    type: string
+                  version:
+                    type: string
+                  env:
+                    type: string
+  /api/v1/platform/meta:
+    get:
+      operationId: getPlatformMeta
+      summary: 平台元信息
+      responses:
+        "200":
+          description: 平台元信息
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, version, env, phase, modules]
+                properties:
+                  name:
+                    type: string
+                  version:
+                    type: string
+                  env:
+                    type: string
+                  phase:
+                    type: string
+                  modules:
+                    type: array
+                    items:
+                      type: string
+components:
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            request_id:
+              type: [string, "null"]
