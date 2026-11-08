@@ -36,3 +36,13 @@ class ForbiddenError(AppError):
 class ConflictError(AppError):
     def __init__(self, message: str = "资源状态冲突") -> None:
         super().__init__("conflict", message, 409)
+
+
+class ValidationFailedError(AppError):
+    def __init__(self, message: str = "请求参数校验失败") -> None:
+        super().__init__("validation_failed", message, 422)
+
+
+class PreconditionRequiredError(AppError):
+    def __init__(self, message: str = "缺少 If-Match 头") -> None:
+        super().__init__("precondition_required", message, 428)

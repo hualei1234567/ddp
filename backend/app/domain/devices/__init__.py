@@ -12,9 +12,12 @@ from app.domain.devices.enums import (
     SensorType,
 )
 from app.domain.devices.errors import (
+    CalibrationProfileInvalidError,
+    CalibrationTargetInvalidError,
     DeviceDomainError,
     DomainValidationError,
     DuplicateResourceError,
+    FourEyesViolationError,
     InvalidStateTransitionError,
     ResourceImmutableError,
     ResourceNotFoundError,
@@ -24,9 +27,11 @@ from app.domain.devices.models import Device, Robot, Sensor
 
 __all__ = [
     "CalibrationProfile",
+    "CalibrationProfileInvalidError",
     "CalibrationRecord",
     "CalibrationScope",
     "CalibrationStatus",
+    "CalibrationTargetInvalidError",
     "CalibrationTargetType",
     "CalibrationType",
     "Device",
@@ -34,6 +39,7 @@ __all__ = [
     "DeviceType",
     "DomainValidationError",
     "DuplicateResourceError",
+    "FourEyesViolationError",
     "InvalidStateTransitionError",
     "LifecycleStatus",
     "ResourceImmutableError",

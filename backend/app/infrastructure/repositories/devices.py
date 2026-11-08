@@ -230,14 +230,15 @@ class SqlRobotRepository:
         scope: ProjectScope,
         *,
         status: LifecycleStatus | None = None,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Robot]:
         statement = scoped_select(RobotModel, scope)
         if status is not None:
             statement = statement.where(RobotModel.status == status.value)
-        statement = statement.order_by(RobotModel.created_at, RobotModel.id).limit(
-            bounded_limit(limit)
-        )
+        if after_id is not None:
+            statement = statement.where(RobotModel.id > after_id)
+        statement = statement.order_by(RobotModel.id).limit(bounded_limit(limit, maximum=101))
         return [_robot_from_row(row) for row in self._session.scalars(statement)]
 
     def save(
@@ -313,14 +314,15 @@ class SqlDeviceRepository:
         scope: ProjectScope,
         *,
         status: LifecycleStatus | None = None,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Device]:
         statement = scoped_select(DeviceModel, scope)
         if status is not None:
             statement = statement.where(DeviceModel.status == status.value)
-        statement = statement.order_by(DeviceModel.created_at, DeviceModel.id).limit(
-            bounded_limit(limit)
-        )
+        if after_id is not None:
+            statement = statement.where(DeviceModel.id > after_id)
+        statement = statement.order_by(DeviceModel.id).limit(bounded_limit(limit, maximum=101))
         return [_device_from_row(row) for row in self._session.scalars(statement)]
 
     def save(
@@ -397,6 +399,9 @@ class SqlSensorRepository:
         *,
         status: LifecycleStatus | None = None,
         sensor_type: SensorType | None = None,
+        robot_id: UUID | None = None,
+        device_id: UUID | None = None,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Sensor]:
         statement = scoped_select(SensorModel, scope)
@@ -404,9 +409,13 @@ class SqlSensorRepository:
             statement = statement.where(SensorModel.status == status.value)
         if sensor_type is not None:
             statement = statement.where(SensorModel.sensor_type == sensor_type.value)
-        statement = statement.order_by(SensorModel.created_at, SensorModel.id).limit(
-            bounded_limit(limit)
-        )
+        if robot_id is not None:
+            statement = statement.where(SensorModel.robot_id == robot_id)
+        if device_id is not None:
+            statement = statement.where(SensorModel.device_id == device_id)
+        if after_id is not None:
+            statement = statement.where(SensorModel.id > after_id)
+        statement = statement.order_by(SensorModel.id).limit(bounded_limit(limit, maximum=101))
         return [_sensor_from_row(row) for row in self._session.scalars(statement)]
 
     def save(

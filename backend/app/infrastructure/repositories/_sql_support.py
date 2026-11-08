@@ -26,9 +26,9 @@ from app.domain.identity.models import ProjectScope
 _T = TypeVar("_T")
 
 
-def bounded_limit(limit: int) -> int:
-    if limit < 1 or limit > 100:
-        raise DomainValidationError("limit 必须在 1 到 100 之间")
+def bounded_limit(limit: int, *, maximum: int = 100) -> int:
+    if limit < 1 or limit > maximum:
+        raise DomainValidationError(f"limit 必须在 1 到 {maximum} 之间")
     return limit
 
 

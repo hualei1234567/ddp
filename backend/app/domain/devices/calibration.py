@@ -21,7 +21,7 @@ from app.domain.devices.enums import (
     CalibrationTargetType,
     CalibrationType,
 )
-from app.domain.devices.errors import DomainValidationError
+from app.domain.devices.errors import DomainValidationError, FourEyesViolationError
 from app.domain.devices.state_machines import assert_calibration_transition
 from app.domain.devices.validation import (
     aware_datetime,
@@ -199,7 +199,7 @@ class CalibrationRecord:
             if not isinstance(self.validated_by, UUID):
                 raise DomainValidationError("validated_by 必须是 UUID")
             if self.validated_by == self.performed_by:
-                raise DomainValidationError("标定执行人与校验人必须分离")
+                raise FourEyesViolationError("标定执行人与校验人必须分离")
         if self.status in _VALIDATED_STATUSES:
             if self.validated_by is None or self.validated_at is None:
                 raise DomainValidationError(
@@ -219,7 +219,7 @@ class CalibrationRecord:
         if not isinstance(validator_id, UUID):
             raise DomainValidationError("validator_id 必须是 UUID")
         if validator_id == self.performed_by:
-            raise DomainValidationError("标定执行人与校验人必须分离")
+            raise FourEyesViolationError("标定执行人与校验人必须分离")
         status = self._target_status(CalibrationStatus.VALIDATED)
         return replace(
             self,

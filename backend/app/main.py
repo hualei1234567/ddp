@@ -10,13 +10,27 @@ import uuid
 from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError
 
+from app.api.errors import domain_error_to_app, integrity_error_to_app
 from app.api.v1.router import api_router
 from app.core.config import get_settings
-from app.core.errors import AppError
+from app.core.errors import AppError, ValidationFailedError
 from app.core.logging import configure_logging
+from app.domain.devices.errors import DeviceDomainError
 from app.domain.identity.errors import CrossProjectAccessError
+
+
+def _error_payload(request: Request, error: AppError) -> dict[str, object]:
+    return {
+        "error": {
+            "code": error.code,
+            "message": error.message,
+            "request_id": getattr(request.state, "request_id", None),
+        }
+    }
 
 
 def create_app() -> FastAPI:
@@ -48,13 +62,40 @@ def create_app() -> FastAPI:
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content={
-                "error": {
-                    "code": exc.code,
-                    "message": exc.message,
-                    "request_id": getattr(request.state, "request_id", None),
-                }
-            },
+            content=_error_payload(request, exc),
+        )
+
+    @app.exception_handler(DeviceDomainError)
+    async def handle_device_domain_error(
+        request: Request,
+        exc: DeviceDomainError,
+    ) -> JSONResponse:
+        error = domain_error_to_app(exc)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_request_validation_error(
+        request: Request,
+        exc: RequestValidationError,
+    ) -> JSONResponse:
+        error = ValidationFailedError()
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(IntegrityError)
+    async def handle_integrity_error(
+        request: Request,
+        exc: IntegrityError,
+    ) -> JSONResponse:
+        error = integrity_error_to_app(exc)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
         )
 
     @app.exception_handler(CrossProjectAccessError)

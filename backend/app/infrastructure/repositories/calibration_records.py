@@ -182,7 +182,11 @@ def _ensure_target_in_project(
         )
     )
     if found is None:
-        raise ResourceNotFoundError("标定目标", target_id)
+        raise ResourceNotFoundError(
+            "标定目标",
+            target_id,
+            code="calibration_target_invalid",
+        )
 
 
 def _ensure_profile_in_project(
@@ -200,7 +204,11 @@ def _ensure_profile_in_project(
         )
     )
     if row is None:
-        raise ResourceNotFoundError("标定配置", profile_id)
+        raise ResourceNotFoundError(
+            "标定配置",
+            profile_id,
+            code="calibration_profile_invalid",
+        )
     if target_type is not None and row != enum_value(target_type):
         raise DomainValidationError("标定配置 target_type 与记录不一致")
 
@@ -419,6 +427,7 @@ class SqlCalibrationRecordRepository:
         target_type: str | None = None,
         target_id: UUID | None = None,
         status: CalibrationStatus | None = None,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[CalibrationRecord]:
         statement = scoped_select(CalibrationRecordModel, scope)
@@ -428,10 +437,11 @@ class SqlCalibrationRecordRepository:
             statement = statement.where(CalibrationRecordModel.target_id == target_id)
         if status is not None:
             statement = statement.where(CalibrationRecordModel.status == status.value)
-        statement = statement.order_by(
-            CalibrationRecordModel.created_at,
-            CalibrationRecordModel.id,
-        ).limit(bounded_limit(limit))
+        if after_id is not None:
+            statement = statement.where(CalibrationRecordModel.id > after_id)
+        statement = statement.order_by(CalibrationRecordModel.id).limit(
+            bounded_limit(limit, maximum=101)
+        )
         return [_record_from_row(row) for row in self._session.scalars(statement)]
 
     def save(

@@ -21,6 +21,12 @@ from app.domain.devices.models import Device, Robot, Sensor
 from app.domain.identity.models import ProjectScope
 
 
+class UnitOfWork(Protocol):
+    """事务边界端口；由 infrastructure 的 ``Session`` 适配。"""
+
+    def commit(self) -> None: ...
+
+
 class RobotRepository(Protocol):
     def add(self, scope: ProjectScope, robot: Robot) -> Robot: ...
 
@@ -33,6 +39,7 @@ class RobotRepository(Protocol):
         scope: ProjectScope,
         *,
         status: LifecycleStatus | None = None,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Robot]: ...
 
@@ -57,6 +64,7 @@ class DeviceRepository(Protocol):
         scope: ProjectScope,
         *,
         status: LifecycleStatus | None = None,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Device]: ...
 
@@ -82,6 +90,9 @@ class SensorRepository(Protocol):
         *,
         status: LifecycleStatus | None = None,
         sensor_type: SensorType | None = None,
+        robot_id: UUID | None = None,
+        device_id: UUID | None = None,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Sensor]: ...
 
@@ -124,6 +135,7 @@ class CalibrationRecordRepository(Protocol):
         target_type: str | None = None,
         target_id: UUID | None = None,
         status: CalibrationStatus | None = None,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[CalibrationRecord]: ...
 
