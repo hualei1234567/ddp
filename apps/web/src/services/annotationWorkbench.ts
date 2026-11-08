@@ -1,0 +1,241 @@
+import type {
+  AnnotationAssignment,
+  AnnotationBatch,
+  AnnotationSampleSet,
+  AnnotationSchema,
+  AnnotationSubmission,
+  AnnotationTask,
+} from "../types/annotation";
+import type { Episode } from "../types/collection";
+import { ApiError } from "./api";
+import type { AnnotationApi } from "./annotation";
+import {
+  buildSubmissionRecords,
+  type BuiltRecords,
+  type EpisodeFormValues,
+} from "./annotationValidation";
+import type { CollectionsApi } from "./collections";
+
+export interface WorkbenchPartialError {
+  scope: string;
+  error: ApiError;
+}
+
+export interface WorkbenchData {
+  assignment: AnnotationAssignment;
+  task: AnnotationTask;
+  batch: AnnotationBatch;
+  schema: AnnotationSchema;
+  sampleSet: AnnotationSampleSet | null;
+  episodes: Episode[];
+  /** 服务端已有的本人 DRAFT 提交；存在时不允许再创建新草稿。 */
+  existingDraft: AnnotationSubmission | null;
+  /** 当前分配的最新提交版本，用于展示“已提交，等待复核”等状态。 */
+  latestSubmission: AnnotationSubmission | null;
+}
+
+export interface WorkbenchLoadResult {
+  data: WorkbenchData | null;
+  error: ApiError | null;
+  partialErrors: WorkbenchPartialError[];
+}
+
+export function asApiError(caught: unknown, fallback: string): ApiError {
+  return caught instanceof ApiError
+    ? caught
+    : new ApiError({ kind: "network", message: fallback, cause: caught });
+}
+
+function latestByVersion(
+  submissions: AnnotationSubmission[],
+): AnnotationSubmission | null {
+  if (submissions.length === 0) {
+    return null;
+  }
+  return [...submissions].sort(
+    (left, right) => right.submission_version - left.submission_version,
+  )[0] ?? null;
+}
+
+async function loadEpisodes(
+  collections: CollectionsApi,
+  projectId: string,
+  episodeIds: string[],
+  signal: AbortSignal,
+  partialErrors: WorkbenchPartialError[],
+): Promise<Episode[]> {
+  const results = await Promise.allSettled(
+    episodeIds.map((episodeId) =>
+      collections.getEpisode(projectId, episodeId, { signal }),
+    ),
+  );
+  const episodes: Episode[] = [];
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      episodes.push(result.value);
+    } else if (!signal.aborted) {
+      partialErrors.push({
+        scope: `Episode ${episodeIds[index] ?? ""}`,
+        error: asApiError(result.reason, "Episode 加载失败"),
+      });
+    }
+  });
+  return episodes;
+}
+
+/**
+ * 工作台聚合加载：分配 → 任务/批次 → Schema → 样本集/Episode/提交。
+ *
+ * 分配、任务、批次与 Schema 是渲染表单的必需数据；样本集、Episode 详情与
+ * 历史提交失败时保留可用数据并返回 Partial 错误，不伪造业务字段。
+ */
+export async function loadAnnotationWorkbench(
+  api: AnnotationApi,
+  collections: CollectionsApi,
+  projectId: string,
+  assignmentId: string,
+  signal: AbortSignal,
+): Promise<WorkbenchLoadResult> {
+  const partialErrors: WorkbenchPartialError[] = [];
+  try {
+    const assignment = await api.getAssignment(projectId, assignmentId, {
+      signal,
+    });
+    const [task, batch] = await Promise.all([
+      api.getTask(projectId, assignment.task_id, { signal }),
+      api.getBatch(projectId, assignment.batch_id, { signal }),
+    ]);
+    const schema = await api.getSchema(projectId, task.schema_id, { signal });
+
+    let sampleSet: AnnotationSampleSet | null = null;
+    try {
+      sampleSet = await api.getSampleSet(projectId, task.sample_set_id, {
+        signal,
+      });
+    } catch (caught) {
+      if (!signal.aborted) {
+        partialErrors.push({
+          scope: "标注样本集",
+          error: asApiError(caught, "标注样本集加载失败"),
+        });
+      }
+    }
+
+    const episodeIds =
+      batch.item_refs.length > 0
+        ? batch.item_refs
+        : (sampleSet?.episode_refs.map((item) => item.episode_id) ?? []);
+    const episodes = await loadEpisodes(
+      collections,
+      projectId,
+      episodeIds,
+      signal,
+      partialErrors,
+    );
+
+    let submissions: AnnotationSubmission[] = [];
+    try {
+      const page = await api.listSubmissions(projectId, task.task_id, {
+        signal,
+      });
+      submissions = page.items.filter(
+        (item) => item.assignment_id === assignment.assignment_id,
+      );
+    } catch (caught) {
+      if (!signal.aborted) {
+        partialErrors.push({
+          scope: "标注提交历史",
+          error: asApiError(caught, "标注提交历史加载失败"),
+        });
+      }
+    }
+
+    const latestSubmission = latestByVersion(submissions);
+    let existingDraft =
+      submissions.find((item) => item.status === "DRAFT") ?? null;
+    if (existingDraft !== null) {
+      try {
+        existingDraft = await api.getSubmission(
+          projectId,
+          existingDraft.submission_id,
+          { signal },
+        );
+      } catch (caught) {
+        if (!signal.aborted) {
+          partialErrors.push({
+            scope: "服务端草稿",
+            error: asApiError(caught, "服务端草稿加载失败"),
+          });
+        }
+      }
+    }
+
+    return {
+      data: {
+        assignment,
+        task,
+        batch,
+        schema,
+        sampleSet,
+        episodes,
+        existingDraft,
+        latestSubmission,
+      },
+      error: null,
+      partialErrors,
+    };
+  } catch (caught) {
+    if (signal.aborted) {
+      return { data: null, error: null, partialErrors };
+    }
+    return {
+      data: null,
+      error: asApiError(caught, "标注工作台加载失败"),
+      partialErrors,
+    };
+  }
+}
+
+/** Schema 快照与任务冻结值一致性检查；不一致时禁止提交。 */
+export function schemaSnapshotMatches(
+  task: AnnotationTask,
+  schema: AnnotationSchema,
+): boolean {
+  return (
+    task.schema_id === schema.schema_id &&
+    task.schema_version === schema.schema_version &&
+    task.schema_sha256 === schema.schema_sha256 &&
+    schema.status === "PUBLISHED"
+  );
+}
+
+/** 标注员可见标签；GOLD_ONLY/SYSTEM_ONLY/REVIEWER_ONLY 不在工作台渲染。 */
+export function visibleLabelDefinitions(schema: AnnotationSchema) {
+  return schema.labels.filter((label) => label.visibility === "ANNOTATOR");
+}
+
+/** 存在当前角色不可见但必填的标签时，前端无法完整填写，应禁用提交。 */
+export function hasHiddenRequiredLabels(schema: AnnotationSchema): boolean {
+  return schema.labels.some(
+    (label) => label.required && label.visibility !== "ANNOTATOR",
+  );
+}
+
+/**
+ * 用工作台当前表单生成提交记录；只校验标注员可见标签。
+ * 服务端仍按完整 Schema 快照做权威校验。
+ */
+export function buildWorkbenchRecords(
+  data: WorkbenchData,
+  values: Record<string, EpisodeFormValues>,
+): BuiltRecords {
+  const visibleSchema: AnnotationSchema = {
+    ...data.schema,
+    labels: visibleLabelDefinitions(data.schema),
+  };
+  const episodes = data.episodes.map((episode) => ({
+    episodeId: episode.episode_id,
+    episodeVersion: episode.episode_version,
+  }));
+  return buildSubmissionRecords(visibleSchema, episodes, values);
+}

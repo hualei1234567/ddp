@@ -38,6 +38,19 @@ describe("导航分区配置", () => {
     expect(findNavItem("/devices")?.item.available).toBe(true);
   });
 
+  it("标注中心主入口与工作台别名高亮同一菜单项", () => {
+    expect(findNavItem("/annotation-tasks")?.item.path).toBe(
+      "/annotation-tasks",
+    );
+    expect(findNavItem("/annotation-tasks/123")?.item.path).toBe(
+      "/annotation-tasks",
+    );
+    expect(findNavItem("/annotation/workbench/abc")?.item.path).toBe(
+      "/annotation-tasks",
+    );
+    expect(findNavItem("/annotation-tasks")?.item.available).toBe(true);
+  });
+
   it("未知路径返回 null，交给 404 页面处理", () => {
     expect(findNavItem("/unknown-path")).toBeNull();
   });

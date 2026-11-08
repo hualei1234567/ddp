@@ -2,6 +2,23 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { navSections } from "./app/navigation";
 import AppLayout from "./components/AppLayout";
+import AnnotationArbitrationQueuePage from "./pages/annotation/AnnotationArbitrationQueuePage";
+import AnnotationGoldSetDetailPage from "./pages/annotation/AnnotationGoldSetDetailPage";
+import AnnotationGoldSetListPage from "./pages/annotation/AnnotationGoldSetListPage";
+import AnnotationIAADetailPage from "./pages/annotation/AnnotationIAADetailPage";
+import AnnotationIAAListPage from "./pages/annotation/AnnotationIAAListPage";
+import AnnotationQualityDetailPage from "./pages/annotation/AnnotationQualityDetailPage";
+import AnnotationQualityListPage from "./pages/annotation/AnnotationQualityListPage";
+import AnnotationReviewQueuePage from "./pages/annotation/AnnotationReviewQueuePage";
+import AnnotationSampleSetDetailPage from "./pages/annotation/AnnotationSampleSetDetailPage";
+import AnnotationSampleSetListPage from "./pages/annotation/AnnotationSampleSetListPage";
+import AnnotationSchemaDetailPage from "./pages/annotation/AnnotationSchemaDetailPage";
+import AnnotationSchemaListPage from "./pages/annotation/AnnotationSchemaListPage";
+import AnnotationSubmissionPage from "./pages/annotation/AnnotationSubmissionPage";
+import AnnotationTaskCreatePage from "./pages/annotation/AnnotationTaskCreatePage";
+import AnnotationTaskDetailPage from "./pages/annotation/AnnotationTaskDetailPage";
+import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
+import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
 import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPage";
 import CollectionTaskListPage from "./pages/collection/CollectionTaskListPage";
 import WorkbenchPage from "./pages/collection/WorkbenchPage";
@@ -33,6 +50,16 @@ function CollectionIndexRedirect() {
   );
 }
 
+function AnnotationIndexRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: "/annotation-tasks", search: location.search }}
+      replace
+    />
+  );
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
@@ -52,9 +79,60 @@ export default function AppRoutes() {
         />
         <Route path="episodes" element={<EpisodeListPage />} />
         <Route path="episodes/:episodeId" element={<EpisodeDetailPage />} />
+        <Route path="raw-assets/:assetId" element={<RawAssetDetailPage />} />
+        <Route path="annotation" element={<AnnotationIndexRedirect />} />
+        <Route path="annotation-tasks" element={<AnnotationTaskListPage />} />
         <Route
-          path="raw-assets/:assetId"
-          element={<RawAssetDetailPage />}
+          path="annotation-tasks/new"
+          element={<AnnotationTaskCreatePage />}
+        />
+        <Route
+          path="annotation-tasks/:taskId"
+          element={<AnnotationTaskDetailPage />}
+        />
+        <Route
+          path="annotation/workbench/:assignmentId"
+          element={<AnnotationWorkbenchPage />}
+        />
+        <Route
+          path="annotation/submissions/:submissionId"
+          element={<AnnotationSubmissionPage />}
+        />
+        <Route path="annotation/reviews" element={<AnnotationReviewQueuePage />} />
+        <Route
+          path="annotation/arbitrations"
+          element={<AnnotationArbitrationQueuePage />}
+        />
+        <Route path="annotation/schemas" element={<AnnotationSchemaListPage />} />
+        <Route
+          path="annotation/schemas/:schemaId"
+          element={<AnnotationSchemaDetailPage />}
+        />
+        <Route
+          path="annotation/sample-sets"
+          element={<AnnotationSampleSetListPage />}
+        />
+        <Route
+          path="annotation/sample-sets/:sampleSetId"
+          element={<AnnotationSampleSetDetailPage />}
+        />
+        <Route path="annotation/gold-sets" element={<AnnotationGoldSetListPage />} />
+        <Route
+          path="annotation/gold-sets/:goldSetId"
+          element={<AnnotationGoldSetDetailPage />}
+        />
+        <Route path="annotation/iaa-reports" element={<AnnotationIAAListPage />} />
+        <Route
+          path="annotation/iaa-reports/:reportId"
+          element={<AnnotationIAADetailPage />}
+        />
+        <Route
+          path="annotation/quality-samples"
+          element={<AnnotationQualityListPage />}
+        />
+        <Route
+          path="annotation/quality-samples/:qualitySampleId"
+          element={<AnnotationQualityDetailPage />}
         />
         {plannedRoutes.map((item) => (
           <Route

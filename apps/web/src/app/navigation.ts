@@ -30,6 +30,11 @@ export interface NavItem {
   icon: ReactNode;
   /** 阶段 0 仅工作台开放；其余模块先完成路由与布局骨架。 */
   available: boolean;
+  /**
+   * 同一模块的附加路径前缀。例如标注中心主入口为 /annotation-tasks，
+   * 工作台位于 /annotation/workbench/*，两者应高亮同一菜单项。
+   */
+  aliases?: string[];
 }
 
 export interface NavSection {
@@ -105,11 +110,12 @@ export const navSections: NavSection[] = [
         available: true,
       },
       {
-        path: "/annotation",
+        path: "/annotation-tasks",
         label: "标注中心",
-        description: "管理标注项目、Schema、任务、审核与返工。",
+        description: "管理标注 Schema、样本集、任务、工作台、复核与仲裁。",
         icon: createElement(TagsOutlined),
-        available: false,
+        available: true,
+        aliases: ["/annotation"],
       },
       {
         path: "/quality",
@@ -215,13 +221,16 @@ export function findNavItem(pathname: string): NavMatch | null {
 
   for (const section of navSections) {
     for (const item of section.items) {
-      const isExact = item.path === pathname;
-      const isNested = item.path !== "/" && pathname.startsWith(`${item.path}/`);
-      if (!isExact && !isNested) {
-        continue;
-      }
-      if (match === null || item.path.length > match.item.path.length) {
-        match = { section, item };
+      for (const candidate of [item.path, ...(item.aliases ?? [])]) {
+        const isExact = candidate === pathname;
+        const isNested =
+          candidate !== "/" && pathname.startsWith(`${candidate}/`);
+        if (!isExact && !isNested) {
+          continue;
+        }
+        if (match === null || candidate.length > match.item.path.length) {
+          match = { section, item };
+        }
       }
     }
   }

@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings=0",
     "test": "vitest run",
+    "test:integration:stage3": "vitest run src/integration/stage3Annotation.integration.test.ts",
     "test:integration:stage2": "bash scripts/integration/run-stage2-upload.sh",
     "test:integration:stage2:setup": "DDP_IT_SKIP_STORAGE=1 bash scripts/integration/run-stage2-upload.sh --setup-only",
     "test:integration:stage2:smoke": "bash scripts/integration/run-stage2-upload.sh --smoke",
