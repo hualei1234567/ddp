@@ -37,7 +37,9 @@ from app.domain.annotation.enums import (
 from app.domain.annotation.errors import (
     AssignmentNotOwnedError,
     DomainValidationError,
+    ForbiddenOperationError,
     ResourceNotFoundError,
+    ReworkLimitExceededError,
     SubmissionNotEditableError,
     SubmissionSchemaMismatchError,
     VersionConflictError,
@@ -66,13 +68,15 @@ _CREATABLE_BATCH_STATUSES = {
     AnnotationBatchStatus.IN_PROGRESS,
     AnnotationBatchStatus.REWORK,
 }
+# 只有状态机允许 SYSTEM_SUPERSEDE 的状态才能被新版本替代。
 _SUPERSEDABLE = {
     AnnotationSubmissionStatus.REWORK_REQUIRED,
     AnnotationSubmissionStatus.RESOLVED_REJECTED,
     AnnotationSubmissionStatus.RESOLVED_REWORK,
-    AnnotationSubmissionStatus.REJECTED,
     AnnotationSubmissionStatus.WITHDRAWN,
 }
+# 任务未显式配置 ``quality_policy.max_rework_rounds`` 时的返工轮次上限。
+DEFAULT_MAX_REWORK_ROUNDS = 3
 
 
 class AnnotationSubmissionUseCases:
@@ -293,6 +297,10 @@ class AnnotationSubmissionUseCases:
             raise AssignmentNotOwnedError("只能操作自己的提交")
         if action_name == AnnotationSubmissionAction.SUBMIT.value:
             self._validate_submission_snapshot(scope, current)
+        if action_name == AnnotationSubmissionAction.REQUIRE_REWORK.value:
+            if current.annotator_id == scope.actor_id:
+                raise ForbiddenOperationError("标注人不得自行发起返工要求")
+            self._assert_rework_round_available(scope, current)
         updated = replace(
             current.apply_action(action_name, reason=reason, now=now),
             updated_by=scope.actor_id,
@@ -309,6 +317,8 @@ class AnnotationSubmissionUseCases:
                 reason=reason,
                 now=now,
             )
+            self._return_assignment_for_rework(scope, current, reason=reason, now=now)
+            self._bump_rework_count(scope, current, now=now)
         self._record(
             scope,
             saved,
@@ -350,6 +360,54 @@ class AnnotationSubmissionUseCases:
             path=f"/annotation-submissions/{submission_id}/actions/require-rework",
             request_id=request_id,
         )
+
+    def _assert_rework_round_available(
+        self,
+        scope: ProjectScope,
+        submission: AnnotationSubmission,
+    ) -> None:
+        batch = self._get_batch(scope, submission.batch_id)
+        task = self._get_task(scope, submission.task_id)
+        if batch.rework_count >= _rework_limit(task.quality_policy):
+            raise ReworkLimitExceededError("返工次数已达上限，请升级项目负责人处理")
+
+    def _return_assignment_for_rework(
+        self,
+        scope: ProjectScope,
+        submission: AnnotationSubmission,
+        *,
+        reason: str | None,
+        now: datetime,
+    ) -> None:
+        """返工要求生效后，分配回到 IN_PROGRESS，允许标注人提交新版本。"""
+        assignment = self._get_assignment(scope, submission.assignment_id)
+        if assignment.status is not AnnotationAssignmentStatus.SUBMITTED:
+            return
+        updated = replace(
+            assignment.apply_action(
+                AnnotationAssignmentAction.REWORK.value,
+                reason=reason,
+                now=now,
+            ),
+            updated_by=scope.actor_id,
+        )
+        self._assignments.save(scope, updated, expected_version=assignment.version)
+
+    def _bump_rework_count(
+        self,
+        scope: ProjectScope,
+        submission: AnnotationSubmission,
+        *,
+        now: datetime,
+    ) -> None:
+        batch = self._get_batch(scope, submission.batch_id)
+        updated = replace(
+            batch,
+            rework_count=batch.rework_count + 1,
+            updated_at=now,
+            updated_by=scope.actor_id,
+        )
+        self._batches.save(scope, updated, expected_version=batch.version)
 
     def _validate_submission_snapshot(
         self,
@@ -598,6 +656,14 @@ def _as_uuid(value: object, field_name: str) -> UUID:
         except ValueError as exc:
             raise DomainValidationError(f"{field_name} 不是合法 UUID") from exc
     raise DomainValidationError(f"{field_name} 必须是 UUID")
+
+
+def _rework_limit(policy: Mapping[str, object]) -> int:
+    """从任务质量策略读取返工上限；非法或缺省时回退默认值。"""
+    value = policy.get("max_rework_rounds")
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    return DEFAULT_MAX_REWORK_ROUNDS
 
 
 __all__ = ["AnnotationSubmissionUseCases"]

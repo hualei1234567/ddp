@@ -34,6 +34,7 @@ from app.api.v1.annotation_quality_models import (
     QualitySampleActionRequest,
     QualitySampleCreate,
     QualitySampleOut,
+    QualitySamplePlanRequest,
 )
 from app.api.v1.schemas import PageOut
 from app.application.annotation.commands import (
@@ -254,6 +255,40 @@ def list_quality_samples(
         items=[QualitySampleOut.from_domain(item) for item in items],
         next_cursor=None,
     )
+
+
+@router.post(
+    "/quality-samples/plan",
+    response_model=list[QualitySampleOut],
+    status_code=201,
+)
+@router.post(
+    "/annotation-quality-samples/plan",
+    response_model=list[QualitySampleOut],
+    status_code=201,
+    include_in_schema=False,
+)
+def plan_quality_samples(
+    payload: QualitySamplePlanRequest,
+    request: Request,
+    scope: WriteScope,
+    use_cases: AnnotationUseCasesDep,
+) -> list[QualitySampleOut]:
+    samples = use_cases.quality_samples.plan_for_submissions(
+        scope,
+        payload.task_id,
+        submission_ids=tuple(payload.submission_ids),
+        sampling_policy_version=payload.sampling_policy_version,
+        sample_type=payload.sample_type,
+        sample_size=payload.sample_size,
+        sample_reason=payload.sample_reason,
+        stratum=payload.stratum,
+        risk_scores=payload.risk_scores,
+        risk_threshold=payload.risk_threshold,
+        due_at=payload.due_at,
+        request_id=request_id(request),
+    )
+    return [QualitySampleOut.from_domain(sample) for sample in samples]
 
 
 @router.post("/quality-samples", response_model=QualitySampleOut, status_code=201)

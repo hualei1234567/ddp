@@ -11,6 +11,12 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
+from app.application.annotation.commands import (
+    NewAnnotationArbitration,
+    NewAnnotationReview,
+    NewGoldSet,
+    NewQualitySample,
+)
 from app.domain.annotation import (
     AnnotationSampleSet,
     AnnotationSchema,
@@ -29,6 +35,27 @@ from app.infrastructure.db.models.annotation_catalog import (
 from app.infrastructure.db.models.annotation_catalog import (
     AnnotationSchema as AnnotationSchemaModel,
 )
+from app.infrastructure.db.models.annotation_quality import (
+    GoldSet as GoldSetModel,
+)
+from app.infrastructure.db.models.annotation_quality import (
+    IAAReport as IAAReportModel,
+)
+from app.infrastructure.db.models.annotation_quality import (
+    QualitySample as QualitySampleModel,
+)
+from app.infrastructure.db.models.annotation_results import (
+    AnnotationArbitration as AnnotationArbitrationModel,
+)
+from app.infrastructure.db.models.annotation_results import (
+    AnnotationRecord as AnnotationRecordModel,
+)
+from app.infrastructure.db.models.annotation_results import (
+    AnnotationReview as AnnotationReviewModel,
+)
+from app.infrastructure.db.models.annotation_results import (
+    AnnotationSubmission as AnnotationSubmissionModel,
+)
 from app.infrastructure.db.models.annotation_work import AnnotationTask as AnnotationTaskModel
 from app.infrastructure.db.models.episodes import EpisodeModel
 from app.infrastructure.db.models.identity import Project, ProjectMember, User
@@ -42,6 +69,13 @@ from sqlalchemy import create_engine, delete, text, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateSchema, DropSchema
+
+from tests.annotation_results_support import (
+    build_stacks,
+    make_submission,
+    prepare_ready_task,
+    seed_identity,
+)
 
 _POSTGRES_URL = os.environ.get("DDP_TEST_POSTGRES_URL") or os.environ.get(
     "DDP_DATABASE_URL",
@@ -372,3 +406,191 @@ def test_postgres_published_schema_json_immutable(postgres_engine: Engine) -> No
             )
             session.flush()
         session.rollback()
+
+
+def _assert_json_update_blocked(
+    engine: Engine,
+    model: type,
+    row_id: object,
+    values: dict[str, object],
+    message: str,
+) -> None:
+    """在真实 PostgreSQL 上更新 JSON 列，必须被不可变触发器拒绝。"""
+    factory = create_session_factory(engine)
+    with factory() as probe:
+        with pytest.raises(IntegrityError, match=message):
+            probe.execute(update(model).where(model.id == row_id).values(**values))
+            probe.flush()
+        probe.rollback()
+
+
+def test_postgres_annotation_result_quality_json_immutability(
+    postgres_engine: Engine,
+) -> None:
+    """7 个不可变守卫函数在 JSON/JSONB 列上的 UPDATE 回归（D1）。"""
+    factory = create_session_factory(postgres_engine)
+    with factory() as session:
+        ids = seed_identity(session)
+        stacks = build_stacks(session, ids)
+        prepare_ready_task(stacks)
+        submission = make_submission(stacks, stacks.scope_a, stacks.assignment_a)
+
+        review = stacks.reviews.create(
+            stacks.scope_c,
+            NewAnnotationReview(
+                submission_id=submission.submission_id,
+                reviewer_id=ids.user_c,
+            ),
+            path="/projects/p/annotation-submissions/x/reviews",
+        )
+        review = stacks.reviews.apply_action(
+            stacks.scope_c,
+            review.review_id,
+            "claim",
+            expected_version=review.version,
+            path="/projects/p/annotation-reviews/x/actions/claim",
+        )
+        review = stacks.reviews.apply_action(
+            stacks.scope_c,
+            review.review_id,
+            "escalate",
+            expected_version=review.version,
+            reason="标注人与复核人意见不一致",
+            path="/projects/p/annotation-reviews/x/actions/escalate",
+        )
+        assert review.status.value == "ESCALATED"
+
+        arbitration = stacks.arbitrations.create(
+            stacks.scope_b,
+            NewAnnotationArbitration(
+                submission_id=submission.submission_id,
+                arbiter_ids=(ids.user_b,),
+                quorum=1,
+                trigger="REVIEWER_DISAGREEMENT",
+                review_id=review.review_id,
+            ),
+            path="/projects/p/annotation-arbitrations",
+        )
+        arbitration = stacks.arbitrations.apply_action(
+            stacks.scope_b,
+            arbitration.arbitration_id,
+            "cancel",
+            expected_version=arbitration.version,
+            reason="测试取消",
+            path="/projects/p/annotation-arbitrations/x/actions/cancel",
+        )
+        assert arbitration.status.value == "CANCELLED"
+
+        gold_set = stacks.gold_sets.create(
+            stacks.scope_a,
+            NewGoldSet(
+                code=f"gold-{uuid4().hex[:8]}",
+                schema_id=stacks.schema_id,
+                items=(
+                    {
+                        "gold_item_id": str(uuid4()),
+                        "episode_id": str(ids.episode_a),
+                        "expected_labels": [{"label_key": "action", "value": "PICK"}],
+                    },
+                ),
+            ),
+            path="/projects/p/gold-sets",
+        )
+        gold_set = stacks.gold_sets.apply_action(
+            stacks.scope_a,
+            gold_set.gold_set_id,
+            "revoke",
+            expected_version=gold_set.version,
+            reason="测试撤销",
+            path="/projects/p/gold-sets/x/actions/revoke",
+        )
+        assert gold_set.status.value == "REVOKED"
+
+        sample = stacks.quality_samples.create_one(
+            stacks.scope_b,
+            NewQualitySample(
+                task_id=stacks.task_id,
+                submission_id=submission.submission_id,
+                annotator_id=ids.user_a,
+                sampling_policy_version="quality/1",
+                sample_type="RANDOM",
+                sample_reason="例行抽检",
+            ),
+            path="/projects/p/quality-samples",
+        )
+        sample = stacks.quality_samples.apply_action(
+            stacks.scope_b,
+            sample.quality_sample_id,
+            "cancel",
+            expected_version=sample.version,
+            reason="测试取消",
+            path="/projects/p/quality-samples/x/actions/cancel",
+        )
+        assert sample.status.value == "CANCELLED"
+
+        iaa = stacks.iaa.compute(
+            stacks.scope_a,
+            stacks.task_id,
+            metric_definitions_version="ddp.stage3.iaa/1",
+            path="/projects/p/iaa-reports",
+        )
+        assert iaa.status == "INSUFFICIENT_DATA"
+
+        submission_id = submission.submission_id
+        record_rows = stacks.records_repo.list_for_submission(stacks.scope_a, submission_id)
+        record_id = record_rows[0].annotation_id
+        review_id = review.review_id
+        arbitration_id = arbitration.arbitration_id
+        gold_set_id = gold_set.gold_set_id
+        sample_id = sample.quality_sample_id
+        iaa_id = iaa.report_id
+
+    _assert_json_update_blocked(
+        postgres_engine,
+        AnnotationSubmissionModel,
+        submission_id,
+        {"record_refs": ["tampered"]},
+        "annotation_submission_immutable",
+    )
+    _assert_json_update_blocked(
+        postgres_engine,
+        AnnotationRecordModel,
+        record_id,
+        {"labels": [{"label_key": "action", "value": "PLACE"}]},
+        "annotation_record_immutable",
+    )
+    _assert_json_update_blocked(
+        postgres_engine,
+        AnnotationReviewModel,
+        review_id,
+        {"issues": [{"code": "tampered"}]},
+        "annotation_review_immutable",
+    )
+    _assert_json_update_blocked(
+        postgres_engine,
+        AnnotationArbitrationModel,
+        arbitration_id,
+        {"votes": [{"arbiter_id": "tampered", "decision": "APPROVE"}]},
+        "annotation_arbitration_immutable",
+    )
+    _assert_json_update_blocked(
+        postgres_engine,
+        GoldSetModel,
+        gold_set_id,
+        {"items": []},
+        "annotation_gold_set_immutable",
+    )
+    _assert_json_update_blocked(
+        postgres_engine,
+        QualitySampleModel,
+        sample_id,
+        {"item_refs": ["tampered"]},
+        "annotation_quality_sample_immutable",
+    )
+    _assert_json_update_blocked(
+        postgres_engine,
+        IAAReportModel,
+        iaa_id,
+        {"metrics": [{"metric": "COHEN_KAPPA", "value": 1.0}]},
+        "annotation_iaa_report_immutable",
+    )

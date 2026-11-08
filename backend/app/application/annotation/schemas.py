@@ -21,8 +21,8 @@ from app.domain.annotation.enums import AnnotationSchemaAction, AnnotationSchema
 from app.domain.annotation.errors import (
     DomainValidationError,
     ForbiddenOperationError,
-    ResourceImmutableError,
     ResourceNotFoundError,
+    SchemaImmutableError,
     VersionConflictError,
 )
 from app.domain.annotation.schema import AnnotationSchema, LabelDefinition
@@ -185,7 +185,7 @@ class AnnotationSchemaUseCases:
         if current.version != expected_version:
             raise VersionConflictError("标注 Schema")
         if current.status is not AnnotationSchemaStatus.DRAFT:
-            raise ResourceImmutableError("仅 DRAFT Schema 允许修改定义")
+            raise SchemaImmutableError("仅 DRAFT Schema 允许修改定义")
         if "labels" in changes:
             changes = {
                 **changes,

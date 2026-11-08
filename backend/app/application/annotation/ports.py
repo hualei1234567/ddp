@@ -321,6 +321,20 @@ class EpisodeDirectory(Protocol):
         limit: int = 500,
     ) -> list[EpisodeCandidate]: ...
 
+    def exclusion_summary(
+        self,
+        scope: ProjectScope,
+        *,
+        statuses: tuple[str, ...],
+        quality_statuses: tuple[str, ...],
+        include_ids: tuple[UUID, ...] = (),
+        exclude_ids: tuple[UUID, ...] = (),
+        captured_from: datetime | None = None,
+        captured_to: datetime | None = None,
+    ) -> Mapping[str, int]:
+        """按门禁原因统计未进入候选池的 Episode 数量。"""
+        ...
+
     def episode_bounds(
         self,
         scope: ProjectScope,

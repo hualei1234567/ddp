@@ -45,7 +45,7 @@ from app.core.errors import ForbiddenError, ValidationFailedError
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["annotation-submissions"])
 
-_SUBMISSION_ACTIONS = frozenset({"submit", "withdraw"})
+_SUBMISSION_ACTIONS = frozenset({"submit", "withdraw", "require-rework"})
 
 
 @router.post(

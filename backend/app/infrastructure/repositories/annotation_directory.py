@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.application.annotation.ports import EpisodeCandidate
@@ -53,6 +53,46 @@ class SqlEpisodeDirectory:
             statement = statement.where(EpisodeModel.id > after_id)
         statement = statement.order_by(EpisodeModel.id).limit(limit)
         return [self._from_row(row) for row in self._session.scalars(statement)]
+
+    def exclusion_summary(
+        self,
+        scope: ProjectScope,
+        *,
+        statuses: tuple[str, ...],
+        quality_statuses: tuple[str, ...],
+        include_ids: tuple[UUID, ...] = (),
+        exclude_ids: tuple[UUID, ...] = (),
+        captured_from: datetime | None = None,
+        captured_to: datetime | None = None,
+    ) -> Mapping[str, int]:
+        statement = (
+            select(EpisodeModel.status, EpisodeModel.quality_status, func.count())
+            .where(
+                EpisodeModel.project_id == scope.project_id,
+                or_(
+                    EpisodeModel.status.not_in(statuses),
+                    EpisodeModel.quality_status.not_in(quality_statuses),
+                ),
+            )
+            .group_by(EpisodeModel.status, EpisodeModel.quality_status)
+        )
+        if include_ids:
+            statement = statement.where(EpisodeModel.id.in_(include_ids))
+        if exclude_ids:
+            statement = statement.where(EpisodeModel.id.not_in(exclude_ids))
+        if captured_from is not None:
+            statement = statement.where(EpisodeModel.created_at >= captured_from)
+        if captured_to is not None:
+            statement = statement.where(EpisodeModel.created_at <= captured_to)
+        summary: dict[str, int] = {}
+        for status, quality_status, count in self._session.execute(statement):
+            # 状态不合格优先归因；否则归因到质量门禁，避免同一 Episode 重复计数。
+            if status not in statuses:
+                reason = f"episode_status:{status}"
+            else:
+                reason = f"quality_status:{quality_status}"
+            summary[reason] = summary.get(reason, 0) + int(count)
+        return summary
 
     def episode_bounds(
         self,
@@ -142,4 +182,4 @@ class SqlGoldSetAnswerAccessPolicy:
                 ProjectMember.user_id == scope.actor_id,
             )
         )
-        return role in {ProjectRole.OWNER.value, ProjectRole.EDITOR.value}
+        return role == ProjectRole.OWNER.value

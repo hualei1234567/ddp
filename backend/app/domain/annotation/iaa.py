@@ -445,7 +445,7 @@ def compute_iaa(
     annotator_count = len(annotators)
     if overlap_item_count < 2 or annotator_count < 2:
         metrics = _empty_metrics(
-            overlap,
+            observations,
             iou_threshold=iou_threshold,
             status=IAAValueStatus.INSUFFICIENT_DATA,
         )
@@ -501,24 +501,15 @@ def compute_iaa(
 
 
 def _empty_metrics(
-    overlap: Mapping[UUID, Mapping[UUID, IAAObservation]],
+    observations: Sequence[IAAObservation],
     *,
     iou_threshold: float,
     status: IAAValueStatus,
 ) -> tuple[IAAMetricResult, ...]:
+    # 即使没有重叠，也要按已出现的标签键返回 N/A 指标行，避免前端显示空白。
     label_keys = sorted(
-        {
-            key
-            for per_annotator in overlap.values()
-            for observation in per_annotator.values()
-            for key in observation.label_values
-        }
-        | {
-            span.label_key
-            for per_annotator in overlap.values()
-            for observation in per_annotator.values()
-            for span in observation.spans
-        }
+        {key for observation in observations for key in observation.label_values}
+        | {span.label_key for observation in observations for span in observation.spans}
     )
     metrics: list[IAAMetricResult] = []
     for label_key in label_keys:

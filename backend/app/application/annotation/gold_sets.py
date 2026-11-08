@@ -246,9 +246,31 @@ class GoldSetUseCases:
         request_id: str | None = None,
     ) -> Mapping[str, object]:
         gold_set = self.get(scope, gold_set_id)
-        if not self._access.can_view_answers(scope, gold_set_id):
-            raise GoldSetAccessDeniedError("无权查看黄金集期望答案")
         now = _utcnow()
+        if not self._access.can_view_answers(scope, gold_set_id):
+            # 拒绝访问也要留痕，供安全审计追查越权尝试。
+            record_change(
+                self._audit,
+                self._outbox,
+                scope,
+                resource_type=_RESOURCE_TYPE,
+                resource_id=gold_set_id,
+                action="view-answers",
+                from_status=gold_set.status.value,
+                to_status=gold_set.status.value,
+                reason=None,
+                request_id=request_id,
+                details={"answer_access": False, "outcome": "DENIED"},
+                event_type="annotation.gold_set.answers_denied",
+                event_payload={
+                    "gold_set_id": str(gold_set_id),
+                    "actor_id": str(scope.actor_id),
+                },
+                occurred_at=now,
+                result="FAILURE",
+            )
+            self._uow.commit()
+            raise GoldSetAccessDeniedError("无权查看黄金集期望答案")
         record_change(
             self._audit,
             self._outbox,

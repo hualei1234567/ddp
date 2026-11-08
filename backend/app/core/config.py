@@ -92,6 +92,10 @@ class Settings(BaseSettings):
     # 空列表表示使用契约默认白名单（由应用层注入），避免配置与契约重复维护。
     upload_allowed_content_types: list[str] = Field(default_factory=list)
 
+    # 标注分配容量上限；由部署配置注入，HTTP 层统一执行。
+    annotation_max_open_items: int = Field(default=50, gt=0)
+    annotation_max_planned_minutes: int = Field(default=2400, gt=0)
+
     # RawAsset 异步校验 Worker。所有阈值由部署配置注入，不在用例内硬编码。
     validation_worker_poll_interval_seconds: float = Field(default=1.0, gt=0)
     validation_stream_chunk_size_bytes: int = Field(default=1024 * 1024, gt=0)

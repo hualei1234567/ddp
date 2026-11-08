@@ -291,7 +291,9 @@ _SUBMISSION_RULES: Mapping[AnnotationSubmissionStatus, Mapping[str, AnnotationSu
             AnnotationSubmissionStatus.APPROVED: {
                 AnnotationSubmissionAction.SYSTEM_SUPERSEDE.value: AnnotationSubmissionStatus.SUPERSEDED,
             },
-            AnnotationSubmissionStatus.WITHDRAWN: {},
+            AnnotationSubmissionStatus.WITHDRAWN: {
+                AnnotationSubmissionAction.SYSTEM_SUPERSEDE.value: AnnotationSubmissionStatus.SUPERSEDED,
+            },
             AnnotationSubmissionStatus.SUPERSEDED: {},
         }
     )

@@ -244,6 +244,18 @@ class AnnotationSampleSetUseCases:
             warn_confirmed=warn_confirmed,
             now=now,
         )
+        gate_exclusions = self._episodes.exclusion_summary(
+            scope,
+            statuses=_ELIGIBLE_STATUSES,
+            quality_statuses=_ELIGIBLE_QUALITY,
+            include_ids=_uuids(merged_filters.get("include_episode_ids")),
+            exclude_ids=_uuids(merged_filters.get("exclude_episode_ids")),
+            captured_from=_datetime(merged_filters.get("captured_from")),
+            captured_to=_datetime(merged_filters.get("captured_to")),
+        )
+        merged_exclusions = dict(result.exclusion_summary)
+        for reason, count in gate_exclusions.items():
+            merged_exclusions[reason] = merged_exclusions.get(reason, 0) + count
         updated = replace(
             current,
             filters=merged_filters,
@@ -253,9 +265,9 @@ class AnnotationSampleSetUseCases:
         ).preview(
             episode_refs=result.episode_refs,
             candidate_count=result.candidate_count,
-            excluded_count=result.excluded_count,
+            excluded_count=result.excluded_count + sum(gate_exclusions.values()),
             deduplicated_count=result.deduplicated_count,
-            exclusion_summary=result.exclusion_summary,
+            exclusion_summary=dict(sorted(merged_exclusions.items())),
             now=now,
         )
         self._sample_sets.replace_refs(scope, sample_set_id, result.episode_refs)

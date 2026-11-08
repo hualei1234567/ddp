@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -229,6 +230,51 @@ class QualitySampleUseCases:
         )
         self._uow.commit()
         return created
+
+    def plan_for_submissions(
+        self,
+        scope: ProjectScope,
+        task_id: UUID,
+        *,
+        submission_ids: tuple[UUID, ...],
+        sampling_policy_version: str,
+        sample_type: str,
+        sample_size: int,
+        sample_reason: str,
+        stratum: str | None = None,
+        risk_scores: Mapping[UUID, float] | None = None,
+        risk_threshold: float | None = None,
+        due_at: datetime | None = None,
+        request_id: str | None = None,
+    ) -> list[QualitySample]:
+        """根据任务内真实提交构造抽检候选，再交给策略化抽样。"""
+        scores = risk_scores or {}
+        candidates: list[QualityCandidate] = []
+        for submission_id in submission_ids:
+            submission = self._submissions.get(scope, submission_id)
+            if submission is None or submission.task_id != task_id:
+                raise ResourceNotFoundError("标注提交", submission_id)
+            candidates.append(
+                QualityCandidate(
+                    submission_id=submission.submission_id,
+                    annotator_id=submission.annotator_id,
+                    stratum=stratum,
+                    risk_score=float(scores.get(submission_id, 0.0)),
+                )
+            )
+        return self.plan(
+            scope,
+            task_id,
+            candidates=tuple(candidates),
+            sampling_policy_version=sampling_policy_version,
+            sample_type=sample_type,
+            sample_size=sample_size,
+            sample_reason=sample_reason,
+            stratum=stratum,
+            risk_threshold=risk_threshold,
+            due_at=due_at,
+            request_id=request_id,
+        )
 
     def apply_action(
         self,

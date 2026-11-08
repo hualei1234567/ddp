@@ -31,6 +31,7 @@ def record_change(
     event_type: str,
     event_payload: Mapping[str, object],
     occurred_at: datetime,
+    result: str = "SUCCESS",
 ) -> None:
     audit.record(
         scope,
@@ -46,7 +47,7 @@ def record_change(
             to_status=to_status,
             reason=reason,
             request_id=request_id,
-            result="SUCCESS",
+            result=result,
             details=details,
             occurred_at=occurred_at,
         ),

@@ -66,6 +66,21 @@ class QualitySampleCreate(BaseModel):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
+class QualitySamplePlanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    task_id: UUID
+    submission_ids: list[UUID] = Field(min_length=1)
+    sampling_policy_version: str = Field(min_length=1, max_length=64)
+    sample_type: str = Field(min_length=1, max_length=16)
+    sample_size: int = Field(ge=1)
+    sample_reason: str = Field(min_length=1, max_length=500)
+    stratum: str | None = Field(default=None, max_length=100)
+    risk_scores: dict[UUID, float] = Field(default_factory=dict)
+    risk_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    due_at: datetime | None = None
+
+
 class QualitySampleActionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

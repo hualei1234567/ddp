@@ -181,19 +181,20 @@ def create_ready_work(
     episode_id: UUID,
     actor_id: UUID,
     code: str,
+    quality_policy: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    created = editor.post(
-        url(project_id, "/annotation-tasks"),
-        json={
-            "code": code,
-            "name": f"任务 {code}",
-            "sample_set_id": sample_set["sample_set_id"],
-            "schema_id": schema["schema_id"],
-            "target_item_count": 1,
-            "target_episode_count": 1,
-            "priority": "P1",
-        },
-    )
+    payload: dict[str, object] = {
+        "code": code,
+        "name": f"任务 {code}",
+        "sample_set_id": sample_set["sample_set_id"],
+        "schema_id": schema["schema_id"],
+        "target_item_count": 1,
+        "target_episode_count": 1,
+        "priority": "P1",
+    }
+    if quality_policy is not None:
+        payload["quality_policy"] = quality_policy
+    created = editor.post(url(project_id, "/annotation-tasks"), json=payload)
     assert created.status_code == 201, created.text
     task_id = created.json()["task_id"]
     submitted = editor.post(

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.v1.annotation_common import (
     ActionName,
@@ -37,6 +37,8 @@ from app.application.annotation.commands import (
     NewAnnotationBatch,
     NewAnnotationTask,
 )
+from app.core.config import Settings, get_settings
+from app.domain.annotation.workload import CapacityPolicy
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["annotation-tasks"])
 
@@ -309,6 +311,7 @@ def create_assignment(
     request: Request,
     scope: WriteScope,
     use_cases: AnnotationUseCasesDep,
+    settings: Annotated[Settings, Depends(get_settings)],
     idempotency_key: IdempotencyKey = None,
 ) -> AnnotationAssignmentOut:
     return _create_assignment(
@@ -322,6 +325,10 @@ def create_assignment(
         payload.lease_expires_at,
         request,
         idempotency_key,
+        capacity=CapacityPolicy(
+            max_open_items=settings.annotation_max_open_items,
+            max_planned_minutes=settings.annotation_max_planned_minutes,
+        ),
     )
 
 
@@ -337,6 +344,7 @@ def create_batch_assignment(
     request: Request,
     scope: WriteScope,
     use_cases: AnnotationUseCasesDep,
+    settings: Annotated[Settings, Depends(get_settings)],
     idempotency_key: IdempotencyKey = None,
 ) -> AnnotationAssignmentOut:
     return _create_assignment(
@@ -350,6 +358,10 @@ def create_batch_assignment(
         payload.lease_expires_at,
         request,
         idempotency_key,
+        capacity=CapacityPolicy(
+            max_open_items=settings.annotation_max_open_items,
+            max_planned_minutes=settings.annotation_max_planned_minutes,
+        ),
     )
 
 
@@ -407,6 +419,8 @@ def _create_assignment(
     lease_expires_at,
     request: Request,
     idempotency_key: str | None,
+    *,
+    capacity: CapacityPolicy | None = None,
 ) -> AnnotationAssignmentOut:
     assignment = use_cases.assignments.create(
         scope,
@@ -418,6 +432,7 @@ def _create_assignment(
             planned_minutes=planned_minutes,
             lease_expires_at=lease_expires_at,
         ),
+        capacity=capacity,
         idempotency_key=idempotency_key,
         method=request.method,
         path=request.url.path,

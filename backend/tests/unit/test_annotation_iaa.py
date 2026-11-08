@@ -50,3 +50,21 @@ def test_compute_iaa_rejects_gold_set_source() -> None:
     )
     with pytest.raises(IAASourceForbiddenError):
         compute_iaa([observation])
+
+
+def test_compute_iaa_insufficient_returns_na_metric_rows() -> None:
+    """样本不足时也必须返回各指标 N/A 占位行，前端不得显示空白（D8）。"""
+    result = compute_iaa([_obs(uuid4(), uuid4(), start=0, end=10)])
+    assert result.status == "INSUFFICIENT_DATA"
+    assert result.metrics
+    metrics = {metric.metric.value for metric in result.metrics}
+    assert metrics == {
+        "PERCENT_AGREEMENT",
+        "COHEN_KAPPA",
+        "FLEISS_KAPPA",
+        "KRIPPENDORFF_ALPHA",
+        "SPAN_F1",
+        "BOUNDARY_MAE",
+    }
+    assert all(metric.value is None for metric in result.metrics)
+    assert all(metric.status.value == "INSUFFICIENT_DATA" for metric in result.metrics)

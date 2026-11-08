@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+from uuid import uuid4
+
+from app.infrastructure.db.models.episodes import EpisodeModel
+from sqlalchemy import update
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.annotation_support import (
@@ -241,3 +246,102 @@ def test_assignment_and_submission_error_mapping(
     )
     assert bypass.status_code == 422
     assert bypass.json()["error"]["code"] == "validation_failed"
+
+
+def _seed_rejected_episode(
+    factory: sessionmaker[Session],
+    project_id,
+    actor_id,
+    code: str,
+) -> None:
+    episode_id = uuid4()
+    with factory() as session:
+        session.add(
+            EpisodeModel(
+                id=episode_id,
+                project_id=project_id,
+                episode_lineage_id=uuid4(),
+                episode_version=1,
+                code=code,
+                status="PENDING",
+                quality_status="NOT_CHECKED",
+                annotation_status="NOT_STARTED",
+                scene_labels=["kitchen"],
+                start_time_ns=1_000,
+                end_time_ns=2_000,
+                duration_ns=1_000,
+                time_domain="UTC",
+                time_base={},
+                canonical_schema_version="ddp.canonical/1.0.0-draft",
+                pipeline_id="parser",
+                pipeline_version="1.0.0",
+                segmentation_rule_version="seg-v1",
+                calibration_snapshot=[],
+                manifest_key=f"canonical/{project_id}/{episode_id}/1/manifest.json",
+                manifest_sha256="sha256:" + "b" * 64,
+                frame_count=10,
+                attempt=1,
+                max_attempts=3,
+                created_at=datetime(2026, 11, 9, 12, 0, tzinfo=UTC),
+                updated_at=datetime(2026, 11, 9, 12, 0, tzinfo=UTC),
+                created_by=actor_id,
+                updated_by=actor_id,
+            )
+        )
+        session.flush()
+        for status, quality, failure in (
+            ("PROCESSING", "NOT_CHECKED", None),
+            ("READY", "NOT_CHECKED", None),
+            ("QUALITY_CHECKING", "FAIL", None),
+            ("REJECTED", "FAIL", "质量门禁未通过"),
+        ):
+            values = {"status": status, "quality_status": quality}
+            if failure is not None:
+                values["failure_reason"] = failure
+            session.execute(
+                update(EpisodeModel).where(EpisodeModel.id == episode_id).values(**values)
+            )
+        session.commit()
+
+
+def test_sample_set_preview_reports_gate_exclusion_reasons(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """门禁排除的 Episode 必须出现在 exclusion_summary（D5）。"""
+    factory, ids = api_db
+    seed_episode(factory, ids.project_a, ids.editor_a, "EP-EXCL-OK")
+    _seed_rejected_episode(factory, ids.project_a, ids.editor_a, "EP-EXCL-REJECTED")
+    editor = make_client(factory, ids.editor_a)
+
+    created = editor.post(
+        url(ids.project_a, "/annotation-sample-sets"),
+        json={"code": "sample-exclusion", "filters": {"scene_labels": ["kitchen"]}},
+    )
+    assert created.status_code == 201, created.text
+    sample_set_id = created.json()["sample_set_id"]
+    previewed = editor.post(
+        url(ids.project_a, f"/annotation-sample-sets/{sample_set_id}/actions/preview"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    assert previewed.status_code == 200, previewed.text
+    body = previewed.json()
+    assert body["exclusion_summary"].get("episode_status:REJECTED") == 1
+    assert body["excluded_count"] >= 1
+
+
+def test_published_schema_patch_returns_contract_error_code(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """发布后原地修改定义必须返回契约错误码 annotation_schema_immutable（D7）。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-immutable")
+    patched = editor.patch(
+        url(ids.project_a, f"/annotation-schemas/{schema['schema_id']}"),
+        headers={"If-Match": f'"{schema["version"]}"'},
+        json={"annotation_levels": ["EPISODE", "FRAME"]},
+    )
+    assert patched.status_code == 409, patched.text
+    assert patched.json()["error"]["code"] == "annotation_schema_immutable"
