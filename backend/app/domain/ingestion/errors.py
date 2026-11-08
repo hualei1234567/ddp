@@ -119,3 +119,19 @@ class ResourceImmutableError(IngestionDomainError):
 
 class ConflictError(IngestionDomainError):
     code = "conflict"
+
+
+class IdempotencyKeyReusedError(IngestionDomainError):
+    code = "idempotency_key_reused"
+
+
+class JobNotRetryableError(IngestionDomainError):
+    code = "job_not_retryable"
+
+
+class JobTimeoutError(IngestionDomainError):
+    code = "job_timeout"
+
+
+class AssetNotUsableError(IngestionDomainError):
+    code = "asset_not_usable"

@@ -90,3 +90,30 @@ class UploadSessionAction(StrEnum):
     SYSTEM_FAIL = "system-fail"
     ABORT = "abort"
     SYSTEM_EXPIRE = "system-expire"
+
+
+class IngestionJobType(StrEnum):
+    """阶段 2 接入 Job 类型；未知类型一律拒绝。"""
+
+    VALIDATE = "VALIDATE"
+    PARSE_METADATA = "PARSE_METADATA"
+    SEGMENT_EPISODE = "SEGMENT_EPISODE"
+    REVALIDATE = "REVALIDATE"
+
+
+class IngestionJobStatus(StrEnum):
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    CANCELLING = "CANCELLING"
+    CANCELLED = "CANCELLED"
+
+
+class IngestionJobAction(StrEnum):
+    WORKER_START = "worker-start"
+    WORKER_SUCCEED = "worker-succeed"
+    WORKER_FAIL = "worker-fail"
+    RETRY = "retry"
+    CANCEL = "cancel"
+    WORKER_CANCELLED = "worker-cancelled"

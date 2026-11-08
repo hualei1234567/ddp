@@ -13,7 +13,8 @@ from typing import Protocol
 from uuid import UUID
 
 from app.domain.identity.models import ProjectScope
-from app.domain.ingestion.enums import RawAssetStatus
+from app.domain.ingestion.enums import IngestionJobStatus, RawAssetStatus
+from app.domain.ingestion.jobs import IngestionJob
 from app.domain.ingestion.models import RawAsset, RawAssetLink, UploadPart, UploadSession
 
 
@@ -111,6 +112,36 @@ class CollectionDirectory(Protocol):
         batch_id: UUID,
         task_id: UUID,
     ) -> bool: ...
+
+
+class IngestionJobRepository(Protocol):
+    def add(self, scope: ProjectScope, job: IngestionJob) -> IngestionJob: ...
+
+    def get(self, scope: ProjectScope, job_id: UUID) -> IngestionJob | None: ...
+
+    def get_by_idempotency_key(
+        self,
+        scope: ProjectScope,
+        key: str,
+    ) -> IngestionJob | None: ...
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        status: IngestionJobStatus | None = None,
+        raw_asset_id: UUID | None = None,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[IngestionJob]: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        job: IngestionJob,
+        *,
+        expected_version: int,
+    ) -> IngestionJob: ...
 
 
 @dataclass(frozen=True, slots=True)

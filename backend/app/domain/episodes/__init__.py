@@ -1,0 +1,83 @@
+"""Episode、切片与数据血缘领域包。"""
+
+from app.domain.episodes.enums import (
+    EpisodeAnnotationStatus,
+    EpisodeQualityStatus,
+    EpisodeStatus,
+    LineageNodeType,
+    LineageRelation,
+    SegmentationMethod,
+)
+from app.domain.episodes.errors import (
+    CalibrationNotActiveError,
+    DomainValidationError,
+    EpisodeDomainError,
+    EpisodeOverlapConflictError,
+    InvalidStateTransitionError,
+    LineageConflictError,
+    ManifestHashMismatchError,
+    ManifestSchemaInvalidError,
+    ResourceImmutableError,
+    ResourceNotFoundError,
+    TimeBaseInvalidError,
+    VersionConflictError,
+)
+from app.domain.episodes.lineage import (
+    LineageEdge,
+    LineageNodeRef,
+    validate_edge_endpoints,
+    validate_supersedes_linear,
+)
+from app.domain.episodes.manifest import (
+    assert_manifest_hash,
+    compute_manifest_sha256,
+    validate_manifest_identity,
+)
+from app.domain.episodes.models import Episode, EpisodeRawAsset, Segmentation
+from app.domain.episodes.state_machines import (
+    EPISODE_DATA_FROZEN_FIELDS,
+    EPISODE_DATA_FROZEN_STATUSES,
+    EPISODE_QUALITY_FROZEN_STATUSES,
+    EPISODE_TERMINAL,
+    allowed_episode_actions,
+    episode_target_status,
+    episode_transition_pairs,
+)
+
+__all__ = [
+    "CalibrationNotActiveError",
+    "DomainValidationError",
+    "EPISODE_DATA_FROZEN_FIELDS",
+    "EPISODE_DATA_FROZEN_STATUSES",
+    "EPISODE_QUALITY_FROZEN_STATUSES",
+    "EPISODE_TERMINAL",
+    "Episode",
+    "EpisodeAnnotationStatus",
+    "EpisodeDomainError",
+    "EpisodeOverlapConflictError",
+    "EpisodeQualityStatus",
+    "EpisodeRawAsset",
+    "EpisodeStatus",
+    "InvalidStateTransitionError",
+    "LineageConflictError",
+    "LineageEdge",
+    "LineageNodeRef",
+    "LineageNodeType",
+    "LineageRelation",
+    "ManifestHashMismatchError",
+    "ManifestSchemaInvalidError",
+    "ResourceImmutableError",
+    "ResourceNotFoundError",
+    "Segmentation",
+    "SegmentationMethod",
+    "TimeBaseInvalidError",
+    "VersionConflictError",
+    "allowed_episode_actions",
+    "assert_manifest_hash",
+    "compute_manifest_sha256",
+    "episode_target_status",
+    "episode_transition_pairs",
+    "validate_edge_endpoints",
+    "validate_manifest_identity",
+    "validate_supersedes_linear",
+]

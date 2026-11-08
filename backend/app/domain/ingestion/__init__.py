@@ -2,6 +2,9 @@
 
 from app.domain.ingestion.enums import (
     RAW_ASSET_ACTIVE_STATUSES,
+    IngestionJobAction,
+    IngestionJobStatus,
+    IngestionJobType,
     RawAssetFormat,
     RawAssetLinkStatus,
     RawAssetLinkType,
@@ -13,15 +16,19 @@ from app.domain.ingestion.enums import (
     UploadVerificationStatus,
 )
 from app.domain.ingestion.errors import (
+    AssetNotUsableError,
     ConflictError,
     DomainValidationError,
     FileSignatureMismatchError,
     FileTooLargeError,
     FileTypeUnsupportedError,
     HashMismatchError,
+    IdempotencyKeyReusedError,
     IngestionDomainError,
     InvalidFilenameError,
     InvalidStateTransitionError,
+    JobNotRetryableError,
+    JobTimeoutError,
     ObjectStorageUnavailableError,
     ResourceImmutableError,
     ResourceNotFoundError,
@@ -32,19 +39,28 @@ from app.domain.ingestion.errors import (
     UploadSessionNotUploadingError,
     VersionConflictError,
 )
+from app.domain.ingestion.jobs import IngestionJob
 from app.domain.ingestion.models import RawAsset, RawAssetLink, UploadPart, UploadSession
 
 __all__ = [
     "RAW_ASSET_ACTIVE_STATUSES",
+    "AssetNotUsableError",
     "ConflictError",
     "DomainValidationError",
     "FileSignatureMismatchError",
     "FileTooLargeError",
     "FileTypeUnsupportedError",
     "HashMismatchError",
+    "IdempotencyKeyReusedError",
     "IngestionDomainError",
+    "IngestionJob",
+    "IngestionJobAction",
+    "IngestionJobStatus",
+    "IngestionJobType",
     "InvalidFilenameError",
     "InvalidStateTransitionError",
+    "JobNotRetryableError",
+    "JobTimeoutError",
     "ObjectStorageUnavailableError",
     "RawAsset",
     "RawAssetFormat",

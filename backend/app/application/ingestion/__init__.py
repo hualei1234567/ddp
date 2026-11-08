@@ -1,5 +1,7 @@
-"""上传与 RawAsset 应用层。"""
+"""上传、RawAsset 与 IngestionJob 应用层。"""
 
+from app.application.ingestion.commands import CreateIngestionJobCommand, JobActionCommand
+from app.application.ingestion.jobs import IngestionJobService
 from app.application.ingestion.ports import (
     AbortUploadSessionCommand,
     AckUploadPartCommand,
@@ -10,6 +12,7 @@ from app.application.ingestion.ports import (
     CompleteUploadResult,
     CreatedUploadSession,
     CreateUploadSessionCommand,
+    IngestionJobRepository,
     ObjectStorage,
     PresignedPart,
     RawAssetLinkRepository,
@@ -32,8 +35,12 @@ __all__ = [
     "CompletePartSpec",
     "CompleteUploadCommand",
     "CompleteUploadResult",
+    "CreateIngestionJobCommand",
     "CreateUploadSessionCommand",
     "CreatedUploadSession",
+    "IngestionJobRepository",
+    "IngestionJobService",
+    "JobActionCommand",
     "ObjectStorage",
     "PresignedPart",
     "RawAssetLinkRepository",

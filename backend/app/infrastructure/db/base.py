@@ -10,6 +10,7 @@ from app.infrastructure.db.collection_guards import (
     install_audit_guards,
     install_collection_state_guards,
 )
+from app.infrastructure.db.episode_guards import install_episode_state_guards
 from app.infrastructure.db.guards import (
     install_calibration_record_guards,
     install_calibration_target_guards,
@@ -41,3 +42,4 @@ def _install_ddp_guards(
     install_audit_guards(connection)
     install_collection_state_guards(connection)
     install_ingestion_state_guards(connection)
+    install_episode_state_guards(connection)

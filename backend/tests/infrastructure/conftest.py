@@ -1,22 +1,26 @@
-"""设备域仓储测试共享夹具。
+"""设备域与 Episode 仓储测试共享夹具。
 
 夹具真实写入 SQLite 数据库，预置两个项目、成员及标定目标（机器人/传感器），
-避免各测试重复搭建项目上下文。
+避免各测试重复搭建项目上下文。Episode 夹具额外预置两个项目各一个 VALID 资产。
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
 from app.domain.devices import Robot, Sensor, SensorType
 from app.domain.identity.models import ProjectRole, ProjectScope
+from app.domain.ingestion.enums import RawAssetFormat, RawAssetSourceType, RawAssetStatus
+from app.domain.ingestion.models import RawAsset
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.models.identity import Project, ProjectMember, User
 from app.infrastructure.db.session import create_db_engine, create_session_factory
 from app.infrastructure.repositories.devices import SqlRobotRepository, SqlSensorRepository
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -158,6 +162,93 @@ def device_db() -> Iterator[tuple[sessionmaker[Session], DeviceIds]]:
         )
         session.commit()
 
+    try:
+        yield factory, ids
+    finally:
+        engine.dispose()
+
+
+@dataclass(frozen=True)
+class EpisodeIds:
+    project_a: UUID
+    project_b: UUID
+    user_a: UUID
+    user_b: UUID
+    asset_a: UUID
+    asset_b: UUID
+
+
+@pytest.fixture()
+def episode_db() -> Iterator[tuple[sessionmaker[Session], EpisodeIds]]:
+    """预置两个项目与各一个 VALID RawAsset，供 Episode/血缘/Job 用例使用。"""
+    engine = create_db_engine(
+        "sqlite+pysqlite:///:memory:",
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout_seconds=5,
+        connect_timeout_seconds=5,
+    )
+    Base.metadata.create_all(engine)
+    factory = create_session_factory(engine)
+    project_a, project_b = uuid4(), uuid4()
+    user_a, user_b = uuid4(), uuid4()
+    with factory() as session:
+        session.add_all(
+            [
+                Project(id=project_a, code="episode-project-a", name="Episode 项目 A"),
+                Project(id=project_b, code="episode-project-b", name="Episode 项目 B"),
+                User(id=user_a, display_name="甲"),
+                User(id=user_b, display_name="乙"),
+            ]
+        )
+        session.commit()
+
+    now = datetime(2026, 11, 8, 12, 0, tzinfo=UTC)
+    assets: dict[str, UUID] = {}
+    for project_id, user_id, label in (
+        (project_a, user_a, "a"),
+        (project_b, user_b, "b"),
+    ):
+        asset_id = uuid4()
+        digest = f"{project_id.hex}{asset_id.hex}"
+        asset = RawAsset(
+            asset_id=asset_id,
+            project_id=project_id,
+            code=f"RAW-{label}",
+            source_type=RawAssetSourceType.UPLOAD,
+            original_filename=f"robot-{label}.mcap",
+            object_key=f"raw/{project_id}/2026/11/08/{asset_id}/content.mcap",
+            size_bytes=1024,
+            content_type="application/x-mcap",
+            format=RawAssetFormat.MCAP,
+            sha256=f"sha256:{digest[:64]}",
+            uploaded_by=user_id,
+            ingested_at=now,
+            created_at=now,
+            updated_at=now,
+            created_by=user_id,
+            updated_by=user_id,
+        )
+        with factory() as session:
+            scope = ProjectScope(project_id, actor_id=user_id)
+            repository = SqlRawAssetRepository(session)
+            repository.add(scope, asset)
+            repository.save(
+                scope,
+                asset.with_status(RawAssetStatus.VALID, now=now),
+                expected_version=1,
+            )
+            session.commit()
+        assets[label] = asset_id
+
+    ids = EpisodeIds(
+        project_a=project_a,
+        project_b=project_b,
+        user_a=user_a,
+        user_b=user_b,
+        asset_a=assets["a"],
+        asset_b=assets["b"],
+    )
     try:
         yield factory, ids
     finally:
