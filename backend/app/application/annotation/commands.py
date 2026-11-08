@@ -106,6 +106,13 @@ class NewGoldSet:
 
 
 @dataclass(frozen=True, slots=True)
+class QualityCandidateSpec:
+    submission_id: UUID
+    stratum: str | None = None
+    risk_score: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class NewQualitySample:
     task_id: UUID
     submission_id: UUID

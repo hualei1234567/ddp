@@ -168,9 +168,17 @@ class SqlMemberDirectory:
             )
         )
 
+    def user_role(self, scope: ProjectScope, user_id: UUID) -> str | None:
+        return self._session.scalar(
+            select(ProjectMember.role).where(
+                ProjectMember.project_id == scope.project_id,
+                ProjectMember.user_id == user_id,
+            )
+        )
+
 
 class SqlGoldSetAnswerAccessPolicy:
-    """黄金集答案访问控制：项目 OWNER/EDITOR 可读，VIEWER 默认拒绝。"""
+    """黄金集答案访问控制：仅项目 OWNER 可读，其余角色一律拒绝。"""
 
     def __init__(self, session: Session) -> None:
         self._session = session

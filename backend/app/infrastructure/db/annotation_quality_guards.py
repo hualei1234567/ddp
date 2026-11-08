@@ -62,6 +62,7 @@ _QUALITY_SAMPLE_IMMUTABLE = " OR ".join(
         "stratum",
         "sample_reason",
         "item_refs",
+        "metadata",
     )
 )
 _IAA_REPORT_IMMUTABLE = " OR ".join(

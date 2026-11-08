@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
-from app.application.annotation.commands import NewQualitySample
+from app.application.annotation.commands import NewQualitySample, QualityCandidateSpec
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
 from app.application.annotation.ports import (
     AnnotationRecordRepository,
@@ -231,38 +230,70 @@ class QualitySampleUseCases:
         self._uow.commit()
         return created
 
-    def plan_for_submissions(
+    def plan_for_candidates(
         self,
         scope: ProjectScope,
         task_id: UUID,
         *,
-        submission_ids: tuple[UUID, ...],
+        candidate_specs: tuple[QualityCandidateSpec, ...],
         sampling_policy_version: str,
         sample_type: str,
         sample_size: int,
         sample_reason: str,
         stratum: str | None = None,
-        risk_scores: Mapping[UUID, float] | None = None,
         risk_threshold: float | None = None,
         due_at: datetime | None = None,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str = "",
         request_id: str | None = None,
     ) -> list[QualitySample]:
-        """根据任务内真实提交构造抽检候选，再交给策略化抽样。"""
-        scores = risk_scores or {}
+        """校验候选确属该任务后，按策略化抽样生成抽检。"""
+        key = validate_key(idempotency_key)
+        body: dict[str, object] = {
+            "task_id": str(task_id),
+            "candidates": [
+                {
+                    "submission_id": str(item.submission_id),
+                    "stratum": item.stratum,
+                    "risk_score": item.risk_score,
+                }
+                for item in candidate_specs
+            ],
+            "sampling_policy_version": sampling_policy_version,
+            "sample_type": sample_type,
+            "sample_size": sample_size,
+            "sample_reason": sample_reason,
+            "stratum": stratum,
+            "risk_threshold": risk_threshold,
+            "due_at": due_at.isoformat() if due_at is not None else None,
+        }
+        now = _utcnow()
+        replay = self._idempotency.lookup(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            now=now,
+        )
+        if replay is not None:
+            sample_ids = [UUID(item) for item in replay.response_ref.split(",") if item]
+            return [self.get(scope, sample_id) for sample_id in sample_ids]
         candidates: list[QualityCandidate] = []
-        for submission_id in submission_ids:
-            submission = self._submissions.get(scope, submission_id)
+        for spec in candidate_specs:
+            submission = self._submissions.get(scope, spec.submission_id)
             if submission is None or submission.task_id != task_id:
-                raise ResourceNotFoundError("标注提交", submission_id)
+                raise ResourceNotFoundError("标注提交", spec.submission_id)
             candidates.append(
                 QualityCandidate(
                     submission_id=submission.submission_id,
                     annotator_id=submission.annotator_id,
-                    stratum=stratum,
-                    risk_score=float(scores.get(submission_id, 0.0)),
+                    stratum=spec.stratum,
+                    risk_score=spec.risk_score,
                 )
             )
-        return self.plan(
+        result = self.plan(
             scope,
             task_id,
             candidates=tuple(candidates),
@@ -275,6 +306,19 @@ class QualitySampleUseCases:
             due_at=due_at,
             request_id=request_id,
         )
+        created = result
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=201,
+            response_ref=",".join(str(item.quality_sample_id) for item in created),
+            now=now,
+        )
+        self._uow.commit()
+        return created
 
     def apply_action(
         self,

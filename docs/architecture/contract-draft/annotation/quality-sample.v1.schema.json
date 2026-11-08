@@ -20,31 +20,170 @@
   ],
   "additionalProperties": false,
   "properties": {
-    "quality_sample_id": {"$ref": "#/$defs/uuid"},
-    "project_id": {"$ref": "#/$defs/uuid"},
-    "task_id": {"$ref": "#/$defs/uuid"},
-    "submission_id": {"$ref": "#/$defs/uuid"},
-    "status": {"type": "string", "enum": ["PLANNED", "SAMPLED", "ASSIGNED", "IN_REVIEW", "PASSED", "FAILED", "ESCALATED", "CLOSED", "CANCELLED"]},
-    "sampling_policy_version": {"type": "string", "minLength": 1, "maxLength": 64},
-    "sample_type": {"type": "string", "enum": ["RANDOM", "STRATIFIED", "RISK_BASED", "GOLD_SET", "IAA_OVERLAP"]},
-    "stratum": {"type": ["string", "null"], "maxLength": 100},
-    "sample_reason": {"type": "string", "minLength": 1, "maxLength": 500},
-    "item_refs": {"type": "array", "items": {"$ref": "#/$defs/uuid"}, "uniqueItems": true},
-    "reviewer_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
-    "review_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
-    "arbitration_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
-    "due_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
-    "outcome": {"oneOf": [{"type": "string", "enum": ["PASS", "FAIL", "ESCALATE"]}, {"type": "null"}]},
-    "reason": {"type": ["string", "null"], "maxLength": 2000},
-    "closed_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
-    "version": {"type": "integer", "minimum": 1},
-    "created_at": {"$ref": "#/$defs/date_time"},
-    "updated_at": {"$ref": "#/$defs/date_time"},
-    "created_by": {"$ref": "#/$defs/uuid"},
-    "updated_by": {"$ref": "#/$defs/uuid"}
+    "quality_sample_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "project_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "task_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "submission_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PLANNED",
+        "SAMPLED",
+        "ASSIGNED",
+        "IN_REVIEW",
+        "PASSED",
+        "FAILED",
+        "ESCALATED",
+        "CLOSED",
+        "CANCELLED"
+      ]
+    },
+    "sampling_policy_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "sample_type": {
+      "type": "string",
+      "enum": [
+        "RANDOM",
+        "STRATIFIED",
+        "RISK_BASED",
+        "GOLD_SET",
+        "IAA_OVERLAP"
+      ]
+    },
+    "stratum": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 100
+    },
+    "sample_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "item_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/uuid"
+      },
+      "uniqueItems": true
+    },
+    "reviewer_id": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "review_id": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "arbitration_id": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "due_at": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/date_time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "outcome": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "PASS",
+            "FAIL",
+            "ESCALATE"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 2000
+    },
+    "closed_at": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/date_time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "updated_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "created_by": {
+      "$ref": "#/$defs/uuid"
+    },
+    "updated_by": {
+      "$ref": "#/$defs/uuid"
+    },
+    "annotator_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
   },
   "$defs": {
-    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
-    "date_time": {"type": "string", "format": "date-time"}
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    }
   }
 }

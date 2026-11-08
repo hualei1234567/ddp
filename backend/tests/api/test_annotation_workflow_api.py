@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+from app.infrastructure.db.models.annotation_work import AnnotationAssignmentEvent
 from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -432,6 +433,14 @@ def test_rework_cycle_versions_and_limit(
     batch = editor.get(url(ids.project_a, f"/annotation-batches/{batch_id}"))
     assert batch.status_code == 200, batch.text
     assert batch.json()["rework_count"] == 1
+    with factory() as session:
+        rework_events = session.scalars(
+            select(AnnotationAssignmentEvent).where(
+                AnnotationAssignmentEvent.assignment_id == UUID(str(assignment_id)),
+                AnnotationAssignmentEvent.action == "rework",
+            )
+        ).all()
+        assert len(rework_events) == 1
 
     # 新版本提交同一条分配，旧版本保留为 SUPERSEDED，不覆盖。
     draft_two = editor.post(
@@ -597,18 +606,40 @@ def test_quality_sampling_plan_is_exposed_over_http(
         work["assignment"]["assignment_id"],
         episode_id,
     )
+    plan_payload = {
+        "task_id": work["task"]["task_id"],
+        "candidates": [{"submission_id": submission["submission_id"]}],
+        "sampling_policy_version": "quality/1",
+        "sample_type": "RANDOM",
+        "sample_size": 1,
+        "sample_reason": "例行抽检",
+    }
     planned = owner.post(
         url(ids.project_a, "/quality-samples/plan"),
-        json={
-            "task_id": work["task"]["task_id"],
-            "submission_ids": [submission["submission_id"]],
-            "sampling_policy_version": "quality/1",
-            "sample_type": "RANDOM",
-            "sample_size": 1,
-            "sample_reason": "例行抽检",
-        },
+        headers={"Idempotency-Key": "plan-idem-0001"},
+        json=plan_payload,
     )
     assert planned.status_code == 201, planned.text
+    replay = owner.post(
+        url(ids.project_a, "/quality-samples/plan"),
+        headers={"Idempotency-Key": "plan-idem-0001"},
+        json=plan_payload,
+    )
+    assert replay.status_code == 201, replay.text
+    assert [item["quality_sample_id"] for item in replay.json()] == [
+        item["quality_sample_id"] for item in planned.json()
+    ]
+    duplicated = owner.post(
+        url(ids.project_a, "/quality-samples/plan"),
+        json={
+            **plan_payload,
+            "candidates": [
+                {"submission_id": submission["submission_id"]},
+                {"submission_id": submission["submission_id"]},
+            ],
+        },
+    )
+    assert duplicated.status_code == 422
     samples = planned.json()
     assert len(samples) == 1
     sample = samples[0]
@@ -673,3 +704,146 @@ def test_withdrawn_submission_can_be_superseded(
     assert replacement.json()["supersedes_id"] == submission_id
     old = editor.get(url(ids.project_a, f"/annotation-submissions/{submission_id}"))
     assert old.json()["status"] == "SUPERSEDED"
+
+
+def test_rework_returns_task_and_batch_from_review(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """任务/批次已进入 REVIEWING 时，返工必须把工作范围退回 REWORK（C1）。"""
+    factory, ids = api_db
+    episode_id = seed_episode(factory, ids.project_a, ids.editor_a, "EP-REVIEW-REWORK")
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-review")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-review")
+    work = create_ready_work(
+        editor,
+        owner,
+        ids.project_a,
+        schema,
+        sample_set,
+        episode_id,
+        ids.editor_a,
+        "task-review",
+    )
+    task_id = work["task"]["task_id"]
+    batch_id = work["batch"]["batch_id"]
+    submission = create_submitted(
+        editor,
+        ids.project_a,
+        work["assignment"]["assignment_id"],
+        episode_id,
+    )
+
+    batch_submitted = editor.post(
+        url(ids.project_a, f"/annotation-batches/{batch_id}/actions/submit"),
+        headers={"If-Match": f'"{work["batch"]["version"]}"'},
+        json={},
+    )
+    assert batch_submitted.status_code == 200, batch_submitted.text
+    task_submitted = editor.post(
+        url(ids.project_a, f"/annotation-tasks/{task_id}/actions/submit"),
+        headers={"If-Match": f'"{work["task"]["version"]}"'},
+        json={},
+    )
+    assert task_submitted.status_code == 200, task_submitted.text
+    task_reviewing = editor.post(
+        url(ids.project_a, f"/annotation-tasks/{task_id}/actions/system-review"),
+        headers={"If-Match": f'"{task_submitted.json()["version"]}"'},
+        json={},
+    )
+    assert task_reviewing.status_code == 200, task_reviewing.text
+    batch_reviewing = editor.post(
+        url(ids.project_a, f"/annotation-batches/{batch_id}/actions/system-review"),
+        headers={"If-Match": f'"{batch_submitted.json()["version"]}"'},
+        json={},
+    )
+    assert batch_reviewing.status_code == 200, batch_reviewing.text
+
+    required = _reject_and_require_rework(
+        owner,
+        editor,
+        ids.project_a,
+        submission["submission_id"],
+        ids.owner_a,
+        reason="复核退回",
+    )
+    assert required.status_code == 200, required.text
+
+    task_after = editor.get(url(ids.project_a, f"/annotation-tasks/{task_id}"))
+    batch_after = editor.get(url(ids.project_a, f"/annotation-batches/{batch_id}"))
+    assert task_after.json()["status"] == "REWORK"
+    assert batch_after.json()["status"] == "REWORK"
+
+    replacement = editor.post(
+        url(ids.project_a, "/annotation-submissions"),
+        json={
+            "assignment_id": str(work["assignment"]["assignment_id"]),
+            "records": [record_payload(episode_id)],
+            "data_source": "REAL",
+        },
+    )
+    assert replacement.status_code == 201, replacement.text
+    assert replacement.json()["submission_version"] == 2
+
+
+def test_require_rework_requires_reviewer_or_owner(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """非复核人/非项目负责人不得发起返工要求（R1）。"""
+    factory, ids = api_db
+    episode_id = seed_episode(factory, ids.project_a, ids.editor_a, "EP-REWORK-ACL")
+    other_editor_id = seed_arbiter(factory, ids.project_a)
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    other = make_client(factory, other_editor_id)
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-rework-acl")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-rework-acl")
+    work = create_ready_work(
+        editor,
+        owner,
+        ids.project_a,
+        schema,
+        sample_set,
+        episode_id,
+        ids.editor_a,
+        "task-rework-acl",
+    )
+    submission = create_submitted(
+        editor,
+        ids.project_a,
+        work["assignment"]["assignment_id"],
+        episode_id,
+    )
+    review = owner.post(
+        url(ids.project_a, f"/annotation-submissions/{submission['submission_id']}/reviews"),
+        json={"reviewer_id": str(ids.owner_a)},
+    )
+    review_id = review.json()["review_id"]
+    owner.post(
+        url(ids.project_a, f"/annotation-reviews/{review_id}/actions/claim"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    rejected = owner.post(
+        url(ids.project_a, f"/annotation-reviews/{review_id}/actions/reject"),
+        headers={"If-Match": '"2"'},
+        json={
+            "reason": "标签错误",
+            "issues": [{"code": "E1", "severity": "MAJOR", "message": "错误"}],
+        },
+    )
+    assert rejected.status_code == 200, rejected.text
+    current = editor.get(
+        url(ids.project_a, f"/annotation-submissions/{submission['submission_id']}")
+    )
+    denied = other.post(
+        url(
+            ids.project_a,
+            f"/annotation-submissions/{submission['submission_id']}/actions/require-rework",
+        ),
+        headers={"If-Match": f'"{current.json()["version"]}"'},
+        json={"reason": "越权返工"},
+    )
+    assert denied.status_code == 403, denied.text
+    assert denied.json()["error"]["code"] == "forbidden"

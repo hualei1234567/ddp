@@ -11,9 +11,11 @@ from app.application.annotation.audit import record_change
 from app.application.annotation.commands import NewAnnotationSubmission
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
 from app.application.annotation.ports import (
+    AnnotationArbitrationRepository,
     AnnotationAssignmentRepository,
     AnnotationBatchRepository,
     AnnotationRecordRepository,
+    AnnotationReviewRepository,
     AnnotationSampleSetRepository,
     AnnotationSchemaRepository,
     AnnotationSubmissionRepository,
@@ -21,17 +23,20 @@ from app.application.annotation.ports import (
     AuditRepository,
     EpisodeDirectory,
     IdempotencyRepository,
+    MemberDirectory,
     OutboxRepository,
     UnitOfWork,
 )
 from app.domain.annotation.enums import (
     AnnotationAssignmentAction,
     AnnotationAssignmentStatus,
+    AnnotationBatchAction,
     AnnotationBatchStatus,
     AnnotationRecordStatus,
     AnnotationSchemaStatus,
     AnnotationSubmissionAction,
     AnnotationSubmissionStatus,
+    AnnotationTaskAction,
     AnnotationTaskStatus,
 )
 from app.domain.annotation.errors import (
@@ -48,6 +53,7 @@ from app.domain.annotation.schema import AnnotationSchema, compute_schema_sha256
 from app.domain.annotation.state_machines import (
     allowed_submission_actions,
     assert_submission_action,
+    submission_transition_pairs,
     validate_action_name,
 )
 from app.domain.annotation.submission import (
@@ -56,7 +62,7 @@ from app.domain.annotation.submission import (
     compute_records_digest,
     validate_record_labels,
 )
-from app.domain.identity.models import ProjectScope
+from app.domain.identity.models import ProjectRole, ProjectScope
 
 _RESOURCE_TYPE = "ANNOTATION_SUBMISSION"
 _RECORD_TYPE = "ANNOTATION_RECORD"
@@ -69,12 +75,11 @@ _CREATABLE_BATCH_STATUSES = {
     AnnotationBatchStatus.REWORK,
 }
 # 只有状态机允许 SYSTEM_SUPERSEDE 的状态才能被新版本替代。
-_SUPERSEDABLE = {
-    AnnotationSubmissionStatus.REWORK_REQUIRED,
-    AnnotationSubmissionStatus.RESOLVED_REJECTED,
-    AnnotationSubmissionStatus.RESOLVED_REWORK,
-    AnnotationSubmissionStatus.WITHDRAWN,
-}
+_SUPERSEDABLE = frozenset(
+    AnnotationSubmissionStatus(current)
+    for current, target in submission_transition_pairs()
+    if target == AnnotationSubmissionStatus.SUPERSEDED.value
+)
 # 任务未显式配置 ``quality_policy.max_rework_rounds`` 时的返工轮次上限。
 DEFAULT_MAX_REWORK_ROUNDS = 3
 
@@ -87,6 +92,9 @@ class AnnotationSubmissionUseCases:
         assignments: AnnotationAssignmentRepository,
         batches: AnnotationBatchRepository,
         tasks: AnnotationTaskRepository,
+        reviews: AnnotationReviewRepository,
+        arbitrations: AnnotationArbitrationRepository,
+        members: MemberDirectory,
         sample_sets: AnnotationSampleSetRepository,
         schemas: AnnotationSchemaRepository,
         episodes: EpisodeDirectory,
@@ -100,6 +108,9 @@ class AnnotationSubmissionUseCases:
         self._assignments = assignments
         self._batches = batches
         self._tasks = tasks
+        self._reviews = reviews
+        self._arbitrations = arbitrations
+        self._members = members
         self._sample_sets = sample_sets
         self._schemas = schemas
         self._episodes = episodes
@@ -298,8 +309,7 @@ class AnnotationSubmissionUseCases:
         if action_name == AnnotationSubmissionAction.SUBMIT.value:
             self._validate_submission_snapshot(scope, current)
         if action_name == AnnotationSubmissionAction.REQUIRE_REWORK.value:
-            if current.annotator_id == scope.actor_id:
-                raise ForbiddenOperationError("标注人不得自行发起返工要求")
+            self._assert_can_require_rework(scope, current)
             self._assert_rework_round_available(scope, current)
         updated = replace(
             current.apply_action(action_name, reason=reason, now=now),
@@ -317,6 +327,7 @@ class AnnotationSubmissionUseCases:
                 reason=reason,
                 now=now,
             )
+            self._return_task_and_batch_for_rework(scope, current, reason=reason, now=now)
             self._return_assignment_for_rework(scope, current, reason=reason, now=now)
             self._bump_rework_count(scope, current, now=now)
         self._record(
@@ -361,15 +372,110 @@ class AnnotationSubmissionUseCases:
             request_id=request_id,
         )
 
+    def _assert_can_require_rework(
+        self,
+        scope: ProjectScope,
+        submission: AnnotationSubmission,
+    ) -> None:
+        """返工要求只能由项目负责人、驳回的复核人或仲裁人发起。"""
+        if submission.annotator_id == scope.actor_id:
+            raise ForbiddenOperationError("标注人不得自行发起返工要求")
+        if self._members.user_role(scope, scope.actor_id) == ProjectRole.OWNER.value:
+            return
+        reviews = self._reviews.list_for_submission(scope, submission.submission_id)
+        if any(
+            review.reviewer_id == scope.actor_id
+            and getattr(review.decision, "value", review.decision) == "REJECT"
+            for review in reviews
+        ):
+            return
+        arbitrations = self._arbitrations.list_for_submission(scope, submission.submission_id)
+        if any(scope.actor_id in arbitration.arbiter_ids for arbitration in arbitrations):
+            return
+        raise ForbiddenOperationError("只有复核人、仲裁人或项目负责人可以发起返工")
+
     def _assert_rework_round_available(
         self,
         scope: ProjectScope,
         submission: AnnotationSubmission,
     ) -> None:
-        batch = self._get_batch(scope, submission.batch_id)
         task = self._get_task(scope, submission.task_id)
-        if batch.rework_count >= _rework_limit(task.quality_policy):
+        current_version = submission.submission_version
+        if current_version - 1 >= _rework_limit(task.quality_policy):
             raise ReworkLimitExceededError("返工次数已达上限，请升级项目负责人处理")
+
+    def _return_task_and_batch_for_rework(
+        self,
+        scope: ProjectScope,
+        submission: AnnotationSubmission,
+        *,
+        reason: str | None,
+        now: datetime,
+    ) -> None:
+        """任务/批次若已进入反馈审，先退回 REWORK，保证分配可回到 IN_PROGRESS。"""
+        task = self._get_task(scope, submission.task_id)
+        task = self._transition_task_for_rework(scope, task, reason=reason, now=now)
+        batch = self._get_batch(scope, submission.batch_id)
+        self._transition_batch_for_rework(scope, batch, reason=reason, now=now)
+        del task
+
+    def _transition_task_for_rework(self, scope, task, *, reason, now):
+        status = task.status
+        if status in {AnnotationTaskStatus.IN_PROGRESS, AnnotationTaskStatus.REWORK}:
+            return task
+        steps: list[str] = []
+        if status is AnnotationTaskStatus.SUBMITTED:
+            steps.append(AnnotationTaskAction.SYSTEM_REVIEW.value)
+            status = AnnotationTaskStatus.REVIEWING
+        if status is AnnotationTaskStatus.REVIEWING:
+            steps.extend(
+                [
+                    AnnotationTaskAction.REJECT.value,
+                    AnnotationTaskAction.REWORK.value,
+                ]
+            )
+        elif status is AnnotationTaskStatus.PAUSED:
+            steps.append(AnnotationTaskAction.RESUME.value)
+        elif status is AnnotationTaskStatus.BLOCKED:
+            steps.append(AnnotationTaskAction.UNBLOCK.value)
+        elif status is not AnnotationTaskStatus.REWORK:
+            raise SubmissionNotEditableError("任务状态不允许返工")
+        for step in steps:
+            updated = replace(
+                task.apply_action(step, reason=reason, now=now),
+                updated_by=scope.actor_id,
+            )
+            task = self._tasks.save(scope, updated, expected_version=task.version)
+        return task
+
+    def _transition_batch_for_rework(self, scope, batch, *, reason, now):
+        status = batch.status
+        if status in {AnnotationBatchStatus.IN_PROGRESS, AnnotationBatchStatus.REWORK}:
+            return batch
+        steps: list[str] = []
+        if status is AnnotationBatchStatus.SUBMITTED:
+            steps.append(AnnotationBatchAction.SYSTEM_REVIEW.value)
+            status = AnnotationBatchStatus.REVIEWING
+        if status is AnnotationBatchStatus.REVIEWING:
+            steps.extend(
+                [
+                    AnnotationBatchAction.REJECT.value,
+                    AnnotationBatchAction.REWORK.value,
+                ]
+            )
+        elif status is AnnotationBatchStatus.PAUSED:
+            steps.append(AnnotationBatchAction.RESUME.value)
+        elif status is AnnotationBatchStatus.BLOCKED:
+            steps.append(AnnotationBatchAction.UNBLOCK.value)
+        elif status is not AnnotationBatchStatus.REWORK:
+            raise SubmissionNotEditableError("批次状态不允许返工")
+        for step in steps:
+            updated = replace(
+                batch.apply_action(step, reason=reason, now=now),
+                updated_by=scope.actor_id,
+            )
+            batch = self._batches.save(scope, updated, expected_version=batch.version)
+        return batch
 
     def _return_assignment_for_rework(
         self,
@@ -383,6 +489,7 @@ class AnnotationSubmissionUseCases:
         assignment = self._get_assignment(scope, submission.assignment_id)
         if assignment.status is not AnnotationAssignmentStatus.SUBMITTED:
             return
+        previous_status = assignment.status
         updated = replace(
             assignment.apply_action(
                 AnnotationAssignmentAction.REWORK.value,
@@ -391,7 +498,18 @@ class AnnotationSubmissionUseCases:
             ),
             updated_by=scope.actor_id,
         )
-        self._assignments.save(scope, updated, expected_version=assignment.version)
+        updated = self._assignments.save(scope, updated, expected_version=assignment.version)
+        self._assignments.add_event(
+            scope,
+            event_id=uuid4(),
+            assignment=updated,
+            action=AnnotationAssignmentAction.REWORK.value,
+            from_status=previous_status.value,
+            actor_id=scope.actor_id,
+            reason=reason,
+            minutes=0,
+            occurred_at=now,
+        )
 
     def _bump_rework_count(
         self,

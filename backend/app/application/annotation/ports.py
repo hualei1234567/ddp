@@ -639,6 +639,8 @@ class GoldSetAccessPolicy(Protocol):
 class MemberDirectory(Protocol):
     def user_is_member(self, scope: ProjectScope, user_id: UUID) -> bool: ...
 
+    def user_role(self, scope: ProjectScope, user_id: UUID) -> str | None: ...
+
 
 @dataclass(frozen=True, slots=True)
 class AuditRecord:

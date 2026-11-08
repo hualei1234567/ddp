@@ -40,6 +40,7 @@ from app.api.v1.schemas import PageOut
 from app.application.annotation.commands import (
     NewGoldSet,
     NewQualitySample,
+    QualityCandidateSpec,
 )
 from app.core.errors import ValidationFailedError
 
@@ -273,19 +274,29 @@ def plan_quality_samples(
     request: Request,
     scope: WriteScope,
     use_cases: AnnotationUseCasesDep,
+    idempotency_key: IdempotencyKey = None,
 ) -> list[QualitySampleOut]:
-    samples = use_cases.quality_samples.plan_for_submissions(
+    samples = use_cases.quality_samples.plan_for_candidates(
         scope,
         payload.task_id,
-        submission_ids=tuple(payload.submission_ids),
+        candidate_specs=tuple(
+            QualityCandidateSpec(
+                submission_id=item.submission_id,
+                stratum=item.stratum,
+                risk_score=item.risk_score,
+            )
+            for item in payload.candidates
+        ),
         sampling_policy_version=payload.sampling_policy_version,
         sample_type=payload.sample_type,
         sample_size=payload.sample_size,
         sample_reason=payload.sample_reason,
         stratum=payload.stratum,
-        risk_scores=payload.risk_scores,
         risk_threshold=payload.risk_threshold,
         due_at=payload.due_at,
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
         request_id=request_id(request),
     )
     return [QualitySampleOut.from_domain(sample) for sample in samples]
