@@ -193,9 +193,7 @@ def test_postgres_dataset_triggers_and_immutability(postgres_engine: Engine) -> 
         session.flush()
         with pytest.raises(IntegrityError, match="dataset_identity_immutable"):
             session.execute(
-                update(DatasetModel)
-                .where(DatasetModel.id == dataset_id)
-                .values(code="changed")
+                update(DatasetModel).where(DatasetModel.id == dataset_id).values(code="changed")
             )
             session.flush()
         session.rollback()
