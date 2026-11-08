@@ -14,6 +14,10 @@
 | [04-阶段0平台纳管与并行开工记录-2026-11-08.md](04-阶段0平台纳管与并行开工记录-2026-11-08.md) | 平台纳管、团队、任务、知识库、评测套件与并行执行记录 | 进行中 |
 | [testing/阶段0-1测试策略.md](testing/阶段0-1测试策略.md) | 阶段 0/1 测试矩阵、CI 门禁、验收清单与 P0 阻断项 | 待审阅 |
 | [reviews/2026-11-08-security-device-review.md](reviews/2026-11-08-security-device-review.md) | 设备域安全审查：1 个 P0、5 个 P1、7 个 P2 | 待修复 |
+| [reviews/2026-11-08-qa-device-review.md](reviews/2026-11-08-qa-device-review.md) | QA 代码审查：契约漂移、激活原子性、测试盲区 | 待修复 |
+| [reviews/2026-11-08-architect-device-review.md](reviews/2026-11-08-architect-device-review.md) | 架构审查：F1–F15 与 D1–D9 契约偏差 | 待冻结 |
+| [reviews/2026-11-08-ux-device-review.md](reviews/2026-11-08-ux-device-review.md) | UX 审查：分页、Stale、移动端、操作路径 | 待修复 |
+| [reviews/2026-11-08-consolidated-remediation.md](reviews/2026-11-08-consolidated-remediation.md) | 四路审查整改计划与 DDP-201～210 任务映射 | 执行中 |
 | [adr/](adr/) | 技术栈、模块化单体、数据分层、隔离、存储、测试、部署、Bash 策略 | 现行 |
 | [../ai-team/](../ai-team/) | 1+6 角色状态、worktree 映射、阶段 0 并行报告 | 进行中 |
 | [DDP_具身智能数据闭环平台建设总规范_V1.0_FINAL.md](DDP_具身智能数据闭环平台建设总规范_V1.0_FINAL.md) | 统一建设基线 | 现行有效 |
