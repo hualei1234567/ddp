@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/split-policy.v1.schema.json",
+  "title": "DDP SplitPolicy v1（阶段 4 草案）",
+  "description": "训练/验证/测试划分策略。[DECISION] 默认 Episode 级 80/10/10，可配置；空测试集默认失败，只有显式 ALLOW_EMPTY_TEST 且 PO 审批并记录理由时允许。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "split_policy_id",
+    "project_id",
+    "version",
+    "strategy",
+    "seed",
+    "group_by",
+    "empty_split_policy",
+    "min_item_count",
+    "min_duration_ns",
+    "rounding_rule",
+    "policy_sha256",
+    "created_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "split_policy_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "name": {"type": ["string", "null"], "maxLength": 200},
+    "version": {"type": "integer", "minimum": 1},
+    "strategy": {"type": "string", "enum": ["RATIO", "FIXED_COUNT"]},
+    "train_ratio": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.8},
+    "validation_ratio": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.1},
+    "test_ratio": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.1},
+    "train_count": {"type": ["integer", "null"], "minimum": 1},
+    "validation_count": {"type": ["integer", "null"], "minimum": 1},
+    "test_count": {"type": ["integer", "null"], "minimum": 0},
+    "seed": {"type": "integer", "minimum": 0},
+    "stratify_by": {"type": "array", "items": {"type": "string", "enum": ["SCENE", "ACTION", "ROBOT", "DEVICE", "LABEL", "QUALITY_STATUS"]}, "uniqueItems": true},
+    "group_by": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["EPISODE_LINEAGE", "MANIFEST_SHA256", "RAW_ASSET_SHA256", "SIMILARITY_GROUP", "SCENE_GROUP"]},
+      "default": ["EPISODE_LINEAGE"],
+      "description": "最小不可拆分单元；默认 Episode 血缘。"
+    },
+    "empty_split_policy": {
+      "type": "string",
+      "enum": ["FAIL", "ALLOW_EMPTY_TEST"],
+      "default": "FAIL",
+      "description": "[DECISION] 默认 FAIL；ALLOW_EMPTY_TEST 需 PO 审批并记录理由，训练/验证始终不得为空。"
+    },
+    "empty_test_waiver_required": {"type": "boolean", "default": true},
+    "min_item_count": {"type": "integer", "minimum": 1, "default": 1},
+    "min_duration_ns": {"type": "integer", "minimum": 0, "default": 0},
+    "rounding_rule": {
+      "type": "string",
+      "enum": ["FLOOR", "ROUND_HALF_UP", "LARGEST_REMAINDER"],
+      "default": "LARGEST_REMAINDER",
+      "description": "占比划分的确定性舍入规则，必须写入质量报告与 Manifest。"
+    },
+    "policy_sha256": {"$ref": "#/$defs/sha256"},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"strategy": {"const": "RATIO"}}, "required": ["strategy"]},
+      "then": {"required": ["train_ratio", "validation_ratio", "test_ratio"]}
+    },
+    {
+      "if": {"properties": {"strategy": {"const": "FIXED_COUNT"}}, "required": ["strategy"]},
+      "then": {"required": ["train_count", "validation_count", "test_count"]}
+    }
+  ],
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"}
+  }
+}

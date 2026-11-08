@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/manifest.v1.schema.json",
+  "title": "DDP DatasetVersion Manifest v1（阶段 4 草案）",
+  "description": "DatasetVersion 的规范化样本清单 API 视图。manifest_sha256 由服务端对不含本字段的 RFC 8785 JCS 规范 JSON 计算；客户端提交的 Hash 一律忽略。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "dataset_version_id",
+    "dataset_lineage_id",
+    "dataset_version",
+    "project_id",
+    "created_by",
+    "created_at",
+    "policy_refs",
+    "source_snapshot_at",
+    "items",
+    "split_counts",
+    "quality_report_sha256",
+    "leakage_report_sha256",
+    "annotation_schema_versions",
+    "episode_version_digest",
+    "canonicalization",
+    "manifest_sha256"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"type": "string", "const": "ddp.dataset.manifest/1.0.0"},
+    "dataset_version_id": {"$ref": "#/$defs/uuid"},
+    "dataset_lineage_id": {"$ref": "#/$defs/uuid"},
+    "dataset_version": {"type": "integer", "minimum": 1},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "policy_refs": {
+      "type": "object",
+      "required": ["dedup", "split", "leakage", "quality"],
+      "additionalProperties": false,
+      "properties": {
+        "dedup": {"$ref": "#/$defs/policy_ref"},
+        "split": {"$ref": "#/$defs/policy_ref"},
+        "leakage": {"$ref": "#/$defs/policy_ref"},
+        "quality": {"$ref": "#/$defs/policy_ref"}
+      }
+    },
+    "selection_rule_version": {"type": "string", "minLength": 1, "maxLength": 64},
+    "source_snapshot_at": {"$ref": "#/$defs/date_time"},
+    "items": {"type": "array", "items": {"$ref": "./dataset-item.v1.schema.json"}},
+    "split_counts": {"$ref": "#/$defs/split_counts"},
+    "quality_report_sha256": {"$ref": "#/$defs/sha256"},
+    "leakage_report_sha256": {"$ref": "#/$defs/sha256"},
+    "annotation_schema_versions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["schema_id", "schema_version", "schema_sha256"],
+        "additionalProperties": false,
+        "properties": {
+          "schema_id": {"$ref": "#/$defs/uuid"},
+          "schema_version": {"type": "integer", "minimum": 1},
+          "schema_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      },
+      "uniqueItems": true
+    },
+    "episode_version_digest": {"$ref": "#/$defs/sha256"},
+    "annotation_submission_refs_digest": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "canonicalization": {"type": "string", "const": "RFC8785_JCS"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256", "description": "服务端计算；不在被哈希的规范 JSON 内。"},
+    "manifest_key": {"type": ["string", "null"], "maxLength": 1024},
+    "size_bytes": {"type": ["integer", "null"], "minimum": 0},
+    "inline": {"type": "boolean", "description": "true 表示响应内联 items；false 时通过短期签名 URL 下载。"},
+    "download_url": {"type": ["string", "null"], "maxLength": 4096},
+    "download_url_expires_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "policy_ref": {
+      "type": "object",
+      "required": ["policy_id", "version", "policy_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "policy_id": {"$ref": "#/$defs/uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "split_counts": {
+      "type": "object",
+      "required": ["train", "validation", "test"],
+      "additionalProperties": false,
+      "properties": {
+        "train": {"type": "integer", "minimum": 0},
+        "validation": {"type": "integer", "minimum": 0},
+        "test": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

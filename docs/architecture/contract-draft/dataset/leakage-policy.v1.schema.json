@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/leakage-policy.v1.schema.json",
+  "title": "DDP LeakagePolicy v1（阶段 4 草案）",
+  "description": "泄漏检查策略。[DECISION] 血缘/内容 Hash/跨划分重复为硬规则；场景组/相似簇/批次组/时间重叠默认软规则，PO 豁免需审计。硬规则不可豁免。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "leakage_policy_id",
+    "project_id",
+    "version",
+    "hard_rules",
+    "soft_rules",
+    "waiver_allowed_rules",
+    "policy_sha256",
+    "created_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "leakage_policy_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "name": {"type": ["string", "null"], "maxLength": 200},
+    "version": {"type": "integer", "minimum": 1},
+    "hard_rules": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["EPISODE_LINEAGE_CROSS_SPLIT", "MANIFEST_SHA256_CROSS_SPLIT", "RAW_ASSET_SHA256_CROSS_SPLIT", "SIMILARITY_GROUP_CROSS_SPLIT"]},
+      "default": ["EPISODE_LINEAGE_CROSS_SPLIT", "MANIFEST_SHA256_CROSS_SPLIT", "RAW_ASSET_SHA256_CROSS_SPLIT"]
+    },
+    "soft_rules": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["SCENE_GROUP_CROSS_SPLIT", "BATCH_GROUP_CROSS_SPLIT", "TEMPORAL_OVERLAP_CROSS_SPLIT", "DUPLICATE_ANNOTATION"]},
+      "default": ["SCENE_GROUP_CROSS_SPLIT", "TEMPORAL_OVERLAP_CROSS_SPLIT"]
+    },
+    "waiver_allowed_rules": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["SCENE_GROUP_CROSS_SPLIT", "BATCH_GROUP_CROSS_SPLIT", "TEMPORAL_OVERLAP_CROSS_SPLIT", "DUPLICATE_ANNOTATION"]},
+      "description": "仅软规则可豁免；硬规则出现在本列表即视为策略非法。"
+    },
+    "similarity_grouping_enabled": {"type": "boolean", "default": false},
+    "scene_grouping_enabled": {"type": "boolean", "default": true},
+    "batch_grouping_enabled": {"type": "boolean", "default": false},
+    "temporal_overlap_enabled": {"type": "boolean", "default": true},
+    "unknown_blocks": {"type": "boolean", "const": true, "description": "检查无法完成时必须 UNKNOWN 并阻断，固定为 true。"},
+    "policy_sha256": {"$ref": "#/$defs/sha256"},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"}
+  }
+}

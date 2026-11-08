@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/external-training-reference.v1.schema.json",
+  "title": "DDP ExternalTrainingReference v1（阶段 4 草案）",
+  "description": "外部训练平台任务/模型/评测引用。DDP 只保存引用与状态摘要，不复制权重、不托管训练日志大文件、不伪造训练结果。DDP 不建设训练集群。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "external_ref_id",
+    "project_id",
+    "adapter_id",
+    "adapter_version",
+    "training_delivery_id",
+    "training_request_revision_id",
+    "dataset_version_id",
+    "external_run_id",
+    "external_status",
+    "correlation_id",
+    "idempotency_key",
+    "submitted_at",
+    "last_synced_at",
+    "version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "external_ref_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "adapter_id": {"type": "string", "minLength": 1, "maxLength": 100},
+    "adapter_version": {"type": "string", "minLength": 1, "maxLength": 100},
+    "training_delivery_id": {"$ref": "#/$defs/uuid"},
+    "training_request_revision_id": {"$ref": "#/$defs/uuid"},
+    "dataset_version_id": {"$ref": "#/$defs/uuid"},
+    "external_run_id": {"type": "string", "minLength": 1, "maxLength": 200},
+    "external_run_url": {"type": ["string", "null"], "maxLength": 4096},
+    "external_status": {"type": "string", "enum": ["SUBMITTED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN", "UNAVAILABLE"]},
+    "status_stale": {"type": "boolean", "default": false, "description": "状态超过同步窗口或平台不可达时为 true，不得显示成功。"},
+    "submitted_at": {"$ref": "#/$defs/date_time"},
+    "last_synced_at": {"$ref": "#/$defs/date_time"},
+    "model_ref": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "model_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "model_version": {"type": ["string", "null"], "maxLength": 100},
+        "registered_at": {"type": ["string", "null"], "format": "date-time"}
+      }
+    },
+    "evaluation_ref": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "evaluation_id": {"type": "string", "minLength": 1, "maxLength": 200},
+        "evaluation_version": {"type": ["string", "null"], "maxLength": 100},
+        "registered_at": {"type": ["string", "null"], "format": "date-time"}
+      }
+    },
+    "correlation_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
+    "error_code": {"type": ["string", "null"], "maxLength": 100},
+    "error_summary": {"type": ["string", "null"], "maxLength": 2000},
+    "allowed_actions": {"type": "array", "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "date_time": {"type": "string", "format": "date-time"}
+  }
+}

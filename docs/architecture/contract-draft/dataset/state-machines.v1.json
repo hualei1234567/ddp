@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/state-machines.v1.json",
+  "title": "DDP 阶段 4 数据集与训练域状态机 v1（草案）",
+  "description": "阶段 4 Dataset、DatasetVersion、ExportJob、TrainingRequest/Revision、TrainingDelivery、DatasetGrant 的权威迁移表。状态文本使用大写下划线；非法迁移统一 state_transition_invalid（409）。本文件是设计基线，阶段 4 尚未实现，不得据此声称可用。",
+  "version": "ddp.stage4/1.0.0-draft",
+  "status": "DRAFT",
+  "frozen_at": null,
+  "common": {
+    "error": "state_transition_invalid",
+    "http_status": 409,
+    "terminal_rule": "终态不得回退；终态对象只能通过新资源/新版本表达变更",
+    "audit_required": true,
+    "optimistic_lock": "动作接口必须带 If-Match: \"<version>\"；缺失 428 precondition_required，失配 409 version_conflict",
+    "idempotency": "写动作支持 Idempotency-Key，作用域 (project_id, user_id, key)，至少 24h",
+    "separation_of_duties": "DatasetVersion 构建人不得是唯一冻结审批人；TrainingRequest 提交人不得自批；交付创建人不得是唯一验收人",
+    "project_scope": "所有对象与迁移必须同项目；跨项目统一 404/403，不泄漏存在性",
+    "not_implemented": "阶段 4 无实现代码、路由或迁移；所有迁移均为契约草案，不得标记 PASS"
+  },
+  "machines": {
+    "Dataset": {
+      "initial": "DRAFT",
+      "terminal": ["ARCHIVED"],
+      "states": ["DRAFT", "ACTIVE", "ARCHIVED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "ACTIVE", "action": "activate", "roles": ["SYSTEM", "PO"], "requires_reason": false, "preconditions": ["首个 DatasetVersion 已 FROZEN"]},
+        {"from": "DRAFT", "to": "ARCHIVED", "action": "archive", "roles": ["PO"], "requires_reason": true, "preconditions": ["无进行中的构建/导出/交付"]},
+        {"from": "ACTIVE", "to": "ARCHIVED", "action": "archive", "roles": ["PO"], "requires_reason": true, "preconditions": ["归档影响评估完成", "保留历史与血缘"]},
+        {"from": "ARCHIVED", "to": "ACTIVE", "action": "restore", "roles": ["PO"], "requires_reason": true, "preconditions": ["PO 书面批准", "恢复后仍遵守 usage_policy"]}
+      ],
+      "forbidden_examples": [
+        {"from": "ACTIVE", "to": "DRAFT", "reason": "已激活不可回退编辑；核心标识不得静默改变"},
+        {"from": "ARCHIVED", "to": "DRAFT", "reason": "归档终态不得回退"},
+        {"from": "DRAFT", "to": "ARCHIVED", "reason": "仅允许 PO 审批并记录原因后归档"}
+      ]
+    },
+    "DatasetVersion": {
+      "initial": "DRAFT",
+      "terminal": ["SUPERSEDED", "CANCELLED", "ARCHIVED"],
+      "states": ["DRAFT", "BUILDING", "VALIDATING", "READY", "FROZEN", "SUPERSEDED", "VALIDATION_FAILED", "CANCELLED", "ARCHIVED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "BUILDING", "action": "build", "roles": ["DE", "PM", "PO"], "requires_reason": false, "preconditions": ["选择条件/策略版本完整", "If-Match 匹配", "同版本无并行构建"]},
+        {"from": "BUILDING", "to": "VALIDATING", "action": "system-build-complete", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["候选清单与统计已生成", "build_attempt 记录"]},
+        {"from": "BUILDING", "to": "VALIDATION_FAILED", "action": "system-build-fail", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["错误码/摘要/日志已记录"]},
+        {"from": "VALIDATING", "to": "READY", "action": "system-validate-pass", "roles": ["SYSTEM", "QA"], "requires_reason": false, "preconditions": ["质量报告 READY 且无阻断项", "泄漏 PASS 或软规则 WAIVED", "训练/验证划分非空", "Manifest Hash 可校验"]},
+        {"from": "VALIDATING", "to": "VALIDATION_FAILED", "action": "system-validate-fail", "roles": ["SYSTEM", "QA"], "requires_reason": true, "preconditions": ["失败门禁、错误码与证据已记录"]},
+        {"from": "VALIDATION_FAILED", "to": "DRAFT", "action": "return-draft", "roles": ["DE", "PM", "PO"], "requires_reason": true, "preconditions": ["build_attempt 递增", "旧尝试审计保留"]},
+        {"from": "READY", "to": "DRAFT", "action": "return-draft", "roles": ["PO", "PM", "DE"], "requires_reason": true, "preconditions": ["样本/策略变更后必须重新校验"]},
+        {"from": "READY", "to": "FROZEN", "action": "freeze", "roles": ["PO", "PM"], "requires_reason": false, "preconditions": ["审批人不是唯一构建人", "QA 独立核验", "G4-01～G4-06 全部通过", "If-Match 匹配", "审计/outbox 同事务成功"]},
+        {"from": "DRAFT", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["未冻结", "无进行中的构建"]},
+        {"from": "BUILDING", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["Worker 支持协作取消或构建已结束"]},
+        {"from": "VALIDATING", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["校验已结束或可中断"]},
+        {"from": "READY", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["未冻结", "影响评估完成"]},
+        {"from": "VALIDATION_FAILED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无进行中的重建"]},
+        {"from": "FROZEN", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM", "PM"], "requires_reason": false, "preconditions": ["同 lineage 新版本已 FROZEN", "superseded_by_version_id 已写入"]},
+        {"from": "FROZEN", "to": "ARCHIVED", "action": "archive", "roles": ["PO"], "requires_reason": true, "preconditions": ["归档影响评估完成", "默认禁止新导出"]},
+        {"from": "SUPERSEDED", "to": "ARCHIVED", "action": "archive", "roles": ["PO"], "requires_reason": true, "preconditions": ["保留历史与血缘", "默认禁止新导出"]}
+      ],
+      "validity_status_machine": {
+        "initial": "VALID",
+        "terminal": ["INVALIDATED"],
+        "states": ["VALID", "STALE", "INVALIDATED", "UNKNOWN"],
+        "transitions": [
+          {"from": "VALID", "to": "STALE", "action": "system-mark-stale", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["上游 Episode/标注失效、Manifest Hash 变化、策略升级或来源不可达"]},
+          {"from": "STALE", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "SYSTEM"], "requires_reason": true, "preconditions": ["上游不可恢复或合规要求", "追加 INVALIDATES 血缘边"]},
+          {"from": "UNKNOWN", "to": "STALE", "action": "system-mark-stale", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["来源恢复但仍未复算"]},
+          {"from": "STALE", "to": "VALID", "action": "revalidate", "roles": ["SYSTEM", "QA"], "requires_reason": true, "preconditions": ["使用显式版本重新校验通过", "不得自动替换失效来源"]}
+        ],
+        "rules": [
+          "validity_status 与生命周期状态分离；FROZEN 内容不得因失效静默改写",
+          "STALE/INVALIDATED/UNKNOWN 默认阻断新导出与新交付，例外需 PO 审批并审计",
+          "失效必须通过追加 INVALIDATES 血缘边表达，不删除历史"
+        ]
+      },
+      "forbidden_examples": [
+        {"from": "DRAFT", "to": "FROZEN", "reason": "跳过构建/校验/审批"},
+        {"from": "BUILDING", "to": "FROZEN", "reason": "跳过校验与质量门禁"},
+        {"from": "FROZEN", "to": "DRAFT", "reason": "冻结后不可原地修改；应创建新版本"},
+        {"from": "FROZEN", "to": "FROZEN", "reason": "重复冻结或重算覆盖 Hash；变化必须新版本"},
+        {"from": "CANCELLED", "to": "FROZEN", "reason": "终态回退"},
+        {"from": "SUPERSEDED", "to": "FROZEN", "reason": "终态回退"},
+        {"from": "ARCHIVED", "to": "FROZEN", "reason": "终态回退"}
+      ]
+    },
+    "ExportJob": {
+      "initial": "QUEUED",
+      "terminal": ["SUCCEEDED", "PARTIAL", "CANCELLED"],
+      "terminal_conditions": {
+        "FAILED": "attempt >= max_attempts 或错误不可重试时视为终态；否则可重试"
+      },
+      "states": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "PARTIAL", "CANCELLED"],
+      "transitions": [
+        {"from": "QUEUED", "to": "RUNNING", "action": "worker-start", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["Worker 租约取得", "DatasetVersion FROZEN 且 validity_status 非 STALE/INVALIDATED/UNKNOWN", "未取消"]},
+        {"from": "RUNNING", "to": "SUCCEEDED", "action": "worker-succeed", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["产物写入对象存储", "逐文件与汇总 SHA256 回读校验通过", "artifact_manifest 已生成"]},
+        {"from": "RUNNING", "to": "FAILED", "action": "worker-fail", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["错误码/摘要/日志/attempt 已记录"]},
+        {"from": "FAILED", "to": "QUEUED", "action": "retry", "roles": ["DE", "PM", "SYSTEM"], "requires_reason": false, "preconditions": ["错误可重试", "attempt < max_attempts", "不覆盖已成功产物"]},
+        {"from": "RUNNING", "to": "PARTIAL", "action": "worker-partial", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["部分产物已写但完整性校验失败", "PARTIAL 不得视为成功", "不得生成可验收交付"]},
+        {"from": "QUEUED", "to": "CANCELLED", "action": "cancel", "roles": ["DE", "PM", "PO"], "requires_reason": true, "preconditions": ["未开始或可中断"]},
+        {"from": "RUNNING", "to": "CANCELLED", "action": "cancel", "roles": ["DE", "PM", "PO"], "requires_reason": true, "preconditions": ["Worker 支持协作取消", "记录已写产物"]}
+      ],
+      "forbidden_examples": [
+        {"from": "QUEUED", "to": "SUCCEEDED", "reason": "跳过执行与校验和"},
+        {"from": "RUNNING", "to": "QUEUED", "reason": "不得无记录重置；重试必须 attempt+1"},
+        {"from": "SUCCEEDED", "to": "RUNNING", "reason": "终态回退；重试必须新 Job"},
+        {"from": "PARTIAL", "to": "SUCCEEDED", "reason": "部分产物不得升级为成功；必须新 Job 或显式重试"},
+        {"from": "CANCELLED", "to": "QUEUED", "reason": "终态回退；必须新 Job"},
+        {"from": "SUCCEEDED", "to": "FAILED", "reason": "成功产物不可被静默覆盖"}
+      ]
+    },
+    "TrainingRequestRevision": {
+      "initial": "DRAFT",
+      "terminal": ["SUPERSEDED"],
+      "states": ["DRAFT", "SUBMITTED", "PENDING_REVIEW", "APPROVED", "REJECTED", "SUPERSEDED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "SUBMITTED", "action": "submit", "roles": ["AE", "PM", "PO"], "requires_reason": false, "preconditions": ["需求必填字段完整", "revision_sha256 已计算", "提交人不是唯一审批人"]},
+        {"from": "SUBMITTED", "to": "PENDING_REVIEW", "action": "system-review-start", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["审批人已确定且非提交人"]},
+        {"from": "PENDING_REVIEW", "to": "APPROVED", "action": "approve", "roles": ["PM", "PO"], "requires_reason": false, "preconditions": ["审批人不是提交人", "字段/阈值/格式合法"]},
+        {"from": "PENDING_REVIEW", "to": "REJECTED", "action": "reject", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["驳回原因与可修改项完整"]},
+        {"from": "APPROVED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM", "PM"], "requires_reason": false, "preconditions": ["新 revision 已创建并引用旧 revision", "旧 revision 保留"]},
+        {"from": "REJECTED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM", "PM"], "requires_reason": false, "preconditions": ["新 revision 已创建并引用旧 revision"]},
+        {"from": "SUBMITTED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM", "PM"], "requires_reason": true, "preconditions": ["需求取消或创建新 revision"]},
+        {"from": "PENDING_REVIEW", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM", "PM"], "requires_reason": true, "preconditions": ["需求取消或创建新 revision"]}
+      ],
+      "forbidden_examples": [
+        {"from": "DRAFT", "to": "APPROVED", "reason": "跳过提交/审批"},
+        {"from": "SUBMITTED", "to": "APPROVED", "reason": "跳过审批"},
+        {"from": "APPROVED", "to": "DRAFT", "reason": "批准后不可原地修改；应创建新 revision"},
+        {"from": "SUPERSEDED", "to": "DRAFT", "reason": "终态回退"},
+        {"from": "PENDING_REVIEW", "to": "APPROVED", "reason": "提交人自批必须被拒绝"}
+      ]
+    },
+    "TrainingRequest": {
+      "initial": "DRAFT",
+      "terminal": ["CLOSED", "CANCELLED"],
+      "states": ["DRAFT", "SUBMITTED", "PENDING_REVIEW", "APPROVED", "IN_DELIVERY", "DELIVERED", "ACCEPTED", "CLOSED", "REJECTED", "REVISION_REQUIRED", "BLOCKED", "CANCELLED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "SUBMITTED", "action": "submit-revision", "roles": ["AE", "PM", "PO"], "requires_reason": false, "preconditions": ["当前 revision SUBMITTED", "提交人非唯一审批人"]},
+        {"from": "SUBMITTED", "to": "PENDING_REVIEW", "action": "system-review-start", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["revision 进入 PENDING_REVIEW"]},
+        {"from": "PENDING_REVIEW", "to": "APPROVED", "action": "approve", "roles": ["PM", "PO"], "requires_reason": false, "preconditions": ["当前 revision APPROVED", "审批人非提交人"]},
+        {"from": "PENDING_REVIEW", "to": "REJECTED", "action": "reject", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["驳回原因完整"]},
+        {"from": "REJECTED", "to": "DRAFT", "action": "new-revision", "roles": ["AE", "PM", "PO"], "requires_reason": true, "preconditions": ["新 revision 已创建", "旧 revision 保留"]},
+        {"from": "APPROVED", "to": "IN_DELIVERY", "action": "start-delivery", "roles": ["PM", "DE"], "requires_reason": false, "preconditions": ["存在匹配的 FROZEN DatasetVersion 或构建计划", "交付负责人明确"]},
+        {"from": "IN_DELIVERY", "to": "DELIVERED", "action": "mark-delivered", "roles": ["PM", "DE"], "requires_reason": false, "preconditions": ["TrainingDelivery DELIVERED", "交付单/清单/校验和完整"]},
+        {"from": "DELIVERED", "to": "ACCEPTED", "action": "accept-delivery", "roles": ["AE", "PM"], "requires_reason": false, "preconditions": ["接收方验收通过", "验收人不是唯一交付创建人"]},
+        {"from": "ACCEPTED", "to": "CLOSED", "action": "close", "roles": ["PM", "PO"], "requires_reason": false, "preconditions": ["交付清单/校验和/Manifest/质量报告/血缘齐全", "审计完整"]},
+        {"from": "DELIVERED", "to": "REVISION_REQUIRED", "action": "require-revision", "roles": ["AE", "PM"], "requires_reason": true, "preconditions": ["交付被驳回或需求变更", "返工范围明确"]},
+        {"from": "REVISION_REQUIRED", "to": "IN_DELIVERY", "action": "start-delivery", "roles": ["PM", "DE"], "requires_reason": false, "preconditions": ["新交付或新 revision 已就绪"]},
+        {"from": "DRAFT", "to": "BLOCKED", "action": "block", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["阻塞原因明确（数据不足/格式/Adapter/权限/合规）"]},
+        {"from": "SUBMITTED", "to": "BLOCKED", "action": "block", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "PENDING_REVIEW", "to": "BLOCKED", "action": "block", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "APPROVED", "to": "BLOCKED", "action": "block", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "IN_DELIVERY", "to": "BLOCKED", "action": "block", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "DELIVERED", "to": "BLOCKED", "action": "block", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "REVISION_REQUIRED", "to": "BLOCKED", "action": "block", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "BLOCKED", "to": "DRAFT", "action": "unblock", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["恢复依据记录", "restores_previous_status 或显式选择"]},
+        {"from": "BLOCKED", "to": "APPROVED", "action": "unblock", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["恢复依据记录", "restores_previous_status 或显式选择"]},
+        {"from": "BLOCKED", "to": "IN_DELIVERY", "action": "unblock", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["恢复依据记录", "restores_previous_status 或显式选择"]},
+        {"from": "BLOCKED", "to": "DELIVERED", "action": "unblock", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["恢复依据记录", "restores_previous_status 或显式选择"]},
+        {"from": "BLOCKED", "to": "REVISION_REQUIRED", "action": "unblock", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["恢复依据记录", "restores_previous_status 或显式选择"]},
+        {"from": "DRAFT", "to": "CANCELLED", "action": "cancel", "roles": ["PO", "PM"], "requires_reason": true, "preconditions": ["无未结交付"]},
+        {"from": "SUBMITTED", "to": "CANCELLED", "action": "cancel", "roles": ["PO", "PM"], "requires_reason": true, "preconditions": ["无未结交付"]},
+        {"from": "PENDING_REVIEW", "to": "CANCELLED", "action": "cancel", "roles": ["PO", "PM"], "requires_reason": true, "preconditions": ["无未结交付"]},
+        {"from": "APPROVED", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["无未结交付", "影响评估完成"]},
+        {"from": "IN_DELIVERY", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["取消进行中的交付需影响评估"]},
+        {"from": "DELIVERED", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["影响评估完成"]},
+        {"from": "REVISION_REQUIRED", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["无未结返工"]},
+        {"from": "BLOCKED", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["影响评估完成"]}
+      ],
+      "forbidden_examples": [
+        {"from": "DRAFT", "to": "IN_DELIVERY", "reason": "跳过提交/审批"},
+        {"from": "DRAFT", "to": "DELIVERED", "reason": "跳过审批/构建/导出/交付"},
+        {"from": "APPROVED", "to": "DRAFT", "reason": "批准内容不可原地修改；应创建新 revision"},
+        {"from": "CLOSED", "to": "IN_DELIVERY", "reason": "终态回退"},
+        {"from": "CANCELLED", "to": "APPROVED", "reason": "终态回退"},
+        {"from": "DELIVERED", "to": "APPROVED", "reason": "不得抹除交付历史"}
+      ]
+    },
+    "TrainingDelivery": {
+      "initial": "DRAFT",
+      "terminal": ["ACCEPTED", "CANCELLED"],
+      "states": ["DRAFT", "READY", "DELIVERED", "ACCEPTED", "REJECTED", "REWORK", "CANCELLED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "READY", "action": "ready", "roles": ["DE", "PM"], "requires_reason": false, "preconditions": ["TrainingRequestRevision APPROVED", "DatasetVersion FROZEN 且 validity_status 有效", "ExportJob SUCCEEDED 且校验和通过", "Manifest/质量报告/交付清单完整"]},
+        {"from": "READY", "to": "DELIVERED", "action": "deliver", "roles": ["DE", "PM"], "requires_reason": false, "preconditions": ["产物可下载且审计写入", "接收方明确"]},
+        {"from": "DELIVERED", "to": "ACCEPTED", "action": "accept", "roles": ["AE", "PM"], "requires_reason": false, "preconditions": ["验收人属于接收方", "验收人不是唯一交付创建人", "验收意见记录"]},
+        {"from": "DELIVERED", "to": "REJECTED", "action": "reject", "roles": ["AE", "PM"], "requires_reason": true, "preconditions": ["驳回原因完整", "问题范围/证据记录"]},
+        {"from": "REJECTED", "to": "REWORK", "action": "rework", "roles": ["DE", "PM"], "requires_reason": true, "preconditions": ["返工范围/责任人明确", "旧交付保留"]},
+        {"from": "REWORK", "to": "READY", "action": "resume-ready", "roles": ["DE", "PM"], "requires_reason": false, "preconditions": ["新产物或重新校验通过的导出", "校验和已更新"]},
+        {"from": "DRAFT", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["未交付"]},
+        {"from": "READY", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["未交付"]}
+      ],
+      "forbidden_examples": [
+        {"from": "DRAFT", "to": "DELIVERED", "reason": "跳过就绪与交付门禁"},
+        {"from": "DRAFT", "to": "ACCEPTED", "reason": "跳过交付与验收"},
+        {"from": "ACCEPTED", "to": "REJECTED", "reason": "终态回退；返工必须新交付"},
+        {"from": "CANCELLED", "to": "READY", "reason": "终态回退"},
+        {"from": "DELIVERED", "to": "DRAFT", "reason": "已交付记录不可原地回退"}
+      ]
+    },
+    "DatasetGrant": {
+      "initial": "PENDING_APPROVAL",
+      "terminal": ["REJECTED", "EXPIRED", "REVOKED"],
+      "states": ["PENDING_APPROVAL", "ACTIVE", "REJECTED", "EXPIRED", "REVOKED"],
+      "transitions": [
+        {"from": "PENDING_APPROVAL", "to": "ACTIVE", "action": "approve", "roles": ["PO"], "requires_reason": false, "preconditions": ["审批人不是创建人", "expires_at 晚于当前时间", "scope 合法", "接收项目存在"]},
+        {"from": "PENDING_APPROVAL", "to": "REJECTED", "action": "reject", "roles": ["PO"], "requires_reason": true, "preconditions": ["驳回原因完整"]},
+        {"from": "PENDING_APPROVAL", "to": "EXPIRED", "action": "system-expire", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["now >= expires_at 仍未审批"]},
+        {"from": "ACTIVE", "to": "REVOKED", "action": "revoke", "roles": ["PO"], "requires_reason": true, "preconditions": ["撤销原因完整", "立即生效"]},
+        {"from": "ACTIVE", "to": "EXPIRED", "action": "system-expire", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["now >= expires_at"]}
+      ],
+      "forbidden_examples": [
+        {"from": "PENDING_APPROVAL", "to": "ACTIVE", "reason": "非 PO 审批或创建人自批必须拒绝"},
+        {"from": "EXPIRED", "to": "ACTIVE", "reason": "终态回退；必须重新申请"},
+        {"from": "REVOKED", "to": "ACTIVE", "reason": "撤销终态不可恢复；必须重新申请"},
+        {"from": "ACTIVE", "to": "PENDING_APPROVAL", "reason": "已生效授权不得回退审批态"}
+      ]
+    }
+  }
+}
