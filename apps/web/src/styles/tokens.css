@@ -1,10 +1,47 @@
+/*
+ * DDP 设计令牌与基础样式。
+ * 色值、间距、圆角、阴影必须与 src/app/theme.ts 中的 designTokens 同步。
+ */
 :root {
-  --ddp-bg: #f5f7fb;
-  --ddp-surface: #ffffff;
-  --ddp-border: #e5e9f2;
-  --ddp-text: #1b2430;
-  --ddp-text-muted: #6b7785;
-  --ddp-brand: #2f6fed;
+  --ddp-color-primary: #2f6fed;
+  --ddp-color-primary-strong: #1f57c3;
+  --ddp-color-success: #18a058;
+  --ddp-color-warning: #d97706;
+  --ddp-color-error: #d92d20;
+  --ddp-color-info: #2f6fed;
+  --ddp-color-bg: #f5f7fb;
+  --ddp-color-surface: #ffffff;
+  --ddp-color-border: #e5e9f2;
+  --ddp-color-text: #1b2430;
+  --ddp-color-text-muted: #6b7785;
+  --ddp-color-disabled: #a6b0bd;
+
+  --ddp-space-xs: 4px;
+  --ddp-space-sm: 8px;
+  --ddp-space-md: 12px;
+  --ddp-space-lg: 16px;
+  --ddp-space-xl: 24px;
+  --ddp-space-xxl: 32px;
+
+  --ddp-radius-sm: 6px;
+  --ddp-radius-md: 8px;
+  --ddp-radius-lg: 12px;
+  --ddp-radius-pill: 999px;
+
+  --ddp-font-size-xs: 12px;
+  --ddp-font-size-sm: 13px;
+  --ddp-font-size-md: 14px;
+  --ddp-font-size-lg: 16px;
+  --ddp-font-size-xl: 20px;
+  --ddp-font-size-xxl: 24px;
+
+  --ddp-shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04),
+    0 8px 24px rgba(16, 24, 40, 0.06);
+  --ddp-shadow-raised: 0 12px 32px rgba(16, 24, 40, 0.12);
+
+  --ddp-header-height: 60px;
+  --ddp-sider-width: 232px;
+  --ddp-sider-collapsed-width: 72px;
 }
 
 * {
@@ -19,23 +56,54 @@ body,
 }
 
 body {
-  background: var(--ddp-bg);
-  color: var(--ddp-text);
+  background: var(--ddp-color-bg);
+  color: var(--ddp-color-text);
+  -webkit-font-smoothing: antialiased;
 }
 
 .ddp-shell {
+  min-height: 100vh;
+}
+
+.ddp-main {
+  min-width: 0;
+}
+
+/* ---------- 侧栏 ---------- */
+
+.ddp-sider {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  border-right: 1px solid var(--ddp-color-border);
+}
+
+.ddp-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
   min-height: 100%;
 }
 
-.ddp-sider {
-  border-right: 1px solid var(--ddp-border);
+.ddp-brand-wrap {
+  flex-shrink: 0;
 }
 
 .ddp-brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 20px 20px 12px;
+  height: var(--ddp-header-height);
+  padding: 0 var(--ddp-space-lg);
+}
+
+.ddp-brand-compact {
+  justify-content: center;
+  padding: 0;
+}
+
+.ddp-brand-compact .ddp-brand-text {
+  display: none;
 }
 
 .ddp-brand-mark {
@@ -44,8 +112,9 @@ body {
   justify-content: center;
   width: 38px;
   height: 38px;
+  flex-shrink: 0;
   border-radius: 10px;
-  background: var(--ddp-brand);
+  background: var(--ddp-color-primary);
   color: #fff;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -53,27 +122,143 @@ body {
 
 .ddp-brand-text {
   font-weight: 600;
-  font-size: 14px;
-  color: var(--ddp-text);
+  font-size: var(--ddp-font-size-md);
+  color: var(--ddp-color-text);
+  white-space: nowrap;
 }
 
 .ddp-nav {
   border-inline-end: none !important;
-  padding: 8px;
+  padding: var(--ddp-space-xs) var(--ddp-space-sm);
 }
 
+.ddp-nav-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ddp-space-sm);
+  width: 100%;
+}
+
+.ddp-nav-badge {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid var(--ddp-color-border);
+  border-radius: var(--ddp-radius-pill);
+  color: var(--ddp-color-text-muted);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.ddp-sider-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+  padding: var(--ddp-space-lg);
+  border-top: 1px solid var(--ddp-color-border);
+  font-size: var(--ddp-font-size-xs);
+}
+
+.ddp-drawer .ant-drawer-body {
+  padding: 0;
+}
+
+/* ---------- 顶栏与内容 ---------- */
+
 .ddp-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: var(--ddp-surface) !important;
-  border-bottom: 1px solid var(--ddp-border);
-  padding: 0 24px !important;
+  gap: var(--ddp-space-md);
+  height: var(--ddp-header-height);
+  padding: 0 var(--ddp-space-xl) !important;
+  background: var(--ddp-color-surface) !important;
+  border-bottom: 1px solid var(--ddp-color-border);
+}
+
+.ddp-header-main {
+  display: flex;
+  align-items: center;
+  gap: var(--ddp-space-sm);
+  min-width: 0;
+}
+
+.ddp-header-crumbs {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ddp-header-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--ddp-space-sm);
+  margin-inline-start: auto;
+}
+
+.ddp-header-actions .ant-tag {
+  margin-inline-end: 0;
+}
+
+.ddp-context-tag {
+  border-style: dashed;
+  color: var(--ddp-color-text-muted);
 }
 
 .ddp-content {
-  padding: 24px;
-  background: var(--ddp-bg);
+  min-height: calc(100vh - var(--ddp-header-height));
+  padding: var(--ddp-space-xl);
+  background: var(--ddp-color-bg);
+  overflow-x: hidden;
+}
+
+/* ---------- 页面容器 ---------- */
+
+.ddp-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ddp-space-lg);
+  width: 100%;
+  min-width: 0;
+}
+
+.ddp-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ddp-space-md);
+}
+
+.ddp-page-heading {
+  min-width: 0;
+}
+
+.ddp-page-title,
+.ddp-title {
+  margin-bottom: 0 !important;
+}
+
+.ddp-page-description {
+  margin-bottom: 0 !important;
+  max-width: 880px;
+}
+
+.ddp-page-extra,
+.ddp-page-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ddp-space-sm);
+}
+
+.ddp-page-body {
+  min-width: 0;
 }
 
 .ddp-stack {
@@ -81,12 +266,101 @@ body {
   width: 100%;
 }
 
-.ddp-title {
-  margin-bottom: 0 !important;
+.ddp-content .ant-card {
+  border-color: var(--ddp-color-border);
+  box-shadow: var(--ddp-shadow-card);
 }
 
-@media (max-width: 768px) {
+/* ---------- 页面状态 ---------- */
+
+.ddp-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ddp-space-md);
+  width: 100%;
+  padding: var(--ddp-space-lg);
+}
+
+.ddp-state-compact {
+  padding: 0;
+}
+
+.ddp-state-caption {
+  font-size: var(--ddp-font-size-sm);
+}
+
+.ddp-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ddp-space-sm);
+}
+
+.ddp-state-inline .ddp-state-actions {
+  margin-inline-start: var(--ddp-space-sm);
+}
+
+.ddp-error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--ddp-space-xl);
+}
+
+.ddp-error-boundary .ddp-state {
+  max-width: 720px;
+}
+
+/* ---------- 响应式：桌面端 / 现场端 ---------- */
+
+@media (max-width: 991px) {
   .ddp-content {
-    padding: 16px;
+    padding: var(--ddp-space-lg);
+  }
+
+  .ddp-header {
+    padding: 0 var(--ddp-space-md) !important;
+  }
+}
+
+@media (max-width: 575px) {
+  .ddp-content {
+    padding: var(--ddp-space-md);
+  }
+
+  .ddp-context-tag {
+    display: none;
+  }
+
+  .ddp-page-title {
+    font-size: var(--ddp-font-size-xl) !important;
+  }
+
+  .ddp-header-crumbs {
+    max-width: 48vw;
+  }
+}
+
+/* 现场端常见触控屏：保证主要可点击区域不小于 44px。 */
+@media (pointer: coarse) {
+  .ddp-nav .ant-menu-item {
+    min-height: 44px;
+    line-height: 44px;
+  }
+
+  .ddp-content .ant-btn {
+    min-height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
