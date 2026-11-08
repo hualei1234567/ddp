@@ -12,6 +12,7 @@ import {
   hashFileSha256,
   planFileParts,
   putUploadPart,
+  signPartUpload,
   UploadTransportError,
 } from "./uploadTransfer";
 
@@ -77,6 +78,46 @@ describe("上传分片与传输", () => {
     await expect(hashFileSha256(new Blob(["abc"]))).resolves.toBe(
       "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
     );
+  });
+
+  it("先计算分片 SHA256 再请求签名 URL，且只使用服务端返回头", async () => {
+    const serverHeaders = { "Content-Length": "3" };
+    const requestUrl = vi.fn(async () => ({
+      part_number: 1,
+      method: "PUT" as const,
+      url: "https://storage.example/part-1?sig=server",
+      headers: serverHeaders,
+      expires_at: "2026-11-08T12:15:00Z",
+    }));
+
+    const signed = await signPartUpload(new Blob(["abc"]), requestUrl);
+
+    expect(requestUrl).toHaveBeenCalledWith(
+      "sha256:ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    );
+    expect(signed.request.headers).toEqual({ "Content-Length": "3" });
+    expect(signed.request.headers).not.toHaveProperty(
+      "x-amz-checksum-sha256",
+    );
+    expect(signed.checksum.base64).toBe(
+      "ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=",
+    );
+  });
+
+  it("服务端返回校验和头时原样保留，不重算、不覆盖签名", async () => {
+    const serverHeaders = {
+      "x-amz-checksum-sha256": "server-bound-base64",
+      "Content-Length": "3",
+    };
+    const signed = await signPartUpload(new Blob(["abc"]), async () => ({
+      part_number: 1,
+      method: "PUT",
+      url: "https://storage.example/part-1",
+      headers: serverHeaders,
+      expires_at: "2026-11-08T12:15:00Z",
+    }));
+
+    expect(signed.request.headers).toBe(serverHeaders);
   });
 
   it("PUT 分片返回 ETag；非 2xx 按可重试性分类", async () => {

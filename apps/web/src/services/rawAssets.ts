@@ -1,5 +1,6 @@
 import type {
   AssetFormat,
+  DownloadUrl,
   RawAsset,
   RawAssetPage,
   RawAssetStatus,
@@ -13,7 +14,11 @@ import {
   requireIdentifier,
   type PageRequestOptions,
 } from "./projectScope";
-import { parseRawAsset, parseRawAssetPage } from "./uploadParsers";
+import {
+  parseDownloadUrl,
+  parseRawAsset,
+  parseRawAssetPage,
+} from "./uploadParsers";
 
 export interface RawAssetListOptions extends PageRequestOptions {
   status?: RawAssetStatus;
@@ -31,6 +36,12 @@ export interface RawAssetsApi {
     assetId: string,
     options?: Pick<PageRequestOptions, "signal">,
   ) => Promise<RawAsset>;
+  /** 获取短期下载地址；URL 只在内存中使用，不落盘、不写日志。 */
+  getDownloadUrl: (
+    projectId: string,
+    assetId: string,
+    options?: Pick<PageRequestOptions, "signal">,
+  ) => Promise<DownloadUrl>;
 }
 
 /**
@@ -69,6 +80,17 @@ export function createRawAssetsApi(client: ApiClient): RawAssetsApi {
           signal: options?.signal,
           validate: (value) =>
             assertProjectScope(parseRawAsset(value), projectId, "原始资产"),
+        },
+      );
+    },
+
+    async getDownloadUrl(projectId, assetId, options) {
+      return client.get(
+        `/api/v1/raw-assets/${requireIdentifier(assetId, "asset_id")}/download-url`,
+        {
+          signal: options?.signal,
+          query: { project_id: projectId },
+          validate: (value) => parseDownloadUrl(value),
         },
       );
     },

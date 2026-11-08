@@ -15,8 +15,10 @@ import {
   Tag,
   Typography,
 } from "antd";
+import { Link } from "react-router-dom";
 
 import IdentifierValue from "../ui/IdentifierValue";
+import { buildRawAssetDetailPath } from "../../services/collectionUrl";
 import {
   canCancelUpload,
   canPauseUpload,
@@ -31,6 +33,8 @@ import {
 } from "../../services/uploadQueue";
 
 interface UploadQueueProps {
+  /** 用于已登记资产的详情链接；缺失时只展示 ID。 */
+  projectId?: string;
   items: UploadQueueItem[];
   online: boolean;
   /** 任务状态或权限导致上传不可用时展示的原因。 */
@@ -64,6 +68,7 @@ function QueueStatusTag({ item }: { item: UploadQueueItem }) {
 }
 
 function QueueItem({
+  projectId,
   item,
   online,
   onPause,
@@ -174,10 +179,28 @@ function QueueItem({
                   <IdentifierValue
                     value={item.deduplicatedAssetId}
                     label="原始资产 ID"
+                    to={
+                      projectId
+                        ? buildRawAssetDetailPath(
+                            projectId,
+                            item.deduplicatedAssetId,
+                          )
+                        : undefined
+                    }
                   />
+                  {projectId ? (
+                    <Link
+                      to={buildRawAssetDetailPath(
+                        projectId,
+                        item.deduplicatedAssetId,
+                      )}
+                    >
+                      查看资产与下载
+                    </Link>
+                  ) : null}
                 </Space>
               ) : (
-                "资产详情页尚未在本任务范围内开放。"
+                "服务端未返回资产 ID；无法给出详情链接。"
               )
             }
           />

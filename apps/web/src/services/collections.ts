@@ -3,13 +3,18 @@ import type {
   CollectionTask,
   CollectionTaskCreateInput,
   CollectionTaskPage,
+  Episode,
+  EpisodeAction,
+  EpisodeActionInput,
   EpisodePage,
+  EpisodeRevisionInput,
 } from "../types/collection";
 import { apiClient, type ApiClient } from "./api";
 import {
   parseCollectionBatchPage,
   parseCollectionTask,
   parseCollectionTaskPage,
+  parseEpisode,
   parseEpisodePage,
 } from "./collectionParsers";
 import { createIdempotencyKey, formatIfMatch } from "./idempotency";
@@ -30,7 +35,11 @@ export interface TaskListOptions extends PageRequestOptions {
 export interface EpisodeListOptions extends PageRequestOptions {
   status?: string;
   collectionTaskId?: string;
+  batchId?: string;
 }
+
+/** Episode 写动作与修订都需要当前 version（If-Match）与幂等键。 */
+export type EpisodeWriteOptions = TaskActionOptions;
 
 export interface TaskActionOptions {
   /** 服务端当前 version；写动作必须带 If-Match。 */
@@ -76,6 +85,24 @@ export interface CollectionsApi {
     projectId: string,
     options?: EpisodeListOptions,
   ) => Promise<EpisodePage>;
+  getEpisode: (
+    projectId: string,
+    episodeId: string,
+    options?: Pick<PageRequestOptions, "signal">,
+  ) => Promise<Episode>;
+  actOnEpisode: (
+    projectId: string,
+    episodeId: string,
+    action: EpisodeAction,
+    input: EpisodeActionInput,
+    options: EpisodeWriteOptions,
+  ) => Promise<Episode>;
+  reviseEpisode: (
+    projectId: string,
+    episodeId: string,
+    input: EpisodeRevisionInput,
+    options: EpisodeWriteOptions,
+  ) => Promise<Episode>;
 }
 
 /**
@@ -176,12 +203,70 @@ export function createCollectionsApi(client: ApiClient): CollectionsApi {
         signal: options?.signal,
         query: {
           status: options?.status,
-          collection_task_id: options?.collectionTaskId,
+          // 真后端参数为 task_id；collection_task_id 会被忽略。
+          task_id: options?.collectionTaskId,
+          batch_id: options?.batchId,
           ...pageQuery(options),
         },
         validate: (value) =>
           assertPageScope(parseEpisodePage(value), projectId, "Episode 列表"),
       });
+    },
+
+    async getEpisode(projectId, episodeId, options) {
+      return client.get(
+        projectPath(
+          projectId,
+          `/episodes/${requireIdentifier(episodeId, "episode_id")}`,
+        ),
+        {
+          signal: options?.signal,
+          validate: (value) =>
+            assertProjectScope(parseEpisode(value), projectId, "Episode"),
+        },
+      );
+    },
+
+    async actOnEpisode(projectId, episodeId, action, input, options) {
+      return client.request(
+        projectPath(
+          projectId,
+          `/episodes/${requireIdentifier(episodeId, "episode_id")}/actions/${requireIdentifier(action, "action")}`,
+        ),
+        {
+          method: "POST",
+          signal: options.signal,
+          headers: {
+            "If-Match": formatIfMatch(options.version),
+            "Idempotency-Key":
+              options.idempotencyKey ?? createIdempotencyKey(),
+          },
+          body: input,
+          validate: (value) =>
+            assertProjectScope(parseEpisode(value), projectId, "Episode"),
+        },
+      );
+    },
+
+    async reviseEpisode(projectId, episodeId, input, options) {
+      return client.request(
+        projectPath(
+          projectId,
+          `/episodes/${requireIdentifier(episodeId, "episode_id")}/revisions`,
+        ),
+        {
+          method: "POST",
+          signal: options.signal,
+          headers: {
+            "If-Match": formatIfMatch(options.version),
+            "Idempotency-Key":
+              options.idempotencyKey ?? createIdempotencyKey(),
+          },
+          body: input,
+          validate: (value) =>
+            assertProjectScope(parseEpisode(value), projectId, "Episode"),
+        },
+      );
     },
   };
 }

@@ -107,4 +107,63 @@ describe("阶段 2 RawAsset API client", () => {
       requestId: "rid-404",
     });
   });
+
+  it("下载地址使用查询参数声明项目，并校验 URL 与有效期", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        url: "https://storage.example/raw/content.mcap?sig=short-lived",
+        expires_at: "2026-11-08T12:15:00Z",
+      }),
+    );
+    const api = createRawAssetsApi(clientWith(fetchImpl));
+
+    const signed = await api.getDownloadUrl(PROJECT_ID, ASSET_ID);
+    expect(signed.url).toContain("https://storage.example/");
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      `http://api.test/api/v1/raw-assets/${ASSET_ID}/download-url?project_id=${PROJECT_ID}`,
+    );
+  });
+
+  it("下载地址拒绝非 http(s) 协议与不可解析有效期", async () => {
+    const javascriptUrl = vi.fn(async () =>
+      jsonResponse({
+        url: "javascript:alert(1)",
+        expires_at: "2026-11-08T12:15:00Z",
+      }),
+    );
+    const api = createRawAssetsApi(clientWith(javascriptUrl));
+    await expect(
+      api.getDownloadUrl(PROJECT_ID, ASSET_ID),
+    ).rejects.toMatchObject({ kind: "invalid_response" });
+
+    const badExpiry = vi.fn(async () =>
+      jsonResponse({
+        url: "https://storage.example/raw/content.mcap",
+        expires_at: "not-a-time",
+      }),
+    );
+    const expiryApi = createRawAssetsApi(clientWith(badExpiry));
+    await expect(
+      expiryApi.getDownloadUrl(PROJECT_ID, ASSET_ID),
+    ).rejects.toMatchObject({ kind: "invalid_response" });
+  });
+
+  it("下载 403/404/409 保持统一错误状态，页面按状态展示", async () => {
+    for (const [status, code] of [
+      [403, "forbidden"],
+      [404, "resource_not_found"],
+      [409, "conflict"],
+    ] as const) {
+      const fetchImpl = vi.fn(async () =>
+        jsonResponse(
+          { error: { code, message: code, request_id: `rid-${status}` } },
+          status,
+        ),
+      );
+      const api = createRawAssetsApi(clientWith(fetchImpl));
+      await expect(
+        api.getDownloadUrl(PROJECT_ID, ASSET_ID),
+      ).rejects.toMatchObject({ status, code });
+    }
+  });
 });

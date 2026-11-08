@@ -7,10 +7,12 @@ import CollectionTaskListPage from "./pages/collection/CollectionTaskListPage";
 import WorkbenchPage from "./pages/collection/WorkbenchPage";
 import DeviceDetailPage from "./pages/devices/DeviceDetailPage";
 import DeviceListPage from "./pages/devices/DeviceListPage";
+import EpisodeDetailPage from "./pages/episodes/EpisodeDetailPage";
 import EpisodeListPage from "./pages/episodes/EpisodeListPage";
 import Forbidden from "./pages/Forbidden";
 import ModulePage from "./pages/ModulePage";
 import NotFound from "./pages/NotFound";
+import RawAssetDetailPage from "./pages/rawAssets/RawAssetDetailPage";
 import Workbench from "./pages/Workbench";
 
 /**
@@ -49,6 +51,11 @@ export default function AppRoutes() {
           element={<WorkbenchPage />}
         />
         <Route path="episodes" element={<EpisodeListPage />} />
+        <Route path="episodes/:episodeId" element={<EpisodeDetailPage />} />
+        <Route
+          path="raw-assets/:assetId"
+          element={<RawAssetDetailPage />}
+        />
         {plannedRoutes.map((item) => (
           <Route
             key={item.path}

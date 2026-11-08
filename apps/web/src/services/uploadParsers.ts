@@ -1,5 +1,6 @@
 import type {
   CompleteUploadResponse,
+  DownloadUrl,
   RawAsset,
   RawAssetPage,
   UploadPartAckResponse,
@@ -441,8 +442,16 @@ export function parseRawAsset(value: unknown, path = "原始资产"): RawAsset {
     ),
     uploaded_by: readUuid(record, "uploaded_by", `${path}.uploaded_by`),
     version: readPositiveInteger(record, "version", `${path}.version`),
-    created_at: readString(record, "created_at", `${path}.created_at`),
-    updated_at: readString(record, "updated_at", `${path}.updated_at`),
+    created_at: readOptionalString(
+      record,
+      "created_at",
+      `${path}.created_at`,
+    ),
+    updated_at: readOptionalString(
+      record,
+      "updated_at",
+      `${path}.updated_at`,
+    ),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
   };
@@ -479,4 +488,30 @@ export function parseCompleteUploadResponse(
     ),
     replayed: readBoolean(record, "replayed", `${path}.replayed`),
   };
+}
+
+/**
+ * 下载地址来自服务端签发。只允许 http/https，避免把 javascript:/data:
+ * 等协议交给浏览器打开；expires_at 必须是可解析时间。
+ */
+export function parseDownloadUrl(
+  value: unknown,
+  path = "下载地址",
+): DownloadUrl {
+  const record = asRecord(value, path);
+  const url = readString(record, "url", `${path}.url`);
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new ContractValidationError(`${path}.url 不是合法 URL`);
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new ContractValidationError(`${path}.url 只允许 http/https`);
+  }
+  const expiresAt = readString(record, "expires_at", `${path}.expires_at`);
+  if (Number.isNaN(Date.parse(expiresAt))) {
+    throw new ContractValidationError(`${path}.expires_at 不是合法时间`);
+  }
+  return { url, expires_at: expiresAt };
 }

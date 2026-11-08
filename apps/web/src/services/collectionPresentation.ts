@@ -5,6 +5,7 @@ import type {
   EpisodeAnnotationStatus,
   EpisodeQualityStatus,
   EpisodeStatus,
+  RawAssetStatus,
   UploadSessionStatus,
   UploadVerificationStatus,
 } from "../types/collection";
@@ -163,6 +164,25 @@ const PRIORITY = createStatusMap<CollectionPriority>(
   { P0: "red", P1: "orange", P2: "blue" },
 );
 
+const RAW_ASSET_STATUS = createStatusMap<RawAssetStatus>(
+  {
+    VALIDATING: "校验中",
+    VALID: "可用",
+    QUARANTINED: "已隔离",
+    REJECTED: "已拒绝",
+    ARCHIVED: "已归档",
+    TOMBSTONED: "已墓碑化",
+  },
+  {
+    VALID: "green",
+    VALIDATING: "processing",
+    QUARANTINED: "orange",
+    REJECTED: "red",
+    ARCHIVED: "blue",
+    TOMBSTONED: "default",
+  },
+);
+
 function resolve(
   map: Record<string, StatusPresentation>,
   value: string,
@@ -191,6 +211,8 @@ export const getAnnotationStatus = (value: string): StatusPresentation =>
   resolve(ANNOTATION_STATUS, value);
 export const getPriority = (value: string): StatusPresentation =>
   resolve(PRIORITY, value);
+export const getRawAssetStatus = (value: string): StatusPresentation =>
+  resolve(RAW_ASSET_STATUS, value);
 
 /** 状态机草案中的动作白名单；未知动作不渲染为可执行按钮。 */
 export const COLLECTION_ACTION_VALUES = [

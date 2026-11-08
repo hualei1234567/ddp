@@ -106,6 +106,45 @@ export const ASSET_FORMAT_VALUES = [
 
 export const COLLECTION_PRIORITY_VALUES = ["P0", "P1", "P2"] as const;
 
+/** 服务端 Episode 动作白名单（对应 `EpisodeAction` Literal 与勘误 5）。 */
+export const EPISODE_ACTION_VALUES = [
+  "ready",
+  "quality-check",
+  "quality-result",
+  "accept",
+  "reject",
+  "complete",
+  "invalidate",
+] as const;
+
+export const LINEAGE_NODE_TYPE_VALUES = [
+  "RAW_ASSET",
+  "UPLOAD_SESSION",
+  "COLLECTION_TASK",
+  "COLLECTION_BATCH",
+  "INGESTION_JOB",
+  "EPISODE",
+  "QUALITY_RUN",
+  "ANNOTATION",
+  "DATASET_VERSION",
+  "TRAINING_RUN",
+] as const;
+
+export const LINEAGE_RELATION_VALUES = [
+  "UPLOADED_BY",
+  "PRODUCED_BY",
+  "USED_AS_INPUT",
+  "PRODUCED",
+  "SEGMENTED_INTO",
+  "SUPERSEDES",
+  "INVALIDATES",
+  "EVALUATED_BY",
+  "ANNOTATED_BY",
+  "INCLUDED_IN",
+] as const;
+
+export const LINEAGE_DIRECTION_VALUES = ["forward", "reverse"] as const;
+
 export type CollectionTaskStatus =
   (typeof COLLECTION_TASK_STATUS_VALUES)[number];
 export type CollectionBatchStatus =
@@ -122,6 +161,10 @@ export type EpisodeAnnotationStatus =
   (typeof EPISODE_ANNOTATION_STATUS_VALUES)[number];
 export type AssetFormat = (typeof ASSET_FORMAT_VALUES)[number];
 export type CollectionPriority = (typeof COLLECTION_PRIORITY_VALUES)[number];
+export type EpisodeAction = (typeof EPISODE_ACTION_VALUES)[number];
+export type LineageNodeType = (typeof LINEAGE_NODE_TYPE_VALUES)[number];
+export type LineageRelation = (typeof LINEAGE_RELATION_VALUES)[number];
+export type LineageDirection = (typeof LINEAGE_DIRECTION_VALUES)[number];
 
 /**
  * 任务响应。
@@ -296,8 +339,9 @@ export interface RawAsset {
   duplicate_of_asset_id: string | null;
   uploaded_by: string;
   version: number;
-  created_at: string;
-  updated_at: string;
+  /** 服务端允许为 null；展示层不得把 null 当成时间 0。 */
+  created_at: string | null;
+  updated_at: string | null;
   created_by: string | null;
   updated_by: string | null;
 }
@@ -382,15 +426,43 @@ export interface Episode {
   language_instruction: string | null;
   frame_count: number;
   calibration_snapshot: CalibrationSnapshotItem[];
-  manifest_key: string;
-  manifest_sha256: string;
+  /** READY 之前服务端可能尚未生成 Manifest。 */
+  manifest_key: string | null;
+  manifest_sha256: string | null;
   preview_refs: EpisodePreviewRef[];
   supersedes_id: string | null;
+  /** 服务端当前处理尝试；真后端会返回，其他环境可能缺失。 */
+  attempt?: number;
+  max_attempts?: number;
   version: number;
-  created_at: string;
-  updated_at: string;
+  created_at: string | null;
+  updated_at: string | null;
   created_by: string | null;
   updated_by: string | null;
+}
+
+export interface LineageEdge {
+  edge_id: string;
+  project_id: string;
+  from_node_type: LineageNodeType;
+  from_node_id: string;
+  to_node_type: LineageNodeType;
+  to_node_id: string;
+  relation: LineageRelation;
+  metadata: Record<string, unknown>;
+  created_by: string;
+  created_at: string;
+}
+
+export interface LineageResponse {
+  items: LineageEdge[];
+  direction: LineageDirection;
+}
+
+/** 服务端签发的短期下载地址；前端只在内存中短暂持有。 */
+export interface DownloadUrl {
+  url: string;
+  expires_at: string;
 }
 
 export type CollectionTaskPage = CursorPage<CollectionTask>;
@@ -441,4 +513,17 @@ export interface CompleteUploadInput {
   expected_size_bytes: number;
   parts: CompleteUploadPartInput[];
   metadata?: Record<string, unknown>;
+}
+
+/** 与服务端 `EpisodeActionRequest` 一致；未使用的字段不下发。 */
+export interface EpisodeActionInput {
+  reason?: string | null;
+  quality_status?: EpisodeQualityStatus;
+  manifest?: Record<string, unknown>;
+  frame_count?: number;
+}
+
+/** 与服务端 `EpisodeRevisionCreate` 一致。 */
+export interface EpisodeRevisionInput {
+  code: string;
 }

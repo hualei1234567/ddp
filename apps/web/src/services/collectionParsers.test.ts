@@ -14,6 +14,7 @@ import {
   parseCollectionTaskPage,
   parseEpisode,
   parseEpisodePage,
+  parseLineageResponse,
 } from "./collectionParsers";
 import {
   parseCompleteUploadResponse,
@@ -96,6 +97,62 @@ describe("Episode 解析", () => {
       parseEpisodePage({ items: [episodeFixture], next_cursor: null }).items[0]
         ?.episode_id,
     ).toBe(episodeFixture.episode_id);
+  });
+
+  it("兼容真后端：顶层无 time_domain/raw_asset_ids，Manifest 与时间可为 null", () => {
+    const {
+      time_domain: _timeDomain,
+      raw_asset_ids: _rawAssetIds,
+      ...withoutDraftOnlyFields
+    } = episodeFixture;
+    void _timeDomain;
+    void _rawAssetIds;
+    const episode = parseEpisode({
+      ...withoutDraftOnlyFields,
+      manifest_key: null,
+      manifest_sha256: null,
+      created_at: null,
+      updated_at: null,
+      attempt: 1,
+      max_attempts: 3,
+    });
+    expect(episode.time_domain).toBe("UTC");
+    expect(episode.raw_asset_ids).toEqual([]);
+    expect(episode.manifest_key).toBeNull();
+    expect(episode.created_at).toBeNull();
+    expect(episode.attempt).toBe(1);
+  });
+
+  it("解析正反向血缘并校验方向回显", () => {
+    const edge = {
+      edge_id: "66666666-6666-7666-8666-666666666666",
+      project_id: PROJECT_ID,
+      from_node_type: "RAW_ASSET",
+      from_node_id: "77777777-7777-7777-8777-777777777777",
+      to_node_type: "EPISODE",
+      to_node_id: "55555555-5555-7555-8555-555555555555",
+      relation: "SEGMENTED_INTO",
+      metadata: {},
+      created_by: "88888888-8888-7888-8888-888888888888",
+      created_at: "2026-11-08T03:30:00Z",
+    };
+    const response = parseLineageResponse(
+      { items: [edge], direction: "reverse" },
+      "reverse",
+    );
+    expect(response.items[0]?.relation).toBe("SEGMENTED_INTO");
+    expect(() =>
+      parseLineageResponse({ items: [edge], direction: "forward" }, "reverse"),
+    ).toThrow(ContractValidationError);
+    expect(() =>
+      parseLineageResponse(
+        {
+          items: [{ ...edge, relation: "UNKNOWN_RELATION" }],
+          direction: "forward",
+        },
+        "forward",
+      ),
+    ).toThrow(ContractValidationError);
   });
 });
 

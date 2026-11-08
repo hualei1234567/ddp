@@ -126,8 +126,11 @@ describe("Episode 列表页面状态", () => {
     expect(html).toContain("查看任务");
   });
 
-  it("详情页未开放时明确标注，不提供假链接", () => {
+  it("详情入口指向 Episode 详情页", () => {
     const html = renderList();
-    expect(html).toContain("详情页未开放");
+    expect(html).toContain("查看详情");
+    expect(html).toContain(
+      `/episodes/${episodeFixture.episode_id}?project_id=${PROJECT_ID}`,
+    );
   });
 });

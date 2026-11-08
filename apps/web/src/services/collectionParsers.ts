@@ -7,6 +7,9 @@ import type {
   Episode,
   EpisodePage,
   EpisodePreviewRef,
+  LineageDirection,
+  LineageEdge,
+  LineageResponse,
   TimeBase,
 } from "../types/collection";
 import {
@@ -16,6 +19,9 @@ import {
   EPISODE_ANNOTATION_STATUS_VALUES,
   EPISODE_QUALITY_STATUS_VALUES,
   EPISODE_STATUS_VALUES,
+  LINEAGE_DIRECTION_VALUES,
+  LINEAGE_NODE_TYPE_VALUES,
+  LINEAGE_RELATION_VALUES,
 } from "../types/collection";
 import {
   asRecord,
@@ -375,6 +381,50 @@ function readArray<T>(
   return value.map((item, index) => parseItem(item, `${path}[${index}]`));
 }
 
+/** 可选校验和：服务端在 READY 之前允许为 null。 */
+function readOptionalSha256Checksum(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string | null {
+  if (record[key] === undefined || record[key] === null) {
+    return null;
+  }
+  return readSha256Checksum(record, key, path);
+}
+
+/** 可选正整数：旧版本服务端可能未下发 attempt/max_attempts。 */
+function readOptionalPositiveInteger(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): number | undefined {
+  if (record[key] === undefined || record[key] === null) {
+    return undefined;
+  }
+  return readPositiveInteger(record, key, path);
+}
+
+/**
+ * Episode 的时间域：真后端放在 `time_base.time_domain`，
+ * DDP-301 草案则在 Episode 顶层。两处都接受，但只允许 UTC。
+ */
+function readEpisodeTimeDomain(
+  record: Record<string, unknown>,
+  timeBase: TimeBase,
+  path: string,
+): "UTC" {
+  const raw = record.time_domain;
+  if (raw !== undefined && raw !== null && typeof raw !== "string") {
+    throw new ContractValidationError(`${path} 必须是字符串`);
+  }
+  const value = typeof raw === "string" ? raw : timeBase.time_domain;
+  if (value !== "UTC") {
+    throw new ContractValidationError(`${path} 必须为 UTC`);
+  }
+  return "UTC";
+}
+
 export function parseEpisode(value: unknown, path = "Episode"): Episode {
   const record = asRecord(value, path);
   const timeBase = parseTimeBase(record.time_base, `${path}.time_base`);
@@ -387,10 +437,13 @@ export function parseEpisode(value: unknown, path = "Episode"): Episode {
   if (calibrationSnapshot.length === 0) {
     throw new ContractValidationError(`${path}.calibration_snapshot 不能为空`);
   }
-  const rawAssetIds = readUuidArray(record, "raw_asset_ids", `${path}.raw_asset_ids`);
-  if (rawAssetIds.length === 0) {
-    throw new ContractValidationError(`${path}.raw_asset_ids 不能为空`);
-  }
+  // 真后端 EpisodeOut 不重复返回 raw_asset_ids；关系通过血缘端点查询。
+  // 缺失时返回空数组，避免把“未返回”误判为契约错误。
+  const rawAssetIds = readUuidArrayOrEmpty(
+    record,
+    "raw_asset_ids",
+    `${path}.raw_asset_ids`,
+  );
 
   return {
     episode_id: readUuid(record, "episode_id", `${path}.episode_id`),
@@ -423,9 +476,7 @@ export function parseEpisode(value: unknown, path = "Episode"): Episode {
     start_time_ns: readString(record, "start_time_ns", `${path}.start_time_ns`),
     end_time_ns: readString(record, "end_time_ns", `${path}.end_time_ns`),
     duration_ns: readString(record, "duration_ns", `${path}.duration_ns`),
-    time_domain: readEnum(record, "time_domain", `${path}.time_domain`, [
-      "UTC",
-    ] as const),
+    time_domain: readEpisodeTimeDomain(record, timeBase, `${path}.time_domain`),
     time_base: timeBase,
     canonical_schema_version: readString(
       record,
@@ -480,8 +531,12 @@ export function parseEpisode(value: unknown, path = "Episode"): Episode {
     ),
     frame_count: readInteger(record, "frame_count", `${path}.frame_count`),
     calibration_snapshot: calibrationSnapshot,
-    manifest_key: readString(record, "manifest_key", `${path}.manifest_key`),
-    manifest_sha256: readSha256Checksum(
+    manifest_key: readOptionalString(
+      record,
+      "manifest_key",
+      `${path}.manifest_key`,
+    ),
+    manifest_sha256: readOptionalSha256Checksum(
       record,
       "manifest_sha256",
       `${path}.manifest_sha256`,
@@ -497,9 +552,23 @@ export function parseEpisode(value: unknown, path = "Episode"): Episode {
       "supersedes_id",
       `${path}.supersedes_id`,
     ),
+    attempt: readOptionalPositiveInteger(record, "attempt", `${path}.attempt`),
+    max_attempts: readOptionalPositiveInteger(
+      record,
+      "max_attempts",
+      `${path}.max_attempts`,
+    ),
     version: readPositiveInteger(record, "version", `${path}.version`),
-    created_at: readString(record, "created_at", `${path}.created_at`),
-    updated_at: readString(record, "updated_at", `${path}.updated_at`),
+    created_at: readOptionalString(
+      record,
+      "created_at",
+      `${path}.created_at`,
+    ),
+    updated_at: readOptionalString(
+      record,
+      "updated_at",
+      `${path}.updated_at`,
+    ),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
   };
@@ -507,4 +576,67 @@ export function parseEpisode(value: unknown, path = "Episode"): Episode {
 
 export function parseEpisodePage(value: unknown): EpisodePage {
   return parseCursorPage(value, "Episode 列表", parseEpisode);
+}
+
+export function parseLineageEdge(
+  value: unknown,
+  path = "血缘边",
+): LineageEdge {
+  const record = asRecord(value, path);
+  return {
+    edge_id: readUuid(record, "edge_id", `${path}.edge_id`),
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    from_node_type: readEnum(
+      record,
+      "from_node_type",
+      `${path}.from_node_type`,
+      LINEAGE_NODE_TYPE_VALUES,
+    ),
+    from_node_id: readUuid(record, "from_node_id", `${path}.from_node_id`),
+    to_node_type: readEnum(
+      record,
+      "to_node_type",
+      `${path}.to_node_type`,
+      LINEAGE_NODE_TYPE_VALUES,
+    ),
+    to_node_id: readUuid(record, "to_node_id", `${path}.to_node_id`),
+    relation: readEnum(
+      record,
+      "relation",
+      `${path}.relation`,
+      LINEAGE_RELATION_VALUES,
+    ),
+    metadata: readOptionalRecord(record, "metadata", `${path}.metadata`) ?? {},
+    created_by: readUuid(record, "created_by", `${path}.created_by`),
+    created_at: readString(record, "created_at", `${path}.created_at`),
+  };
+}
+
+export function parseLineageResponse(
+  value: unknown,
+  expectedDirection: LineageDirection,
+  path = "血缘查询",
+): LineageResponse {
+  const record = asRecord(value, path);
+  const direction = readEnum(
+    record,
+    "direction",
+    `${path}.direction`,
+    LINEAGE_DIRECTION_VALUES,
+  );
+  if (direction !== expectedDirection) {
+    throw new ContractValidationError(
+      `${path}.direction 与请求方向 ${expectedDirection} 不一致`,
+    );
+  }
+  const rawItems = record.items;
+  if (!Array.isArray(rawItems)) {
+    throw new ContractValidationError(`${path}.items 必须是数组`);
+  }
+  return {
+    items: rawItems.map((item, index) =>
+      parseLineageEdge(item, `${path}.items[${index}]`),
+    ),
+    direction,
+  };
 }

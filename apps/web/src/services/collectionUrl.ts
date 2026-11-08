@@ -212,3 +212,22 @@ export function buildEpisodeListPath(
 ): string {
   return `/episodes${buildEpisodeListSearch(projectId, filters)}`;
 }
+
+/** 详情页保留列表筛选与项目上下文，便于返回时恢复现场。 */
+export function buildEpisodeDetailPath(
+  projectId: string | null,
+  episodeId: string,
+  filters: EpisodeListFilters = EMPTY_EPISODE_LIST_FILTERS,
+): string {
+  return `/episodes/${encodeURIComponent(episodeId)}${buildEpisodeListSearch(
+    projectId,
+    filters,
+  )}`;
+}
+
+export function buildRawAssetDetailPath(
+  projectId: string | null,
+  assetId: string,
+): string {
+  return `/raw-assets/${encodeURIComponent(assetId)}${buildSearch(projectId, [])}`;
+}

@@ -1,6 +1,5 @@
 import { ReloadOutlined } from "@ant-design/icons";
 import {
-  Alert,
   Button,
   Card,
   Descriptions,
@@ -28,6 +27,7 @@ import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
 import type { ApiError } from "../../services/api";
 import {
+  buildEpisodeDetailPath,
   buildTaskDetailPath,
   hasEpisodeListFilters,
   readEpisodeListFilters,
@@ -60,7 +60,7 @@ function filterEpisodes(
     return items;
   }
   return items.filter((item) =>
-    [item.code, item.episode_id, item.manifest_key].some((value) =>
+    [item.code, item.episode_id, item.manifest_key ?? ""].some((value) =>
       value.toLowerCase().includes(keyword),
     ),
   );
@@ -162,7 +162,8 @@ function buildColumns(projectId: string): TableColumnsType<Episode> {
       title: "更新时间",
       dataIndex: "updated_at",
       width: 170,
-      sorter: (left, right) => left.updated_at.localeCompare(right.updated_at),
+      sorter: (left, right) =>
+        (left.updated_at ?? "").localeCompare(right.updated_at ?? ""),
       render: (value: string) => formatDateTime(value),
     },
     {
@@ -170,10 +171,10 @@ function buildColumns(projectId: string): TableColumnsType<Episode> {
       key: "actions",
       width: 120,
       fixed: "right",
-      render: () => (
-        <Typography.Text type="secondary">
-          详情页未开放
-        </Typography.Text>
+      render: (_value, record) => (
+        <Link to={buildEpisodeDetailPath(projectId, record.episode_id)}>
+          查看详情
+        </Link>
       ),
     },
   ];
@@ -332,6 +333,9 @@ export function EpisodeListBody({
                   {formatDateTime(episode.updated_at)}
                 </Descriptions.Item>
               </Descriptions>
+              <Link to={buildEpisodeDetailPath(projectId, episode.episode_id)}>
+                查看详情
+              </Link>
             </Card>
           ))}
         </Space>
@@ -568,16 +572,10 @@ function EpisodeListContent({
   return (
     <PageContainer
       title="Episode 管理"
-      description="按阶段 2 契约草案展示 Episode 状态、质量状态、时间语义与切片版本。READY 不等于 ACCEPTED；详情、Manifest 与血缘页面不在 DDP-305 范围内。"
+      description="按服务端 Episode 接口展示状态、质量状态、时间语义与切片版本。READY 不等于 ACCEPTED；详情页可查看动作、修订与正反向血缘。"
       extra={extra}
       filters={filtersElement}
     >
-      <Alert
-        type="info"
-        showIcon
-        message="阶段 2 契约草案，后端端点尚未实现"
-        description="列表数据来自服务端 Episode 接口；若端点未实现，页面展示真实错误与重试，不使用 Mock Episode 冒充切片结果。"
-      />
       <EpisodeListBody
         projectId={projectId}
         filters={filters}

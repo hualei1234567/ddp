@@ -165,10 +165,13 @@ async function uploadPart(
     throw new Error(`分片计划缺少第 ${partNumber} 片`);
   }
   const partBlob = blob.slice(part.start, part.end);
+  // 先算 SHA256，再请求绑定校验和的预签名 URL；PUT 只使用服务端返回头。
+  const checksum = await computePartChecksum(partBlob);
   const partUrl = await uploadsApi.createPartUrl(
     projectId,
     session.upload_session_id,
     partNumber,
+    { sha256: checksum.prefixed },
   );
   if (!("x-amz-checksum-sha256" in partUrl.headers)) {
     console.warn(
@@ -176,7 +179,6 @@ async function uploadPart(
         "当前按服务端返回头发送，分片 SHA256 仍通过 ack 提交。",
     );
   }
-  const checksum = await computePartChecksum(partBlob);
   const etag = await putUploadPart(partUrl, partBlob);
   const ack = await uploadsApi.ackPart(
     projectId,

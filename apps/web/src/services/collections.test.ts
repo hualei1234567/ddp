@@ -151,8 +151,62 @@ describe("阶段 2 采集 API client", () => {
       `/collection-tasks/${TASK_ID}/batches?limit=100`,
     );
     expect(fetchImpl.mock.calls[1]?.[0]).toBe(
-      `http://api.test/api/v1/projects/${PROJECT_ID}/episodes?collection_task_id=${TASK_ID}&limit=100&status=READY`,
+      `http://api.test/api/v1/projects/${PROJECT_ID}/episodes?limit=100&status=READY&task_id=${TASK_ID}`,
     );
+  });
+
+  it("Episode 详情、动作与修订使用真实路径、If-Match 与幂等键", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(episodeFixture))
+      .mockResolvedValueOnce(jsonResponse(episodeFixture))
+      .mockResolvedValueOnce(jsonResponse(episodeFixture, 201));
+    const api = createCollectionsApi(clientWith(fetchImpl as typeof fetch));
+
+    await api.getEpisode(PROJECT_ID, episodeFixture.episode_id);
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      `http://api.test/api/v1/projects/${PROJECT_ID}/episodes/${episodeFixture.episode_id}`,
+    );
+
+    await api.actOnEpisode(
+      PROJECT_ID,
+      episodeFixture.episode_id,
+      "quality-result",
+      { quality_status: "PASS", reason: "抽检通过" },
+      { version: 4, idempotencyKey: "idem-episode-action" },
+    );
+    const actionInit = fetchImpl.mock.calls[1]?.[1] as RequestInit | undefined;
+    expect(fetchImpl.mock.calls[1]?.[0]).toBe(
+      `http://api.test/api/v1/projects/${PROJECT_ID}/episodes/${episodeFixture.episode_id}/actions/quality-result`,
+    );
+    expect(actionInit?.headers).toMatchObject({
+      "If-Match": '"4"',
+      "Idempotency-Key": "idem-episode-action",
+    });
+    expect(JSON.parse(String(actionInit?.body))).toEqual({
+      quality_status: "PASS",
+      reason: "抽检通过",
+    });
+
+    await api.reviseEpisode(
+      PROJECT_ID,
+      episodeFixture.episode_id,
+      { code: "EP-0001-R2" },
+      { version: 5, idempotencyKey: "idem-episode-revision" },
+    );
+    const revisionInit = fetchImpl.mock.calls[2]?.[1] as
+      | RequestInit
+      | undefined;
+    expect(fetchImpl.mock.calls[2]?.[0]).toBe(
+      `http://api.test/api/v1/projects/${PROJECT_ID}/episodes/${episodeFixture.episode_id}/revisions`,
+    );
+    expect(revisionInit?.headers).toMatchObject({
+      "If-Match": '"5"',
+      "Idempotency-Key": "idem-episode-revision",
+    });
+    expect(JSON.parse(String(revisionInit?.body))).toEqual({
+      code: "EP-0001-R2",
+    });
   });
 
   it("403 保持统一 ApiError，页面可映射 Forbidden", async () => {

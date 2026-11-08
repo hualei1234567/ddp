@@ -225,6 +225,7 @@ export default function WorkbenchBody({
       </Space>
     ) : step === "upload" ? (
       <UploadQueue
+        projectId={projectId}
         items={uploadQueue.items}
         online={online}
         disabledReason={uploadDisabledReason}

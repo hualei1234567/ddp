@@ -8,10 +8,10 @@ import type {
 import { ApiError } from "../services/api";
 import { createIdempotencyKey } from "../services/idempotency";
 import {
-  computePartChecksum,
   hashFileSha256,
   planFileParts,
   putUploadPart,
+  signPartUpload,
   UploadTransportError,
 } from "../services/uploadTransfer";
 import { uploadsApi } from "../services/uploads";
@@ -283,25 +283,28 @@ export function useUploadQueue({
         }
 
         patchItem(itemId, { status: "uploading" });
-        const partUrl = await uploadsApi.createPartUrl(
-          projectId,
-          session.upload_session_id,
-          partNumber,
-          { signal },
-        );
         const blob = file.slice(part.start, part.end);
-        const checksum = await computePartChecksum(blob);
-        // 对象存储的 x-amz-checksum-sha256 必须由预签名 URL 绑定签名。
-        // 服务端未在 partUrl.headers 中返回该校验头时，不能自行追加未签名头，
-        // 否则 MinIO/S3 会以签名不匹配拒绝；分片 SHA256 仍通过 ack 提交。
-        const headers = { ...partUrl.headers };
+        // 顺序不可交换：先算分片 SHA256，再请求带校验和绑定的预签名 URL。
+        const { checksum, request: partUrl } = await signPartUpload(
+          blob,
+          (sha256) =>
+            uploadsApi.createPartUrl(
+              projectId,
+              session.upload_session_id,
+              partNumber,
+              { sha256, signal },
+            ),
+          signal,
+        );
 
         let etag = "";
         let lastError: unknown = null;
         for (let attempt = 1; attempt <= PART_RETRY_LIMIT; attempt += 1) {
           try {
+            // 严格使用服务端返回的 URL/headers（可能含签名绑定的校验和）。
+            // 不自行追加未签名头；服务端未返回校验和头时仅 ack 提交。
             etag = await putUploadPart(
-              { ...partUrl, headers },
+              partUrl,
               blob,
               globalThis.fetch,
               signal,

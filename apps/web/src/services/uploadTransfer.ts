@@ -136,6 +136,32 @@ export async function computePartChecksum(blob: Blob): Promise<PartChecksum> {
   };
 }
 
+export interface SignedPartUpload {
+  checksum: PartChecksum;
+  /** 服务端签发的请求；headers 必须原样用于 PUT，不得自行增补。 */
+  request: UploadPartUrlResponse;
+}
+
+/**
+ * 先计算分片 SHA256，再带着该校验和向服务端申请预签名 URL。
+ *
+ * 服务端可能把校验和绑定进签名并在 `headers` 中返回校验头；客户端只使用
+ * 服务端返回的头。若服务端未返回校验和头，本次 PUT 不带该校验头，分片
+ * SHA256 仍通过后续 ack 提交，保持旧服务端兼容。
+ */
+export async function signPartUpload(
+  blob: Blob,
+  requestUrl: (sha256: string) => Promise<UploadPartUrlResponse>,
+  signal?: AbortSignal,
+): Promise<SignedPartUpload> {
+  throwIfAborted(signal);
+  const checksum = await computePartChecksum(blob);
+  throwIfAborted(signal);
+  const request = await requestUrl(checksum.prefixed);
+  throwIfAborted(signal);
+  return { checksum, request };
+}
+
 function isRetryableStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }

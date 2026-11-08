@@ -39,6 +39,16 @@ export interface UploadAbortOptions extends UploadCompleteOptions {
   reason?: string | null;
 }
 
+/**
+ * 分片 URL 请求：可选提交分片 SHA256，用于服务端把校验和绑定进
+ * 预签名（响应 headers 会带回 x-amz-checksum-sha256）。
+ */
+export interface UploadPartUrlOptions {
+  signal?: AbortSignal;
+  /** 契约格式 `sha256:<64hex>`。 */
+  sha256?: string;
+}
+
 export interface UploadsApi {
   createSession: (
     projectId: string,
@@ -54,7 +64,7 @@ export interface UploadsApi {
     projectId: string,
     uploadSessionId: string,
     partNumber: number,
-    options?: Pick<UploadWriteOptions, "signal">,
+    options?: UploadPartUrlOptions,
   ) => Promise<UploadPartUrlResponse>;
   ackPart: (
     projectId: string,
@@ -133,6 +143,11 @@ export function createUploadsApi(client: ApiClient): UploadsApi {
         {
           method: "POST",
           signal: options.signal,
+          // 旧服务端/旧会话仍兼容无请求体；客户端有校验和时显式绑定。
+          body:
+            options.sha256 === undefined
+              ? undefined
+              : { sha256: options.sha256 },
           validate: (value) => parseUploadPartUrl(value),
         },
       );
