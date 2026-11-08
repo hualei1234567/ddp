@@ -230,6 +230,24 @@ class S3MultipartStorage:
             raise ObjectStorageUnavailableError("读取对象内容失败") from exc
         return bytes(body)
 
+    def put_bytes(
+        self,
+        object_key: str,
+        data: bytes,
+        *,
+        content_type: str,
+    ) -> None:
+        """写入不可变产物对象；内容已完整位于内存，调用方仍须回读校验。"""
+        try:
+            self._client.put_object(
+                Bucket=self.bucket,
+                Key=object_key,
+                Body=data,
+                ContentType=content_type,
+            )
+        except (BotoCoreError, ClientError) as exc:
+            raise ObjectStorageUnavailableError("写入对象存储失败") from exc
+
     def stream_object(self, object_key: str, *, chunk_size: int) -> Iterator[bytes]:
         """按块流式读取对象，调用方负责计算 Hash 与大小。
 

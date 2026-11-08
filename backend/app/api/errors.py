@@ -361,6 +361,18 @@ _DATASET_STATUS_BY_CODE = {
     "dataset_item_ineligible": 422,
     "dataset_split_invalid": 422,
     "dataset_annotation_snapshot_mismatch": 422,
+    "export_format_unsupported": 422,
+    "export_format_version_unsupported": 422,
+    "export_config_invalid": 422,
+    "export_checksum_mismatch": 422,
+    "export_job_not_retryable": 409,
+    "export_job_cancelled": 410,
+    "export_incomplete": 409,
+    "export_output_conflict": 409,
+    "export_artifact_verify_failed": 409,
+    "export_job_failed": 409,
+    "export_partial": 409,
+    "export_job_timeout": 409,
 }
 
 _DATASET_MESSAGES = {
@@ -392,6 +404,18 @@ _DATASET_MESSAGES = {
     "dataset_item_ineligible": "Episode/标注/Manifest/标定/时间同步不合格",
     "dataset_split_invalid": "划分比例、计数或分组非法",
     "dataset_annotation_snapshot_mismatch": "标注/Schema 快照不一致",
+    "export_format_unsupported": "不支持的导出格式，不得降级为其他格式",
+    "export_format_version_unsupported": "不支持的导出格式版本",
+    "export_config_invalid": "导出配置或字段映射非法",
+    "export_checksum_mismatch": "导出产物逐文件或汇总 Hash 不一致",
+    "export_job_not_retryable": "导出任务不可重试或已达最大尝试次数",
+    "export_job_cancelled": "导出任务已取消，不能继续操作",
+    "export_incomplete": "导出产物不完整，不能用于交付",
+    "export_output_conflict": "导出输出路径或产物冲突",
+    "export_artifact_verify_failed": "导出产物回读校验失败",
+    "export_job_failed": "导出任务执行失败",
+    "export_partial": "仅写出部分产物，不得视为成功",
+    "export_job_timeout": "导出任务执行超时",
 }
 _DATASET_FALLBACK = "数据集域规则校验失败"
 

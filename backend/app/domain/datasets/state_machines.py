@@ -11,7 +11,12 @@ from __future__ import annotations
 from collections.abc import Mapping
 from types import MappingProxyType
 
-from app.domain.datasets.enums import DatasetStatus, DatasetVersionStatus, ValidityStatus
+from app.domain.datasets.enums import (
+    DatasetStatus,
+    DatasetVersionStatus,
+    ExportJobStatus,
+    ValidityStatus,
+)
 from app.domain.datasets.errors import DomainValidationError, InvalidStateTransitionError
 
 _TRANSITION = tuple[str, str]
@@ -92,6 +97,58 @@ _VALIDITY_RULES: Mapping[ValidityStatus, Mapping[str, ValidityStatus]] = Mapping
     }
 )
 
+_EXPORT_RULES: Mapping[ExportJobStatus, Mapping[str, ExportJobStatus]] = MappingProxyType(
+    {
+        ExportJobStatus.QUEUED: {
+            "worker-start": ExportJobStatus.RUNNING,
+            "cancel": ExportJobStatus.CANCELLED,
+        },
+        ExportJobStatus.RUNNING: {
+            "worker-succeed": ExportJobStatus.SUCCEEDED,
+            "worker-fail": ExportJobStatus.FAILED,
+            "worker-partial": ExportJobStatus.PARTIAL,
+            "cancel": ExportJobStatus.CANCELLED,
+        },
+        ExportJobStatus.FAILED: {
+            "retry": ExportJobStatus.QUEUED,
+        },
+        ExportJobStatus.SUCCEEDED: {},
+        ExportJobStatus.PARTIAL: {},
+        ExportJobStatus.CANCELLED: {},
+    }
+)
+
+# 创建后不可原地修改的输入字段；重试必须复用同一输出前缀与配置。
+EXPORT_IMMUTABLE_COLUMNS: tuple[str, ...] = (
+    "project_id",
+    "dataset_version_id",
+    "format",
+    "format_version",
+    "exporter_id",
+    "exporter_version",
+    "mapping_version",
+    "config",
+    "config_sha256",
+    "idempotency_key",
+    "requested_by",
+    "output_prefix",
+    "max_attempts",
+    "timeout_seconds",
+    "created_at",
+    "created_by",
+)
+
+# 终态或已写出产物后禁止改写产物摘要。
+EXPORT_ARTIFACT_COLUMNS: tuple[str, ...] = (
+    "artifact_count",
+    "total_bytes",
+    "artifact_manifest_key",
+    "artifact_manifest_sha256",
+    "aggregate_sha256",
+    "verification_status",
+    "verification_evidence_ref",
+)
+
 _REASON_REQUIRED: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         "dataset": frozenset({"archive", "restore"}),
@@ -108,6 +165,7 @@ _REASON_REQUIRED: Mapping[str, frozenset[str]] = MappingProxyType(
         "validity": frozenset(
             {"system-mark-stale", "system-mark-unknown", "invalidate", "revalidate"}
         ),
+        "export": frozenset({"worker-fail", "worker-partial", "cancel"}),
     }
 )
 
@@ -204,6 +262,10 @@ def validity_target(current: ValidityStatus, action: str) -> ValidityStatus:
     return _target(_VALIDITY_RULES, "数据集版本有效性", current, action)  # type: ignore[return-value]
 
 
+def export_target(current: ExportJobStatus, action: str) -> ExportJobStatus:
+    return _target(_EXPORT_RULES, "导出任务", current, action)  # type: ignore[return-value]
+
+
 def allowed_dataset_actions(current: DatasetStatus) -> frozenset[str]:
     return _allowed(_DATASET_RULES, current)
 
@@ -216,6 +278,10 @@ def allowed_validity_actions(current: ValidityStatus) -> frozenset[str]:
     return _allowed(_VALIDITY_RULES, current)
 
 
+def allowed_export_actions(current: ExportJobStatus) -> frozenset[str]:
+    return _allowed(_EXPORT_RULES, current)
+
+
 def validate_action_name(action: object, *, family: str) -> str:
     if not isinstance(action, str) or not action.strip():
         raise DomainValidationError("action 必须是非空字符串")
@@ -224,6 +290,7 @@ def validate_action_name(action: object, *, family: str) -> str:
         "dataset": _DATASET_RULES,
         "version": _VERSION_RULES,
         "validity": _VALIDITY_RULES,
+        "export": _EXPORT_RULES,
     }.get(family)
     if rules is None:
         raise DomainValidationError("未知状态机")
@@ -247,6 +314,18 @@ def version_transition_pairs() -> frozenset[_TRANSITION]:
 
 def validity_transition_pairs() -> frozenset[_TRANSITION]:
     return _pairs(_VALIDITY_RULES)
+
+
+def export_transition_pairs() -> frozenset[_TRANSITION]:
+    return _pairs(_EXPORT_RULES)
+
+
+def export_terminal_states() -> frozenset[str]:
+    return frozenset(
+        getattr(current, "value", str(current))
+        for current, transitions in _EXPORT_RULES.items()
+        if not transitions
+    )
 
 
 def dataset_terminal_states() -> frozenset[str]:

@@ -15,6 +15,7 @@ from app.api.v1 import (
     dataset_version_routes,
     devices,
     episodes,
+    export_routes,
     ingestion_jobs,
     lineage,
     platform,
@@ -35,3 +36,4 @@ api_router.include_router(lineage.router)
 api_router.include_router(annotation.router)
 api_router.include_router(dataset_routes.router)
 api_router.include_router(dataset_version_routes.router)
+api_router.include_router(export_routes.router)

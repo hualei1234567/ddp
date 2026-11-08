@@ -160,3 +160,51 @@ class PolicyInvalidError(DatasetDomainError):
     """策略定义非法。"""
 
     code = "validation_failed"
+
+
+class ExportFormatUnsupportedError(DatasetDomainError):
+    code = "export_format_unsupported"
+
+
+class ExportFormatVersionUnsupportedError(DatasetDomainError):
+    code = "export_format_version_unsupported"
+
+
+class ExportConfigInvalidError(DatasetDomainError):
+    code = "export_config_invalid"
+
+
+class ExportJobNotRetryableError(DatasetDomainError):
+    code = "export_job_not_retryable"
+
+
+class ExportJobCancelledError(DatasetDomainError):
+    code = "export_job_cancelled"
+
+
+class ExportIncompleteError(DatasetDomainError):
+    code = "export_incomplete"
+
+
+class ExportChecksumMismatchError(DatasetDomainError):
+    code = "export_checksum_mismatch"
+
+
+class ExportOutputConflictError(DatasetDomainError):
+    code = "export_output_conflict"
+
+
+class ExportArtifactVerifyFailedError(DatasetDomainError):
+    code = "export_artifact_verify_failed"
+
+
+class ExportExecutionFailedError(DatasetDomainError):
+    code = "export_job_failed"
+
+
+class ExportPartialError(DatasetDomainError):
+    code = "export_partial"
+
+
+class ExportTimeoutError(DatasetDomainError):
+    code = "export_job_timeout"

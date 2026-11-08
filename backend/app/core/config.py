@@ -103,6 +103,18 @@ class Settings(BaseSettings):
     validation_retry_base_seconds: float = Field(default=5.0, gt=0)
     validation_retry_max_seconds: float = Field(default=300.0, gt=0)
 
+    # ExportJob 异步导出 Worker 与产物策略。
+    export_storage_prefix: str = "exports"
+    export_default_timeout_seconds: int = Field(default=3600, ge=1)
+    export_max_timeout_seconds: int = Field(default=86400, ge=1)
+    export_default_max_attempts: int = Field(default=3, ge=1)
+    export_max_attempts_limit: int = Field(default=20, ge=1)
+    export_artifact_chunk_size_bytes: int = Field(default=1024 * 1024, gt=0)
+    export_worker_poll_interval_seconds: float = Field(default=1.0, gt=0)
+    export_worker_max_attempts: int = Field(default=5, ge=1, le=100)
+    export_worker_retry_base_seconds: float = Field(default=5.0, gt=0)
+    export_worker_retry_max_seconds: float = Field(default=300.0, gt=0)
+
     jwt_secret: str = "replace-me-in-production"  # noqa: S105 - 占位符，生产必须覆盖
     jwt_issuer: str = "ddp"
     jwt_audience: str = "ddp-api"
@@ -173,6 +185,7 @@ class Settings(BaseSettings):
         problems.extend(self._rate_limit_config_problems())
         problems.extend(self._security_headers_config_problems())
         problems.extend(self._validation_worker_config_problems())
+        problems.extend(self._export_worker_config_problems())
         if not self.is_local:
             if self.local_header_auth:
                 problems.append(
@@ -267,6 +280,25 @@ class Settings(BaseSettings):
         if self.validation_retry_max_seconds < self.validation_retry_base_seconds:
             return ["DDP_VALIDATION_RETRY_MAX_SECONDS 不得小于 DDP_VALIDATION_RETRY_BASE_SECONDS"]
         return []
+
+    def _export_worker_config_problems(self) -> list[str]:
+        problems: list[str] = []
+        if not self.export_storage_prefix.strip("/"):
+            problems.append("DDP_EXPORT_STORAGE_PREFIX 不能为空")
+        if self.export_default_timeout_seconds > self.export_max_timeout_seconds:
+            problems.append(
+                "DDP_EXPORT_DEFAULT_TIMEOUT_SECONDS 不得大于 DDP_EXPORT_MAX_TIMEOUT_SECONDS"
+            )
+        if self.export_default_max_attempts > self.export_max_attempts_limit:
+            problems.append(
+                "DDP_EXPORT_DEFAULT_MAX_ATTEMPTS 不得大于 DDP_EXPORT_MAX_ATTEMPTS_LIMIT"
+            )
+        if self.export_worker_retry_max_seconds < self.export_worker_retry_base_seconds:
+            problems.append(
+                "DDP_EXPORT_WORKER_RETRY_MAX_SECONDS 不得小于 "
+                "DDP_EXPORT_WORKER_RETRY_BASE_SECONDS"
+            )
+        return problems
 
 
 @lru_cache(maxsize=1)

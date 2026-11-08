@@ -62,6 +62,7 @@ from app.infrastructure.db.models.episodes import (
     EpisodeRawAssetModel,
     LineageNodeRefModel,
 )
+from app.infrastructure.db.models.export_jobs import ExportJobModel
 from app.infrastructure.db.models.identity import Project, ProjectMember, User
 from app.infrastructure.db.models.ingestion import (
     RawAssetLinkModel,
@@ -105,6 +106,7 @@ __all__ = [
     "Device",
     "EpisodeModel",
     "EpisodeRawAssetModel",
+    "ExportJobModel",
     "GoldEvaluation",
     "GoldExposure",
     "GoldSet",

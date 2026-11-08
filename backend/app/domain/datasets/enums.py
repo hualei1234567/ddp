@@ -154,6 +154,28 @@ class QualityReportStatus(StrEnum):
     STALE = "STALE"
 
 
+class ExportJobStatus(StrEnum):
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    PARTIAL = "PARTIAL"
+    CANCELLED = "CANCELLED"
+
+
+class ExportFormat(StrEnum):
+    """阶段 4 P0 仅支持 LE_ROBOT；未知格式必须显式拒绝。"""
+
+    LE_ROBOT = "LE_ROBOT"
+
+
+class ExportVerificationStatus(StrEnum):
+    """真实 LeRobot Loader 验证前固定 UNVERIFIED，不得宣称已兼容。"""
+
+    UNVERIFIED = "UNVERIFIED"
+    VERIFIED_BY_LOADER = "VERIFIED_BY_LOADER"
+
+
 class ExclusionCode(StrEnum):
     EPISODE_STATUS_INELIGIBLE = "EPISODE_STATUS_INELIGIBLE"
     QUALITY_NOT_PASSED = "QUALITY_NOT_PASSED"

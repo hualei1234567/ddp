@@ -119,3 +119,23 @@ class LeakageWaiverCommand:
     reason: str
     impact: str | None = None
     expires_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewExportJob:
+    dataset_version_id: UUID
+    format: str
+    format_version: str
+    exporter_id: str
+    exporter_version: str
+    mapping_version: str
+    config: Mapping[str, object]
+    timeout_seconds: int | None = None
+    max_attempts: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExportJobActionCommand:
+    action: str
+    expected_version: int
+    reason: str | None = None
