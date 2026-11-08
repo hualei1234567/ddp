@@ -144,18 +144,12 @@ class ExportJobUseCases:
             else self._default_timeout
         )
         if timeout > self._max_timeout:
-            raise DomainValidationError(
-                f"timeout_seconds 不得超过 {self._max_timeout}"
-            )
+            raise DomainValidationError(f"timeout_seconds 不得超过 {self._max_timeout}")
         attempts = (
-            command.max_attempts
-            if command.max_attempts is not None
-            else self._default_max_attempts
+            command.max_attempts if command.max_attempts is not None else self._default_max_attempts
         )
         if attempts > self._max_attempts_limit:
-            raise DomainValidationError(
-                f"max_attempts 不得超过 {self._max_attempts_limit}"
-            )
+            raise DomainValidationError(f"max_attempts 不得超过 {self._max_attempts_limit}")
         job_id = uuid4()
         candidate = new_export_job(
             export_job_id=job_id,
@@ -418,9 +412,7 @@ class ExportJobUseCases:
         }
 
     def _read(self, object_key: str) -> bytes:
-        return b"".join(
-            self._storage.stream_object(object_key, chunk_size=self._chunk_size)
-        )
+        return b"".join(self._storage.stream_object(object_key, chunk_size=self._chunk_size))
 
 
 def _safe_artifact_path(value: str) -> str:

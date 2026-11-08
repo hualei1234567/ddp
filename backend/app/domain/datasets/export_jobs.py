@@ -44,7 +44,6 @@ from app.domain.datasets.state_machines import (
     export_target,
 )
 from app.domain.datasets.validation import (
-    aware_datetime,
     coerce_enum,
     non_negative_int,
     optional_aware_datetime,
@@ -90,9 +89,7 @@ class ExportJob:
     error_code: str | None = None
     error_summary: str | None = None
     log_ref: str | None = None
-    verification_status: ExportVerificationStatus | str = (
-        ExportVerificationStatus.UNVERIFIED
-    )
+    verification_status: ExportVerificationStatus | str = ExportVerificationStatus.UNVERIFIED
     verification_evidence_ref: str | None = None
     row_version: int = 1
     created_at: datetime | None = None
@@ -119,9 +116,10 @@ class ExportJob:
         config = config_payload(self.config)
         object.__setattr__(self, "config", config)
         digest = sha256_value(config)
-        if self.config_sha256 is not None and ensure_sha(
-            self.config_sha256, "config_sha256"
-        ) != digest:
+        if (
+            self.config_sha256 is not None
+            and ensure_sha(self.config_sha256, "config_sha256") != digest
+        ):
             raise ExportConfigInvalidError("config_sha256 与配置内容不一致")
         object.__setattr__(self, "config_sha256", digest)
         key = text_value(
@@ -216,9 +214,7 @@ class ExportJob:
                 self.aggregate_sha256,
             )
             if any(value is None for value in required):
-                raise DomainValidationError(
-                    "SUCCEEDED 导出任务必须记录产物统计、清单与汇总 Hash"
-                )
+                raise DomainValidationError("SUCCEEDED 导出任务必须记录产物统计、清单与汇总 Hash")
         if status in {ExportJobStatus.FAILED, ExportJobStatus.PARTIAL}:
             if self.finished_at is None:
                 raise DomainValidationError(f"{status.value} 导出任务必须记录 finished_at")

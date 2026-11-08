@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app.infrastructure.db.models.collection import OutboxEvent
-from sqlalchemy import func, select
+from app.infrastructure.db.models.datasets import DatasetVersionModel
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import ApiIds, make_client
@@ -81,9 +82,7 @@ def test_export_create_list_detail_idempotency_and_permissions(
 
     listed = viewer.get(url(ids.project_a, "/exports"))
     assert listed.status_code == 200, listed.text
-    assert [item["export_job_id"] for item in listed.json()["items"]] == [
-        job["export_job_id"]
-    ]
+    assert [item["export_job_id"] for item in listed.json()["items"]] == [job["export_job_id"]]
     filtered = viewer.get(
         url(ids.project_a, f"/exports?status=SUCCEEDED&dataset_version_id={ctx['version_id']}")
     )
@@ -215,9 +214,7 @@ def test_export_worker_success_manifest_and_download(
     assert download.json()["download_url"].startswith("https://fake-export.test/")
     assert storage.presign_calls[-1]["object_key"].endswith("meta/info.json")
 
-    traversal = editor.get(
-        url(ids.project_a, f"/exports/{job_id}/artifacts/../secret/download")
-    )
+    traversal = editor.get(url(ids.project_a, f"/exports/{job_id}/artifacts/../secret/download"))
     assert traversal.status_code == 404
 
     second = run_export_worker(factory, storage)

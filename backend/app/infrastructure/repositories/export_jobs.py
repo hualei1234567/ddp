@@ -118,9 +118,7 @@ class SqlExportJobRepository:
         limit = bounded_limit(limit, maximum=101)
         statement = scoped_select(ExportJobModel, scope)
         if dataset_version_id is not None:
-            statement = statement.where(
-                ExportJobModel.dataset_version_id == dataset_version_id
-            )
+            statement = statement.where(ExportJobModel.dataset_version_id == dataset_version_id)
         if status is not None:
             statement = statement.where(ExportJobModel.status == status)
         if format is not None:

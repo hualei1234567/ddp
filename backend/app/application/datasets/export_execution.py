@@ -283,12 +283,11 @@ class ExportExecutionService:
             artifact.data,
             content_type=artifact.content_type,
         )
-        readback = b"".join(
-            self._storage.stream_object(object_key, chunk_size=self._chunk_size)
-        )
-        if len(readback) != artifact.size_bytes or sha256_text(
-            readback.decode("utf-8")
-        ) != artifact.sha256:
+        readback = b"".join(self._storage.stream_object(object_key, chunk_size=self._chunk_size))
+        if (
+            len(readback) != artifact.size_bytes
+            or sha256_text(readback.decode("utf-8")) != artifact.sha256
+        ):
             raise ExportArtifactVerifyFailedError(f"产物校验失败：{artifact.path}")
 
     def _fail(
