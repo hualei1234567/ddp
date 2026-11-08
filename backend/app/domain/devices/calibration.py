@@ -24,6 +24,12 @@ from app.domain.devices.enums import (
 from app.domain.devices.errors import DomainValidationError, FourEyesViolationError
 from app.domain.devices.state_machines import assert_calibration_transition
 from app.domain.devices.validation import (
+    CHECKSUM_MAX_LENGTH,
+    FRAME_MAX_LENGTH,
+    METHOD_MAX_LENGTH,
+    NAME_MAX_LENGTH,
+    SOURCE_MAX_LENGTH,
+    VERSION_MAX_LENGTH,
     aware_datetime,
     coerce_enum,
     frozen_mapping,
@@ -65,7 +71,11 @@ class CalibrationProfile:
     selection_rule: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "name", normalized_text(self.name, "name"))
+        object.__setattr__(
+            self,
+            "name",
+            normalized_text(self.name, "name", max_length=NAME_MAX_LENGTH),
+        )
         object.__setattr__(
             self,
             "scope",
@@ -79,7 +89,11 @@ class CalibrationProfile:
         object.__setattr__(
             self,
             "schema_version",
-            normalized_text(self.schema_version, "schema_version"),
+            normalized_text(
+                self.schema_version,
+                "schema_version",
+                max_length=VERSION_MAX_LENGTH,
+            ),
         )
         object.__setattr__(self, "version", positive_int(self.version, "version"))
         object.__setattr__(
@@ -140,8 +154,25 @@ class CalibrationRecord:
             "calibration_type",
             coerce_enum(self.calibration_type, CalibrationType, "calibration_type"),
         )
-        object.__setattr__(self, "method", normalized_text(self.method, "method"))
-        object.__setattr__(self, "checksum", normalized_text(self.checksum, "checksum"))
+        object.__setattr__(
+            self,
+            "method",
+            normalized_text(self.method, "method", max_length=METHOD_MAX_LENGTH),
+        )
+        object.__setattr__(
+            self,
+            "checksum",
+            normalized_text(
+                self.checksum,
+                "checksum",
+                max_length=CHECKSUM_MAX_LENGTH,
+            ),
+        )
+        object.__setattr__(
+            self,
+            "source",
+            optional_text(self.source, "source", max_length=SOURCE_MAX_LENGTH),
+        )
         object.__setattr__(
             self,
             "status",
@@ -183,8 +214,16 @@ class CalibrationRecord:
         object.__setattr__(self, "version", positive_int(self.version, "version"))
 
     def _validate_frames(self) -> None:
-        parent = optional_text(self.parent_frame, "parent_frame")
-        child = optional_text(self.child_frame, "child_frame")
+        parent = optional_text(
+            self.parent_frame,
+            "parent_frame",
+            max_length=FRAME_MAX_LENGTH,
+        )
+        child = optional_text(
+            self.child_frame,
+            "child_frame",
+            max_length=FRAME_MAX_LENGTH,
+        )
         object.__setattr__(self, "parent_frame", parent)
         object.__setattr__(self, "child_frame", child)
         if (parent is None) != (child is None):

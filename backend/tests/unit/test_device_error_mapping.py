@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from app.api.errors import domain_error_to_app, integrity_error_to_app
 from app.domain.devices.errors import (
+    DeviceDomainError,
     DomainValidationError,
     DuplicateResourceError,
     FourEyesViolationError,
@@ -59,3 +60,38 @@ def test_integrity_error_maps_unique_and_generic() -> None:
     assert integrity_error_to_app(unique).status_code == 409
     assert integrity_error_to_app(foreign_key).code == "conflict"
     assert "foreign key" not in integrity_error_to_app(foreign_key).message
+
+
+def test_domain_validation_message_is_not_echoed() -> None:
+    marker = "INPUT-SECRET-MARKER"
+    mapped = domain_error_to_app(DomainValidationError(f"device_type 取值非法：{marker}"))
+
+    assert mapped.code == "validation_failed"
+    assert marker not in mapped.message
+
+
+def test_unknown_domain_code_converges_to_stable_fallback() -> None:
+    class _UnknownError(DeviceDomainError):
+        code = "unexpected_internal_code"
+
+    mapped = domain_error_to_app(_UnknownError("internal-detail-SECRET"))
+
+    assert mapped.code == "validation_failed"
+    assert mapped.status_code == 422
+    assert "internal-detail-SECRET" not in mapped.message
+
+
+def test_integrity_error_does_not_leak_sql_or_parameters() -> None:
+    marker = "SQL-SECRET-PARAM"
+    error = IntegrityError(
+        "INSERT INTO devices (code) VALUES (%s)",
+        (marker,),
+        Exception(f"CHECK constraint failed: code = '{marker}'"),
+    )
+
+    mapped = integrity_error_to_app(error)
+
+    assert mapped.code == "conflict"
+    assert mapped.status_code == 409
+    assert "INSERT" not in mapped.message
+    assert marker not in mapped.message

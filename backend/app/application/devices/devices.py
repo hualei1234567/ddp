@@ -158,7 +158,7 @@ class DeviceUseCases:
     ) -> Device:
         entry = _ACTIONS.get(action)
         if entry is None:
-            raise DomainValidationError(f"未知设备动作：{action!r}")
+            raise DomainValidationError("未知设备动作")
         current = self.get_device(scope, device_id)
         if current.version != expected_version:
             raise VersionConflictError("设备", expected_version)
@@ -171,9 +171,8 @@ class DeviceUseCases:
         return updated
 
     def _ensure_patchable(self, changes: Mapping[str, object]) -> None:
-        unknown = sorted(set(changes) - _PATCHABLE_FIELDS)
-        if unknown:
-            raise DomainValidationError(f"以下字段不允许修改：{', '.join(unknown)}")
+        if set(changes) - _PATCHABLE_FIELDS:
+            raise DomainValidationError("请求包含不允许修改的字段")
 
     def _validate_robot(self, scope: ProjectScope, robot_id: UUID | None) -> None:
         if robot_id is None:
@@ -201,7 +200,7 @@ def _lifecycle_status(value: str | None) -> LifecycleStatus | None:
     try:
         return LifecycleStatus(value)
     except ValueError as exc:
-        raise DomainValidationError(f"status 取值非法：{value!r}") from exc
+        raise DomainValidationError("status 取值非法") from exc
 
 
 def _optional_uuid(value: object, field_name: str) -> UUID | None:

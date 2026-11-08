@@ -285,9 +285,8 @@ class CalibrationUseCases:
 
 
 def _ensure_patchable(changes: Mapping[str, object]) -> None:
-    unknown = sorted(set(changes) - _PATCHABLE_FIELDS)
-    if unknown:
-        raise DomainValidationError(f"以下字段不允许修改：{', '.join(unknown)}")
+    if set(changes) - _PATCHABLE_FIELDS:
+        raise DomainValidationError("请求包含不允许修改的字段")
 
 
 def _target_type(value: str | None) -> CalibrationTargetType | None:
@@ -296,7 +295,7 @@ def _target_type(value: str | None) -> CalibrationTargetType | None:
     try:
         return CalibrationTargetType(value)
     except ValueError as exc:
-        raise DomainValidationError(f"target_type 取值非法：{value!r}") from exc
+        raise DomainValidationError("target_type 取值非法") from exc
 
 
 def _calibration_status(value: str | None) -> CalibrationStatus | None:
@@ -305,7 +304,7 @@ def _calibration_status(value: str | None) -> CalibrationStatus | None:
     try:
         return CalibrationStatus(value)
     except ValueError as exc:
-        raise DomainValidationError(f"status 取值非法：{value!r}") from exc
+        raise DomainValidationError("status 取值非法") from exc
 
 
 def _compute_checksum(record: CalibrationRecord) -> str:

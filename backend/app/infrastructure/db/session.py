@@ -9,12 +9,28 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from functools import lru_cache
+from typing import Any
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import get_settings
+
+
+def _enable_sqlite_foreign_keys(
+    dbapi_connection: Any,
+    _connection_record: Any,
+) -> None:
+    """SQLite 默认关闭外键；每条新连接都必须显式开启。
+
+    使用 DB-API 游标而非 ORM，确保连接池中复用的连接同样生效。
+    """
+    cursor = dbapi_connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys=ON")
+    finally:
+        cursor.close()
 
 
 def create_db_engine(
@@ -31,13 +47,16 @@ def create_db_engine(
         connect_args = {"check_same_thread": False}
         if ":memory:" in url:
             # 内存库必须在多连接间共享同一实例。
-            return create_engine(
+            engine = create_engine(
                 url,
                 connect_args=connect_args,
                 poolclass=StaticPool,
                 echo=echo,
             )
-        return create_engine(url, connect_args=connect_args, echo=echo)
+        else:
+            engine = create_engine(url, connect_args=connect_args, echo=echo)
+        event.listen(engine, "connect", _enable_sqlite_foreign_keys)
+        return engine
 
     return create_engine(
         url,

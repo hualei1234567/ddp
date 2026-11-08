@@ -73,7 +73,8 @@ class ResourceNotFoundError(DeviceDomainError):
         self.resource_id = resource_id
         if code is not None:
             self.code = code
-        super().__init__(f"{resource} 不存在或不可见：{resource_id}")
+        # 领域消息不回显资源 ID，避免进入日志或异常链后泄漏客户端输入。
+        super().__init__(f"{resource}不存在或不可见")
 
 
 class VersionConflictError(DeviceDomainError):
@@ -84,7 +85,8 @@ class VersionConflictError(DeviceDomainError):
     def __init__(self, resource: str, expected: int) -> None:
         self.resource = resource
         self.expected = expected
-        super().__init__(f"{resource} 版本冲突：expected_version={expected}")
+        # 不回显调用方传入的版本值；版本号细节只保留在领域属性中。
+        super().__init__(f"{resource}版本冲突")
 
 
 class ResourceImmutableError(DeviceDomainError):

@@ -20,6 +20,11 @@ from app.domain.devices.enums import (
 from app.domain.devices.errors import DomainValidationError
 from app.domain.devices.state_machines import assert_lifecycle_transition
 from app.domain.devices.validation import (
+    CODE_MAX_LENGTH,
+    FRAME_MAX_LENGTH,
+    LABEL_MAX_LENGTH,
+    NAME_MAX_LENGTH,
+    VERSION_MAX_LENGTH,
     coerce_enum,
     frozen_mapping,
     normalized_text,
@@ -85,26 +90,42 @@ class Robot(_LifecycleActions):
     version: int = 1
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "code", normalized_text(self.code, "code"))
-        object.__setattr__(self, "name", normalized_text(self.name, "name"))
+        object.__setattr__(
+            self,
+            "code",
+            normalized_text(self.code, "code", max_length=CODE_MAX_LENGTH),
+        )
+        object.__setattr__(
+            self,
+            "name",
+            normalized_text(self.name, "name", max_length=NAME_MAX_LENGTH),
+        )
         object.__setattr__(
             self,
             "robot_type",
-            normalized_text(self.robot_type, "robot_type"),
+            normalized_text(
+                self.robot_type,
+                "robot_type",
+                max_length=CODE_MAX_LENGTH,
+            ),
         )
         object.__setattr__(
             self,
             "status",
             coerce_enum(self.status, LifecycleStatus, "status"),
         )
-        for name in (
-            "vendor",
-            "model",
-            "serial_number",
-            "firmware_version",
-            "hardware_version",
-        ):
-            object.__setattr__(self, name, optional_text(getattr(self, name), name))
+        for name in ("vendor", "model", "serial_number"):
+            object.__setattr__(
+                self,
+                name,
+                optional_text(getattr(self, name), name, max_length=LABEL_MAX_LENGTH),
+            )
+        for name in ("firmware_version", "hardware_version"):
+            object.__setattr__(
+                self,
+                name,
+                optional_text(getattr(self, name), name, max_length=VERSION_MAX_LENGTH),
+            )
         object.__setattr__(
             self,
             "capability_profile",
@@ -139,8 +160,16 @@ class Device(_LifecycleActions):
     version: int = 1
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "code", normalized_text(self.code, "code"))
-        object.__setattr__(self, "name", normalized_text(self.name, "name"))
+        object.__setattr__(
+            self,
+            "code",
+            normalized_text(self.code, "code", max_length=CODE_MAX_LENGTH),
+        )
+        object.__setattr__(
+            self,
+            "name",
+            normalized_text(self.name, "name", max_length=NAME_MAX_LENGTH),
+        )
         object.__setattr__(
             self,
             "device_type",
@@ -151,14 +180,18 @@ class Device(_LifecycleActions):
             "status",
             coerce_enum(self.status, LifecycleStatus, "status"),
         )
-        for name in (
-            "vendor",
-            "model",
-            "serial_number",
-            "firmware_version",
-            "hardware_version",
-        ):
-            object.__setattr__(self, name, optional_text(getattr(self, name), name))
+        for name in ("vendor", "model", "serial_number"):
+            object.__setattr__(
+                self,
+                name,
+                optional_text(getattr(self, name), name, max_length=LABEL_MAX_LENGTH),
+            )
+        for name in ("firmware_version", "hardware_version"):
+            object.__setattr__(
+                self,
+                name,
+                optional_text(getattr(self, name), name, max_length=VERSION_MAX_LENGTH),
+            )
         object.__setattr__(
             self,
             "capability_profile",
@@ -204,7 +237,11 @@ class Sensor(_LifecycleActions):
     version: int = 1
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "code", normalized_text(self.code, "code"))
+        object.__setattr__(
+            self,
+            "code",
+            normalized_text(self.code, "code", max_length=CODE_MAX_LENGTH),
+        )
         object.__setattr__(
             self,
             "sensor_type",
@@ -228,17 +265,41 @@ class Sensor(_LifecycleActions):
         object.__setattr__(
             self,
             "coordinate_frame",
-            normalized_text(self.coordinate_frame, "coordinate_frame"),
+            normalized_text(
+                self.coordinate_frame,
+                "coordinate_frame",
+                max_length=FRAME_MAX_LENGTH,
+            ),
         )
-        for name in (
-            "vendor",
-            "model",
-            "serial_number",
+        for name in ("vendor", "model", "serial_number"):
+            object.__setattr__(
+                self,
+                name,
+                optional_text(getattr(self, name), name, max_length=LABEL_MAX_LENGTH),
+            )
+        object.__setattr__(
+            self,
             "sync_group",
+            optional_text(self.sync_group, "sync_group", max_length=CODE_MAX_LENGTH),
+        )
+        object.__setattr__(
+            self,
             "firmware_version",
+            optional_text(
+                self.firmware_version,
+                "firmware_version",
+                max_length=VERSION_MAX_LENGTH,
+            ),
+        )
+        object.__setattr__(
+            self,
             "mount_position",
-        ):
-            object.__setattr__(self, name, optional_text(getattr(self, name), name))
+            optional_text(
+                self.mount_position,
+                "mount_position",
+                max_length=FRAME_MAX_LENGTH,
+            ),
+        )
 
         if self.robot_id is None and self.device_id is None:
             raise DomainValidationError("传感器必须至少关联机器人或设备")

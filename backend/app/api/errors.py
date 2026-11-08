@@ -26,23 +26,35 @@ _STATUS_BY_CODE = {
     "forbidden": 403,
 }
 
+# 对外错误文案固定且不含客户端输入；未知领域码统一收敛到 validation_failed。
 _MESSAGES = {
     "validation_failed": "请求参数或领域规则校验失败",
+    "calibration_invalid": "标定数据校验失败",
     "calibration_target_invalid": "标定目标不存在、跨项目或类型不匹配",
     "calibration_profile_invalid": "标定配置不存在、跨项目或与记录不匹配",
+    "calibration_checksum_mismatch": "标定校验和不匹配",
+    "calibration_not_active": "标定记录未激活",
     "state_transition_invalid": "资源状态不允许该操作",
     "version_conflict": "资源版本已变化，请重新读取后再试",
     "resource_immutable": "资源已冻结或包含不可变字段",
     "duplicate_resource": "项目内业务键或序列号重复",
+    "calibration_active_conflict": "同一标定目标已存在激活记录",
     "resource_not_found": "资源不存在或不属于当前项目",
+    "forbidden": "无权执行该操作",
 }
+_FALLBACK_MESSAGE = "设备域规则校验失败"
 
 
 def domain_error_to_app(exc: DeviceDomainError) -> AppError:
-    code = getattr(exc, "code", "validation_failed")
-    status_code = _STATUS_BY_CODE.get(code, 422)
-    message = _MESSAGES.get(code, str(exc))
-    return AppError(code, message, status_code)
+    code = getattr(exc, "code", None)
+    if not isinstance(code, str) or code not in _STATUS_BY_CODE:
+        # 不把未知异常的 str(exc) 回显给客户端，避免泄漏内部标识或输入。
+        return AppError("validation_failed", _FALLBACK_MESSAGE, 422)
+    return AppError(
+        code,
+        _MESSAGES.get(code, _FALLBACK_MESSAGE),
+        _STATUS_BY_CODE[code],
+    )
 
 
 def integrity_error_to_app(exc: IntegrityError) -> AppError:

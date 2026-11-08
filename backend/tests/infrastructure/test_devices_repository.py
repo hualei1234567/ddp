@@ -222,6 +222,51 @@ def test_repository_rejects_cross_project_writes(
             )
 
 
+def test_sqlite_rejects_cross_project_device_robot_reference(
+    device_db: tuple[sessionmaker[Session], DeviceIds],
+) -> None:
+    """项目 A 的设备引用项目 B 的机器人必须由复合外键拒绝。"""
+    factory, ids = device_db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    cross_project_device = Device(
+        device_id=uuid4(),
+        project_id=ids.project_a,
+        code="cross-project-device",
+        name="跨项目设备",
+        device_type=DeviceType.COMPUTE,
+        robot_id=ids.robot_b,
+    )
+
+    with factory() as session:
+        with pytest.raises(IntegrityError):
+            SqlDeviceRepository(session).add(scope_a, cross_project_device)
+        session.rollback()
+
+    with factory() as session:
+        assert SqlDeviceRepository(session).get(scope_a, cross_project_device.device_id) is None
+
+
+def test_sqlite_rejects_cross_project_sensor_robot_reference(
+    device_db: tuple[sessionmaker[Session], DeviceIds],
+) -> None:
+    """项目 A 的传感器引用项目 B 的机器人必须由复合外键拒绝。"""
+    factory, ids = device_db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    cross_project_sensor = _sensor(
+        ids.project_a,
+        code="cross-project-sensor",
+        robot_id=ids.robot_b,
+    )
+
+    with factory() as session:
+        with pytest.raises(IntegrityError):
+            SqlSensorRepository(session).add(scope_a, cross_project_sensor)
+        session.rollback()
+
+    with factory() as session:
+        assert SqlSensorRepository(session).get(scope_a, cross_project_sensor.sensor_id) is None
+
+
 def test_stale_version_is_rejected(
     device_db: tuple[sessionmaker[Session], DeviceIds],
 ) -> None:

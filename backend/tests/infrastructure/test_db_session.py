@@ -46,6 +46,38 @@ def test_memory_engine_uses_static_pool() -> None:
     engine.dispose()
 
 
+def test_sqlite_connections_enable_foreign_keys() -> None:
+    engine = _memory_engine()
+    try:
+        with engine.connect() as connection:
+            enabled = connection.exec_driver_sql("PRAGMA foreign_keys").scalar()
+        assert enabled == 1
+    finally:
+        engine.dispose()
+
+
+def test_sqlite_rejects_foreign_key_violation() -> None:
+    from sqlalchemy.exc import IntegrityError
+
+    engine = _memory_engine()
+    Base.metadata.create_all(engine)
+    factory = create_session_factory(engine)
+    try:
+        with factory() as session:
+            session.add(
+                ProjectMember(
+                    project_id=uuid4(),
+                    user_id=uuid4(),
+                    role=ProjectRole.OWNER.value,
+                )
+            )
+            with pytest.raises(IntegrityError):
+                session.commit()
+            session.rollback()
+    finally:
+        engine.dispose()
+
+
 def test_repositories_read_within_project_scope() -> None:
     _, factory = _factory()
     project_id = uuid4()

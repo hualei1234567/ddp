@@ -169,7 +169,7 @@ def _ensure_target_in_project(
     try:
         resolved = CalibrationTargetType(target_type)
     except ValueError as exc:
-        raise DomainValidationError(f"target_type 取值非法：{target_type!r}") from exc
+        raise DomainValidationError("target_type 取值非法") from exc
     if resolved is CalibrationTargetType.SYSTEM:
         if target_id != scope.project_id:
             raise DomainValidationError("SYSTEM 标定的 target_id 必须等于当前项目 ID")
