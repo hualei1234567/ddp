@@ -1,0 +1,119 @@
+{
+  "task": "DDP-308",
+  "kind": "真实 PostgreSQL 16 + uvicorn 8010 + S3 协议替身 API 探针",
+  "executed_at": "2026-11-08T15:54:56.782532+00:00",
+  "environment": {
+    "api": "http://127.0.0.1:8010",
+    "postgres": "postgresql+psycopg://ddp:***@127.0.0.1:55432/ddp_qa_308_d2fe715c",
+    "s3_stub": "http://127.0.0.1:35781",
+    "s3_stub_kind": "自研最小 S3 协议替身（非 MinIO、非 s3rver）"
+  },
+  "summary": {
+    "PASS": 17,
+    "FAIL": 1,
+    "BLOCKED": 2,
+    "PARTIAL": 0
+  },
+  "results": [
+    {
+      "id": "API-MIGRATE",
+      "status": "PASS",
+      "detail": "一次性测试库 upgrade head 完成"
+    },
+    {
+      "id": "API-SEED",
+      "status": "PASS",
+      "detail": "真实 PG 预置 API 项目 A/B、用户与成员关系（乙只在 B）"
+    },
+    {
+      "id": "API-START",
+      "status": "PASS",
+      "detail": "uvicorn 127.0.0.1:8010 已就绪"
+    },
+    {
+      "id": "API-HEALTH",
+      "status": "PASS",
+      "detail": "HTTP 200，status=ok，env=local"
+    },
+    {
+      "id": "API-IDEM-01",
+      "status": "PASS",
+      "detail": "同键同请求重放返回同一 upload_session_id=c434f31f-fc7b-4037-b9d5-15846d7eaa43，Idempotent-Replayed=true"
+    },
+    {
+      "id": "API-IDEM-02",
+      "status": "PASS",
+      "detail": "同键不同请求体返回 409 idempotency_key_reused"
+    },
+    {
+      "id": "API-UPL-01",
+      "status": "PASS",
+      "detail": "缺分片 complete 返回 409 upload_incomplete（missing=[2]）；补传分片 2 后 202 COMPLETED"
+    },
+    {
+      "id": "API-UPL-02",
+      "status": "PASS",
+      "detail": "同分片不同 Hash 返回 409 upload_part_conflict，既有分片记录未变"
+    },
+    {
+      "id": "API-UPL-03",
+      "status": "PASS",
+      "detail": "总大小不符返回 422 size_mismatch；修正后同一会话可完成 202"
+    },
+    {
+      "id": "API-UPL-04",
+      "status": "PASS",
+      "detail": "声明 MP4 实际非 MP4：422 file_signature_mismatch；会话 FAILED；未登记资产"
+    },
+    {
+      "id": "API-UPL-05",
+      "status": "PASS",
+      "detail": "过期会话继续访问返回 410 upload_session_expired"
+    },
+    {
+      "id": "API-UPL-06",
+      "status": "FAIL",
+      "detail": "AssertionError: 并发 complete 结果=[(503, 'object_storage_unavailable', False, '{\"error\":{\"code\":\"object_storage_unavailable\",\"message\":\"对象存储暂不可用，请稍后重试\",\"request_id\":\"afdb9a31dd6c4f5f83c1f096715ca733\"}}'), (202, '', False, '{\"upload_session\":{\"upload_session_id\":\"46232d7f-448a-4d0b-8fa7-3e7cdb848705\",\"project_id\":\"1c642f45-1f46-416d-b512-6686856fec86\",\"collection_task_id\":null,\"batch_id\":null,\"status\":\"COMPLETED\",\"verification_status\":\"PENDING\",\"verification_error_code\":null,\"verified_at\":null,\"original_filename\":\"robot.mcap\",\"declared_content_type\":\"application/x-mcap\",\"declared_size_bytes\":9,\"expected_sha256\":\"sha2')]；S3 替身 NoSuchUpload 事件=['ERROR NoSuchUpload status=404 /ddp-raw/raw/1c642f45-1f46-416d-b512-6686856fec86/2026/11/08/e9dc6e41-4484-4d82-9190-ad93b4117d4d/content.mcap?uploadId=148e924c2c7a47d4b08db7ac45fe7475']"
+    },
+    {
+      "id": "API-XPROJ-01",
+      "status": "PASS",
+      "detail": "B 用户访问 B 路由下的 A 会话=404；A 用户访问 B 项目=403；外部用户访问 A=403；B 列表无跨项目资产"
+    },
+    {
+      "id": "API-DEDUP-01",
+      "status": "PASS",
+      "detail": "同项目同内容第二次上传 deduplicated=true，复用资产 652e83b9-d127-4fbf-ba4b-0abd851b3dfa，新对象已清理，资产计数=1"
+    },
+    {
+      "id": "API-DEDUP-02",
+      "status": "PASS",
+      "detail": "跨项目相同内容不去重：A 资产 1 个、B 资产 1 个（345b7d02-4f17-409c-9f39-7fd7366a5bb1），互不复用"
+    },
+    {
+      "id": "API-UPL-07",
+      "status": "PASS",
+      "detail": "路径穿越文件名被拒绝 422 filename_invalid；对象 Key=raw/1c642f45-1f46-416d-b512-6686856fec86/2026/11/08/a57db5bf-b9f0-4e85-8f47-7cd2043135c4/content.mcap 不含原始文件名"
+    },
+    {
+      "id": "API-AUDIT-01",
+      "status": "PASS",
+      "detail": "上传会话审计 3 条（动作=['begin-upload', 'complete', 'create']，均有 request_id），outbox 4 条（类型=['ingestion.raw_asset.validation_requested', 'ingestion.upload_session.completed', 'ingestion.upload_session.created', 'ingestion.upload_session.status_changed']）"
+    },
+    {
+      "id": "S3-STUB-PROTOCOL",
+      "status": "PASS",
+      "detail": "真实 uvicorn 8010 + 真实 PG 下，boto3 经 HTTP 完成预签名 PUT、ListParts、CompleteMultipartUpload、Range GET、DeleteObject；对象字节与 Hash 由 API 校验。替身为自研最小 S3 协议实现。"
+    },
+    {
+      "id": "S3-MINIO",
+      "status": "BLOCKED",
+      "detail": "本机 9000 无 MinIO 服务，MinIO 镜像/二进制不可得；未执行 MinIO 专属 ETag/一致性/权限/生命周期/预签名行为验收，不得将本报告视为 MinIO 验收通过。"
+    },
+    {
+      "id": "S3-SRVER",
+      "status": "BLOCKED",
+      "detail": "s3rver 3.7.1 未安装（node_modules/全局/缓存均未找到），且 Agent 命令白名单不允许 npm install；未使用 s3rver。"
+    }
+  ]
+}

@@ -1,0 +1,364 @@
+{
+  "task": "DDP-308",
+  "kind": "真实 PostgreSQL 16 数据库与 Episode 应用层探针",
+  "executed_at": "2026-11-08T15:53:55.538393+00:00",
+  "postgres": {
+    "admin_url": "postgresql+psycopg://ddp:***@127.0.0.1:55432/postgres",
+    "database": "ddp_qa_308_57ca7052",
+    "url": "postgresql+psycopg://ddp:***@127.0.0.1:55432/ddp_qa_308_57ca7052"
+  },
+  "alembic_head": "0010",
+  "summary": {
+    "PASS": 69,
+    "FAIL": 0,
+    "BLOCKED": 0,
+    "PARTIAL": 0
+  },
+  "results": [
+    {
+      "id": "MIG-UP-0006",
+      "status": "PASS",
+      "detail": "upgrade 0006 完成，当前 revision=0006，表数=13"
+    },
+    {
+      "id": "MIG-UP-0007",
+      "status": "PASS",
+      "detail": "upgrade 0007 完成，当前 revision=0007，表数=17"
+    },
+    {
+      "id": "MIG-UP-0008",
+      "status": "PASS",
+      "detail": "upgrade 0008 完成，当前 revision=0008，表数=21"
+    },
+    {
+      "id": "MIG-UP-0009",
+      "status": "PASS",
+      "detail": "upgrade 0009 完成，当前 revision=0009，表数=26"
+    },
+    {
+      "id": "MIG-UP-0010",
+      "status": "PASS",
+      "detail": "upgrade 0010 完成，当前 revision=0010，表数=26"
+    },
+    {
+      "id": "MIG-HEAD-0010",
+      "status": "PASS",
+      "detail": "head=0010；阶段 2 表 14 张齐全；上传触发器 11 个、Episode/血缘触发器 15 个齐全"
+    },
+    {
+      "id": "MIG-DOWN-0010",
+      "status": "PASS",
+      "detail": "downgrade 0010→0009；Episode/血缘触发器已移除"
+    },
+    {
+      "id": "MIG-DOWN-0009",
+      "status": "PASS",
+      "detail": "downgrade 0009→0008；episodes/ingestion_jobs 已移除"
+    },
+    {
+      "id": "MIG-DOWN-0008",
+      "status": "PASS",
+      "detail": "downgrade 0008→0007；上传表与 11 触发器已移除"
+    },
+    {
+      "id": "MIG-REUP-0008",
+      "status": "PASS",
+      "detail": "upgrade 0008 完成；上传表 4/4，触发器 11/11"
+    },
+    {
+      "id": "MIG-REUP-HEAD",
+      "status": "PASS",
+      "detail": "head=0010；阶段 2 表 14 张齐全；上传触发器 11 个、Episode/血缘触发器 15 个齐全"
+    },
+    {
+      "id": "MIG-DOWN-0005",
+      "status": "PASS",
+      "detail": "downgrade 全链→0005；阶段 2 表全部移除"
+    },
+    {
+      "id": "MIG-REUP-ALL",
+      "status": "PASS",
+      "detail": "head=0010；阶段 2 表 14 张齐全；上传触发器 11 个、Episode/血缘触发器 15 个齐全"
+    },
+    {
+      "id": "DB-TRG-INVENTORY",
+      "status": "PASS",
+      "detail": "上传触发器 11/11、Episode/血缘触发器 15/15 存在；上传触发器=['trg_raw_asset_links_no_delete', 'trg_raw_asset_links_terminal_status', 'trg_raw_assets_content_immutable', 'trg_raw_assets_initial_status', 'trg_raw_assets_no_delete', 'trg_raw_assets_transition', 'trg_upload_parts_no_delete', 'trg_upload_parts_no_update', 'trg_upload_sessions_initial_status', 'trg_upload_sessions_no_delete', 'trg_upload_sessions_transition']"
+    },
+    {
+      "id": "DB-SEED",
+      "status": "PASS",
+      "detail": "真实 PG 预置项目 A/B、用户与成员关系"
+    },
+    {
+      "id": "DB-COL-TRG-01",
+      "status": "PASS",
+      "detail": "collection_task_initial_status_invalid"
+    },
+    {
+      "id": "DB-COL-TRG-02",
+      "status": "PASS",
+      "detail": "collection_task_state_transition_invalid"
+    },
+    {
+      "id": "DB-COL-TRG-02B",
+      "status": "PASS",
+      "detail": "合法链路 DRAFT→PENDING_REVIEW 通过"
+    },
+    {
+      "id": "DB-COL-TRG-03",
+      "status": "PASS",
+      "detail": "collection_task_delete_forbidden"
+    },
+    {
+      "id": "DB-COL-TRG-04",
+      "status": "PASS",
+      "detail": "collection_batch_state_transition_invalid"
+    },
+    {
+      "id": "DB-COL-TRG-05",
+      "status": "PASS",
+      "detail": "collection_batch_leads_task"
+    },
+    {
+      "id": "DB-COL-TRG-06",
+      "status": "PASS",
+      "detail": "collection_batch_delete_forbidden"
+    },
+    {
+      "id": "DB-COL-TRG-07",
+      "status": "PASS",
+      "detail": "collection_batch_initial_status_invalid"
+    },
+    {
+      "id": "DB-TRG-01",
+      "status": "PASS",
+      "detail": "upload_session_initial_status_invalid"
+    },
+    {
+      "id": "DB-TRG-02",
+      "status": "PASS",
+      "detail": "upload_session_state_transition_invalid"
+    },
+    {
+      "id": "DB-TRG-02B",
+      "status": "PASS",
+      "detail": "合法链路 CREATED→UPLOADING→COMPLETING→COMPLETED 通过"
+    },
+    {
+      "id": "DB-TRG-03",
+      "status": "PASS",
+      "detail": "upload_session_delete_forbidden"
+    },
+    {
+      "id": "DB-TRG-04",
+      "status": "PASS",
+      "detail": "upload_part_immutable"
+    },
+    {
+      "id": "DB-TRG-05",
+      "status": "PASS",
+      "detail": "upload_part_delete_forbidden"
+    },
+    {
+      "id": "DB-TRG-06",
+      "status": "PASS",
+      "detail": "raw_asset_initial_status_invalid"
+    },
+    {
+      "id": "DB-TRG-07",
+      "status": "PASS",
+      "detail": "raw_asset_state_transition_invalid"
+    },
+    {
+      "id": "DB-TRG-08",
+      "status": "PASS",
+      "detail": "raw_asset_content_immutable"
+    },
+    {
+      "id": "DB-TRG-09",
+      "status": "PASS",
+      "detail": "raw_asset_delete_forbidden"
+    },
+    {
+      "id": "DB-TRG-10",
+      "status": "PASS",
+      "detail": "raw_asset_link_state_transition_invalid"
+    },
+    {
+      "id": "DB-TRG-11",
+      "status": "PASS",
+      "detail": "raw_asset_link_delete_forbidden"
+    },
+    {
+      "id": "DB-AUD-01",
+      "status": "PASS",
+      "detail": "audit_log_append_only"
+    },
+    {
+      "id": "DB-AUD-02",
+      "status": "PASS",
+      "detail": "audit_log_append_only"
+    },
+    {
+      "id": "DB-OUTBOX-01",
+      "status": "PASS",
+      "detail": "outbox_events 可写入并读取，状态 PENDING"
+    },
+    {
+      "id": "DB-EPI-TRG-01",
+      "status": "PASS",
+      "detail": "episode_initial_status_invalid"
+    },
+    {
+      "id": "DB-EPI-TRG-02",
+      "status": "PASS",
+      "detail": "episode_state_transition_invalid"
+    },
+    {
+      "id": "DB-EPI-TRG-03",
+      "status": "PASS",
+      "detail": "episode_raw_asset_immutable"
+    },
+    {
+      "id": "DB-EPI-TRG-04",
+      "status": "PASS",
+      "detail": "episode_raw_asset_immutable"
+    },
+    {
+      "id": "DB-EPI-TRG-05",
+      "status": "PASS",
+      "detail": "episode_manifest_required"
+    },
+    {
+      "id": "DB-EPI-TRG-06",
+      "status": "PASS",
+      "detail": "episode_raw_asset_parent_frozen"
+    },
+    {
+      "id": "DB-EPI-TRG-07",
+      "status": "PASS",
+      "detail": "episode_data_immutable"
+    },
+    {
+      "id": "DB-EPI-TRG-08",
+      "status": "PASS",
+      "detail": "episode_quality_immutable"
+    },
+    {
+      "id": "DB-EPI-TRG-09",
+      "status": "PASS",
+      "detail": "episode_delete_forbidden"
+    },
+    {
+      "id": "DB-LIN-TRG-01",
+      "status": "PASS",
+      "detail": "lineage_node_ref_identity_immutable"
+    },
+    {
+      "id": "DB-LIN-TRG-02",
+      "status": "PASS",
+      "detail": "lineage_node_ref_delete_forbidden"
+    },
+    {
+      "id": "DB-LIN-TRG-03",
+      "status": "PASS",
+      "detail": "lineage_edge_append_only"
+    },
+    {
+      "id": "DB-LIN-TRG-04",
+      "status": "PASS",
+      "detail": "lineage_edge_append_only"
+    },
+    {
+      "id": "DB-LIN-TRG-05",
+      "status": "PASS",
+      "detail": "lineage_edge_self_forbidden"
+    },
+    {
+      "id": "DB-LIN-TRG-06",
+      "status": "PASS",
+      "detail": "lineage_supersedes_not_linear"
+    },
+    {
+      "id": "DB-LIN-TRG-07",
+      "status": "PASS",
+      "detail": "lineage_supersedes_not_linear"
+    },
+    {
+      "id": "DB-LIN-TRG-08",
+      "status": "PASS",
+      "detail": "insert or update on table \"data_lineage_edges\" violates foreign key constraint \"fk_data_lineage_edges_project_to_node\""
+    },
+    {
+      "id": "EPI-ASSET-VALID",
+      "status": "PASS",
+      "detail": "复用真实 PG 中 VALID 资产 7e60c8e4-01a6-4ef8-b210-3e794644b0d0"
+    },
+    {
+      "id": "EPI-CREATE",
+      "status": "PASS",
+      "detail": "Episode 324360e4-c5dd-44f2-9f65-3af4c30cffed 创建成功，status=PENDING，血缘节点/边已写入"
+    },
+    {
+      "id": "EPI-READY",
+      "status": "PASS",
+      "detail": "READY 成功，manifest_sha256=sha256:33f6edbeed508c4a987c0f84c5a0c8fdaa8d5b53e442116657286e8149484e92 与服务端重算一致"
+    },
+    {
+      "id": "EPI-MANIFEST-HASH",
+      "status": "PASS",
+      "detail": "错误 Manifest Hash 被拒绝：ManifestHashMismatchError"
+    },
+    {
+      "id": "EPI-READY-RESUBMIT",
+      "status": "PASS",
+      "detail": "READY 后再次提交不同 Manifest 被拒绝：InvalidStateTransitionError: Episode 当前状态 READY 不允许动作 system-ready"
+    },
+    {
+      "id": "EPI-READY-FREEZE",
+      "status": "PASS",
+      "detail": "episode_data_immutable"
+    },
+    {
+      "id": "EPI-QGATE-01",
+      "status": "PASS",
+      "detail": "NOT_CHECKED 时 accept 被拒绝：质检未通过，不能 ACCEPTED"
+    },
+    {
+      "id": "EPI-QGATE-02",
+      "status": "PASS",
+      "detail": "质检 FAIL 时 accept 被拒绝：质检未通过，不能 ACCEPTED"
+    },
+    {
+      "id": "EPI-QGATE-03",
+      "status": "PASS",
+      "detail": "质检 PASS 后 accept 成功，status=ACCEPTED"
+    },
+    {
+      "id": "EPI-QGATE-FREEZE",
+      "status": "PASS",
+      "detail": "episode_quality_immutable"
+    },
+    {
+      "id": "EPI-REVISE",
+      "status": "PASS",
+      "detail": "修订新 ID 198f3fbd-07b3-42c3-861d-31e266ed87d7，version=2，supersedes_id=324360e4-c5dd-44f2-9f65-3af4c30cffed，旧版保持 ACCEPTED"
+    },
+    {
+      "id": "EPI-LIN-DIR",
+      "status": "PASS",
+      "detail": "正向 2 条（含 SEGMENTED_INTO），反向 2 条（含来源资产）"
+    },
+    {
+      "id": "EPI-XPROJ",
+      "status": "PASS",
+      "detail": "项目 B 作用域读取项目 A Episode/血缘均为空"
+    },
+    {
+      "id": "EPI-AUDIT-OUTBOX",
+      "status": "PASS",
+      "detail": "Episode 审计 7 条、outbox 8 条，动作=['accept', 'create', 'quality-check', 'record-quality', 'system-ready', 'system-start']"
+    }
+  ]
+}
