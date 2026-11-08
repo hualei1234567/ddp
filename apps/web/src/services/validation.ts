@@ -1,4 +1,4 @@
-import type { ErrorEnvelope } from "../types/api";
+import type { CursorPage, ErrorEnvelope } from "../types/api";
 import type { HealthResponse, PlatformMeta } from "../types/platform";
 
 /** 外部响应进入 UI 前必须经过校验；校验失败由 API client 统一转为 ApiError。 */
@@ -159,6 +159,74 @@ export function readInteger(
   return value;
 }
 
+/** 契约中的 version / sequence_no / 分片号等必须为正整数。 */
+export function readPositiveInteger(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): number {
+  const value = readInteger(record, key, path);
+  if (value < 1) {
+    throw new ContractValidationError(`${path} 必须是正整数`);
+  }
+  return value;
+}
+
+export function readBoolean(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): boolean {
+  const value = record[key];
+  if (typeof value !== "boolean") {
+    throw new ContractValidationError(`${path} 必须是布尔值`);
+  }
+  return value;
+}
+
+export function readOptionalBoolean(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): boolean | null {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "boolean") {
+    throw new ContractValidationError(`${path} 必须是布尔值或 null`);
+  }
+  return value;
+}
+
+export function readIntegerArray(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): number[] {
+  const value = record[key];
+  if (!Array.isArray(value)) {
+    throw new ContractValidationError(`${path} 必须是数组`);
+  }
+  return value.map((item, index) => {
+    if (typeof item !== "number" || !Number.isInteger(item) || item < 1) {
+      throw new ContractValidationError(`${path}[${index}] 必须是正整数`);
+    }
+    return item;
+  });
+}
+
+export function readOptionalIntegerArray(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): number[] {
+  if (record[key] === undefined || record[key] === null) {
+    return [];
+  }
+  return readIntegerArray(record, key, path);
+}
+
 export function readStringArray(
   record: Record<string, unknown>,
   key: string,
@@ -197,6 +265,33 @@ export function readOptionalRecord(
     return null;
   }
   return asRecord(value, path);
+}
+
+/** 阶段 0/1/2 共用的游标分页解析；列表条目仍由调用方逐项校验。 */
+export function parseCursorPage<T>(
+  value: unknown,
+  path: string,
+  parseItem: (item: unknown, itemPath: string) => T,
+): CursorPage<T> {
+  const record = asRecord(value, path);
+  const rawItems = record.items;
+  if (!Array.isArray(rawItems)) {
+    throw new ContractValidationError(`${path}.items 必须是数组`);
+  }
+  const items = rawItems.map((item, index) =>
+    parseItem(item, `${path}.items[${index}]`),
+  );
+  const rawNextCursor = record.next_cursor;
+  if (
+    rawNextCursor !== undefined &&
+    rawNextCursor !== null &&
+    typeof rawNextCursor !== "string"
+  ) {
+    throw new ContractValidationError(
+      `${path}.next_cursor 必须是字符串或 null`,
+    );
+  }
+  return { items, next_cursor: rawNextCursor ?? null };
 }
 
 export function parseHealthResponse(value: unknown): HealthResponse {
@@ -246,14 +341,18 @@ export function parseErrorEnvelope(value: unknown): ErrorEnvelope | null {
     ) {
       throw new ContractValidationError("error.request_id 必须是字符串或 null");
     }
-
-    return {
+    const rawDetails = error.details;
+    const parsed: ErrorEnvelope = {
       error: {
         code,
         message,
         request_id: rawRequestId ?? null,
       },
     };
+    if (rawDetails !== undefined && rawDetails !== null) {
+      parsed.error.details = asRecord(rawDetails, "error.details");
+    }
+    return parsed;
   } catch {
     return null;
   }

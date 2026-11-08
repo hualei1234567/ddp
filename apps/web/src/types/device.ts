@@ -160,8 +160,4 @@ export interface CalibrationRecord {
   updated_at: string | null;
 }
 
-/** DDP-101 §4.1 约定：列表统一返回 `{ items, next_cursor }`。 */
-export interface CursorPage<T> {
-  items: T[];
-  next_cursor: string | null;
-}
+export type { CursorPage } from "./api";

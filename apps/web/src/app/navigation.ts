@@ -81,7 +81,7 @@ export const navSections: NavSection[] = [
         label: "数据采集",
         description: "管理采集任务、现场作业、SOP 与人员设备排期。",
         icon: createElement(ExperimentOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/ingestion",
@@ -102,7 +102,7 @@ export const navSections: NavSection[] = [
         label: "Episode 管理",
         description: "查看切片结果、元数据与数据血缘。",
         icon: createElement(PartitionOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/annotation",

@@ -22,6 +22,8 @@ export interface ApiErrorOptions {
   status?: number;
   code?: string;
   requestId?: string | null;
+  /** 契约错误体中的可选 details；仅用于稳定错误码的补充提示。 */
+  details?: Record<string, unknown> | null;
   cause?: unknown;
 }
 
@@ -31,6 +33,7 @@ export class ApiError extends Error {
   readonly status?: number;
   readonly code?: string;
   readonly requestId: string | null;
+  readonly details: Record<string, unknown> | null;
 
   constructor(options: ApiErrorOptions) {
     super(
@@ -42,6 +45,7 @@ export class ApiError extends Error {
     this.status = options.status;
     this.code = options.code;
     this.requestId = options.requestId ?? null;
+    this.details = options.details ?? null;
   }
 
   get isForbidden(): boolean {
@@ -54,6 +58,14 @@ export class ApiError extends Error {
 
   get isNotFound(): boolean {
     return this.status === 404;
+  }
+
+  get isConflict(): boolean {
+    return this.status === 409;
+  }
+
+  get isGone(): boolean {
+    return this.status === 410;
   }
 }
 
@@ -177,6 +189,7 @@ function toHttpError(
     status: response.status,
     code: envelope?.error.code ?? `http_${response.status}`,
     requestId: envelope?.error.request_id ?? requestId,
+    details: envelope?.error.details ?? null,
     message:
       envelope?.error.message ||
       fallbackMessage ||
