@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-record.v1.schema.json",
+  "title": "DDP AnnotationRecord v1（草案）",
+  "description": "阶段 3 标注记录。批准后不可原地修改；修订创建新 annotation_version；失效只追加状态。",
+  "version": "ddp.stage3/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "annotation_id",
+    "annotation_lineage_id",
+    "annotation_version",
+    "project_id",
+    "submission_id",
+    "episode_id",
+    "episode_version",
+    "task_id",
+    "schema_id",
+    "schema_version",
+    "status",
+    "labels",
+    "record_sha256",
+    "version",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "annotation_id": {"$ref": "#/$defs/uuid"},
+    "annotation_lineage_id": {"$ref": "#/$defs/uuid"},
+    "annotation_version": {"type": "integer", "minimum": 1},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "submission_id": {"$ref": "#/$defs/uuid"},
+    "episode_id": {"$ref": "#/$defs/uuid"},
+    "episode_version": {"type": "integer", "minimum": 1},
+    "task_id": {"$ref": "#/$defs/uuid"},
+    "schema_id": {"$ref": "#/$defs/uuid"},
+    "schema_version": {"type": "integer", "minimum": 1},
+    "status": {"type": "string", "enum": ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "SUPERSEDED", "INVALIDATED"]},
+    "time_range": {"oneOf": [{"$ref": "#/$defs/time_range"}, {"type": "null"}]},
+    "labels": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/label_value"}},
+    "evidence_refs": {"type": "array", "items": {"$ref": "#/$defs/evidence_ref"}},
+    "record_sha256": {"$ref": "#/$defs/sha256"},
+    "supersedes_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "approved_by": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "approved_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "updated_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "int64_string": {"type": "string", "pattern": "^-?[0-9]+$"},
+    "time_range": {
+      "type": "object",
+      "required": ["start_time_ns", "end_time_ns", "time_domain"],
+      "additionalProperties": false,
+      "properties": {
+        "start_time_ns": {"$ref": "#/$defs/int64_string"},
+        "end_time_ns": {"$ref": "#/$defs/int64_string"},
+        "time_domain": {"type": "string", "enum": ["UTC", "ROS", "DEVICE", "HOST", "MONOTONIC", "UNKNOWN"]}
+      }
+    },
+    "label_value": {
+      "type": "object",
+      "required": ["label_key", "value", "source", "label_status"],
+      "additionalProperties": false,
+      "properties": {
+        "label_key": {"type": "string", "minLength": 1, "maxLength": 100},
+        "value": {"oneOf": [{"type": "string"}, {"type": "number"}, {"type": "boolean"}, {"type": "array"}, {"type": "object"}]},
+        "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "source": {"type": "string", "enum": ["HUMAN", "AI_ASSISTED", "IMPORTED"]},
+        "label_status": {"type": "string", "enum": ["DRAFT", "CONFIRMED", "REJECTED"]},
+        "comment": {"type": ["string", "null"], "maxLength": 2000}
+      }
+    },
+    "evidence_ref": {
+      "type": "object",
+      "required": ["evidence_id", "object_key", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "evidence_id": {"type": "string", "minLength": 1, "maxLength": 64},
+        "object_key": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "content_type": {"type": ["string", "null"], "maxLength": 200}
+      }
+    }
+  }
+}

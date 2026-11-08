@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-sample-selection.v1.schema.json",
+  "title": "DDP AnnotationSampleSet v1（草案）",
+  "description": "阶段 3 标注样本选择与快照。样本集不是阶段 4 DatasetVersion。",
+  "version": "ddp.stage3/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "sample_set_id",
+    "project_id",
+    "code",
+    "status",
+    "selection_rule_version",
+    "filters",
+    "episode_refs",
+    "dedup_key",
+    "candidate_count",
+    "selected_count",
+    "excluded_count",
+    "deduplicated_count",
+    "version",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "sample_set_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "code": {"type": "string", "minLength": 1, "maxLength": 64},
+    "name": {"type": ["string", "null"], "maxLength": 200},
+    "status": {"type": "string", "enum": ["DRAFT", "PREVIEW", "SNAPSHOTTED", "CONSUMED", "CANCELLED"]},
+    "selection_rule_version": {"type": "string", "minLength": 1, "maxLength": 64},
+    "strategy": {"type": "string", "enum": ["FILTER", "STRATIFIED", "RISK_BASED", "MANUAL"]},
+    "filters": {"$ref": "#/$defs/filters"},
+    "strata": {"type": "array", "items": {"$ref": "#/$defs/stratum"}},
+    "episode_refs": {"type": "array", "items": {"$ref": "#/$defs/episode_ref"}},
+    "dedup_key": {"type": "string", "enum": ["EPISODE_LINEAGE", "EPISODE_VERSION", "NONE"]},
+    "candidate_count": {"type": "integer", "minimum": 0},
+    "selected_count": {"type": "integer", "minimum": 0},
+    "excluded_count": {"type": "integer", "minimum": 0},
+    "deduplicated_count": {"type": "integer", "minimum": 0},
+    "snapshot_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "snapshot_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "cancelled_reason": {"type": ["string", "null"], "maxLength": 1000},
+    "data_source": {"type": "string", "enum": ["REAL", "SYNTHETIC", "MIXED", "UNKNOWN"]},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "updated_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "int64_string": {"type": "string", "pattern": "^-?[0-9]+$"},
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "episode_statuses": {"type": "array", "items": {"type": "string", "enum": ["ACCEPTED", "COMPLETED"]}, "uniqueItems": true},
+        "quality_statuses": {"type": "array", "items": {"type": "string", "enum": ["PASS", "WARN"]}, "uniqueItems": true},
+        "scene_labels": {"type": "array", "items": {"type": "string", "maxLength": 100}, "uniqueItems": true},
+        "action_codes": {"type": "array", "items": {"type": "string", "maxLength": 100}, "uniqueItems": true},
+        "robot_ids": {"type": "array", "items": {"$ref": "#/$defs/uuid"}, "uniqueItems": true},
+        "device_ids": {"type": "array", "items": {"$ref": "#/$defs/uuid"}, "uniqueItems": true},
+        "sensor_ids": {"type": "array", "items": {"$ref": "#/$defs/uuid"}, "uniqueItems": true},
+        "captured_from": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+        "captured_to": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+        "data_source": {"type": ["string", "null"], "enum": ["REAL", "SYNTHETIC", "MIXED", "UNKNOWN", null]},
+        "include_episode_ids": {"type": "array", "items": {"$ref": "#/$defs/uuid"}, "uniqueItems": true},
+        "exclude_episode_ids": {"type": "array", "items": {"$ref": "#/$defs/uuid"}, "uniqueItems": true},
+        "not_annotated": {"type": "boolean"},
+        "allow_multiple_time_ranges": {"type": "boolean"}
+      }
+    },
+    "stratum": {
+      "type": "object",
+      "required": ["name", "target_count"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 100},
+        "target_count": {"type": "integer", "minimum": 0},
+        "criteria": {"type": "object", "additionalProperties": true}
+      }
+    },
+    "episode_ref": {
+      "type": "object",
+      "required": ["episode_id", "episode_lineage_id", "episode_version", "sample_role", "selected_reason"],
+      "additionalProperties": false,
+      "properties": {
+        "episode_id": {"$ref": "#/$defs/uuid"},
+        "episode_lineage_id": {"$ref": "#/$defs/uuid"},
+        "episode_version": {"type": "integer", "minimum": 1},
+        "time_range": {"oneOf": [{"$ref": "#/$defs/time_range"}, {"type": "null"}]},
+        "stratum": {"type": ["string", "null"], "maxLength": 100},
+        "sample_role": {"type": "string", "enum": ["NORMAL", "GOLD", "IAA", "QUALITY"]},
+        "selected_reason": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    },
+    "time_range": {
+      "type": "object",
+      "required": ["start_time_ns", "end_time_ns", "time_domain"],
+      "additionalProperties": false,
+      "properties": {
+        "start_time_ns": {"$ref": "#/$defs/int64_string"},
+        "end_time_ns": {"$ref": "#/$defs/int64_string"},
+        "time_domain": {"type": "string", "enum": ["UTC", "ROS", "DEVICE", "HOST", "MONOTONIC", "UNKNOWN"]}
+      }
+    }
+  }
+}

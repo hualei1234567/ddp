@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-review.v1.schema.json",
+  "title": "DDP AnnotationReview v1（草案）",
+  "description": "阶段 3 复核。复核人不得是标注人；驳回必须有问题项、严重级别、定位与原因。",
+  "version": "ddp.stage3/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "review_id",
+    "project_id",
+    "submission_id",
+    "reviewer_id",
+    "review_round",
+    "status",
+    "issues",
+    "version",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "review_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "submission_id": {"$ref": "#/$defs/uuid"},
+    "reviewer_id": {"$ref": "#/$defs/uuid"},
+    "review_round": {"type": "integer", "minimum": 1},
+    "status": {"type": "string", "enum": ["PENDING", "IN_REVIEW", "APPROVED", "REJECTED", "ESCALATED", "CANCELLED"]},
+    "decision": {"oneOf": [{"type": "string", "enum": ["APPROVE", "REJECT", "ESCALATE"]}, {"type": "null"}]},
+    "issues": {"type": "array", "items": {"$ref": "#/$defs/issue"}},
+    "checklist": {"type": "array", "items": {"$ref": "#/$defs/check_item"}},
+    "review_duration_sec": {"type": ["integer", "null"], "minimum": 0},
+    "reason": {"type": ["string", "null"], "maxLength": 2000},
+    "decided_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "updated_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "issue": {
+      "type": "object",
+      "required": ["code", "severity", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {"type": "string", "minLength": 1, "maxLength": 100},
+        "severity": {"type": "string", "enum": ["BLOCKER", "MAJOR", "MINOR", "SUGGESTION"]},
+        "label_key": {"type": ["string", "null"], "maxLength": 100},
+        "item_ref": {"type": ["string", "null"], "maxLength": 200},
+        "message": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "evidence_ref": {"type": ["string", "null"], "maxLength": 1024}
+      }
+    },
+    "check_item": {
+      "type": "object",
+      "required": ["key", "passed"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {"type": "string", "minLength": 1, "maxLength": 100},
+        "passed": {"type": "boolean"},
+        "comment": {"type": ["string", "null"], "maxLength": 1000}
+      }
+    }
+  }
+}

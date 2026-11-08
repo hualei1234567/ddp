@@ -1,0 +1,322 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/state-machines.v1.json",
+  "title": "DDP 阶段 3 标注域状态机 v1（草案）",
+  "description": "阶段 3 标注 Schema、样本集、任务、批次、分配、提交、记录、复核、仲裁、黄金集、抽检、IAA 的权威迁移表。状态文本使用大写下划线；非法迁移统一 state_transition_invalid（409）。本文件是测试与实现共用的机器可读基线，未冻结。",
+  "version": "ddp.stage3/1.0.0-draft",
+  "status": "DRAFT",
+  "common": {
+    "error": "state_transition_invalid",
+    "http_status": 409,
+    "terminal_rule": "终态不得回退；终态对象只能通过新资源/新版本表达变更",
+    "audit_required": true,
+    "optimistic_lock": "动作接口必须带 If-Match: \"<version>\"；缺失 428 precondition_required，失配 409 version_conflict",
+    "idempotency": "写动作支持 Idempotency-Key，作用域 (project_id, user_id, key)，至少 24h",
+    "project_scope": "所有对象与迁移必须同项目；跨项目统一 404/403，不泄漏存在性"
+  },
+  "machines": {
+    "AnnotationSchema": {
+      "initial": "DRAFT",
+      "terminal": ["DEPRECATED", "REVOKED"],
+      "states": ["DRAFT", "PENDING_REVIEW", "PUBLISHED", "DEPRECATED", "REVOKED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "PENDING_REVIEW", "action": "submit-review", "roles": ["AM", "PM"], "requires_reason": false, "preconditions": ["标签定义完整", "类型/枚举/范围合法", "至少一个 annotation_level"]},
+        {"from": "PENDING_REVIEW", "to": "DRAFT", "action": "return-draft", "roles": ["PO", "PM"], "requires_reason": true, "preconditions": ["非创建人可退回"]},
+        {"from": "PENDING_REVIEW", "to": "PUBLISHED", "action": "publish", "roles": ["PO"], "requires_reason": false, "preconditions": ["审批人不是创建人", "schema_sha256 已计算"]},
+        {"from": "PUBLISHED", "to": "DEPRECATED", "action": "deprecate", "roles": ["PO", "AM"], "requires_reason": true, "preconditions": ["不再允许新任务引用", "在途任务快照保留"]},
+        {"from": "PUBLISHED", "to": "REVOKED", "action": "revoke", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["安全/合规原因", "影响评估完成"]},
+        {"from": "DEPRECATED", "to": "REVOKED", "action": "revoke", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["安全/合规原因"]}
+      ],
+      "forbidden_examples": [
+        {"from": "PUBLISHED", "to": "DRAFT", "reason": "已发布不可回退编辑"},
+        {"from": "PUBLISHED", "to": "PUBLISHED", "reason": "原地修改标签定义；应创建新版本"},
+        {"from": "REVOKED", "to": "PUBLISHED", "reason": "撤销终态不可恢复"}
+      ]
+    },
+    "AnnotationSampleSet": {
+      "initial": "DRAFT",
+      "terminal": ["CONSUMED", "CANCELLED"],
+      "states": ["DRAFT", "PREVIEW", "SNAPSHOTTED", "CONSUMED", "CANCELLED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "PREVIEW", "action": "preview", "roles": ["AM", "PM", "DE"], "requires_reason": false, "preconditions": ["筛选条件合法", "Episode 同项目"]},
+        {"from": "PREVIEW", "to": "SNAPSHOTTED", "action": "snapshot", "roles": ["AM", "PM"], "requires_reason": false, "preconditions": ["至少一个合格 Episode", "去重与分层完成", "snapshot_sha256 已计算"]},
+        {"from": "SNAPSHOTTED", "to": "CONSUMED", "action": "consume", "roles": ["SYSTEM", "AM"], "requires_reason": false, "preconditions": ["任务已批准并引用该快照"]},
+        {"from": "DRAFT", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["未被任务引用"]},
+        {"from": "PREVIEW", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["未被任务引用"]},
+        {"from": "SNAPSHOTTED", "to": "CANCELLED", "action": "cancel", "roles": ["PO", "PM"], "requires_reason": true, "preconditions": ["未被任务引用或任务已取消"]}
+      ],
+      "forbidden_examples": [
+        {"from": "SNAPSHOTTED", "to": "PREVIEW", "reason": "快照后不可静默变更"},
+        {"from": "CONSUMED", "to": "SNAPSHOTTED", "reason": "终态回退"},
+        {"from": "CANCELLED", "to": "DRAFT", "reason": "终态回退"}
+      ]
+    },
+    "AnnotationTask": {
+      "initial": "DRAFT",
+      "terminal": ["COMPLETED", "CANCELLED", "ARCHIVED"],
+      "states": ["DRAFT", "PENDING_REVIEW", "APPROVED", "READY", "ASSIGNED", "IN_PROGRESS", "PAUSED", "BLOCKED", "SUBMITTED", "REVIEWING", "ARBITRATION", "ACCEPTED", "REJECTED", "REWORK", "COMPLETED", "CANCELLED", "ARCHIVED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "PENDING_REVIEW", "action": "submit-review", "roles": ["AM", "PM"], "requires_reason": false, "preconditions": ["绑定已快照样本集与已发布 Schema", "目标量/策略/截止时间完整"]},
+        {"from": "PENDING_REVIEW", "to": "DRAFT", "action": "return-draft", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["非创建人可退回"]},
+        {"from": "PENDING_REVIEW", "to": "APPROVED", "action": "approve", "roles": ["PM", "PO"], "requires_reason": false, "preconditions": ["审批人不是创建人", "样本集/Schema 快照有效"]},
+        {"from": "APPROVED", "to": "READY", "action": "ready", "roles": ["AM", "PM"], "requires_reason": false, "preconditions": ["Schema 仍 PUBLISHED", "样本集快照有效", "黄金集如配置则 ACTIVE", "批次/分配策略完整"]},
+        {"from": "READY", "to": "ASSIGNED", "action": "assign", "roles": ["AM", "PM"], "requires_reason": false, "preconditions": ["人员同项目且容量可用", "职责分离通过"]},
+        {"from": "ASSIGNED", "to": "IN_PROGRESS", "action": "start", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["至少一个分配已领取", "任务未取消"]},
+        {"from": "IN_PROGRESS", "to": "PAUSED", "action": "pause", "roles": ["AN", "AM"], "requires_reason": true, "preconditions": ["暂停原因明确"]},
+        {"from": "PAUSED", "to": "IN_PROGRESS", "action": "resume", "roles": ["AN", "AM"], "requires_reason": true, "preconditions": ["暂停原因解除"]},
+        {"from": "IN_PROGRESS", "to": "BLOCKED", "action": "block", "roles": ["AN", "AM"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "BLOCKED", "to": "IN_PROGRESS", "action": "unblock", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["阻塞原因解除"]},
+        {"from": "IN_PROGRESS", "to": "SUBMITTED", "action": "submit", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["所有有效批次已提交", "无未结必填项"]},
+        {"from": "PAUSED", "to": "SUBMITTED", "action": "submit", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["所有有效批次已提交", "无未结必填项"]},
+        {"from": "BLOCKED", "to": "SUBMITTED", "action": "submit", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["所有有效批次已提交", "无未结必填项"]},
+        {"from": "SUBMITTED", "to": "REVIEWING", "action": "system-review", "roles": ["SYSTEM", "AM"], "requires_reason": false, "preconditions": ["复核任务已分配", "提交摘要已生成"]},
+        {"from": "REVIEWING", "to": "ACCEPTED", "action": "accept", "roles": ["QI", "AM"], "requires_reason": false, "preconditions": ["所有提交 APPROVED 或仲裁通过", "黄金集/IAA/抽检达到策略", "质量门禁通过"]},
+        {"from": "REVIEWING", "to": "REJECTED", "action": "reject", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["问题项与范围完整"]},
+        {"from": "REVIEWING", "to": "ARBITRATION", "action": "escalate", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["存在升级仲裁项", "触发原因明确"]},
+        {"from": "ARBITRATION", "to": "ACCEPTED", "action": "resolve-accepted", "roles": ["AR", "QI"], "requires_reason": false, "preconditions": ["仲裁结论 RESOLVED_APPROVED/RESOLVED_REWORK 已处理", "质量门禁通过"]},
+        {"from": "ARBITRATION", "to": "REJECTED", "action": "resolve-rejected", "roles": ["AR", "QI"], "requires_reason": true, "preconditions": ["仲裁结论 RESOLVED_REJECTED"]},
+        {"from": "REJECTED", "to": "REWORK", "action": "rework", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["返工范围/责任人/截止时间明确", "返工次数未超限"]},
+        {"from": "REWORK", "to": "IN_PROGRESS", "action": "resume-work", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["返工提交版本已创建"]},
+        {"from": "ACCEPTED", "to": "COMPLETED", "action": "complete", "roles": ["AM", "PM"], "requires_reason": false, "preconditions": ["所有批次 ACCEPTED/CANCELLED", "目标达成或 PO 例外批准", "审计/血缘完整"]},
+        {"from": "COMPLETED", "to": "ARCHIVED", "action": "archive", "roles": ["SYSTEM", "AM"], "requires_reason": false, "preconditions": ["保留策略允许", "不影响血缘"]},
+        {"from": "DRAFT", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结分配/提交"]},
+        {"from": "PENDING_REVIEW", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结分配/提交"]},
+        {"from": "APPROVED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结分配/提交"]},
+        {"from": "READY", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结分配/提交"]},
+        {"from": "ASSIGNED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结分配/提交"]},
+        {"from": "IN_PROGRESS", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结提交；或已保存草稿"]},
+        {"from": "PAUSED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结提交"]},
+        {"from": "BLOCKED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结提交"]},
+        {"from": "SUBMITTED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结复核"]},
+        {"from": "REVIEWING", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结复核/仲裁"]},
+        {"from": "ARBITRATION", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["仲裁影响评估完成"]},
+        {"from": "REJECTED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结返工"]},
+        {"from": "REWORK", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结提交"]},
+        {"from": "ACCEPTED", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["影响评估完成"]}
+      ],
+      "forbidden_examples": [
+        {"from": "DRAFT", "to": "APPROVED", "reason": "跳过审核"},
+        {"from": "DRAFT", "to": "IN_PROGRESS", "reason": "跳过审批/就绪/分配/领取"},
+        {"from": "READY", "to": "SUBMITTED", "reason": "跳过执行"},
+        {"from": "SUBMITTED", "to": "ACCEPTED", "reason": "跳过复核/抽检/IAA"},
+        {"from": "REVIEWING", "to": "COMPLETED", "reason": "跳过验收与完成条件"},
+        {"from": "COMPLETED", "to": "IN_PROGRESS", "reason": "终态回退"},
+        {"from": "CANCELLED", "to": "DRAFT", "reason": "终态回退"},
+        {"from": "ARCHIVED", "to": "IN_PROGRESS", "reason": "终态回退"}
+      ]
+    },
+    "AnnotationBatch": {
+      "initial": "PLANNED",
+      "terminal": ["ACCEPTED", "CANCELLED"],
+      "states": ["PLANNED", "READY", "ASSIGNED", "IN_PROGRESS", "PAUSED", "BLOCKED", "SUBMITTED", "REVIEWING", "ARBITRATION", "ACCEPTED", "REJECTED", "REWORK", "CANCELLED"],
+      "transitions": [
+        {"from": "PLANNED", "to": "READY", "action": "ready", "roles": ["AM", "PM"], "requires_reason": false, "preconditions": ["所属任务 READY/ASSIGNED/IN_PROGRESS", "批次样本属于任务样本集"]},
+        {"from": "READY", "to": "ASSIGNED", "action": "assign", "roles": ["AM", "PM"], "requires_reason": false, "preconditions": ["人员/复核人同项目且容量可用"]},
+        {"from": "ASSIGNED", "to": "IN_PROGRESS", "action": "start", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["任务 IN_PROGRESS", "至少一个分配已领取"]},
+        {"from": "IN_PROGRESS", "to": "PAUSED", "action": "pause", "roles": ["AN", "AM"], "requires_reason": true, "preconditions": ["任务状态兼容"]},
+        {"from": "PAUSED", "to": "IN_PROGRESS", "action": "resume", "roles": ["AN", "AM"], "requires_reason": true, "preconditions": ["暂停原因解除"]},
+        {"from": "IN_PROGRESS", "to": "BLOCKED", "action": "block", "roles": ["AN", "AM"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "BLOCKED", "to": "IN_PROGRESS", "action": "unblock", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["阻塞原因解除"]},
+        {"from": "IN_PROGRESS", "to": "SUBMITTED", "action": "submit", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["批次内所有有效分配已提交", "必填完整"]},
+        {"from": "PAUSED", "to": "SUBMITTED", "action": "submit", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["批次内所有有效分配已提交"]},
+        {"from": "BLOCKED", "to": "SUBMITTED", "action": "submit", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["批次内所有有效分配已提交"]},
+        {"from": "SUBMITTED", "to": "REVIEWING", "action": "system-review", "roles": ["SYSTEM", "AM"], "requires_reason": false, "preconditions": ["复核已分配"]},
+        {"from": "REVIEWING", "to": "ACCEPTED", "action": "accept", "roles": ["QI", "AM"], "requires_reason": false, "preconditions": ["批次提交全部通过或仲裁通过", "抽检满足策略"]},
+        {"from": "REVIEWING", "to": "REJECTED", "action": "reject", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["问题项完整"]},
+        {"from": "REVIEWING", "to": "ARBITRATION", "action": "escalate", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["存在升级项"]},
+        {"from": "ARBITRATION", "to": "ACCEPTED", "action": "resolve-accepted", "roles": ["AR", "QI"], "requires_reason": false, "preconditions": ["仲裁通过/返工已处理"]},
+        {"from": "ARBITRATION", "to": "REJECTED", "action": "resolve-rejected", "roles": ["AR", "QI"], "requires_reason": true, "preconditions": ["仲裁驳回"]},
+        {"from": "REJECTED", "to": "REWORK", "action": "rework", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["返工要求明确", "次数未超限"]},
+        {"from": "REWORK", "to": "IN_PROGRESS", "action": "resume-work", "roles": ["AN", "AM"], "requires_reason": false, "preconditions": ["返工提交已创建"]},
+        {"from": "PLANNED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "READY", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "ASSIGNED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "IN_PROGRESS", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["无未结提交"]},
+        {"from": "PAUSED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["无未结提交"]},
+        {"from": "BLOCKED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["无未结提交"]},
+        {"from": "SUBMITTED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["无未结复核"]},
+        {"from": "REVIEWING", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["无未结复核/仲裁"]},
+        {"from": "ARBITRATION", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["影响评估完成"]},
+        {"from": "REJECTED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["无未结返工"]},
+        {"from": "REWORK", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM", "PO"], "requires_reason": true, "preconditions": ["无未结提交"]}
+      ],
+      "forbidden_examples": [
+        {"from": "PLANNED", "to": "IN_PROGRESS", "reason": "跳过就绪/分配"},
+        {"from": "PLANNED", "to": "ACCEPTED", "reason": "跳过执行/复核"},
+        {"from": "ACCEPTED", "to": "IN_PROGRESS", "reason": "终态回退"},
+        {"from": "CANCELLED", "to": "READY", "reason": "终态回退"}
+      ]
+    },
+    "AnnotationAssignment": {
+      "initial": "ASSIGNED",
+      "terminal": ["COMPLETED", "REVOKED", "EXPIRED"],
+      "states": ["ASSIGNED", "CLAIMED", "IN_PROGRESS", "SUBMITTED", "COMPLETED", "REVOKED", "EXPIRED"],
+      "transitions": [
+        {"from": "ASSIGNED", "to": "CLAIMED", "action": "claim", "roles": ["ASSIGNEE"], "requires_reason": false, "preconditions": ["领取人=assignee_id", "项目成员", "容量可用", "未过期", "职责分离"]},
+        {"from": "ASSIGNED", "to": "REVOKED", "action": "revoke", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["未开始或已保存草稿"]},
+        {"from": "ASSIGNED", "to": "EXPIRED", "action": "system-expire", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["now >= lease_expires_at"]},
+        {"from": "CLAIMED", "to": "IN_PROGRESS", "action": "start", "roles": ["ASSIGNEE"], "requires_reason": false, "preconditions": ["任务/批次允许开始"]},
+        {"from": "CLAIMED", "to": "ASSIGNED", "action": "release", "roles": ["ASSIGNEE", "AM"], "requires_reason": true, "preconditions": ["未提交"]},
+        {"from": "CLAIMED", "to": "REVOKED", "action": "revoke", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["草稿保留"]},
+        {"from": "CLAIMED", "to": "EXPIRED", "action": "system-expire", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["now >= lease_expires_at"]},
+        {"from": "IN_PROGRESS", "to": "SUBMITTED", "action": "submit", "roles": ["ASSIGNEE"], "requires_reason": false, "preconditions": ["提交完整性通过", "Schema 快照一致"]},
+        {"from": "IN_PROGRESS", "to": "REVOKED", "action": "revoke", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["草稿保留"]},
+        {"from": "SUBMITTED", "to": "COMPLETED", "action": "complete", "roles": ["SYSTEM", "AM"], "requires_reason": false, "preconditions": ["复核通过或仲裁通过"]},
+        {"from": "SUBMITTED", "to": "IN_PROGRESS", "action": "rework", "roles": ["AM", "QI"], "requires_reason": true, "preconditions": ["提交被驳回", "返工次数未超限"]}
+      ],
+      "forbidden_examples": [
+        {"from": "COMPLETED", "to": "IN_PROGRESS", "reason": "终态回退；应新建分配或返工"},
+        {"from": "REVOKED", "to": "CLAIMED", "reason": "撤销不可恢复"},
+        {"from": "EXPIRED", "to": "CLAIMED", "reason": "过期不可恢复"},
+        {"from": "ASSIGNED", "to": "SUBMITTED", "reason": "跳过领取/执行/提交"}
+      ]
+    },
+    "AnnotationSubmission": {
+      "initial": "DRAFT",
+      "terminal": ["APPROVED", "RESOLVED_APPROVED", "REWORK_REQUIRED", "WITHDRAWN", "SUPERSEDED"],
+      "states": ["DRAFT", "SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED", "ESCALATED", "ARBITRATING", "RESOLVED_APPROVED", "RESOLVED_REJECTED", "RESOLVED_REWORK", "REWORK_REQUIRED", "WITHDRAWN", "SUPERSEDED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "SUBMITTED", "action": "submit", "roles": ["ASSIGNEE"], "requires_reason": false, "preconditions": ["必填/类型/范围/时间片段合法", "Schema 快照一致", "records_digest 已计算"]},
+        {"from": "DRAFT", "to": "WITHDRAWN", "action": "withdraw", "roles": ["ASSIGNEE"], "requires_reason": true, "preconditions": ["未进入复核"]},
+        {"from": "SUBMITTED", "to": "IN_REVIEW", "action": "system-review-start", "roles": ["SYSTEM", "AM"], "requires_reason": false, "preconditions": ["复核人已分配且非标注人"]},
+        {"from": "IN_REVIEW", "to": "APPROVED", "action": "approve", "roles": ["QI"], "requires_reason": false, "preconditions": ["检查项通过", "记录 digest 校验通过"]},
+        {"from": "IN_REVIEW", "to": "REJECTED", "action": "reject", "roles": ["QI"], "requires_reason": true, "preconditions": ["问题项/定位/原因完整"]},
+        {"from": "IN_REVIEW", "to": "ESCALATED", "action": "escalate", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["触发原因明确", "仲裁待分配"]},
+        {"from": "ESCALATED", "to": "ARBITRATING", "action": "arbitrate-start", "roles": ["AR", "AM"], "requires_reason": false, "preconditions": ["仲裁人独立且人数达标"]},
+        {"from": "ARBITRATING", "to": "RESOLVED_APPROVED", "action": "resolve-approved", "roles": ["AR"], "requires_reason": false, "preconditions": ["法定人数通过", "结论明确"]},
+        {"from": "ARBITRATING", "to": "RESOLVED_REJECTED", "action": "resolve-rejected", "roles": ["AR"], "requires_reason": true, "preconditions": ["法定人数通过", "结论明确"]},
+        {"from": "ARBITRATING", "to": "RESOLVED_REWORK", "action": "resolve-rework", "roles": ["AR"], "requires_reason": true, "preconditions": ["法定人数通过", "返工范围明确"]},
+        {"from": "REJECTED", "to": "REWORK_REQUIRED", "action": "require-rework", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["返工要求明确"]},
+        {"from": "RESOLVED_REJECTED", "to": "REWORK_REQUIRED", "action": "require-rework", "roles": ["AR", "AM"], "requires_reason": true, "preconditions": ["返工要求明确"]},
+        {"from": "RESOLVED_REWORK", "to": "REWORK_REQUIRED", "action": "require-rework", "roles": ["AR", "AM"], "requires_reason": true, "preconditions": ["返工要求明确"]},
+        {"from": "REWORK_REQUIRED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["新 submission_version 已创建并引用旧版本"]},
+        {"from": "APPROVED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM", "AM"], "requires_reason": true, "preconditions": ["标签/Episode 修订被批准", "旧版本保留"]}
+      ],
+      "forbidden_examples": [
+        {"from": "DRAFT", "to": "APPROVED", "reason": "跳过提交/复核"},
+        {"from": "SUBMITTED", "to": "APPROVED", "reason": "跳过复核"},
+        {"from": "APPROVED", "to": "DRAFT", "reason": "已批准不可原地编辑；应新版本"},
+        {"from": "REWORK_REQUIRED", "to": "APPROVED", "reason": "返工版本终态；新版本应重新提交"},
+        {"from": "SUPERSEDED", "to": "SUBMITTED", "reason": "终态回退"}
+      ]
+    },
+    "AnnotationRecord": {
+      "initial": "DRAFT",
+      "terminal": ["SUPERSEDED", "INVALIDATED"],
+      "states": ["DRAFT", "SUBMITTED", "APPROVED", "REJECTED", "SUPERSEDED", "INVALIDATED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "SUBMITTED", "action": "submit-with-submission", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["所属提交已 SUBMITTED"]},
+        {"from": "SUBMITTED", "to": "APPROVED", "action": "approve-with-submission", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["所属提交 APPROVED/RESOLVED_APPROVED"]},
+        {"from": "SUBMITTED", "to": "REJECTED", "action": "reject-with-submission", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["所属提交 REJECTED/RESOLVED_REJECTED"]},
+        {"from": "APPROVED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM", "AM"], "requires_reason": true, "preconditions": ["新 annotation_version 已创建"]},
+        {"from": "REJECTED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["新版本已创建"]},
+        {"from": "DRAFT", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["Episode/任务失效"]},
+        {"from": "SUBMITTED", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["Episode/任务失效"]},
+        {"from": "APPROVED", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["Episode 失效/合规要求"]}
+      ],
+      "forbidden_examples": [
+        {"from": "APPROVED", "to": "DRAFT", "reason": "已批准不可原地编辑"},
+        {"from": "INVALIDATED", "to": "APPROVED", "reason": "终态回退"}
+      ]
+    },
+    "AnnotationReview": {
+      "initial": "PENDING",
+      "terminal": ["APPROVED", "REJECTED", "ESCALATED", "CANCELLED"],
+      "states": ["PENDING", "IN_REVIEW", "APPROVED", "REJECTED", "ESCALATED", "CANCELLED"],
+      "transitions": [
+        {"from": "PENDING", "to": "IN_REVIEW", "action": "claim", "roles": ["QI"], "requires_reason": false, "preconditions": ["reviewer 非标注人", "If-Match 匹配"]},
+        {"from": "PENDING", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["未开始"]},
+        {"from": "IN_REVIEW", "to": "APPROVED", "action": "approve", "roles": ["QI"], "requires_reason": false, "preconditions": ["检查项通过", "digest 校验通过"]},
+        {"from": "IN_REVIEW", "to": "REJECTED", "action": "reject", "roles": ["QI"], "requires_reason": true, "preconditions": ["问题项/定位/原因完整"]},
+        {"from": "IN_REVIEW", "to": "ESCALATED", "action": "escalate", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["触发原因明确"]},
+        {"from": "IN_REVIEW", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["重新分配/任务取消"]}
+      ],
+      "forbidden_examples": [
+        {"from": "APPROVED", "to": "IN_REVIEW", "reason": "终态回退"},
+        {"from": "ESCALATED", "to": "APPROVED", "reason": "升级后应由仲裁处理"},
+        {"from": "REJECTED", "to": "APPROVED", "reason": "终态回退；应新提交/新复核"}
+      ]
+    },
+    "AnnotationArbitration": {
+      "initial": "PENDING",
+      "terminal": ["RESOLVED_APPROVED", "RESOLVED_REJECTED", "RESOLVED_REWORK", "CANCELLED"],
+      "states": ["PENDING", "IN_ARBITRATION", "RESOLVED_APPROVED", "RESOLVED_REJECTED", "RESOLVED_REWORK", "CANCELLED"],
+      "transitions": [
+        {"from": "PENDING", "to": "IN_ARBITRATION", "action": "claim", "roles": ["AR"], "requires_reason": false, "preconditions": ["仲裁人非标注人/首轮复核人", "人数满足 quorum"]},
+        {"from": "PENDING", "to": "CANCELLED", "action": "cancel", "roles": ["PO", "AM"], "requires_reason": true, "preconditions": ["争议撤回/影响评估完成"]},
+        {"from": "IN_ARBITRATION", "to": "PENDING", "action": "recuse", "roles": ["AR", "PO"], "requires_reason": true, "preconditions": ["利益冲突/回避", "重新分配"]},
+        {"from": "IN_ARBITRATION", "to": "RESOLVED_APPROVED", "action": "resolve-approved", "roles": ["AR"], "requires_reason": false, "preconditions": ["投票达到 quorum", "结论明确"]},
+        {"from": "IN_ARBITRATION", "to": "RESOLVED_REJECTED", "action": "resolve-rejected", "roles": ["AR"], "requires_reason": true, "preconditions": ["投票达到 quorum", "结论明确"]},
+        {"from": "IN_ARBITRATION", "to": "RESOLVED_REWORK", "action": "resolve-rework", "roles": ["AR"], "requires_reason": true, "preconditions": ["投票达到 quorum", "返工范围明确"]},
+        {"from": "IN_ARBITRATION", "to": "CANCELLED", "action": "cancel", "roles": ["PO"], "requires_reason": true, "preconditions": ["影响评估完成"]}
+      ],
+      "forbidden_examples": [
+        {"from": "IN_ARBITRATION", "to": "RESOLVED_APPROVED", "reason": "人数不足或投票未达 quorum 时禁止"},
+        {"from": "RESOLVED_APPROVED", "to": "IN_ARBITRATION", "reason": "终态回退"},
+        {"from": "CANCELLED", "to": "IN_ARBITRATION", "reason": "终态回退"}
+      ]
+    },
+    "GoldSet": {
+      "initial": "DRAFT",
+      "terminal": ["RETIRED", "REVOKED"],
+      "states": ["DRAFT", "PENDING_REVIEW", "ACTIVE", "RETIRED", "REVOKED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "PENDING_REVIEW", "action": "submit-review", "roles": ["AM"], "requires_reason": false, "preconditions": ["条目/答案/Schema 完整", "答案脱敏策略确定"]},
+        {"from": "PENDING_REVIEW", "to": "DRAFT", "action": "return-draft", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["非创建人可退回"]},
+        {"from": "PENDING_REVIEW", "to": "ACTIVE", "action": "activate", "roles": ["PO", "QI"], "requires_reason": false, "preconditions": ["审批人非创建人", "Schema 兼容", "blind=true"]},
+        {"from": "ACTIVE", "to": "RETIRED", "action": "retire", "roles": ["AM", "PO"], "requires_reason": true, "preconditions": ["不再用于新任务", "历史结果保留"]},
+        {"from": "ACTIVE", "to": "REVOKED", "action": "revoke", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["答案泄漏/合规/质量问题", "影响评估完成"]},
+        {"from": "DRAFT", "to": "REVOKED", "action": "revoke", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["安全/合规原因"]},
+        {"from": "PENDING_REVIEW", "to": "REVOKED", "action": "revoke", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["安全/合规原因"]}
+      ],
+      "forbidden_examples": [
+        {"from": "ACTIVE", "to": "DRAFT", "reason": "激活后不可原地编辑；应新版本"},
+        {"from": "RETIRED", "to": "ACTIVE", "reason": "终态回退"},
+        {"from": "REVOKED", "to": "ACTIVE", "reason": "撤销终态不可恢复"}
+      ]
+    },
+    "QualitySample": {
+      "initial": "PLANNED",
+      "terminal": ["CLOSED", "CANCELLED"],
+      "states": ["PLANNED", "SAMPLED", "ASSIGNED", "IN_REVIEW", "PASSED", "FAILED", "ESCALATED", "CLOSED", "CANCELLED"],
+      "transitions": [
+        {"from": "PLANNED", "to": "SAMPLED", "action": "sample", "roles": ["SYSTEM", "AM"], "requires_reason": false, "preconditions": ["抽样策略版本有效", "样本属于任务/提交", "理由记录"]},
+        {"from": "SAMPLED", "to": "ASSIGNED", "action": "assign", "roles": ["AM"], "requires_reason": false, "preconditions": ["reviewer 非标注人", "容量可用"]},
+        {"from": "ASSIGNED", "to": "IN_REVIEW", "action": "start", "roles": ["QI"], "requires_reason": false, "preconditions": ["复核人=assignee", "未过期"]},
+        {"from": "IN_REVIEW", "to": "PASSED", "action": "pass", "roles": ["QI"], "requires_reason": false, "preconditions": ["检查项通过", "无阻断问题"]},
+        {"from": "IN_REVIEW", "to": "FAILED", "action": "fail", "roles": ["QI"], "requires_reason": true, "preconditions": ["问题项/返工要求完整"]},
+        {"from": "IN_REVIEW", "to": "ESCALATED", "action": "escalate", "roles": ["QI", "AM"], "requires_reason": true, "preconditions": ["触发仲裁"]},
+        {"from": "PASSED", "to": "CLOSED", "action": "close", "roles": ["AM", "QI"], "requires_reason": false, "preconditions": ["结论留痕"]},
+        {"from": "FAILED", "to": "CLOSED", "action": "close", "roles": ["AM", "QI"], "requires_reason": true, "preconditions": ["返工/仲裁已创建或结论明确"]},
+        {"from": "ESCALATED", "to": "CLOSED", "action": "close", "roles": ["AM", "QI", "AR"], "requires_reason": true, "preconditions": ["仲裁结论已产生或影响评估完成"]},
+        {"from": "PLANNED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["未开始复核"]},
+        {"from": "SAMPLED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["未开始复核"]},
+        {"from": "ASSIGNED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "PM"], "requires_reason": true, "preconditions": ["未开始复核"]}
+      ],
+      "forbidden_examples": [
+        {"from": "PLANNED", "to": "PASSED", "reason": "跳过抽样/复核"},
+        {"from": "PASSED", "to": "FAILED", "reason": "终态结论不可回退；应新抽检"},
+        {"from": "CLOSED", "to": "IN_REVIEW", "reason": "终态回退"}
+      ]
+    },
+    "IAAReport": {
+      "initial": "QUEUED",
+      "terminal": ["SUCCEEDED", "INSUFFICIENT_DATA", "CANCELLED"],
+      "states": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "INSUFFICIENT_DATA", "CANCELLED"],
+      "transitions": [
+        {"from": "QUEUED", "to": "RUNNING", "action": "worker-start", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["Worker 租约取得", "未取消"]},
+        {"from": "RUNNING", "to": "SUCCEEDED", "action": "worker-succeed", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["指标计算完成", "样本量满足", "结果写入"]},
+        {"from": "RUNNING", "to": "FAILED", "action": "worker-fail", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["错误码/摘要/日志记录"]},
+        {"from": "RUNNING", "to": "INSUFFICIENT_DATA", "action": "worker-insufficient", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["重叠样本 <2 或分母为 0"]},
+        {"from": "FAILED", "to": "QUEUED", "action": "retry", "roles": ["DE", "SYSTEM"], "requires_reason": false, "preconditions": ["错误可重试", "attempt < max_attempts"]},
+        {"from": "QUEUED", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "DE"], "requires_reason": true, "preconditions": ["未开始或可中断"]},
+        {"from": "RUNNING", "to": "CANCELLED", "action": "cancel", "roles": ["AM", "DE"], "requires_reason": true, "preconditions": ["Worker 支持协作取消"]}
+      ],
+      "forbidden_examples": [
+        {"from": "SUCCEEDED", "to": "RUNNING", "reason": "终态回退"},
+        {"from": "INSUFFICIENT_DATA", "to": "SUCCEEDED", "reason": "终态；应补充重叠样本后新报告"},
+        {"from": "CANCELLED", "to": "QUEUED", "reason": "终态回退；应新建报告"}
+      ]
+    }
+  }
+}

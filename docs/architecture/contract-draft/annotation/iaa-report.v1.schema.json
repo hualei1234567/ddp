@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/iaa-report.v1.schema.json",
+  "title": "DDP IAAReport v1（草案）",
+  "description": "阶段 3 IAA 报告。只在同任务、同 Schema 版本、至少两名标注员独立标注的重叠样本上计算；样本不足为 INSUFFICIENT_DATA，不显示 0。",
+  "version": "ddp.stage3/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "iaa_report_id",
+    "project_id",
+    "task_id",
+    "schema_id",
+    "schema_version",
+    "status",
+    "metric_definitions_version",
+    "sample_item_count",
+    "overlap_item_count",
+    "annotator_count",
+    "metrics",
+    "version",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "iaa_report_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "task_id": {"$ref": "#/$defs/uuid"},
+    "schema_id": {"$ref": "#/$defs/uuid"},
+    "schema_version": {"type": "integer", "minimum": 1},
+    "status": {"type": "string", "enum": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "INSUFFICIENT_DATA", "CANCELLED"]},
+    "metric_definitions_version": {"type": "string", "minLength": 1, "maxLength": 64},
+    "sample_item_count": {"type": "integer", "minimum": 0},
+    "overlap_item_count": {"type": "integer", "minimum": 0},
+    "annotator_count": {"type": "integer", "minimum": 0},
+    "excluded_items": {"type": "array", "items": {"$ref": "#/$defs/excluded_item"}},
+    "metrics": {"type": "array", "items": {"$ref": "#/$defs/metric"}},
+    "job_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "error_code": {"type": ["string", "null"], "maxLength": 100},
+    "error_summary": {"type": ["string", "null"], "maxLength": 2000},
+    "computed_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "updated_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "excluded_item": {
+      "type": "object",
+      "required": ["annotation_id", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "annotation_id": {"$ref": "#/$defs/uuid"},
+        "label_key": {"type": ["string", "null"], "maxLength": 100},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 500}
+      }
+    },
+    "metric": {
+      "type": "object",
+      "required": ["metric", "label_key", "value", "numerator", "denominator", "sample_size", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "metric": {"type": "string", "enum": ["PERCENT_AGREEMENT", "COHEN_KAPPA", "FLEISS_KAPPA", "KRIPPENDORFF_ALPHA", "SPAN_F1", "BOUNDARY_MAE", "GOLD_ACCURACY"]},
+        "label_key": {"type": "string", "minLength": 1, "maxLength": 100},
+        "value": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+        "numerator": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+        "denominator": {"oneOf": [{"type": "number"}, {"type": "null"}]},
+        "sample_size": {"type": "integer", "minimum": 0},
+        "status": {"type": "string", "enum": ["OK", "N/A", "INSUFFICIENT_DATA", "PARTIAL"]},
+        "unit": {"type": ["string", "null"], "maxLength": 32},
+        "config": {"type": ["object", "null"], "additionalProperties": true}
+      }
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-arbitration.v1.schema.json",
+  "title": "DDP AnnotationArbitration v1（草案）",
+  "description": "阶段 3 仲裁。仲裁人不得是标注人或首轮复核人；法定人数不足不得出结论。",
+  "version": "ddp.stage3/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "arbitration_id",
+    "project_id",
+    "task_id",
+    "submission_id",
+    "review_id",
+    "arbiter_ids",
+    "quorum",
+    "status",
+    "trigger",
+    "votes",
+    "version",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "arbitration_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "task_id": {"$ref": "#/$defs/uuid"},
+    "submission_id": {"$ref": "#/$defs/uuid"},
+    "review_id": {"$ref": "#/$defs/uuid"},
+    "arbiter_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/uuid"}},
+    "quorum": {"type": "integer", "minimum": 1},
+    "status": {"type": "string", "enum": ["PENDING", "IN_ARBITRATION", "RESOLVED_APPROVED", "RESOLVED_REJECTED", "RESOLVED_REWORK", "CANCELLED"]},
+    "trigger": {"type": "string", "enum": ["REVIEWER_DISAGREEMENT", "ANNOTATOR_DISPUTE", "GOLD_SET_CONFLICT", "IAA_CONFLICT", "HIGH_RISK", "POLICY"]},
+    "votes": {"type": "array", "items": {"$ref": "#/$defs/vote"}},
+    "final_decision": {"oneOf": [{"type": "string", "enum": ["APPROVE", "REJECT", "REWORK"]}, {"type": "null"}]},
+    "reason": {"type": ["string", "null"], "maxLength": 2000},
+    "resolved_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "updated_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "vote": {
+      "type": "object",
+      "required": ["arbiter_id", "decision", "voted_at"],
+      "additionalProperties": false,
+      "properties": {
+        "arbiter_id": {"$ref": "#/$defs/uuid"},
+        "decision": {"type": "string", "enum": ["APPROVE", "REJECT", "REWORK", "ABSTAIN"]},
+        "reason": {"type": ["string", "null"], "maxLength": 2000},
+        "voted_at": {"$ref": "#/$defs/date_time"}
+      }
+    }
+  }
+}

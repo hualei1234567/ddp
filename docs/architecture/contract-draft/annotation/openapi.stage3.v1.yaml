@@ -1,0 +1,1879 @@
+openapi: 3.1.0
+info:
+  title: DDP Stage 3 Annotation API
+  version: 1.0.0-draft
+  description: |
+    DDP 阶段 3 标注中心 HTTP API 草案（未冻结）。覆盖标签 Schema、样本集、
+    标注任务/批次、分配/工作量、提交/记录、复核/仲裁、黄金集、质检抽检、IAA、
+    血缘与指标摘要。
+    - 所有项目路由由服务端强制 project scope；不信任客户端 project_id。
+    - 写动作使用 If-Match；缺失 428，失配 409；写动作支持 Idempotency-Key。
+    - 本文件是 DRAFT，不得声称已实现或已冻结。
+    - 复杂响应 Schema 以同目录 JSON Schema 为准。
+  contact:
+    name: DDP System Architect (待确认)
+  license:
+    name: Proprietary
+servers:
+  - url: http://localhost:8000
+    description: 本地开发
+security:
+  - bearerAuth: []
+tags:
+  - name: annotation-schemas
+    description: 标签 Schema、版本、审批与发布
+  - name: annotation-samples
+    description: 标注样本选择、预览与快照
+  - name: annotation-tasks
+    description: 标注任务、批次与状态动作
+  - name: annotation-assignments
+    description: 分配、领取、工作量与工作台
+  - name: annotation-submissions
+    description: 提交、记录、复核与仲裁
+  - name: annotation-quality
+    description: 黄金集、质检抽检与 IAA
+  - name: annotation-metrics
+    description: 指标摘要、血缘与审计
+paths:
+  /api/v1/projects/{project_id}/annotation-schemas:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listAnnotationSchemas
+      tags: [annotation-schemas]
+      summary: 标签 Schema 列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/AnnotationSchemaStatus" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Schema 分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationSchemaPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createAnnotationSchema
+      tags: [annotation-schemas]
+      summary: 创建标签 Schema（DRAFT）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationSchemaCreate" }
+      responses:
+        "201":
+          description: Schema 已创建
+          content:
+            application/json:
+              schema: { $ref: "./label-schema.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-schemas/{schema_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SchemaId"
+    get:
+      operationId: getAnnotationSchema
+      tags: [annotation-schemas]
+      summary: Schema 详情
+      responses:
+        "200":
+          description: Schema 详情
+          content:
+            application/json:
+              schema: { $ref: "./label-schema.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateAnnotationSchema
+      tags: [annotation-schemas]
+      summary: 修改 DRAFT Schema
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationSchemaPatch" }
+      responses:
+        "200":
+          description: 修改后的 Schema
+          content:
+            application/json:
+              schema: { $ref: "./label-schema.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-schemas/{schema_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SchemaId"
+      - $ref: "#/components/parameters/Action"
+    post:
+      operationId: actOnAnnotationSchema
+      tags: [annotation-schemas]
+      summary: Schema 状态动作（submit-review/publish/deprecate/revoke/return-draft）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的 Schema
+          content:
+            application/json:
+              schema: { $ref: "./label-schema.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-sample-sets/preview:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    post:
+      operationId: previewAnnotationSampleSet
+      tags: [annotation-samples]
+      summary: 预览样本选择（不落库或落 PREVIEW）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SampleSetPreviewRequest" }
+      responses:
+        "200":
+          description: 预览结果
+          content:
+            application/json:
+              schema: { $ref: "./annotation-sample-selection.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-sample-sets:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listAnnotationSampleSets
+      tags: [annotation-samples]
+      summary: 样本集列表
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, PREVIEW, SNAPSHOTTED, CONSUMED, CANCELLED] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 样本集分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationSampleSetPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createAnnotationSampleSet
+      tags: [annotation-samples]
+      summary: 创建/快照样本集
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SampleSetCreate" }
+      responses:
+        "201":
+          description: 样本集已创建
+          content:
+            application/json:
+              schema: { $ref: "./annotation-sample-selection.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-sample-sets/{sample_set_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SampleSetId"
+    get:
+      operationId: getAnnotationSampleSet
+      tags: [annotation-samples]
+      summary: 样本集详情
+      responses:
+        "200":
+          description: 样本集详情
+          content:
+            application/json:
+              schema: { $ref: "./annotation-sample-selection.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-tasks:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listAnnotationTasks
+      tags: [annotation-tasks]
+      summary: 标注任务列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/AnnotationTaskStatus" }
+        - name: assigned_to
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 任务分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationTaskPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createAnnotationTask
+      tags: [annotation-tasks]
+      summary: 创建标注任务（DRAFT）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationTaskCreate" }
+      responses:
+        "201":
+          description: 任务已创建
+          content:
+            application/json:
+              schema: { $ref: "./annotation-task.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      operationId: getAnnotationTask
+      tags: [annotation-tasks]
+      summary: 任务详情
+      responses:
+        "200":
+          description: 任务详情
+          content:
+            application/json:
+              schema: { $ref: "./annotation-task.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateAnnotationTask
+      tags: [annotation-tasks]
+      summary: 修改 DRAFT 任务
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationTaskPatch" }
+      responses:
+        "200":
+          description: 修改后的任务
+          content:
+            application/json:
+              schema: { $ref: "./annotation-task.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TaskId"
+      - $ref: "#/components/parameters/Action"
+    post:
+      operationId: actOnAnnotationTask
+      tags: [annotation-tasks]
+      summary: 任务状态动作（submit-review/approve/return-draft/ready/assign/start/pause/resume/block/unblock/submit/accept/reject/rework/complete/cancel/archive）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的任务
+          content:
+            application/json:
+              schema: { $ref: "./annotation-task.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}/items:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      operationId: listAnnotationTaskItems
+      tags: [annotation-tasks]
+      summary: 任务样本项列表（AN 仅本人可见范围内）
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 样本项分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationTaskItemPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}/batches:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      operationId: listAnnotationBatches
+      tags: [annotation-tasks]
+      summary: 批次列表
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [PLANNED, READY, ASSIGNED, IN_PROGRESS, PAUSED, BLOCKED, SUBMITTED, REVIEWING, ARBITRATION, ACCEPTED, REJECTED, REWORK, CANCELLED] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 批次分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationBatchPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createAnnotationBatch
+      tags: [annotation-tasks]
+      summary: 拆分批次
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationBatchCreate" }
+      responses:
+        "201":
+          description: 批次已创建
+          content:
+            application/json:
+              schema: { $ref: "./annotation-batch.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-batches/{batch_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/BatchId"
+    get:
+      operationId: getAnnotationBatch
+      tags: [annotation-tasks]
+      summary: 批次详情
+      responses:
+        "200":
+          description: 批次详情
+          content:
+            application/json:
+              schema: { $ref: "./annotation-batch.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateAnnotationBatch
+      tags: [annotation-tasks]
+      summary: 修改 PLANNED/READY 批次
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationBatchPatch" }
+      responses:
+        "200":
+          description: 修改后的批次
+          content:
+            application/json:
+              schema: { $ref: "./annotation-batch.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-batches/{batch_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/BatchId"
+      - $ref: "#/components/parameters/Action"
+    post:
+      operationId: actOnAnnotationBatch
+      tags: [annotation-tasks]
+      summary: 批次状态动作（ready/assign/start/pause/resume/block/unblock/submit/accept/reject/rework/cancel）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的批次
+          content:
+            application/json:
+              schema: { $ref: "./annotation-batch.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-assignments:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listAnnotationAssignments
+      tags: [annotation-assignments]
+      summary: 分配列表（AN 仅本人）
+      parameters:
+        - name: task_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: assignee_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [ASSIGNED, CLAIMED, IN_PROGRESS, SUBMITTED, COMPLETED, REVOKED, EXPIRED] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 分配分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationAssignmentPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createAnnotationAssignment
+      tags: [annotation-assignments]
+      summary: 创建分配（校验容量/职责分离）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationAssignmentCreate" }
+      responses:
+        "201":
+          description: 分配已创建
+          content:
+            application/json:
+              schema: { $ref: "./annotation-assignment.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-assignments/{assignment_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/AssignmentId"
+    get:
+      operationId: getAnnotationAssignment
+      tags: [annotation-assignments]
+      summary: 分配详情
+      responses:
+        "200":
+          description: 分配详情
+          content:
+            application/json:
+              schema: { $ref: "./annotation-assignment.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-assignments/{assignment_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/AssignmentId"
+      - $ref: "#/components/parameters/Action"
+    post:
+      operationId: actOnAnnotationAssignment
+      tags: [annotation-assignments]
+      summary: 分配动作（claim/start/release/revoke/expire）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的分配
+          content:
+            application/json:
+              schema: { $ref: "./annotation-assignment.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-assignments/{assignment_id}/workbench:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/AssignmentId"
+    get:
+      operationId: getAnnotationWorkbench
+      tags: [annotation-assignments]
+      summary: 标注工作台数据（任务、Schema、样本项、草稿；不含黄金集答案）
+      responses:
+        "200":
+          description: 工作台数据
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationWorkbench" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-submissions:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listAnnotationSubmissions
+      tags: [annotation-submissions]
+      summary: 提交列表（AN 仅本人）
+      parameters:
+        - name: task_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, SUBMITTED, IN_REVIEW, APPROVED, REJECTED, ESCALATED, ARBITRATING, RESOLVED_APPROVED, RESOLVED_REJECTED, RESOLVED_REWORK, REWORK_REQUIRED, WITHDRAWN, SUPERSEDED] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 提交分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationSubmissionPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createAnnotationSubmission
+      tags: [annotation-submissions]
+      summary: 创建提交/草稿
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationSubmissionCreate" }
+      responses:
+        "201":
+          description: 提交已创建
+          content:
+            application/json:
+              schema: { $ref: "./annotation-submission.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SubmissionId"
+    get:
+      operationId: getAnnotationSubmission
+      tags: [annotation-submissions]
+      summary: 提交详情
+      responses:
+        "200":
+          description: 提交详情
+          content:
+            application/json:
+              schema: { $ref: "./annotation-submission.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateAnnotationSubmission
+      tags: [annotation-submissions]
+      summary: 修改 DRAFT 提交
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationSubmissionPatch" }
+      responses:
+        "200":
+          description: 修改后的提交
+          content:
+            application/json:
+              schema: { $ref: "./annotation-submission.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SubmissionId"
+      - $ref: "#/components/parameters/Action"
+    post:
+      operationId: actOnAnnotationSubmission
+      tags: [annotation-submissions]
+      summary: 提交动作（submit/withdraw/approve/reject/escalate/resolve-approved/resolve-rejected/resolve-rework）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的提交
+          content:
+            application/json:
+              schema: { $ref: "./annotation-submission.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/records:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SubmissionId"
+    get:
+      operationId: listAnnotationRecords
+      tags: [annotation-submissions]
+      summary: 提交记录列表
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 记录分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationRecordPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-reviews:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listAnnotationReviews
+      tags: [annotation-submissions]
+      summary: 复核列表
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, IN_REVIEW, APPROVED, REJECTED, ESCALATED, CANCELLED] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 复核分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationReviewPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createAnnotationReview
+      tags: [annotation-submissions]
+      summary: 创建复核（分配复核人）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationReviewCreate" }
+      responses:
+        "201":
+          description: 复核已创建
+          content:
+            application/json:
+              schema: { $ref: "./annotation-review.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-reviews/{review_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ReviewId"
+    get:
+      operationId: getAnnotationReview
+      tags: [annotation-submissions]
+      summary: 复核详情
+      responses:
+        "200":
+          description: 复核详情
+          content:
+            application/json:
+              schema: { $ref: "./annotation-review.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-reviews/{review_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ReviewId"
+      - $ref: "#/components/parameters/Action"
+    post:
+      operationId: actOnAnnotationReview
+      tags: [annotation-submissions]
+      summary: 复核动作（claim/approve/reject/escalate/cancel）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的复核
+          content:
+            application/json:
+              schema: { $ref: "./annotation-review.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-arbitrations:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listAnnotationArbitrations
+      tags: [annotation-submissions]
+      summary: 仲裁列表
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [PENDING, IN_ARBITRATION, RESOLVED_APPROVED, RESOLVED_REJECTED, RESOLVED_REWORK, CANCELLED] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 仲裁分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationArbitrationPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createAnnotationArbitration
+      tags: [annotation-submissions]
+      summary: 创建仲裁
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnnotationArbitrationCreate" }
+      responses:
+        "201":
+          description: 仲裁已创建
+          content:
+            application/json:
+              schema: { $ref: "./annotation-arbitration.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-arbitrations/{arbitration_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ArbitrationId"
+    get:
+      operationId: getAnnotationArbitration
+      tags: [annotation-submissions]
+      summary: 仲裁详情
+      responses:
+        "200":
+          description: 仲裁详情
+          content:
+            application/json:
+              schema: { $ref: "./annotation-arbitration.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-arbitrations/{arbitration_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ArbitrationId"
+      - $ref: "#/components/parameters/Action"
+    post:
+      operationId: actOnAnnotationArbitration
+      tags: [annotation-submissions]
+      summary: 仲裁动作（claim/recuse/resolve-approved/resolve-rejected/resolve-rework/cancel）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的仲裁
+          content:
+            application/json:
+              schema: { $ref: "./annotation-arbitration.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/gold-sets:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listGoldSets
+      tags: [annotation-quality]
+      summary: 黄金集列表（答案脱敏，仅授权角色可见完整）
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [DRAFT, PENDING_REVIEW, ACTIVE, RETIRED, REVOKED] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 黄金集分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GoldSetPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createGoldSet
+      tags: [annotation-quality]
+      summary: 创建黄金集
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoldSetCreate" }
+      responses:
+        "201":
+          description: 黄金集已创建
+          content:
+            application/json:
+              schema: { $ref: "./gold-set.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/gold-sets/{gold_set_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/GoldSetId"
+    get:
+      operationId: getGoldSet
+      tags: [annotation-quality]
+      summary: 黄金集详情（按角色脱敏）
+      responses:
+        "200":
+          description: 黄金集详情
+          content:
+            application/json:
+              schema: { $ref: "./gold-set.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateGoldSet
+      tags: [annotation-quality]
+      summary: 修改 DRAFT 黄金集
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GoldSetPatch" }
+      responses:
+        "200":
+          description: 修改后的黄金集
+          content:
+            application/json:
+              schema: { $ref: "./gold-set.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/gold-sets/{gold_set_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/GoldSetId"
+      - $ref: "#/components/parameters/Action"
+    post:
+      operationId: actOnGoldSet
+      tags: [annotation-quality]
+      summary: 黄金集动作（submit-review/activate/retire/revoke）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的黄金集
+          content:
+            application/json:
+              schema: { $ref: "./gold-set.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/quality-samples:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listQualitySamples
+      tags: [annotation-quality]
+      summary: 质检抽检列表
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [PLANNED, SAMPLED, ASSIGNED, IN_REVIEW, PASSED, FAILED, ESCALATED, CLOSED, CANCELLED] }
+        - name: task_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 抽检分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QualitySamplePage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createQualitySample
+      tags: [annotation-quality]
+      summary: 创建抽检
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QualitySampleCreate" }
+      responses:
+        "201":
+          description: 抽检已创建
+          content:
+            application/json:
+              schema: { $ref: "./quality-sample.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/quality-samples/{quality_sample_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/QualitySampleId"
+    get:
+      operationId: getQualitySample
+      tags: [annotation-quality]
+      summary: 抽检详情
+      responses:
+        "200":
+          description: 抽检详情
+          content:
+            application/json:
+              schema: { $ref: "./quality-sample.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/quality-samples/{quality_sample_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/QualitySampleId"
+      - $ref: "#/components/parameters/Action"
+    post:
+      operationId: actOnQualitySample
+      tags: [annotation-quality]
+      summary: 抽检动作（sample/assign/pass/fail/escalate/close/cancel）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的抽检
+          content:
+            application/json:
+              schema: { $ref: "./quality-sample.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/iaa-reports:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listIaaReports
+      tags: [annotation-quality]
+      summary: IAA 报告列表
+      parameters:
+        - name: task_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, INSUFFICIENT_DATA, CANCELLED] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: IAA 报告分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IaaReportPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createIaaReport
+      tags: [annotation-quality]
+      summary: 创建 IAA 计算（异步 202）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IaaReportCreate" }
+      responses:
+        "202":
+          description: 已受理，异步计算
+          content:
+            application/json:
+              schema: { $ref: "./iaa-report.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/iaa-reports/{iaa_report_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/IaaReportId"
+    get:
+      operationId: getIaaReport
+      tags: [annotation-quality]
+      summary: IAA 报告详情（样本不足时 status=INSUFFICIENT_DATA）
+      responses:
+        "200":
+          description: IAA 报告详情
+          content:
+            application/json:
+              schema: { $ref: "./iaa-report.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-workloads:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listAnnotationWorkloads
+      tags: [annotation-metrics]
+      summary: 工作量汇总（个人明细仅授权）
+      parameters:
+        - name: user_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: period_start
+          in: query
+          schema: { type: string, format: date-time }
+        - name: period_end
+          in: query
+          schema: { type: string, format: date-time }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 工作量分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationWorkloadPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-workloads/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/UserId"
+    get:
+      operationId: getAnnotationWorkload
+      tags: [annotation-metrics]
+      summary: 某人工作量（本人/AM/PM/AU）
+      parameters:
+        - name: period_start
+          in: query
+          schema: { type: string, format: date-time }
+        - name: period_end
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: 工作量详情
+          content:
+            application/json:
+              schema: { $ref: "./annotation-workload.v1.schema.json" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}/lineage:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      operationId: getAnnotationTaskLineage
+      tags: [annotation-metrics]
+      summary: 标注任务血缘（正反向、深度 1–5）
+      parameters:
+        - name: direction
+          in: query
+          schema: { type: string, enum: [FORWARD, BACKWARD, BOTH] }
+        - name: depth
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 5 }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 血缘边分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationLineagePage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}/audit:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      operationId: listAnnotationAuditEvents
+      tags: [annotation-metrics]
+      summary: 标注任务审计事件（只读）
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 审计事件分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationAuditPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/annotation-metrics/summary:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: getAnnotationMetricsSummary
+      tags: [annotation-metrics]
+      summary: 标注指标摘要（口径/缺失语义）
+      parameters:
+        - name: task_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: period_start
+          in: query
+          schema: { type: string, format: date-time }
+        - name: period_end
+          in: query
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: 指标摘要
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnnotationMetricsSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SchemaId:
+      name: schema_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SampleSetId:
+      name: sample_set_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BatchId:
+      name: batch_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AssignmentId:
+      name: assignment_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    SubmissionId:
+      name: submission_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ReviewId:
+      name: review_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ArbitrationId:
+      name: arbitration_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    GoldSetId:
+      name: gold_set_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    QualitySampleId:
+      name: quality_sample_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IaaReportId:
+      name: iaa_report_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Action:
+      name: action
+      in: path
+      required: true
+      description: 服务端白名单动作；非法动作返回 422 validation_failed
+      schema: { type: string, minLength: 1, maxLength: 64 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: 乐观锁版本，格式 "3"
+      schema: { type: string, pattern: '^"[0-9]+"$' }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: 幂等键；作用域 (project_id, user_id, key)，至少 24h
+      schema: { type: string, minLength: 1, maxLength: 128 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 512 }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+  responses:
+    Unauthorized:
+      description: 未登录或 Token 失效
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Forbidden:
+      description: 权限不足、职责分离违规、项目范围拒绝
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: 同项目内不存在；跨项目统一不可见
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Conflict:
+      description: 状态/版本/幂等/业务冲突
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    UnprocessableEntity:
+      description: 参数/Schema/业务校验失败
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    PreconditionRequired:
+      description: 缺少 If-Match
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    TooManyRequests:
+      description: 触发限流
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Gone:
+      description: 分配/资源已过期或撤销
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    ServiceUnavailable:
+      description: 依赖/outbox/对象存储不可用
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code: { type: string, minLength: 1, maxLength: 100 }
+            message: { type: string, minLength: 1, maxLength: 2000 }
+            request_id: { type: [string, "null"], maxLength: 128 }
+            details: { type: [object, "null"], additionalProperties: true }
+    AnnotationSchemaStatus:
+      type: string
+      enum: [DRAFT, PENDING_REVIEW, PUBLISHED, DEPRECATED, REVOKED]
+    AnnotationTaskStatus:
+      type: string
+      enum: [DRAFT, PENDING_REVIEW, APPROVED, READY, ASSIGNED, IN_PROGRESS, PAUSED, BLOCKED, SUBMITTED, REVIEWING, ARBITRATION, ACCEPTED, REJECTED, REWORK, COMPLETED, CANCELLED, ARCHIVED]
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 2000 }
+        comment: { type: [string, "null"], maxLength: 2000 }
+        evidence_refs: { type: array, items: { type: string, maxLength: 1024 }, uniqueItems: true }
+        payload: { type: [object, "null"], additionalProperties: true }
+    AnnotationSchemaCreate:
+      type: object
+      required: [code, name, annotation_levels, labels]
+      additionalProperties: false
+      properties:
+        code: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        annotation_levels:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, enum: [TASK, EPISODE, TIME_RANGE, ACTION_SEGMENT, FRAME, OBJECT_TRACK] }
+        labels: { type: array, minItems: 1, items: { type: object, additionalProperties: true } }
+    AnnotationSchemaPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        annotation_levels:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, enum: [TASK, EPISODE, TIME_RANGE, ACTION_SEGMENT, FRAME, OBJECT_TRACK] }
+        labels: { type: array, minItems: 1, items: { type: object, additionalProperties: true } }
+    SampleSetPreviewRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        filters: { type: object, additionalProperties: true }
+        strategy: { type: string, enum: [FILTER, STRATIFIED, RISK_BASED, MANUAL] }
+        strata: { type: array, items: { type: object, additionalProperties: true } }
+        dedup_key: { type: string, enum: [EPISODE_LINEAGE, EPISODE_VERSION, NONE] }
+    SampleSetCreate:
+      type: object
+      required: [code, selection_rule_version, filters, dedup_key]
+      additionalProperties: false
+      properties:
+        code: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: [string, "null"], maxLength: 200 }
+        selection_rule_version: { type: string, minLength: 1, maxLength: 64 }
+        strategy: { type: string, enum: [FILTER, STRATIFIED, RISK_BASED, MANUAL] }
+        filters: { type: object, additionalProperties: true }
+        strata: { type: array, items: { type: object, additionalProperties: true } }
+        dedup_key: { type: string, enum: [EPISODE_LINEAGE, EPISODE_VERSION, NONE] }
+        data_source: { type: string, enum: [REAL, SYNTHETIC, MIXED, UNKNOWN] }
+    AnnotationTaskCreate:
+      type: object
+      required: [code, name, sample_set_id, schema_id, schema_version, target_item_count, target_episode_count, priority]
+      additionalProperties: false
+      properties:
+        code: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        sample_set_id: { type: string, format: uuid }
+        schema_id: { type: string, format: uuid }
+        schema_version: { type: integer, minimum: 1 }
+        gold_set_id: { type: [string, "null"], format: uuid }
+        iaa_policy: { type: object, additionalProperties: true }
+        quality_policy: { type: object, additionalProperties: true }
+        assignment_mode: { type: string, enum: [MANUAL, CLAIM, MIXED] }
+        target_item_count: { type: integer, minimum: 1 }
+        target_episode_count: { type: integer, minimum: 1 }
+        due_at: { type: [string, "null"], format: date-time }
+        priority: { type: string, enum: [P0, P1, P2, P3] }
+    AnnotationTaskPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        due_at: { type: [string, "null"], format: date-time }
+        priority: { type: string, enum: [P0, P1, P2, P3] }
+    AnnotationBatchCreate:
+      type: object
+      required: [code, sequence_no, planned_item_count]
+      additionalProperties: false
+      properties:
+        code: { type: string, minLength: 1, maxLength: 64 }
+        sequence_no: { type: integer, minimum: 1 }
+        stratum: { type: [string, "null"], maxLength: 100 }
+        item_refs: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        planned_item_count: { type: integer, minimum: 0 }
+        assignee_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        reviewer_pool_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        due_at: { type: [string, "null"], format: date-time }
+    AnnotationBatchPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        stratum: { type: [string, "null"], maxLength: 100 }
+        item_refs: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        planned_item_count: { type: integer, minimum: 0 }
+        assignee_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        reviewer_pool_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        due_at: { type: [string, "null"], format: date-time }
+    AnnotationAssignmentCreate:
+      type: object
+      required: [task_id, batch_id, assignee_id, assignment_role, planned_item_count, planned_minutes]
+      additionalProperties: false
+      properties:
+        task_id: { type: string, format: uuid }
+        batch_id: { type: string, format: uuid }
+        assignee_id: { type: string, format: uuid }
+        assignment_role: { type: string, enum: [ANNOTATOR, REVIEWER, ARBITER] }
+        planned_item_count: { type: integer, minimum: 0 }
+        planned_minutes: { type: integer, minimum: 0 }
+        lease_expires_at: { type: [string, "null"], format: date-time }
+    AnnotationSubmissionCreate:
+      type: object
+      required: [task_id, batch_id, assignment_id, schema_id, schema_version, schema_sha256, item_count, records_digest, data_source]
+      additionalProperties: false
+      properties:
+        task_id: { type: string, format: uuid }
+        batch_id: { type: string, format: uuid }
+        assignment_id: { type: string, format: uuid }
+        schema_id: { type: string, format: uuid }
+        schema_version: { type: integer, minimum: 1 }
+        schema_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        item_count: { type: integer, minimum: 0 }
+        records_digest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        record_refs: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        data_source: { type: string, enum: [REAL, SYNTHETIC, MIXED, UNKNOWN] }
+        auto_label:
+          type: [object, "null"]
+          additionalProperties: true
+    AnnotationSubmissionPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        item_count: { type: integer, minimum: 0 }
+        records_digest: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        record_refs: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        auto_label:
+          type: [object, "null"]
+          additionalProperties: true
+    AnnotationReviewCreate:
+      type: object
+      required: [submission_id, review_round]
+      additionalProperties: false
+      properties:
+        submission_id: { type: string, format: uuid }
+        reviewer_id: { type: [string, "null"], format: uuid }
+        review_round: { type: integer, minimum: 1 }
+    AnnotationArbitrationCreate:
+      type: object
+      required: [task_id, submission_id, review_id, arbiter_ids, quorum, trigger]
+      additionalProperties: false
+      properties:
+        task_id: { type: string, format: uuid }
+        submission_id: { type: string, format: uuid }
+        review_id: { type: string, format: uuid }
+        arbiter_ids: { type: array, minItems: 1, uniqueItems: true, items: { type: string, format: uuid } }
+        quorum: { type: integer, minimum: 1 }
+        trigger: { type: string, enum: [REVIEWER_DISAGREEMENT, ANNOTATOR_DISPUTE, GOLD_SET_CONFLICT, IAA_CONFLICT, HIGH_RISK, POLICY] }
+    GoldSetCreate:
+      type: object
+      required: [code, schema_id, schema_version, schema_sha256, items, exposure_policy, max_exposure_per_annotator, rotation_policy]
+      additionalProperties: false
+      properties:
+        code: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: [string, "null"], maxLength: 200 }
+        schema_id: { type: string, format: uuid }
+        schema_version: { type: integer, minimum: 1 }
+        schema_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        items: { type: array, minItems: 1, items: { type: object, additionalProperties: true } }
+        exposure_policy: { type: string, enum: [HIDDEN, ROTATING, CONTROLLED] }
+        max_exposure_per_annotator: { type: integer, minimum: 1 }
+        rotation_policy: { type: string, enum: [NONE, PER_TASK, PER_PERIOD, PER_ANNOTATOR] }
+        usage_policy: { type: [object, "null"], additionalProperties: true }
+    GoldSetPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: [string, "null"], maxLength: 200 }
+        items: { type: array, minItems: 1, items: { type: object, additionalProperties: true } }
+        exposure_policy: { type: string, enum: [HIDDEN, ROTATING, CONTROLLED] }
+        max_exposure_per_annotator: { type: integer, minimum: 1 }
+        rotation_policy: { type: string, enum: [NONE, PER_TASK, PER_PERIOD, PER_ANNOTATOR] }
+        usage_policy: { type: [object, "null"], additionalProperties: true }
+    QualitySampleCreate:
+      type: object
+      required: [task_id, submission_id, sampling_policy_version, sample_type, sample_reason]
+      additionalProperties: false
+      properties:
+        task_id: { type: string, format: uuid }
+        submission_id: { type: string, format: uuid }
+        sampling_policy_version: { type: string, minLength: 1, maxLength: 64 }
+        sample_type: { type: string, enum: [RANDOM, STRATIFIED, RISK_BASED, GOLD_SET, IAA_OVERLAP] }
+        stratum: { type: [string, "null"], maxLength: 100 }
+        sample_reason: { type: string, minLength: 1, maxLength: 500 }
+        item_refs: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        reviewer_id: { type: [string, "null"], format: uuid }
+        due_at: { type: [string, "null"], format: date-time }
+    IaaReportCreate:
+      type: object
+      required: [task_id, schema_id, schema_version, metric_definitions_version, metrics]
+      additionalProperties: false
+      properties:
+        task_id: { type: string, format: uuid }
+        schema_id: { type: string, format: uuid }
+        schema_version: { type: integer, minimum: 1 }
+        metric_definitions_version: { type: string, minLength: 1, maxLength: 64 }
+        metrics: { type: array, minItems: 1, items: { type: string, enum: [PERCENT_AGREEMENT, COHEN_KAPPA, FLEISS_KAPPA, KRIPPENDORFF_ALPHA, SPAN_F1, BOUNDARY_MAE] } }
+    AnnotationSchemaPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./label-schema.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationSampleSetPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-sample-selection.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationTaskPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-task.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationTaskItemPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [episode_id, episode_version, sample_role]
+            properties:
+              episode_id: { type: string, format: uuid }
+              episode_version: { type: integer, minimum: 1 }
+              time_range: { type: [object, "null"], additionalProperties: true }
+              stratum: { type: [string, "null"], maxLength: 100 }
+              sample_role: { type: string, enum: [NORMAL, GOLD, IAA, QUALITY] }
+        next_cursor: { type: [string, "null"] }
+    AnnotationBatchPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-batch.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationAssignmentPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-assignment.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationSubmissionPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-submission.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationRecordPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-record.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationReviewPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-review.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationArbitrationPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-arbitration.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    GoldSetPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./gold-set.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    QualitySamplePage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./quality-sample.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    IaaReportPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./iaa-report.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationWorkloadPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-workload.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationLineagePage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "./annotation-lineage.v1.schema.json" } }
+        next_cursor: { type: [string, "null"] }
+    AnnotationAuditPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [audit_id, actor_id, action, object_type, object_id, occurred_at]
+            properties:
+              audit_id: { type: string, format: uuid }
+              project_id: { type: string, format: uuid }
+              actor_id: { type: string, format: uuid }
+              action: { type: string, maxLength: 100 }
+              object_type: { type: string, maxLength: 64 }
+              object_id: { type: string, format: uuid }
+              before: { type: [object, "null"], additionalProperties: true }
+              after: { type: [object, "null"], additionalProperties: true }
+              reason: { type: [string, "null"], maxLength: 2000 }
+              request_id: { type: [string, "null"], maxLength: 128 }
+              correlation_id: { type: [string, "null"], maxLength: 128 }
+              occurred_at: { type: string, format: date-time }
+        next_cursor: { type: [string, "null"] }
+    AnnotationWorkbench:
+      type: object
+      required: [assignment, task, schema, items]
+      properties:
+        assignment: { $ref: "./annotation-assignment.v1.schema.json" }
+        task: { $ref: "./annotation-task.v1.schema.json" }
+        schema: { $ref: "./label-schema.v1.schema.json" }
+        items: { type: array, items: { type: object, additionalProperties: true } }
+        draft: { type: [object, "null"], additionalProperties: true }
+        gold_set: { type: [object, "null"], description: "脱敏摘要；绝不包含 expected_labels" }
+    AnnotationMetricsSummary:
+      type: object
+      required: [metrics]
+      properties:
+        metrics:
+          type: array
+          items:
+            type: object
+            required: [name, value, status, period, source, owner, metric_version]
+            properties:
+              name: { type: string, maxLength: 100 }
+              value: { type: [number, "null"] }
+              numerator: { type: [number, "null"] }
+              denominator: { type: [number, "null"] }
+              status: { type: string, enum: [OK, N/A, UNKNOWN, STALE, PARTIAL] }
+              period: { type: string, maxLength: 64 }
+              source: { type: string, maxLength: 200 }
+              owner: { type: string, maxLength: 64 }
+              metric_version: { type: string, maxLength: 64 }
+              updated_at: { type: [string, "null"], format: date-time }

@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/gold-set.v1.schema.json",
+  "title": "DDP GoldSet v1（草案）",
+  "description": "阶段 3 黄金集。expected_labels 为高敏数据，禁止进入标注员响应、日志、导出与前端缓存。",
+  "version": "ddp.stage3/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "gold_set_id",
+    "project_id",
+    "code",
+    "status",
+    "schema_id",
+    "schema_version",
+    "schema_sha256",
+    "blind",
+    "items",
+    "exposure_policy",
+    "max_exposure_per_annotator",
+    "rotation_policy",
+    "version",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "gold_set_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "code": {"type": "string", "minLength": 1, "maxLength": 64},
+    "name": {"type": ["string", "null"], "maxLength": 200},
+    "status": {"type": "string", "enum": ["DRAFT", "PENDING_REVIEW", "ACTIVE", "RETIRED", "REVOKED"]},
+    "schema_id": {"$ref": "#/$defs/uuid"},
+    "schema_version": {"type": "integer", "minimum": 1},
+    "schema_sha256": {"$ref": "#/$defs/sha256"},
+    "blind": {"type": "boolean", "const": true},
+    "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/gold_item"}},
+    "exposure_policy": {"type": "string", "enum": ["HIDDEN", "ROTATING", "CONTROLLED"]},
+    "max_exposure_per_annotator": {"type": "integer", "minimum": 1},
+    "rotation_policy": {"type": "string", "enum": ["NONE", "PER_TASK", "PER_PERIOD", "PER_ANNOTATOR"]},
+    "usage_policy": {"type": ["object", "null"], "additionalProperties": true},
+    "published_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "retired_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "revoked_reason": {"type": ["string", "null"], "maxLength": 2000},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "updated_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "int64_string": {"type": "string", "pattern": "^-?[0-9]+$"},
+    "gold_item": {
+      "type": "object",
+      "required": ["gold_item_id", "episode_id", "expected_labels", "difficulty", "weight", "active"],
+      "additionalProperties": false,
+      "properties": {
+        "gold_item_id": {"$ref": "#/$defs/uuid"},
+        "episode_id": {"$ref": "#/$defs/uuid"},
+        "episode_version": {"type": "integer", "minimum": 1},
+        "time_range": {"oneOf": [{"$ref": "#/$defs/time_range"}, {"type": "null"}]},
+        "expected_labels": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/expected_label"}},
+        "difficulty": {"type": "string", "enum": ["EASY", "MEDIUM", "HARD"]},
+        "weight": {"type": "number", "minimum": 0},
+        "active": {"type": "boolean"}
+      }
+    },
+    "expected_label": {
+      "type": "object",
+      "required": ["label_key", "value"],
+      "additionalProperties": false,
+      "properties": {
+        "label_key": {"type": "string", "minLength": 1, "maxLength": 100},
+        "value": {"oneOf": [{"type": "string"}, {"type": "number"}, {"type": "boolean"}, {"type": "array"}, {"type": "object"}]},
+        "tolerance": {"type": ["object", "null"], "additionalProperties": true}
+      }
+    },
+    "time_range": {
+      "type": "object",
+      "required": ["start_time_ns", "end_time_ns", "time_domain"],
+      "additionalProperties": false,
+      "properties": {
+        "start_time_ns": {"$ref": "#/$defs/int64_string"},
+        "end_time_ns": {"$ref": "#/$defs/int64_string"},
+        "time_domain": {"type": "string", "enum": ["UTC", "ROS", "DEVICE", "HOST", "MONOTONIC", "UNKNOWN"]}
+      }
+    }
+  }
+}

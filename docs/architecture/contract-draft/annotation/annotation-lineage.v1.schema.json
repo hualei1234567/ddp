@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-lineage.v1.schema.json",
+  "title": "DDP AnnotationLineageEdge v1（草案）",
+  "description": "阶段 3 标注血缘边。只追加、不更新、不删除；跨项目节点禁止；成环禁止（SUPERSEDES 线性）。本 Schema 扩展阶段 2 血缘节点/关系，不修改阶段 2 文件。",
+  "version": "ddp.stage3/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "edge_id",
+    "project_id",
+    "from_node_type",
+    "from_node_id",
+    "to_node_type",
+    "to_node_id",
+    "relation",
+    "created_by",
+    "created_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "edge_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "from_node_type": {"$ref": "#/$defs/node_type"},
+    "from_node_id": {"$ref": "#/$defs/uuid"},
+    "to_node_type": {"$ref": "#/$defs/node_type"},
+    "to_node_id": {"$ref": "#/$defs/uuid"},
+    "relation": {"$ref": "#/$defs/relation"},
+    "metadata": {"type": "object", "additionalProperties": true},
+    "contract_version": {"type": "string", "minLength": 1, "maxLength": 64},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "created_at": {"$ref": "#/$defs/date_time"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "node_type": {
+      "type": "string",
+      "enum": [
+        "RAW_ASSET",
+        "UPLOAD_SESSION",
+        "COLLECTION_TASK",
+        "COLLECTION_BATCH",
+        "INGESTION_JOB",
+        "EPISODE",
+        "QUALITY_RUN",
+        "ANNOTATION_SCHEMA",
+        "ANNOTATION_SAMPLE_SET",
+        "ANNOTATION_TASK",
+        "ANNOTATION_BATCH",
+        "ANNOTATION_ASSIGNMENT",
+        "ANNOTATION_SUBMISSION",
+        "ANNOTATION",
+        "ANNOTATION_REVIEW",
+        "ANNOTATION_ARBITRATION",
+        "GOLD_SET",
+        "QUALITY_SAMPLE",
+        "IAA_REPORT",
+        "DATASET_VERSION",
+        "TRAINING_RUN"
+      ]
+    },
+    "relation": {
+      "type": "string",
+      "enum": [
+        "UPLOADED_BY",
+        "PRODUCED_BY",
+        "USED_AS_INPUT",
+        "PRODUCED",
+        "SEGMENTED_INTO",
+        "SUPERSEDES",
+        "INVALIDATES",
+        "EVALUATED_BY",
+        "ANNOTATED_BY",
+        "INCLUDED_IN",
+        "SAMPLED_FROM",
+        "SPLIT_INTO",
+        "ASSIGNED_TO",
+        "SUBMITTED_AS",
+        "CONTAINS",
+        "REVIEWED_BY",
+        "ESCALATED_TO",
+        "RESOLVED_BY",
+        "USES_SCHEMA",
+        "EVALUATED_AGAINST",
+        "QUALITY_SAMPLED",
+        "USED_FOR_IAA"
+      ]
+    }
+  }
+}
