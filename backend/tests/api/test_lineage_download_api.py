@@ -153,6 +153,7 @@ def test_download_url_short_lived_audited_without_plaintext(
         )
     download_audits = [row for row in audits if row.action == "download_requested"]
     assert len(download_audits) == 1
+    assert download_audits[0].request_id is not None
     serialized = json.dumps(download_audits[0].details, ensure_ascii=False)
     assert body["url"] not in serialized
     assert "X-Amz" not in serialized

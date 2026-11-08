@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.deps import get_query_read_scope
 from app.api.v1.episode_dependencies import EpisodeUseCasesDep
@@ -75,11 +75,21 @@ def get_raw_asset_lineage(
 @router.get("/raw-assets/{asset_id}/download-url", response_model=DownloadUrlOut)
 def get_raw_asset_download_url(
     asset_id: UUID,
+    request: Request,
     scope: ReadScope,
     use_cases: EpisodeUseCasesDep,
 ) -> DownloadUrlOut:
-    signed = use_cases.downloads.create_download_url(scope, asset_id)
+    signed = use_cases.downloads.create_download_url(
+        scope,
+        asset_id,
+        request_id=_request_id(request),
+    )
     return DownloadUrlOut(url=signed.url, expires_at=signed.expires_at)
+
+
+def _request_id(request: Request) -> str | None:
+    value = getattr(request.state, "request_id", None)
+    return value if isinstance(value, str) else None
 
 
 def _internal_direction(direction: str) -> str:
