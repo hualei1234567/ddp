@@ -7,7 +7,8 @@ services:
       POSTGRES_PASSWORD: ${DDP_DB_PASSWORD:-ddp}
       POSTGRES_DB: ${DDP_DB_NAME:-ddp}
     ports:
-      - "5432:5432"
+      # 笔记本 5432 已被系统 PostgreSQL 占用，DDP 使用 55432。
+      - "55432:5432"
     volumes:
       - ddp-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -70,6 +71,11 @@ services:
       dockerfile: infra/docker/api.Dockerfile
     container_name: ddp-api
     env_file: .env
+    environment:
+      # 容器内必须用服务名，而不是宿主 .env 里的 localhost。
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+      DDP_REDIS_URL: redis://redis:6379/0
+      DDP_S3_ENDPOINT: http://minio:9000
     depends_on:
       postgres:
         condition: service_healthy
