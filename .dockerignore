@@ -1,0 +1,20 @@
+# 构建上下文裁剪：镜像只需要源码与依赖清单。
+.git
+.gitignore
+.venv
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.ruff_cache
+node_modules
+**/node_modules
+dist
+**/dist
+data
+.env
+.env.*
+docs
+ai-team
+*.md
+!README.md
