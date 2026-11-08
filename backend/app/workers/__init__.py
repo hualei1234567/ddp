@@ -1,1 +1,4 @@
-"""异步 Worker 入口（阶段 0 仅占位）。"""
+"""异步 Worker 入口。
+
+当前包含 RawAsset 校验 outbox Worker：``python -m app.workers.outbox``。
+"""

@@ -85,6 +85,12 @@ class ObjectStorageUnavailableError(IngestionDomainError):
     code = "object_storage_unavailable"
 
 
+class ObjectNotFoundError(IngestionDomainError):
+    """对象 Key 不存在；属于内容校验结果，不作为可无限重试的存储故障。"""
+
+    code = "object_missing"
+
+
 class InvalidStateTransitionError(IngestionDomainError):
     code = "state_transition_invalid"
 

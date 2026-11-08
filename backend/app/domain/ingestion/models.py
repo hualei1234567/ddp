@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from uuid import UUID
@@ -15,6 +15,7 @@ from app.domain.ingestion.enums import (
     RawAssetFormat,
     RawAssetLinkStatus,
     RawAssetLinkType,
+    RawAssetQuarantineCode,
     RawAssetSourceType,
     RawAssetStatus,
     StorageClass,
@@ -27,7 +28,10 @@ from app.domain.ingestion.errors import (
     ResourceImmutableError,
     UploadSessionExpiredError,
 )
-from app.domain.ingestion.state_machines import assert_upload_session_action
+from app.domain.ingestion.state_machines import (
+    assert_upload_session_action,
+    raw_asset_target_status,
+)
 from app.domain.ingestion.validation import (
     CONTENT_TYPE_MAX_LENGTH,
     canonical_json,
@@ -444,6 +448,46 @@ class RawAsset:
         self.assert_content_immutable(updated)
         return updated
 
+    def mark_valid(self, *, now: datetime) -> RawAsset:
+        """VALIDATING → VALID；记录校验时间并清空隔离信息。"""
+        target = raw_asset_target_status(self.status, "validate-success")
+        updated = replace(
+            self,
+            status=target,
+            verified_at=now,
+            quarantine_reason=None,
+            quarantine_codes=(),
+            updated_at=now,
+        )
+        self.assert_content_immutable(updated)
+        return updated
+
+    def mark_quarantined(
+        self,
+        *,
+        codes: Sequence[RawAssetQuarantineCode | str],
+        reason: str,
+        now: datetime,
+    ) -> RawAsset:
+        """VALIDATING → QUARANTINED；隔离码必须来自稳定枚举且不得重复。"""
+        target = raw_asset_target_status(self.status, "validate-quarantine")
+        normalized = _quarantine_codes(codes)
+        if not isinstance(reason, str) or not reason.strip():
+            raise DomainValidationError("隔离原因不能为空")
+        cleaned_reason = reason.strip()
+        if len(cleaned_reason) > 1000:
+            raise DomainValidationError("隔离原因长度不得超过 1000")
+        updated = replace(
+            self,
+            status=target,
+            quarantine_codes=normalized,
+            quarantine_reason=cleaned_reason,
+            verified_at=None,
+            updated_at=now,
+        )
+        self.assert_content_immutable(updated)
+        return updated
+
 
 @dataclass(frozen=True, slots=True)
 class RawAssetLink:
@@ -514,4 +558,25 @@ def _uuid_tuple(value: object, field_name: str) -> tuple[UUID, ...]:
         if item not in seen:
             seen.add(item)
             result.append(item)
+    return tuple(result)
+
+
+def _quarantine_codes(
+    values: Sequence[RawAssetQuarantineCode | str],
+) -> tuple[str, ...]:
+    if not isinstance(values, list | tuple):
+        raise DomainValidationError("quarantine_codes 必须是列表")
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        try:
+            value = RawAssetQuarantineCode(item).value
+        except (TypeError, ValueError) as exc:
+            raise DomainValidationError("quarantine_codes 含未知稳定码") from exc
+        if value in seen:
+            raise DomainValidationError("quarantine_codes 不得重复")
+        seen.add(value)
+        result.append(value)
+    if not result:
+        raise DomainValidationError("quarantine_codes 不能为空")
     return tuple(result)

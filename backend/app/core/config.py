@@ -90,6 +90,13 @@ class Settings(BaseSettings):
     # 空列表表示使用契约默认白名单（由应用层注入），避免配置与契约重复维护。
     upload_allowed_content_types: list[str] = Field(default_factory=list)
 
+    # RawAsset 异步校验 Worker。所有阈值由部署配置注入，不在用例内硬编码。
+    validation_worker_poll_interval_seconds: float = Field(default=1.0, gt=0)
+    validation_stream_chunk_size_bytes: int = Field(default=1024 * 1024, gt=0)
+    validation_max_attempts: int = Field(default=5, ge=1, le=100)
+    validation_retry_base_seconds: float = Field(default=5.0, gt=0)
+    validation_retry_max_seconds: float = Field(default=300.0, gt=0)
+
     jwt_secret: str = "replace-me-in-production"  # noqa: S105 - 占位符，生产必须覆盖
     jwt_issuer: str = "ddp"
     jwt_audience: str = "ddp-api"
@@ -159,6 +166,7 @@ class Settings(BaseSettings):
         problems = self._cors_config_problems()
         problems.extend(self._rate_limit_config_problems())
         problems.extend(self._security_headers_config_problems())
+        problems.extend(self._validation_worker_config_problems())
         if not self.is_local:
             if self.local_header_auth:
                 problems.append(
@@ -248,6 +256,11 @@ class Settings(BaseSettings):
                     f"HSTS preload 的 max-age 不得小于 {_HSTS_PRELOAD_MIN_AGE_SECONDS} 秒"
                 )
         return problems
+
+    def _validation_worker_config_problems(self) -> list[str]:
+        if self.validation_retry_max_seconds < self.validation_retry_base_seconds:
+            return ["DDP_VALIDATION_RETRY_MAX_SECONDS 不得小于 DDP_VALIDATION_RETRY_BASE_SECONDS"]
+        return []
 
 
 @lru_cache(maxsize=1)

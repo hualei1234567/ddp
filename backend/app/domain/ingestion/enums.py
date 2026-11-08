@@ -44,6 +44,24 @@ RAW_ASSET_ACTIVE_STATUSES: frozenset[str] = frozenset(
 )
 
 
+class RawAssetQuarantineCode(StrEnum):
+    """RawAsset 隔离原因稳定码。
+
+    前六项来自 ``raw-asset.v1.schema.json`` 草案；后三项是本任务新增的
+    内容一致性校验码，契约草案尚未收录，已作为风险上报。
+    """
+
+    MALWARE_SUSPECTED = "malware_suspected"
+    MALWARE_SCANNER_UNAVAILABLE = "malware_scanner_unavailable"
+    SIGNATURE_AMBIGUOUS = "signature_ambiguous"
+    UNSUPPORTED_FORMAT = "unsupported_format"
+    METADATA_CONFLICT = "metadata_conflict"
+    PARSE_FAILED = "parse_failed"
+    HASH_MISMATCH = "hash_mismatch"
+    SIZE_MISMATCH = "size_mismatch"
+    OBJECT_MISSING = "object_missing"
+
+
 class RawAssetSourceType(StrEnum):
     UPLOAD = "UPLOAD"
     DEVICE = "DEVICE"

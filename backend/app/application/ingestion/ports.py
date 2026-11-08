@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Protocol
@@ -20,6 +20,8 @@ from app.domain.ingestion.models import RawAsset, RawAssetLink, UploadPart, Uplo
 
 class UnitOfWork(Protocol):
     def commit(self) -> None: ...
+
+    def rollback(self) -> None: ...
 
 
 class UploadSessionRepository(Protocol):
@@ -64,6 +66,8 @@ class RawAssetRepository(Protocol):
     def add(self, scope: ProjectScope, asset: RawAsset) -> RawAsset: ...
 
     def get(self, scope: ProjectScope, asset_id: UUID) -> RawAsset | None: ...
+
+    def get_for_update(self, scope: ProjectScope, asset_id: UUID) -> RawAsset | None: ...
 
     def find_active_by_content(
         self,
@@ -145,6 +149,55 @@ class IngestionJobRepository(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class ClaimedValidationEvent:
+    """已被 Worker 锁定的一条校验事件。
+
+    只携带处理所需字段，不暴露 ORM 行；事件在事务提交前保持行锁。
+    """
+
+    event_id: UUID
+    project_id: UUID
+    aggregate_id: UUID
+    payload: Mapping[str, object]
+    attempts: int
+    created_at: datetime
+
+
+class ValidationEventQueue(Protocol):
+    """校验 outbox 事件消费端口。
+
+    PostgreSQL 使用 ``FOR UPDATE SKIP LOCKED`` 抢占；SQLite 串行执行。
+    业务写入与事件状态更新必须在同一事务内完成。
+    """
+
+    def claim_next(
+        self,
+        *,
+        now: datetime,
+        event_type: str,
+    ) -> ClaimedValidationEvent | None: ...
+
+    def mark_published(self, event_id: UUID, *, now: datetime) -> None: ...
+
+    def mark_retry(
+        self,
+        event_id: UUID,
+        *,
+        attempts: int,
+        available_at: datetime,
+        last_error: str,
+    ) -> bool: ...
+
+    def mark_dead_letter(
+        self,
+        event_id: UUID,
+        *,
+        attempts: int,
+        last_error: str,
+    ) -> bool: ...
+
+
+@dataclass(frozen=True, slots=True)
 class StoredPart:
     part_number: int
     etag: str
@@ -187,6 +240,10 @@ class ObjectStorage(Protocol):
     def abort_multipart(self, object_key: str, upload_id: str) -> None: ...
 
     def read_range(self, object_key: str, *, start: int, length: int) -> bytes: ...
+
+    def stream_object(self, object_key: str, *, chunk_size: int) -> Iterator[bytes]:
+        """按块流式读取对象；调用方不得在 HTTP 线程消费大文件。"""
+        ...
 
     def delete_object(self, object_key: str) -> None: ...
 

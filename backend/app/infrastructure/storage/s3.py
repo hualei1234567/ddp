@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import boto3
@@ -9,7 +10,10 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from app.application.ingestion.ports import PresignedPart, StoredPart
 from app.core.config import Settings
-from app.domain.ingestion.errors import ObjectStorageUnavailableError
+from app.domain.ingestion.errors import (
+    ObjectNotFoundError,
+    ObjectStorageUnavailableError,
+)
 from app.domain.ingestion.validation import sha256_from_base64
 
 _UPLOAD_PART = "upload_part"
@@ -190,6 +194,41 @@ class S3MultipartStorage:
             raise ObjectStorageUnavailableError("读取对象内容失败") from exc
         return bytes(body)
 
+    def stream_object(self, object_key: str, *, chunk_size: int) -> Iterator[bytes]:
+        """按块流式读取对象，调用方负责计算 Hash 与大小。
+
+        对象不存在是稳定的校验结果，转换为 :class:`ObjectNotFoundError`；
+        其余 SDK/I/O 错误收敛为可重试的 ``object_storage_unavailable``。
+        """
+        if chunk_size <= 0:
+            raise ObjectStorageUnavailableError("流式读取块大小必须为正数")
+        try:
+            response = self._client.get_object(Bucket=self.bucket, Key=object_key)
+        except ClientError as exc:
+            if _is_missing_object(exc):
+                raise ObjectNotFoundError("对象不存在") from exc
+            raise ObjectStorageUnavailableError("读取对象内容失败") from exc
+        except BotoCoreError as exc:
+            raise ObjectStorageUnavailableError("读取对象内容失败") from exc
+
+        body = response.get("Body")
+        if body is None:
+            raise ObjectStorageUnavailableError("对象存储未返回内容流")
+
+        def _iter_chunks() -> Iterator[bytes]:
+            try:
+                while True:
+                    chunk = body.read(chunk_size)
+                    if not chunk:
+                        break
+                    yield bytes(chunk)
+            except (BotoCoreError, OSError) as exc:
+                raise ObjectStorageUnavailableError("流式读取对象中断") from exc
+            finally:
+                body.close()
+
+        return _iter_chunks()
+
     def delete_object(self, object_key: str) -> None:
         try:
             self._client.delete_object(Bucket=self.bucket, Key=object_key)
@@ -199,6 +238,12 @@ class S3MultipartStorage:
 
 def _error_code(exc: ClientError) -> str:
     return str(exc.response.get("Error", {}).get("Code", ""))
+
+
+def _is_missing_object(exc: ClientError) -> bool:
+    code = _error_code(exc)
+    status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+    return code in {"NoSuchKey", "404", "NotFound"} or status == 404
 
 
 def _quoted_etag(etag: str) -> str:

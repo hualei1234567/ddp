@@ -329,6 +329,7 @@ class UploadCompletionService:
                     "asset_id": str(asset.asset_id),
                     "validation_job_id": str(job_id),
                     "upload_session_id": str(saved.upload_session_id),
+                    "actor_user_id": str(scope.actor_id),
                 },
                 now=utcnow(),
                 aggregate_type="RAW_ASSET",

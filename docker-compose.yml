@@ -89,6 +89,28 @@ services:
       timeout: 5s
       retries: 10
 
+  worker:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-worker
+    command: ["python", "-m", "app.workers.outbox"]
+    env_file: .env
+    environment:
+      # 与 API 相同：容器内使用服务名访问数据库、缓存与对象存储。
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+      DDP_REDIS_URL: redis://redis:6379/0
+      DDP_S3_ENDPOINT: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
   web:
     profiles: ["app"]
     build:

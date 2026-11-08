@@ -24,8 +24,17 @@ from app.application.ingestion.ports import (
     UploadSessionDetail,
     UploadSessionRepository,
 )
+from app.application.ingestion.raw_asset_validation import (
+    RawAssetValidationService,
+    ValidationOutcome,
+)
 from app.application.ingestion.raw_assets import RawAssetUseCases
 from app.application.ingestion.upload_sessions import UploadSessionUseCases
+from app.application.ingestion.validation_events import (
+    ProcessingStatus,
+    ProcessResult,
+    ValidationEventProcessor,
+)
 
 __all__ = [
     "AckUploadPartCommand",
@@ -43,9 +52,12 @@ __all__ = [
     "JobActionCommand",
     "ObjectStorage",
     "PresignedPart",
+    "ProcessResult",
+    "ProcessingStatus",
     "RawAssetLinkRepository",
     "RawAssetRepository",
     "RawAssetUseCases",
+    "RawAssetValidationService",
     "StoredPart",
     "UnitOfWork",
     "UploadPartRepository",
@@ -53,4 +65,6 @@ __all__ = [
     "UploadSessionDetail",
     "UploadSessionRepository",
     "UploadSessionUseCases",
+    "ValidationEventProcessor",
+    "ValidationOutcome",
 ]

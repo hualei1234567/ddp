@@ -92,6 +92,21 @@ class SqlRawAssetRepository:
         )
         return self._from_row(row) if row is not None else None
 
+    def get_for_update(self, scope: ProjectScope, asset_id: UUID) -> RawAsset | None:
+        """锁定资产行，避免重复事件并发迁移同一资产。
+
+        PostgreSQL 使用行锁；SQLite 忽略 ``FOR UPDATE``，由单写事务串行化。
+        """
+        row = self._session.scalar(
+            select(RawAssetModel)
+            .where(
+                RawAssetModel.id == asset_id,
+                RawAssetModel.project_id == scope.project_id,
+            )
+            .with_for_update()
+        )
+        return self._from_row(row) if row is not None else None
+
     def find_active_by_content(
         self,
         scope: ProjectScope,

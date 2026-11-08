@@ -7,11 +7,12 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from app.application.ingestion.ports import PresignedPart, StoredPart
-from app.domain.ingestion.errors import ObjectStorageUnavailableError
+from app.domain.ingestion.errors import ObjectNotFoundError, ObjectStorageUnavailableError
 
 
 @dataclass
@@ -44,6 +45,7 @@ class FakeMultipartStorage:
         self._objects: dict[str, bytes] = {}
         self._failures: list[str] = []
         self.presigned_calls: list[dict[str, object]] = []
+        self.stream_calls: list[tuple[str, int]] = []
 
     # ---------------------------------------------------------- 测试操作
     def fail_next(self, operation: str) -> None:
@@ -53,6 +55,10 @@ class FakeMultipartStorage:
         if operation in self._failures:
             self._failures.remove(operation)
             raise ObjectStorageUnavailableError(f"模拟对象存储故障：{operation}")
+
+    def put_object(self, object_key: str, data: bytes) -> None:
+        """测试直接写入已完成对象，绕过 multipart 流程。"""
+        self._objects[object_key] = data
 
     def put_part(
         self,
@@ -176,6 +182,17 @@ class FakeMultipartStorage:
         if length <= 0:
             return b""
         return content[start : start + length]
+
+    def stream_object(self, object_key: str, *, chunk_size: int) -> Iterator[bytes]:
+        self._maybe_fail("stream")
+        self.stream_calls.append((object_key, chunk_size))
+        content = self._objects.get(object_key)
+        if content is None:
+            raise ObjectNotFoundError("对象不存在")
+        if chunk_size <= 0:
+            raise ObjectStorageUnavailableError("流式读取块大小必须为正数")
+        for start in range(0, len(content), chunk_size):
+            yield content[start : start + chunk_size]
 
     def delete_object(self, object_key: str) -> None:
         self._maybe_fail("delete")
