@@ -36,7 +36,7 @@ def _error_payload(request: Request, error: AppError) -> dict[str, object]:
 def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
-    # fail-closed：非本地环境未接入真实认证时直接拒绝启动。
+    # fail-closed：非本地环境 JWT 配置不完整时直接拒绝启动。
     settings.validate_runtime_security()
 
     app = FastAPI(

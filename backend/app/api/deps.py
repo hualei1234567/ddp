@@ -24,6 +24,7 @@ from app.domain.identity.models import (
     ProjectContext,
     ProjectScope,
 )
+from app.infrastructure.auth.jwt import TokenValidationError, decode_hs256_token
 from app.infrastructure.db.session import get_session
 from app.infrastructure.repositories.identity import (
     SqlProjectMembershipRepository,
@@ -34,6 +35,9 @@ from app.infrastructure.repositories.identity import (
 # ``testclient`` 只可能来自 Starlette 进程内 ASGI 测试客户端，不会出现在真实网络中。
 _LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost", "testclient"})
 
+# 对外统一措辞，避免通过错误消息区分过期、签名错误等细节。
+_INVALID_TOKEN_MESSAGE = "无效或已过期的访问令牌"  # noqa: S105 - 错误提示，非凭据
+
 
 def _is_loopback(request: Request) -> bool:
     """仅信任 ASGI Server 提供的对端地址，不读取任何转发头。"""
@@ -41,21 +45,55 @@ def _is_loopback(request: Request) -> bool:
     return client is not None and client.host in _LOOPBACK_HOSTS
 
 
+def _bearer_token(request: Request) -> str | None:
+    """提取 Bearer token；存在 Authorization 但格式错误时直接拒绝。
+
+    一旦客户端声明了 ``Authorization``，就不得再回退到 X-User-Id，
+    避免本地 Header 后门被用来掩盖错误的令牌。
+    """
+    authorization = request.headers.get("Authorization")
+    if authorization is None:
+        return None
+    scheme, separator, credentials = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not separator or not credentials.strip():
+        raise AuthenticationError("Authorization 头格式错误，应为 Bearer <token>")
+    return credentials.strip()
+
+
+def _principal_from_token(token: str, settings: Settings) -> Principal:
+    try:
+        claims = decode_hs256_token(
+            token,
+            secret=settings.jwt_secret,
+            issuer=settings.jwt_issuer,
+            audience=settings.jwt_audience,
+            leeway_seconds=settings.jwt_leeway_seconds,
+        )
+        user_id = UUID(claims.subject)
+        platform_role = PlatformRole(claims.platform_role)
+    except (TokenValidationError, ValueError) as exc:
+        raise AuthenticationError(_INVALID_TOKEN_MESSAGE) from exc
+    return Principal(user_id=user_id, platform_role=platform_role)
+
+
 def get_current_principal(
     request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> Principal:
-    """阶段 0 身份适配器：本地 loopback 显式开关下才允许请求头模拟用户。
+    """认证适配器：优先 Bearer JWT；本地 Header 仅在测试/loopback 下作为后门。
 
     安全约束：
-    - 默认关闭（``DDP_LOCAL_HEADER_AUTH=false``），生产环境永不启用；
-    - 只接受 loopback 来源，避免把开发便利暴露给远端；
-    - 平台角色固定为 ``member``，任何请求头都不能提升平台权限。
-
-    接入 JWT/OIDC 时应替换本函数实现，路由与服务层无需感知具体认证方式。
+    - 任何环境都接受完整的 HS256 Bearer JWT；
+    - 本地 Header 认证默认关闭，只允许 ``local`` 环境、显式开关与 loopback 三者同时成立；
+    - 平台角色只能来自经过签名的 ``platform_role`` 声明，请求头不能提升权限；
+    - 非本地环境缺失令牌一律 401，不存在隐式放行。
     """
+    token = _bearer_token(request)
+    if token is not None:
+        return _principal_from_token(token, settings)
+
     if not settings.is_local:
-        raise AuthenticationError("非本地环境未配置真实认证，拒绝访问")
+        raise AuthenticationError("缺少访问令牌")
     if not settings.local_header_auth:
         raise AuthenticationError("本地 Header 认证未启用")
     if not _is_loopback(request):

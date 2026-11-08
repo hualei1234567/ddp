@@ -10,6 +10,20 @@ from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# HS256 密钥强度下限（字节级字符数）。低于该值视为配置不完整，非本地环境拒绝启动。
+_MIN_JWT_SECRET_LENGTH = 32
+# 明确视为未替换的占位密钥；命中后生产环境拒绝启动。
+_PLACEHOLDER_JWT_SECRETS = frozenset(
+    {
+        "",
+        "replace-me-in-production",
+        "change-me",
+        "changeme",
+        "secret",
+        "jwt-secret",
+    }
+)
+
 
 class Settings(BaseSettings):
     """服务配置。字段名对应 ``DDP_<UPPER_NAME>``。"""
@@ -45,26 +59,52 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
 
     jwt_secret: str = "replace-me-in-production"  # noqa: S105 - 占位符，生产必须覆盖
+    jwt_issuer: str = "ddp"
+    jwt_audience: str = "ddp-api"
     jwt_expire_minutes: int = 720
+    jwt_leeway_seconds: int = Field(default=30, ge=0, le=300)
 
     @property
     def is_local(self) -> bool:
         return self.env.lower() in {"local", "dev", "development"}
 
-    def validate_runtime_security(self) -> None:
-        """启动自检：非本地环境没有真实认证时 fail-closed。
+    @property
+    def has_complete_jwt_config(self) -> bool:
+        return not self._jwt_config_problems()
 
-        当前代码只实现了本地请求头身份适配器，尚无 JWT/OIDC 校验实现。
-        因此非本地环境一律拒绝启动；接入真实认证后，应在此处改为检查
-        对应认证配置是否完整，而不是默认放行。
-        """
+    def validate_runtime_security(self) -> None:
+        """启动自检：非本地环境必须配置完整的 JWT 认证，否则 fail-closed。"""
         if self.is_local:
             return
-        raise RuntimeError(
-            "非本地环境未接入真实认证（JWT/OIDC），拒绝启动；"
-            "本地开发请设置 DDP_ENV=local，并按需显式开启 "
-            "DDP_LOCAL_HEADER_AUTH=true（仅 loopback 生效）。"
-        )
+        if self.local_header_auth:
+            raise RuntimeError(
+                "非本地环境禁止启用本地 Header 认证（DDP_LOCAL_HEADER_AUTH），"
+                "请改用 Bearer JWT。"
+            )
+        problems = self._jwt_config_problems()
+        if problems:
+            raise RuntimeError(
+                "非本地环境 JWT 认证配置不完整，拒绝启动："
+                + "；".join(problems)
+                + "。请配置 DDP_JWT_SECRET（至少 "
+                + str(_MIN_JWT_SECRET_LENGTH)
+                + " 个字符的强随机值）、DDP_JWT_ISSUER、DDP_JWT_AUDIENCE。"
+            )
+
+    def _jwt_config_problems(self) -> list[str]:
+        problems: list[str] = []
+        secret = self.jwt_secret.strip()
+        if secret.lower() in _PLACEHOLDER_JWT_SECRETS:
+            problems.append("DDP_JWT_SECRET 为空或仍为占位符")
+        elif len(secret) < _MIN_JWT_SECRET_LENGTH:
+            problems.append(f"DDP_JWT_SECRET 长度不足 {_MIN_JWT_SECRET_LENGTH} 个字符")
+        if secret != self.jwt_secret:
+            problems.append("DDP_JWT_SECRET 不得包含首尾空白")
+        if not self.jwt_issuer.strip():
+            problems.append("DDP_JWT_ISSUER 为空")
+        if not self.jwt_audience.strip():
+            problems.append("DDP_JWT_AUDIENCE 为空")
+        return problems
 
 
 @lru_cache(maxsize=1)
