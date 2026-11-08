@@ -93,9 +93,7 @@ class SqlDatasetGrantRepository:
         if status is not None:
             statement = statement.where(DatasetGrantModel.status == status)
         if grantee_project_id is not None:
-            statement = statement.where(
-                DatasetGrantModel.grantee_project_id == grantee_project_id
-            )
+            statement = statement.where(DatasetGrantModel.grantee_project_id == grantee_project_id)
         if after_id is not None:
             statement = statement.where(DatasetGrantModel.id > after_id)
         statement = statement.order_by(DatasetGrantModel.id).limit(limit)

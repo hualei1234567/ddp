@@ -81,12 +81,8 @@ class DatasetGrant:
         object.__setattr__(
             self, "grantee_team", optional_text(self.grantee_team, "grantee_team", max_length=200)
         )
-        object.__setattr__(
-            self, "expires_at", aware_datetime(self.expires_at, "expires_at")
-        )
-        object.__setattr__(
-            self, "status", coerce_enum(self.status, DatasetGrantStatus, "status")
-        )
+        object.__setattr__(self, "expires_at", aware_datetime(self.expires_at, "expires_at"))
+        object.__setattr__(self, "status", coerce_enum(self.status, DatasetGrantStatus, "status"))
         for name in ("approved_by", "rejected_by", "revoked_by", "created_by", "updated_by"):
             object.__setattr__(self, name, optional_uuid(getattr(self, name), name))
         for name in (

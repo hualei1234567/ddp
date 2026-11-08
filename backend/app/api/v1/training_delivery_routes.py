@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, Query, Request
 from app.api.deps import get_project_context
 from app.api.v1.dataset_dependencies import (
     IdempotencyKey,
-    OwnerScope,
     ReadScope,
     WriteScope,
     request_id,
@@ -125,7 +124,11 @@ def act_on_delivery(
         "cancel",
     }:
         raise ValidationFailedError("交付动作非法")
-    if action == "cancel" and not context.is_platform_admin and context.role is not ProjectRole.OWNER:
+    if (
+        action == "cancel"
+        and not context.is_platform_admin
+        and context.role is not ProjectRole.OWNER
+    ):
         raise ForbiddenError("取消交付要求项目负责人权限")
     delivery = services.deliveries.apply_action(
         scope,

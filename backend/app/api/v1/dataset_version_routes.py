@@ -13,12 +13,10 @@ from app.api.v1.dataset_dependencies import (
     DatasetUseCasesDep,
     ExpectedVersion,
     IdempotencyKey,
-    ReadScope,
     WriteScope,
     request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
-from app.api.v1.training_dependencies import DatasetReadScope, DatasetVersionReadScope
 from app.api.v1.dataset_schemas import (
     DatasetVersionCreate,
     SelectionPreviewRequest,
@@ -30,6 +28,7 @@ from app.api.v1.dataset_schemas import (
     quality_out,
     version_out,
 )
+from app.api.v1.training_dependencies import DatasetReadScope, DatasetVersionReadScope
 from app.application.datasets.commands import (
     ActionCommand,
     LeakageWaiverCommand,

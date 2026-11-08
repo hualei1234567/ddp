@@ -31,8 +31,10 @@ from app.domain.datasets.validation import (
     optional_uuid,
     positive_int,
     required_uuid,
-    sha256_value as ensure_sha,
     text_value,
+)
+from app.domain.datasets.validation import (
+    sha256_value as ensure_sha,
 )
 
 
@@ -123,9 +125,7 @@ class TrainingDelivery:
             "quality_report_ref",
             optional_sha256(self.quality_report_ref, "quality_report_ref"),
         )
-        object.__setattr__(
-            self, "item_count", non_negative_int(self.item_count, "item_count")
-        )
+        object.__setattr__(self, "item_count", non_negative_int(self.item_count, "item_count"))
         counts = _split_counts(self.split_counts)
         object.__setattr__(self, "split_counts", counts)
         if self.item_count != sum(counts.values()):
@@ -342,9 +342,7 @@ def new_training_delivery(
         artifact_manifest_key=text_value(
             artifact_manifest_key, "artifact_manifest_key", max_length=1024
         ),
-        artifact_manifest_sha256=ensure_sha(
-            artifact_manifest_sha256, "artifact_manifest_sha256"
-        ),
+        artifact_manifest_sha256=ensure_sha(artifact_manifest_sha256, "artifact_manifest_sha256"),
         aggregate_sha256=ensure_sha(aggregate_sha256, "aggregate_sha256"),
         item_count=item_count,
         split_counts=split_counts,

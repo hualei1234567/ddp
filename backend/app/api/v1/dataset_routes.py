@@ -18,7 +18,6 @@ from app.api.v1.dataset_dependencies import (
     request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
-from app.api.v1.training_dependencies import DatasetReadScope
 from app.api.v1.dataset_schemas import (
     DatasetActionRequest,
     DatasetCreate,
@@ -30,6 +29,7 @@ from app.api.v1.dataset_schemas import (
     dataset_out,
     policy_out,
 )
+from app.api.v1.training_dependencies import DatasetReadScope
 from app.application.datasets.commands import (
     NewDataset,
     NewDedupPolicy,

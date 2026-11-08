@@ -42,7 +42,9 @@ class TrainingRequestRepository(Protocol):
 
 
 class TrainingRequestRevisionRepository(Protocol):
-    def add(self, scope: ProjectScope, revision: TrainingRequestRevision) -> TrainingRequestRevision: ...
+    def add(
+        self, scope: ProjectScope, revision: TrainingRequestRevision
+    ) -> TrainingRequestRevision: ...
 
     def get(self, scope: ProjectScope, revision_id: UUID) -> TrainingRequestRevision | None: ...
 

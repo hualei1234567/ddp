@@ -22,8 +22,8 @@ from app.api.v1.dataset_dependencies import (
     WriteScope,
     request_id,
 )
-from app.api.v1.upload_dependencies import ObjectStorageDep, SettingsDep
 from app.api.v1.export_schemas import ExportJobCreate
+from app.api.v1.upload_dependencies import ObjectStorageDep, SettingsDep
 from app.application.datasets.dataset_grants import (
     DatasetGrantAccessService,
     DatasetGrantUseCases,
@@ -69,9 +69,7 @@ def get_training_adapter_gateway(settings: SettingsDep) -> TrainingAdapterGatewa
     return ConfiguredTrainingAdapterGateway(settings)
 
 
-TrainingAdapterDep = Annotated[
-    TrainingAdapterGateway, Depends(get_training_adapter_gateway)
-]
+TrainingAdapterDep = Annotated[TrainingAdapterGateway, Depends(get_training_adapter_gateway)]
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,9 +235,7 @@ def get_dataset_version_read_scope(
     )
 
 
-DatasetVersionReadScope = Annotated[
-    ProjectScope, Depends(get_dataset_version_read_scope)
-]
+DatasetVersionReadScope = Annotated[ProjectScope, Depends(get_dataset_version_read_scope)]
 
 
 def get_export_create_scope(
@@ -306,9 +302,7 @@ def get_export_download_scope(
     return ProjectScope.from_context(context)
 
 
-ExportDownloadScope = Annotated[
-    ProjectScope, Depends(get_export_download_scope)
-]
+ExportDownloadScope = Annotated[ProjectScope, Depends(get_export_download_scope)]
 
 __all__ = [
     "ActionName",

@@ -9,7 +9,11 @@ from uuid import UUID
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from app.domain.datasets.training_enums import RevisionStatus, TrainingPriority, TrainingRequestStatus
+from app.domain.datasets.training_enums import (
+    RevisionStatus,
+    TrainingPriority,
+    TrainingRequestStatus,
+)
 from app.domain.datasets.training_requests import TrainingRequest, TrainingRequestRevision
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.training import (

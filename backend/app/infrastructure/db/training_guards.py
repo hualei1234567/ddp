@@ -137,7 +137,9 @@ _GRANT_TERMINAL_SQL = _terminal_sql(grant_terminal_states())
 
 _SQLITE_STATEMENTS = (
     _insert_initial_sqlite("training_requests", "DRAFT", "training_request_initial_status_invalid"),
-    _transition_sqlite("training_requests", _REQUEST_PAIRS, "training_request_state_transition_invalid"),
+    _transition_sqlite(
+        "training_requests", _REQUEST_PAIRS, "training_request_state_transition_invalid"
+    ),
     _immutable_sqlite(
         "training_requests",
         REQUEST_IMMUTABLE_COLUMNS,
@@ -185,9 +187,7 @@ _SQLITE_STATEMENTS = (
         SELECT RAISE(ABORT, 'training_request_revision_terminal_immutable');
     END
     """,
-    _no_delete_sqlite(
-        "training_request_revisions", "training_request_revision_delete_forbidden"
-    ),
+    _no_delete_sqlite("training_request_revisions", "training_request_revision_delete_forbidden"),
     _insert_initial_sqlite(
         "training_deliveries", "DRAFT", "training_delivery_initial_status_invalid"
     ),
@@ -238,7 +238,9 @@ _SQLITE_STATEMENTS = (
         "dataset_grants", "PENDING_APPROVAL", "dataset_grant_initial_status_invalid"
     ),
     _transition_sqlite("dataset_grants", _GRANT_PAIRS, "dataset_grant_state_transition_invalid"),
-    _immutable_sqlite("dataset_grants", GRANT_IMMUTABLE_COLUMNS, "dataset_grant_identity_immutable"),
+    _immutable_sqlite(
+        "dataset_grants", GRANT_IMMUTABLE_COLUMNS, "dataset_grant_identity_immutable"
+    ),
     f"""
     CREATE TRIGGER IF NOT EXISTS trg_dataset_grants_terminal_immutable
     BEFORE UPDATE ON dataset_grants
@@ -392,10 +394,30 @@ _FUNCTIONS = (
 )
 
 _TRIGGERS = (
-    ("trg_training_requests_initial_status", "training_requests", "INSERT", "ddp_training_request_guard"),
-    ("trg_training_requests_transition", "training_requests", "UPDATE", "ddp_training_request_guard"),
-    ("trg_training_requests_immutable", "training_requests", "UPDATE", "ddp_training_request_guard"),
-    ("trg_training_requests_terminal_immutable", "training_requests", "UPDATE", "ddp_training_request_guard"),
+    (
+        "trg_training_requests_initial_status",
+        "training_requests",
+        "INSERT",
+        "ddp_training_request_guard",
+    ),
+    (
+        "trg_training_requests_transition",
+        "training_requests",
+        "UPDATE",
+        "ddp_training_request_guard",
+    ),
+    (
+        "trg_training_requests_immutable",
+        "training_requests",
+        "UPDATE",
+        "ddp_training_request_guard",
+    ),
+    (
+        "trg_training_requests_terminal_immutable",
+        "training_requests",
+        "UPDATE",
+        "ddp_training_request_guard",
+    ),
     ("trg_training_requests_no_delete", "training_requests", "DELETE", "ddp_training_delete_guard"),
     (
         "trg_training_request_revisions_initial_status",
@@ -433,11 +455,36 @@ _TRIGGERS = (
         "DELETE",
         "ddp_training_delete_guard",
     ),
-    ("trg_training_deliveries_initial_status", "training_deliveries", "INSERT", "ddp_training_delivery_guard"),
-    ("trg_training_deliveries_transition", "training_deliveries", "UPDATE", "ddp_training_delivery_guard"),
-    ("trg_training_deliveries_immutable", "training_deliveries", "UPDATE", "ddp_training_delivery_guard"),
-    ("trg_training_deliveries_terminal_immutable", "training_deliveries", "UPDATE", "ddp_training_delivery_guard"),
-    ("trg_training_deliveries_no_delete", "training_deliveries", "DELETE", "ddp_training_delete_guard"),
+    (
+        "trg_training_deliveries_initial_status",
+        "training_deliveries",
+        "INSERT",
+        "ddp_training_delivery_guard",
+    ),
+    (
+        "trg_training_deliveries_transition",
+        "training_deliveries",
+        "UPDATE",
+        "ddp_training_delivery_guard",
+    ),
+    (
+        "trg_training_deliveries_immutable",
+        "training_deliveries",
+        "UPDATE",
+        "ddp_training_delivery_guard",
+    ),
+    (
+        "trg_training_deliveries_terminal_immutable",
+        "training_deliveries",
+        "UPDATE",
+        "ddp_training_delivery_guard",
+    ),
+    (
+        "trg_training_deliveries_no_delete",
+        "training_deliveries",
+        "DELETE",
+        "ddp_training_delete_guard",
+    ),
     (
         "trg_external_training_references_initial_status",
         "external_training_references",
@@ -471,7 +518,12 @@ _TRIGGERS = (
     ("trg_dataset_grants_initial_status", "dataset_grants", "INSERT", "ddp_dataset_grant_guard"),
     ("trg_dataset_grants_transition", "dataset_grants", "UPDATE", "ddp_dataset_grant_guard"),
     ("trg_dataset_grants_immutable", "dataset_grants", "UPDATE", "ddp_dataset_grant_guard"),
-    ("trg_dataset_grants_terminal_immutable", "dataset_grants", "UPDATE", "ddp_dataset_grant_guard"),
+    (
+        "trg_dataset_grants_terminal_immutable",
+        "dataset_grants",
+        "UPDATE",
+        "ddp_dataset_grant_guard",
+    ),
     ("trg_dataset_grants_no_delete", "dataset_grants", "DELETE", "ddp_training_delete_guard"),
 )
 

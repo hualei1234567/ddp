@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from app.infrastructure.db.models.collection import OutboxEvent
 from sqlalchemy import func, select
@@ -138,9 +138,7 @@ def test_training_request_validation_and_cross_project_isolation(
     done = create_request(editor, ids.project_a, ids.owner_a)
     assert viewer.get(url(ids.project_a, "/training-requests")).status_code == 200
     assert outsider.get(url(ids.project_a, "/training-requests")).status_code == 403
-    cross = owner.get(
-        url(ids.project_b, f"/training-requests/{done['training_request_id']}")
-    )
+    cross = owner.get(url(ids.project_b, f"/training-requests/{done['training_request_id']}"))
     assert cross.status_code == 404
     assert cross.json()["error"]["code"] == "resource_not_found"
 
@@ -182,19 +180,26 @@ def test_training_delivery_accept_reject_rework_and_history_preserved(
     assert delivery["aggregate_sha256"] == ctx["export_job"]["aggregate_sha256"]
 
     missing_if_match = editor.post(
-        url(ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/ready"),
+        url(
+            ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/ready"
+        ),
         json={},
     )
     assert missing_if_match.status_code == 428
 
     ready = editor.post(
-        url(ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/ready"),
+        url(
+            ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/ready"
+        ),
         headers={"If-Match": f'"{delivery["version"]}"'},
         json={},
     )
     assert ready.status_code == 200, ready.text
     delivered = editor.post(
-        url(ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/deliver"),
+        url(
+            ids.project_a,
+            f"/training-deliveries/{delivery['training_delivery_id']}/actions/deliver",
+        ),
         headers={"If-Match": f'"{ready.json()["version"]}"'},
         json={},
     )
@@ -202,7 +207,9 @@ def test_training_delivery_accept_reject_rework_and_history_preserved(
     assert delivered.json()["status"] == "DELIVERED"
 
     self_accept = editor.post(
-        url(ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/accept"),
+        url(
+            ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/accept"
+        ),
         headers={"If-Match": f'"{delivered.json()["version"]}"'},
         json={"acceptance_opinion": "自验"},
     )
@@ -210,7 +217,9 @@ def test_training_delivery_accept_reject_rework_and_history_preserved(
     assert self_accept.json()["error"]["code"] == "training_delivery_acceptance_forbidden"
 
     rejected = owner.post(
-        url(ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/reject"),
+        url(
+            ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/reject"
+        ),
         headers={"If-Match": f'"{delivered.json()["version"]}"'},
         json={"reason": "划分比例与需求不一致"},
     )
@@ -230,12 +239,13 @@ def test_training_delivery_accept_reject_rework_and_history_preserved(
     assert second.status_code == 201, second.text
     second_delivery = second.json()
     assert (
-        second_delivery["training_request_revision_id"]
-        == delivery["training_request_revision_id"]
+        second_delivery["training_request_revision_id"] == delivery["training_request_revision_id"]
     )
 
     reworked = editor.post(
-        url(ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/rework"),
+        url(
+            ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/rework"
+        ),
         headers={"If-Match": f'"{rejected.json()["version"]}"'},
         json={
             "reason": "返工范围：重新导出并复核",
@@ -245,9 +255,7 @@ def test_training_delivery_accept_reject_rework_and_history_preserved(
     assert reworked.status_code == 200, reworked.text
     assert reworked.json()["status"] == "REWORK"
     assert reworked.json()["rework_ref"] == second_delivery["training_delivery_id"]
-    assert (
-        reworked.json()["dataset_version_id"] == delivery["dataset_version_id"]
-    )
+    assert reworked.json()["dataset_version_id"] == delivery["dataset_version_id"]
 
     second_ready = editor.post(
         url(
@@ -311,12 +319,19 @@ def test_delivery_requires_frozen_version_and_approved_revision(
     assert not_approved.json()["error"]["code"] == "training_request_not_approved"
 
     submit_revision(editor, ids.project_a, request_body)
+    revision = get_revision(
+        editor,
+        ids.project_a,
+        request_body,
+        request_body["current_revision_id"],
+    )
     approver.post(
         url(
             ids.project_a,
-            f"/training-requests/{request_body['training_request_id']}/revisions/{request_body['current_revision_id']}/actions/approve",
+            f"/training-requests/{request_body['training_request_id']}"
+            f"/revisions/{request_body['current_revision_id']}/actions/approve",
         ),
-        headers={"If-Match": f'"{get_revision(editor, ids.project_a, request_body, request_body["current_revision_id"])["version"]}"'},
+        headers={"If-Match": f'"{revision["version"]}"'},
         json={},
     )
 

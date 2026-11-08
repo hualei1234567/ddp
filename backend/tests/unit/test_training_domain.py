@@ -102,9 +102,7 @@ def test_snapshot_validation_and_revision_hash_are_server_side() -> None:
         normalize_requirement_snapshot(snapshot(format="PARQUET"))
 
     with pytest.raises(TrainingRequestIncompleteError):
-        normalize_requirement_snapshot(
-            snapshot(target_episode_count=None, target_duration_ns=None)
-        )
+        normalize_requirement_snapshot(snapshot(target_episode_count=None, target_duration_ns=None))
 
     with pytest.raises(TrainingRequestIncompleteError):
         normalize_requirement_snapshot(snapshot(quality_thresholds={"api_key": "x"}))
@@ -149,9 +147,7 @@ def test_approved_revision_is_immutable_and_cannot_self_approve() -> None:
 
 def test_request_terminal_state_cannot_be_rolled_back() -> None:
     request, _, actor = make_request()
-    cancelled = request.apply_action(
-        "cancel", now=NOW, actor_id=actor, reason="不再需要"
-    )
+    cancelled = request.apply_action("cancel", now=NOW, actor_id=actor, reason="不再需要")
     assert cancelled.status is TrainingRequestStatus.CANCELLED
     with pytest.raises(InvalidStateTransitionError):
         cancelled.apply_action("block", now=NOW, actor_id=actor, reason="x")
@@ -277,9 +273,7 @@ def test_external_reference_status_is_authoritative_and_terminal() -> None:
         actor_id=actor,
         now=NOW,
     )
-    running = reference.apply_status(
-        ExternalTrainingStatus.RUNNING, now=NOW, actor_id=actor
-    )
+    running = reference.apply_status(ExternalTrainingStatus.RUNNING, now=NOW, actor_id=actor)
     succeeded = running.apply_status(
         ExternalTrainingStatus.SUCCEEDED,
         now=NOW,
@@ -298,22 +292,28 @@ def test_callback_signature_window_nonce_and_replay_guards() -> None:
     timestamp = int(NOW.timestamp())
     nonce = "nonce-0001"
     signature = compute_callback_signature(secret, timestamp, nonce, body)
-    assert verify_callback_signature(
-        secret=secret,
-        timestamp=str(timestamp),
-        nonce=nonce,
-        signature=signature,
-        body=body,
-        now=NOW,
-    ) == nonce
-    assert verify_callback_signature(
-        secret=secret,
-        timestamp=str(timestamp),
-        nonce=nonce,
-        signature=signature.replace("sha256=", "sha256:"),
-        body=body,
-        now=NOW,
-    ) == nonce
+    assert (
+        verify_callback_signature(
+            secret=secret,
+            timestamp=str(timestamp),
+            nonce=nonce,
+            signature=signature,
+            body=body,
+            now=NOW,
+        )
+        == nonce
+    )
+    assert (
+        verify_callback_signature(
+            secret=secret,
+            timestamp=str(timestamp),
+            nonce=nonce,
+            signature=signature.replace("sha256=", "sha256:"),
+            body=body,
+            now=NOW,
+        )
+        == nonce
+    )
 
     with pytest.raises(TrainingCallbackInvalidError):
         verify_callback_signature(

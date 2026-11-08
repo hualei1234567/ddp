@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, replace
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -24,10 +24,9 @@ from app.domain.datasets.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
-from app.domain.datasets.training_enums import DatasetGrantStatus, GrantScope
+from app.domain.datasets.training_enums import GrantScope
 from app.domain.datasets.training_errors import (
     DatasetGrantExpiredError,
-    DatasetGrantForbiddenError,
     DatasetGrantRevokedError,
 )
 from app.domain.datasets.training_state_machines import validate_action_name
@@ -115,18 +114,14 @@ class DatasetGrantUseCases:
             "expires_at": command.expires_at.isoformat(),
         }
         now = _utcnow()
-        replay = self._idempotency.lookup(
-            scope, key, method=method, path=path, body=body, now=now
-        )
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
         if replay is not None:
             return self._replay(scope, dataset_id, replay.response_ref)
         dataset = self._datasets.get(scope, dataset_id)
         if dataset is None:
             raise ResourceNotFoundError("数据集", dataset_id)
         if command.dataset_version_id is not None:
-            version = self._versions.get_for_dataset(
-                scope, dataset_id, command.dataset_version_id
-            )
+            version = self._versions.get_for_dataset(scope, dataset_id, command.dataset_version_id)
             if version is None:
                 raise ResourceNotFoundError("数据集版本", command.dataset_version_id)
         if command.grantee_project_id == scope.project_id:
@@ -215,9 +210,7 @@ class DatasetGrantUseCases:
             "reason": reason,
         }
         now = _utcnow()
-        replay = self._idempotency.lookup(
-            scope, key, method=method, path=path, body=body, now=now
-        )
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
         if replay is not None:
             return self._replay(scope, dataset_id, replay.response_ref)
         current = self._grants.get(scope, grant_id)
@@ -228,23 +221,17 @@ class DatasetGrantUseCases:
         if action_name not in current.allowed_actions:
             from app.domain.datasets.errors import InvalidStateTransitionError
 
-            raise InvalidStateTransitionError(
-                "数据集授权", current.status.value, action_name
-            )
+            raise InvalidStateTransitionError("数据集授权", current.status.value, action_name)
         if action_name == "approve":
             updated = current.approve(actor_id=scope.actor_id, now=now)
         elif action_name == "reject":
             if not reason or not reason.strip():
                 raise DomainValidationError("驳回授权必须填写原因")
-            updated = current.reject(
-                actor_id=scope.actor_id, now=now, reason=reason
-            )
+            updated = current.reject(actor_id=scope.actor_id, now=now, reason=reason)
         else:
             if not reason or not reason.strip():
                 raise DomainValidationError("撤销授权必须填写原因")
-            updated = current.revoke(
-                actor_id=scope.actor_id, now=now, reason=reason
-            )
+            updated = current.revoke(actor_id=scope.actor_id, now=now, reason=reason)
         saved = self._grants.save(scope, updated, expected_version=expected_version)
         record_change(
             self._audit,
@@ -322,20 +309,25 @@ class DatasetGrantAccessService:
             dataset_id=dataset_id,
             user_id=user_id,
         )
-        denied_reason: Exception | None = None
+        expired_error: DatasetGrantExpiredError | None = None
+        revoked_error: DatasetGrantRevokedError | None = None
         for grant in grants:
             if grant.dataset_version_id is not None and version_id is not None:
                 if grant.dataset_version_id != version_id:
                     continue
-            if grant.dataset_version_id is not None and version_id is None:
-                continue
+            # 版本范围授权也允许读取数据集级元数据；版本明细仍要求匹配版本。
             try:
                 if grant.allows(required, now):
                     return True
-            except (DatasetGrantExpiredError, DatasetGrantRevokedError) as exc:
-                denied_reason = exc
-        if denied_reason is not None:
-            raise denied_reason
+            except DatasetGrantExpiredError as exc:
+                expired_error = expired_error or exc
+            except DatasetGrantRevokedError as exc:
+                revoked_error = revoked_error or exc
+        # 过期优先于撤销上报，保证同一数据集下的失效原因稳定。
+        if expired_error is not None:
+            raise expired_error
+        if revoked_error is not None:
+            raise revoked_error
         return False
 
 

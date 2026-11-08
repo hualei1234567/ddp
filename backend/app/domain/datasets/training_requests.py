@@ -9,7 +9,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from uuid import UUID
 
@@ -40,15 +40,15 @@ from app.domain.datasets.training_state_machines import (
 from app.domain.datasets.validation import (
     aware_datetime,
     coerce_enum,
-    non_negative_int,
     optional_aware_datetime,
-    optional_sha256,
     optional_text,
     optional_uuid,
     positive_int,
     required_uuid,
-    sha256_value as ensure_sha,
     text_value,
+)
+from app.domain.datasets.validation import (
+    sha256_value as ensure_sha,
 )
 
 EXPORT_FORMAT_VERSION_LE_ROBOT = "ddp.lerobot/1.0.0"
@@ -187,14 +187,10 @@ def normalize_requirement_snapshot(value: object) -> dict[str, object]:
     }
     missing = allowed - set(value)
     if missing:
-        raise TrainingRequestIncompleteError(
-            "需求快照缺少字段：" + ", ".join(sorted(missing))
-        )
+        raise TrainingRequestIncompleteError("需求快照缺少字段：" + ", ".join(sorted(missing)))
     unknown = set(value) - allowed
     if unknown:
-        raise TrainingRequestIncompleteError(
-            "需求快照包含未知字段：" + ", ".join(sorted(unknown))
-        )
+        raise TrainingRequestIncompleteError("需求快照包含未知字段：" + ", ".join(sorted(unknown)))
 
     episode_target = value.get("target_episode_count")
     duration_target = value.get("target_duration_ns")
@@ -213,9 +209,7 @@ def normalize_requirement_snapshot(value: object) -> dict[str, object]:
         )
 
     snapshot: dict[str, object] = {
-        "business_goal": text_value(
-            value.get("business_goal"), "business_goal", max_length=2000
-        ),
+        "business_goal": text_value(value.get("business_goal"), "business_goal", max_length=2000),
         "model_type": text_value(value.get("model_type"), "model_type", max_length=100),
         "training_type": coerce_enum(
             value.get("training_type"), TrainingType, "training_type"
@@ -227,13 +221,9 @@ def normalize_requirement_snapshot(value: object) -> dict[str, object]:
             min_items=1,
         ),
         "scene_targets": _text_list(value.get("scene_targets"), "scene_targets", max_length=100),
-        "action_targets": _text_list(
-            value.get("action_targets"), "action_targets", max_length=100
-        ),
+        "action_targets": _text_list(value.get("action_targets"), "action_targets", max_length=100),
         "robot_targets": _text_list(value.get("robot_targets"), "robot_targets", max_length=100),
-        "device_targets": _text_list(
-            value.get("device_targets"), "device_targets", max_length=100
-        ),
+        "device_targets": _text_list(value.get("device_targets"), "device_targets", max_length=100),
         "required_labels": _text_list(
             value.get("required_labels"), "required_labels", max_length=100
         ),
@@ -242,18 +232,14 @@ def normalize_requirement_snapshot(value: object) -> dict[str, object]:
         "target_duration_ns": duration_target,
         "quality_thresholds": _quality_thresholds(value.get("quality_thresholds")),
         "split_requirements": _split_requirements(value.get("split_requirements")),
-        "leakage_policy_id": optional_uuid(
-            value.get("leakage_policy_id"), "leakage_policy_id"
-        ),
+        "leakage_policy_id": optional_uuid(value.get("leakage_policy_id"), "leakage_policy_id"),
         "format": ExportFormat.LE_ROBOT.value,
         "format_version": EXPORT_FORMAT_VERSION_LE_ROBOT,
         "delivery_due_at": _due_at(value.get("delivery_due_at")).isoformat(),
         "acceptance_method": text_value(
             value.get("acceptance_method"), "acceptance_method", max_length=500
         ),
-        "priority": coerce_enum(
-            value.get("priority"), TrainingPriority, "priority"
-        ).value,
+        "priority": coerce_enum(value.get("priority"), TrainingPriority, "priority").value,
     }
     if len(canonical_json(snapshot).encode("utf-8")) > _MAX_SNAPSHOT_BYTES:
         raise TrainingRequestIncompleteError("需求快照过大")
@@ -480,9 +466,7 @@ class TrainingRequest:
                 name,
                 optional_text(getattr(self, name), name, max_length=limit),
             )
-        object.__setattr__(
-            self, "closed_at", optional_aware_datetime(self.closed_at, "closed_at")
-        )
+        object.__setattr__(self, "closed_at", optional_aware_datetime(self.closed_at, "closed_at"))
         object.__setattr__(self, "row_version", positive_int(self.row_version, "row_version"))
         for name in ("created_at", "updated_at"):
             object.__setattr__(self, name, optional_aware_datetime(getattr(self, name), name))

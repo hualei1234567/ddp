@@ -141,9 +141,7 @@ class TrainingRequestUseCases:
         key = validate_key(idempotency_key)
         body = asdict(command)
         now = _utcnow()
-        replay = self._idempotency.lookup(
-            scope, key, method=method, path=path, body=body, now=now
-        )
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
         if replay is not None:
             return self._replay(scope, replay.response_ref)
         if self._requests.get_by_code(scope, command.code) is not None:
@@ -215,9 +213,7 @@ class TrainingRequestUseCases:
         key = validate_key(idempotency_key)
         body = asdict(command)
         now = _utcnow()
-        replay = self._idempotency.lookup(
-            scope, key, method=method, path=path, body=body, now=now
-        )
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
         if replay is not None:
             return self._revision_replay(scope, request_id, replay.response_ref)
         request = self.get(scope, request_id)
@@ -362,9 +358,7 @@ class TrainingRequestUseCases:
             "reason": reason,
         }
         now = _utcnow()
-        replay = self._idempotency.lookup(
-            scope, key, method=method, path=path, body=body, now=now
-        )
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
         if replay is not None:
             return self._revision_replay(scope, request_id, replay.response_ref)
         request = self.get(scope, request_id)
@@ -376,9 +370,7 @@ class TrainingRequestUseCases:
         if action_name not in allowed_revision_actions(revision.status):
             from app.domain.datasets.errors import InvalidStateTransitionError
 
-            raise InvalidStateTransitionError(
-                "需求修订", revision.status.value, action_name
-            )
+            raise InvalidStateTransitionError("需求修订", revision.status.value, action_name)
         if action_name == "submit":
             saved = self._revisions.save(
                 scope,
@@ -392,15 +384,9 @@ class TrainingRequestUseCases:
             )
             # 状态机要求 DRAFT→SUBMITTED→PENDING_REVIEW 两次显式迁移，
             # 不能在同一 UPDATE 中跳跃，否则数据库兜底触发器会拒绝。
-            request = request.apply_action(
-                "submit-revision", now=now, actor_id=scope.actor_id
-            )
-            request = self._requests.save(
-                scope, request, expected_version=request.row_version - 1
-            )
-            request = request.apply_action(
-                "system-review-start", now=now, actor_id=scope.actor_id
-            )
+            request = request.apply_action("submit-revision", now=now, actor_id=scope.actor_id)
+            request = self._requests.save(scope, request, expected_version=request.row_version - 1)
+            request = request.apply_action("system-review-start", now=now, actor_id=scope.actor_id)
         elif action_name == "approve":
             saved = self._revisions.save(
                 scope,
@@ -481,9 +467,7 @@ class TrainingRequestUseCases:
             "restore_status": restore_status,
         }
         now = _utcnow()
-        replay = self._idempotency.lookup(
-            scope, key, method=method, path=path, body=body, now=now
-        )
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
         if replay is not None:
             return self._replay(scope, replay.response_ref)
         request = self.get(scope, request_id)
@@ -492,12 +476,8 @@ class TrainingRequestUseCases:
         if action_name not in allowed_request_actions(request.status):
             from app.domain.datasets.errors import InvalidStateTransitionError
 
-            raise InvalidStateTransitionError(
-                "训练需求", request.status.value, action_name
-            )
-        if action_requires_reason("request", action_name) and not (
-            reason and reason.strip()
-        ):
+            raise InvalidStateTransitionError("训练需求", request.status.value, action_name)
+        if action_requires_reason("request", action_name) and not (reason and reason.strip()):
             raise DomainValidationError("该动作必须填写原因")
         updated = request.apply_action(
             action_name,

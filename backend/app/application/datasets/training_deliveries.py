@@ -25,7 +25,12 @@ from app.application.datasets.training_ports import (
     TrainingRequestRevisionRepository,
 )
 from app.domain.datasets.canonical import sha256_text
-from app.domain.datasets.enums import DatasetStatus, DatasetVersionStatus, ExportJobStatus, ValidityStatus
+from app.domain.datasets.enums import (
+    DatasetStatus,
+    DatasetVersionStatus,
+    ExportJobStatus,
+    ValidityStatus,
+)
 from app.domain.datasets.errors import (
     DomainValidationError,
     DuplicateResourceError,
@@ -122,9 +127,7 @@ class TrainingDeliveryUseCases:
         key = validate_key(idempotency_key)
         body = asdict(command)
         now = _utcnow()
-        replay = self._idempotency.lookup(
-            scope, key, method=method, path=path, body=body, now=now
-        )
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
         if replay is not None:
             return self._replay(scope, replay.response_ref)
         request = self._requests.get(scope, command.training_request_id)
@@ -161,9 +164,7 @@ class TrainingDeliveryUseCases:
             TrainingRequestStatus.REVISION_REQUIRED,
             TrainingRequestStatus.IN_DELIVERY,
         }:
-            raise InvalidStateTransitionError(
-                "训练需求", request.status.value, "start-delivery"
-            )
+            raise InvalidStateTransitionError("训练需求", request.status.value, "start-delivery")
         delivery = new_training_delivery(
             training_delivery_id=uuid4(),
             project_id=scope.project_id,
@@ -189,9 +190,7 @@ class TrainingDeliveryUseCases:
             TrainingRequestStatus.REVISION_REQUIRED,
         }:
             updated_request = request.start_delivery(now=now, actor_id=scope.actor_id)
-            self._requests.save(
-                scope, updated_request, expected_version=request.row_version
-            )
+            self._requests.save(scope, updated_request, expected_version=request.row_version)
         record_change(
             self._audit,
             self._outbox,
@@ -204,9 +203,7 @@ class TrainingDeliveryUseCases:
             reason=None,
             request_id=request_id,
             details={
-                "training_request_revision_id": str(
-                    created.training_request_revision_id
-                ),
+                "training_request_revision_id": str(created.training_request_revision_id),
                 "dataset_version_id": str(created.dataset_version_id),
                 "export_job_id": str(created.export_job_id),
                 "delivery_note_no": created.delivery_note_no,
@@ -268,18 +265,14 @@ class TrainingDeliveryUseCases:
             "rework_ref": str(rework_ref) if rework_ref else None,
         }
         now = _utcnow()
-        replay = self._idempotency.lookup(
-            scope, key, method=method, path=path, body=body, now=now
-        )
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
         if replay is not None:
             return self._replay(scope, replay.response_ref)
         delivery = self.get(scope, delivery_id)
         if delivery.row_version != expected_version:
             raise VersionConflictError("训练交付")
         if action_name not in allowed_delivery_actions(delivery.status):
-            raise InvalidStateTransitionError(
-                "训练交付", delivery.status.value, action_name
-            )
+            raise InvalidStateTransitionError("训练交付", delivery.status.value, action_name)
         request = self._requests.get(scope, delivery.training_request_id)
         if request is None:
             raise ResourceNotFoundError("训练需求", delivery.training_request_id)
@@ -299,16 +292,12 @@ class TrainingDeliveryUseCases:
         elif action_name == "accept":
             if not opinion or not opinion.strip():
                 raise DomainValidationError("验收必须填写验收意见")
-            updated = delivery.accept(
-                now=now, actor_id=scope.actor_id, opinion=opinion
-            )
+            updated = delivery.accept(now=now, actor_id=scope.actor_id, opinion=opinion)
             request = request.accept_delivery(now=now, actor_id=scope.actor_id)
         elif action_name == "reject":
             if not reason or not reason.strip():
                 raise DomainValidationError("驳回交付必须填写原因")
-            updated = delivery.reject(
-                now=now, actor_id=scope.actor_id, reason=reason
-            )
+            updated = delivery.reject(now=now, actor_id=scope.actor_id, reason=reason)
             request = request.require_revision(now=now, actor_id=scope.actor_id)
         elif action_name == "rework":
             if not reason or not reason.strip():

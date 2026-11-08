@@ -226,9 +226,7 @@ class SqlExternalReferenceRepository:
             submitted_at=reference.submitted_at,
             last_synced_at=reference.last_synced_at,
             model_ref=dict(reference.model_ref) if reference.model_ref else None,
-            evaluation_ref=(
-                dict(reference.evaluation_ref) if reference.evaluation_ref else None
-            ),
+            evaluation_ref=(dict(reference.evaluation_ref) if reference.evaluation_ref else None),
             correlation_id=reference.correlation_id,
             idempotency_key=reference.idempotency_key,
             error_code=reference.error_code,

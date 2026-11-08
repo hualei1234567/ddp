@@ -96,9 +96,7 @@ def ensure_capabilities(
 ) -> None:
     supported = {item.value if hasattr(item, "value") else str(item) for item in capabilities}
     if required.value not in supported:
-        raise TrainingAdapterUnsupportedError(
-            f"Adapter {adapter_id} 不支持能力 {required.value}"
-        )
+        raise TrainingAdapterUnsupportedError(f"Adapter {adapter_id} 不支持能力 {required.value}")
 
 
 __all__ = [

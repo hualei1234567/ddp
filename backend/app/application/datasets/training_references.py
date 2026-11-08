@@ -119,9 +119,7 @@ class ExternalTrainingReferenceUseCases:
             TrainingDeliveryStatus.DELIVERED,
             TrainingDeliveryStatus.ACCEPTED,
         }:
-            raise InvalidStateTransitionError(
-                "训练交付", delivery.status.value, "submit-training"
-            )
+            raise InvalidStateTransitionError("训练交付", delivery.status.value, "submit-training")
         key = validate_key(idempotency_key or command.correlation_id)
         if key is None:
             raise DomainValidationError("外部训练引用必须提供幂等键或 correlation_id")
@@ -228,9 +226,7 @@ class ExternalTrainingReferenceUseCases:
             raise DomainValidationError("外部引用仅支持 sync/cancel")
         body = {"action": action_name, "expected_version": expected_version}
         now = _utcnow()
-        replay = self._idempotency.lookup(
-            scope, key, method=method, path=path, body=body, now=now
-        )
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
         if replay is not None:
             return self._replay(scope, replay.response_ref)
         reference = self.get(scope, reference_id)
@@ -269,9 +265,7 @@ class ExternalTrainingReferenceUseCases:
             self._references.save(scope, failed, expected_version=expected_version)
             self._uow.commit()
             raise
-        updated = self._apply_run_status(
-            reference, result, now=now, actor_id=scope.actor_id
-        )
+        updated = self._apply_run_status(reference, result, now=now, actor_id=scope.actor_id)
         saved = self._references.save(scope, updated, expected_version=expected_version)
         record_change(
             self._audit,
@@ -373,9 +367,7 @@ class ExternalTrainingReferenceUseCases:
             now=now,
         )
 
-    def _replay(
-        self, scope: ProjectScope, response_ref: str | None
-    ) -> ExternalTrainingReference:
+    def _replay(self, scope: ProjectScope, response_ref: str | None) -> ExternalTrainingReference:
         if not response_ref:
             raise ResourceNotFoundError("外部训练引用", response_ref)
         try:
@@ -459,7 +451,9 @@ class AdapterCallbackUseCases:
             ExternalTrainingStatus.CANCELLED,
         }:
             if reference.effective_status is status:
-                self._callbacks.prune_before(received_before=now - timedelta(seconds=self._nonce_ttl))
+                self._callbacks.prune_before(
+                    received_before=now - timedelta(seconds=self._nonce_ttl)
+                )
                 self._uow.commit()
                 return "IDEMPOTENT"
             raise TrainingExternalRunConflictError("已终态的外部训练引用不能回退或改写")
@@ -471,17 +465,9 @@ class AdapterCallbackUseCases:
             model_ref=model_ref,
             evaluation_ref=evaluation_ref,
             error_code=error_code
-            or (
-                "adapter_reported_failure"
-                if status is ExternalTrainingStatus.FAILED
-                else None
-            ),
+            or ("adapter_reported_failure" if status is ExternalTrainingStatus.FAILED else None),
             error_summary=error_summary
-            or (
-                "外部训练平台报告失败"
-                if status is ExternalTrainingStatus.FAILED
-                else None
-            ),
+            or ("外部训练平台报告失败" if status is ExternalTrainingStatus.FAILED else None),
         )
         updated = reference.apply_status(
             result.status,

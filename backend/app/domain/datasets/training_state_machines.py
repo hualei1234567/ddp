@@ -111,73 +111,73 @@ _REQUEST_RULES: Mapping[TrainingRequestStatus, Mapping[str, TrainingRequestStatu
     )
 )
 
-_DELIVERY_RULES: Mapping[
-    TrainingDeliveryStatus, Mapping[str, TrainingDeliveryStatus]
-] = MappingProxyType(
-    {
-        TrainingDeliveryStatus.DRAFT: {
-            "ready": TrainingDeliveryStatus.READY,
-            "cancel": TrainingDeliveryStatus.CANCELLED,
-        },
-        TrainingDeliveryStatus.READY: {
-            "deliver": TrainingDeliveryStatus.DELIVERED,
-            "cancel": TrainingDeliveryStatus.CANCELLED,
-        },
-        TrainingDeliveryStatus.DELIVERED: {
-            "accept": TrainingDeliveryStatus.ACCEPTED,
-            "reject": TrainingDeliveryStatus.REJECTED,
-        },
-        TrainingDeliveryStatus.REJECTED: {
-            "rework": TrainingDeliveryStatus.REWORK,
-        },
-        TrainingDeliveryStatus.REWORK: {
-            "resume-ready": TrainingDeliveryStatus.READY,
-        },
-        TrainingDeliveryStatus.ACCEPTED: {},
-        TrainingDeliveryStatus.CANCELLED: {},
-    }
+_DELIVERY_RULES: Mapping[TrainingDeliveryStatus, Mapping[str, TrainingDeliveryStatus]] = (
+    MappingProxyType(
+        {
+            TrainingDeliveryStatus.DRAFT: {
+                "ready": TrainingDeliveryStatus.READY,
+                "cancel": TrainingDeliveryStatus.CANCELLED,
+            },
+            TrainingDeliveryStatus.READY: {
+                "deliver": TrainingDeliveryStatus.DELIVERED,
+                "cancel": TrainingDeliveryStatus.CANCELLED,
+            },
+            TrainingDeliveryStatus.DELIVERED: {
+                "accept": TrainingDeliveryStatus.ACCEPTED,
+                "reject": TrainingDeliveryStatus.REJECTED,
+            },
+            TrainingDeliveryStatus.REJECTED: {
+                "rework": TrainingDeliveryStatus.REWORK,
+            },
+            TrainingDeliveryStatus.REWORK: {
+                "resume-ready": TrainingDeliveryStatus.READY,
+            },
+            TrainingDeliveryStatus.ACCEPTED: {},
+            TrainingDeliveryStatus.CANCELLED: {},
+        }
+    )
 )
 
-_EXTERNAL_RULES: Mapping[
-    ExternalTrainingStatus, Mapping[str, ExternalTrainingStatus]
-] = MappingProxyType(
-    {
-        ExternalTrainingStatus.SUBMITTED: {
-            "sync": ExternalTrainingStatus.RUNNING,
-            "system-succeed": ExternalTrainingStatus.SUCCEEDED,
-            "system-fail": ExternalTrainingStatus.FAILED,
-            "system-cancel": ExternalTrainingStatus.CANCELLED,
-            "system-unknown": ExternalTrainingStatus.UNKNOWN,
-            "system-unavailable": ExternalTrainingStatus.UNAVAILABLE,
-        },
-        ExternalTrainingStatus.RUNNING: {
-            "sync": ExternalTrainingStatus.RUNNING,
-            "system-succeed": ExternalTrainingStatus.SUCCEEDED,
-            "system-fail": ExternalTrainingStatus.FAILED,
-            "system-cancel": ExternalTrainingStatus.CANCELLED,
-            "system-unknown": ExternalTrainingStatus.UNKNOWN,
-            "system-unavailable": ExternalTrainingStatus.UNAVAILABLE,
-        },
-        ExternalTrainingStatus.UNKNOWN: {
-            "system-unknown": ExternalTrainingStatus.UNKNOWN,
-            "sync": ExternalTrainingStatus.RUNNING,
-            "system-succeed": ExternalTrainingStatus.SUCCEEDED,
-            "system-fail": ExternalTrainingStatus.FAILED,
-            "system-cancel": ExternalTrainingStatus.CANCELLED,
-            "system-unavailable": ExternalTrainingStatus.UNAVAILABLE,
-        },
-        ExternalTrainingStatus.UNAVAILABLE: {
-            "system-unavailable": ExternalTrainingStatus.UNAVAILABLE,
-            "sync": ExternalTrainingStatus.RUNNING,
-            "system-succeed": ExternalTrainingStatus.SUCCEEDED,
-            "system-fail": ExternalTrainingStatus.FAILED,
-            "system-cancel": ExternalTrainingStatus.CANCELLED,
-            "system-unknown": ExternalTrainingStatus.UNKNOWN,
-        },
-        ExternalTrainingStatus.SUCCEEDED: {},
-        ExternalTrainingStatus.FAILED: {},
-        ExternalTrainingStatus.CANCELLED: {},
-    }
+_EXTERNAL_RULES: Mapping[ExternalTrainingStatus, Mapping[str, ExternalTrainingStatus]] = (
+    MappingProxyType(
+        {
+            ExternalTrainingStatus.SUBMITTED: {
+                "sync": ExternalTrainingStatus.RUNNING,
+                "system-succeed": ExternalTrainingStatus.SUCCEEDED,
+                "system-fail": ExternalTrainingStatus.FAILED,
+                "system-cancel": ExternalTrainingStatus.CANCELLED,
+                "system-unknown": ExternalTrainingStatus.UNKNOWN,
+                "system-unavailable": ExternalTrainingStatus.UNAVAILABLE,
+            },
+            ExternalTrainingStatus.RUNNING: {
+                "sync": ExternalTrainingStatus.RUNNING,
+                "system-succeed": ExternalTrainingStatus.SUCCEEDED,
+                "system-fail": ExternalTrainingStatus.FAILED,
+                "system-cancel": ExternalTrainingStatus.CANCELLED,
+                "system-unknown": ExternalTrainingStatus.UNKNOWN,
+                "system-unavailable": ExternalTrainingStatus.UNAVAILABLE,
+            },
+            ExternalTrainingStatus.UNKNOWN: {
+                "system-unknown": ExternalTrainingStatus.UNKNOWN,
+                "sync": ExternalTrainingStatus.RUNNING,
+                "system-succeed": ExternalTrainingStatus.SUCCEEDED,
+                "system-fail": ExternalTrainingStatus.FAILED,
+                "system-cancel": ExternalTrainingStatus.CANCELLED,
+                "system-unavailable": ExternalTrainingStatus.UNAVAILABLE,
+            },
+            ExternalTrainingStatus.UNAVAILABLE: {
+                "system-unavailable": ExternalTrainingStatus.UNAVAILABLE,
+                "sync": ExternalTrainingStatus.RUNNING,
+                "system-succeed": ExternalTrainingStatus.SUCCEEDED,
+                "system-fail": ExternalTrainingStatus.FAILED,
+                "system-cancel": ExternalTrainingStatus.CANCELLED,
+                "system-unknown": ExternalTrainingStatus.UNKNOWN,
+            },
+            ExternalTrainingStatus.SUCCEEDED: {},
+            ExternalTrainingStatus.FAILED: {},
+            ExternalTrainingStatus.CANCELLED: {},
+        }
+    )
 )
 
 _GRANT_RULES: Mapping[DatasetGrantStatus, Mapping[str, DatasetGrantStatus]] = MappingProxyType(
@@ -326,7 +326,9 @@ GRANT_TERMINAL_CONTENT_COLUMNS: tuple[str, ...] = (
 )
 
 
-def _target(rules: Mapping[object, Mapping[str, object]], entity: str, current: object, action: str) -> object:
+def _target(
+    rules: Mapping[object, Mapping[str, object]], entity: str, current: object, action: str
+) -> object:
     target = rules.get(current, {}).get(action)
     if target is None:
         current_text = getattr(current, "value", current)

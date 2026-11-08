@@ -25,7 +25,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.domain.datasets.training_enums import (
     DatasetGrantStatus,
     ExternalTrainingStatus,
-    GrantScope,
     RevisionStatus,
     TrainingDeliveryStatus,
     TrainingPriority,
@@ -65,7 +64,9 @@ class TrainingRequestModel(Base):
     blocked_from_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     cancel_reason: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -83,7 +84,9 @@ class TrainingRequestModel(Base):
         UniqueConstraint("project_id", "code", name="uq_training_requests_project_code"),
         CheckConstraint(f"status IN ({_values(TrainingRequestStatus)})", name="status_allowed"),
         CheckConstraint(f"priority IN ({_values(TrainingPriority)})", name="priority_allowed"),
-        CheckConstraint("current_revision_no IS NULL OR current_revision_no >= 1", name="revision_no_positive"),
+        CheckConstraint(
+            "current_revision_no IS NULL OR current_revision_no >= 1", name="revision_no_positive"
+        ),
         CheckConstraint("version >= 1", name="version_positive"),
         CheckConstraint(
             "status <> 'BLOCKED' OR blocked_reason IS NOT NULL",
@@ -125,7 +128,9 @@ class TrainingRequestRevisionModel(Base):
     rejected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     revision_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -215,7 +220,9 @@ class TrainingDeliveryModel(Base):
     acceptance_opinion: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     rework_ref: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -327,7 +334,9 @@ class ExternalTrainingReferenceModel(Base):
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     error_summary: Mapped[str | None] = mapped_column(String(2000), nullable=True)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )
@@ -427,7 +436,9 @@ class DatasetGrantModel(Base):
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     revoke_reason: Mapped[str | None] = mapped_column(String(2000), nullable=True)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("CURRENT_TIMESTAMP")
     )

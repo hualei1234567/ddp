@@ -12,7 +12,6 @@ from uuid import UUID
 
 from app.domain.datasets.errors import DomainValidationError, InvalidStateTransitionError
 from app.domain.datasets.training_enums import ExternalTrainingStatus
-from app.domain.datasets.training_errors import TrainingExternalRunConflictError
 from app.domain.datasets.training_state_machines import external_target
 from app.domain.datasets.validation import (
     aware_datetime,
@@ -72,9 +71,7 @@ def _evaluation_ref(value: object) -> dict[str, object] | None:
     if unknown:
         raise DomainValidationError("evaluation_ref 包含未知字段")
     result: dict[str, object] = {
-        "evaluation_id": text_value(
-            value.get("evaluation_id"), "evaluation_id", max_length=200
-        )
+        "evaluation_id": text_value(value.get("evaluation_id"), "evaluation_id", max_length=200)
     }
     if value.get("evaluation_version") is not None:
         result["evaluation_version"] = text_value(
@@ -154,15 +151,15 @@ class ExternalTrainingReference:
             coerce_enum(self.external_status, ExternalTrainingStatus, "external_status"),
         )
         object.__setattr__(
-            self, "correlation_id", text_value(self.correlation_id, "correlation_id", max_length=128)
+            self,
+            "correlation_id",
+            text_value(self.correlation_id, "correlation_id", max_length=128),
         )
         key = text_value(self.idempotency_key, "idempotency_key", max_length=128)
         if len(key) < 8:
             raise DomainValidationError("idempotency_key 长度不得小于 8")
         object.__setattr__(self, "idempotency_key", key)
-        object.__setattr__(
-            self, "submitted_at", aware_datetime(self.submitted_at, "submitted_at")
-        )
+        object.__setattr__(self, "submitted_at", aware_datetime(self.submitted_at, "submitted_at"))
         object.__setattr__(
             self, "last_synced_at", aware_datetime(self.last_synced_at, "last_synced_at")
         )

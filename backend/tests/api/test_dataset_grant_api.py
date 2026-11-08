@@ -20,7 +20,7 @@ NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
 
 def _grant_payload(dataset_version_id, *, scope: list[str], expires_at: datetime, reason: str):
     return {
-        "dataset_version_id": str(dataset_version_id),
+        "dataset_version_id": str(dataset_version_id) if dataset_version_id else None,
         "grantee_project_id": None,
         "grantee_team": "跨项目算法组",
         "scope": scope,
@@ -53,9 +53,7 @@ def test_grant_scope_expiry_revocation_and_cross_project_isolation(
     dataset_id = ctx["dataset"]["dataset_id"]
     version_id = ctx["version_id"]
 
-    assert grantee.get(
-        url(ids.project_a, f"/datasets/{dataset_id}")
-    ).status_code == 403
+    assert grantee.get(url(ids.project_a, f"/datasets/{dataset_id}")).status_code == 403
     assert grantee.get(url(ids.project_a, "/datasets")).status_code == 403
 
     payload = _grant_payload(
@@ -96,9 +94,7 @@ def test_grant_scope_expiry_revocation_and_cross_project_isolation(
     assert approved.status_code == 200, approved.text
     assert approved.json()["status"] == "ACTIVE"
 
-    assert grantee.get(
-        url(ids.project_a, f"/datasets/{dataset_id}")
-    ).status_code == 200
+    assert grantee.get(url(ids.project_a, f"/datasets/{dataset_id}")).status_code == 200
     version_detail = grantee.get(
         url(ids.project_a, f"/datasets/{dataset_id}/versions/{version_id}")
     )
@@ -165,17 +161,13 @@ def test_grant_scope_expiry_revocation_and_cross_project_isolation(
     assert expired_access.status_code == 410
     assert expired_access.json()["error"]["code"] == "dataset_grant_expired"
 
-    detail = owner.get(
-        url(ids.project_a, f"/datasets/{dataset_id}/grants/{grant['grant_id']}")
-    )
+    detail = owner.get(url(ids.project_a, f"/datasets/{dataset_id}/grants/{grant['grant_id']}"))
     assert detail.status_code == 200
     assert detail.json()["status"] == "EXPIRED"
 
     with factory() as session:
         rows = session.scalars(
-            select(DatasetGrantModel).where(
-                DatasetGrantModel.dataset_id == UUID(dataset_id)
-            )
+            select(DatasetGrantModel).where(DatasetGrantModel.dataset_id == UUID(dataset_id))
         ).all()
         assert {row.status for row in rows} <= {"ACTIVE", "REVOKED"}
         assert any(row.status == "REVOKED" for row in rows)
@@ -212,12 +204,12 @@ def test_grant_validation_rejects_self_project_and_past_expiry(
     past = _grant_payload(
         None,
         scope=["VIEW"],
-        expires_at=NOW - timedelta(hours=1),
+        expires_at=datetime.now(UTC) - timedelta(hours=1),
         reason="已过期",
     )
     past["grantee_project_id"] = str(ids.project_b)
     response = _create_grant(owner, ids.project_a, dataset_id, past)
-    assert response.status_code == 410
+    assert response.status_code == 410, response.text
     assert response.json()["error"]["code"] == "dataset_grant_expired"
 
     invalid_scope = _grant_payload(

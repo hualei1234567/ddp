@@ -324,9 +324,7 @@ class Settings(BaseSettings):
             if not secret or secret != secret.strip():
                 problems.append(f"训练 Adapter {adapter_id!r} 的回调密钥为空或含首尾空白")
             elif not self.is_local and len(secret) < 32:
-                problems.append(
-                    f"非本地环境训练 Adapter {adapter_id!r} 的回调密钥长度不足 32"
-                )
+                problems.append(f"非本地环境训练 Adapter {adapter_id!r} 的回调密钥长度不足 32")
         for adapter_id, capabilities in self.training_adapter_capabilities.items():
             if not adapter_id.strip() or adapter_id != adapter_id.strip():
                 problems.append("训练 Adapter 能力声明的 ID 非法")
@@ -338,9 +336,7 @@ class Settings(BaseSettings):
             if len(set(capabilities)) != len(capabilities):
                 problems.append(f"训练 Adapter {adapter_id!r} 能力声明存在重复项")
         if self.training_callback_nonce_ttl_seconds < self.training_callback_time_window_seconds:
-            problems.append(
-                "DDP_TRAINING_CALLBACK_NONCE_TTL_SECONDS 不得小于回调时间窗"
-            )
+            problems.append("DDP_TRAINING_CALLBACK_NONCE_TTL_SECONDS 不得小于回调时间窗")
         return problems
 
 

@@ -33,9 +33,7 @@ def add_member(
         if session.get(User, user_id) is None:
             session.add(User(id=user_id, display_name=f"用户-{user_id.hex[:6]}"))
             session.flush()
-        session.add(
-            ProjectMember(project_id=project_id, user_id=user_id, role=role)
-        )
+        session.add(ProjectMember(project_id=project_id, user_id=user_id, role=role))
         session.commit()
     return user_id
 
@@ -67,7 +65,9 @@ def snapshot(**overrides: object) -> dict[str, object]:
     return payload
 
 
-def request_payload(owner_id: UUID, *, priority: str = "P1", **overrides: object) -> dict[str, object]:
+def request_payload(
+    owner_id: UUID, *, priority: str = "P1", **overrides: object
+) -> dict[str, object]:
     snapshot_payload = snapshot(priority=priority)
     snapshot_payload.update(overrides)
     return {
@@ -79,7 +79,9 @@ def request_payload(owner_id: UUID, *, priority: str = "P1", **overrides: object
     }
 
 
-def create_request(client, project_id: UUID, owner_id: UUID, **overrides: object) -> dict[str, object]:
+def create_request(
+    client, project_id: UUID, owner_id: UUID, **overrides: object
+) -> dict[str, object]:
     response = client.post(
         url(project_id, "/training-requests"),
         json=request_payload(owner_id, **overrides),
@@ -89,7 +91,9 @@ def create_request(client, project_id: UUID, owner_id: UUID, **overrides: object
     return response.json()
 
 
-def get_revision(client, project_id: UUID, request_body: dict[str, object], revision_id: UUID | str):
+def get_revision(
+    client, project_id: UUID, request_body: dict[str, object], revision_id: UUID | str
+):
     response = client.get(
         url(
             project_id,
@@ -104,7 +108,10 @@ def submit_revision(client, project_id: UUID, request_body: dict[str, object]):
     request_id = request_body["training_request_id"]
     revision = get_revision(client, project_id, request_body, request_body["current_revision_id"])
     response = client.post(
-        url(project_id, f"/training-requests/{request_id}/revisions/{revision['revision_id']}/actions/submit"),
+        url(
+            project_id,
+            f"/training-requests/{request_id}/revisions/{revision['revision_id']}/actions/submit",
+        ),
         headers={"If-Match": f'"{revision["version"]}"'},
         json={},
     )
@@ -116,7 +123,10 @@ def approve_revision(client, project_id: UUID, request_body: dict[str, object]):
     request_id = request_body["training_request_id"]
     revision = get_revision(client, project_id, request_body, request_body["current_revision_id"])
     response = client.post(
-        url(project_id, f"/training-requests/{request_id}/revisions/{revision['revision_id']}/actions/approve"),
+        url(
+            project_id,
+            f"/training-requests/{request_id}/revisions/{revision['revision_id']}/actions/approve",
+        ),
         headers={"If-Match": f'"{revision["version"]}"'},
         json={},
     )
@@ -128,9 +138,7 @@ def approved_request(editor, approver, project_id: UUID, owner_id: UUID) -> dict
     created = create_request(editor, project_id, owner_id)
     submit_revision(editor, project_id, created)
     approve_revision(approver, project_id, created)
-    response = approver.get(
-        url(project_id, f"/training-requests/{created['training_request_id']}")
-    )
+    response = approver.get(url(project_id, f"/training-requests/{created['training_request_id']}"))
     assert response.status_code == 200, response.text
     return response.json()
 

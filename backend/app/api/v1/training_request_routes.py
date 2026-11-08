@@ -13,6 +13,8 @@ from app.api.v1.dataset_dependencies import (
     OwnerScope,
     ReadScope,
     WriteScope,
+)
+from app.api.v1.dataset_dependencies import (
     request_id as get_request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
@@ -83,9 +85,7 @@ def list_training_requests(
     page = build_page(items, limit=limit, id_of=lambda item: item.training_request_id)
     return {
         "items": [
-            training_request_out(
-                item, allowed_actions=allowed_request_actions(item.status)
-            )
+            training_request_out(item, allowed_actions=allowed_request_actions(item.status))
             for item in page.items
         ],
         "next_cursor": page.next_cursor,
@@ -212,9 +212,7 @@ def get_revision(
     scope: ReadScope,
     services: TrainingServicesDep,
 ) -> dict[str, Any]:
-    return training_revision_out(
-        services.requests.get_revision(scope, request_id, revision_id)
-    )
+    return training_revision_out(services.requests.get_revision(scope, request_id, revision_id))
 
 
 @router.patch("/{request_id}/revisions/{revision_id}")

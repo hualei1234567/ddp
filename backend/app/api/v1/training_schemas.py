@@ -244,9 +244,7 @@ def external_reference_out(reference: ExternalTrainingReference) -> dict[str, An
         "idempotency_key": reference.idempotency_key,
         "error_code": reference.error_code,
         "error_summary": reference.error_summary,
-        "allowed_actions": sorted(
-            allowed_external_actions(reference.effective_status)
-        ),
+        "allowed_actions": sorted(allowed_external_actions(reference.effective_status)),
         "version": reference.row_version,
         "created_at": _iso(reference.created_at),
         "updated_at": _iso(reference.updated_at),
