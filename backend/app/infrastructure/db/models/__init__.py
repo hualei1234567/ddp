@@ -18,6 +18,12 @@ from app.infrastructure.db.models.devices import (
     Sensor,
 )
 from app.infrastructure.db.models.identity import Project, ProjectMember, User
+from app.infrastructure.db.models.ingestion import (
+    RawAssetLinkModel,
+    RawAssetModel,
+    UploadPartModel,
+    UploadSessionModel,
+)
 
 __all__ = [
     "AuditLog",
@@ -33,7 +39,11 @@ __all__ = [
     "OutboxEvent",
     "Project",
     "ProjectMember",
+    "RawAssetLinkModel",
+    "RawAssetModel",
     "Robot",
     "Sensor",
+    "UploadPartModel",
+    "UploadSessionModel",
     "User",
 ]

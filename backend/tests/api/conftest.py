@@ -8,6 +8,8 @@ from uuid import UUID, uuid4
 
 import pytest
 from app.api.deps import get_current_principal
+from app.api.v1.upload_dependencies import get_object_storage
+from app.core.config import Settings, get_settings
 from app.domain.devices import (
     CalibrationProfile,
     CalibrationScope,
@@ -109,6 +111,8 @@ def make_client(
     user_id: UUID,
     *,
     platform_role: PlatformRole = PlatformRole.MEMBER,
+    object_storage: object | None = None,
+    settings_override: Settings | None = None,
 ) -> TestClient:
     app = create_app()
 
@@ -127,6 +131,10 @@ def make_client(
         user_id=user_id,
         platform_role=platform_role,
     )
+    if object_storage is not None:
+        app.dependency_overrides[get_object_storage] = lambda: object_storage
+    if settings_override is not None:
+        app.dependency_overrides[get_settings] = lambda: settings_override
     return TestClient(app)
 
 

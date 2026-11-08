@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import calibrations, collection, devices, platform, sensors
+from app.api.v1 import calibrations, collection, devices, platform, sensors, uploads
 
 api_router = APIRouter()
 api_router.include_router(platform.router)
@@ -15,3 +15,4 @@ api_router.include_router(devices.router)
 api_router.include_router(sensors.router)
 api_router.include_router(calibrations.router)
 api_router.include_router(collection.router)
+api_router.include_router(uploads.router)

@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.errors import AppError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.devices.errors import DeviceDomainError
+from app.domain.ingestion.errors import IngestionDomainError
 
 _STATUS_BY_CODE = {
     "validation_failed": 422,
@@ -78,6 +79,62 @@ def collection_error_to_app(exc: CollectionDomainError) -> AppError:
         code,
         _COLLECTION_MESSAGES.get(code, "采集域规则校验失败"),
         _COLLECTION_STATUS_BY_CODE[code],
+    )
+
+
+_INGESTION_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "filename_invalid": 422,
+    "file_type_unsupported": 415,
+    "file_too_large": 413,
+    "upload_session_expired": 410,
+    "upload_incomplete": 409,
+    "upload_part_conflict": 409,
+    "upload_session_not_uploading": 409,
+    "file_signature_mismatch": 422,
+    "hash_mismatch": 422,
+    "size_mismatch": 422,
+    "object_storage_unavailable": 503,
+    "state_transition_invalid": 409,
+    "version_conflict": 409,
+    "resource_immutable": 409,
+    "conflict": 409,
+    "resource_not_found": 404,
+    "forbidden": 403,
+}
+
+_INGESTION_MESSAGES = {
+    "validation_failed": "请求参数或上传域规则校验失败",
+    "filename_invalid": "文件名包含非法路径或控制字符",
+    "file_type_unsupported": "声明的内容类型不在白名单内",
+    "file_too_large": "文件超过允许的最大大小",
+    "upload_session_expired": "上传会话已过期，请新建会话",
+    "upload_incomplete": "上传分片不完整，请补传缺失分片",
+    "upload_part_conflict": "同分片号已存在不同内容",
+    "upload_session_not_uploading": "上传会话当前状态不允许该操作",
+    "file_signature_mismatch": "对象内容签名与声明格式不一致",
+    "hash_mismatch": "整文件 Hash 不一致",
+    "size_mismatch": "分片总大小与声明大小不一致",
+    "object_storage_unavailable": "对象存储暂不可用，请稍后重试",
+    "state_transition_invalid": "上传会话或资产不允许该状态迁移",
+    "version_conflict": "资源版本已变化，请重新读取后再试",
+    "resource_immutable": "资产内容不可变",
+    "conflict": "上传会话或资产存在冲突",
+    "resource_not_found": "资源不存在或不属于当前项目",
+    "forbidden": "无权执行该操作",
+}
+
+
+def ingestion_error_to_app(exc: IngestionDomainError) -> AppError:
+    code = getattr(exc, "code", None)
+    if not isinstance(code, str) or code not in _INGESTION_STATUS_BY_CODE:
+        return AppError("validation_failed", "上传域规则校验失败", 422)
+    details = dict(getattr(exc, "details", {}) or {})
+    return AppError(
+        code,
+        _INGESTION_MESSAGES.get(code, "上传域规则校验失败"),
+        _INGESTION_STATUS_BY_CODE[code],
+        details=details or None,
     )
 
 

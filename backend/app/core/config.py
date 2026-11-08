@@ -82,6 +82,14 @@ class Settings(BaseSettings):
     s3_bucket: str = "ddp-raw"
     s3_region: str = "us-east-1"
 
+    # 上传策略：由项目/部署配置覆盖，不在用例内硬编码阈值。
+    upload_max_size_bytes: int = Field(default=10 * 1024**3, gt=0)
+    upload_part_size_bytes: int = Field(default=16 * 1024**2, gt=0)
+    upload_session_ttl_hours: int = Field(default=24, gt=0)
+    upload_url_ttl_seconds: int = Field(default=900, gt=0, le=3600)
+    # 空列表表示使用契约默认白名单（由应用层注入），避免配置与契约重复维护。
+    upload_allowed_content_types: list[str] = Field(default_factory=list)
+
     jwt_secret: str = "replace-me-in-production"  # noqa: S105 - 占位符，生产必须覆盖
     jwt_issuer: str = "ddp"
     jwt_audience: str = "ddp-api"
@@ -114,6 +122,8 @@ class Settings(BaseSettings):
             "Retry-After",
             "X-RateLimit-Limit",
             "X-RateLimit-Remaining",
+            "ETag",
+            "Idempotent-Replayed",
         ]
     )
     cors_max_age_seconds: int = Field(default=600, ge=0)

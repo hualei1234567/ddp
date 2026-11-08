@@ -14,6 +14,7 @@ from app.infrastructure.db.guards import (
     install_calibration_record_guards,
     install_calibration_target_guards,
 )
+from app.infrastructure.db.ingestion_guards import install_ingestion_state_guards
 
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -39,3 +40,4 @@ def _install_ddp_guards(
     install_calibration_record_guards(connection)
     install_audit_guards(connection)
     install_collection_state_guards(connection)
+    install_ingestion_state_guards(connection)

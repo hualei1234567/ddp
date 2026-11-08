@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.errors import (
     collection_error_to_app,
     domain_error_to_app,
+    ingestion_error_to_app,
     integrity_error_to_app,
 )
 from app.api.middleware.rate_limit import RateLimitMiddleware
@@ -27,17 +28,19 @@ from app.core.logging import configure_logging
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.identity.errors import CrossProjectAccessError
+from app.domain.ingestion.errors import IngestionDomainError
 from app.infrastructure.rate_limit import build_rate_limiter
 
 
 def _error_payload(request: Request, error: AppError) -> dict[str, object]:
-    return {
-        "error": {
-            "code": error.code,
-            "message": error.message,
-            "request_id": getattr(request.state, "request_id", None),
-        }
+    body: dict[str, object] = {
+        "code": error.code,
+        "message": error.message,
+        "request_id": getattr(request.state, "request_id", None),
     }
+    if error.details:
+        body["details"] = error.details
+    return {"error": body}
 
 
 def _register_middleware(app: FastAPI, settings: Settings) -> None:
@@ -109,6 +112,17 @@ def create_app() -> FastAPI:
         exc: CollectionDomainError,
     ) -> JSONResponse:
         error = collection_error_to_app(exc)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(IngestionDomainError)
+    async def handle_ingestion_domain_error(
+        request: Request,
+        exc: IngestionDomainError,
+    ) -> JSONResponse:
+        error = ingestion_error_to_app(exc)
         return JSONResponse(
             status_code=error.status_code,
             content=_error_payload(request, error),
