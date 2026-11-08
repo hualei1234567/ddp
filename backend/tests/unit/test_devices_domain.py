@@ -283,6 +283,48 @@ def test_calibration_rejects_invalid_transitions(
         getattr(record, action)()
 
 
+def test_calibration_activation_requires_effective_validity_window() -> None:
+    performer = uuid4()
+    validator = uuid4()
+    validated = _record(
+        status=CalibrationStatus.VALIDATED,
+        evidence_asset_ids=(uuid4(),),
+        performed_by=performer,
+        validated_by=validator,
+        validated_at=datetime(2026, 1, 2, tzinfo=UTC),
+        valid_from=datetime(2026, 1, 1, tzinfo=UTC),
+        valid_to=datetime(2026, 12, 1, tzinfo=UTC),
+    )
+    assert validated.activate(now=datetime(2026, 6, 1, tzinfo=UTC)).status is (
+        CalibrationStatus.ACTIVE
+    )
+
+
+def test_calibration_activation_rejects_expired_window() -> None:
+    record = _record(
+        status=CalibrationStatus.VALIDATED,
+        evidence_asset_ids=(uuid4(),),
+        validated_by=uuid4(),
+        validated_at=datetime(2026, 1, 2, tzinfo=UTC),
+        valid_from=datetime(2026, 1, 1, tzinfo=UTC),
+        valid_to=datetime(2026, 2, 1, tzinfo=UTC),
+    )
+    with pytest.raises(DomainValidationError, match="过期"):
+        record.activate(now=datetime(2026, 6, 1, tzinfo=UTC))
+
+
+def test_calibration_activation_rejects_future_valid_from() -> None:
+    record = _record(
+        status=CalibrationStatus.VALIDATED,
+        evidence_asset_ids=(uuid4(),),
+        validated_by=uuid4(),
+        validated_at=datetime(2026, 1, 2, tzinfo=UTC),
+        valid_from=datetime(2026, 12, 1, tzinfo=UTC),
+    )
+    with pytest.raises(DomainValidationError, match="尚未生效"):
+        record.activate(now=datetime(2026, 6, 1, tzinfo=UTC))
+
+
 def test_calibration_requires_four_eyes() -> None:
     performer = uuid4()
     record = _record(

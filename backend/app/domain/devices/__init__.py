@@ -16,6 +16,7 @@ from app.domain.devices.errors import (
     DomainValidationError,
     DuplicateResourceError,
     InvalidStateTransitionError,
+    ResourceImmutableError,
     ResourceNotFoundError,
     VersionConflictError,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "DuplicateResourceError",
     "InvalidStateTransitionError",
     "LifecycleStatus",
+    "ResourceImmutableError",
     "ResourceNotFoundError",
     "Robot",
     "Sensor",

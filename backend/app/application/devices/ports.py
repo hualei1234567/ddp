@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -132,6 +133,57 @@ class CalibrationRecordRepository(Protocol):
         record: CalibrationRecord,
         *,
         expected_version: int,
+    ) -> CalibrationRecord:
+        """仅编辑草稿白名单字段；绝不写 status。"""
+
+    def submit(
+        self,
+        scope: ProjectScope,
+        record: CalibrationRecord,
+        *,
+        expected_version: int,
+    ) -> CalibrationRecord: ...
+
+    def validate(
+        self,
+        scope: ProjectScope,
+        record: CalibrationRecord,
+        validator_id: UUID,
+        validated_at: datetime,
+        *,
+        expected_version: int,
+    ) -> CalibrationRecord: ...
+
+    def reject(
+        self,
+        scope: ProjectScope,
+        record: CalibrationRecord,
+        *,
+        expected_version: int,
+    ) -> CalibrationRecord: ...
+
+    def reopen(
+        self,
+        scope: ProjectScope,
+        record: CalibrationRecord,
+        *,
+        expected_version: int,
+    ) -> CalibrationRecord: ...
+
+    def revoke(
+        self,
+        scope: ProjectScope,
+        record: CalibrationRecord,
+        *,
+        expected_version: int,
+    ) -> CalibrationRecord: ...
+
+    def expire(
+        self,
+        scope: ProjectScope,
+        record: CalibrationRecord,
+        *,
+        expected_version: int,
     ) -> CalibrationRecord: ...
 
     def activate(
@@ -140,5 +192,6 @@ class CalibrationRecordRepository(Protocol):
         record: CalibrationRecord,
         *,
         expected_version: int,
+        now: datetime | None = None,
     ) -> CalibrationRecord:
-        """激活已校验记录，并原子地把同目标旧 ACTIVE 记录转为 SUPERSEDED。"""
+        """校验状态/版本/有效期后原子激活，并替代同目标旧 ACTIVE。"""

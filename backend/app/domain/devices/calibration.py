@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Self
 from uuid import UUID
 
@@ -239,7 +239,13 @@ class CalibrationRecord:
             validated_at=None,
         )
 
-    def activate(self) -> Self:
+    def activate(self, *, now: datetime | None = None) -> Self:
+        """VALIDATED→ACTIVE；有效期不合法时拒绝，避免过期标定被激活。"""
+        current = aware_datetime(now or datetime.now(UTC), "now")
+        if self.valid_from > current:
+            raise DomainValidationError("标定尚未生效，不能激活")
+        if self.valid_to is not None and self.valid_to <= current:
+            raise DomainValidationError("标定已过期，不能激活")
         return replace(self, status=self._target_status(CalibrationStatus.ACTIVE))
 
     def supersede(self) -> Self:

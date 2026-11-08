@@ -45,3 +45,7 @@ class VersionConflictError(DeviceDomainError):
         self.resource = resource
         self.expected = expected
         super().__init__(f"{resource} 版本冲突：expected_version={expected}")
+
+
+class ResourceImmutableError(DeviceDomainError):
+    """不可变资源或不可变字段被修改；对外映射为 ``resource_immutable``。"""
