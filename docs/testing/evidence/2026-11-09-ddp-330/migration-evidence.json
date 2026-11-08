@@ -1,0 +1,1756 @@
+{
+  "database": "ddp_qa_d330_1018494_1794179052",
+  "steps": [
+    {
+      "action": "upgrade",
+      "revision": "0011",
+      "actual": "0011",
+      "tables": 27,
+      "triggers": 35
+    },
+    {
+      "action": "upgrade",
+      "revision": "0012",
+      "actual": "0012",
+      "stage4_tables": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 44
+    },
+    {
+      "action": "upgrade",
+      "revision": "0013",
+      "actual": "0013",
+      "stage4_tables": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 58
+    },
+    {
+      "action": "upgrade",
+      "revision": "0014",
+      "actual": "0014",
+      "stage4_tables": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 77
+    },
+    {
+      "action": "upgrade",
+      "revision": "0015",
+      "actual": "0015",
+      "stage4_tables": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 93
+    },
+    {
+      "action": "upgrade",
+      "revision": "0016",
+      "actual": "0016",
+      "stage4_tables": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 93
+    },
+    {
+      "action": "upgrade",
+      "revision": "0017",
+      "actual": "0017",
+      "stage4_tables": [
+        "dataset_dedup_policies",
+        "dataset_items",
+        "dataset_leakage_policies",
+        "dataset_leakage_reports",
+        "dataset_quality_policies",
+        "dataset_quality_reports",
+        "dataset_split_policies",
+        "dataset_versions",
+        "datasets"
+      ],
+      "stage4_triggers": [
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_delete"
+        },
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_update"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_delete"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_update"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_delete"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_update"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_delete"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_update"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_delete"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_update"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_delete"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_update"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_delete"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_update"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_immutable"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_initial_status"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_no_delete"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_transition"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_validity_transition"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_identity_immutable"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_initial_status"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_no_delete"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_transition"
+        }
+      ],
+      "all_trigger_count": 116
+    },
+    {
+      "action": "upgrade",
+      "revision": "0018",
+      "actual": "0018",
+      "stage4_tables": [
+        "dataset_dedup_policies",
+        "dataset_items",
+        "dataset_leakage_policies",
+        "dataset_leakage_reports",
+        "dataset_quality_policies",
+        "dataset_quality_reports",
+        "dataset_split_policies",
+        "dataset_versions",
+        "datasets",
+        "export_jobs"
+      ],
+      "stage4_triggers": [
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_delete"
+        },
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_update"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_delete"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_update"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_delete"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_update"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_delete"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_update"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_delete"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_update"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_delete"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_update"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_delete"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_update"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_immutable"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_initial_status"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_no_delete"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_transition"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_validity_transition"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_identity_immutable"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_initial_status"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_no_delete"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_transition"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_artifacts_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_initial_status"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_input_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_no_delete"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_transition"
+        }
+      ],
+      "all_trigger_count": 121
+    },
+    {
+      "action": "upgrade",
+      "revision": "0019",
+      "actual": "0019",
+      "stage4_tables": [
+        "dataset_dedup_policies",
+        "dataset_grants",
+        "dataset_items",
+        "dataset_leakage_policies",
+        "dataset_leakage_reports",
+        "dataset_quality_policies",
+        "dataset_quality_reports",
+        "dataset_split_policies",
+        "dataset_versions",
+        "datasets",
+        "export_jobs",
+        "external_training_references",
+        "training_adapter_callbacks",
+        "training_deliveries",
+        "training_request_revisions",
+        "training_requests"
+      ],
+      "stage4_triggers": [
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_delete"
+        },
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_update"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_immutable"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_initial_status"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_no_delete"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_terminal_immutable"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_transition"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_delete"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_update"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_delete"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_update"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_delete"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_update"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_delete"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_update"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_delete"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_update"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_delete"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_update"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_immutable"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_initial_status"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_no_delete"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_transition"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_validity_transition"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_identity_immutable"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_initial_status"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_no_delete"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_transition"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_artifacts_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_initial_status"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_input_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_no_delete"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_transition"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_immutable"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_initial_status"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_no_delete"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_terminal_immutable"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_transition"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_immutable"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_initial_status"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_no_delete"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_terminal_immutable"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_transition"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_decision_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_initial_status"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_no_delete"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_terminal_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_transition"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_immutable"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_initial_status"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_no_delete"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_terminal_immutable"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_transition"
+        }
+      ],
+      "all_trigger_count": 147
+    },
+    {
+      "action": "upgrade",
+      "revision": "0020",
+      "actual": "0020",
+      "stage4_triggers": [
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_delete"
+        },
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_update"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_immutable"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_initial_status"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_no_delete"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_terminal_immutable"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_transition"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_delete"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_update"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_delete"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_update"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_delete"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_update"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_delete"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_update"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_delete"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_update"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_delete"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_update"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_immutable"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_initial_status"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_no_delete"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_transition"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_validity_transition"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_identity_immutable"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_initial_status"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_no_delete"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_transition"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_artifacts_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_initial_status"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_input_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_no_delete"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_transition"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_immutable"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_initial_status"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_no_delete"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_terminal_immutable"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_transition"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_immutable"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_initial_status"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_no_delete"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_terminal_immutable"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_transition"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_decision_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_initial_status"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_no_delete"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_terminal_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_transition"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_immutable"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_initial_status"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_no_delete"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_terminal_immutable"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_transition"
+        }
+      ],
+      "guard_source_has_external_status": true,
+      "transition_trigger_enabled": "O"
+    },
+    {
+      "action": "downgrade",
+      "revision": "0019",
+      "actual": "0019",
+      "stage4_tables_present": [
+        "dataset_dedup_policies",
+        "dataset_grants",
+        "dataset_items",
+        "dataset_leakage_policies",
+        "dataset_leakage_reports",
+        "dataset_quality_policies",
+        "dataset_quality_reports",
+        "dataset_split_policies",
+        "dataset_versions",
+        "datasets",
+        "export_jobs",
+        "external_training_references",
+        "training_adapter_callbacks",
+        "training_deliveries",
+        "training_request_revisions",
+        "training_requests"
+      ],
+      "stage4_triggers": [
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_delete"
+        },
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_update"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_immutable"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_initial_status"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_no_delete"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_terminal_immutable"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_transition"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_delete"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_update"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_delete"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_update"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_delete"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_update"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_delete"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_update"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_delete"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_update"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_delete"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_update"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_immutable"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_initial_status"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_no_delete"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_transition"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_validity_transition"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_identity_immutable"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_initial_status"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_no_delete"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_transition"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_artifacts_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_initial_status"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_input_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_no_delete"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_transition"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_immutable"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_initial_status"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_no_delete"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_terminal_immutable"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_transition"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_immutable"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_initial_status"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_no_delete"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_terminal_immutable"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_transition"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_decision_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_initial_status"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_no_delete"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_terminal_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_transition"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_immutable"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_initial_status"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_no_delete"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_terminal_immutable"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_transition"
+        }
+      ],
+      "all_trigger_count": 147
+    },
+    {
+      "action": "downgrade",
+      "revision": "0018",
+      "actual": "0018",
+      "stage4_tables_present": [
+        "dataset_dedup_policies",
+        "dataset_items",
+        "dataset_leakage_policies",
+        "dataset_leakage_reports",
+        "dataset_quality_policies",
+        "dataset_quality_reports",
+        "dataset_split_policies",
+        "dataset_versions",
+        "datasets",
+        "export_jobs"
+      ],
+      "stage4_triggers": [
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_delete"
+        },
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_update"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_delete"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_update"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_delete"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_update"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_delete"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_update"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_delete"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_update"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_delete"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_update"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_delete"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_update"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_immutable"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_initial_status"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_no_delete"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_transition"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_validity_transition"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_identity_immutable"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_initial_status"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_no_delete"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_transition"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_artifacts_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_initial_status"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_input_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_no_delete"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_transition"
+        }
+      ],
+      "all_trigger_count": 121
+    },
+    {
+      "action": "downgrade",
+      "revision": "0017",
+      "actual": "0017",
+      "stage4_tables_present": [
+        "dataset_dedup_policies",
+        "dataset_items",
+        "dataset_leakage_policies",
+        "dataset_leakage_reports",
+        "dataset_quality_policies",
+        "dataset_quality_reports",
+        "dataset_split_policies",
+        "dataset_versions",
+        "datasets"
+      ],
+      "stage4_triggers": [
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_delete"
+        },
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_update"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_delete"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_update"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_delete"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_update"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_delete"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_update"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_delete"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_update"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_delete"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_update"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_delete"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_update"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_immutable"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_initial_status"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_no_delete"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_transition"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_validity_transition"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_identity_immutable"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_initial_status"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_no_delete"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_transition"
+        }
+      ],
+      "all_trigger_count": 116
+    },
+    {
+      "action": "downgrade",
+      "revision": "0016",
+      "actual": "0016",
+      "stage4_tables_present": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 93
+    },
+    {
+      "action": "downgrade",
+      "revision": "0015",
+      "actual": "0015",
+      "stage4_tables_present": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 93
+    },
+    {
+      "action": "downgrade",
+      "revision": "0014",
+      "actual": "0014",
+      "stage4_tables_present": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 77
+    },
+    {
+      "action": "downgrade",
+      "revision": "0013",
+      "actual": "0013",
+      "stage4_tables_present": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 58
+    },
+    {
+      "action": "downgrade",
+      "revision": "0012",
+      "actual": "0012",
+      "stage4_tables_present": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 44
+    },
+    {
+      "action": "downgrade",
+      "revision": "0011",
+      "actual": "0011",
+      "stage4_tables_present": [],
+      "stage4_triggers": [],
+      "all_trigger_count": 35
+    },
+    {
+      "action": "upgrade",
+      "revision": "head",
+      "actual": "0020",
+      "stage4_tables": [
+        "dataset_dedup_policies",
+        "dataset_grants",
+        "dataset_items",
+        "dataset_leakage_policies",
+        "dataset_leakage_reports",
+        "dataset_quality_policies",
+        "dataset_quality_reports",
+        "dataset_split_policies",
+        "dataset_versions",
+        "datasets",
+        "export_jobs",
+        "external_training_references",
+        "training_adapter_callbacks",
+        "training_deliveries",
+        "training_request_revisions",
+        "training_requests"
+      ],
+      "stage4_triggers": [
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_delete"
+        },
+        {
+          "table": "dataset_dedup_policies",
+          "trigger": "trg_dataset_dedup_policies_no_update"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_immutable"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_initial_status"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_no_delete"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_terminal_immutable"
+        },
+        {
+          "table": "dataset_grants",
+          "trigger": "trg_dataset_grants_transition"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_delete"
+        },
+        {
+          "table": "dataset_items",
+          "trigger": "trg_dataset_items_no_update"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_delete"
+        },
+        {
+          "table": "dataset_leakage_policies",
+          "trigger": "trg_dataset_leakage_policies_no_update"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_delete"
+        },
+        {
+          "table": "dataset_leakage_reports",
+          "trigger": "trg_dataset_leakage_reports_no_update"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_delete"
+        },
+        {
+          "table": "dataset_quality_policies",
+          "trigger": "trg_dataset_quality_policies_no_update"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_delete"
+        },
+        {
+          "table": "dataset_quality_reports",
+          "trigger": "trg_dataset_quality_reports_no_update"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_delete"
+        },
+        {
+          "table": "dataset_split_policies",
+          "trigger": "trg_dataset_split_policies_no_update"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_immutable"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_initial_status"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_no_delete"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_transition"
+        },
+        {
+          "table": "dataset_versions",
+          "trigger": "trg_dataset_versions_validity_transition"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_identity_immutable"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_initial_status"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_no_delete"
+        },
+        {
+          "table": "datasets",
+          "trigger": "trg_datasets_transition"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_artifacts_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_initial_status"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_input_immutable"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_no_delete"
+        },
+        {
+          "table": "export_jobs",
+          "trigger": "trg_export_jobs_transition"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_immutable"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_initial_status"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_no_delete"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_terminal_immutable"
+        },
+        {
+          "table": "external_training_references",
+          "trigger": "trg_external_training_references_transition"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_immutable"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_initial_status"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_no_delete"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_terminal_immutable"
+        },
+        {
+          "table": "training_deliveries",
+          "trigger": "trg_training_deliveries_transition"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_decision_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_initial_status"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_no_delete"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_terminal_immutable"
+        },
+        {
+          "table": "training_request_revisions",
+          "trigger": "trg_training_request_revisions_transition"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_immutable"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_initial_status"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_no_delete"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_terminal_immutable"
+        },
+        {
+          "table": "training_requests",
+          "trigger": "trg_training_requests_transition"
+        }
+      ]
+    }
+  ],
+  "trigger_snapshots": {
+    "head": [
+      {
+        "table": "dataset_dedup_policies",
+        "trigger": "trg_dataset_dedup_policies_no_delete"
+      },
+      {
+        "table": "dataset_dedup_policies",
+        "trigger": "trg_dataset_dedup_policies_no_update"
+      },
+      {
+        "table": "dataset_grants",
+        "trigger": "trg_dataset_grants_immutable"
+      },
+      {
+        "table": "dataset_grants",
+        "trigger": "trg_dataset_grants_initial_status"
+      },
+      {
+        "table": "dataset_grants",
+        "trigger": "trg_dataset_grants_no_delete"
+      },
+      {
+        "table": "dataset_grants",
+        "trigger": "trg_dataset_grants_terminal_immutable"
+      },
+      {
+        "table": "dataset_grants",
+        "trigger": "trg_dataset_grants_transition"
+      },
+      {
+        "table": "dataset_items",
+        "trigger": "trg_dataset_items_no_delete"
+      },
+      {
+        "table": "dataset_items",
+        "trigger": "trg_dataset_items_no_update"
+      },
+      {
+        "table": "dataset_leakage_policies",
+        "trigger": "trg_dataset_leakage_policies_no_delete"
+      },
+      {
+        "table": "dataset_leakage_policies",
+        "trigger": "trg_dataset_leakage_policies_no_update"
+      },
+      {
+        "table": "dataset_leakage_reports",
+        "trigger": "trg_dataset_leakage_reports_no_delete"
+      },
+      {
+        "table": "dataset_leakage_reports",
+        "trigger": "trg_dataset_leakage_reports_no_update"
+      },
+      {
+        "table": "dataset_quality_policies",
+        "trigger": "trg_dataset_quality_policies_no_delete"
+      },
+      {
+        "table": "dataset_quality_policies",
+        "trigger": "trg_dataset_quality_policies_no_update"
+      },
+      {
+        "table": "dataset_quality_reports",
+        "trigger": "trg_dataset_quality_reports_no_delete"
+      },
+      {
+        "table": "dataset_quality_reports",
+        "trigger": "trg_dataset_quality_reports_no_update"
+      },
+      {
+        "table": "dataset_split_policies",
+        "trigger": "trg_dataset_split_policies_no_delete"
+      },
+      {
+        "table": "dataset_split_policies",
+        "trigger": "trg_dataset_split_policies_no_update"
+      },
+      {
+        "table": "dataset_versions",
+        "trigger": "trg_dataset_versions_immutable"
+      },
+      {
+        "table": "dataset_versions",
+        "trigger": "trg_dataset_versions_initial_status"
+      },
+      {
+        "table": "dataset_versions",
+        "trigger": "trg_dataset_versions_no_delete"
+      },
+      {
+        "table": "dataset_versions",
+        "trigger": "trg_dataset_versions_transition"
+      },
+      {
+        "table": "dataset_versions",
+        "trigger": "trg_dataset_versions_validity_transition"
+      },
+      {
+        "table": "datasets",
+        "trigger": "trg_datasets_identity_immutable"
+      },
+      {
+        "table": "datasets",
+        "trigger": "trg_datasets_initial_status"
+      },
+      {
+        "table": "datasets",
+        "trigger": "trg_datasets_no_delete"
+      },
+      {
+        "table": "datasets",
+        "trigger": "trg_datasets_transition"
+      },
+      {
+        "table": "export_jobs",
+        "trigger": "trg_export_jobs_artifacts_immutable"
+      },
+      {
+        "table": "export_jobs",
+        "trigger": "trg_export_jobs_initial_status"
+      },
+      {
+        "table": "export_jobs",
+        "trigger": "trg_export_jobs_input_immutable"
+      },
+      {
+        "table": "export_jobs",
+        "trigger": "trg_export_jobs_no_delete"
+      },
+      {
+        "table": "export_jobs",
+        "trigger": "trg_export_jobs_transition"
+      },
+      {
+        "table": "external_training_references",
+        "trigger": "trg_external_training_references_immutable"
+      },
+      {
+        "table": "external_training_references",
+        "trigger": "trg_external_training_references_initial_status"
+      },
+      {
+        "table": "external_training_references",
+        "trigger": "trg_external_training_references_no_delete"
+      },
+      {
+        "table": "external_training_references",
+        "trigger": "trg_external_training_references_terminal_immutable"
+      },
+      {
+        "table": "external_training_references",
+        "trigger": "trg_external_training_references_transition"
+      },
+      {
+        "table": "training_deliveries",
+        "trigger": "trg_training_deliveries_immutable"
+      },
+      {
+        "table": "training_deliveries",
+        "trigger": "trg_training_deliveries_initial_status"
+      },
+      {
+        "table": "training_deliveries",
+        "trigger": "trg_training_deliveries_no_delete"
+      },
+      {
+        "table": "training_deliveries",
+        "trigger": "trg_training_deliveries_terminal_immutable"
+      },
+      {
+        "table": "training_deliveries",
+        "trigger": "trg_training_deliveries_transition"
+      },
+      {
+        "table": "training_request_revisions",
+        "trigger": "trg_training_request_revisions_decision_immutable"
+      },
+      {
+        "table": "training_request_revisions",
+        "trigger": "trg_training_request_revisions_immutable"
+      },
+      {
+        "table": "training_request_revisions",
+        "trigger": "trg_training_request_revisions_initial_status"
+      },
+      {
+        "table": "training_request_revisions",
+        "trigger": "trg_training_request_revisions_no_delete"
+      },
+      {
+        "table": "training_request_revisions",
+        "trigger": "trg_training_request_revisions_terminal_immutable"
+      },
+      {
+        "table": "training_request_revisions",
+        "trigger": "trg_training_request_revisions_transition"
+      },
+      {
+        "table": "training_requests",
+        "trigger": "trg_training_requests_immutable"
+      },
+      {
+        "table": "training_requests",
+        "trigger": "trg_training_requests_initial_status"
+      },
+      {
+        "table": "training_requests",
+        "trigger": "trg_training_requests_no_delete"
+      },
+      {
+        "table": "training_requests",
+        "trigger": "trg_training_requests_terminal_immutable"
+      },
+      {
+        "table": "training_requests",
+        "trigger": "trg_training_requests_transition"
+      }
+    ]
+  }
+}
