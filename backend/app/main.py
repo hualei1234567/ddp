@@ -12,7 +12,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
-from app.api.errors import domain_error_to_app, integrity_error_to_app
+from app.api.errors import (
+    collection_error_to_app,
+    domain_error_to_app,
+    integrity_error_to_app,
+)
 from app.api.middleware.rate_limit import RateLimitMiddleware
 from app.api.middleware.request_id import RequestIdMiddleware
 from app.api.middleware.security_headers import SecurityHeadersMiddleware
@@ -20,6 +24,7 @@ from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ValidationFailedError
 from app.core.logging import configure_logging
+from app.domain.collection.errors import CollectionDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.identity.errors import CrossProjectAccessError
 from app.infrastructure.rate_limit import build_rate_limiter
@@ -93,6 +98,17 @@ def create_app() -> FastAPI:
         exc: DeviceDomainError,
     ) -> JSONResponse:
         error = domain_error_to_app(exc)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(CollectionDomainError)
+    async def handle_collection_domain_error(
+        request: Request,
+        exc: CollectionDomainError,
+    ) -> JSONResponse:
+        error = collection_error_to_app(exc)
         return JSONResponse(
             status_code=error.status_code,
             content=_error_payload(request, error),
