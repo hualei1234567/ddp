@@ -30,7 +30,8 @@ services:
       retries: 20
 
   minio:
-    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    # 阶段 0 使用 latest 以便在受限网络下拉取；阶段 1 固定 digest。
+    image: minio/minio:latest
     container_name: ddp-minio
     command: server /data --console-address ":9001"
     environment:
@@ -48,7 +49,8 @@ services:
       retries: 30
 
   minio-init:
-    image: minio/mc:RELEASE.2024-10-08T09-37-26Z
+    # 阶段 0 使用 latest；阶段 1 固定 digest。
+    image: minio/mc:latest
     container_name: ddp-minio-init
     depends_on:
       minio:
