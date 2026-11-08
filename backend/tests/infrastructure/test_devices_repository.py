@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import NamedTuple
 from uuid import UUID, uuid4
@@ -17,6 +18,7 @@ from app.domain.devices import (
     CalibrationType,
     Device,
     DeviceType,
+    DomainValidationError,
     DuplicateResourceError,
     LifecycleStatus,
     Robot,
@@ -25,10 +27,11 @@ from app.domain.devices import (
     VersionConflictError,
 )
 from app.domain.identity.errors import CrossProjectAccessError
-from app.domain.identity.models import ProjectScope
+from app.domain.identity.models import ProjectRole, ProjectScope
 from app.infrastructure.db.base import Base
+from app.infrastructure.db.models.devices import Robot as RobotModel
 from app.infrastructure.db.models.devices import Sensor as SensorModel
-from app.infrastructure.db.models.identity import Project, User
+from app.infrastructure.db.models.identity import Project, ProjectMember, User
 from app.infrastructure.db.session import create_db_engine, create_session_factory
 from app.infrastructure.repositories.devices import (
     SqlCalibrationProfileRepository,
@@ -47,6 +50,7 @@ class _Ids(NamedTuple):
     project_b: UUID
     user_a: UUID
     user_b: UUID
+    user_viewer: UUID
 
 
 def _factory() -> tuple[Engine, sessionmaker[Session]]:
@@ -69,6 +73,7 @@ def db() -> Iterator[tuple[sessionmaker[Session], _Ids]]:
         project_b=uuid4(),
         user_a=uuid4(),
         user_b=uuid4(),
+        user_viewer=uuid4(),
     )
     with factory() as session:
         session.add_all(
@@ -77,6 +82,34 @@ def db() -> Iterator[tuple[sessionmaker[Session], _Ids]]:
                 Project(id=ids.project_b, code="project-b", name="项目 B"),
                 User(id=ids.user_a, display_name="甲"),
                 User(id=ids.user_b, display_name="乙"),
+                User(id=ids.user_viewer, display_name="只读用户"),
+            ]
+        )
+        session.flush()
+        session.add_all(
+            [
+                # A 项目：甲执行、乙校验、只读用户仅可读。
+                ProjectMember(
+                    project_id=ids.project_a,
+                    user_id=ids.user_a,
+                    role=ProjectRole.EDITOR.value,
+                ),
+                ProjectMember(
+                    project_id=ids.project_a,
+                    user_id=ids.user_b,
+                    role=ProjectRole.OWNER.value,
+                ),
+                ProjectMember(
+                    project_id=ids.project_a,
+                    user_id=ids.user_viewer,
+                    role=ProjectRole.VIEWER.value,
+                ),
+                # B 项目：乙为 owner。
+                ProjectMember(
+                    project_id=ids.project_b,
+                    user_id=ids.user_b,
+                    role=ProjectRole.OWNER.value,
+                ),
             ]
         )
         session.commit()
@@ -178,11 +211,11 @@ def test_robot_roundtrip_and_reads_are_project_scoped(
 ) -> None:
     factory, ids = db
     robot = _robot(ids.project_a)
-    scope_a = ProjectScope(ids.project_a)
-    scope_b = ProjectScope(ids.project_b)
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    scope_b = ProjectScope(ids.project_b, actor_id=ids.user_b)
 
     with factory() as session:
-        SqlRobotRepository(session).add(scope_a, robot, actor_id=ids.user_a)
+        SqlRobotRepository(session).add(scope_a, robot)
         session.commit()
 
     with factory() as session:
@@ -200,14 +233,13 @@ def test_robot_code_and_serial_number_are_unique_within_project(
     db: tuple[sessionmaker[Session], _Ids],
 ) -> None:
     factory, ids = db
-    scope_a = ProjectScope(ids.project_a)
-    scope_b = ProjectScope(ids.project_b)
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    scope_b = ProjectScope(ids.project_b, actor_id=ids.user_b)
 
     with factory() as session:
         SqlRobotRepository(session).add(
             scope_a,
             _robot(ids.project_a, code="r-1", serial_number="sn-1"),
-            actor_id=ids.user_a,
         )
         session.commit()
 
@@ -216,7 +248,6 @@ def test_robot_code_and_serial_number_are_unique_within_project(
             SqlRobotRepository(session).add(
                 scope_a,
                 _robot(ids.project_a, code="r-1", serial_number="sn-2"),
-                actor_id=ids.user_a,
             )
         session.rollback()
 
@@ -225,7 +256,6 @@ def test_robot_code_and_serial_number_are_unique_within_project(
             SqlRobotRepository(session).add(
                 scope_a,
                 _robot(ids.project_a, code="r-2", serial_number="sn-1"),
-                actor_id=ids.user_a,
             )
         session.rollback()
 
@@ -234,7 +264,6 @@ def test_robot_code_and_serial_number_are_unique_within_project(
         SqlRobotRepository(session).add(
             scope_b,
             _robot(ids.project_b, code="r-1", serial_number="sn-1"),
-            actor_id=ids.user_b,
         )
         session.commit()
 
@@ -243,13 +272,12 @@ def test_device_code_is_unique_within_project(
     db: tuple[sessionmaker[Session], _Ids],
 ) -> None:
     factory, ids = db
-    scope_a = ProjectScope(ids.project_a)
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
 
     with factory() as session:
         SqlDeviceRepository(session).add(
             scope_a,
             _device(ids.project_a, code="d-1"),
-            actor_id=ids.user_a,
         )
         session.commit()
 
@@ -258,15 +286,13 @@ def test_device_code_is_unique_within_project(
             SqlDeviceRepository(session).add(
                 scope_a,
                 _device(ids.project_a, code="d-1"),
-                actor_id=ids.user_a,
             )
         session.rollback()
 
     with factory() as session:
         SqlDeviceRepository(session).add(
-            ProjectScope(ids.project_b),
+            ProjectScope(ids.project_b, actor_id=ids.user_b),
             _device(ids.project_b, code="d-1"),
-            actor_id=ids.user_b,
         )
         session.commit()
 
@@ -275,19 +301,19 @@ def test_sensor_code_is_unique_and_reads_are_project_scoped(
     db: tuple[sessionmaker[Session], _Ids],
 ) -> None:
     factory, ids = db
-    scope_a = ProjectScope(ids.project_a)
-    scope_b = ProjectScope(ids.project_b)
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    scope_b = ProjectScope(ids.project_b, actor_id=ids.user_b)
     device = _device(ids.project_a)
     robot_b = _robot(ids.project_b)
 
     with factory() as session:
-        SqlDeviceRepository(session).add(scope_a, device, actor_id=ids.user_a)
-        SqlRobotRepository(session).add(scope_b, robot_b, actor_id=ids.user_b)
+        SqlDeviceRepository(session).add(scope_a, device)
+        SqlRobotRepository(session).add(scope_b, robot_b)
         session.commit()
 
     sensor = _sensor(ids.project_a, code="s-1", device_id=device.device_id)
     with factory() as session:
-        SqlSensorRepository(session).add(scope_a, sensor, actor_id=ids.user_a)
+        SqlSensorRepository(session).add(scope_a, sensor)
         session.commit()
 
     with factory() as session:
@@ -302,7 +328,6 @@ def test_sensor_code_is_unique_and_reads_are_project_scoped(
             SqlSensorRepository(session).add(
                 scope_a,
                 _sensor(ids.project_a, code="s-1", device_id=device.device_id),
-                actor_id=ids.user_a,
             )
         session.rollback()
 
@@ -310,7 +335,6 @@ def test_sensor_code_is_unique_and_reads_are_project_scoped(
         SqlSensorRepository(session).add(
             scope_b,
             _sensor(ids.project_b, code="s-1", robot_id=robot_b.robot_id),
-            actor_id=ids.user_b,
         )
         session.commit()
 
@@ -319,14 +343,13 @@ def test_repository_rejects_cross_project_writes(
     db: tuple[sessionmaker[Session], _Ids],
 ) -> None:
     factory, ids = db
-    scope_a = ProjectScope(ids.project_a)
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
 
     with factory() as session:
         with pytest.raises(CrossProjectAccessError):
             SqlRobotRepository(session).add(
                 scope_a,
                 _robot(ids.project_b),
-                actor_id=ids.user_a,
             )
 
 
@@ -334,11 +357,11 @@ def test_stale_version_is_rejected(
     db: tuple[sessionmaker[Session], _Ids],
 ) -> None:
     factory, ids = db
-    scope_a = ProjectScope(ids.project_a)
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
     robot = _robot(ids.project_a)
 
     with factory() as session:
-        SqlRobotRepository(session).add(scope_a, robot, actor_id=ids.user_a)
+        SqlRobotRepository(session).add(scope_a, robot)
         session.commit()
 
     # 另一个会话把版本推进到 2。
@@ -350,7 +373,6 @@ def test_stale_version_is_rejected(
             scope_a,
             current.activate(),
             expected_version=current.version,
-            actor_id=ids.user_a,
         )
         session.commit()
 
@@ -361,7 +383,6 @@ def test_stale_version_is_rejected(
                 scope_a,
                 robot.activate(),
                 expected_version=1,
-                actor_id=ids.user_a,
             )
         session.rollback()
 
@@ -394,15 +415,14 @@ def test_calibration_profile_accepts_non_initial_config_version(
     db: tuple[sessionmaker[Session], _Ids],
 ) -> None:
     factory, ids = db
-    scope_a = ProjectScope(ids.project_a)
-    scope_b = ProjectScope(ids.project_b)
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    scope_b = ProjectScope(ids.project_b, actor_id=ids.user_b)
     profile = _profile(ids.project_a, version=2)
 
     with factory() as session:
         SqlCalibrationProfileRepository(session).add(
             scope_a,
             profile,
-            actor_id=ids.user_a,
         )
         session.commit()
 
@@ -418,8 +438,8 @@ def test_activation_supersedes_previous_active_and_is_project_scoped(
     db: tuple[sessionmaker[Session], _Ids],
 ) -> None:
     factory, ids = db
-    scope_a = ProjectScope(ids.project_a)
-    scope_b = ProjectScope(ids.project_b)
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    scope_b = ProjectScope(ids.project_b, actor_id=ids.user_b)
     profile = _profile(ids.project_a)
     target_id = uuid4()
 
@@ -427,7 +447,6 @@ def test_activation_supersedes_previous_active_and_is_project_scoped(
         SqlCalibrationProfileRepository(session).add(
             scope_a,
             profile,
-            actor_id=ids.user_a,
         )
         session.commit()
 
@@ -442,7 +461,6 @@ def test_activation_supersedes_previous_active_and_is_project_scoped(
         SqlCalibrationRecordRepository(session).add(
             scope_a,
             first,
-            actor_id=ids.user_a,
         )
         session.commit()
 
@@ -454,7 +472,6 @@ def test_activation_supersedes_previous_active_and_is_project_scoped(
             scope_a,
             stored,
             expected_version=stored.version,
-            actor_id=ids.user_a,
         )
         assert activated.status is CalibrationStatus.ACTIVE
         session.commit()
@@ -470,7 +487,6 @@ def test_activation_supersedes_previous_active_and_is_project_scoped(
         SqlCalibrationRecordRepository(session).add(
             scope_a,
             second,
-            actor_id=ids.user_a,
         )
         session.commit()
 
@@ -482,7 +498,6 @@ def test_activation_supersedes_previous_active_and_is_project_scoped(
             scope_a,
             stored,
             expected_version=stored.version,
-            actor_id=ids.user_a,
         )
         session.commit()
 
@@ -513,6 +528,156 @@ def test_activation_supersedes_previous_active_and_is_project_scoped(
             SqlCalibrationRecordRepository(session).add(
                 scope_a,
                 duplicate_active,
-                actor_id=ids.user_a,
             )
+        session.rollback()
+
+
+def test_repository_derives_audit_fields_from_scope(
+    db: tuple[sessionmaker[Session], _Ids],
+) -> None:
+    """created_by/updated_by 只能来自服务端 scope，调用方无法另行传入。"""
+    factory, ids = db
+    robot = _robot(ids.project_a)
+    scope = ProjectScope(ids.project_a, actor_id=ids.user_b)
+
+    with factory() as session:
+        SqlRobotRepository(session).add(scope, robot)
+        session.commit()
+
+    with factory() as session:
+        row = session.get(RobotModel, robot.robot_id)
+        assert row is not None
+        assert row.created_by == ids.user_b
+        assert row.updated_by == ids.user_b
+
+
+def test_calibration_performer_must_be_current_actor(
+    db: tuple[sessionmaker[Session], _Ids],
+) -> None:
+    factory, ids = db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    profile = _profile(ids.project_a)
+
+    with factory() as session:
+        SqlCalibrationProfileRepository(session).add(scope_a, profile)
+        session.commit()
+
+    forged = _calibration_record(
+        ids.project_a,
+        profile.profile_id,
+        target_id=uuid4(),
+        performer=ids.user_b,
+        validator=ids.user_a,
+    )
+    with factory() as session:
+        with pytest.raises(DomainValidationError, match="performed_by"):
+            SqlCalibrationRecordRepository(session).add(scope_a, forged)
+        session.rollback()
+
+
+def test_calibration_validator_must_be_project_member(
+    db: tuple[sessionmaker[Session], _Ids],
+) -> None:
+    factory, ids = db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    profile = _profile(ids.project_a)
+
+    with factory() as session:
+        SqlCalibrationProfileRepository(session).add(scope_a, profile)
+        session.commit()
+
+    record = _calibration_record(
+        ids.project_a,
+        profile.profile_id,
+        target_id=uuid4(),
+        performer=ids.user_a,
+        validator=uuid4(),
+    )
+    with factory() as session:
+        with pytest.raises(DomainValidationError, match="validated_by"):
+            SqlCalibrationRecordRepository(session).add(scope_a, record)
+        session.rollback()
+
+
+def test_calibration_validator_viewer_is_rejected(
+    db: tuple[sessionmaker[Session], _Ids],
+) -> None:
+    factory, ids = db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    profile = _profile(ids.project_a)
+
+    with factory() as session:
+        SqlCalibrationProfileRepository(session).add(scope_a, profile)
+        session.commit()
+
+    record = _calibration_record(
+        ids.project_a,
+        profile.profile_id,
+        target_id=uuid4(),
+        performer=ids.user_a,
+        validator=ids.user_viewer,
+    )
+    with factory() as session:
+        with pytest.raises(DomainValidationError, match="validated_by"):
+            SqlCalibrationRecordRepository(session).add(scope_a, record)
+        session.rollback()
+
+
+def test_calibration_editor_can_validate_others_record(
+    db: tuple[sessionmaker[Session], _Ids],
+) -> None:
+    factory, ids = db
+    performer_scope = ProjectScope(ids.project_a, actor_id=ids.user_b)
+    profile = _profile(ids.project_a)
+
+    with factory() as session:
+        SqlCalibrationProfileRepository(session).add(performer_scope, profile)
+        session.commit()
+
+    record = _calibration_record(
+        ids.project_a,
+        profile.profile_id,
+        target_id=uuid4(),
+        performer=ids.user_b,
+        validator=ids.user_a,
+    )
+    with factory() as session:
+        SqlCalibrationRecordRepository(session).add(performer_scope, record)
+        session.commit()
+
+    with factory() as session:
+        stored = SqlCalibrationRecordRepository(session).get(
+            performer_scope,
+            record.calibration_id,
+        )
+        assert stored is not None
+        assert stored.validated_by == ids.user_a
+
+
+def test_calibration_update_cannot_forge_performer(
+    db: tuple[sessionmaker[Session], _Ids],
+) -> None:
+    factory, ids = db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    profile = _profile(ids.project_a)
+    record = _calibration_record(
+        ids.project_a,
+        profile.profile_id,
+        target_id=uuid4(),
+        performer=ids.user_a,
+        validator=ids.user_b,
+    )
+
+    with factory() as session:
+        SqlCalibrationProfileRepository(session).add(scope_a, profile)
+        SqlCalibrationRecordRepository(session).add(scope_a, record)
+        session.commit()
+
+    with factory() as session:
+        repository = SqlCalibrationRecordRepository(session)
+        stored = repository.get(scope_a, record.calibration_id)
+        assert stored is not None
+        tampered = replace(stored, performed_by=ids.user_viewer)
+        with pytest.raises(DomainValidationError, match="不可修改"):
+            repository.save(scope_a, tampered, expected_version=stored.version)
         session.rollback()

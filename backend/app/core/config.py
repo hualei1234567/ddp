@@ -21,10 +21,14 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    env: str = "local"
+    env: str = "production"
     app_name: str = "DDP"
     app_version: str = "0.1.0"
     log_level: str = "INFO"
+
+    # 本地开发专用：仅当显式开启且请求来自 loopback 时，才接受 X-User-Id。
+    # 生产环境禁止使用请求头身份；未接入真实认证时启动自检会拒绝启动。
+    local_header_auth: bool = False
 
     database_url: str = "postgresql+psycopg://ddp:ddp@localhost:5432/ddp"
     database_pool_size: int = Field(default=10, ge=1)
@@ -46,6 +50,21 @@ class Settings(BaseSettings):
     @property
     def is_local(self) -> bool:
         return self.env.lower() in {"local", "dev", "development"}
+
+    def validate_runtime_security(self) -> None:
+        """启动自检：非本地环境没有真实认证时 fail-closed。
+
+        当前代码只实现了本地请求头身份适配器，尚无 JWT/OIDC 校验实现。
+        因此非本地环境一律拒绝启动；接入真实认证后，应在此处改为检查
+        对应认证配置是否完整，而不是默认放行。
+        """
+        if self.is_local:
+            return
+        raise RuntimeError(
+            "非本地环境未接入真实认证（JWT/OIDC），拒绝启动；"
+            "本地开发请设置 DDP_ENV=local，并按需显式开启 "
+            "DDP_LOCAL_HEADER_AUTH=true（仅 loopback 生效）。"
+        )
 
 
 @lru_cache(maxsize=1)

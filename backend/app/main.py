@@ -22,6 +22,8 @@ from app.domain.identity.errors import CrossProjectAccessError
 def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
+    # fail-closed：非本地环境未接入真实认证时直接拒绝启动。
+    settings.validate_runtime_security()
 
     app = FastAPI(
         title=settings.app_name,

@@ -5,13 +5,19 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID, uuid4
 
+import pytest
 from app.api.deps import (
     get_current_principal,
+    get_delete_scope,
     get_project_access_service,
+    get_project_scope,
+    get_scope,
+    get_write_scope,
     require_project_permission,
 )
 from app.application.identity.access import ProjectAccessService
 from app.core.config import Settings, get_settings
+from app.core.errors import AuthenticationError
 from app.domain.identity.errors import CrossProjectAccessError
 from app.domain.identity.models import (
     PlatformRole,
@@ -19,9 +25,10 @@ from app.domain.identity.models import (
     ProjectAction,
     ProjectContext,
     ProjectRole,
+    ProjectScope,
 )
 from app.main import create_app
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.testclient import TestClient
 
 from tests.fakes import FakeMembershipRepository, FakeProjectRepository
@@ -77,6 +84,45 @@ def _build_client(
     ) -> dict[str, str | None]:
         return {"project_id": str(context.project_id)}
 
+    @app.get("/test/projects/{project_id}/read-scope")
+    def read_scope(
+        scope: Annotated[ProjectScope, Depends(get_project_scope)],
+    ) -> dict[str, str]:
+        return {
+            "project_id": str(scope.project_id),
+            "actor_id": str(scope.actor_id),
+        }
+
+    @app.post("/test/projects/{project_id}/write-scope")
+    def write_scope(
+        scope: Annotated[ProjectScope, Depends(get_write_scope)],
+    ) -> dict[str, str]:
+        return {
+            "project_id": str(scope.project_id),
+            "actor_id": str(scope.actor_id),
+        }
+
+    @app.delete("/test/projects/{project_id}/resource")
+    def delete_resource(
+        scope: Annotated[
+            ProjectScope,
+            Depends(get_scope(ProjectAction.DELETE)),
+        ],
+    ) -> dict[str, str]:
+        return {
+            "project_id": str(scope.project_id),
+            "actor_id": str(scope.actor_id),
+        }
+
+    @app.delete("/test/projects/{project_id}/delete-scope")
+    def delete_scope(
+        scope: Annotated[ProjectScope, Depends(get_delete_scope)],
+    ) -> dict[str, str]:
+        return {
+            "project_id": str(scope.project_id),
+            "actor_id": str(scope.actor_id),
+        }
+
     @app.get("/test/cross-project")
     def cross_project() -> dict[str, str]:
         raise CrossProjectAccessError("模拟跨项目资源访问")
@@ -101,8 +147,12 @@ def _service(
     )
 
 
-def test_local_header_identity_is_accepted() -> None:
-    client = _build_client(settings=Settings(env="local"))
+def _local_with_header_auth() -> Settings:
+    return Settings(env="local", local_header_auth=True)
+
+
+def test_local_header_identity_is_accepted_when_explicitly_enabled() -> None:
+    client = _build_client(settings=_local_with_header_auth())
     user_id = uuid4()
 
     response = client.get("/test/me", headers={"X-User-Id": str(user_id)})
@@ -111,8 +161,67 @@ def test_local_header_identity_is_accepted() -> None:
     assert response.json() == {"user_id": str(user_id), "platform_role": "member"}
 
 
-def test_missing_identity_header_is_rejected() -> None:
+def test_local_header_auth_is_disabled_by_default() -> None:
     client = _build_client(settings=Settings(env="local"))
+
+    response = client.get("/test/me", headers={"X-User-Id": str(uuid4())})
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "not_authenticated"
+
+
+def test_platform_role_header_is_ignored() -> None:
+    """平台角色不得来自请求头，伪造 admin 仍只能是普通成员。"""
+    client = _build_client(settings=_local_with_header_auth())
+
+    response = client.get(
+        "/test/me",
+        headers={
+            "X-User-Id": str(uuid4()),
+            "X-Platform-Role": PlatformRole.ADMIN.value,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["platform_role"] == PlatformRole.MEMBER.value
+
+
+def test_forged_admin_header_cannot_escalate_project_permission() -> None:
+    project_id = uuid4()
+    client = _build_client(
+        service=_service({project_id}),
+        settings=_local_with_header_auth(),
+    )
+
+    response = client.delete(
+        f"/test/projects/{project_id}/members",
+        headers={
+            "X-User-Id": str(uuid4()),
+            "X-Platform-Role": PlatformRole.ADMIN.value,
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+
+def test_local_header_auth_rejects_non_loopback_client() -> None:
+    settings = _local_with_header_auth()
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/",
+        "query_string": b"",
+        "headers": [(b"x-user-id", str(uuid4()).encode())],
+        "client": ("10.0.0.9", 54321),
+    }
+
+    with pytest.raises(AuthenticationError, match="loopback"):
+        get_current_principal(Request(scope), settings)
+
+
+def test_missing_identity_header_is_rejected() -> None:
+    client = _build_client(settings=_local_with_header_auth())
 
     response = client.get("/test/me")
 
@@ -121,7 +230,7 @@ def test_missing_identity_header_is_rejected() -> None:
 
 
 def test_invalid_user_id_is_rejected() -> None:
-    client = _build_client(settings=Settings(env="local"))
+    client = _build_client(settings=_local_with_header_auth())
 
     response = client.get("/test/me", headers={"X-User-Id": "not-a-uuid"})
 
@@ -129,20 +238,10 @@ def test_invalid_user_id_is_rejected() -> None:
     assert response.json()["error"]["code"] == "not_authenticated"
 
 
-def test_invalid_platform_role_is_rejected() -> None:
-    client = _build_client(settings=Settings(env="local"))
-
-    response = client.get(
-        "/test/me",
-        headers={"X-User-Id": str(uuid4()), "X-Platform-Role": "root"},
-    )
-
-    assert response.status_code == 401
-    assert response.json()["error"]["code"] == "not_authenticated"
-
-
 def test_non_local_environment_rejects_header_identity() -> None:
-    client = _build_client(settings=Settings(env="production"))
+    client = _build_client(
+        settings=Settings(env="production", local_header_auth=True),
+    )
 
     response = client.get("/test/me", headers={"X-User-Id": str(uuid4())})
 
@@ -164,6 +263,35 @@ def test_viewer_can_read_project() -> None:
     assert response.json()["project_id"] == str(project_id)
 
 
+def test_default_project_scope_requires_read_permission() -> None:
+    project_id = uuid4()
+    user_id = uuid4()
+    client = _build_client(
+        principal=Principal(user_id),
+        service=_service({project_id}, {(project_id, user_id): ProjectRole.VIEWER}),
+    )
+
+    response = client.get(f"/test/projects/{project_id}/read-scope")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "project_id": str(project_id),
+        "actor_id": str(user_id),
+    }
+
+
+def test_non_member_cannot_get_read_scope() -> None:
+    project_id = uuid4()
+    client = _build_client(
+        principal=Principal(uuid4()),
+        service=_service({project_id}),
+    )
+
+    response = client.get(f"/test/projects/{project_id}/read-scope")
+
+    assert response.status_code == 403
+
+
 def test_viewer_cannot_write_project() -> None:
     project_id = uuid4()
     user_id = uuid4()
@@ -176,6 +304,78 @@ def test_viewer_cannot_write_project() -> None:
 
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "forbidden"
+
+
+def test_viewer_write_scope_is_forbidden() -> None:
+    project_id = uuid4()
+    user_id = uuid4()
+    client = _build_client(
+        principal=Principal(user_id),
+        service=_service({project_id}, {(project_id, user_id): ProjectRole.VIEWER}),
+    )
+
+    response = client.post(f"/test/projects/{project_id}/write-scope")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+
+def test_viewer_delete_scope_is_forbidden() -> None:
+    project_id = uuid4()
+    user_id = uuid4()
+    client = _build_client(
+        principal=Principal(user_id),
+        service=_service({project_id}, {(project_id, user_id): ProjectRole.VIEWER}),
+    )
+
+    response = client.delete(f"/test/projects/{project_id}/delete-scope")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+
+def test_viewer_cannot_delete_resource() -> None:
+    project_id = uuid4()
+    user_id = uuid4()
+    client = _build_client(
+        principal=Principal(user_id),
+        service=_service({project_id}, {(project_id, user_id): ProjectRole.VIEWER}),
+    )
+
+    response = client.delete(f"/test/projects/{project_id}/resource")
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
+
+
+def test_editor_can_write_scope_but_cannot_delete() -> None:
+    project_id = uuid4()
+    user_id = uuid4()
+    client = _build_client(
+        principal=Principal(user_id),
+        service=_service({project_id}, {(project_id, user_id): ProjectRole.EDITOR}),
+    )
+
+    write_response = client.post(f"/test/projects/{project_id}/write-scope")
+    delete_response = client.delete(f"/test/projects/{project_id}/resource")
+
+    assert write_response.status_code == 200
+    assert write_response.json()["actor_id"] == str(user_id)
+    assert delete_response.status_code == 403
+
+
+def test_owner_can_delete_scope() -> None:
+    project_id = uuid4()
+    user_id = uuid4()
+    client = _build_client(
+        principal=Principal(user_id),
+        service=_service({project_id}, {(project_id, user_id): ProjectRole.OWNER}),
+    )
+
+    response = client.delete(f"/test/projects/{project_id}/resource")
+
+    assert response.status_code == 200
+    assert response.json()["actor_id"] == str(user_id)
 
 
 def test_editor_can_write_project() -> None:
@@ -221,20 +421,14 @@ def test_member_of_other_project_cannot_read_by_idor() -> None:
     assert response.status_code == 403
 
 
-def test_platform_admin_header_can_manage_existing_project() -> None:
+def test_platform_admin_principal_can_manage_existing_project() -> None:
     project_id = uuid4()
     client = _build_client(
+        principal=Principal(uuid4(), PlatformRole.ADMIN),
         service=_service({project_id}),
-        settings=Settings(env="local"),
     )
 
-    response = client.delete(
-        f"/test/projects/{project_id}/members",
-        headers={
-            "X-User-Id": str(uuid4()),
-            "X-Platform-Role": PlatformRole.ADMIN.value,
-        },
-    )
+    response = client.delete(f"/test/projects/{project_id}/members")
 
     assert response.status_code == 200
 

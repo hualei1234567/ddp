@@ -30,6 +30,7 @@ def test_member_resolves_project_role() -> None:
     context = service.resolve_context(Principal(user_id), project_id)
 
     assert context.project_id == project_id
+    assert context.actor_id == user_id
     assert context.role is ProjectRole.EDITOR
     assert context.can(ProjectAction.WRITE)
     assert not context.can(ProjectAction.DELETE)
@@ -59,6 +60,7 @@ def test_platform_admin_resolves_existing_project_without_membership() -> None:
     context = service.resolve_context(principal, project_id)
 
     assert context.role is None
+    assert context.actor_id == principal.user_id
     assert context.is_platform_admin
     assert context.can(ProjectAction.MANAGE_MEMBERS)
 

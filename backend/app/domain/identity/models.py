@@ -36,24 +36,40 @@ class ProjectAction(StrEnum):
     READ = "read"
     WRITE = "write"
     DELETE = "delete"
+    VALIDATE = "validate"
     MANAGE_MEMBERS = "manage_members"
 
 
 # 显式权限矩阵：未列出的动作一律拒绝，禁止“未知动作默认放行”。
+# VALIDATE 表示可以担任标定记录的校验人；VIEWER 只读，不得校验。
 ROLE_PERMISSIONS: Mapping[ProjectRole, frozenset[ProjectAction]] = MappingProxyType(
     {
         ProjectRole.VIEWER: frozenset({ProjectAction.READ}),
-        ProjectRole.EDITOR: frozenset({ProjectAction.READ, ProjectAction.WRITE}),
+        ProjectRole.EDITOR: frozenset(
+            {
+                ProjectAction.READ,
+                ProjectAction.WRITE,
+                ProjectAction.VALIDATE,
+            }
+        ),
         ProjectRole.OWNER: frozenset(
             {
                 ProjectAction.READ,
                 ProjectAction.WRITE,
                 ProjectAction.DELETE,
+                ProjectAction.VALIDATE,
                 ProjectAction.MANAGE_MEMBERS,
             }
         ),
     }
 )
+
+
+def role_allows(role: ProjectRole | None, action: ProjectAction) -> bool:
+    """判断项目角色是否拥有动作权限；无角色一律拒绝。"""
+    if role is None:
+        return False
+    return action in ROLE_PERMISSIONS[role]
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,12 +101,15 @@ class ProjectContext:
     def is_platform_admin(self) -> bool:
         return self.platform_role is PlatformRole.ADMIN
 
+    @property
+    def actor_id(self) -> UUID:
+        """当前主体 ID；所有写入审计字段都必须从这里派生。"""
+        return self.user_id
+
     def can(self, action: ProjectAction) -> bool:
         if self.is_platform_admin:
             return True
-        if self.role is None:
-            return False
-        return action in ROLE_PERMISSIONS[self.role]
+        return role_allows(self.role, action)
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,13 +118,17 @@ class ProjectScope:
 
     所有按 ID 读写资源的地方都必须先调用 :meth:`ensure`，
     禁止依赖客户端声明的 ``project_id``。
+
+    ``actor_id`` 来自服务端认证后的 :class:`ProjectContext`，
+    仓储必须据此写入 ``created_by`` / ``updated_by``，不接受调用方另行传入。
     """
 
     project_id: UUID
+    actor_id: UUID
 
     @classmethod
     def from_context(cls, context: ProjectContext) -> ProjectScope:
-        return cls(project_id=context.project_id)
+        return cls(project_id=context.project_id, actor_id=context.actor_id)
 
     def ensure(self, project_id: UUID) -> None:
         if project_id != self.project_id:

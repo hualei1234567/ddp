@@ -18,6 +18,7 @@ from sqlalchemy import Select, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.application.identity.ports import ProjectMembershipRepository
 from app.domain.devices.calibration import CalibrationProfile, CalibrationRecord
 from app.domain.devices.enums import (
     CalibrationStatus,
@@ -34,7 +35,7 @@ from app.domain.devices.errors import (
     VersionConflictError,
 )
 from app.domain.devices.models import Device, Robot, Sensor
-from app.domain.identity.models import ProjectScope
+from app.domain.identity.models import ProjectAction, ProjectScope, role_allows
 from app.infrastructure.db.models.devices import (
     CalibrationProfile as CalibrationProfileModel,
 )
@@ -44,6 +45,7 @@ from app.infrastructure.db.models.devices import (
 from app.infrastructure.db.models.devices import Device as DeviceModel
 from app.infrastructure.db.models.devices import Robot as RobotModel
 from app.infrastructure.db.models.devices import Sensor as SensorModel
+from app.infrastructure.repositories.identity import SqlProjectMembershipRepository
 
 _T = TypeVar("_T")
 
@@ -105,6 +107,18 @@ def _raise_update_failure(
     if row is None or row.project_id != scope.project_id:
         raise ResourceNotFoundError(resource, resource_id)
     raise VersionConflictError(resource, expected_version)
+
+
+def _ensure_performer_is_actor(scope: ProjectScope, performed_by: UUID) -> None:
+    """新记录的执行人必须就是当前认证主体，禁止代填他人。"""
+    if performed_by != scope.actor_id:
+        raise DomainValidationError("performed_by 必须等于当前主体")
+
+
+def _ensure_performer_unchanged(persisted: UUID, submitted: UUID) -> None:
+    """更新时 performed_by 不允许被改写。"""
+    if submitted != persisted:
+        raise DomainValidationError("performed_by 不可修改")
 
 
 def _robot_values(robot: Robot, *, actor_id: UUID) -> dict[str, object]:
@@ -249,14 +263,14 @@ class SqlRobotRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def add(self, scope: ProjectScope, robot: Robot, *, actor_id: UUID) -> Robot:
+    def add(self, scope: ProjectScope, robot: Robot) -> Robot:
         scope.ensure(robot.project_id)
         _ensure_initial_version(robot.version)
         row = RobotModel(
             id=robot.robot_id,
             project_id=robot.project_id,
-            created_by=actor_id,
-            **_robot_values(robot, actor_id=actor_id),
+            created_by=scope.actor_id,
+            **_robot_values(robot, actor_id=scope.actor_id),
         )
         self._session.add(row)
         _flush(self._session)
@@ -301,7 +315,6 @@ class SqlRobotRepository:
         robot: Robot,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> Robot:
         scope.ensure(robot.project_id)
         _ensure_expected_version(robot.version, expected_version)
@@ -312,7 +325,10 @@ class SqlRobotRepository:
                 RobotModel.project_id == scope.project_id,
                 RobotModel.version == expected_version,
             )
-            .values(**_robot_values(robot, actor_id=actor_id), version=expected_version + 1)
+            .values(
+                **_robot_values(robot, actor_id=scope.actor_id),
+                version=expected_version + 1,
+            )
         )
         if result.rowcount == 0:
             _raise_update_failure(
@@ -330,14 +346,14 @@ class SqlDeviceRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def add(self, scope: ProjectScope, device: Device, *, actor_id: UUID) -> Device:
+    def add(self, scope: ProjectScope, device: Device) -> Device:
         scope.ensure(device.project_id)
         _ensure_initial_version(device.version)
         row = DeviceModel(
             id=device.device_id,
             project_id=device.project_id,
-            created_by=actor_id,
-            **_device_values(device, actor_id=actor_id),
+            created_by=scope.actor_id,
+            **_device_values(device, actor_id=scope.actor_id),
         )
         self._session.add(row)
         _flush(self._session)
@@ -382,7 +398,6 @@ class SqlDeviceRepository:
         device: Device,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> Device:
         scope.ensure(device.project_id)
         _ensure_expected_version(device.version, expected_version)
@@ -393,7 +408,10 @@ class SqlDeviceRepository:
                 DeviceModel.project_id == scope.project_id,
                 DeviceModel.version == expected_version,
             )
-            .values(**_device_values(device, actor_id=actor_id), version=expected_version + 1)
+            .values(
+                **_device_values(device, actor_id=scope.actor_id),
+                version=expected_version + 1,
+            )
         )
         if result.rowcount == 0:
             _raise_update_failure(
@@ -411,14 +429,14 @@ class SqlSensorRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
-    def add(self, scope: ProjectScope, sensor: Sensor, *, actor_id: UUID) -> Sensor:
+    def add(self, scope: ProjectScope, sensor: Sensor) -> Sensor:
         scope.ensure(sensor.project_id)
         _ensure_initial_version(sensor.version)
         row = SensorModel(
             id=sensor.sensor_id,
             project_id=sensor.project_id,
-            created_by=actor_id,
-            **_sensor_values(sensor, actor_id=actor_id),
+            created_by=scope.actor_id,
+            **_sensor_values(sensor, actor_id=scope.actor_id),
         )
         self._session.add(row)
         _flush(self._session)
@@ -466,7 +484,6 @@ class SqlSensorRepository:
         sensor: Sensor,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> Sensor:
         scope.ensure(sensor.project_id)
         _ensure_expected_version(sensor.version, expected_version)
@@ -477,7 +494,10 @@ class SqlSensorRepository:
                 SensorModel.project_id == scope.project_id,
                 SensorModel.version == expected_version,
             )
-            .values(**_sensor_values(sensor, actor_id=actor_id), version=expected_version + 1)
+            .values(
+                **_sensor_values(sensor, actor_id=scope.actor_id),
+                version=expected_version + 1,
+            )
         )
         if result.rowcount == 0:
             _raise_update_failure(
@@ -513,8 +533,6 @@ class SqlCalibrationProfileRepository:
         self,
         scope: ProjectScope,
         profile: CalibrationProfile,
-        *,
-        actor_id: UUID,
     ) -> CalibrationProfile:
         scope.ensure(profile.project_id)
         # 注意：CalibrationProfile.version 是配置版本号（DDP-101 §2.2），
@@ -529,8 +547,8 @@ class SqlCalibrationProfileRepository:
             schema_version=profile.schema_version,
             required_types=[_enum_value(item) for item in profile.required_types],
             selection_rule=dict(profile.selection_rule),
-            created_by=actor_id,
-            updated_by=actor_id,
+            created_by=scope.actor_id,
+            updated_by=scope.actor_id,
         )
         self._session.add(row)
         _flush(self._session)
@@ -605,23 +623,50 @@ def _record_from_row(row: CalibrationRecordModel) -> CalibrationRecord:
 
 
 class SqlCalibrationRecordRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self,
+        session: Session,
+        memberships: ProjectMembershipRepository | None = None,
+    ) -> None:
         self._session = session
+        self._memberships = memberships or SqlProjectMembershipRepository(session)
+
+    def _ensure_validator_eligible(
+        self,
+        scope: ProjectScope,
+        validated_by: UUID | None,
+    ) -> None:
+        """校验人必须是本项目成员，且角色拥有 VALIDATE 权限。"""
+        if validated_by is None:
+            return
+        role = self._memberships.role_for(scope.project_id, validated_by)
+        if not role_allows(role, ProjectAction.VALIDATE):
+            raise DomainValidationError("validated_by 必须是本项目有校验权限的成员")
+
+    def _get_owned_row(
+        self,
+        scope: ProjectScope,
+        calibration_id: UUID,
+    ) -> CalibrationRecordModel:
+        row = self._session.get(CalibrationRecordModel, calibration_id)
+        if row is None or row.project_id != scope.project_id:
+            raise ResourceNotFoundError("标定", calibration_id)
+        return row
 
     def add(
         self,
         scope: ProjectScope,
         record: CalibrationRecord,
-        *,
-        actor_id: UUID,
     ) -> CalibrationRecord:
         scope.ensure(record.project_id)
         _ensure_initial_version(record.version)
+        _ensure_performer_is_actor(scope, record.performed_by)
+        self._ensure_validator_eligible(scope, record.validated_by)
         row = CalibrationRecordModel(
             id=record.calibration_id,
             project_id=record.project_id,
-            created_by=actor_id,
-            **_record_values(record, actor_id=actor_id),
+            created_by=scope.actor_id,
+            **_record_values(record, actor_id=scope.actor_id),
         )
         self._session.add(row)
         _flush(self._session)
@@ -668,10 +713,12 @@ class SqlCalibrationRecordRepository:
         record: CalibrationRecord,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> CalibrationRecord:
         scope.ensure(record.project_id)
         _ensure_expected_version(record.version, expected_version)
+        existing = self._get_owned_row(scope, record.calibration_id)
+        _ensure_performer_unchanged(existing.performed_by, record.performed_by)
+        self._ensure_validator_eligible(scope, record.validated_by)
         result = self._session.execute(
             update(CalibrationRecordModel)
             .where(
@@ -679,7 +726,10 @@ class SqlCalibrationRecordRepository:
                 CalibrationRecordModel.project_id == scope.project_id,
                 CalibrationRecordModel.version == expected_version,
             )
-            .values(**_record_values(record, actor_id=actor_id), version=expected_version + 1)
+            .values(
+                **_record_values(record, actor_id=scope.actor_id),
+                version=expected_version + 1,
+            )
         )
         if result.rowcount == 0:
             _raise_update_failure(
@@ -698,10 +748,12 @@ class SqlCalibrationRecordRepository:
         record: CalibrationRecord,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> CalibrationRecord:
         scope.ensure(record.project_id)
         _ensure_expected_version(record.version, expected_version)
+        existing = self._get_owned_row(scope, record.calibration_id)
+        _ensure_performer_unchanged(existing.performed_by, record.performed_by)
+        self._ensure_validator_eligible(scope, record.validated_by)
         activated = record.activate()
 
         # 同一事务内先替代旧 ACTIVE，再激活当前记录；部分唯一索引兜底并发。
@@ -719,7 +771,7 @@ class SqlCalibrationRecordRepository:
             .values(
                 status=CalibrationStatus.SUPERSEDED.value,
                 version=CalibrationRecordModel.version + 1,
-                updated_by=actor_id,
+                updated_by=scope.actor_id,
             )
         )
         result = self._session.execute(
@@ -730,7 +782,10 @@ class SqlCalibrationRecordRepository:
                 CalibrationRecordModel.version == expected_version,
                 CalibrationRecordModel.status == CalibrationStatus.VALIDATED.value,
             )
-            .values(**_record_values(activated, actor_id=actor_id), version=expected_version + 1)
+            .values(
+                **_record_values(activated, actor_id=scope.actor_id),
+                version=expected_version + 1,
+            )
         )
         if result.rowcount == 0:
             row = self._session.get(CalibrationRecordModel, record.calibration_id)

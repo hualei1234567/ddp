@@ -21,7 +21,7 @@ from app.domain.identity.models import ProjectScope
 
 
 class RobotRepository(Protocol):
-    def add(self, scope: ProjectScope, robot: Robot, *, actor_id: UUID) -> Robot: ...
+    def add(self, scope: ProjectScope, robot: Robot) -> Robot: ...
 
     def get(self, scope: ProjectScope, robot_id: UUID) -> Robot | None: ...
 
@@ -41,12 +41,11 @@ class RobotRepository(Protocol):
         robot: Robot,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> Robot: ...
 
 
 class DeviceRepository(Protocol):
-    def add(self, scope: ProjectScope, device: Device, *, actor_id: UUID) -> Device: ...
+    def add(self, scope: ProjectScope, device: Device) -> Device: ...
 
     def get(self, scope: ProjectScope, device_id: UUID) -> Device | None: ...
 
@@ -66,12 +65,11 @@ class DeviceRepository(Protocol):
         device: Device,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> Device: ...
 
 
 class SensorRepository(Protocol):
-    def add(self, scope: ProjectScope, sensor: Sensor, *, actor_id: UUID) -> Sensor: ...
+    def add(self, scope: ProjectScope, sensor: Sensor) -> Sensor: ...
 
     def get(self, scope: ProjectScope, sensor_id: UUID) -> Sensor | None: ...
 
@@ -92,7 +90,6 @@ class SensorRepository(Protocol):
         sensor: Sensor,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> Sensor: ...
 
 
@@ -101,8 +98,6 @@ class CalibrationProfileRepository(Protocol):
         self,
         scope: ProjectScope,
         profile: CalibrationProfile,
-        *,
-        actor_id: UUID,
     ) -> CalibrationProfile: ...
 
     def get(self, scope: ProjectScope, profile_id: UUID) -> CalibrationProfile | None: ...
@@ -113,8 +108,6 @@ class CalibrationRecordRepository(Protocol):
         self,
         scope: ProjectScope,
         record: CalibrationRecord,
-        *,
-        actor_id: UUID,
     ) -> CalibrationRecord: ...
 
     def get(
@@ -139,7 +132,6 @@ class CalibrationRecordRepository(Protocol):
         record: CalibrationRecord,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> CalibrationRecord: ...
 
     def activate(
@@ -148,6 +140,5 @@ class CalibrationRecordRepository(Protocol):
         record: CalibrationRecord,
         *,
         expected_version: int,
-        actor_id: UUID,
     ) -> CalibrationRecord:
         """激活已校验记录，并原子地把同目标旧 ACTIVE 记录转为 SUPERSEDED。"""
