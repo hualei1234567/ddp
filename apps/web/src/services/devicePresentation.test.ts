@@ -38,6 +38,7 @@ describe("设备域展示映射", () => {
   it("传感器沿用设备状态机，类型映射独立", () => {
     expect(getSensorStatus("FAULT").label).toBe("故障");
     expect(getDeviceType("CAMERA_RIG").label).toBe("相机组");
+    expect(getSensorType("RGB_D").label).toBe("RGB-D 相机");
     expect(getSensorType("RGB-D").label).toBe("RGB-D 相机");
     expect(getDeviceType("UNKNOWN_TYPE").known).toBe(false);
   });

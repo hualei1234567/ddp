@@ -132,7 +132,7 @@ export function parseSensor(value: unknown, path = "传感器"): Sensor {
       `${path}.resolution_h`,
     ),
     bit_depth: readOptionalNumber(record, "bit_depth", `${path}.bit_depth`),
-    channels: readOptionalStringArray(record, "channels", `${path}.channels`),
+    channels: readOptionalNumber(record, "channels", `${path}.channels`),
     intrinsic_calibration_id: readOptionalString(
       record,
       "intrinsic_calibration_id",
@@ -181,7 +181,7 @@ export function parseCalibrationRecord(
   path = "标定记录",
 ): CalibrationRecord {
   const record = asRecord(value, path);
-  const uncertainty = readOptionalNumber(
+  const uncertainty = readOptionalRecord(
     record,
     "uncertainty",
     `${path}.uncertainty`,

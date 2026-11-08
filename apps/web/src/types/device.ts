@@ -43,7 +43,8 @@ export interface Sensor {
   resolution_w: number | null;
   resolution_h: number | null;
   bit_depth: number | null;
-  channels: string[] | null;
+  /** 图像通道数，后端为整数（如 RGB=3、RGB_D=4），不是通道名数组。 */
+  channels: number | null;
   intrinsic_calibration_id: string | null;
   extrinsic_calibration_id: string | null;
   coordinate_frame: string | null;
@@ -77,7 +78,11 @@ export interface CalibrationRecord {
   evidence_asset_ids: string[];
   source: string | null;
   checksum: string | null;
-  uncertainty: number | null;
+  /**
+   * 不确定度，后端序列化为 JSON 对象（如 `{ translation_m, rotation_rad }`）。
+   * 具体键由 Canonical 标定 Schema 约束，前端不解释业务语义。
+   */
+  uncertainty: Record<string, unknown> | null;
   performed_by: string | null;
   validated_by: string | null;
   validated_at: string | null;

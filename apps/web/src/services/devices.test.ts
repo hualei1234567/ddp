@@ -1,76 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiClient, ApiError } from "./api";
+import {
+  backendCalibrationFixture,
+  backendDeviceFixture,
+  backendSensorFixture,
+} from "./__fixtures__/deviceContract.fixtures";
 import { createDevicesApi } from "./devices";
 
 const projectId = "11111111-1111-7111-8111-111111111111";
 const deviceId = "22222222-2222-7222-8222-222222222222";
 
-const device = {
-  device_id: deviceId,
-  project_id: projectId,
-  robot_id: null,
-  code: "DEV-001",
-  name: "主控计算单元",
-  device_type: "COMPUTE",
-  vendor: "Acme",
-  model: "X1",
-  serial_number: "SN-001",
-  firmware_version: null,
-  hardware_version: null,
-  calibration_profile_id: null,
-  capability_profile: null,
-  status: "ACTIVE",
-  location_id: null,
-  owner_user_id: null,
-  version: 1,
-  created_at: null,
-  updated_at: null,
-  created_by: null,
-  updated_by: null,
-};
-
-const sensor = {
-  sensor_id: "sensor-1",
-  project_id: projectId,
-  robot_id: null,
-  device_id: deviceId,
-  code: "CAM-001",
-  sensor_type: "RGB",
-  vendor: null,
-  model: null,
-  serial_number: null,
-  sample_rate_hz: 30,
-  resolution_w: 1920,
-  resolution_h: 1080,
-  bit_depth: 8,
-  channels: null,
-  intrinsic_calibration_id: null,
-  extrinsic_calibration_id: null,
-  coordinate_frame: null,
-  sync_mode: null,
-  sync_group: null,
-  firmware_version: null,
-  calibration_profile_id: null,
-  status: "ACTIVE",
-  mount_position: null,
-  version: 1,
-  created_at: null,
-  updated_at: null,
-};
-
-const calibration = {
-  calibration_id: "cal-1",
-  project_id: projectId,
-  target_type: "DEVICE",
-  target_id: deviceId,
-  calibration_type: "EXTRINSIC",
-  status: "ACTIVE",
-  evidence_asset_ids: [],
-  version: 1,
-  created_at: null,
-  updated_at: null,
-};
+const device = backendDeviceFixture;
+const sensor = backendSensorFixture;
+const calibration = backendCalibrationFixture;
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {

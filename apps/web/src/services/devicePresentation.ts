@@ -64,6 +64,9 @@ const DEVICE_TYPE_LABELS: Record<string, string> = {
 
 const SENSOR_TYPE_LABELS: Record<string, string> = {
   RGB: "RGB 相机",
+  /** 后端 API 枚举使用大写下划线形式。 */
+  RGB_D: "RGB-D 相机",
+  /** 兼容历史连字符值；仅为展示兜底，不改变服务端枚举。 */
   "RGB-D": "RGB-D 相机",
   DEPTH: "深度相机",
   IMU: "IMU",
