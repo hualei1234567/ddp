@@ -14,6 +14,7 @@
 | [04-阶段0平台纳管与并行开工记录-2026-11-08.md](04-阶段0平台纳管与并行开工记录-2026-11-08.md) | 平台纳管、团队、任务、知识库、评测套件与并行执行记录 | 进行中 |
 | [architecture/阶段1-设备域契约冻结-v1.md](architecture/阶段1-设备域契约冻结-v1.md) | 设备域契约冻结候选：字段、版本、状态、错误码、参数 Schema | 待用户批准 |
 | [adr/0009-device-contract-freeze.md](adr/0009-device-contract-freeze.md) | ADR-0009 设备域契约冻结与不可变决策 | 已提议 |
+| [testing/阶段1设备域安全与契约验收.md](testing/阶段1设备域安全与契约验收.md) | DDP-205 独立验收：安全门禁 PARTIAL，数据库兜底/契约 fixture/PG 证据待关闭 | 待整改 |
 | [testing/阶段0-1测试策略.md](testing/阶段0-1测试策略.md) | 阶段 0/1 测试矩阵、CI 门禁、验收清单与 P0 阻断项 | 待审阅 |
 | [operations/JWT认证与staging启动.md](operations/JWT认证与staging启动.md) | Bearer JWT 配置、启动自检、staging 重建与回滚 | 现行 |
 | [reviews/2026-11-08-security-device-review.md](reviews/2026-11-08-security-device-review.md) | 设备域安全审查：1 个 P0、5 个 P1、7 个 P2 | 待修复 |
