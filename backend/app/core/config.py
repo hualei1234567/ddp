@@ -115,6 +115,13 @@ class Settings(BaseSettings):
     export_worker_retry_base_seconds: float = Field(default=5.0, gt=0)
     export_worker_retry_max_seconds: float = Field(default=300.0, gt=0)
 
+    # 训练平台 Adapter：回调密钥与能力声明只来自配置/Secret 管理，不硬编码。
+    # DDP_TRAINING_ADAPTER_SHARED_SECRETS 形如 {"mock": "<32+ 字符密钥>"}。
+    training_adapter_shared_secrets: dict[str, str] = Field(default_factory=dict)
+    training_adapter_capabilities: dict[str, list[str]] = Field(default_factory=dict)
+    training_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
+    training_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
+
     jwt_secret: str = "replace-me-in-production"  # noqa: S105 - 占位符，生产必须覆盖
     jwt_issuer: str = "ddp"
     jwt_audience: str = "ddp-api"
@@ -186,6 +193,7 @@ class Settings(BaseSettings):
         problems.extend(self._security_headers_config_problems())
         problems.extend(self._validation_worker_config_problems())
         problems.extend(self._export_worker_config_problems())
+        problems.extend(self._training_adapter_config_problems())
         if not self.is_local:
             if self.local_header_auth:
                 problems.append(
@@ -297,6 +305,41 @@ class Settings(BaseSettings):
             problems.append(
                 "DDP_EXPORT_WORKER_RETRY_MAX_SECONDS 不得小于 "
                 "DDP_EXPORT_WORKER_RETRY_BASE_SECONDS"
+            )
+        return problems
+
+    def _training_adapter_config_problems(self) -> list[str]:
+        problems: list[str] = []
+        known_capabilities = {
+            "submit",
+            "status",
+            "cancel",
+            "callback",
+            "model_ref",
+            "evaluation_ref",
+        }
+        for adapter_id, secret in self.training_adapter_shared_secrets.items():
+            if not adapter_id.strip() or adapter_id != adapter_id.strip():
+                problems.append("训练 Adapter ID 不得为空或包含首尾空白")
+            if not secret or secret != secret.strip():
+                problems.append(f"训练 Adapter {adapter_id!r} 的回调密钥为空或含首尾空白")
+            elif not self.is_local and len(secret) < 32:
+                problems.append(
+                    f"非本地环境训练 Adapter {adapter_id!r} 的回调密钥长度不足 32"
+                )
+        for adapter_id, capabilities in self.training_adapter_capabilities.items():
+            if not adapter_id.strip() or adapter_id != adapter_id.strip():
+                problems.append("训练 Adapter 能力声明的 ID 非法")
+            unknown = set(capabilities) - known_capabilities
+            if unknown:
+                problems.append(
+                    f"训练 Adapter {adapter_id!r} 声明了未知能力：{', '.join(sorted(unknown))}"
+                )
+            if len(set(capabilities)) != len(capabilities):
+                problems.append(f"训练 Adapter {adapter_id!r} 能力声明存在重复项")
+        if self.training_callback_nonce_ttl_seconds < self.training_callback_time_window_seconds:
+            problems.append(
+                "DDP_TRAINING_CALLBACK_NONCE_TTL_SECONDS 不得小于回调时间窗"
             )
         return problems
 

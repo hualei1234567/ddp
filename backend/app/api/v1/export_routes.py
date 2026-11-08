@@ -17,6 +17,7 @@ from app.api.v1.export_dependencies import (
     WriteScope,
     request_id,
 )
+from app.api.v1.training_dependencies import ExportDownloadScope, ExportGrantScope
 from app.api.v1.export_schemas import (
     ExportActionRequest,
     ExportJobCreate,
@@ -58,7 +59,7 @@ def list_export_jobs(
 def create_export_job(
     payload: ExportJobCreate,
     request: Request,
-    scope: WriteScope,
+    scope: ExportGrantScope,
     use_cases: ExportUseCasesDep,
     idempotency_key: RequiredIdempotencyKey,
 ) -> dict[str, Any]:
@@ -122,7 +123,7 @@ def act_on_export_job(
 @router.get("/{export_job_id}/artifacts")
 def get_export_artifacts(
     export_job_id: UUID,
-    scope: ReadScope,
+    scope: ExportDownloadScope,
     use_cases: ExportUseCasesDep,
 ) -> dict[str, Any]:
     return use_cases.artifact_manifest(scope, export_job_id)
@@ -133,7 +134,7 @@ def download_export_artifact(
     export_job_id: UUID,
     artifact_path: str,
     request: Request,
-    scope: ReadScope,
+    scope: ExportDownloadScope,
     use_cases: ExportUseCasesDep,
 ) -> dict[str, Any]:
     return use_cases.artifact_download(

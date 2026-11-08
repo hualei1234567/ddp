@@ -18,6 +18,7 @@ from app.api.v1.dataset_dependencies import (
     request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.training_dependencies import DatasetReadScope, DatasetVersionReadScope
 from app.api.v1.dataset_schemas import (
     DatasetVersionCreate,
     SelectionPreviewRequest,
@@ -45,7 +46,7 @@ router = APIRouter(prefix="/projects/{project_id}/datasets", tags=["dataset-vers
 @router.get("/{dataset_id}/versions")
 def list_versions(
     dataset_id: UUID,
-    scope: ReadScope,
+    scope: DatasetReadScope,
     use_cases: DatasetUseCasesDep,
     status: str | None = None,
     validity_status: str | None = None,
@@ -110,7 +111,7 @@ def create_version(
 def get_version(
     dataset_id: UUID,
     version_id: UUID,
-    scope: ReadScope,
+    scope: DatasetVersionReadScope,
     use_cases: DatasetUseCasesDep,
 ) -> dict[str, Any]:
     version = use_cases.versions.get(scope, dataset_id, version_id)
@@ -200,7 +201,7 @@ def preview_selection(
 def list_items(
     dataset_id: UUID,
     version_id: UUID,
-    scope: ReadScope,
+    scope: DatasetVersionReadScope,
     use_cases: DatasetUseCasesDep,
     split: str | None = None,
     sample_role: str | None = None,
@@ -230,7 +231,7 @@ def get_item(
     dataset_id: UUID,
     version_id: UUID,
     item_id: UUID,
-    scope: ReadScope,
+    scope: DatasetVersionReadScope,
     use_cases: DatasetUseCasesDep,
 ) -> dict[str, Any]:
     return item_out(use_cases.versions.get_item(scope, dataset_id, version_id, item_id))
@@ -240,7 +241,7 @@ def get_item(
 def get_quality_report(
     dataset_id: UUID,
     version_id: UUID,
-    scope: ReadScope,
+    scope: DatasetVersionReadScope,
     use_cases: DatasetUseCasesDep,
 ) -> dict[str, Any]:
     return quality_out(use_cases.versions.quality_report(scope, dataset_id, version_id))
@@ -250,7 +251,7 @@ def get_quality_report(
 def get_leakage_report(
     dataset_id: UUID,
     version_id: UUID,
-    scope: ReadScope,
+    scope: DatasetVersionReadScope,
     use_cases: DatasetUseCasesDep,
 ) -> dict[str, Any]:
     return leakage_out(use_cases.versions.leakage_report(scope, dataset_id, version_id))
@@ -260,7 +261,7 @@ def get_leakage_report(
 def get_manifest(
     dataset_id: UUID,
     version_id: UUID,
-    scope: ReadScope,
+    scope: DatasetVersionReadScope,
     use_cases: DatasetUseCasesDep,
     inline: Annotated[bool, Query()] = True,
 ) -> dict[str, Any]:

@@ -22,6 +22,7 @@ from app.infrastructure.db.guards import (
     install_calibration_target_guards,
 )
 from app.infrastructure.db.ingestion_guards import install_ingestion_state_guards
+from app.infrastructure.db.training_guards import install_training_guards
 
 NAMING_CONVENTION = {
     "ix": "ix_%(column_0_label)s",
@@ -55,3 +56,4 @@ def _install_ddp_guards(
     install_quality_guards(connection)
     install_dataset_guards(connection)
     install_export_guards(connection)
+    install_training_guards(connection)

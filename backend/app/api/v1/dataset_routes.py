@@ -18,6 +18,7 @@ from app.api.v1.dataset_dependencies import (
     request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.training_dependencies import DatasetReadScope
 from app.api.v1.dataset_schemas import (
     DatasetActionRequest,
     DatasetCreate,
@@ -105,7 +106,7 @@ def create_dataset(
 @router.get("/{dataset_id}")
 def get_dataset(
     dataset_id: UUID,
-    scope: ReadScope,
+    scope: DatasetReadScope,
     use_cases: DatasetUseCasesDep,
 ) -> dict[str, Any]:
     dataset = use_cases.datasets.get(scope, dataset_id)

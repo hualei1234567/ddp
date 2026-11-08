@@ -72,6 +72,14 @@ from app.infrastructure.db.models.ingestion import (
     UploadSessionModel,
 )
 from app.infrastructure.db.models.jobs import IngestionJobModel
+from app.infrastructure.db.models.training import (
+    DatasetGrantModel,
+    ExternalTrainingReferenceModel,
+    TrainingAdapterCallbackModel,
+    TrainingDeliveryModel,
+    TrainingRequestModel,
+    TrainingRequestRevisionModel,
+)
 
 __all__ = [
     "AnnotationArbitration",
@@ -95,6 +103,7 @@ __all__ = [
     "CollectionTaskSensor",
     "DataLineageEdgeModel",
     "DatasetDedupPolicyModel",
+    "DatasetGrantModel",
     "DatasetItemModel",
     "DatasetLeakagePolicyModel",
     "DatasetLeakageReportModel",
@@ -107,6 +116,7 @@ __all__ = [
     "EpisodeModel",
     "EpisodeRawAssetModel",
     "ExportJobModel",
+    "ExternalTrainingReferenceModel",
     "GoldEvaluation",
     "GoldExposure",
     "GoldSet",
@@ -122,6 +132,10 @@ __all__ = [
     "RawAssetModel",
     "Robot",
     "Sensor",
+    "TrainingAdapterCallbackModel",
+    "TrainingDeliveryModel",
+    "TrainingRequestModel",
+    "TrainingRequestRevisionModel",
     "UploadPartChecksumBindingModel",
     "UploadPartModel",
     "UploadSessionModel",

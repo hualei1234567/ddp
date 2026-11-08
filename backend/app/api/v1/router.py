@@ -8,9 +8,11 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    adapter_callback_routes,
     annotation,
     calibrations,
     collection,
+    dataset_grant_routes,
     dataset_routes,
     dataset_version_routes,
     devices,
@@ -20,6 +22,8 @@ from app.api.v1 import (
     lineage,
     platform,
     sensors,
+    training_delivery_routes,
+    training_request_routes,
     uploads,
 )
 
@@ -37,3 +41,7 @@ api_router.include_router(annotation.router)
 api_router.include_router(dataset_routes.router)
 api_router.include_router(dataset_version_routes.router)
 api_router.include_router(export_routes.router)
+api_router.include_router(dataset_grant_routes.router)
+api_router.include_router(training_request_routes.router)
+api_router.include_router(training_delivery_routes.router)
+api_router.include_router(adapter_callback_routes.router)
