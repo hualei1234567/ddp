@@ -1,0 +1,14 @@
+extends:
+  - recommended
+
+rules:
+  # 阶段 0 的 /health 与 /api/v1/platform/meta 为公开只读端点，不强制 4xx；
+  # 设备域写端点均已在契约中声明 401/403/409/422/428/429。
+  operation-4xx-response: warn
+  # 本契约的 summary 已足够；description 按端点复杂度可选。
+  operation-description: off
+  # 信息区已包含 owner 与许可名称，不以 URL/邮箱作为门禁。
+  info-license: off
+  info-contact: off
+  # 标签必须有说明，避免“未知标签”污染生成代码。
+  tag-description: error

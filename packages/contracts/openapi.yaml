@@ -1,17 +1,61 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    DDP（Embodied AI Data Platform）API 契约。
-    阶段 0 只有平台健康检查与元信息；业务契约按阶段追加。
+    DDP（Embodied AI Data Platform）HTTP API 契约。
+
+    - `0.2.0` 是**当前已实现端点快照**：覆盖 `/health`、平台元信息，以及
+      devices / sensors / calibrations 的全部已实现路由、错误码、乐观锁与分页。
+    - 设备域**冻结目标**为 `ddp.device/1.0.0`（已批准），字段与语义以
+      `docs/architecture/阶段1-设备域契约冻结-v1.md` 为准。
+    - 当前实现与冻结目标的逐项差距、责任与排期见
+      `docs/architecture/阶段1-设备域冻结字段实现差距与排期.md`。
+    - 未实现字段不会在本文中伪装为已可用；例如 `frame_id`、`frame_convention`、
+      `calibration_version`、`profile_version`、`schema_version` 目前尚未进入实现接口。
+
+    认证：生产环境使用 `Authorization: Bearer <JWT>`；本项目阶段 0 另支持
+    local 环境、显式开关且 loopback 来源的 `X-User-Id` 本地后门，不属于对外契约。
+    所有项目路由由服务端校验成员资格，不信任客户端传入的 `project_id`。
+    错误体统一为 `{"error": {"code", "message", "request_id"}}`。
+    响应头携带 `X-Request-Id`；写动作要求 `If-Match: "<version>"`。
+  contact:
+    name: DDP System Architect
+  license:
+    name: Proprietary
+x-ddp-contract:
+  kind: implemented-snapshot
+  version: 0.2.0
+  frozen_target: ddp.device/1.0.0
+  frozen_status: approved
+  approved_at: "2026-11-08"
+  frozen_document: docs/architecture/阶段1-设备域契约冻结-v1.md
+  gap_document: docs/architecture/阶段1-设备域冻结字段实现差距与排期.md
+  approval_record: docs/adr/0009-device-contract-freeze.md
+  note: |
+    本文件只声明已实现行为。冻结目标的破坏性字段更名（coordinate_frame→frame_id、
+    version→lock_version、Profile version→profile_version）在差距 G-03/G-04/G-08
+    关闭前不会出现在本快照中，避免前端生成不可调用的类型。
 servers:
   - url: http://localhost:8000
     description: 本地开发
+security:
+  - bearerAuth: []
+tags:
+  - name: platform
+    description: 健康检查与平台元信息
+  - name: devices
+    description: 设备档案、项目隔离、乐观锁与生命周期动作
+  - name: sensors
+    description: 传感器档案、参照校验、乐观锁与生命周期动作
+  - name: calibrations
+    description: 标定记录草案、提交/校验/驳回/激活/作废/过期
 paths:
   /health:
     get:
       operationId: getHealth
+      tags: [platform]
+      security: []
       summary: 服务健康检查
       responses:
         "200":
@@ -19,21 +63,12 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [status, service, version, env]
-                properties:
-                  status:
-                    type: string
-                    const: ok
-                  service:
-                    type: string
-                  version:
-                    type: string
-                  env:
-                    type: string
+                $ref: "#/components/schemas/HealthResponse"
   /api/v1/platform/meta:
     get:
       operationId: getPlatformMeta
+      tags: [platform]
+      security: []
       summary: 平台元信息
       responses:
         "200":
@@ -41,34 +76,1925 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                required: [name, version, env, phase, modules]
-                properties:
-                  name:
-                    type: string
-                  version:
-                    type: string
-                  env:
-                    type: string
-                  phase:
-                    type: string
-                  modules:
-                    type: array
-                    items:
-                      type: string
+                $ref: "#/components/schemas/PlatformMeta"
+  /api/v1/projects/{project_id}/devices:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listDevices
+      tags: [devices]
+      summary: 设备列表（游标分页）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: 生命周期状态过滤；非法枚举返回 `validation_failed`
+          schema:
+            $ref: "#/components/schemas/LifecycleStatus"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 设备分页结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DevicePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      operationId: createDevice
+      tags: [devices]
+      summary: 创建设备档案
+      description: 初始状态固定为 `PROVISIONED`；客户端不得提交 status/project_id/审计字段。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DeviceCreate"
+      responses:
+        "201":
+          description: 设备已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/devices/{device_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/DeviceId"
+    get:
+      operationId: getDevice
+      tags: [devices]
+      summary: 设备详情
+      responses:
+        "200":
+          description: 设备详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    patch:
+      operationId: updateDevice
+      tags: [devices]
+      summary: 修改设备档案（不含状态）
+      description: |
+        仅允许修改白名单字段；`status`、`project_id`、各 `*_id`、审计字段一律拒绝。
+        必须携带 `If-Match`；成功一次版本 +1。
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DevicePatch"
+      responses:
+        "200":
+          description: 修改后的设备
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/devices/{device_id}/activate:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/DeviceId"
+    post:
+      operationId: activateDevice
+      tags: [devices]
+      summary: 设备启用（PROVISIONED→ACTIVE）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/devices/{device_id}/maintenance:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/DeviceId"
+    post:
+      operationId: enterDeviceMaintenance
+      tags: [devices]
+      summary: 设备进入维护（ACTIVE/FAULT→IN_MAINTENANCE）
+      description: |
+        当前实现接收 `ActionRequest` 形状但不持久化 reason/maintenance_record_id；
+        冻结目标要求持久化并写审计，见差距 G-09/G-10。
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/devices/{device_id}/fault:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/DeviceId"
+    post:
+      operationId: reportDeviceFault
+      tags: [devices]
+      summary: 上报设备故障（ACTIVE/IN_MAINTENANCE→FAULT）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/devices/{device_id}/suspend:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/DeviceId"
+    post:
+      operationId: suspendDevice
+      tags: [devices]
+      summary: 挂起设备（任意非终态→SUSPENDED）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/devices/{device_id}/retire:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/DeviceId"
+    post:
+      operationId: retireDevice
+      tags: [devices]
+      summary: 设备退役（任意非终态→RETIRED，终态）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/sensors:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listSensors
+      tags: [sensors]
+      summary: 传感器列表（游标分页）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/LifecycleStatus"
+        - name: sensor_type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/SensorType"
+        - name: robot_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: device_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 传感器分页结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SensorPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      operationId: createSensor
+      tags: [sensors]
+      summary: 创建传感器档案
+      description: |
+        必须至少关联 `robot_id` 或 `device_id`；引用必须同项目。
+        当前实现字段为 `coordinate_frame`；冻结目标更名 `frame_id` 并新增
+        `frame_convention`，见差距 G-08。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SensorCreate"
+      responses:
+        "201":
+          description: 传感器已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sensor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/sensors/{sensor_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SensorId"
+    get:
+      operationId: getSensor
+      tags: [sensors]
+      summary: 传感器详情
+      responses:
+        "200":
+          description: 传感器详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sensor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    patch:
+      operationId: updateSensor
+      tags: [sensors]
+      summary: 修改传感器档案（不含状态）
+      description: 必须携带 `If-Match`；引用变更会重新校验同项目与标定目标一致性。
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SensorPatch"
+      responses:
+        "200":
+          description: 修改后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sensor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/activate:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SensorId"
+    post:
+      operationId: activateSensor
+      tags: [sensors]
+      summary: 传感器启用（PROVISIONED→ACTIVE）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sensor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/maintenance:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SensorId"
+    post:
+      operationId: enterSensorMaintenance
+      tags: [sensors]
+      summary: 传感器进入维护
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sensor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/fault:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SensorId"
+    post:
+      operationId: reportSensorFault
+      tags: [sensors]
+      summary: 上报传感器故障（ACTIVE/IN_MAINTENANCE→FAULT）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sensor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/suspend:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SensorId"
+    post:
+      operationId: suspendSensor
+      tags: [sensors]
+      summary: 挂起传感器（任意非终态→SUSPENDED）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sensor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/retire:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/SensorId"
+    post:
+      operationId: retireSensor
+      tags: [sensors]
+      summary: 传感器退役（终态）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sensor"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/calibrations:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listCalibrations
+      tags: [calibrations]
+      summary: 标定记录列表（游标分页）
+      parameters:
+        - name: target_type
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CalibrationTargetType"
+        - name: target_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CalibrationStatus"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 标定记录分页结果
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalibrationPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      operationId: createCalibration
+      tags: [calibrations]
+      summary: 创建标定草案
+      description: |
+        初始状态固定为 `DRAFT`；`performed_by` 由服务端主体写入；
+        `checksum` 由服务端计算，客户端提交会被拒绝。
+        当前实现按 `profile_id + target_type` 校验 Profile；目标存在性由应用层校验，
+        DB 兜底见差距 G-12。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalibrationCreate"
+      responses:
+        "201":
+          description: 标定草案已创建
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calibration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/CalibrationId"
+    get:
+      operationId: getCalibration
+      tags: [calibrations]
+      summary: 标定记录详情
+      responses:
+        "200":
+          description: 标定记录详情
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calibration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    patch:
+      operationId: updateCalibration
+      tags: [calibrations]
+      summary: 修改标定草案（仅 DRAFT）
+      description: |
+        非 DRAFT 记录返回 `resource_immutable`；`status/checksum/performed_by` 等
+        不可由 PATCH 写入。必须携带 `If-Match`。
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CalibrationPatch"
+      responses:
+        "200":
+          description: 修改后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calibration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/submit:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/CalibrationId"
+    post:
+      operationId: submitCalibration
+      tags: [calibrations]
+      summary: 提交标定（DRAFT→SUBMITTED）
+      description: 要求证据非空；当前实现不重算/比对 checksum，见差距 G-15。
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 提交后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calibration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/validate:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/CalibrationId"
+    post:
+      operationId: validateCalibration
+      tags: [calibrations]
+      summary: 校验标定（SUBMITTED→VALIDATED）
+      description: |
+        要求当前主体具备项目 VALIDATE 权限，且执行人与校验人分离（四眼）。
+        违反返回 `403 forbidden`。
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 校验后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calibration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/reject:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/CalibrationId"
+    post:
+      operationId: rejectCalibration
+      tags: [calibrations]
+      summary: 驳回标定（SUBMITTED→REJECTED）
+      description: 当前实现未持久化 status_reason；冻结目标见差距 G-09/G-10。
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 驳回后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calibration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/activate:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/CalibrationId"
+    post:
+      operationId: activateCalibration
+      tags: [calibrations]
+      summary: 激活标定（VALIDATED→ACTIVE）
+      description: |
+        同目标/类型旧 ACTIVE 在同一事务内转 SUPERSEDED；当前实现已做有效期校验与
+        部分唯一索引兜底，但无 DB 投影/触发器，见差距 G-12/G-13/G-14。
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 激活后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calibration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/revoke:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/CalibrationId"
+    post:
+      operationId: revokeCalibration
+      tags: [calibrations]
+      summary: 作废标定（ACTIVE→REVOKED，终态）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 作废后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calibration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/expire:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/CalibrationId"
+    post:
+      operationId: expireCalibration
+      tags: [calibrations]
+      summary: 标记标定过期（ACTIVE→EXPIRED，终态）
+      description: 当前为显式动作；自动到期任务尚未实现，见差距 G-20/批次 E。
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequest"
+      responses:
+        "200":
+          description: 过期后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Calibration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 生产环境使用 Bearer JWT；本地 X-User-Id 后门不属于对外契约。
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      description: 项目 ID；服务端校验当前主体成员资格，不信任客户端声明
+      schema:
+        type: string
+        format: uuid
+    DeviceId:
+      name: device_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SensorId:
+      name: sensor_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CalibrationId:
+      name: calibration_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: 不透明游标；由上一页 `next_cursor` 返回；非法返回 `validation_failed`
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: 每页数量，默认 20，最大 100
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: |
+        乐观锁版本，格式为 `"<version>"`（可带弱校验前缀 `W/`）。
+        缺失返回 428 `precondition_required`；不匹配返回 409 `version_conflict`。
+      schema:
+        type: string
+        pattern: '^(W/)?"?[1-9][0-9]*"?$'
+  responses:
+    Unauthorized:
+      description: 未认证或令牌无效（`not_authenticated`，401）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Forbidden:
+      description: 权限不足、跨项目访问或四眼违规（`forbidden`，403）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    NotFound:
+      description: |
+        同项目内资源不存在或跨项目不可见（`resource_not_found`，404）；
+        平台管理员访问不存在的项目时可能为 `not_found`。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    Conflict:
+      description: |
+        状态/版本/唯一性冲突，可能返回：
+        `state_transition_invalid`、`version_conflict`、`resource_immutable`、
+        `duplicate_resource`、`calibration_active_conflict` 或通用 `conflict`（409）。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    UnprocessableEntity:
+      description: |
+        参数或领域校验失败，可能返回：
+        `validation_failed`、`calibration_invalid`、`calibration_target_invalid`、
+        `calibration_profile_invalid`、`calibration_checksum_mismatch`、
+        `calibration_not_active`（422）。
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    PreconditionRequired:
+      description: 缺少 `If-Match`（`precondition_required`，428）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
+    TooManyRequests:
+      description: 触发写路径/认证路径限流（`rate_limited`，429）
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorEnvelope"
   schemas:
+    ErrorCode:
+      type: string
+      description: 稳定错误码；未知错误不得默认成功
+      enum:
+        - not_authenticated
+        - forbidden
+        - not_found
+        - resource_not_found
+        - conflict
+        - state_transition_invalid
+        - version_conflict
+        - resource_immutable
+        - duplicate_resource
+        - calibration_active_conflict
+        - validation_failed
+        - calibration_invalid
+        - calibration_target_invalid
+        - calibration_profile_invalid
+        - calibration_checksum_mismatch
+        - calibration_not_active
+        - precondition_required
+        - rate_limited
     ErrorEnvelope:
       type: object
       required: [error]
+      additionalProperties: false
       properties:
         error:
           type: object
           required: [code, message]
+          additionalProperties: false
           properties:
             code:
-              type: string
+              $ref: "#/components/schemas/ErrorCode"
             message:
               type: string
             request_id:
               type: [string, "null"]
+    HealthResponse:
+      type: object
+      required: [status, service, version, env]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          const: ok
+        service:
+          type: string
+        version:
+          type: string
+        env:
+          type: string
+    PlatformMeta:
+      type: object
+      required: [name, version, env, phase, modules]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        env:
+          type: string
+        phase:
+          type: string
+        modules:
+          type: array
+          items:
+            type: string
+    LifecycleStatus:
+      type: string
+      enum: [PROVISIONED, ACTIVE, IN_MAINTENANCE, FAULT, SUSPENDED, RETIRED]
+    DeviceType:
+      type: string
+      enum: [COMPUTE, CONTROLLER, CAMERA_RIG, TELEOP, GRIPPER, OTHER]
+    SensorType:
+      type: string
+      enum: [RGB, RGB_D, DEPTH, IMU, JOINT_STATE, END_EFFECTOR, FORCE_TORQUE, MOCAP, AUDIO]
+    SensorSyncMode:
+      type: string
+      enum: [PTP, NTP, HARDWARE_TRIGGER, SOFTWARE_ESTIMATE, MANUAL, NONE]
+    CalibrationScope:
+      type: string
+      enum: [ROBOT, DEVICE, SENSOR, SYSTEM]
+    CalibrationTargetType:
+      type: string
+      enum: [ROBOT, DEVICE, SENSOR, SYSTEM]
+    CalibrationType:
+      type: string
+      enum:
+        - INTRINSICS
+        - EXTRINSICS
+        - HAND_EYE
+        - IMU
+        - JOINT_OFFSET
+        - TIME_OFFSET
+        - FORCE_TORQUE
+        - DEPTH_ALIGNMENT
+    CalibrationStatus:
+      type: string
+      enum:
+        - DRAFT
+        - SUBMITTED
+        - VALIDATED
+        - ACTIVE
+        - REJECTED
+        - SUPERSEDED
+        - REVOKED
+        - EXPIRED
+    Device:
+      type: object
+      required:
+        - device_id
+        - project_id
+        - robot_id
+        - code
+        - name
+        - device_type
+        - vendor
+        - model
+        - serial_number
+        - firmware_version
+        - hardware_version
+        - calibration_profile_id
+        - capability_profile
+        - status
+        - location_id
+        - owner_user_id
+        - version
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      additionalProperties: false
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        robot_id:
+          type: [string, "null"]
+          format: uuid
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        device_type:
+          $ref: "#/components/schemas/DeviceType"
+        vendor:
+          type: [string, "null"]
+          maxLength: 120
+        model:
+          type: [string, "null"]
+          maxLength: 120
+        serial_number:
+          type: [string, "null"]
+          maxLength: 120
+        firmware_version:
+          type: [string, "null"]
+          maxLength: 64
+        hardware_version:
+          type: [string, "null"]
+          maxLength: 64
+        calibration_profile_id:
+          type: [string, "null"]
+          format: uuid
+        capability_profile:
+          type: object
+          additionalProperties: true
+        status:
+          $ref: "#/components/schemas/LifecycleStatus"
+        location_id:
+          type: [string, "null"]
+          format: uuid
+        owner_user_id:
+          type: [string, "null"]
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+          description: 乐观锁；仅表示档案版本，不表示业务修订历史
+        created_at:
+          type: [string, "null"]
+          format: date-time
+        updated_at:
+          type: [string, "null"]
+          format: date-time
+        created_by:
+          type: [string, "null"]
+          format: uuid
+        updated_by:
+          type: [string, "null"]
+          format: uuid
+    DeviceCreate:
+      type: object
+      required: [code, name, device_type]
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        device_type:
+          $ref: "#/components/schemas/DeviceType"
+        robot_id:
+          type: [string, "null"]
+          format: uuid
+        vendor:
+          type: [string, "null"]
+          maxLength: 120
+        model:
+          type: [string, "null"]
+          maxLength: 120
+        serial_number:
+          type: [string, "null"]
+          maxLength: 120
+        firmware_version:
+          type: [string, "null"]
+          maxLength: 64
+        hardware_version:
+          type: [string, "null"]
+          maxLength: 64
+        calibration_profile_id:
+          type: [string, "null"]
+          format: uuid
+        capability_profile:
+          type: object
+          additionalProperties: true
+          default: {}
+        location_id:
+          type: [string, "null"]
+          format: uuid
+        owner_user_id:
+          type: [string, "null"]
+          format: uuid
+    DevicePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        device_type:
+          $ref: "#/components/schemas/DeviceType"
+        robot_id:
+          type: [string, "null"]
+          format: uuid
+        vendor:
+          type: [string, "null"]
+          maxLength: 120
+        model:
+          type: [string, "null"]
+          maxLength: 120
+        serial_number:
+          type: [string, "null"]
+          maxLength: 120
+        firmware_version:
+          type: [string, "null"]
+          maxLength: 64
+        hardware_version:
+          type: [string, "null"]
+          maxLength: 64
+        calibration_profile_id:
+          type: [string, "null"]
+          format: uuid
+        capability_profile:
+          type: object
+          additionalProperties: true
+        location_id:
+          type: [string, "null"]
+          format: uuid
+        owner_user_id:
+          type: [string, "null"]
+          format: uuid
+    DevicePage:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Device"
+        next_cursor:
+          type: [string, "null"]
+    Sensor:
+      type: object
+      required:
+        - sensor_id
+        - project_id
+        - robot_id
+        - device_id
+        - code
+        - sensor_type
+        - vendor
+        - model
+        - serial_number
+        - sample_rate_hz
+        - resolution_w
+        - resolution_h
+        - bit_depth
+        - channels
+        - intrinsic_calibration_id
+        - extrinsic_calibration_id
+        - coordinate_frame
+        - sync_mode
+        - sync_group
+        - firmware_version
+        - calibration_profile_id
+        - status
+        - mount_position
+        - version
+        - created_at
+        - updated_at
+      additionalProperties: false
+      properties:
+        sensor_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        robot_id:
+          type: [string, "null"]
+          format: uuid
+        device_id:
+          type: [string, "null"]
+          format: uuid
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sensor_type:
+          $ref: "#/components/schemas/SensorType"
+        vendor:
+          type: [string, "null"]
+          maxLength: 120
+        model:
+          type: [string, "null"]
+          maxLength: 120
+        serial_number:
+          type: [string, "null"]
+          maxLength: 120
+        sample_rate_hz:
+          type: number
+          exclusiveMinimum: 0
+        resolution_w:
+          type: [integer, "null"]
+          minimum: 1
+        resolution_h:
+          type: [integer, "null"]
+          minimum: 1
+        bit_depth:
+          type: [integer, "null"]
+          minimum: 1
+        channels:
+          type: [integer, "null"]
+          minimum: 1
+          description: 整数通道数；不是字符串数组
+        intrinsic_calibration_id:
+          type: [string, "null"]
+          format: uuid
+        extrinsic_calibration_id:
+          type: [string, "null"]
+          format: uuid
+        coordinate_frame:
+          type: string
+          minLength: 1
+          maxLength: 200
+          deprecated: true
+          description: 当前实现字段；冻结目标更名 `frame_id`（差距 G-08）
+        sync_mode:
+          $ref: "#/components/schemas/SensorSyncMode"
+        sync_group:
+          type: [string, "null"]
+          maxLength: 64
+        firmware_version:
+          type: [string, "null"]
+          maxLength: 64
+        calibration_profile_id:
+          type: [string, "null"]
+          format: uuid
+        status:
+          $ref: "#/components/schemas/LifecycleStatus"
+        mount_position:
+          type: [string, "null"]
+          maxLength: 200
+        version:
+          type: integer
+          minimum: 1
+          description: 乐观锁
+        created_at:
+          type: [string, "null"]
+          format: date-time
+        updated_at:
+          type: [string, "null"]
+          format: date-time
+    SensorCreate:
+      type: object
+      required: [code, sensor_type, sample_rate_hz, coordinate_frame]
+      additionalProperties: false
+      anyOf:
+        - required: [robot_id]
+        - required: [device_id]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sensor_type:
+          $ref: "#/components/schemas/SensorType"
+        sample_rate_hz:
+          type: number
+          exclusiveMinimum: 0
+        coordinate_frame:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: 当前实现字段；冻结目标为 `frame_id` + 必填 `frame_convention`
+        robot_id:
+          type: [string, "null"]
+          format: uuid
+        device_id:
+          type: [string, "null"]
+          format: uuid
+        vendor:
+          type: [string, "null"]
+          maxLength: 120
+        model:
+          type: [string, "null"]
+          maxLength: 120
+        serial_number:
+          type: [string, "null"]
+          maxLength: 120
+        resolution_w:
+          type: [integer, "null"]
+          minimum: 1
+        resolution_h:
+          type: [integer, "null"]
+          minimum: 1
+        bit_depth:
+          type: [integer, "null"]
+          minimum: 1
+        channels:
+          type: [integer, "null"]
+          minimum: 1
+        intrinsic_calibration_id:
+          type: [string, "null"]
+          format: uuid
+        extrinsic_calibration_id:
+          type: [string, "null"]
+          format: uuid
+        sync_mode:
+          allOf:
+            - $ref: "#/components/schemas/SensorSyncMode"
+          default: NONE
+        sync_group:
+          type: [string, "null"]
+          maxLength: 64
+        firmware_version:
+          type: [string, "null"]
+          maxLength: 64
+        calibration_profile_id:
+          type: [string, "null"]
+          format: uuid
+        mount_position:
+          type: [string, "null"]
+          maxLength: 200
+    SensorPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sensor_type:
+          $ref: "#/components/schemas/SensorType"
+        robot_id:
+          type: [string, "null"]
+          format: uuid
+        device_id:
+          type: [string, "null"]
+          format: uuid
+        vendor:
+          type: [string, "null"]
+          maxLength: 120
+        model:
+          type: [string, "null"]
+          maxLength: 120
+        serial_number:
+          type: [string, "null"]
+          maxLength: 120
+        sample_rate_hz:
+          type: number
+          exclusiveMinimum: 0
+        resolution_w:
+          type: [integer, "null"]
+          minimum: 1
+        resolution_h:
+          type: [integer, "null"]
+          minimum: 1
+        bit_depth:
+          type: [integer, "null"]
+          minimum: 1
+        channels:
+          type: [integer, "null"]
+          minimum: 1
+        intrinsic_calibration_id:
+          type: [string, "null"]
+          format: uuid
+        extrinsic_calibration_id:
+          type: [string, "null"]
+          format: uuid
+        coordinate_frame:
+          type: string
+          minLength: 1
+          maxLength: 200
+          deprecated: true
+        sync_mode:
+          $ref: "#/components/schemas/SensorSyncMode"
+        sync_group:
+          type: [string, "null"]
+          maxLength: 64
+        firmware_version:
+          type: [string, "null"]
+          maxLength: 64
+        calibration_profile_id:
+          type: [string, "null"]
+          format: uuid
+        mount_position:
+          type: [string, "null"]
+          maxLength: 200
+    SensorPage:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Sensor"
+        next_cursor:
+          type: [string, "null"]
+    Calibration:
+      type: object
+      required:
+        - calibration_id
+        - project_id
+        - profile_id
+        - scope
+        - target_type
+        - target_id
+        - calibration_type
+        - method
+        - parameters
+        - parent_frame
+        - child_frame
+        - valid_from
+        - valid_to
+        - status
+        - evidence_asset_ids
+        - source
+        - checksum
+        - uncertainty
+        - performed_by
+        - validated_by
+        - validated_at
+        - supersedes_id
+        - version
+        - created_at
+        - updated_at
+      additionalProperties: false
+      properties:
+        calibration_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        profile_id:
+          type: string
+          format: uuid
+        scope:
+          $ref: "#/components/schemas/CalibrationScope"
+        target_type:
+          $ref: "#/components/schemas/CalibrationTargetType"
+        target_id:
+          type: string
+          format: uuid
+        calibration_type:
+          $ref: "#/components/schemas/CalibrationType"
+        method:
+          type: string
+          minLength: 1
+          maxLength: 200
+        parameters:
+          type: object
+          additionalProperties: true
+          description: 分类型参数；冻结目标按 calibration_type + schema_version 校验
+        parent_frame:
+          type: [string, "null"]
+          maxLength: 200
+        child_frame:
+          type: [string, "null"]
+          maxLength: 200
+        valid_from:
+          type: string
+          format: date-time
+          description: 必须带时区；统一 UTC
+        valid_to:
+          type: [string, "null"]
+          format: date-time
+        status:
+          $ref: "#/components/schemas/CalibrationStatus"
+        evidence_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        source:
+          type: [string, "null"]
+          maxLength: 120
+        checksum:
+          type: string
+          pattern: '^sha256:[0-9a-f]{64}$'
+          description: 服务端计算；冻结目标使用 RFC 8785 JCS（差距 G-15）
+        uncertainty:
+          type: object
+          additionalProperties: true
+        performed_by:
+          type: string
+          format: uuid
+        validated_by:
+          type: [string, "null"]
+          format: uuid
+        validated_at:
+          type: [string, "null"]
+          format: date-time
+        supersedes_id:
+          type: [string, "null"]
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+          deprecated: true
+          description: |
+            当前实现中兼任乐观锁；冻结目标拆分为 `lock_version` 与
+            `calibration_version`（差距 G-04）。
+        created_at:
+          type: [string, "null"]
+          format: date-time
+        updated_at:
+          type: [string, "null"]
+          format: date-time
+    CalibrationCreate:
+      type: object
+      required:
+        - profile_id
+        - target_type
+        - target_id
+        - calibration_type
+        - method
+        - parameters
+        - valid_from
+      additionalProperties: false
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        target_type:
+          $ref: "#/components/schemas/CalibrationTargetType"
+        target_id:
+          type: string
+          format: uuid
+        calibration_type:
+          $ref: "#/components/schemas/CalibrationType"
+        method:
+          type: string
+          minLength: 1
+          maxLength: 200
+        parameters:
+          type: object
+          additionalProperties: true
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: [string, "null"]
+          format: date-time
+        parent_frame:
+          type: [string, "null"]
+          maxLength: 200
+        child_frame:
+          type: [string, "null"]
+          maxLength: 200
+        evidence_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          default: []
+        source:
+          type: [string, "null"]
+          maxLength: 120
+        uncertainty:
+          type: object
+          additionalProperties: true
+          default: {}
+    CalibrationPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        target_type:
+          $ref: "#/components/schemas/CalibrationTargetType"
+        target_id:
+          type: string
+          format: uuid
+        calibration_type:
+          $ref: "#/components/schemas/CalibrationType"
+        method:
+          type: string
+          minLength: 1
+          maxLength: 200
+        parameters:
+          type: object
+          additionalProperties: true
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type: [string, "null"]
+          format: date-time
+        parent_frame:
+          type: [string, "null"]
+          maxLength: 200
+        child_frame:
+          type: [string, "null"]
+          maxLength: 200
+        evidence_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        source:
+          type: [string, "null"]
+          maxLength: 120
+        uncertainty:
+          type: object
+          additionalProperties: true
+    CalibrationPage:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Calibration"
+        next_cursor:
+          type: [string, "null"]
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        状态动作统一可选载荷。当前实现只保留请求形状，尚未持久化 reason/fault_code 等；
+        冻结目标要求按状态矩阵校验、持久化并写审计（差距 G-09/G-10）。
+      properties:
+        reason:
+          type: [string, "null"]
+          maxLength: 1000
+        fault_code:
+          type: [string, "null"]
+          maxLength: 64
+          description: 当前实现不校验枚举；冻结目标为固定故障码集合
+        fault_detail:
+          type: [string, "null"]
+          maxLength: 2000
+        occurred_at:
+          type: [string, "null"]
+          format: date-time
+        maintenance_record_id:
+          type: [string, "null"]
+          format: uuid
+        evidence_refs:
+          type: [array, "null"]
+          items:
+            type: string
+            format: uuid

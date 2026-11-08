@@ -74,6 +74,40 @@ jobs:
       - name: 构建
         run: npm run build
 
+  contract:
+    name: 契约 OpenAPI lint / 兼容性 diff
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出（需完整历史以读取基线契约）
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: OpenAPI lint（Redocly）
+        run: |
+          npx --yes @redocly/cli@1 lint \
+            packages/contracts/openapi.yaml \
+            --config packages/contracts/redocly.yaml
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          # TODO(DDP-214 后续)：锁定 Go 与 oasdiff 版本，避免 @latest 供应链漂移。
+          go-version: "stable"
+      - name: 安装 oasdiff
+        run: |
+          go install github.com/oasdiff/oasdiff@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: 破坏性兼容性 diff
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          bash packages/contracts/scripts/check-compatibility.sh \
+            packages/contracts/openapi.yaml \
+            "${BASE_REF}"
+
   security:
     name: Secret / 依赖 / Agent 守卫
     runs-on: ubuntu-latest

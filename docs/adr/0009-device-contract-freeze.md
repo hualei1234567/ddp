@@ -1,11 +1,25 @@
 # ADR-0009 设备域契约冻结与不可变决策
 
-- 状态：**已提议（待用户批准）**
-- 日期：2026-11-08
-- 决策者：System Architect
-- 任务：DDP-207（P0）
-- 关联：ADR-0002、ADR-0003、ADR-0004；`docs/architecture/阶段1-设备域契约冻结-v1.md`；`docs/data-standards/Canonical草案.md`
+- 状态：**已批准（APPROVED）**，由用户于 2026-11-08 给予长期授权
+- 日期：2026-11-08（批准日期：2026-11-08；最近修订：2026-11-08，DDP-214）
+- 决策者：System Architect；批准人：用户
+- 任务：DDP-207（P0）；DDP-214（P1，批准记录、契约快照与差距排期）
+- 关联：ADR-0002、ADR-0003、ADR-0004；`docs/architecture/阶段1-设备域契约冻结-v1.md`；`docs/architecture/阶段1-设备域冻结字段实现差距与排期.md`；`docs/data-standards/Canonical草案.md`
 - 契约版本：`ddp.device/1.0.0`；参数 Schema：`ddp.device.calibration-parameters/1.0.0`
+- 契约实现快照：`packages/contracts/openapi.yaml` `0.2.0`（仅覆盖当前已实现端点，**不是**冻结目标的完整实现）
+
+## 0. 批准记录
+
+| 项 | 内容 |
+|---|---|
+| 批准范围 | 本 ADR 全部决策，以及 `docs/architecture/阶段1-设备域契约冻结-v1.md` 的字段、状态机、错误码与参数 Schema |
+| 批准方式 | 用户长期授权；DDP-214 任务书明确“用户已给长期授权” |
+| 批准日期 | 2026-11-08 |
+| 不包含的授权 | 数据库迁移执行、生产部署、发布、删除数据、绕过分阶段门禁 |
+| 生效方式 | 契约即日起作为设备域唯一设计基线；实现按差距清单分批收敛，破坏性变更仍需新建 ADR |
+| 跟踪文档 | `docs/architecture/阶段1-设备域冻结字段实现差距与排期.md` |
+
+> 批准表示“设计与契约已冻结、后续实现必须遵守”，不等于“当前代码已经符合契约”。当前实现与冻结目标的逐项差距、责任与建议排期见跟踪文档。
 
 ## 1. 背景
 
@@ -25,7 +39,7 @@
 
 ### 2.1 冻结设备域契约 v1
 
-以 `docs/architecture/阶段1-设备域契约冻结-v1.md` 为唯一设备域契约冻结候选，覆盖 Robot、Device、Sensor、CalibrationProfile、CalibrationRecord 的字段、状态机、错误码、审计事件与参数 Schema。批准后：
+以 `docs/architecture/阶段1-设备域契约冻结-v1.md` 为唯一设备域契约冻结基线，覆盖 Robot、Device、Sensor、CalibrationProfile、CalibrationRecord 的字段、状态机、错误码、审计事件与参数 Schema。批准后：
 
 - API DTO、Domain 类型、DB 列名、事件字段、前端类型必须使用同一命名。
 - `packages/contracts/**` 只能由 System Architect/契约 Owner 在批准后更新；实施不得自行改契约。
@@ -130,17 +144,29 @@ CalibrationRecord 从 `SUBMITTED` 起冻结：
 
 ## 5. 批准与生效
 
-本 ADR 状态为 **已提议（待用户批准）**。批准条件：
+本 ADR 已于 2026-11-08 经用户长期授权批准，状态为 **已批准（APPROVED）**。生效范围：
 
-1. 用户确认本 ADR 与 `docs/architecture/阶段1-设备域契约冻结-v1.md` 的决策。
-2. 确认 DB 兜底方案（`calibration_target_refs` + 触发器）作为阶段 1 实施范围。
-3. 确认破坏性字段更名（`lock_version`/`profile_version`/`frame_id`）与错误码新增。
-4. 确认迁移与生产执行另行审批，不在本 ADR 内授权。
+1. 本 ADR 与 `docs/architecture/阶段1-设备域契约冻结-v1.md` 的决策成为设备域唯一设计基线。
+2. DB 兜底方案（`calibration_target_refs` + 触发器）纳入阶段 1 实施范围。
+3. 破坏性字段更名（`lock_version`/`profile_version`/`frame_id`）与错误码新增已获设计批准。
+4. **迁移执行与生产执行仍需另行审批**，本 ADR 不授权执行迁移、部署或数据处理。
 
-批准前：不更新 `packages/contracts/**`、不实施迁移、不宣称设备域契约已冻结。
+批准后的契约维护规则：
+
+- `packages/contracts/openapi.yaml` 当前为 `0.2.0` 实现快照，只允许 Architect 更新；待差距清单关闭后升级为 `1.0.0`。
+- 实施任务必须引用冻结文档与差距清单 ID（`G-xx`），不得自行改字段语义。
+- 契约兼容性检查已加入 CI；破坏性 diff 必须新建 ADR 并获得用户批准。
 
 ## 6. 验收与证据
 
 - 契约文档自检：D1–D9、F2/F3/F5/F6、状态矩阵、参数 Schema、target_id 方案、差异表均已覆盖。
-- 未运行 `pytest/ruff/tsc/Alembic/Markdown lint`：本 ADR 为文档决策，且当前会话无 Bash 工具；标记 `NOT RUN`。
+- DDP-214 已补齐：OpenAPI 设备域端点与错误码、Redocly lint、oasdiff 兼容性检查、ADR 批准记录、实现差距与排期。
+- 本会话未执行 `pytest/ruff/tsc/Alembic/Redocly/oasdiff/Markdown lint`：当前会话无 Bash 工具，全部标记 `NOT RUN`；CI 加入后以流水线结果为准。
 - 实施验收必须附：PostgreSQL 跨项目负向测试、非法状态直写测试、冻结字段篡改测试、并发激活测试、审计 outbox 失败回滚测试、前后端契约测试。
+
+## 7. 变更记录
+
+| 日期 | 变更 | 任务 |
+|---|---|---|
+| 2026-11-08 | 首次提出，状态“已提议” | DDP-207 |
+| 2026-11-08 | 用户长期授权，状态改为“已批准”；补充 OpenAPI 快照、差距清单与 CI 门禁 | DDP-214 |
