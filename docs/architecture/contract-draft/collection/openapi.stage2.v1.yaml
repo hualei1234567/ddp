@@ -1,0 +1,1624 @@
+openapi: 3.1.0
+info:
+  title: DDP Stage 2 Collection / Ingestion / Episode API
+  version: 1.0.0-draft
+  description: |
+    DDP 阶段 2 HTTP API 草案（未冻结）。覆盖采集任务/批次、上传会话与分片、
+    RawAsset、IngestionJob、Episode 基础切片与血缘。
+    - 所有项目路由由服务端强制 project scope；不信任客户端 project_id。
+    - 写动作使用 If-Match；登记为 DRAFT 的契约不得声称已实现。
+    - 上传完成返回 202；整文件 Hash/格式/恶意扫描由 VALIDATE Job 异步完成。
+    - 复杂响应 Schema 以同目录 JSON Schema 为准。
+  contact:
+    name: DDP System Architect
+  license:
+    name: Proprietary
+servers:
+  - url: http://localhost:8000
+    description: 本地开发
+security:
+  - bearerAuth: []
+tags:
+  - name: collection
+    description: 采集任务、批次、分配与状态动作
+  - name: uploads
+    description: 上传会话、分片、断点续传、完成与中止
+  - name: raw-assets
+    description: RawAsset 查询、下载、重校验、隔离放行、墓碑
+  - name: ingestion
+    description: 解析/校验/切片 Job 与重试/取消/日志
+  - name: episodes
+    description: Episode 基础切片、Manifest、质检动作与下载
+  - name: lineage
+    description: 数据血缘正向/反向查询
+paths:
+  /api/v1/projects/{project_id}/collection-tasks:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listCollectionTasks
+      tags: [collection]
+      summary: 采集任务列表（游标分页）
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/CollectionTaskStatus" }
+        - name: assigned_to
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 任务分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionTaskPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createCollectionTask
+      tags: [collection]
+      summary: 创建采集任务
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollectionTaskCreate" }
+      responses:
+        "201":
+          description: 任务已创建（初始 DRAFT）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionTask" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/collection-tasks/{task_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      operationId: getCollectionTask
+      tags: [collection]
+      summary: 任务详情
+      responses:
+        "200":
+          description: 任务详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionTask" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateCollectionTask
+      tags: [collection]
+      summary: 修改任务（仅 DRAFT 核心字段）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollectionTaskPatch" }
+      responses:
+        "200":
+          description: 修改后的任务
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionTask" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/collection-tasks/{task_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TaskId"
+      - $ref: "#/components/parameters/CollectionAction"
+    post:
+      operationId: actOnCollectionTask
+      tags: [collection]
+      summary: 任务状态动作（白名单）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollectionTaskActionRequest" }
+      responses:
+        "200":
+          description: 动作后的任务
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionTask" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/collection-tasks/{task_id}/batches:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/TaskId"
+    get:
+      operationId: listCollectionBatches
+      tags: [collection]
+      summary: 批次列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/CollectionBatchStatus" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 批次分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionBatchPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createCollectionBatch
+      tags: [collection]
+      summary: 拆分批次
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollectionBatchCreate" }
+      responses:
+        "201":
+          description: 批次已创建（初始 PLANNED）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionBatch" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/collection-batches/{batch_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/BatchId"
+    get:
+      operationId: getCollectionBatch
+      tags: [collection]
+      summary: 批次详情
+      responses:
+        "200":
+          description: 批次详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionBatch" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateCollectionBatch
+      tags: [collection]
+      summary: 修改批次（仅 PLANNED 核心字段）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollectionBatchPatch" }
+      responses:
+        "200":
+          description: 修改后的批次
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionBatch" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/collection-batches/{batch_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/BatchId"
+      - $ref: "#/components/parameters/CollectionAction"
+    post:
+      operationId: actOnCollectionBatch
+      tags: [collection]
+      summary: 批次状态动作（白名单）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CollectionBatchActionRequest" }
+      responses:
+        "200":
+          description: 动作后的批次
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CollectionBatch" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/upload-sessions:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    post:
+      operationId: createUploadSession
+      tags: [uploads]
+      summary: 创建上传会话
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UploadSessionCreate" }
+      responses:
+        "201":
+          description: 会话已创建
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadSession" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/UploadSessionId"
+    get:
+      operationId: getUploadSession
+      tags: [uploads]
+      summary: 断点状态
+      responses:
+        "200":
+          description: 会话状态与已确认分片
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadSession" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/parts/{part_number}/url:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/UploadSessionId"
+      - $ref: "#/components/parameters/PartNumber"
+    post:
+      operationId: createUploadPartUrl
+      tags: [uploads]
+      summary: 获取分片预签名 URL
+      responses:
+        "200":
+          description: 分片上传 URL 与必填头
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadPartUrlResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/parts/{part_number}/ack:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/UploadSessionId"
+      - $ref: "#/components/parameters/PartNumber"
+    post:
+      operationId: ackUploadPart
+      tags: [uploads]
+      summary: 确认分片（ETag/大小/SHA256）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UploadPartAckRequest" }
+      responses:
+        "200":
+          description: 分片已确认
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadPartAckResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/parts:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/UploadSessionId"
+    get:
+      operationId: listUploadParts
+      tags: [uploads]
+      summary: 已确认分片列表
+      responses:
+        "200":
+          description: 分片列表
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadPartList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/complete:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/UploadSessionId"
+    post:
+      operationId: completeUploadSession
+      tags: [uploads]
+      summary: 完成上传并登记/命中 RawAsset（异步校验）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompleteUploadRequest" }
+      responses:
+        "202":
+          description: 完成已受理，等待 VALIDATE Job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CompleteUploadResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/abort:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/UploadSessionId"
+    post:
+      operationId: abortUploadSession
+      tags: [uploads]
+      summary: 中止上传会话
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AbortRequest" }
+      responses:
+        "200":
+          description: 会话已中止（或原状态返回）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadSession" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/raw-assets:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listRawAssets
+      tags: [raw-assets]
+      summary: RawAsset 列表/筛选
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/RawAssetStatus" }
+        - name: collection_task_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: format
+          in: query
+          schema: { $ref: "#/components/schemas/AssetFormat" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 资产分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RawAssetPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/raw-assets/{asset_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/AssetId"
+    get:
+      operationId: getRawAsset
+      tags: [raw-assets]
+      summary: RawAsset 详情
+      responses:
+        "200":
+          description: 资产详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RawAsset" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/raw-assets/{asset_id}/download-url:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/AssetId"
+    get:
+      operationId: createRawAssetDownloadUrl
+      tags: [raw-assets]
+      summary: 短期下载地址（强审计）
+      responses:
+        "200":
+          description: 短期签名地址
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DownloadUrlResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/raw-assets/{asset_id}/revalidate:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/AssetId"
+    post:
+      operationId: revalidateRawAsset
+      tags: [raw-assets]
+      summary: 重新校验资产
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RevalidateRequest" }
+      responses:
+        "202":
+          description: 已创建重新校验 Job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestionJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/raw-assets/{asset_id}/release-quarantine:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/AssetId"
+    post:
+      operationId: releaseRawAssetQuarantine
+      tags: [raw-assets]
+      summary: 隔离放行（DE 提案 + QI/PO 批准，禁止自审）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReleaseQuarantineRequest" }
+      responses:
+        "202":
+          description: 放行已受理并进入重新校验
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestionJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/raw-assets/{asset_id}/tombstone:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/AssetId"
+    post:
+      operationId: tombstoneRawAsset
+      tags: [raw-assets]
+      summary: 资产墓碑（PO + QI 双人）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TombstoneRequest" }
+      responses:
+        "200":
+          description: 墓碑后的资产
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RawAsset" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/raw-assets/{asset_id}/ingest:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/AssetId"
+    post:
+      operationId: ingestRawAsset
+      tags: [ingestion]
+      summary: 创建解析/切片 Job（资产必须 VALID/ARCHIVED）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IngestRequest" }
+      responses:
+        "202":
+          description: Job 已入队
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestionJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/ingestion-jobs:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listIngestionJobs
+      tags: [ingestion]
+      summary: Job 列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/IngestionJobStatus" }
+        - name: raw_asset_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Job 分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestionJobPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/ingestion-jobs/{job_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/JobId"
+    get:
+      operationId: getIngestionJob
+      tags: [ingestion]
+      summary: Job 详情
+      responses:
+        "200":
+          description: Job 详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestionJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/ingestion-jobs/{job_id}/retry:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/JobId"
+    post:
+      operationId: retryIngestionJob
+      tags: [ingestion]
+      summary: 重试可重试 Job
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RetryRequest" }
+      responses:
+        "202":
+          description: Job 已重新入队
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestionJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/ingestion-jobs/{job_id}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/JobId"
+    post:
+      operationId: cancelIngestionJob
+      tags: [ingestion]
+      summary: 取消 Job
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CancelRequest" }
+      responses:
+        "202":
+          description: 取消已受理
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/IngestionJob" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/ingestion-jobs/{job_id}/log-url:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/JobId"
+    get:
+      operationId: createIngestionJobLogUrl
+      tags: [ingestion]
+      summary: 日志短期地址
+      responses:
+        "200":
+          description: 日志签名地址
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DownloadUrlResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/episodes:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listEpisodes
+      tags: [episodes]
+      summary: Episode 列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/EpisodeStatus" }
+        - name: collection_task_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Episode 分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EpisodePage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createEpisode
+      tags: [episodes]
+      summary: 从 VALID/ARCHIVED 资产创建基础切片
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EpisodeCreate" }
+      responses:
+        "201":
+          description: Episode 已创建（PENDING）
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Episode" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/episodes/{episode_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/EpisodeId"
+    get:
+      operationId: getEpisode
+      tags: [episodes]
+      summary: Episode 详情
+      responses:
+        "200":
+          description: Episode 详情
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Episode" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateEpisode
+      tags: [episodes]
+      summary: 修改允许的元数据（READY 后数据字段不可改）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EpisodePatch" }
+      responses:
+        "200":
+          description: 修改后的 Episode
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Episode" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/episodes/{episode_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/EpisodeId"
+      - $ref: "#/components/parameters/EpisodeAction"
+    post:
+      operationId: actOnEpisode
+      tags: [episodes]
+      summary: Episode 状态动作（白名单）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EpisodeActionRequest" }
+      responses:
+        "200":
+          description: 动作后的 Episode
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Episode" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/episodes/{episode_id}/manifest:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/EpisodeId"
+    get:
+      operationId: getEpisodeManifest
+      tags: [episodes]
+      summary: Episode Manifest 与 Hash
+      responses:
+        "200":
+          description: Manifest 响应
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EpisodeManifestResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/episodes/{episode_id}/download-url:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/EpisodeId"
+    get:
+      operationId: createEpisodeDownloadUrl
+      tags: [episodes]
+      summary: Episode 数据短期下载地址
+      responses:
+        "200":
+          description: 短期签名地址
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DownloadUrlResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/Gone" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/episodes/{episode_id}/lineage:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/EpisodeId"
+    get:
+      operationId: getEpisodeLineage
+      tags: [lineage]
+      summary: Episode 血缘
+      parameters:
+        - $ref: "#/components/parameters/Direction"
+        - $ref: "#/components/parameters/Depth"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 血缘遍历结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LineageTraversalResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/lineage/nodes/{node_type}/{node_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/NodeType"
+      - $ref: "#/components/parameters/NodeId"
+    get:
+      operationId: traverseLineage
+      tags: [lineage]
+      summary: 通用血缘遍历
+      parameters:
+        - $ref: "#/components/parameters/Direction"
+        - $ref: "#/components/parameters/Depth"
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 血缘遍历结果
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LineageTraversalResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BatchId:
+      name: batch_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    UploadSessionId:
+      name: upload_session_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AssetId:
+      name: asset_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EpisodeId:
+      name: episode_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    NodeId:
+      name: node_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    PartNumber:
+      name: part_number
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1, maximum: 10000 }
+    CollectionAction:
+      name: action
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [submit-review, return-draft, approve, ready, assign, start, pause, resume, block, unblock, submit, accept, reject, rework, complete, cancel]
+    EpisodeAction:
+      name: action
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [quality-check, accept, reject, retry, complete, archive, invalidate]
+    NodeType:
+      name: node_type
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [RAW_ASSET, UPLOAD_SESSION, COLLECTION_TASK, COLLECTION_BATCH, INGESTION_JOB, EPISODE, QUALITY_RUN, ANNOTATION, DATASET_VERSION, TRAINING_RUN]
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: { type: string, pattern: '^(W/)?"?[1-9][0-9]*"?$' }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Direction:
+      name: direction
+      in: query
+      required: false
+      schema: { type: string, enum: [forward, reverse, both], default: both }
+    Depth:
+      name: depth
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 5, default: 2 }
+  responses:
+    Unauthorized:
+      description: 未认证或令牌无效（not_authenticated）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Forbidden:
+      description: 权限不足、职责分离违规或跨项目（forbidden/project_scope_denied/asset_quarantined）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    NotFound:
+      description: 资源不存在或跨项目不可见（resource_not_found）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Conflict:
+      description: 状态/版本/分片/幂等/重复冲突（409 系列）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    Gone:
+      description: 会话过期或资产墓碑（upload_session_expired/asset_tombstoned）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    PayloadTooLarge:
+      description: 文件过大（file_too_large）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    UnsupportedMediaType:
+      description: 类型不在白名单（file_type_unsupported）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    UnprocessableEntity:
+      description: 参数/领域校验失败（422 系列）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    PreconditionRequired:
+      description: 缺少 If-Match（precondition_required）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    TooManyRequests:
+      description: 触发限流（rate_limited）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    ServiceUnavailable:
+      description: 依赖不可用（dependency_unavailable/object_storage_unavailable）
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code:
+              type: string
+              description: 稳定错误码；完整注册表见 error-codes.v1.json
+              enum:
+                - not_authenticated
+                - forbidden
+                - project_scope_denied
+                - asset_quarantined
+                - resource_not_found
+                - not_found
+                - conflict
+                - state_transition_invalid
+                - version_conflict
+                - resource_immutable
+                - duplicate_resource
+                - idempotency_key_reused
+                - upload_incomplete
+                - upload_part_conflict
+                - upload_session_not_uploading
+                - episode_overlap_conflict
+                - episode_already_exists
+                - job_not_retryable
+                - asset_not_usable
+                - lineage_conflict
+                - upload_session_expired
+                - asset_tombstoned
+                - file_too_large
+                - file_type_unsupported
+                - validation_failed
+                - file_signature_mismatch
+                - hash_mismatch
+                - size_mismatch
+                - filename_invalid
+                - quarantine_release_denied
+                - calibration_not_active
+                - calibration_snapshot_invalid
+                - episode_time_range_invalid
+                - time_base_invalid
+                - manifest_hash_mismatch
+                - manifest_schema_invalid
+                - unsupported_format
+                - malware_detected
+                - scanner_unavailable
+                - job_config_invalid
+                - precondition_required
+                - rate_limited
+                - internal_error
+                - dependency_unavailable
+                - object_storage_unavailable
+                - storage_quota_exceeded
+            message: { type: string }
+            request_id: { type: [string, "null"] }
+            details: { type: [object, "null"], additionalProperties: true }
+    CollectionTaskStatus:
+      type: string
+      enum: [DRAFT, PENDING_REVIEW, APPROVED, READY, ASSIGNED, IN_PROGRESS, PAUSED, BLOCKED, SUBMITTED, DATA_CHECKING, ACCEPTED, REJECTED, REWORK, COMPLETED, CANCELLED]
+    CollectionBatchStatus:
+      type: string
+      enum: [PLANNED, READY, IN_PROGRESS, PAUSED, BLOCKED, SUBMITTED, ACCEPTED, REJECTED, REWORK, CANCELLED]
+    UploadSessionStatus:
+      type: string
+      enum: [CREATED, UPLOADING, COMPLETING, COMPLETED, ABORTED, EXPIRED, FAILED]
+    RawAssetStatus:
+      type: string
+      enum: [VALIDATING, VALID, QUARANTINED, REJECTED, ARCHIVED, TOMBSTONED]
+    IngestionJobStatus:
+      type: string
+      enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLING, CANCELLED]
+    EpisodeStatus:
+      type: string
+      enum: [PENDING, PROCESSING, READY, QUALITY_CHECKING, ACCEPTED, COMPLETED, ARCHIVED, FAILED, REJECTED, INVALIDATED]
+    AssetFormat:
+      type: string
+      enum: [MCAP, ROSBAG2, HDF5, MP4, PARQUET, CSV, JSON, ZIP, UNKNOWN]
+    CollectionTask:
+      type: object
+      required: [task_id, project_id, code, name, status, priority, target_episode_count, target_duration_sec, submitted_episode_count, accepted_episode_count, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        task_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        code: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        requirement_id: { type: [string, "null"], format: uuid }
+        plan_id: { type: [string, "null"], format: uuid }
+        sop_id: { type: [string, "null"], format: uuid }
+        sop_version: { type: [string, "null"], maxLength: 64 }
+        scenario_id: { type: [string, "null"], format: uuid }
+        action_spec_id: { type: [string, "null"], format: uuid }
+        action_spec_version: { type: [string, "null"], maxLength: 64 }
+        status: { $ref: "#/components/schemas/CollectionTaskStatus" }
+        priority: { type: string, enum: [P0, P1, P2] }
+        assigned_to: { type: [string, "null"], format: uuid }
+        assigned_robot_id: { type: [string, "null"], format: uuid }
+        assigned_device_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        assigned_sensor_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        location_id: { type: [string, "null"], format: uuid }
+        scheduled_start: { type: [string, "null"], format: date-time }
+        scheduled_end: { type: [string, "null"], format: date-time }
+        actual_start: { type: [string, "null"], format: date-time }
+        actual_end: { type: [string, "null"], format: date-time }
+        target_episode_count: { type: integer, minimum: 0 }
+        target_duration_sec: { type: integer, minimum: 0 }
+        submitted_episode_count: { type: integer, minimum: 0 }
+        accepted_episode_count: { type: integer, minimum: 0 }
+        quality_summary: { type: [object, "null"], additionalProperties: true }
+        status_reason: { type: [string, "null"], maxLength: 1000 }
+        blocked_reason: { type: [string, "null"], maxLength: 1000 }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        created_by: { type: [string, "null"], format: uuid }
+        updated_by: { type: [string, "null"], format: uuid }
+    CollectionTaskCreate:
+      type: object
+      required: [code, name, priority, target_episode_count, target_duration_sec]
+      additionalProperties: false
+      properties:
+        code: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        requirement_id: { type: [string, "null"], format: uuid }
+        plan_id: { type: [string, "null"], format: uuid }
+        sop_id: { type: [string, "null"], format: uuid }
+        sop_version: { type: [string, "null"], maxLength: 64 }
+        scenario_id: { type: [string, "null"], format: uuid }
+        action_spec_id: { type: [string, "null"], format: uuid }
+        action_spec_version: { type: [string, "null"], maxLength: 64 }
+        priority: { type: string, enum: [P0, P1, P2] }
+        scheduled_start: { type: [string, "null"], format: date-time }
+        scheduled_end: { type: [string, "null"], format: date-time }
+        target_episode_count: { type: integer, minimum: 0 }
+        target_duration_sec: { type: integer, minimum: 0 }
+        location_id: { type: [string, "null"], format: uuid }
+    CollectionTaskPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        priority: { type: string, enum: [P0, P1, P2] }
+        sop_version: { type: [string, "null"], maxLength: 64 }
+        scheduled_start: { type: [string, "null"], format: date-time }
+        scheduled_end: { type: [string, "null"], format: date-time }
+        target_episode_count: { type: integer, minimum: 0 }
+        target_duration_sec: { type: integer, minimum: 0 }
+        location_id: { type: [string, "null"], format: uuid }
+    CollectionTaskActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 1000 }
+        assigned_to: { type: [string, "null"], format: uuid }
+        assigned_robot_id: { type: [string, "null"], format: uuid }
+        assigned_device_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        assigned_sensor_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        location_id: { type: [string, "null"], format: uuid }
+        scheduled_start: { type: [string, "null"], format: date-time }
+        scheduled_end: { type: [string, "null"], format: date-time }
+        waiver_reason: { type: [string, "null"], maxLength: 1000 }
+    CollectionTaskPage:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CollectionTask" } }
+        next_cursor: { type: [string, "null"] }
+    CollectionBatch:
+      type: object
+      required: [batch_id, project_id, task_id, code, sequence_no, status, expected_count, submitted_count, accepted_count, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        batch_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        task_id: { type: string, format: uuid }
+        code: { type: string, minLength: 1, maxLength: 64 }
+        sequence_no: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/CollectionBatchStatus" }
+        assigned_to: { type: [string, "null"], format: uuid }
+        scheduled_start: { type: [string, "null"], format: date-time }
+        scheduled_end: { type: [string, "null"], format: date-time }
+        expected_count: { type: integer, minimum: 0 }
+        submitted_count: { type: integer, minimum: 0 }
+        accepted_count: { type: integer, minimum: 0 }
+        status_reason: { type: [string, "null"], maxLength: 1000 }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CollectionBatchCreate:
+      type: object
+      required: [expected_count]
+      additionalProperties: false
+      properties:
+        code: { type: [string, "null"], maxLength: 64 }
+        sequence_no: { type: [integer, "null"], minimum: 1 }
+        expected_count: { type: integer, minimum: 0 }
+        assigned_to: { type: [string, "null"], format: uuid }
+        scheduled_start: { type: [string, "null"], format: date-time }
+        scheduled_end: { type: [string, "null"], format: date-time }
+    CollectionBatchPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        expected_count: { type: integer, minimum: 0 }
+        assigned_to: { type: [string, "null"], format: uuid }
+        scheduled_start: { type: [string, "null"], format: date-time }
+        scheduled_end: { type: [string, "null"], format: date-time }
+    CollectionBatchActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 1000 }
+        assigned_to: { type: [string, "null"], format: uuid }
+    CollectionBatchPage:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/CollectionBatch" } }
+        next_cursor: { type: [string, "null"] }
+    UploadSession:
+      $ref: "./upload-session.v1.schema.json"
+    UploadSessionCreate:
+      type: object
+      required: [original_filename, declared_content_type, declared_size_bytes]
+      additionalProperties: false
+      properties:
+        collection_task_id: { type: [string, "null"], format: uuid }
+        batch_id: { type: [string, "null"], format: uuid }
+        original_filename: { type: string, minLength: 1, maxLength: 255 }
+        declared_content_type: { type: string, minLength: 1, maxLength: 200 }
+        declared_size_bytes: { type: integer, minimum: 1 }
+        expected_sha256: { type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$' }
+        format_hint: { type: [string, "null"], enum: [MCAP, ROSBAG2, HDF5, MP4, PARQUET, CSV, JSON, ZIP, UNKNOWN, null] }
+        part_size_bytes: { type: [integer, "null"], minimum: 1 }
+        metadata: { type: object, additionalProperties: true }
+    UploadPartUrlResponse:
+      type: object
+      required: [part_number, method, url, headers, expires_at]
+      additionalProperties: false
+      properties:
+        part_number: { type: integer, minimum: 1, maximum: 10000 }
+        method: { type: string, const: PUT }
+        url: { type: string, format: uri }
+        headers: { type: object, additionalProperties: { type: string } }
+        expires_at: { type: string, format: date-time }
+    UploadPartAckRequest:
+      type: object
+      required: [etag, size_bytes, sha256]
+      additionalProperties: false
+      properties:
+        etag: { type: string, minLength: 1, maxLength: 256 }
+        size_bytes: { type: integer, minimum: 1 }
+        sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    UploadPartAckResponse:
+      type: object
+      required: [part_number, etag, size_bytes, sha256, recorded_at, uploaded_bytes, uploaded_part_count]
+      additionalProperties: false
+      properties:
+        part_number: { type: integer, minimum: 1, maximum: 10000 }
+        etag: { type: string, minLength: 1, maxLength: 256 }
+        size_bytes: { type: integer, minimum: 1 }
+        sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        recorded_at: { type: string, format: date-time }
+        uploaded_bytes: { type: integer, minimum: 0 }
+        uploaded_part_count: { type: integer, minimum: 0 }
+    UploadPartList:
+      type: object
+      required: [items, missing_part_numbers, uploaded_bytes]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [part_number, size_bytes, etag, sha256, recorded_at]
+            additionalProperties: false
+            properties:
+              part_number: { type: integer, minimum: 1, maximum: 10000 }
+              size_bytes: { type: integer, minimum: 1 }
+              etag: { type: string }
+              sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+              recorded_at: { type: string, format: date-time }
+        missing_part_numbers: { type: array, items: { type: integer, minimum: 1, maximum: 10000 }, uniqueItems: true }
+        uploaded_bytes: { type: integer, minimum: 0 }
+    CompleteUploadRequest:
+      $ref: "./upload-complete-request.v1.schema.json"
+    CompleteUploadResponse:
+      type: object
+      required: [upload_session, deduplicated, validation_job_id, replayed]
+      additionalProperties: false
+      properties:
+        upload_session: { $ref: "#/components/schemas/UploadSession" }
+        raw_asset: { oneOf: [{ $ref: "#/components/schemas/RawAsset" }, { type: "null" }] }
+        deduplicated: { type: boolean }
+        validation_job_id: { type: string, format: uuid }
+        replayed: { type: boolean }
+    AbortRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 1000 }
+    RawAsset:
+      $ref: "./raw-asset.v1.schema.json"
+    RawAssetPage:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/RawAsset" } }
+        next_cursor: { type: [string, "null"] }
+    DownloadUrlResponse:
+      type: object
+      required: [url, expires_at, sha256]
+      additionalProperties: false
+      properties:
+        url: { type: string, format: uri }
+        expires_at: { type: string, format: date-time }
+        sha256: { type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$' }
+        size_bytes: { type: [integer, "null"], minimum: 1 }
+    RevalidateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 1000 }
+        scan_required: { type: boolean, default: true }
+    ReleaseQuarantineRequest:
+      type: object
+      required: [reason, approval_id, scan_report_sha256]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+        approval_id: { type: string, format: uuid }
+        scan_report_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        evidence_refs: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+    TombstoneRequest:
+      type: object
+      required: [reason, approval_id]
+      additionalProperties: false
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+        approval_id: { type: string, format: uuid }
+        legal_basis: { type: [string, "null"], maxLength: 1000 }
+    IngestionJob:
+      type: object
+      required: [job_id, project_id, job_type, status, attempt, max_attempts, timeout_sec, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        job_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        job_type: { type: string, enum: [VALIDATE, PARSE_METADATA, SEGMENT_EPISODE, REVALIDATE] }
+        raw_asset_id: { type: [string, "null"], format: uuid }
+        raw_asset_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        input_manifest_key: { type: [string, "null"], maxLength: 1024 }
+        status: { $ref: "#/components/schemas/IngestionJobStatus" }
+        idempotency_key: { type: [string, "null"], maxLength: 128 }
+        attempt: { type: integer, minimum: 1 }
+        max_attempts: { type: integer, minimum: 1 }
+        timeout_sec: { type: integer, minimum: 1 }
+        pipeline_id: { type: [string, "null"], maxLength: 128 }
+        pipeline_version: { type: [string, "null"], maxLength: 64 }
+        parser_id: { type: [string, "null"], maxLength: 128 }
+        parser_version: { type: [string, "null"], maxLength: 64 }
+        config_hash: { type: [string, "null"], maxLength: 71 }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        error_code: { type: [string, "null"], maxLength: 64 }
+        error_summary: { type: [string, "null"], maxLength: 2000 }
+        output_refs: { type: array, items: { type: object, additionalProperties: true } }
+        log_ref: { type: [string, "null"], maxLength: 1024 }
+        metrics: { type: object, additionalProperties: true }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    IngestionJobPage:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/IngestionJob" } }
+        next_cursor: { type: [string, "null"] }
+    RetryRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 1000 }
+    CancelRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 1000 }
+    IngestRequest:
+      type: object
+      required: [job_type]
+      additionalProperties: false
+      properties:
+        job_type: { type: string, enum: [PARSE_METADATA, SEGMENT_EPISODE, REVALIDATE] }
+        pipeline_id: { type: [string, "null"], maxLength: 128 }
+        pipeline_version: { type: [string, "null"], maxLength: 64 }
+        parser_id: { type: [string, "null"], maxLength: 128 }
+        parser_version: { type: [string, "null"], maxLength: 64 }
+        segmentation_rule_version: { type: [string, "null"], maxLength: 64 }
+        config: { type: object, additionalProperties: true }
+        timeout_sec: { type: integer, minimum: 1, default: 3600 }
+    Episode:
+      $ref: "./episode.v1.schema.json"
+    EpisodeCreate:
+      type: object
+      required: [raw_asset_ids, segmentation]
+      additionalProperties: false
+      properties:
+        code: { type: [string, "null"], maxLength: 64 }
+        collection_task_id: { type: [string, "null"], format: uuid }
+        batch_id: { type: [string, "null"], format: uuid }
+        robot_id: { type: [string, "null"], format: uuid }
+        device_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        sensor_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        raw_asset_ids: { type: array, minItems: 1, maxItems: 64, uniqueItems: true, items: { type: string, format: uuid } }
+        segmentation: { $ref: "#/components/schemas/EpisodeSegmentation" }
+        time_base: { oneOf: [{ $ref: "#/components/schemas/TimeBase" }, { type: "null" }] }
+        calibration_snapshot: { type: array, items: { $ref: "#/components/schemas/CalibrationSnapshotItem" } }
+        scene_labels: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }
+        language_instruction: { type: [string, "null"], maxLength: 2000 }
+        success: { type: [boolean, "null"] }
+        failure_reason: { type: [string, "null"], maxLength: 2000 }
+    EpisodeSegmentation:
+      type: object
+      required: [method, rule_version, start_time_ns, end_time_ns]
+      additionalProperties: false
+      properties:
+        method: { type: string, enum: [MANUAL_TIME_RANGE, RULE] }
+        rule_version: { type: string, minLength: 1, maxLength: 64 }
+        start_time_ns: { type: string, pattern: '^-?[0-9]+$' }
+        end_time_ns: { type: string, pattern: '^-?[0-9]+$' }
+        time_domain: { type: string, enum: [UTC], default: UTC }
+        allow_overlap: { type: boolean, default: false }
+        overlap_reason: { type: [string, "null"], maxLength: 1000 }
+    TimeBase:
+      type: object
+      required: [time_domain, clock_source, sync_method, sync_status]
+      additionalProperties: false
+      properties:
+        time_domain: { type: string, enum: [UTC, ROS, DEVICE, HOST, MONOTONIC, UNKNOWN] }
+        clock_source: { type: string, enum: [PTP, NTP, ROS_CLOCK, DEVICE_CLOCK, HOST_CLOCK, MONOTONIC, EXTERNAL, UNKNOWN] }
+        clock_id: { type: [string, "null"], maxLength: 200 }
+        offset_to_utc_ns: { type: [string, "null"], pattern: '^-?[0-9]+$' }
+        drift_ppm: { type: [number, "null"] }
+        uncertainty_ns: { type: [string, "null"], pattern: '^-?[0-9]+$' }
+        sync_method: { type: string, enum: [PTP, NTP, HARDWARE_TRIGGER, SOFTWARE_ESTIMATE, MANUAL, NONE] }
+        sync_ref: { type: [string, "null"], maxLength: 200 }
+        sync_status: { type: string, enum: [VERIFIED, DEGRADED, UNVERIFIED, FAILED] }
+    CalibrationSnapshotItem:
+      type: object
+      required: [calibration_id, calibration_version, checksum, target_type, target_id, schema_version]
+      additionalProperties: false
+      properties:
+        calibration_id: { type: string, format: uuid }
+        calibration_version: { type: integer, minimum: 1 }
+        checksum: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        target_type: { type: string, enum: [ROBOT, DEVICE, SENSOR, SYSTEM] }
+        target_id: { type: string, format: uuid }
+        schema_version: { type: string, minLength: 1, maxLength: 64 }
+    EpisodePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        scene_labels: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }
+        language_instruction: { type: [string, "null"], maxLength: 2000 }
+        success: { type: [boolean, "null"] }
+        failure_reason: { type: [string, "null"], maxLength: 2000 }
+    EpisodeActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 1000 }
+        quality_status: { type: [string, "null"], enum: [NOT_CHECKED, PASS, WARN, FAIL, null] }
+        rule_version: { type: [string, "null"], maxLength: 64 }
+        evidence_refs: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+    EpisodePage:
+      type: object
+      required: [items, next_cursor]
+      additionalProperties: false
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Episode" } }
+        next_cursor: { type: [string, "null"] }
+    EpisodeManifestResponse:
+      type: object
+      required: [episode_id, episode_version, manifest_sha256]
+      additionalProperties: false
+      properties:
+        episode_id: { type: string, format: uuid }
+        episode_version: { type: integer, minimum: 1 }
+        manifest_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        manifest: { type: [object, "null"], additionalProperties: true }
+        manifest_url: { type: [string, "null"], format: uri }
+    LineageEdge:
+      $ref: "./lineage-edge.v1.schema.json"
+    LineageNodeRef:
+      type: object
+      required: [node_type, node_id]
+      additionalProperties: false
+      properties:
+        node_type: { type: string, enum: [RAW_ASSET, UPLOAD_SESSION, COLLECTION_TASK, COLLECTION_BATCH, INGESTION_JOB, EPISODE, QUALITY_RUN, ANNOTATION, DATASET_VERSION, TRAINING_RUN] }
+        node_id: { type: string, format: uuid }
+    LineageTraversalResponse:
+      type: object
+      required: [root, direction, depth, items]
+      additionalProperties: false
+      properties:
+        root: { $ref: "#/components/schemas/LineageNodeRef" }
+        direction: { type: string, enum: [forward, reverse, both] }
+        depth: { type: integer, minimum: 1, maximum: 5 }
+        items: { type: array, items: { $ref: "#/components/schemas/LineageEdge" } }
+        next_cursor: { type: [string, "null"] }

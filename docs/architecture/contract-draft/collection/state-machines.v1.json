@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/collection/state-machines.v1.json",
+  "title": "DDP 阶段 2 状态机 v1（草案）",
+  "description": "阶段 2 采集任务、批次、上传会话、RawAsset、IngestionJob、Episode 的权威迁移表。状态文本使用大写下划线；非法迁移统一 state_transition_invalid（409）。本文件是测试与实现共用的机器可读基线，未冻结。",
+  "version": "ddp.stage2/1.0.0-draft",
+  "status": "DRAFT",
+  "common": {
+    "error": "state_transition_invalid",
+    "http_status": 409,
+    "terminal_rule": "终态不得回退；终态对象只能通过新资源/新版本表达变更",
+    "audit_required": true,
+    "optimistic_lock": "动作接口必须带 If-Match: \"<version>\"；缺失 428 precondition_required，失配 409 version_conflict",
+    "idempotency": "写动作支持 Idempotency-Key，作用域 (project_id, user_id, key)，至少 24h"
+  },
+  "machines": {
+    "CollectionTask": {
+      "initial": "DRAFT",
+      "terminal": ["COMPLETED", "CANCELLED"],
+      "states": ["DRAFT", "PENDING_REVIEW", "APPROVED", "READY", "ASSIGNED", "IN_PROGRESS", "PAUSED", "BLOCKED", "SUBMITTED", "DATA_CHECKING", "ACCEPTED", "REJECTED", "REWORK", "COMPLETED", "CANCELLED"],
+      "transitions": [
+        {"from": "DRAFT", "to": "PENDING_REVIEW", "action": "submit-review", "roles": ["CM", "PM", "PO"], "requires_reason": false, "preconditions": ["名称/方案/SOP 版本/目标数量完整"]},
+        {"from": "PENDING_REVIEW", "to": "DRAFT", "action": "return-draft", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["非创建人可退回"]},
+        {"from": "PENDING_REVIEW", "to": "APPROVED", "action": "approve", "roles": ["PM", "PO"], "requires_reason": false, "preconditions": ["审批人不是创建人"]},
+        {"from": "APPROVED", "to": "READY", "action": "ready", "roles": ["CM", "PM"], "requires_reason": false, "preconditions": ["资源可分配", "SOP/方案版本未失效"]},
+        {"from": "READY", "to": "ASSIGNED", "action": "assign", "roles": ["CM", "PM", "PO"], "requires_reason": false, "preconditions": ["人员/机器人/设备/传感器/场地同项目且可用"]},
+        {"from": "ASSIGNED", "to": "IN_PROGRESS", "action": "start", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["开工检查通过", "设备 ACTIVE", "标定 ACTIVE", "SOP 版本匹配", "自检完成"]},
+        {"from": "IN_PROGRESS", "to": "PAUSED", "action": "pause", "roles": ["CL", "CM"], "requires_reason": true, "preconditions": ["无未结上传或上传已暂停"]},
+        {"from": "PAUSED", "to": "IN_PROGRESS", "action": "resume", "roles": ["CL", "CM"], "requires_reason": true, "preconditions": ["暂停原因解除"]},
+        {"from": "IN_PROGRESS", "to": "BLOCKED", "action": "block", "roles": ["CL", "CM"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "BLOCKED", "to": "IN_PROGRESS", "action": "unblock", "roles": ["CM", "PM"], "requires_reason": true, "preconditions": ["阻塞原因解除"]},
+        {"from": "ASSIGNED", "to": "SUBMITTED", "action": "submit", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["至少一个关联 RawAsset VALID", "自检清单完成"]},
+        {"from": "IN_PROGRESS", "to": "SUBMITTED", "action": "submit", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["至少一个关联 RawAsset VALID", "自检清单完成"]},
+        {"from": "PAUSED", "to": "SUBMITTED", "action": "submit", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["至少一个关联 RawAsset VALID", "自检清单完成"]},
+        {"from": "BLOCKED", "to": "SUBMITTED", "action": "submit", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["至少一个关联 RawAsset VALID", "自检清单完成"]},
+        {"from": "SUBMITTED", "to": "DATA_CHECKING", "action": "system-data-check", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["自动质检 Job 已创建"]},
+        {"from": "DATA_CHECKING", "to": "ACCEPTED", "action": "accept", "roles": ["QI"], "requires_reason": false, "preconditions": ["质量门禁通过"]},
+        {"from": "DATA_CHECKING", "to": "REJECTED", "action": "reject", "roles": ["QI"], "requires_reason": true, "preconditions": ["不合格项与证据完整"]},
+        {"from": "REJECTED", "to": "REWORK", "action": "rework", "roles": ["QI", "CM"], "requires_reason": true, "preconditions": ["返工范围与责任人明确"]},
+        {"from": "REWORK", "to": "SUBMITTED", "action": "submit", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["返工完成并重新自检"]},
+        {"from": "ACCEPTED", "to": "COMPLETED", "action": "complete", "roles": ["CM", "PO"], "requires_reason": false, "preconditions": ["批次全部终态", "accepted_episode_count >= target_episode_count 或有 PO 豁免"]},
+        {"from": "DRAFT", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "PENDING_REVIEW", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "APPROVED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "READY", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "ASSIGNED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "IN_PROGRESS", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "PAUSED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "BLOCKED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "SUBMITTED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "DATA_CHECKING", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "REJECTED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "REWORK", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]},
+        {"from": "ACCEPTED", "to": "CANCELLED", "action": "cancel", "roles": ["PM", "PO"], "requires_reason": true, "preconditions": ["无未结上传/解析"]}
+      ],
+      "forbidden_examples": [
+        {"from": "DRAFT", "to": "APPROVED", "reason": "跳过审核"},
+        {"from": "DRAFT", "to": "IN_PROGRESS", "reason": "跳过审批/分配/开工检查"},
+        {"from": "APPROVED", "to": "SUBMITTED", "reason": "跳过分配与执行"},
+        {"from": "SUBMITTED", "to": "ACCEPTED", "reason": "跳过数据检查"},
+        {"from": "DATA_CHECKING", "to": "COMPLETED", "reason": "跳过验收与完成条件"},
+        {"from": "ACCEPTED", "to": "IN_PROGRESS", "reason": "终态前回退"},
+        {"from": "COMPLETED", "to": "IN_PROGRESS", "reason": "终态回退"},
+        {"from": "CANCELLED", "to": "DRAFT", "reason": "终态回退"}
+      ]
+    },
+    "CollectionBatch": {
+      "initial": "PLANNED",
+      "terminal": ["ACCEPTED", "CANCELLED"],
+      "states": ["PLANNED", "READY", "IN_PROGRESS", "PAUSED", "BLOCKED", "SUBMITTED", "ACCEPTED", "REJECTED", "REWORK", "CANCELLED"],
+      "transitions": [
+        {"from": "PLANNED", "to": "READY", "action": "ready", "roles": ["CM", "PM"], "requires_reason": false, "preconditions": ["所属任务为 READY/ASSIGNED/IN_PROGRESS"]},
+        {"from": "READY", "to": "IN_PROGRESS", "action": "start", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["任务为 IN_PROGRESS", "人员/设备已分配"]},
+        {"from": "IN_PROGRESS", "to": "PAUSED", "action": "pause", "roles": ["CL", "CM"], "requires_reason": true, "preconditions": ["任务状态兼容"]},
+        {"from": "PAUSED", "to": "IN_PROGRESS", "action": "resume", "roles": ["CL", "CM"], "requires_reason": true, "preconditions": ["暂停原因解除"]},
+        {"from": "IN_PROGRESS", "to": "BLOCKED", "action": "block", "roles": ["CL", "CM"], "requires_reason": true, "preconditions": ["阻塞原因明确"]},
+        {"from": "BLOCKED", "to": "IN_PROGRESS", "action": "unblock", "roles": ["CM", "PM"], "requires_reason": true, "preconditions": ["阻塞原因解除"]},
+        {"from": "IN_PROGRESS", "to": "SUBMITTED", "action": "submit", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["至少一个 VALID 资产", "任务允许提交"]},
+        {"from": "PAUSED", "to": "SUBMITTED", "action": "submit", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["至少一个 VALID 资产", "任务允许提交"]},
+        {"from": "BLOCKED", "to": "SUBMITTED", "action": "submit", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["至少一个 VALID 资产", "任务允许提交"]},
+        {"from": "SUBMITTED", "to": "ACCEPTED", "action": "accept", "roles": ["QI"], "requires_reason": false, "preconditions": ["质检通过", "任务为 DATA_CHECKING/ACCEPTED/COMPLETED"]},
+        {"from": "SUBMITTED", "to": "REJECTED", "action": "reject", "roles": ["QI"], "requires_reason": true, "preconditions": ["问题项完整"]},
+        {"from": "REJECTED", "to": "REWORK", "action": "rework", "roles": ["QI", "CM"], "requires_reason": true, "preconditions": ["返工要求明确"]},
+        {"from": "REWORK", "to": "SUBMITTED", "action": "submit", "roles": ["CL", "CM"], "requires_reason": false, "preconditions": ["返工完成"]},
+        {"from": "PLANNED", "to": "CANCELLED", "action": "cancel", "roles": ["CM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "READY", "to": "CANCELLED", "action": "cancel", "roles": ["CM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "IN_PROGRESS", "to": "CANCELLED", "action": "cancel", "roles": ["CM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "PAUSED", "to": "CANCELLED", "action": "cancel", "roles": ["CM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "BLOCKED", "to": "CANCELLED", "action": "cancel", "roles": ["CM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "SUBMITTED", "to": "CANCELLED", "action": "cancel", "roles": ["CM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "REJECTED", "to": "CANCELLED", "action": "cancel", "roles": ["CM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]},
+        {"from": "REWORK", "to": "CANCELLED", "action": "cancel", "roles": ["CM", "PM", "PO"], "requires_reason": true, "preconditions": ["原因明确"]}
+      ],
+      "forbidden_examples": [
+        {"from": "PLANNED", "to": "IN_PROGRESS", "reason": "跳过 READY 与任务开工"},
+        {"from": "PLANNED", "to": "ACCEPTED", "reason": "跳过执行/质检"},
+        {"from": "SUBMITTED", "to": "COMPLETED", "reason": "批次无 COMPLETED 状态；应 ACCEPTED"},
+        {"from": "ACCEPTED", "to": "IN_PROGRESS", "reason": "终态回退"},
+        {"from": "CANCELLED", "to": "READY", "reason": "终态回退"}
+      ]
+    },
+    "UploadSession": {
+      "initial": "CREATED",
+      "terminal": ["COMPLETED", "ABORTED", "EXPIRED", "FAILED"],
+      "states": ["CREATED", "UPLOADING", "COMPLETING", "COMPLETED", "ABORTED", "EXPIRED", "FAILED"],
+      "transitions": [
+        {"from": "CREATED", "to": "UPLOADING", "action": "request-part-url-or-ack", "roles": ["SESSION_OWNER", "CM", "DE", "PO"], "requires_reason": false, "preconditions": ["会话未过期", "项目/任务权限通过"]},
+        {"from": "CREATED", "to": "COMPLETING", "action": "complete", "roles": ["SESSION_OWNER", "CM", "DE", "PO"], "requires_reason": false, "preconditions": ["If-Match 匹配", "分片已确认"]},
+        {"from": "UPLOADING", "to": "COMPLETING", "action": "complete", "roles": ["SESSION_OWNER", "CM", "DE", "PO"], "requires_reason": false, "preconditions": ["If-Match 匹配", "分片已确认"]},
+        {"from": "COMPLETING", "to": "COMPLETED", "action": "system-register", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["ListParts 与确认记录一致", "大小/签名通过", "对象存储完成"]},
+        {"from": "COMPLETING", "to": "UPLOADING", "action": "system-retryable-failure", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["upload_incomplete/size_mismatch/upload_part_conflict"]},
+        {"from": "COMPLETING", "to": "FAILED", "action": "system-security-failure", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["file_signature_mismatch/安全拦截/不可恢复"]},
+        {"from": "CREATED", "to": "ABORTED", "action": "abort", "roles": ["SESSION_OWNER", "CM", "DE", "PO"], "requires_reason": true, "preconditions": ["无已完成登记"]},
+        {"from": "UPLOADING", "to": "ABORTED", "action": "abort", "roles": ["SESSION_OWNER", "CM", "DE", "PO"], "requires_reason": true, "preconditions": ["无已完成登记"]},
+        {"from": "CREATED", "to": "EXPIRED", "action": "system-expire", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["now >= expires_at"]},
+        {"from": "UPLOADING", "to": "EXPIRED", "action": "system-expire", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["now >= expires_at"]},
+        {"from": "CREATED", "to": "FAILED", "action": "system-fail", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["不可恢复错误"]},
+        {"from": "UPLOADING", "to": "FAILED", "action": "system-fail", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["不可恢复错误"]}
+      ],
+      "forbidden_examples": [
+        {"from": "CREATED", "to": "COMPLETED", "reason": "无分片确认与完成事务"},
+        {"from": "COMPLETED", "to": "UPLOADING", "reason": "终态回退"},
+        {"from": "EXPIRED", "to": "UPLOADING", "reason": "过期不可恢复"},
+        {"from": "ABORTED", "to": "UPLOADING", "reason": "中止不可恢复"},
+        {"from": "FAILED", "to": "UPLOADING", "reason": "安全失败不可恢复"}
+      ]
+    },
+    "RawAsset": {
+      "initial": "VALIDATING",
+      "terminal": ["TOMBSTONED"],
+      "terminal_note": "REJECTED 是不可用态，仅允许再迁移到 TOMBSTONED；ARCHIVED 是归档可用态，仅允许再迁移到 TOMBSTONED；TOMBSTONED 是绝对终态。",
+      "states": ["VALIDATING", "VALID", "QUARANTINED", "REJECTED", "ARCHIVED", "TOMBSTONED"],
+      "transitions": [
+        {"from": "VALIDATING", "to": "VALID", "action": "validate-success", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["大小/Hash/签名/格式/可解析性/扫描通过", "无内容冲突"]},
+        {"from": "VALIDATING", "to": "QUARANTINED", "action": "validate-quarantine", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["扫描可疑/不可用/格式不支持/元数据冲突"]},
+        {"from": "VALIDATING", "to": "REJECTED", "action": "validate-reject", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["Hash/大小/签名不符/严重损坏/安全拦截"]},
+        {"from": "QUARANTINED", "to": "VALIDATING", "action": "release-quarantine-or-revalidate", "roles": ["DE", "QI", "PO"], "requires_reason": true, "preconditions": ["双人审批", "扫描报告满足策略"]},
+        {"from": "QUARANTINED", "to": "REJECTED", "action": "reject-quarantined", "roles": ["QI", "DE"], "requires_reason": true, "preconditions": ["复核失败"]},
+        {"from": "VALID", "to": "QUARANTINED", "action": "post-hoc-quarantine", "roles": ["QI", "DE"], "requires_reason": true, "preconditions": ["双人审批", "安全事件"]},
+        {"from": "VALID", "to": "ARCHIVED", "action": "archive", "roles": ["SYSTEM", "DE"], "requires_reason": false, "preconditions": ["保留策略允许", "不影响血缘"]},
+        {"from": "VALID", "to": "TOMBSTONED", "action": "tombstone", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["双人审批", "法务/保留依据"]},
+        {"from": "QUARANTINED", "to": "TOMBSTONED", "action": "tombstone", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["双人审批", "法务/保留依据"]},
+        {"from": "REJECTED", "to": "TOMBSTONED", "action": "tombstone", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["双人审批", "法务/保留依据"]},
+        {"from": "ARCHIVED", "to": "TOMBSTONED", "action": "tombstone", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["双人审批", "法务/保留依据"]}
+      ],
+      "forbidden_examples": [
+        {"from": "VALID", "to": "VALIDATING", "reason": "原地重验；应经 QUARANTINED 或新资产"},
+        {"from": "REJECTED", "to": "VALID", "reason": "拒绝不可恢复；需新上传"},
+        {"from": "TOMBSTONED", "to": "VALID", "reason": "墓碑终态"},
+        {"from": "ARCHIVED", "to": "VALID", "reason": "归档不回退"}
+      ]
+    },
+    "IngestionJob": {
+      "initial": "QUEUED",
+      "terminal": ["SUCCEEDED", "CANCELLED"],
+      "terminal_note": "FAILED 在达到 max_attempts 或不可重试时终态；可重试且 attempt < max_attempts 时允许 FAILED→QUEUED。",
+      "states": ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLING", "CANCELLED"],
+      "transitions": [
+        {"from": "QUEUED", "to": "RUNNING", "action": "worker-start", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["Worker 租约取得", "未取消"]},
+        {"from": "RUNNING", "to": "SUCCEEDED", "action": "worker-succeed", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["产物写入/校验通过"]},
+        {"from": "RUNNING", "to": "FAILED", "action": "worker-fail", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["错误码/摘要/日志记录"]},
+        {"from": "FAILED", "to": "QUEUED", "action": "retry", "roles": ["DE", "SYSTEM"], "requires_reason": false, "preconditions": ["错误可重试", "attempt < max_attempts"]},
+        {"from": "QUEUED", "to": "CANCELLING", "action": "cancel", "roles": ["DE", "PO"], "requires_reason": true, "preconditions": ["未开始或可中断"]},
+        {"from": "RUNNING", "to": "CANCELLING", "action": "cancel", "roles": ["DE", "PO"], "requires_reason": true, "preconditions": ["Worker 支持协作取消"]},
+        {"from": "CANCELLING", "to": "CANCELLED", "action": "worker-cancelled", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["已停止/已清理"]}
+      ],
+      "forbidden_examples": [
+        {"from": "SUCCEEDED", "to": "RUNNING", "reason": "终态回退"},
+        {"from": "CANCELLED", "to": "QUEUED", "reason": "终态回退；应新建 Job"},
+        {"from": "RUNNING", "to": "QUEUED", "reason": "必须先 FAILED 再重试"},
+        {"from": "FAILED", "to": "RUNNING", "reason": "必须重新入队"}
+      ]
+    },
+    "Episode": {
+      "initial": "PENDING",
+      "terminal": ["REJECTED", "ARCHIVED", "INVALIDATED"],
+      "states": ["PENDING", "PROCESSING", "READY", "QUALITY_CHECKING", "ACCEPTED", "COMPLETED", "ARCHIVED", "FAILED", "REJECTED", "INVALIDATED"],
+      "transitions": [
+        {"from": "PENDING", "to": "PROCESSING", "action": "system-start", "roles": ["SYSTEM", "DE"], "requires_reason": false, "preconditions": ["至少一个 VALID/ARCHIVED RawAsset", "切片规则版本确定", "标定快照有效"]},
+        {"from": "PROCESSING", "to": "READY", "action": "system-ready", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["Manifest 生成/Hash 校验/时间帧流完整性通过"]},
+        {"from": "PROCESSING", "to": "FAILED", "action": "system-fail", "roles": ["SYSTEM"], "requires_reason": true, "preconditions": ["解析/切片失败", "错误码/日志记录"]},
+        {"from": "FAILED", "to": "PROCESSING", "action": "retry", "roles": ["DE"], "requires_reason": false, "preconditions": ["数据与规则未变", "attempt < max_attempts"]},
+        {"from": "READY", "to": "QUALITY_CHECKING", "action": "quality-check", "roles": ["QI", "SYSTEM"], "requires_reason": false, "preconditions": ["质检规则版本确定"]},
+        {"from": "QUALITY_CHECKING", "to": "ACCEPTED", "action": "accept", "roles": ["QI"], "requires_reason": false, "preconditions": ["质量门禁通过", "标定/时间同步/流完整性满足"]},
+        {"from": "QUALITY_CHECKING", "to": "REJECTED", "action": "reject", "roles": ["QI"], "requires_reason": true, "preconditions": ["问题项与证据完整"]},
+        {"from": "ACCEPTED", "to": "COMPLETED", "action": "complete", "roles": ["CM"], "requires_reason": false, "preconditions": ["Manifest 冻结", "血缘完整", "标签状态满足交付要求"]},
+        {"from": "COMPLETED", "to": "ARCHIVED", "action": "archive", "roles": ["SYSTEM", "DE"], "requires_reason": false, "preconditions": ["保留策略触发"]},
+        {"from": "PENDING", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["影响评估完成"]},
+        {"from": "PROCESSING", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["原始资产不可用/标定撤销/污染"]},
+        {"from": "READY", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["原始资产不可用/标定撤销/污染"]},
+        {"from": "QUALITY_CHECKING", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["原始资产不可用/标定撤销/污染"]},
+        {"from": "ACCEPTED", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["原始资产不可用/标定撤销/污染"]},
+        {"from": "COMPLETED", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["原始资产不可用/标定撤销/污染"]},
+        {"from": "FAILED", "to": "INVALIDATED", "action": "invalidate", "roles": ["PO", "QI"], "requires_reason": true, "preconditions": ["影响评估完成"]}
+      ],
+      "forbidden_examples": [
+        {"from": "PENDING", "to": "ACCEPTED", "reason": "跳过处理与质检"},
+        {"from": "READY", "to": "ACCEPTED", "reason": "跳过质检"},
+        {"from": "REJECTED", "to": "ACCEPTED", "reason": "该版本终态；修订创建新版本"},
+        {"from": "REJECTED", "to": "PROCESSING", "reason": "禁止原地重开；创建新 episode_version"},
+        {"from": "INVALIDATED", "to": "PROCESSING", "reason": "终态回退"},
+        {"from": "ARCHIVED", "to": "ACCEPTED", "reason": "终态回退"}
+      ]
+    }
+  }
+}

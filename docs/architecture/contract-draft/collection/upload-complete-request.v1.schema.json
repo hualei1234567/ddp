@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/collection/upload-complete-request.v1.schema.json",
+  "title": "DDP CompleteUploadRequest v1（草案）",
+  "description": "完成分片上传请求。服务端必须与对象存储 ListParts 交叉核对；不能仅信任本请求。",
+  "version": "ddp.stage2/1.0.0-draft",
+  "type": "object",
+  "required": ["expected_sha256", "expected_size_bytes", "parts"],
+  "additionalProperties": false,
+  "properties": {
+    "expected_sha256": {"$ref": "#/$defs/sha256"},
+    "expected_size_bytes": {"type": "integer", "minimum": 1},
+    "parts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {"$ref": "#/$defs/part"},
+      "description": "按 part_number 升序，必须从 1 开始连续"
+    },
+    "metadata": {
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {"pattern": "^[a-z][a-z0-9_]{0,63}$"},
+      "additionalProperties": {"type": ["string", "number", "boolean", "null"]}
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "part": {
+      "type": "object",
+      "required": ["part_number", "etag", "size_bytes", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "part_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "etag": {"type": "string", "minLength": 1, "maxLength": 256},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

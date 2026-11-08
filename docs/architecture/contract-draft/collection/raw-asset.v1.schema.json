@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/collection/raw-asset.v1.schema.json",
+  "title": "DDP RawAsset v1（草案）",
+  "description": "阶段 2 原始资产响应。内容字段创建后不可变；状态只经领域动作迁移。",
+  "version": "ddp.stage2/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "asset_id",
+    "project_id",
+    "code",
+    "source_type",
+    "original_filename",
+    "object_key",
+    "size_bytes",
+    "content_type",
+    "format",
+    "sha256",
+    "status",
+    "storage_class",
+    "uploaded_by",
+    "version",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "asset_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "code": {"type": "string", "minLength": 1, "maxLength": 64},
+    "source_type": {"type": "string", "enum": ["UPLOAD", "DEVICE", "IMPORT"]},
+    "collection_task_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "batch_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "upload_session_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "original_filename": {"type": "string", "minLength": 1, "maxLength": 255},
+    "object_key": {"type": "string", "minLength": 1, "maxLength": 1024},
+    "size_bytes": {"type": "integer", "minimum": 1},
+    "content_type": {"type": "string", "minLength": 1, "maxLength": 200},
+    "format": {
+      "type": "string",
+      "enum": ["MCAP", "ROSBAG2", "HDF5", "MP4", "PARQUET", "CSV", "JSON", "ZIP", "UNKNOWN"]
+    },
+    "sha256": {"$ref": "#/$defs/sha256"},
+    "status": {
+      "type": "string",
+      "enum": ["VALIDATING", "VALID", "QUARANTINED", "REJECTED", "ARCHIVED", "TOMBSTONED"]
+    },
+    "captured_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "ingested_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "device_ids": {"type": "array", "items": {"$ref": "#/$defs/uuid"}, "uniqueItems": true},
+    "sensor_ids": {"type": "array", "items": {"$ref": "#/$defs/uuid"}, "uniqueItems": true},
+    "sensor_snapshot": {"type": ["object", "null"], "additionalProperties": true},
+    "device_time_raw": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["value", "domain", "clock_id"],
+          "additionalProperties": false,
+          "properties": {
+            "value": {"type": "string", "pattern": "^-?[0-9]+$"},
+            "domain": {"type": "string", "enum": ["UTC", "ROS", "DEVICE", "HOST", "MONOTONIC", "UNKNOWN"]},
+            "clock_id": {"type": "string", "maxLength": 200},
+            "unit": {"type": "string", "enum": ["ns", "us", "ms", "s"]}
+          }
+        },
+        {"type": "null"}
+      ]
+    },
+    "raw_metadata": {"type": "object", "additionalProperties": true},
+    "storage_class": {"type": "string", "enum": ["STANDARD", "INFREQUENT", "ARCHIVE"]},
+    "retention_policy_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "quarantine_reason": {"oneOf": [{"type": "string", "maxLength": 1000}, {"type": "null"}]},
+    "quarantine_codes": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "enum": [
+          "malware_suspected",
+          "malware_scanner_unavailable",
+          "signature_ambiguous",
+          "unsupported_format",
+          "metadata_conflict",
+          "parse_failed"
+        ]
+      }
+    },
+    "scan_report_key": {"oneOf": [{"type": "string", "maxLength": 1024}, {"type": "null"}]},
+    "verified_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "archived_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "tombstoned_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "duplicate_of_asset_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "uploaded_by": {"$ref": "#/$defs/uuid"},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "updated_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"}
+  }
+}

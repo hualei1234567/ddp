@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/collection/upload-session.v1.schema.json",
+  "title": "DDP UploadSession v1（草案）",
+  "description": "阶段 2 上传会话响应/断点状态。传输态与 RawAsset 资产态分离；不包含对象存储凭据。",
+  "version": "ddp.stage2/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "upload_session_id",
+    "project_id",
+    "status",
+    "verification_status",
+    "original_filename",
+    "declared_content_type",
+    "declared_size_bytes",
+    "part_size_bytes",
+    "max_size_bytes",
+    "allowed_content_types",
+    "expires_at",
+    "uploaded_bytes",
+    "uploaded_part_count",
+    "deduplicated",
+    "version",
+    "created_at",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "upload_session_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "collection_task_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "batch_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "status": {
+      "type": "string",
+      "enum": ["CREATED", "UPLOADING", "COMPLETING", "COMPLETED", "ABORTED", "EXPIRED", "FAILED"]
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": ["PENDING", "VERIFIED", "REJECTED"],
+      "description": "完成上传后的异步校验结果；命中既有资产时也在此反映新上传内容是否真实一致"
+    },
+    "verification_error_code": {"oneOf": [{"type": "string", "maxLength": 64}, {"type": "null"}]},
+    "verified_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "original_filename": {"type": "string", "minLength": 1, "maxLength": 255},
+    "declared_content_type": {"type": "string", "minLength": 1, "maxLength": 200},
+    "declared_size_bytes": {"type": "integer", "minimum": 1},
+    "expected_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "format_hint": {
+      "oneOf": [
+        {"type": "string", "enum": ["MCAP", "ROSBAG2", "HDF5", "MP4", "PARQUET", "CSV", "JSON", "ZIP", "UNKNOWN"]},
+        {"type": "null"}
+      ]
+    },
+    "part_size_bytes": {"type": "integer", "minimum": 1},
+    "max_size_bytes": {"type": "integer", "minimum": 1},
+    "allowed_content_types": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1, "maxLength": 200}
+    },
+    "object_key_prefix": {"type": "string", "maxLength": 1024},
+    "object_key": {"type": ["string", "null"], "maxLength": 1024},
+    "expires_at": {"$ref": "#/$defs/date_time"},
+    "completed_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "aborted_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "failure_code": {"oneOf": [{"type": "string", "maxLength": 64}, {"type": "null"}]},
+    "failure_summary": {"oneOf": [{"type": "string", "maxLength": 2000}, {"type": "null"}]},
+    "uploaded_bytes": {"type": "integer", "minimum": 0},
+    "uploaded_part_count": {"type": "integer", "minimum": 0},
+    "missing_part_numbers": {
+      "type": "array",
+      "items": {"type": "integer", "minimum": 1, "maximum": 10000},
+      "uniqueItems": true
+    },
+    "uploaded_parts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/upload_part_summary"}
+    },
+    "deduplicated": {"type": "boolean"},
+    "deduplicated_asset_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "asset_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "upload_part_summary": {
+      "type": "object",
+      "required": ["part_number", "size_bytes", "etag", "sha256", "recorded_at"],
+      "additionalProperties": false,
+      "properties": {
+        "part_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "etag": {"type": "string", "minLength": 1, "maxLength": 256},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "recorded_at": {"$ref": "#/$defs/date_time"}
+      }
+    }
+  }
+}

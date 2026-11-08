@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/collection/collection-batch.v1.schema.json",
+  "title": "DDP CollectionBatch v1（草案）",
+  "description": "阶段 2 采集批次响应。批次不得领先所属任务状态；初始 PLANNED。",
+  "version": "ddp.stage2/1.0.0-draft",
+  "type": "object",
+  "required": ["batch_id", "project_id", "task_id", "code", "sequence_no", "status", "expected_count", "submitted_count", "accepted_count", "version", "created_at", "updated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "batch_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "task_id": {"$ref": "#/$defs/uuid"},
+    "code": {"type": "string", "minLength": 1, "maxLength": 64},
+    "sequence_no": {"type": "integer", "minimum": 1},
+    "status": {"$ref": "#/$defs/status"},
+    "assigned_to": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "scheduled_start": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "scheduled_end": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "expected_count": {"type": "integer", "minimum": 0},
+    "submitted_count": {"type": "integer", "minimum": 0},
+    "accepted_count": {"type": "integer", "minimum": 0},
+    "status_reason": {"type": ["string", "null"], "maxLength": 1000},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "status": {"type": "string", "enum": ["PLANNED", "READY", "IN_PROGRESS", "PAUSED", "BLOCKED", "SUBMITTED", "ACCEPTED", "REJECTED", "REWORK", "CANCELLED"]}
+  }
+}
