@@ -69,3 +69,51 @@ class NewAnnotationAssignment:
     planned_item_count: int = 0
     planned_minutes: int = 0
     lease_expires_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewAnnotationSubmission:
+    assignment_id: UUID
+    records: tuple[Mapping[str, object], ...]
+    data_source: str = "UNKNOWN"
+
+
+@dataclass(frozen=True, slots=True)
+class NewAnnotationReview:
+    submission_id: UUID
+    reviewer_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class NewAnnotationArbitration:
+    submission_id: UUID
+    arbiter_ids: tuple[UUID, ...]
+    quorum: int
+    trigger: str
+    review_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewGoldSet:
+    code: str
+    schema_id: UUID
+    items: tuple[Mapping[str, object], ...]
+    name: str | None = None
+    exposure_policy: str = "HIDDEN"
+    max_exposure_per_annotator: int = 1
+    rotation_policy: str = "NONE"
+    usage_policy: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class NewQualitySample:
+    task_id: UUID
+    submission_id: UUID
+    annotator_id: UUID
+    sampling_policy_version: str
+    sample_type: str
+    sample_reason: str
+    item_refs: tuple[UUID, ...] = ()
+    stratum: str | None = None
+    due_at: datetime | None = None
+    metadata: Mapping[str, object] = field(default_factory=dict)

@@ -7,6 +7,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase
 
 from app.infrastructure.db.annotation_catalog_guards import install_catalog_guards
+from app.infrastructure.db.annotation_quality_guards import install_quality_guards
+from app.infrastructure.db.annotation_result_guards import install_result_guards
 from app.infrastructure.db.annotation_work_guards import install_work_guards
 from app.infrastructure.db.collection_guards import (
     install_audit_guards,
@@ -47,3 +49,5 @@ def _install_ddp_guards(
     install_episode_state_guards(connection)
     install_catalog_guards(connection)
     install_work_guards(connection)
+    install_result_guards(connection)
+    install_quality_guards(connection)

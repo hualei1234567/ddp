@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """标注域状态机。
 
 迁移表直接对应阶段 3 契约草案 ``state-machines.v1.json``：
@@ -14,16 +15,30 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from app.domain.annotation.enums import (
+    AnnotationArbitrationAction,
+    AnnotationArbitrationStatus,
     AnnotationAssignmentAction,
     AnnotationAssignmentStatus,
     AnnotationBatchAction,
     AnnotationBatchStatus,
+    AnnotationRecordAction,
+    AnnotationRecordStatus,
+    AnnotationReviewAction,
+    AnnotationReviewStatus,
     AnnotationSampleSetAction,
     AnnotationSampleSetStatus,
     AnnotationSchemaAction,
     AnnotationSchemaStatus,
+    AnnotationSubmissionAction,
+    AnnotationSubmissionStatus,
     AnnotationTaskAction,
     AnnotationTaskStatus,
+    GoldSetAction,
+    GoldSetStatus,
+    IAAReportAction,
+    IAAReportStatus,
+    QualitySampleAction,
+    QualitySampleStatus,
 )
 from app.domain.annotation.errors import (
     DomainValidationError,
@@ -238,6 +253,194 @@ _ASSIGNMENT_RULES: Mapping[AnnotationAssignmentStatus, Mapping[str, AnnotationAs
     )
 )
 
+_SUBMISSION_RULES: Mapping[AnnotationSubmissionStatus, Mapping[str, AnnotationSubmissionStatus]] = (
+    MappingProxyType(
+        {
+            AnnotationSubmissionStatus.DRAFT: {
+                AnnotationSubmissionAction.SUBMIT.value: AnnotationSubmissionStatus.SUBMITTED,
+                AnnotationSubmissionAction.WITHDRAW.value: AnnotationSubmissionStatus.WITHDRAWN,
+            },
+            AnnotationSubmissionStatus.SUBMITTED: {
+                AnnotationSubmissionAction.SYSTEM_REVIEW_START.value: AnnotationSubmissionStatus.IN_REVIEW,
+            },
+            AnnotationSubmissionStatus.IN_REVIEW: {
+                AnnotationSubmissionAction.APPROVE.value: AnnotationSubmissionStatus.APPROVED,
+                AnnotationSubmissionAction.REJECT.value: AnnotationSubmissionStatus.REJECTED,
+                AnnotationSubmissionAction.ESCALATE.value: AnnotationSubmissionStatus.ESCALATED,
+            },
+            AnnotationSubmissionStatus.ESCALATED: {
+                AnnotationSubmissionAction.ARBITRATE_START.value: AnnotationSubmissionStatus.ARBITRATING,
+            },
+            AnnotationSubmissionStatus.ARBITRATING: {
+                AnnotationSubmissionAction.RESOLVE_APPROVED.value: AnnotationSubmissionStatus.RESOLVED_APPROVED,
+                AnnotationSubmissionAction.RESOLVE_REJECTED.value: AnnotationSubmissionStatus.RESOLVED_REJECTED,
+                AnnotationSubmissionAction.RESOLVE_REWORK.value: AnnotationSubmissionStatus.RESOLVED_REWORK,
+            },
+            AnnotationSubmissionStatus.REJECTED: {
+                AnnotationSubmissionAction.REQUIRE_REWORK.value: AnnotationSubmissionStatus.REWORK_REQUIRED,
+            },
+            AnnotationSubmissionStatus.RESOLVED_REJECTED: {
+                AnnotationSubmissionAction.REQUIRE_REWORK.value: AnnotationSubmissionStatus.REWORK_REQUIRED,
+            },
+            AnnotationSubmissionStatus.RESOLVED_REWORK: {
+                AnnotationSubmissionAction.REQUIRE_REWORK.value: AnnotationSubmissionStatus.REWORK_REQUIRED,
+            },
+            AnnotationSubmissionStatus.REWORK_REQUIRED: {
+                AnnotationSubmissionAction.SYSTEM_SUPERSEDE.value: AnnotationSubmissionStatus.SUPERSEDED,
+            },
+            AnnotationSubmissionStatus.APPROVED: {
+                AnnotationSubmissionAction.SYSTEM_SUPERSEDE.value: AnnotationSubmissionStatus.SUPERSEDED,
+            },
+            AnnotationSubmissionStatus.WITHDRAWN: {},
+            AnnotationSubmissionStatus.SUPERSEDED: {},
+        }
+    )
+)
+
+_RECORD_RULES: Mapping[AnnotationRecordStatus, Mapping[str, AnnotationRecordStatus]] = (
+    MappingProxyType(
+        {
+            AnnotationRecordStatus.DRAFT: {
+                AnnotationRecordAction.SUBMIT_WITH_SUBMISSION.value: AnnotationRecordStatus.SUBMITTED,
+                AnnotationRecordAction.INVALIDATE.value: AnnotationRecordStatus.INVALIDATED,
+            },
+            AnnotationRecordStatus.SUBMITTED: {
+                AnnotationRecordAction.APPROVE_WITH_SUBMISSION.value: AnnotationRecordStatus.APPROVED,
+                AnnotationRecordAction.REJECT_WITH_SUBMISSION.value: AnnotationRecordStatus.REJECTED,
+                AnnotationRecordAction.INVALIDATE.value: AnnotationRecordStatus.INVALIDATED,
+            },
+            AnnotationRecordStatus.APPROVED: {
+                AnnotationRecordAction.SYSTEM_SUPERSEDE.value: AnnotationRecordStatus.SUPERSEDED,
+                AnnotationRecordAction.INVALIDATE.value: AnnotationRecordStatus.INVALIDATED,
+            },
+            AnnotationRecordStatus.REJECTED: {
+                AnnotationRecordAction.SYSTEM_SUPERSEDE.value: AnnotationRecordStatus.SUPERSEDED,
+            },
+            AnnotationRecordStatus.SUPERSEDED: {},
+            AnnotationRecordStatus.INVALIDATED: {},
+        }
+    )
+)
+
+_REVIEW_RULES: Mapping[AnnotationReviewStatus, Mapping[str, AnnotationReviewStatus]] = (
+    MappingProxyType(
+        {
+            AnnotationReviewStatus.PENDING: {
+                AnnotationReviewAction.CLAIM.value: AnnotationReviewStatus.IN_REVIEW,
+                AnnotationReviewAction.CANCEL.value: AnnotationReviewStatus.CANCELLED,
+            },
+            AnnotationReviewStatus.IN_REVIEW: {
+                AnnotationReviewAction.APPROVE.value: AnnotationReviewStatus.APPROVED,
+                AnnotationReviewAction.REJECT.value: AnnotationReviewStatus.REJECTED,
+                AnnotationReviewAction.ESCALATE.value: AnnotationReviewStatus.ESCALATED,
+                AnnotationReviewAction.CANCEL.value: AnnotationReviewStatus.CANCELLED,
+            },
+            AnnotationReviewStatus.APPROVED: {},
+            AnnotationReviewStatus.REJECTED: {},
+            AnnotationReviewStatus.ESCALATED: {},
+            AnnotationReviewStatus.CANCELLED: {},
+        }
+    )
+)
+
+_ARBITRATION_RULES: Mapping[
+    AnnotationArbitrationStatus, Mapping[str, AnnotationArbitrationStatus]
+] = MappingProxyType(
+    {
+        AnnotationArbitrationStatus.PENDING: {
+            AnnotationArbitrationAction.CLAIM.value: AnnotationArbitrationStatus.IN_ARBITRATION,
+            AnnotationArbitrationAction.CANCEL.value: AnnotationArbitrationStatus.CANCELLED,
+        },
+        AnnotationArbitrationStatus.IN_ARBITRATION: {
+            AnnotationArbitrationAction.RECUSE.value: AnnotationArbitrationStatus.PENDING,
+            AnnotationArbitrationAction.RESOLVE_APPROVED.value: AnnotationArbitrationStatus.RESOLVED_APPROVED,
+            AnnotationArbitrationAction.RESOLVE_REJECTED.value: AnnotationArbitrationStatus.RESOLVED_REJECTED,
+            AnnotationArbitrationAction.RESOLVE_REWORK.value: AnnotationArbitrationStatus.RESOLVED_REWORK,
+            AnnotationArbitrationAction.CANCEL.value: AnnotationArbitrationStatus.CANCELLED,
+        },
+        AnnotationArbitrationStatus.RESOLVED_APPROVED: {},
+        AnnotationArbitrationStatus.RESOLVED_REJECTED: {},
+        AnnotationArbitrationStatus.RESOLVED_REWORK: {},
+        AnnotationArbitrationStatus.CANCELLED: {},
+    }
+)
+
+_GOLD_SET_RULES: Mapping[GoldSetStatus, Mapping[str, GoldSetStatus]] = MappingProxyType(
+    {
+        GoldSetStatus.DRAFT: {
+            GoldSetAction.SUBMIT_REVIEW.value: GoldSetStatus.PENDING_REVIEW,
+            GoldSetAction.REVOKE.value: GoldSetStatus.REVOKED,
+        },
+        GoldSetStatus.PENDING_REVIEW: {
+            GoldSetAction.RETURN_DRAFT.value: GoldSetStatus.DRAFT,
+            GoldSetAction.ACTIVATE.value: GoldSetStatus.ACTIVE,
+            GoldSetAction.REVOKE.value: GoldSetStatus.REVOKED,
+        },
+        GoldSetStatus.ACTIVE: {
+            GoldSetAction.RETIRE.value: GoldSetStatus.RETIRED,
+            GoldSetAction.REVOKE.value: GoldSetStatus.REVOKED,
+        },
+        GoldSetStatus.RETIRED: {},
+        GoldSetStatus.REVOKED: {},
+    }
+)
+
+_QUALITY_SAMPLE_RULES: Mapping[QualitySampleStatus, Mapping[str, QualitySampleStatus]] = (
+    MappingProxyType(
+        {
+            QualitySampleStatus.PLANNED: {
+                QualitySampleAction.SAMPLE.value: QualitySampleStatus.SAMPLED,
+                QualitySampleAction.CANCEL.value: QualitySampleStatus.CANCELLED,
+            },
+            QualitySampleStatus.SAMPLED: {
+                QualitySampleAction.ASSIGN.value: QualitySampleStatus.ASSIGNED,
+                QualitySampleAction.CANCEL.value: QualitySampleStatus.CANCELLED,
+            },
+            QualitySampleStatus.ASSIGNED: {
+                QualitySampleAction.START.value: QualitySampleStatus.IN_REVIEW,
+                QualitySampleAction.CANCEL.value: QualitySampleStatus.CANCELLED,
+            },
+            QualitySampleStatus.IN_REVIEW: {
+                QualitySampleAction.PASS.value: QualitySampleStatus.PASSED,
+                QualitySampleAction.FAIL.value: QualitySampleStatus.FAILED,
+                QualitySampleAction.ESCALATE.value: QualitySampleStatus.ESCALATED,
+            },
+            QualitySampleStatus.PASSED: {
+                QualitySampleAction.CLOSE.value: QualitySampleStatus.CLOSED,
+            },
+            QualitySampleStatus.FAILED: {
+                QualitySampleAction.CLOSE.value: QualitySampleStatus.CLOSED,
+            },
+            QualitySampleStatus.ESCALATED: {
+                QualitySampleAction.CLOSE.value: QualitySampleStatus.CLOSED,
+            },
+            QualitySampleStatus.CLOSED: {},
+            QualitySampleStatus.CANCELLED: {},
+        }
+    )
+)
+
+_IAA_REPORT_RULES: Mapping[IAAReportStatus, Mapping[str, IAAReportStatus]] = MappingProxyType(
+    {
+        IAAReportStatus.QUEUED: {
+            IAAReportAction.WORKER_START.value: IAAReportStatus.RUNNING,
+            IAAReportAction.CANCEL.value: IAAReportStatus.CANCELLED,
+        },
+        IAAReportStatus.RUNNING: {
+            IAAReportAction.WORKER_SUCCEED.value: IAAReportStatus.SUCCEEDED,
+            IAAReportAction.WORKER_FAIL.value: IAAReportStatus.FAILED,
+            IAAReportAction.WORKER_INSUFFICIENT.value: IAAReportStatus.INSUFFICIENT_DATA,
+            IAAReportAction.CANCEL.value: IAAReportStatus.CANCELLED,
+        },
+        IAAReportStatus.FAILED: {
+            IAAReportAction.RETRY.value: IAAReportStatus.QUEUED,
+        },
+        IAAReportStatus.SUCCEEDED: {},
+        IAAReportStatus.INSUFFICIENT_DATA: {},
+        IAAReportStatus.CANCELLED: {},
+    }
+)
+
 _REASON_REQUIRED: Mapping[str, frozenset[str]] = MappingProxyType(
     {
         "schema": frozenset(
@@ -280,6 +483,61 @@ _REASON_REQUIRED: Mapping[str, frozenset[str]] = MappingProxyType(
                 AnnotationAssignmentAction.RELEASE.value,
                 AnnotationAssignmentAction.REVOKE.value,
                 AnnotationAssignmentAction.REWORK.value,
+            }
+        ),
+        "submission": frozenset(
+            {
+                AnnotationSubmissionAction.WITHDRAW.value,
+                AnnotationSubmissionAction.REJECT.value,
+                AnnotationSubmissionAction.ESCALATE.value,
+                AnnotationSubmissionAction.RESOLVE_REJECTED.value,
+                AnnotationSubmissionAction.RESOLVE_REWORK.value,
+                AnnotationSubmissionAction.REQUIRE_REWORK.value,
+                AnnotationSubmissionAction.SYSTEM_SUPERSEDE.value,
+            }
+        ),
+        "record": frozenset(
+            {
+                AnnotationRecordAction.REJECT_WITH_SUBMISSION.value,
+                AnnotationRecordAction.SYSTEM_SUPERSEDE.value,
+                AnnotationRecordAction.INVALIDATE.value,
+            }
+        ),
+        "review": frozenset(
+            {
+                AnnotationReviewAction.REJECT.value,
+                AnnotationReviewAction.ESCALATE.value,
+                AnnotationReviewAction.CANCEL.value,
+            }
+        ),
+        "arbitration": frozenset(
+            {
+                AnnotationArbitrationAction.RECUSE.value,
+                AnnotationArbitrationAction.RESOLVE_REJECTED.value,
+                AnnotationArbitrationAction.RESOLVE_REWORK.value,
+                AnnotationArbitrationAction.CANCEL.value,
+            }
+        ),
+        "gold_set": frozenset(
+            {
+                GoldSetAction.RETURN_DRAFT.value,
+                GoldSetAction.RETIRE.value,
+                GoldSetAction.REVOKE.value,
+            }
+        ),
+        "quality_sample": frozenset(
+            {
+                QualitySampleAction.FAIL.value,
+                QualitySampleAction.ESCALATE.value,
+                QualitySampleAction.CLOSE.value,
+                QualitySampleAction.CANCEL.value,
+            }
+        ),
+        "iaa_report": frozenset(
+            {
+                IAAReportAction.WORKER_FAIL.value,
+                IAAReportAction.WORKER_INSUFFICIENT.value,
+                IAAReportAction.CANCEL.value,
             }
         ),
     }
@@ -347,6 +605,64 @@ def assignment_target(
     )
 
 
+def submission_target(
+    current: AnnotationSubmissionStatus,
+    action: str,
+) -> AnnotationSubmissionStatus:
+    return _target(  # type: ignore[return-value]
+        _SUBMISSION_RULES,
+        "标注提交",
+        current,
+        action,
+    )
+
+
+def record_target(
+    current: AnnotationRecordStatus,
+    action: str,
+) -> AnnotationRecordStatus:
+    return _target(_RECORD_RULES, "标注记录", current, action)  # type: ignore[return-value]
+
+
+def review_target(
+    current: AnnotationReviewStatus,
+    action: str,
+) -> AnnotationReviewStatus:
+    return _target(_REVIEW_RULES, "标注复核", current, action)  # type: ignore[return-value]
+
+
+def arbitration_target(
+    current: AnnotationArbitrationStatus,
+    action: str,
+) -> AnnotationArbitrationStatus:
+    return _target(  # type: ignore[return-value]
+        _ARBITRATION_RULES,
+        "标注仲裁",
+        current,
+        action,
+    )
+
+
+def gold_set_target(current: GoldSetStatus, action: str) -> GoldSetStatus:
+    return _target(_GOLD_SET_RULES, "黄金集", current, action)  # type: ignore[return-value]
+
+
+def quality_sample_target(
+    current: QualitySampleStatus,
+    action: str,
+) -> QualitySampleStatus:
+    return _target(  # type: ignore[return-value]
+        _QUALITY_SAMPLE_RULES,
+        "质检抽检",
+        current,
+        action,
+    )
+
+
+def iaa_report_target(current: IAAReportStatus, action: str) -> IAAReportStatus:
+    return _target(_IAA_REPORT_RULES, "IAA 报告", current, action)  # type: ignore[return-value]
+
+
 def allowed_schema_actions(current: AnnotationSchemaStatus) -> frozenset[str]:
     return _allowed(_SCHEMA_RULES, current)
 
@@ -365,6 +681,34 @@ def allowed_batch_actions(current: AnnotationBatchStatus) -> frozenset[str]:
 
 def allowed_assignment_actions(current: AnnotationAssignmentStatus) -> frozenset[str]:
     return _allowed(_ASSIGNMENT_RULES, current)
+
+
+def allowed_submission_actions(current: AnnotationSubmissionStatus) -> frozenset[str]:
+    return _allowed(_SUBMISSION_RULES, current)
+
+
+def allowed_record_actions(current: AnnotationRecordStatus) -> frozenset[str]:
+    return _allowed(_RECORD_RULES, current)
+
+
+def allowed_review_actions(current: AnnotationReviewStatus) -> frozenset[str]:
+    return _allowed(_REVIEW_RULES, current)
+
+
+def allowed_arbitration_actions(current: AnnotationArbitrationStatus) -> frozenset[str]:
+    return _allowed(_ARBITRATION_RULES, current)
+
+
+def allowed_gold_set_actions(current: GoldSetStatus) -> frozenset[str]:
+    return _allowed(_GOLD_SET_RULES, current)
+
+
+def allowed_quality_sample_actions(current: QualitySampleStatus) -> frozenset[str]:
+    return _allowed(_QUALITY_SAMPLE_RULES, current)
+
+
+def allowed_iaa_report_actions(current: IAAReportStatus) -> frozenset[str]:
+    return _allowed(_IAA_REPORT_RULES, current)
 
 
 def assert_schema_action(
@@ -396,6 +740,49 @@ def assert_assignment_action(
     return assignment_target(current, action)
 
 
+def assert_submission_action(
+    current: AnnotationSubmissionStatus,
+    action: str,
+) -> AnnotationSubmissionStatus:
+    return submission_target(current, action)
+
+
+def assert_record_action(
+    current: AnnotationRecordStatus,
+    action: str,
+) -> AnnotationRecordStatus:
+    return record_target(current, action)
+
+
+def assert_review_action(
+    current: AnnotationReviewStatus,
+    action: str,
+) -> AnnotationReviewStatus:
+    return review_target(current, action)
+
+
+def assert_arbitration_action(
+    current: AnnotationArbitrationStatus,
+    action: str,
+) -> AnnotationArbitrationStatus:
+    return arbitration_target(current, action)
+
+
+def assert_gold_set_action(current: GoldSetStatus, action: str) -> GoldSetStatus:
+    return gold_set_target(current, action)
+
+
+def assert_quality_sample_action(
+    current: QualitySampleStatus,
+    action: str,
+) -> QualitySampleStatus:
+    return quality_sample_target(current, action)
+
+
+def assert_iaa_report_action(current: IAAReportStatus, action: str) -> IAAReportStatus:
+    return iaa_report_target(current, action)
+
+
 def validate_action_name(action: object, *, family: str) -> str:
     if not isinstance(action, str) or not action.strip():
         raise DomainValidationError("action 必须是非空字符串")
@@ -409,6 +796,13 @@ def validate_action_name(action: object, *, family: str) -> str:
         "task": _TASK_RULES,
         "batch": _BATCH_RULES,
         "assignment": _ASSIGNMENT_RULES,
+        "submission": _SUBMISSION_RULES,
+        "record": _RECORD_RULES,
+        "review": _REVIEW_RULES,
+        "arbitration": _ARBITRATION_RULES,
+        "gold_set": _GOLD_SET_RULES,
+        "quality_sample": _QUALITY_SAMPLE_RULES,
+        "iaa_report": _IAA_REPORT_RULES,
     }[family]
     if value not in {name for transitions in rules.values() for name in transitions}:
         raise DomainValidationError("未知状态动作")
@@ -439,6 +833,34 @@ def assignment_transition_pairs() -> frozenset[_TRANSITION]:
     return _pairs(_ASSIGNMENT_RULES)
 
 
+def submission_transition_pairs() -> frozenset[_TRANSITION]:
+    return _pairs(_SUBMISSION_RULES)
+
+
+def record_transition_pairs() -> frozenset[_TRANSITION]:
+    return _pairs(_RECORD_RULES)
+
+
+def review_transition_pairs() -> frozenset[_TRANSITION]:
+    return _pairs(_REVIEW_RULES)
+
+
+def arbitration_transition_pairs() -> frozenset[_TRANSITION]:
+    return _pairs(_ARBITRATION_RULES)
+
+
+def gold_set_transition_pairs() -> frozenset[_TRANSITION]:
+    return _pairs(_GOLD_SET_RULES)
+
+
+def quality_sample_transition_pairs() -> frozenset[_TRANSITION]:
+    return _pairs(_QUALITY_SAMPLE_RULES)
+
+
+def iaa_report_transition_pairs() -> frozenset[_TRANSITION]:
+    return _pairs(_IAA_REPORT_RULES)
+
+
 def schema_terminal_states() -> frozenset[str]:
     return _terminal(_SCHEMA_RULES)
 
@@ -457,6 +879,34 @@ def batch_terminal_states() -> frozenset[str]:
 
 def assignment_terminal_states() -> frozenset[str]:
     return _terminal(_ASSIGNMENT_RULES)
+
+
+def submission_terminal_states() -> frozenset[str]:
+    return _terminal(_SUBMISSION_RULES)
+
+
+def record_terminal_states() -> frozenset[str]:
+    return _terminal(_RECORD_RULES)
+
+
+def review_terminal_states() -> frozenset[str]:
+    return _terminal(_REVIEW_RULES)
+
+
+def arbitration_terminal_states() -> frozenset[str]:
+    return _terminal(_ARBITRATION_RULES)
+
+
+def gold_set_terminal_states() -> frozenset[str]:
+    return _terminal(_GOLD_SET_RULES)
+
+
+def quality_sample_terminal_states() -> frozenset[str]:
+    return _terminal(_QUALITY_SAMPLE_RULES)
+
+
+def iaa_report_terminal_states() -> frozenset[str]:
+    return _terminal(_IAA_REPORT_RULES)
 
 
 def _terminal(rules: Mapping[object, Mapping[str, object]]) -> frozenset[str]:

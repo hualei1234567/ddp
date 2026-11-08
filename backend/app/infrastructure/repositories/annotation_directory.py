@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from uuid import UUID
 
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.application.annotation.ports import EpisodeCandidate
 from app.domain.annotation.errors import DomainValidationError
-from app.domain.identity.models import ProjectScope
+from app.domain.identity.models import ProjectRole, ProjectScope
 from app.infrastructure.db.models.episodes import DataLineageEdgeModel, EpisodeModel
 from app.infrastructure.db.models.identity import ProjectMember
 from app.infrastructure.repositories._annotation_sql import as_utc
@@ -52,6 +53,27 @@ class SqlEpisodeDirectory:
             statement = statement.where(EpisodeModel.id > after_id)
         statement = statement.order_by(EpisodeModel.id).limit(limit)
         return [self._from_row(row) for row in self._session.scalars(statement)]
+
+    def episode_bounds(
+        self,
+        scope: ProjectScope,
+        *,
+        episode_ids: tuple[UUID, ...],
+    ) -> Mapping[UUID, tuple[int, int]]:
+        if not episode_ids:
+            return {}
+        rows = self._session.execute(
+            select(EpisodeModel.id, EpisodeModel.start_time_ns, EpisodeModel.end_time_ns).where(
+                EpisodeModel.project_id == scope.project_id,
+                EpisodeModel.id.in_(episode_ids),
+            )
+        )
+        result: dict[UUID, tuple[int, int]] = {}
+        for episode_id, start, end in rows:
+            if start is None or end is None:
+                continue
+            result[episode_id] = (int(start), int(end))
+        return result
 
     def _from_row(self, row: EpisodeModel) -> EpisodeCandidate:
         has_lineage = bool(
@@ -105,3 +127,19 @@ class SqlMemberDirectory:
                 )
             )
         )
+
+
+class SqlGoldSetAnswerAccessPolicy:
+    """黄金集答案访问控制：项目 OWNER/EDITOR 可读，VIEWER 默认拒绝。"""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def can_view_answers(self, scope: ProjectScope, gold_set_id: UUID) -> bool:
+        role = self._session.scalar(
+            select(ProjectMember.role).where(
+                ProjectMember.project_id == scope.project_id,
+                ProjectMember.user_id == scope.actor_id,
+            )
+        )
+        return role in {ProjectRole.OWNER.value, ProjectRole.EDITOR.value}

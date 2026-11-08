@@ -12,10 +12,15 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.domain.annotation.arbitration import AnnotationArbitration
 from app.domain.annotation.assignment import AnnotationAssignment
 from app.domain.annotation.batch import AnnotationBatch
+from app.domain.annotation.gold_set import GoldEvaluation, GoldSet
+from app.domain.annotation.quality_sample import QualitySample
+from app.domain.annotation.review import AnnotationReview
 from app.domain.annotation.sample_set import AnnotationSampleSet, SampleEpisodeRef
 from app.domain.annotation.schema import AnnotationSchema
+from app.domain.annotation.submission import AnnotationRecord, AnnotationSubmission
 from app.domain.annotation.task import AnnotationTask
 from app.domain.identity.models import ProjectScope
 
@@ -315,6 +320,306 @@ class EpisodeDirectory(Protocol):
         after_id: UUID | None = None,
         limit: int = 500,
     ) -> list[EpisodeCandidate]: ...
+
+    def episode_bounds(
+        self,
+        scope: ProjectScope,
+        *,
+        episode_ids: tuple[UUID, ...],
+    ) -> Mapping[UUID, tuple[int, int]]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class RecordObservation:
+    """IAA / 黄金集评估使用的只读投影。"""
+
+    record: AnnotationRecord
+    submission_id: UUID
+    annotator_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class GoldExposure:
+    exposure_id: UUID
+    project_id: UUID
+    gold_set_id: UUID
+    gold_item_id: UUID
+    annotator_id: UUID
+    task_id: UUID
+    rotation_marker: str
+    exposed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class GoldEvaluationRecord:
+    evaluation_id: UUID
+    project_id: UUID
+    gold_set_id: UUID
+    task_id: UUID
+    submission_id: UUID
+    evaluation: GoldEvaluation
+    computed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class IAAReportRecord:
+    report_id: UUID
+    project_id: UUID
+    task_id: UUID
+    schema_id: UUID
+    schema_version: int
+    status: str
+    metric_definitions_version: str
+    sample_item_count: int
+    overlap_item_count: int
+    annotator_count: int
+    metrics: tuple[Mapping[str, object], ...]
+    excluded_items: tuple[Mapping[str, object], ...]
+    computed_at: datetime | None
+    version: int = 1
+
+
+class AnnotationSubmissionRepository(Protocol):
+    def add(
+        self,
+        scope: ProjectScope,
+        submission: AnnotationSubmission,
+    ) -> AnnotationSubmission: ...
+
+    def get(self, scope: ProjectScope, submission_id: UUID) -> AnnotationSubmission | None: ...
+
+    def list_for_task(
+        self,
+        scope: ProjectScope,
+        *,
+        task_id: UUID,
+        statuses: tuple[str, ...] | None = None,
+        limit: int = 100,
+    ) -> list[AnnotationSubmission]: ...
+
+    def list_for_assignment(
+        self,
+        scope: ProjectScope,
+        *,
+        assignment_id: UUID,
+    ) -> list[AnnotationSubmission]: ...
+
+    def latest_for_assignment(
+        self,
+        scope: ProjectScope,
+        *,
+        assignment_id: UUID,
+    ) -> AnnotationSubmission | None: ...
+
+    def next_version(self, scope: ProjectScope, assignment_id: UUID) -> int: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        submission: AnnotationSubmission,
+        *,
+        expected_version: int,
+    ) -> AnnotationSubmission: ...
+
+
+class AnnotationRecordRepository(Protocol):
+    def add_many(
+        self,
+        scope: ProjectScope,
+        records: tuple[AnnotationRecord, ...],
+    ) -> None: ...
+
+    def list_for_submission(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+    ) -> list[AnnotationRecord]: ...
+
+    def list_for_task(
+        self,
+        scope: ProjectScope,
+        *,
+        task_id: UUID,
+        statuses: tuple[str, ...],
+    ) -> list[RecordObservation]: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        record: AnnotationRecord,
+        *,
+        expected_version: int,
+    ) -> AnnotationRecord: ...
+
+
+class AnnotationReviewRepository(Protocol):
+    def add(self, scope: ProjectScope, review: AnnotationReview) -> AnnotationReview: ...
+
+    def get(self, scope: ProjectScope, review_id: UUID) -> AnnotationReview | None: ...
+
+    def list_for_submission(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+    ) -> list[AnnotationReview]: ...
+
+    def first_for_submission(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+    ) -> AnnotationReview | None: ...
+
+    def next_round(self, scope: ProjectScope, submission_id: UUID) -> int: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        review: AnnotationReview,
+        *,
+        expected_version: int,
+    ) -> AnnotationReview: ...
+
+
+class AnnotationArbitrationRepository(Protocol):
+    def add(
+        self,
+        scope: ProjectScope,
+        arbitration: AnnotationArbitration,
+    ) -> AnnotationArbitration: ...
+
+    def get(
+        self,
+        scope: ProjectScope,
+        arbitration_id: UUID,
+    ) -> AnnotationArbitration | None: ...
+
+    def list_for_submission(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+    ) -> list[AnnotationArbitration]: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        arbitration: AnnotationArbitration,
+        *,
+        expected_version: int,
+    ) -> AnnotationArbitration: ...
+
+
+class GoldSetRepository(Protocol):
+    def add(self, scope: ProjectScope, gold_set: GoldSet) -> GoldSet: ...
+
+    def get(self, scope: ProjectScope, gold_set_id: UUID) -> GoldSet | None: ...
+
+    def get_by_code(self, scope: ProjectScope, code: str) -> GoldSet | None: ...
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        status: str | None = None,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[GoldSet]: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        gold_set: GoldSet,
+        *,
+        expected_version: int,
+    ) -> GoldSet: ...
+
+    def add_exposures(
+        self,
+        scope: ProjectScope,
+        exposures: tuple[GoldExposure, ...],
+    ) -> None: ...
+
+    def count_exposures(
+        self,
+        scope: ProjectScope,
+        *,
+        gold_set_id: UUID,
+        gold_item_id: UUID,
+        annotator_id: UUID,
+        task_id: UUID | None = None,
+    ) -> int: ...
+
+    def list_exposures(
+        self,
+        scope: ProjectScope,
+        *,
+        gold_set_id: UUID,
+        annotator_id: UUID,
+    ) -> list[GoldExposure]: ...
+
+    def add_evaluation(
+        self,
+        scope: ProjectScope,
+        record: GoldEvaluationRecord,
+    ) -> GoldEvaluationRecord: ...
+
+    def get_evaluation(
+        self,
+        scope: ProjectScope,
+        evaluation_id: UUID,
+    ) -> GoldEvaluationRecord | None: ...
+
+
+class QualitySampleRepository(Protocol):
+    def add(self, scope: ProjectScope, sample: QualitySample) -> QualitySample: ...
+
+    def get(self, scope: ProjectScope, sample_id: UUID) -> QualitySample | None: ...
+
+    def list_for_task(
+        self,
+        scope: ProjectScope,
+        *,
+        task_id: UUID,
+        status: str | None = None,
+        limit: int = 100,
+    ) -> list[QualitySample]: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        sample: QualitySample,
+        *,
+        expected_version: int,
+    ) -> QualitySample: ...
+
+
+class IAAReportRepository(Protocol):
+    def add(
+        self,
+        scope: ProjectScope,
+        report: IAAReportRecord,
+    ) -> IAAReportRecord: ...
+
+    def get(self, scope: ProjectScope, report_id: UUID) -> IAAReportRecord | None: ...
+
+    def list_for_task(
+        self,
+        scope: ProjectScope,
+        *,
+        task_id: UUID,
+        limit: int = 20,
+    ) -> list[IAAReportRecord]: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        report: IAAReportRecord,
+        *,
+        expected_version: int,
+    ) -> IAAReportRecord: ...
+
+
+class GoldSetAccessPolicy(Protocol):
+    def can_view_answers(self, scope: ProjectScope, gold_set_id: UUID) -> bool: ...
 
 
 class MemberDirectory(Protocol):

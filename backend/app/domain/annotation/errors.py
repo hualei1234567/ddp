@@ -150,3 +150,103 @@ class AssignmentRevokedError(AnnotationDomainError):
 
 class ItemAlreadyAssignedError(AnnotationDomainError):
     code = "annotation_item_already_assigned"
+
+
+class SubmissionNotEditableError(AnnotationDomainError):
+    code = "annotation_submission_not_editable"
+
+
+class SubmissionIncompleteError(AnnotationDomainError):
+    code = "annotation_submission_incomplete"
+
+
+class SubmissionSchemaMismatchError(AnnotationDomainError):
+    code = "annotation_submission_schema_mismatch"
+
+
+class SubmissionNotSubmittedError(AnnotationDomainError):
+    code = "annotation_submission_not_submitted"
+
+
+class SubmissionAlreadyDecidedError(AnnotationDomainError):
+    code = "annotation_submission_already_decided"
+
+
+class RecordDigestMismatchError(AnnotationDomainError):
+    code = "annotation_record_digest_mismatch"
+
+
+class UnknownLabelError(AnnotationDomainError):
+    code = "annotation_schema_unknown_label"
+
+
+class LabelValueInvalidError(AnnotationDomainError):
+    code = "annotation_schema_value_invalid"
+
+
+class ReviewSelfForbiddenError(AnnotationDomainError):
+    code = "annotation_review_self_forbidden"
+
+
+class ReviewNotPendingError(AnnotationDomainError):
+    code = "annotation_review_not_pending"
+
+
+class ReviewRequiredError(AnnotationDomainError):
+    code = "annotation_review_required"
+
+
+class ArbitrationRequiredError(AnnotationDomainError):
+    code = "annotation_arbitration_required"
+
+
+class ArbitrationNotPendingError(AnnotationDomainError):
+    code = "annotation_arbitration_not_pending"
+
+
+class ArbitrationQuorumNotMetError(AnnotationDomainError):
+    code = "annotation_arbitration_quorum_not_met"
+
+
+class ArbiterConflictError(AnnotationDomainError):
+    code = "annotation_arbiter_conflict"
+
+
+class GoldSetAccessDeniedError(AnnotationDomainError):
+    code = "gold_set_access_denied"
+
+
+class GoldSetNotActiveError(AnnotationDomainError):
+    code = "gold_set_not_active"
+
+
+class GoldSetSchemaIncompatibleError(AnnotationDomainError):
+    code = "gold_set_schema_incompatible"
+
+
+class GoldSetExposureForbiddenError(AnnotationDomainError):
+    code = "gold_set_item_exposure_forbidden"
+
+
+class QualitySampleNotReviewableError(AnnotationDomainError):
+    code = "quality_sample_not_reviewable"
+
+
+class QualitySamplePolicyMissingError(AnnotationDomainError):
+    code = "quality_sample_policy_missing"
+
+
+class QualitySampleSelfReviewForbiddenError(AnnotationDomainError):
+    code = "quality_sample_self_review_forbidden"
+
+
+class IAAInsufficientOverlapError(AnnotationDomainError):
+    code = "iaa_insufficient_overlap"
+
+
+class IAASourceForbiddenError(AnnotationDomainError):
+    code = "iaa_source_forbidden"
+
+
+class ReworkLimitExceededError(AnnotationDomainError):
+    code = "annotation_task_rework_limit_exceeded"

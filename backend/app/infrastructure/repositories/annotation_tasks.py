@@ -136,6 +136,8 @@ class SqlAnnotationTaskRepository:
                 priority=task.priority.value,
                 progress=dict(task.progress),
                 quality_summary=dict(task.quality_summary),
+                gold_set_id=task.gold_set_id,
+                iaa_report_id=task.iaa_report_id,
                 accepted_at=task.accepted_at,
                 completed_at=task.completed_at,
                 status_reason=task.status_reason,

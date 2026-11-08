@@ -5,6 +5,19 @@ from app.infrastructure.db.models.annotation_catalog import (
     AnnotationSampleSet,
     AnnotationSchema,
 )
+from app.infrastructure.db.models.annotation_quality import (
+    GoldEvaluation,
+    GoldExposure,
+    GoldSet,
+    IAAReport,
+    QualitySample,
+)
+from app.infrastructure.db.models.annotation_results import (
+    AnnotationArbitration,
+    AnnotationRecord,
+    AnnotationReview,
+    AnnotationSubmission,
+)
 from app.infrastructure.db.models.annotation_work import (
     AnnotationAssignment,
     AnnotationAssignmentEvent,
@@ -45,12 +58,16 @@ from app.infrastructure.db.models.ingestion import (
 from app.infrastructure.db.models.jobs import IngestionJobModel
 
 __all__ = [
+    "AnnotationArbitration",
     "AnnotationAssignment",
     "AnnotationAssignmentEvent",
     "AnnotationBatch",
+    "AnnotationRecord",
+    "AnnotationReview",
     "AnnotationSampleEpisode",
     "AnnotationSampleSet",
     "AnnotationSchema",
+    "AnnotationSubmission",
     "AnnotationTask",
     "AuditLog",
     "CalibrationProfile",
@@ -64,12 +81,17 @@ __all__ = [
     "Device",
     "EpisodeModel",
     "EpisodeRawAssetModel",
+    "GoldEvaluation",
+    "GoldExposure",
+    "GoldSet",
+    "IAAReport",
     "IdempotencyRecord",
     "IngestionJobModel",
     "LineageNodeRefModel",
     "OutboxEvent",
     "Project",
     "ProjectMember",
+    "QualitySample",
     "RawAssetLinkModel",
     "RawAssetModel",
     "Robot",

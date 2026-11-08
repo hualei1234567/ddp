@@ -246,3 +246,239 @@ class MissingSemantics(StrEnum):
     UNKNOWN = "UNKNOWN"
     STALE = "STALE"
     PARTIAL = "PARTIAL"
+
+
+class AnnotationSubmissionStatus(StrEnum):
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"
+    IN_REVIEW = "IN_REVIEW"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    ESCALATED = "ESCALATED"
+    ARBITRATING = "ARBITRATING"
+    RESOLVED_APPROVED = "RESOLVED_APPROVED"
+    RESOLVED_REJECTED = "RESOLVED_REJECTED"
+    RESOLVED_REWORK = "RESOLVED_REWORK"
+    REWORK_REQUIRED = "REWORK_REQUIRED"
+    WITHDRAWN = "WITHDRAWN"
+    SUPERSEDED = "SUPERSEDED"
+
+
+class AnnotationSubmissionAction(StrEnum):
+    SUBMIT = "submit"
+    WITHDRAW = "withdraw"
+    SYSTEM_REVIEW_START = "system-review-start"
+    APPROVE = "approve"
+    REJECT = "reject"
+    ESCALATE = "escalate"
+    ARBITRATE_START = "arbitrate-start"
+    RESOLVE_APPROVED = "resolve-approved"
+    RESOLVE_REJECTED = "resolve-rejected"
+    RESOLVE_REWORK = "resolve-rework"
+    REQUIRE_REWORK = "require-rework"
+    SYSTEM_SUPERSEDE = "system-supersede"
+
+
+class AnnotationRecordStatus(StrEnum):
+    DRAFT = "DRAFT"
+    SUBMITTED = "SUBMITTED"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    SUPERSEDED = "SUPERSEDED"
+    INVALIDATED = "INVALIDATED"
+
+
+class AnnotationRecordAction(StrEnum):
+    SUBMIT_WITH_SUBMISSION = "submit-with-submission"
+    APPROVE_WITH_SUBMISSION = "approve-with-submission"
+    REJECT_WITH_SUBMISSION = "reject-with-submission"
+    SYSTEM_SUPERSEDE = "system-supersede"
+    INVALIDATE = "invalidate"
+
+
+class LabelValueSource(StrEnum):
+    HUMAN = "HUMAN"
+    AI_ASSISTED = "AI_ASSISTED"
+    IMPORTED = "IMPORTED"
+
+
+class LabelValueStatus(StrEnum):
+    DRAFT = "DRAFT"
+    CONFIRMED = "CONFIRMED"
+    REJECTED = "REJECTED"
+
+
+class AnnotationReviewStatus(StrEnum):
+    PENDING = "PENDING"
+    IN_REVIEW = "IN_REVIEW"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    ESCALATED = "ESCALATED"
+    CANCELLED = "CANCELLED"
+
+
+class AnnotationReviewAction(StrEnum):
+    CLAIM = "claim"
+    APPROVE = "approve"
+    REJECT = "reject"
+    ESCALATE = "escalate"
+    CANCEL = "cancel"
+
+
+class ReviewDecision(StrEnum):
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+    ESCALATE = "ESCALATE"
+
+
+class ReviewIssueSeverity(StrEnum):
+    BLOCKER = "BLOCKER"
+    MAJOR = "MAJOR"
+    MINOR = "MINOR"
+    SUGGESTION = "SUGGESTION"
+
+
+class AnnotationArbitrationStatus(StrEnum):
+    PENDING = "PENDING"
+    IN_ARBITRATION = "IN_ARBITRATION"
+    RESOLVED_APPROVED = "RESOLVED_APPROVED"
+    RESOLVED_REJECTED = "RESOLVED_REJECTED"
+    RESOLVED_REWORK = "RESOLVED_REWORK"
+    CANCELLED = "CANCELLED"
+
+
+class AnnotationArbitrationAction(StrEnum):
+    CLAIM = "claim"
+    RECUSE = "recuse"
+    RESOLVE_APPROVED = "resolve-approved"
+    RESOLVE_REJECTED = "resolve-rejected"
+    RESOLVE_REWORK = "resolve-rework"
+    CANCEL = "cancel"
+
+
+class ArbitrationTrigger(StrEnum):
+    REVIEWER_DISAGREEMENT = "REVIEWER_DISAGREEMENT"
+    ANNOTATOR_DISPUTE = "ANNOTATOR_DISPUTE"
+    GOLD_SET_CONFLICT = "GOLD_SET_CONFLICT"
+    IAA_CONFLICT = "IAA_CONFLICT"
+    HIGH_RISK = "HIGH_RISK"
+    POLICY = "POLICY"
+
+
+class ArbitrationDecision(StrEnum):
+    APPROVE = "APPROVE"
+    REJECT = "REJECT"
+    REWORK = "REWORK"
+    ABSTAIN = "ABSTAIN"
+
+
+class GoldSetStatus(StrEnum):
+    DRAFT = "DRAFT"
+    PENDING_REVIEW = "PENDING_REVIEW"
+    ACTIVE = "ACTIVE"
+    RETIRED = "RETIRED"
+    REVOKED = "REVOKED"
+
+
+class GoldSetAction(StrEnum):
+    SUBMIT_REVIEW = "submit-review"
+    RETURN_DRAFT = "return-draft"
+    ACTIVATE = "activate"
+    RETIRE = "retire"
+    REVOKE = "revoke"
+
+
+class GoldSetExposurePolicy(StrEnum):
+    HIDDEN = "HIDDEN"
+    ROTATING = "ROTATING"
+    CONTROLLED = "CONTROLLED"
+
+
+class GoldRotationPolicy(StrEnum):
+    NONE = "NONE"
+    PER_TASK = "PER_TASK"
+    PER_PERIOD = "PER_PERIOD"
+    PER_ANNOTATOR = "PER_ANNOTATOR"
+
+
+class GoldItemDifficulty(StrEnum):
+    EASY = "EASY"
+    MEDIUM = "MEDIUM"
+    HARD = "HARD"
+
+
+class QualitySampleStatus(StrEnum):
+    PLANNED = "PLANNED"
+    SAMPLED = "SAMPLED"
+    ASSIGNED = "ASSIGNED"
+    IN_REVIEW = "IN_REVIEW"
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+    ESCALATED = "ESCALATED"
+    CLOSED = "CLOSED"
+    CANCELLED = "CANCELLED"
+
+
+class QualitySampleAction(StrEnum):
+    SAMPLE = "sample"
+    ASSIGN = "assign"
+    START = "start"
+    PASS = "pass"  # noqa: S105 - 枚举值不是凭据
+    FAIL = "fail"
+    ESCALATE = "escalate"
+    CLOSE = "close"
+    CANCEL = "cancel"
+
+
+class QualitySampleType(StrEnum):
+    RANDOM = "RANDOM"
+    STRATIFIED = "STRATIFIED"
+    RISK_BASED = "RISK_BASED"
+    GOLD_SET = "GOLD_SET"
+    IAA_OVERLAP = "IAA_OVERLAP"
+
+
+class QualitySampleOutcome(StrEnum):
+    PASS = "PASS"  # noqa: S105 - 枚举值不是凭据
+    FAIL = "FAIL"
+    ESCALATE = "ESCALATE"
+
+
+class IAAReportStatus(StrEnum):
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+    CANCELLED = "CANCELLED"
+
+
+class IAAReportAction(StrEnum):
+    WORKER_START = "worker-start"
+    WORKER_SUCCEED = "worker-succeed"
+    WORKER_FAIL = "worker-fail"
+    WORKER_INSUFFICIENT = "worker-insufficient"
+    RETRY = "retry"
+    CANCEL = "cancel"
+
+
+class IAAMetric(StrEnum):
+    PERCENT_AGREEMENT = "PERCENT_AGREEMENT"
+    COHEN_KAPPA = "COHEN_KAPPA"
+    FLEISS_KAPPA = "FLEISS_KAPPA"
+    KRIPPENDORFF_ALPHA = "KRIPPENDORFF_ALPHA"
+    SPAN_F1 = "SPAN_F1"
+    BOUNDARY_MAE = "BOUNDARY_MAE"
+    GOLD_ACCURACY = "GOLD_ACCURACY"
+
+
+class IAAValueStatus(StrEnum):
+    OK = "OK"
+    NOT_APPLICABLE = "N/A"
+    INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+    PARTIAL = "PARTIAL"
+
+
+class IAAObservationSource(StrEnum):
+    SUBMISSION = "SUBMISSION"
+    GOLD_SET = "GOLD_SET"

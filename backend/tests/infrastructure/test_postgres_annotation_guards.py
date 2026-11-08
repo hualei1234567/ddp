@@ -38,7 +38,7 @@ from app.infrastructure.repositories.annotation_sample_sets import (
 )
 from app.infrastructure.repositories.annotation_schemas import SqlAnnotationSchemaRepository
 from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRepository
-from sqlalchemy import create_engine, delete, update
+from sqlalchemy import create_engine, delete, text, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.schema import CreateSchema, DropSchema
@@ -291,3 +291,59 @@ def test_postgres_annotation_cross_project_and_triggers(postgres_engine: Engine)
 
     with factory() as session:
         assert SqlAnnotationSchemaRepository(session).get(scope_b, schema.schema_id) is None
+
+
+_EXPECTED_ANNOTATION_RESULT_TRIGGERS = frozenset(
+    {
+        "trg_annotation_submissions_initial_status",
+        "trg_annotation_submissions_transition",
+        "trg_annotation_submissions_immutable",
+        "trg_annotation_submissions_snapshot",
+        "trg_annotation_submissions_no_delete",
+        "trg_annotation_records_initial_status",
+        "trg_annotation_records_transition",
+        "trg_annotation_records_immutable",
+        "trg_annotation_records_no_delete",
+        "trg_annotation_reviews_initial_status",
+        "trg_annotation_reviews_transition",
+        "trg_annotation_reviews_immutable",
+        "trg_annotation_reviews_separation",
+        "trg_annotation_reviews_no_delete",
+        "trg_annotation_arbitrations_initial_status",
+        "trg_annotation_arbitrations_transition",
+        "trg_annotation_arbitrations_immutable",
+        "trg_annotation_arbitrations_decision",
+        "trg_annotation_arbitrations_no_delete",
+        "trg_annotation_gold_sets_initial_status",
+        "trg_annotation_gold_sets_transition",
+        "trg_annotation_gold_sets_immutable",
+        "trg_annotation_gold_sets_no_delete",
+        "trg_annotation_gold_set_exposures_append_only",
+        "trg_annotation_gold_set_exposures_no_delete",
+        "trg_annotation_gold_set_evaluations_append_only",
+        "trg_annotation_gold_set_evaluations_no_delete",
+        "trg_annotation_iaa_reports_initial_status",
+        "trg_annotation_iaa_reports_transition",
+        "trg_annotation_iaa_reports_immutable",
+        "trg_annotation_iaa_reports_no_delete",
+        "trg_annotation_quality_samples_initial_status",
+        "trg_annotation_quality_samples_transition",
+        "trg_annotation_quality_samples_immutable",
+        "trg_annotation_quality_samples_no_delete",
+    }
+)
+
+
+def test_postgres_annotation_result_quality_trigger_inventory(
+    postgres_engine: Engine,
+) -> None:
+    """结果/质控批次触发器必须随 0014/0015 与 create_all 安装。"""
+    with postgres_engine.connect() as connection:
+        names = {
+            str(row[0])
+            for row in connection.execute(
+                text("SELECT tgname FROM pg_trigger WHERE NOT tgisinternal")
+            )
+        }
+    missing = _EXPECTED_ANNOTATION_RESULT_TRIGGERS - names
+    assert not missing, f"缺少触发器：{sorted(missing)}"
