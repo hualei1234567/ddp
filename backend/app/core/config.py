@@ -1,11 +1,16 @@
 """应用配置。
 
 所有配置通过环境变量注入，前缀 ``DDP_``；本地开发从 ``.env`` 读取。
+列表类型（CORS 来源、限流路径前缀等）通过 JSON 数组注入，例如::
+
+    DDP_CORS_ALLOWED_ORIGINS=["https://console.example.com"]
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +28,25 @@ _PLACEHOLDER_JWT_SECRETS = frozenset(
         "jwt-secret",
     }
 )
+# MinIO / S3 的默认或占位凭据；非本地环境命中后拒绝启动。
+_PLACEHOLDER_S3_CREDENTIALS = frozenset(
+    {
+        "",
+        "minioadmin",
+        "changeme",
+        "change-me",
+        "change_me",
+        "replace-me-in-production",
+        "secret",
+        "access-key",
+        "secret-key",
+        "admin",
+    }
+)
+# API 响应默认 CSP：不加载任何外部资源，禁止被嵌入。
+_DEFAULT_CSP = "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+# HSTS preload 要求的最短 max-age（一年）。
+_HSTS_PRELOAD_MIN_AGE_SECONDS = 31_536_000
 
 
 class Settings(BaseSettings):
@@ -54,7 +78,7 @@ class Settings(BaseSettings):
 
     s3_endpoint: str = "http://localhost:9000"
     s3_access_key: str = "minioadmin"
-    s3_secret_key: str = "minioadmin"  # noqa: S105 - 本地默认值，生产由环境注入
+    s3_secret_key: str = "minioadmin"  # noqa: S105 - 本地默认值，生产必须覆盖
     s3_bucket: str = "ddp-raw"
     s3_region: str = "us-east-1"
 
@@ -63,6 +87,48 @@ class Settings(BaseSettings):
     jwt_audience: str = "ddp-api"
     jwt_expire_minutes: int = 720
     jwt_leeway_seconds: int = Field(default=30, ge=0, le=300)
+
+    # 安全响应头。CSP 仅作用于 API/健康检查；FastAPI 文档页面依赖 CDN，
+    # 生产环境应通过反向代理关闭或单独定制文档页。
+    security_headers_enabled: bool = True
+    content_security_policy: str = _DEFAULT_CSP
+    referrer_policy: str = "no-referrer"
+    # HSTS 仅应在 HTTPS（含反向代理终止 TLS）场景显式开启。
+    hsts_enabled: bool = False
+    hsts_max_age_seconds: int = Field(default=_HSTS_PRELOAD_MIN_AGE_SECONDS, ge=0)
+    hsts_include_subdomains: bool = True
+    hsts_preload: bool = False
+
+    # CORS：默认空列表表示拒绝所有跨域来源，必须显式配置可信来源。
+    cors_allowed_origins: list[str] = Field(default_factory=list)
+    cors_allow_credentials: bool = False
+    cors_allow_methods: list[str] = Field(
+        default_factory=lambda: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    )
+    cors_allow_headers: list[str] = Field(
+        default_factory=lambda: ["Authorization", "Content-Type", "X-Request-Id"]
+    )
+    cors_expose_headers: list[str] = Field(
+        default_factory=lambda: [
+            "X-Request-Id",
+            "Retry-After",
+            "X-RateLimit-Limit",
+            "X-RateLimit-Remaining",
+        ]
+    )
+    cors_max_age_seconds: int = Field(default=600, ge=0)
+
+    # 限流：按客户端 IP 的滑动窗口。认证路径使用更严格的桶。
+    # ``memory`` 为进程内实现（默认）；多副本部署需提供 Redis 实现后切换。
+    rate_limit_enabled: bool = True
+    rate_limit_backend: Literal["memory", "redis"] = "memory"
+    rate_limit_auth_path_prefixes: list[str] = Field(default_factory=lambda: ["/api/v1/auth"])
+    rate_limit_auth_requests: int = Field(default=20, ge=1)
+    rate_limit_auth_window_seconds: int = Field(default=60, ge=1)
+    rate_limit_write_requests: int = Field(default=120, ge=1)
+    rate_limit_write_window_seconds: int = Field(default=60, ge=1)
+    # 默认不信任 X-Forwarded-For（可伪造）。仅在可信反向代理之后显式开启。
+    rate_limit_trust_forwarded_for: bool = False
 
     @property
     def is_local(self) -> bool:
@@ -73,23 +139,26 @@ class Settings(BaseSettings):
         return not self._jwt_config_problems()
 
     def validate_runtime_security(self) -> None:
-        """启动自检：非本地环境必须配置完整的 JWT 认证，否则 fail-closed。"""
-        if self.is_local:
-            return
-        if self.local_header_auth:
-            raise RuntimeError(
-                "非本地环境禁止启用本地 Header 认证（DDP_LOCAL_HEADER_AUTH），"
-                "请改用 Bearer JWT。"
-            )
-        problems = self._jwt_config_problems()
+        """启动自检：配置不安全时 fail-closed。
+
+        - 非本地环境必须配置完整 JWT，且禁止 Header 身份后门；
+        - 非本地环境禁止默认/占位 MinIO 凭据；
+        - CORS 来源必须显式且格式合法；
+        - 限流后端若选择尚未实现的 redis，直接拒绝启动（占位）。
+        """
+        problems = self._cors_config_problems()
+        problems.extend(self._rate_limit_config_problems())
+        problems.extend(self._security_headers_config_problems())
+        if not self.is_local:
+            if self.local_header_auth:
+                problems.append(
+                    "非本地环境禁止启用本地 Header 认证（DDP_LOCAL_HEADER_AUTH），"
+                    "请改用 Bearer JWT"
+                )
+            problems.extend(self._jwt_config_problems())
+            problems.extend(self._s3_credential_problems())
         if problems:
-            raise RuntimeError(
-                "非本地环境 JWT 认证配置不完整，拒绝启动："
-                + "；".join(problems)
-                + "。请配置 DDP_JWT_SECRET（至少 "
-                + str(_MIN_JWT_SECRET_LENGTH)
-                + " 个字符的强随机值）、DDP_JWT_ISSUER、DDP_JWT_AUDIENCE。"
-            )
+            raise RuntimeError("安全配置不完整，拒绝启动：" + "；".join(problems) + "。")
 
     def _jwt_config_problems(self) -> list[str]:
         problems: list[str] = []
@@ -104,6 +173,70 @@ class Settings(BaseSettings):
             problems.append("DDP_JWT_ISSUER 为空")
         if not self.jwt_audience.strip():
             problems.append("DDP_JWT_AUDIENCE 为空")
+        return problems
+
+    def _s3_credential_problems(self) -> list[str]:
+        problems: list[str] = []
+        access_key = self.s3_access_key.strip()
+        secret_key = self.s3_secret_key.strip()
+        if access_key.lower() in _PLACEHOLDER_S3_CREDENTIALS:
+            problems.append("DDP_S3_ACCESS_KEY 为空或仍为默认占位值")
+        if secret_key.lower() in _PLACEHOLDER_S3_CREDENTIALS:
+            problems.append("DDP_S3_SECRET_KEY 为空或仍为默认占位值")
+        if access_key != self.s3_access_key or secret_key != self.s3_secret_key:
+            problems.append("DDP_S3_ACCESS_KEY/DDP_S3_SECRET_KEY 不得包含首尾空白")
+        if access_key and access_key == secret_key:
+            problems.append("DDP_S3_ACCESS_KEY 与 DDP_S3_SECRET_KEY 不得相同")
+        return problems
+
+    def _cors_config_problems(self) -> list[str]:
+        problems: list[str] = []
+        for origin in self.cors_allowed_origins:
+            if origin != origin.strip():
+                problems.append(f"CORS 来源不得包含首尾空白：{origin!r}")
+                continue
+            if origin == "*":
+                if not self.is_local:
+                    problems.append("非本地环境 CORS 不得使用通配符 *，必须显式列出可信来源")
+                elif self.cors_allow_credentials:
+                    problems.append("CORS 允许凭据时不得使用通配符 *")
+                continue
+            parsed = urlsplit(origin)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.netloc
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+            ):
+                problems.append(f"CORS 来源格式非法（必须为 scheme://host[:port]）：{origin!r}")
+        if len(set(self.cors_allowed_origins)) != len(self.cors_allowed_origins):
+            problems.append("CORS 来源存在重复项")
+        return problems
+
+    def _rate_limit_config_problems(self) -> list[str]:
+        problems: list[str] = []
+        if self.rate_limit_enabled and self.rate_limit_backend == "redis":
+            problems.append(
+                "DDP_RATE_LIMIT_BACKEND=redis 仅为占位，尚未实现分布式限流；"
+                "请使用 memory 或提供 Redis 实现"
+            )
+        for prefix in self.rate_limit_auth_path_prefixes:
+            if not prefix.startswith("/") or prefix != prefix.strip() or not prefix.rstrip("/"):
+                problems.append(f"限流认证路径前缀非法：{prefix!r}")
+        return problems
+
+    def _security_headers_config_problems(self) -> list[str]:
+        problems: list[str] = []
+        if self.hsts_enabled and self.hsts_max_age_seconds <= 0:
+            problems.append("启用 HSTS 时 DDP_HSTS_MAX_AGE_SECONDS 必须大于 0")
+        if self.hsts_enabled and self.hsts_preload:
+            if not self.hsts_include_subdomains:
+                problems.append("HSTS preload 必须同时启用 includeSubDomains")
+            if self.hsts_max_age_seconds < _HSTS_PRELOAD_MIN_AGE_SECONDS:
+                problems.append(
+                    f"HSTS preload 的 max-age 不得小于 {_HSTS_PRELOAD_MIN_AGE_SECONDS} 秒"
+                )
         return problems
 
 

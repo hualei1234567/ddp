@@ -6,21 +6,23 @@
 
 from __future__ import annotations
 
-import uuid
-from collections.abc import Awaitable, Callable
-
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
 from app.api.errors import domain_error_to_app, integrity_error_to_app
+from app.api.middleware.rate_limit import RateLimitMiddleware
+from app.api.middleware.request_id import RequestIdMiddleware
+from app.api.middleware.security_headers import SecurityHeadersMiddleware
 from app.api.v1.router import api_router
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ValidationFailedError
 from app.core.logging import configure_logging
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.identity.errors import CrossProjectAccessError
+from app.infrastructure.rate_limit import build_rate_limiter
 
 
 def _error_payload(request: Request, error: AppError) -> dict[str, object]:
@@ -33,10 +35,37 @@ def _error_payload(request: Request, error: AppError) -> dict[str, object]:
     }
 
 
+def _register_middleware(app: FastAPI, settings: Settings) -> None:
+    """注册中间件。
+
+    Starlette 中后添加的中间件位于外层，因此按“内层 → 外层”顺序添加。
+    最终执行顺序：RequestId → SecurityHeaders → CORS → RateLimit → 路由。
+    这样限流/预检响应同样带安全头与 request_id。
+    """
+    if settings.rate_limit_enabled:
+        app.add_middleware(
+            RateLimitMiddleware,
+            settings=settings,
+            limiter=build_rate_limiter(settings),
+        )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_allowed_origins,
+        allow_credentials=settings.cors_allow_credentials,
+        allow_methods=settings.cors_allow_methods,
+        allow_headers=settings.cors_allow_headers,
+        expose_headers=settings.cors_expose_headers,
+        max_age=settings.cors_max_age_seconds,
+    )
+    if settings.security_headers_enabled:
+        app.add_middleware(SecurityHeadersMiddleware, settings=settings)
+    app.add_middleware(RequestIdMiddleware)
+
+
 def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
-    # fail-closed：非本地环境 JWT 配置不完整时直接拒绝启动。
+    # fail-closed：非本地环境安全配置不完整时直接拒绝启动。
     settings.validate_runtime_security()
 
     app = FastAPI(
@@ -47,16 +76,9 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
 
-    @app.middleware("http")
-    async def request_id_middleware(
-        request: Request,
-        call_next: Callable[[Request], Awaitable[Response]],
-    ) -> Response:
-        request_id = request.headers.get("X-Request-Id") or uuid.uuid4().hex
-        request.state.request_id = request_id
-        response = await call_next(request)
-        response.headers["X-Request-Id"] = request_id
-        return response
+    # 先注册中间件；Starlette 在首次请求时构建中间件栈，
+    # 以确保异常处理器与后续注册的路由都处于中间件栈内。
+    _register_middleware(app, settings)
 
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
