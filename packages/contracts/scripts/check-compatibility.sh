@@ -44,4 +44,17 @@ fi
 
 echo "比较基线 ${base_ref}:packages/contracts/openapi.yaml → ${current}"
 echo "基线已导出到 ${tmpdir}/packages/contracts（含 fragments）"
+
+read_info_version() {
+  awk '/^info:/{inside=1; next} inside && /^  version:/{print $2; exit}' "$1"
+}
+base_version="$(read_info_version "${base_doc}")"
+current_version="$(read_info_version "${current}")"
+base_major="${base_version%%.*}"
+current_major="${current_version%%.*}"
+if [[ -n "${base_version}" && -n "${current_version}" && "${base_major}" != "${current_major}" ]]; then
+  echo "主版本变化 ${base_version} → ${current_version}：按版本策略允许破坏性变更，跳过 oasdiff breaking。"
+  exit 0
+fi
+
 oasdiff breaking "${base_doc}" "${current}" --fail-on ERR
