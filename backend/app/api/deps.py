@@ -11,7 +11,7 @@ from collections.abc import Callable
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, Path, Request
+from fastapi import Depends, Path, Query, Request
 from sqlalchemy.orm import Session
 
 from app.application.identity.access import ProjectAccessService
@@ -132,6 +132,19 @@ def get_project_context(
     return access.resolve_context(principal, project_id)
 
 
+def get_query_project_context(
+    project_id: Annotated[UUID, Query(description="项目 ID，服务端校验成员资格")],
+    principal: CurrentPrincipal,
+    access: Annotated[ProjectAccessService, Depends(get_project_access_service)],
+) -> ProjectContext:
+    """无项目路径前缀的资源（血缘/下载）使用查询参数声明项目。
+
+    客户端提交的 project_id 只是定位上下文，服务端仍按成员资格与资源项目
+    归属双重校验，不信任其用于跨项目读取。
+    """
+    return access.resolve_context(principal, project_id)
+
+
 def _checked_scope(
     context: ProjectContext,
     action: ProjectAction,
@@ -145,6 +158,13 @@ def get_project_scope(
     context: Annotated[ProjectContext, Depends(get_project_context)],
 ) -> ProjectScope:
     """默认只读作用域：未显式声明 WRITE/DELETE 的路由按 READ 校验。"""
+    return _checked_scope(context, ProjectAction.READ)
+
+
+def get_query_read_scope(
+    context: Annotated[ProjectContext, Depends(get_query_project_context)],
+) -> ProjectScope:
+    """查询参数定位项目的只读作用域。"""
     return _checked_scope(context, ProjectAction.READ)
 
 

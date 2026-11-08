@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app.api.errors import (
     collection_error_to_app,
     domain_error_to_app,
+    episode_error_to_app,
     ingestion_error_to_app,
     integrity_error_to_app,
 )
@@ -27,6 +28,7 @@ from app.core.errors import AppError, ValidationFailedError
 from app.core.logging import configure_logging
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.devices.errors import DeviceDomainError
+from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.identity.errors import CrossProjectAccessError
 from app.domain.ingestion.errors import IngestionDomainError
 from app.infrastructure.rate_limit import build_rate_limiter
@@ -112,6 +114,17 @@ def create_app() -> FastAPI:
         exc: CollectionDomainError,
     ) -> JSONResponse:
         error = collection_error_to_app(exc)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(EpisodeDomainError)
+    async def handle_episode_domain_error(
+        request: Request,
+        exc: EpisodeDomainError,
+    ) -> JSONResponse:
+        error = episode_error_to_app(exc)
         return JSONResponse(
             status_code=error.status_code,
             content=_error_payload(request, error),

@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.errors import AppError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.devices.errors import DeviceDomainError
+from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.ingestion.errors import IngestionDomainError
 
 _STATUS_BY_CODE = {
@@ -95,6 +96,11 @@ _INGESTION_STATUS_BY_CODE = {
     "hash_mismatch": 422,
     "size_mismatch": 422,
     "object_storage_unavailable": 503,
+    "object_missing": 404,
+    "asset_not_usable": 422,
+    "job_not_retryable": 409,
+    "job_timeout": 409,
+    "idempotency_key_reused": 409,
     "state_transition_invalid": 409,
     "version_conflict": 409,
     "resource_immutable": 409,
@@ -116,6 +122,11 @@ _INGESTION_MESSAGES = {
     "hash_mismatch": "整文件 Hash 不一致",
     "size_mismatch": "分片总大小与声明大小不一致",
     "object_storage_unavailable": "对象存储暂不可用，请稍后重试",
+    "object_missing": "对象存储中的内容不存在",
+    "asset_not_usable": "原始资产当前状态不可用于该操作",
+    "job_not_retryable": "接入任务已达到最大重试次数，不能重试",
+    "job_timeout": "接入任务尚未超过超时阈值",
+    "idempotency_key_reused": "同一幂等键对应了不同请求体",
     "state_transition_invalid": "上传会话或资产不允许该状态迁移",
     "version_conflict": "资源版本已变化，请重新读取后再试",
     "resource_immutable": "资产内容不可变",
@@ -134,6 +145,52 @@ def ingestion_error_to_app(exc: IngestionDomainError) -> AppError:
         code,
         _INGESTION_MESSAGES.get(code, "上传域规则校验失败"),
         _INGESTION_STATUS_BY_CODE[code],
+        details=details or None,
+    )
+
+
+_EPISODE_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "state_transition_invalid": 409,
+    "version_conflict": 409,
+    "resource_immutable": 409,
+    "resource_not_found": 404,
+    "forbidden": 403,
+    "conflict": 409,
+    "episode_overlap_conflict": 409,
+    "manifest_hash_mismatch": 422,
+    "manifest_schema_invalid": 422,
+    "calibration_not_active": 422,
+    "episode_time_base_invalid": 422,
+    "lineage_conflict": 409,
+}
+
+_EPISODE_MESSAGES = {
+    "validation_failed": "请求参数或 Episode 规则校验失败",
+    "state_transition_invalid": "Episode 当前状态不允许该操作",
+    "version_conflict": "Episode 版本已变化，请重新读取后再试",
+    "resource_immutable": "Episode 已冻结，数据字段不可修改",
+    "resource_not_found": "Episode 或血缘节点不存在、不属于当前项目",
+    "forbidden": "无权执行该操作",
+    "conflict": "Episode 存在冲突",
+    "episode_overlap_conflict": "同一原始资产的时间区间已被其他 Episode 使用",
+    "manifest_hash_mismatch": "Manifest Hash 校验失败",
+    "manifest_schema_invalid": "Manifest 结构或身份字段非法",
+    "calibration_not_active": "引用的标定记录未激活",
+    "episode_time_base_invalid": "时间基准不合法",
+    "lineage_conflict": "血缘边重复、跨项目或成环",
+}
+
+
+def episode_error_to_app(exc: EpisodeDomainError) -> AppError:
+    code = getattr(exc, "code", None)
+    if not isinstance(code, str) or code not in _EPISODE_STATUS_BY_CODE:
+        return AppError("validation_failed", "Episode 域规则校验失败", 422)
+    details = dict(getattr(exc, "details", {}) or {})
+    return AppError(
+        code,
+        _EPISODE_MESSAGES.get(code, "Episode 域规则校验失败"),
+        _EPISODE_STATUS_BY_CODE[code],
         details=details or None,
     )
 

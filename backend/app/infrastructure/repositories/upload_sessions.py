@@ -73,11 +73,15 @@ class SqlUploadSessionRepository:
         return session
 
     def get(self, scope: ProjectScope, session_id: UUID) -> UploadSession | None:
+        # 并发 complete 时，输家需要在 ListParts 收到 NoSuchUpload 后重读
+        # 数据库中的最终状态；必须绕过 identity map 的缓存快照。
         row = self._session.scalar(
-            select(UploadSessionModel).where(
+            select(UploadSessionModel)
+            .where(
                 UploadSessionModel.id == session_id,
                 UploadSessionModel.project_id == scope.project_id,
             )
+            .execution_options(populate_existing=True)
         )
         return self._from_row(row) if row is not None else None
 

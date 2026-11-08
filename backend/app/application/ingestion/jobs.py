@@ -2,15 +2,29 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.application.collection.audit import record_change
-from app.application.collection.ports import AuditRepository, OutboxRepository
+from app.application.collection.idempotency import IdempotencyGuard, validate_key
+from app.application.collection.pagination import (
+    Page,
+    build_page,
+    decode_cursor,
+    normalize_limit,
+)
+from app.application.collection.ports import (
+    AuditRepository,
+    IdempotencyRecord,
+    IdempotencyRepository,
+    OutboxRepository,
+)
 from app.application.ingestion.commands import CreateIngestionJobCommand, JobActionCommand
 from app.application.ingestion.ports import IngestionJobRepository, RawAssetRepository, UnitOfWork
+from app.domain.collection.errors import DomainValidationError as PaginationValidationError
 from app.domain.identity.models import ProjectScope
-from app.domain.ingestion.enums import IngestionJobType, RawAssetStatus
+from app.domain.ingestion.enums import IngestionJobStatus, IngestionJobType, RawAssetStatus
 from app.domain.ingestion.errors import (
     AssetNotUsableError,
     ConflictError,
@@ -34,12 +48,17 @@ class IngestionJobService:
         audit: AuditRepository,
         outbox: OutboxRepository,
         uow: UnitOfWork,
+        *,
+        idempotency: IdempotencyRepository | None = None,
     ) -> None:
         self._jobs = jobs
         self._raw_assets = raw_assets
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
+        self._guard = IdempotencyGuard(idempotency) if idempotency is not None else None
+        # 幂等重放标记供 API 设置响应头；服务实例按请求装配，不跨请求共享。
+        self.last_replayed = False
 
     def create(
         self,
@@ -47,8 +66,19 @@ class IngestionJobService:
         command: CreateIngestionJobCommand,
         *,
         request_id: str | None = None,
+        http_idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str | None = None,
     ) -> IngestionJob:
         now = utcnow()
+        key = validate_key(http_idempotency_key)
+        body = asdict(command)
+        self.last_replayed = False
+        replay = self._lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            self.last_replayed = True
+            return self._load(scope, _uuid_ref(replay.response_ref, "接入任务"))
+
         try:
             job_type = IngestionJobType(command.job_type)
         except (TypeError, ValueError) as exc:
@@ -81,6 +111,7 @@ class IngestionJobService:
         if job.idempotency_key is not None:
             existing = self._jobs.get_by_idempotency_key(scope, job.idempotency_key)
             if existing is not None:
+                self.last_replayed = True
                 return self._replay(existing, job)
         for asset_id in raw_asset_ids:
             asset = self._raw_assets.get(scope, asset_id)
@@ -99,6 +130,7 @@ class IngestionJobService:
             existing = self._jobs.get_by_idempotency_key(scope, job.idempotency_key)
             if existing is None:
                 raise
+            self.last_replayed = True
             return self._replay(existing, job)
         record_change(
             self._audit,
@@ -123,8 +155,37 @@ class IngestionJobService:
             },
             occurred_at=now,
         )
+        self._store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            ref=created.job_id,
+            now=now,
+            response_status=201,
+        )
         self._uow.commit()
         return created
+
+    def list_jobs(
+        self,
+        scope: ProjectScope,
+        *,
+        status: str | None = None,
+        raw_asset_id: UUID | None = None,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> Page[IngestionJob]:
+        bounded = _normalize_limit(limit)
+        items = self._jobs.list(
+            scope,
+            status=_job_status(status),
+            raw_asset_id=raw_asset_id,
+            after_id=_decode_cursor(cursor),
+            limit=bounded + 1,
+        )
+        return build_page(items, limit=bounded, id_of=lambda item: item.job_id)
 
     def apply_action(
         self,
@@ -133,8 +194,27 @@ class IngestionJobService:
         command: JobActionCommand,
         *,
         request_id: str | None = None,
+        http_idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str | None = None,
     ) -> IngestionJob:
         now = utcnow()
+        key = validate_key(http_idempotency_key)
+        body = {
+            "action": command.action,
+            "expected_version": command.expected_version,
+            "reason": command.reason,
+            "error_code": command.error_code,
+            "error_summary": command.error_summary,
+            "log_ref": command.log_ref,
+            "metrics": dict(command.metrics),
+        }
+        self.last_replayed = False
+        replay = self._lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            self.last_replayed = True
+            return self._load(scope, _uuid_ref(replay.response_ref, "接入任务"))
+
         job = self._load(scope, job_id)
         if job.version != command.expected_version:
             raise VersionConflictError("接入任务")
@@ -193,6 +273,7 @@ class IngestionJobService:
             },
             occurred_at=now,
         )
+        self._store(scope, key, method=method, path=path, body=body, ref=saved.job_id, now=now)
         self._uow.commit()
         return saved
 
@@ -205,10 +286,88 @@ class IngestionJobService:
             raise ResourceNotFoundError("接入任务", job_id)
         return job
 
+    def _lookup(
+        self,
+        scope: ProjectScope,
+        key: str | None,
+        *,
+        method: str,
+        path: str | None,
+        body: dict[str, object],
+        now: datetime,
+    ) -> IdempotencyRecord | None:
+        if self._guard is None or key is None or path is None:
+            return None
+        return self._guard.lookup(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            now=now,
+        )
+
+    def _store(
+        self,
+        scope: ProjectScope,
+        key: str | None,
+        *,
+        method: str,
+        path: str | None,
+        body: dict[str, object],
+        ref: UUID,
+        now: datetime,
+        response_status: int = 200,
+    ) -> None:
+        if self._guard is None or key is None or path is None:
+            return
+        self._guard.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=response_status,
+            response_ref=str(ref),
+            now=now,
+        )
+
     def _replay(self, existing: IngestionJob, candidate: IngestionJob) -> IngestionJob:
         if not existing.matches_idempotent_request(candidate):
             raise IdempotencyKeyReusedError("同一幂等键对应了不同的接入任务请求")
         return existing
+
+
+def _uuid_ref(value: str | None, resource: str) -> UUID:
+    if not value:
+        raise ResourceNotFoundError(resource, value)
+    try:
+        return UUID(value)
+    except ValueError as exc:
+        raise ResourceNotFoundError(resource, value) from exc
+
+
+def _normalize_limit(limit: int) -> int:
+    try:
+        return normalize_limit(limit)
+    except PaginationValidationError as exc:
+        raise DomainValidationError(str(exc)) from exc
+
+
+def _decode_cursor(cursor: str | None) -> UUID | None:
+    try:
+        return decode_cursor(cursor)
+    except PaginationValidationError as exc:
+        raise DomainValidationError(str(exc)) from exc
+
+
+def _job_status(value: str | None) -> IngestionJobStatus | None:
+    if value is None:
+        return None
+    try:
+        return IngestionJobStatus(value)
+    except ValueError as exc:
+        raise DomainValidationError("status 取值非法") from exc
 
 
 def _unique_uuids(values: object) -> tuple[UUID, ...]:

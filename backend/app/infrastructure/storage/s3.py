@@ -6,11 +6,13 @@ from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
-from app.application.ingestion.ports import PresignedPart, StoredPart
+from app.application.ingestion.ports import PresignedDownload, PresignedPart, StoredPart
 from app.core.config import Settings
 from app.domain.ingestion.errors import (
+    MultipartUploadNotFoundError,
     ObjectNotFoundError,
     ObjectStorageUnavailableError,
 )
@@ -39,6 +41,11 @@ class S3MultipartStorage:
             aws_access_key_id=settings.s3_access_key,
             aws_secret_access_key=settings.s3_secret_key,
             region_name=settings.s3_region,
+            # MinIO 只接受 SigV4；自定义 endpoint 下 botocore 默认可能选 SigV2。
+            config=Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+            ),
         )
 
     @property
@@ -95,6 +102,29 @@ class S3MultipartStorage:
             expires_at=datetime.now(UTC) + timedelta(seconds=expires_in_seconds),
         )
 
+    def presign_download(
+        self,
+        object_key: str,
+        *,
+        expires_in_seconds: int,
+    ) -> PresignedDownload:
+        """生成短时 GET 预签名 URL；URL 不写日志。"""
+        if expires_in_seconds <= 0:
+            raise ObjectStorageUnavailableError("下载 URL 有效期必须为正数")
+        try:
+            url = self._client.generate_presigned_url(
+                _GET_OBJECT,
+                Params={"Bucket": self.bucket, "Key": object_key},
+                ExpiresIn=expires_in_seconds,
+                HttpMethod="GET",
+            )
+        except (BotoCoreError, ClientError) as exc:
+            raise ObjectStorageUnavailableError("无法生成下载 URL") from exc
+        return PresignedDownload(
+            url=url,
+            expires_at=datetime.now(UTC) + timedelta(seconds=expires_in_seconds),
+        )
+
     def list_parts(self, object_key: str, upload_id: str) -> list[StoredPart]:
         parts: list[StoredPart] = []
         marker: int | None = None
@@ -128,7 +158,13 @@ class S3MultipartStorage:
                 if next_marker is None:
                     break
                 marker = int(next_marker)
-        except (BotoCoreError, ClientError, KeyError, TypeError, ValueError) as exc:
+        except ClientError as exc:
+            # NoSuchUpload 是并发完成的稳定信号，由应用层重读会话判定幂等/冲突；
+            # 其余 SDK 错误仍收敛为可重试的存储不可用。
+            if _error_code(exc) == "NoSuchUpload":
+                raise MultipartUploadNotFoundError("multipart 已不存在") from exc
+            raise ObjectStorageUnavailableError("无法读取对象存储分片列表") from exc
+        except (BotoCoreError, KeyError, TypeError, ValueError) as exc:
             raise ObjectStorageUnavailableError("无法读取对象存储分片列表") from exc
         return parts
 

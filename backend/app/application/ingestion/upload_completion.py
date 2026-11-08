@@ -54,6 +54,7 @@ from app.domain.ingestion.errors import (
     DomainValidationError,
     FileSignatureMismatchError,
     HashMismatchError,
+    MultipartUploadNotFoundError,
     ObjectStorageUnavailableError,
     ResourceNotFoundError,
     SizeMismatchError,
@@ -167,10 +168,13 @@ class UploadCompletionService:
                 request_id=request_id,
             )
             raise
-        storage_parts = self._storage.list_parts(
-            session.object_key,
-            session.multipart_upload_id,
+        storage_parts = self._list_storage_parts_or_recover(
+            scope,
+            session,
+            expected_version=expected_version,
         )
+        if isinstance(storage_parts, CompleteUploadResult):
+            return storage_parts
         try:
             missing, storage_total = self._assert_storage_matches(
                 session,
@@ -355,6 +359,34 @@ class UploadCompletionService:
         )
 
     # ------------------------------------------------------------------ 内部
+    def _list_storage_parts_or_recover(
+        self,
+        scope: ProjectScope,
+        session: UploadSession,
+        *,
+        expected_version: int,
+    ) -> list[StoredPart] | CompleteUploadResult:
+        """读取 S3 分片；multipart 已消失时按会话最终状态收敛。
+
+        并发 complete 中，输家可能在赢家提交后才调用 ListParts，收到
+        ``NoSuchUpload``。此时必须重读会话，而不是把存储信号映射为 503：
+        - 会话已 COMPLETED：返回首次结果（HTTP 202 + 幂等重放）；
+        - 会话版本已推进（例如 COMPLETING）：409 version_conflict；
+        - 其余情况：409 upload_incomplete。
+        """
+        try:
+            return self._storage.list_parts(
+                session.object_key,
+                session.multipart_upload_id,
+            )
+        except MultipartUploadNotFoundError:
+            current = self._load(scope, session.upload_session_id)
+            if current.status is UploadSessionStatus.COMPLETED:
+                return self._completed_result(scope, current, replayed=True)
+            if current.version != expected_version:
+                raise VersionConflictError("上传会话") from None
+            raise UploadIncompleteError([]) from None
+
     def _load(self, scope: ProjectScope, session_id: UUID) -> UploadSession:
         session = self._sessions.get(scope, session_id)
         if session is None:

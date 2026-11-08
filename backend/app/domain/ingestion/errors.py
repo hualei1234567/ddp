@@ -59,6 +59,17 @@ class UploadPartConflictError(IngestionDomainError):
     code = "upload_part_conflict"
 
 
+class MultipartUploadNotFoundError(IngestionDomainError):
+    """对象存储中已不存在该 multipart。
+
+    并发完成时，赢家提交后 S3 的 ListParts 会返回 ``NoSuchUpload``。这不是
+    存储故障，必须交由完成用例重读会话，按“幂等成功/版本冲突/分片不完整”
+    处理，不能映射为 503。
+    """
+
+    code = "upload_incomplete"
+
+
 class UploadSessionNotUploadingError(IngestionDomainError):
     code = "upload_session_not_uploading"
 

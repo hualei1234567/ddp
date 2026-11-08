@@ -87,6 +87,8 @@ class Settings(BaseSettings):
     upload_part_size_bytes: int = Field(default=16 * 1024**2, gt=0)
     upload_session_ttl_hours: int = Field(default=24, gt=0)
     upload_url_ttl_seconds: int = Field(default=900, gt=0, le=3600)
+    # 下载预签名 URL 必须短时有效；默认 5 分钟，上限 1 小时。
+    download_url_ttl_seconds: int = Field(default=300, gt=0, le=3600)
     # 空列表表示使用契约默认白名单（由应用层注入），避免配置与契约重复维护。
     upload_allowed_content_types: list[str] = Field(default_factory=list)
 

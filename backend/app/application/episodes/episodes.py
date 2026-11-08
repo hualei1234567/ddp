@@ -2,11 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import asdict
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.application.collection.audit import record_change
-from app.application.collection.ports import AuditRepository, OutboxRepository
+from app.application.collection.idempotency import IdempotencyGuard, validate_key
+from app.application.collection.pagination import (
+    Page,
+    build_page,
+    decode_cursor,
+    normalize_limit,
+)
+from app.application.collection.ports import (
+    AuditRepository,
+    IdempotencyRecord,
+    IdempotencyRepository,
+    OutboxRepository,
+)
 from app.application.episodes.commands import (
     CreateEpisodeCommand,
     EpisodeActionCommand,
@@ -20,7 +34,8 @@ from app.application.episodes.ports import (
     UnitOfWork,
 )
 from app.application.ingestion.ports import IngestionJobRepository, RawAssetRepository
-from app.domain.episodes.enums import LineageNodeType, LineageRelation
+from app.domain.collection.errors import DomainValidationError as PaginationValidationError
+from app.domain.episodes.enums import EpisodeStatus, LineageNodeType, LineageRelation
 from app.domain.episodes.errors import (
     ConflictError,
     DomainValidationError,
@@ -30,6 +45,7 @@ from app.domain.episodes.errors import (
 )
 from app.domain.episodes.lineage import LineageEdge, validate_supersedes_linear
 from app.domain.episodes.models import Episode, EpisodeRawAsset
+from app.domain.episodes.validation import build_manifest_key
 from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.enums import RawAssetStatus
 from app.domain.ingestion.errors import AssetNotUsableError
@@ -50,6 +66,8 @@ class EpisodeService:
         audit: AuditRepository,
         outbox: OutboxRepository,
         uow: UnitOfWork,
+        *,
+        idempotency: IdempotencyRepository | None = None,
     ) -> None:
         self._episodes = episodes
         self._episode_assets = episode_assets
@@ -59,6 +77,9 @@ class EpisodeService:
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
+        self._guard = IdempotencyGuard(idempotency) if idempotency is not None else None
+        # 幂等重放标记供 API 设置响应头；服务实例按请求装配，不跨请求共享。
+        self.last_replayed = False
 
     def create(
         self,
@@ -66,8 +87,19 @@ class EpisodeService:
         command: CreateEpisodeCommand,
         *,
         request_id: str | None = None,
+        http_idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str | None = None,
     ) -> Episode:
         now = utcnow()
+        key = validate_key(http_idempotency_key)
+        body = asdict(command)
+        self.last_replayed = False
+        replay = self._lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            self.last_replayed = True
+            return self._load(scope, _uuid_ref(replay.response_ref, "Episode"))
+
         raw_asset_ids = _unique_uuids(command.raw_asset_ids)
         if not 1 <= len(raw_asset_ids) <= 64:
             raise DomainValidationError("raw_asset_ids 数量必须在 1 到 64 之间")
@@ -167,8 +199,42 @@ class EpisodeService:
             },
             occurred_at=now,
         )
+        self._store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            ref=created.episode_id,
+            now=now,
+            response_status=201,
+        )
         self._uow.commit()
         return created
+
+    def list_episodes(
+        self,
+        scope: ProjectScope,
+        *,
+        status: str | None = None,
+        task_id: UUID | None = None,
+        batch_id: UUID | None = None,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> Page[Episode]:
+        bounded = _normalize_limit(limit)
+        items = self._episodes.list(
+            scope,
+            status=_episode_status(status),
+            task_id=task_id,
+            batch_id=batch_id,
+            after_id=_decode_cursor(cursor),
+            limit=bounded + 1,
+        )
+        return build_page(items, limit=bounded, id_of=lambda item: item.episode_id)
+
+    def get_episode(self, scope: ProjectScope, episode_id: UUID) -> Episode:
+        return self._load(scope, episode_id)
 
     def revise(
         self,
@@ -177,8 +243,22 @@ class EpisodeService:
         command: ReviseEpisodeCommand,
         *,
         request_id: str | None = None,
+        http_idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str | None = None,
     ) -> Episode:
         now = utcnow()
+        key = validate_key(http_idempotency_key)
+        body = {
+            "code": command.code,
+            "expected_version": command.expected_version,
+        }
+        self.last_replayed = False
+        replay = self._lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            self.last_replayed = True
+            return self._load(scope, _uuid_ref(replay.response_ref, "Episode"))
+
         current = self._load(scope, episode_id)
         if command.expected_version is not None and current.version != command.expected_version:
             raise VersionConflictError("Episode")
@@ -264,6 +344,15 @@ class EpisodeService:
             },
             occurred_at=now,
         )
+        self._store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            ref=created.episode_id,
+            now=now,
+        )
         self._uow.commit()
         return created
 
@@ -274,8 +363,24 @@ class EpisodeService:
         command: MarkEpisodeReadyCommand,
         *,
         request_id: str | None = None,
+        http_idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str | None = None,
     ) -> Episode:
         now = utcnow()
+        key = validate_key(http_idempotency_key)
+        body = {
+            "expected_version": command.expected_version,
+            "manifest_key": command.manifest_key,
+            "manifest": dict(command.manifest),
+            "frame_count": command.frame_count,
+        }
+        self.last_replayed = False
+        replay = self._lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            self.last_replayed = True
+            return self._load(scope, _uuid_ref(replay.response_ref, "Episode"))
+
         episode = self._load(scope, episode_id)
         if episode.version != command.expected_version:
             raise VersionConflictError("Episode")
@@ -287,6 +392,83 @@ class EpisodeService:
         )
         saved = self._episodes.save(scope, ready, expected_version=episode.version)
         self._record_action(scope, episode, saved, "system-ready", request_id, now)
+        self._store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            ref=saved.episode_id,
+            now=now,
+        )
+        self._uow.commit()
+        return saved
+
+    def ready_from_manifest(
+        self,
+        scope: ProjectScope,
+        episode_id: UUID,
+        *,
+        expected_version: int,
+        manifest: Mapping[str, object],
+        frame_count: int,
+        request_id: str | None = None,
+        http_idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str | None = None,
+    ) -> Episode:
+        """HTTP 就绪用例：服务端生成 manifest_key，并在同一事务内完成系统处理。
+
+        Episode 创建后为 PENDING；解析 Worker 产出 Manifest 后由调用方提交
+        ``ready``。阶段 2 不暴露 ``system-start`` 动作，因此这里在 PENDING 时
+        先执行一次系统处理迁移，再校验 Manifest 并进入 READY。
+        """
+        now = utcnow()
+        key = validate_key(http_idempotency_key)
+        body = {
+            "expected_version": expected_version,
+            "manifest": dict(manifest),
+            "frame_count": frame_count,
+        }
+        self.last_replayed = False
+        replay = self._lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            self.last_replayed = True
+            return self._load(scope, _uuid_ref(replay.response_ref, "Episode"))
+
+        episode = self._load(scope, episode_id)
+        if episode.version != expected_version:
+            raise VersionConflictError("Episode")
+        if episode.status is EpisodeStatus.PENDING:
+            started = episode.start_processing(now)
+            saved_start = self._episodes.save(
+                scope,
+                started,
+                expected_version=episode.version,
+            )
+            self._record_action(scope, episode, saved_start, "system-start", request_id, now)
+            episode = saved_start
+        ready = episode.mark_ready(
+            manifest_key=build_manifest_key(
+                episode.project_id,
+                episode.episode_id,
+                episode.episode_version,
+            ),
+            manifest=manifest,
+            frame_count=frame_count,
+            now=now,
+        )
+        saved = self._episodes.save(scope, ready, expected_version=episode.version)
+        self._record_action(scope, episode, saved, "ready", request_id, now)
+        self._store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            ref=saved.episode_id,
+            now=now,
+        )
         self._uow.commit()
         return saved
 
@@ -297,8 +479,26 @@ class EpisodeService:
         command: EpisodeActionCommand,
         *,
         request_id: str | None = None,
+        http_idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str | None = None,
     ) -> Episode:
         now = utcnow()
+        key = validate_key(http_idempotency_key)
+        body = {
+            "action": command.action,
+            "expected_version": command.expected_version,
+            "reason": command.reason,
+            "quality_status": command.quality_status,
+            "error_code": command.error_code,
+            "error_summary": command.error_summary,
+        }
+        self.last_replayed = False
+        replay = self._lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            self.last_replayed = True
+            return self._load(scope, _uuid_ref(replay.response_ref, "Episode"))
+
         episode = self._load(scope, episode_id)
         if episode.version != command.expected_version:
             raise VersionConflictError("Episode")
@@ -336,6 +536,15 @@ class EpisodeService:
             raise DomainValidationError("未知 Episode 动作")
         saved = self._episodes.save(scope, updated, expected_version=episode.version)
         self._record_action(scope, episode, saved, action, request_id, now, reason=command.reason)
+        self._store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            ref=saved.episode_id,
+            now=now,
+        )
         self._uow.commit()
         return saved
 
@@ -344,6 +553,52 @@ class EpisodeService:
         if episode is None:
             raise ResourceNotFoundError("Episode", episode_id)
         return episode
+
+    def _lookup(
+        self,
+        scope: ProjectScope,
+        key: str | None,
+        *,
+        method: str,
+        path: str | None,
+        body: Mapping[str, object],
+        now: datetime,
+    ) -> IdempotencyRecord | None:
+        if self._guard is None or key is None or path is None:
+            return None
+        return self._guard.lookup(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            now=now,
+        )
+
+    def _store(
+        self,
+        scope: ProjectScope,
+        key: str | None,
+        *,
+        method: str,
+        path: str | None,
+        body: Mapping[str, object],
+        ref: UUID,
+        now: datetime,
+        response_status: int = 200,
+    ) -> None:
+        if self._guard is None or key is None or path is None:
+            return
+        self._guard.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=response_status,
+            response_ref=str(ref),
+            now=now,
+        )
 
     def _register_episode_lineage(
         self,
@@ -472,6 +727,38 @@ class EpisodeService:
             },
             occurred_at=now,
         )
+
+
+def _uuid_ref(value: str | None, resource: str) -> UUID:
+    if not value:
+        raise ResourceNotFoundError(resource, value)
+    try:
+        return UUID(value)
+    except ValueError as exc:
+        raise ResourceNotFoundError(resource, value) from exc
+
+
+def _normalize_limit(limit: int) -> int:
+    try:
+        return normalize_limit(limit)
+    except PaginationValidationError as exc:
+        raise DomainValidationError(str(exc)) from exc
+
+
+def _decode_cursor(cursor: str | None) -> UUID | None:
+    try:
+        return decode_cursor(cursor)
+    except PaginationValidationError as exc:
+        raise DomainValidationError(str(exc)) from exc
+
+
+def _episode_status(value: str | None) -> EpisodeStatus | None:
+    if value is None:
+        return None
+    try:
+        return EpisodeStatus(value)
+    except ValueError as exc:
+        raise DomainValidationError("status 取值非法") from exc
 
 
 def _unique_uuids(values: object) -> tuple[UUID, ...]:

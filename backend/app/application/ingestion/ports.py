@@ -212,6 +212,14 @@ class PresignedPart:
     expires_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class PresignedDownload:
+    """短时下载地址；URL 属于敏感凭据，不得写入日志或审计明文。"""
+
+    url: str
+    expires_at: datetime
+
+
 class ObjectStorage(Protocol):
     """对象存储 multipart 适配端口；耗时读写不得在 HTTP 线程执行。"""
 
@@ -227,6 +235,13 @@ class ObjectStorage(Protocol):
         checksum_sha256_base64: str | None,
         expires_in_seconds: int,
     ) -> PresignedPart: ...
+
+    def presign_download(
+        self,
+        object_key: str,
+        *,
+        expires_in_seconds: int,
+    ) -> PresignedDownload: ...
 
     def list_parts(self, object_key: str, upload_id: str) -> list[StoredPart]: ...
 
