@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
 
 from app.api.errors import (
+    annotation_error_to_app,
     collection_error_to_app,
     domain_error_to_app,
     episode_error_to_app,
@@ -26,6 +27,7 @@ from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ValidationFailedError
 from app.core.logging import configure_logging
+from app.domain.annotation.errors import AnnotationDomainError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
@@ -114,6 +116,17 @@ def create_app() -> FastAPI:
         exc: CollectionDomainError,
     ) -> JSONResponse:
         error = collection_error_to_app(exc)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(AnnotationDomainError)
+    async def handle_annotation_domain_error(
+        request: Request,
+        exc: AnnotationDomainError,
+    ) -> JSONResponse:
+        error = annotation_error_to_app(exc)
         return JSONResponse(
             status_code=error.status_code,
             content=_error_payload(request, error),

@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    annotation,
     calibrations,
     collection,
     devices,
@@ -29,3 +30,4 @@ api_router.include_router(uploads.router)
 api_router.include_router(ingestion_jobs.router)
 api_router.include_router(episodes.router)
 api_router.include_router(lineage.router)
+api_router.include_router(annotation.router)

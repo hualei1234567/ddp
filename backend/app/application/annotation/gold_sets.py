@@ -89,6 +89,16 @@ class GoldSetUseCases:
             raise ResourceNotFoundError("黄金集", gold_set_id)
         return gold_set
 
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        status: str | None = None,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[GoldSet]:
+        return self._gold_sets.list(scope, status=status, after_id=after_id, limit=limit)
+
     def allowed_actions(self, scope: ProjectScope, gold_set_id: UUID) -> frozenset[str]:
         return allowed_gold_set_actions(self.get(scope, gold_set_id).status)
 
@@ -162,9 +172,29 @@ class GoldSetUseCases:
         *,
         expected_version: int,
         reason: str | None = None,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str = "",
         request_id: str | None = None,
     ) -> GoldSet:
+        key = validate_key(idempotency_key)
         action_name = validate_action_name(action, family="gold_set")
+        body: dict[str, object] = {
+            "action": action_name,
+            "expected_version": expected_version,
+            "reason": reason,
+        }
+        now = _utcnow()
+        replay = self._idempotency.lookup(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            now=now,
+        )
+        if replay is not None:
+            return self.get(scope, _as_uuid(replay.response_ref, "黄金集"))
         current = self.get(scope, gold_set_id)
         if current.version != expected_version:
             raise VersionConflictError("黄金集")
@@ -176,7 +206,6 @@ class GoldSetUseCases:
             if schema is None:
                 raise ResourceNotFoundError("标注 Schema", current.schema_id)
             current.assert_schema_compatible(schema)
-        now = _utcnow()
         updated = replace(
             current.apply_action(action_name, reason=reason, now=now),
             updated_by=scope.actor_id,
@@ -191,6 +220,16 @@ class GoldSetUseCases:
             reason,
             request_id,
             now,
+        )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=200,
+            response_ref=str(saved.gold_set_id),
+            now=now,
         )
         self._uow.commit()
         return saved

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
 from app.application.annotation.commands import NewQualitySample
+from app.application.annotation.idempotency import IdempotencyGuard, validate_key
 from app.application.annotation.ports import (
     AnnotationRecordRepository,
     AnnotationSubmissionRepository,
@@ -24,6 +25,7 @@ from app.domain.annotation.enums import (
 )
 from app.domain.annotation.errors import (
     DomainValidationError,
+    ForbiddenOperationError,
     QualitySampleNotReviewableError,
     QualitySamplePolicyMissingError,
     QualitySampleSelfReviewForbiddenError,
@@ -66,7 +68,7 @@ class QualitySampleUseCases:
         self._members = members
         self._audit = audit
         self._outbox = outbox
-        self._idempotency = idempotency
+        self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
 
     def get(self, scope: ProjectScope, sample_id: UUID) -> QualitySample:
@@ -167,8 +169,24 @@ class QualitySampleUseCases:
         scope: ProjectScope,
         command: NewQualitySample,
         *,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str = "",
         request_id: str | None = None,
     ) -> QualitySample:
+        key = validate_key(idempotency_key)
+        body = asdict(command)
+        now = _utcnow()
+        replay = self._idempotency.lookup(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            now=now,
+        )
+        if replay is not None:
+            return self.get(scope, _as_uuid(replay.response_ref, "质检抽检"))
         task = self._tasks.get(scope, command.task_id)
         if task is None:
             raise ResourceNotFoundError("标注任务", command.task_id)
@@ -179,7 +197,6 @@ class QualitySampleUseCases:
             raise DomainValidationError("抽检标注人与提交不一致")
         if command.annotator_id == scope.actor_id:
             raise QualitySampleSelfReviewForbiddenError("标注员不得自行选择抽检样本")
-        now = _utcnow()
         sample = QualitySample(
             quality_sample_id=uuid4(),
             project_id=scope.project_id,
@@ -200,6 +217,16 @@ class QualitySampleUseCases:
         )
         created = self._samples.add(scope, sample)
         self._record(scope, created, "plan", None, created.status.value, None, request_id, now)
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=201,
+            response_ref=str(created.quality_sample_id),
+            now=now,
+        )
         self._uow.commit()
         return created
 
@@ -212,8 +239,29 @@ class QualitySampleUseCases:
         expected_version: int,
         reviewer_id: UUID | None = None,
         reason: str | None = None,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str = "",
         request_id: str | None = None,
     ) -> QualitySample:
+        key = validate_key(idempotency_key)
+        body: dict[str, object] = {
+            "action": action,
+            "expected_version": expected_version,
+            "reviewer_id": reviewer_id,
+            "reason": reason,
+        }
+        now = _utcnow()
+        replay = self._idempotency.lookup(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            now=now,
+        )
+        if replay is not None:
+            return self.get(scope, _as_uuid(replay.response_ref, "质检抽检"))
         action_name = validate_action_name(action, family="quality_sample")
         current = self.get(scope, sample_id)
         if current.version != expected_version:
@@ -239,7 +287,7 @@ class QualitySampleUseCases:
             QualitySampleAction.ESCALATE.value,
         }:
             if current.reviewer_id is None or current.reviewer_id != scope.actor_id:
-                raise QualitySampleNotReviewableError("只有抽检复核人可以操作该抽检")
+                raise ForbiddenOperationError("只有抽检复核人可以操作该抽检")
         now = _utcnow()
         updated = replace(
             current.apply_action(
@@ -260,6 +308,16 @@ class QualitySampleUseCases:
             reason,
             request_id,
             now,
+        )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=200,
+            response_ref=str(saved.quality_sample_id),
+            now=now,
         )
         self._uow.commit()
         return saved
@@ -309,6 +367,17 @@ class QualitySampleUseCases:
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _as_uuid(value: object, resource: str) -> UUID:
+    if isinstance(value, UUID):
+        return value
+    if isinstance(value, str):
+        try:
+            return UUID(value)
+        except ValueError as exc:
+            raise DomainValidationError(f"{resource} ID 非法") from exc
+    raise DomainValidationError(f"{resource} ID 非法")
 
 
 __all__ = ["QualitySampleUseCases"]

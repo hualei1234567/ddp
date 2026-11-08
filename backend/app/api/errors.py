@@ -8,6 +8,7 @@ from __future__ import annotations
 from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import AppError
+from app.domain.annotation.errors import AnnotationDomainError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
@@ -192,6 +193,129 @@ def episode_error_to_app(exc: EpisodeDomainError) -> AppError:
         _EPISODE_MESSAGES.get(code, "Episode 域规则校验失败"),
         _EPISODE_STATUS_BY_CODE[code],
         details=details or None,
+    )
+
+
+_ANNOTATION_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "resource_not_found": 404,
+    "forbidden": 403,
+    "state_transition_invalid": 409,
+    "version_conflict": 409,
+    "resource_immutable": 409,
+    "duplicate_resource": 409,
+    "conflict": 409,
+    "idempotency_key_reused": 409,
+    "annotation_schema_not_published": 422,
+    "annotation_schema_immutable": 409,
+    "annotation_schema_snapshot_mismatch": 422,
+    "annotation_sample_set_empty": 422,
+    "annotation_sample_set_not_snapshotted": 409,
+    "annotation_sample_set_cancelled": 409,
+    "annotation_sample_episode_ineligible": 422,
+    "annotation_sample_duplicate": 422,
+    "annotation_task_not_approved": 409,
+    "annotation_task_not_ready": 409,
+    "annotation_task_has_open_work": 409,
+    "annotation_task_rework_limit_exceeded": 409,
+    "annotation_batch_not_compatible": 409,
+    "annotation_batch_over_capacity": 409,
+    "annotation_assignment_capacity_exceeded": 409,
+    "annotation_assignment_not_owned": 403,
+    "annotation_assignment_expired": 410,
+    "annotation_assignment_revoked": 410,
+    "annotation_item_already_assigned": 409,
+    "annotation_submission_not_editable": 409,
+    "annotation_submission_incomplete": 422,
+    "annotation_submission_schema_mismatch": 422,
+    "annotation_submission_not_submitted": 409,
+    "annotation_submission_already_decided": 409,
+    "annotation_record_digest_mismatch": 422,
+    "annotation_schema_unknown_label": 422,
+    "annotation_schema_value_invalid": 422,
+    "annotation_review_self_forbidden": 403,
+    "annotation_review_not_pending": 409,
+    "annotation_review_required": 409,
+    "annotation_arbitration_required": 409,
+    "annotation_arbitration_not_pending": 409,
+    "annotation_arbitration_quorum_not_met": 409,
+    "annotation_arbiter_conflict": 403,
+    "gold_set_access_denied": 403,
+    "gold_set_not_active": 409,
+    "gold_set_schema_incompatible": 409,
+    "gold_set_item_exposure_forbidden": 403,
+    "quality_sample_not_reviewable": 409,
+    "quality_sample_policy_missing": 422,
+    "quality_sample_self_review_forbidden": 403,
+    "iaa_insufficient_overlap": 422,
+    "iaa_source_forbidden": 403,
+}
+
+_ANNOTATION_MESSAGES = {
+    "validation_failed": "请求参数或标注域规则校验失败",
+    "resource_not_found": "资源不存在或不属于当前项目",
+    "forbidden": "无权执行该操作",
+    "state_transition_invalid": "资源状态不允许该操作",
+    "version_conflict": "资源版本已变化，请重新读取后再试",
+    "resource_immutable": "资源当前状态不允许修改",
+    "duplicate_resource": "项目内业务键重复",
+    "conflict": "标注资源存在未处理冲突",
+    "idempotency_key_reused": "同一幂等键对应了不同请求体",
+    "annotation_schema_not_published": "引用的标注 Schema 未发布或不可用",
+    "annotation_schema_immutable": "已发布 Schema 的标签定义不可原地修改",
+    "annotation_schema_snapshot_mismatch": "Schema 快照不可复算或已漂移",
+    "annotation_sample_set_empty": "样本集为空，不能生成快照",
+    "annotation_sample_set_not_snapshotted": "样本集未快照或快照不可用",
+    "annotation_sample_set_cancelled": "样本集已取消",
+    "annotation_sample_episode_ineligible": "Episode 不满足样本入选条件",
+    "annotation_sample_duplicate": "样本重复",
+    "annotation_task_not_approved": "任务未批准，不能执行该操作",
+    "annotation_task_not_ready": "任务未就绪",
+    "annotation_task_has_open_work": "任务存在未结工作",
+    "annotation_task_rework_limit_exceeded": "返工次数超过上限",
+    "annotation_batch_not_compatible": "批次与任务或样本集不兼容",
+    "annotation_batch_over_capacity": "批次计划量超过任务目标",
+    "annotation_assignment_capacity_exceeded": "分配超过人员容量",
+    "annotation_assignment_not_owned": "该分配不属于当前用户",
+    "annotation_assignment_expired": "分配已过期，需重新分配",
+    "annotation_assignment_revoked": "分配已撤销",
+    "annotation_item_already_assigned": "标注项已被分配",
+    "annotation_submission_not_editable": "提交当前状态不允许编辑",
+    "annotation_submission_incomplete": "提交内容不完整",
+    "annotation_submission_schema_mismatch": "提交 Schema 快照与任务不一致",
+    "annotation_submission_not_submitted": "提交尚未提交，不能执行该操作",
+    "annotation_submission_already_decided": "提交已作出终态结论",
+    "annotation_record_digest_mismatch": "标注记录摘要校验失败",
+    "annotation_schema_unknown_label": "标签未在 Schema 中定义",
+    "annotation_schema_value_invalid": "标签值不符合 Schema 约束",
+    "annotation_review_self_forbidden": "复核人不得是标注人",
+    "annotation_review_not_pending": "复核不在待处理状态",
+    "annotation_review_required": "该操作要求先完成复核",
+    "annotation_arbitration_required": "该操作要求先完成仲裁",
+    "annotation_arbitration_not_pending": "仲裁不在可操作状态",
+    "annotation_arbitration_quorum_not_met": "仲裁投票未达到法定人数",
+    "annotation_arbiter_conflict": "仲裁人与标注人或复核人冲突",
+    "gold_set_access_denied": "无权查看黄金集期望答案",
+    "gold_set_not_active": "黄金集未激活",
+    "gold_set_schema_incompatible": "黄金集 Schema 快照不兼容",
+    "gold_set_item_exposure_forbidden": "黄金项曝光次数或轮换策略不允许",
+    "quality_sample_not_reviewable": "抽检当前状态不允许复核",
+    "quality_sample_policy_missing": "缺少有效抽样策略版本",
+    "quality_sample_self_review_forbidden": "标注员不得自行选择或复核抽检样本",
+    "iaa_insufficient_overlap": "重叠样本不足，无法给出 IAA 结论",
+    "iaa_source_forbidden": "IAA 只能基于真实提交重叠计算",
+}
+_ANNOTATION_FALLBACK_MESSAGE = "标注域规则校验失败"
+
+
+def annotation_error_to_app(exc: AnnotationDomainError) -> AppError:
+    code = getattr(exc, "code", None)
+    if not isinstance(code, str) or code not in _ANNOTATION_STATUS_BY_CODE:
+        return AppError("validation_failed", _ANNOTATION_FALLBACK_MESSAGE, 422)
+    return AppError(
+        code,
+        _ANNOTATION_MESSAGES.get(code, _ANNOTATION_FALLBACK_MESSAGE),
+        _ANNOTATION_STATUS_BY_CODE[code],
     )
 
 

@@ -199,6 +199,7 @@ class AnnotationSchemaUseCases:
         now = _utcnow()
         updated = replace(
             current,
+            schema_sha256=None,
             **dict(changes),
             updated_at=now,
             updated_by=scope.actor_id,

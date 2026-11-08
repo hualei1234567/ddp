@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
+from app.application.annotation.idempotency import IdempotencyGuard, validate_key
 from app.application.annotation.ports import (
     AnnotationRecordRepository,
     AnnotationSchemaRepository,
@@ -20,6 +21,7 @@ from app.application.annotation.ports import (
     AuditRepository,
     IAAReportRecord,
     IAAReportRepository,
+    IdempotencyRepository,
     OutboxRepository,
     UnitOfWork,
 )
@@ -29,6 +31,7 @@ from app.domain.annotation.enums import (
     IAAReportStatus,
 )
 from app.domain.annotation.errors import (
+    DomainValidationError,
     IAAInsufficientOverlapError,
     ResourceNotFoundError,
     SchemaSnapshotMismatchError,
@@ -53,6 +56,7 @@ class IAAUseCases:
         audit: AuditRepository,
         outbox: OutboxRepository,
         uow: UnitOfWork,
+        idempotency: IdempotencyRepository | None = None,
     ) -> None:
         self._reports = reports
         self._records = records
@@ -61,6 +65,7 @@ class IAAUseCases:
         self._schemas = schemas
         self._audit = audit
         self._outbox = outbox
+        self._idempotency = IdempotencyGuard(idempotency) if idempotency is not None else None
         self._uow = uow
 
     def get(self, scope: ProjectScope, report_id: UUID) -> IAAReportRecord:
@@ -76,9 +81,30 @@ class IAAUseCases:
         *,
         metric_definitions_version: str,
         iou_threshold: float = 0.5,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str = "",
         request_id: str | None = None,
     ) -> IAAReportRecord:
         """计算任务 IAA；样本不足结果是 INSUFFICIENT_DATA，而不是 0。"""
+        key = validate_key(idempotency_key)
+        body: dict[str, object] = {
+            "task_id": str(task_id),
+            "metric_definitions_version": metric_definitions_version,
+            "iou_threshold": iou_threshold,
+        }
+        now = _utcnow()
+        if self._idempotency is not None:
+            replay = self._idempotency.lookup(
+                scope,
+                key,
+                method=method,
+                path=path,
+                body=body,
+                now=now,
+            )
+            if replay is not None:
+                return self.get(scope, _as_uuid(replay.response_ref, "IAA 报告"))
         task = self._tasks.get(scope, task_id)
         if task is None:
             raise ResourceNotFoundError("标注任务", task_id)
@@ -129,7 +155,6 @@ class IAAUseCases:
                 IAAReportStatus(stored.status),
                 IAAReportAction.WORKER_START.value,
             ).value,
-            version=stored.version + 1,
         )
         stored = self._reports.save(scope, running, expected_version=stored.version)
         terminal_status = (
@@ -147,7 +172,6 @@ class IAAUseCases:
                 terminal_action.value,
             ).value,
             computed_at=now,
-            version=stored.version + 1,
         )
         final = self._reports.save(scope, final, expected_version=stored.version)
         if task.iaa_report_id != final.report_id:
@@ -188,6 +212,17 @@ class IAAUseCases:
             },
             occurred_at=now,
         )
+        if self._idempotency is not None:
+            self._idempotency.store(
+                scope,
+                key,
+                method=method,
+                path=path,
+                body=body,
+                response_status=201,
+                response_ref=str(final.report_id),
+                now=now,
+            )
         self._uow.commit()
         return final
 
@@ -226,6 +261,17 @@ def _to_observation(record, annotator_id: UUID) -> IAAObservation:
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _as_uuid(value: object, resource: str) -> UUID:
+    if isinstance(value, UUID):
+        return value
+    if isinstance(value, str):
+        try:
+            return UUID(value)
+        except ValueError as exc:
+            raise DomainValidationError(f"{resource} ID 非法") from exc
+    raise DomainValidationError(f"{resource} ID 非法")
 
 
 __all__ = ["IAAUseCases"]

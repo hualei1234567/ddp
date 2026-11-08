@@ -120,6 +120,21 @@ class AnnotationSubmissionUseCases:
     ) -> frozenset[str]:
         return allowed_submission_actions(self.get(scope, submission_id).status)
 
+    def list_for_task(
+        self,
+        scope: ProjectScope,
+        *,
+        task_id: UUID,
+        statuses: tuple[str, ...] | None = None,
+        limit: int = 100,
+    ) -> list[AnnotationSubmission]:
+        return self._submissions.list_for_task(
+            scope,
+            task_id=task_id,
+            statuses=statuses,
+            limit=limit,
+        )
+
     def create_draft(
         self,
         scope: ProjectScope,

@@ -81,6 +81,13 @@ class AnnotationArbitrationUseCases:
     ) -> frozenset[str]:
         return allowed_arbitration_actions(self.get(scope, arbitration_id).status)
 
+    def list_for_submission(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+    ) -> list[AnnotationArbitration]:
+        return self._arbitrations.list_for_submission(scope, submission_id)
+
     def create(
         self,
         scope: ProjectScope,

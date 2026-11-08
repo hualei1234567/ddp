@@ -29,6 +29,7 @@ from app.domain.annotation.enums import (
 )
 from app.domain.annotation.errors import (
     DomainValidationError,
+    ForbiddenOperationError,
     ResourceNotFoundError,
     ReviewNotPendingError,
     ReviewSelfForbiddenError,
@@ -77,6 +78,13 @@ class AnnotationReviewUseCases:
 
     def allowed_actions(self, scope: ProjectScope, review_id: UUID) -> frozenset[str]:
         return allowed_review_actions(self.get(scope, review_id).status)
+
+    def list_for_submission(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+    ) -> list[AnnotationReview]:
+        return self._reviews.list_for_submission(scope, submission_id)
 
     def create(
         self,
@@ -177,7 +185,7 @@ class AnnotationReviewUseCases:
             raise VersionConflictError("标注复核")
         assert_review_action(current.status, action_name)
         if scope.actor_id != current.reviewer_id:
-            raise ReviewNotPendingError("只有复核人可以操作该复核")
+            raise ForbiddenOperationError("只有复核人可以操作该复核")
         if (
             action_name
             in {

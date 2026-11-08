@@ -10,7 +10,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.application.annotation.ports import RecordObservation
-from app.domain.annotation.arbitration import AnnotationArbitration
+from app.domain.annotation.arbitration import AnnotationArbitration, ArbitrationVote
 from app.domain.annotation.errors import DomainValidationError
 from app.domain.annotation.review import AnnotationReview
 from app.domain.annotation.submission import AnnotationRecord, AnnotationSubmission
@@ -52,6 +52,17 @@ def _uuid_list(value: object) -> tuple[UUID, ...]:
 
 def _uuid_tuple_json(value: tuple[UUID, ...]) -> list[str]:
     return [str(item) for item in value]
+
+
+def _vote_from_payload(value: object) -> ArbitrationVote:
+    data = dict(value) if isinstance(value, dict) else {}
+    arbiter_id = data.get("arbiter_id")
+    if isinstance(arbiter_id, str):
+        data["arbiter_id"] = UUID(arbiter_id)
+    voted_at = data.get("voted_at")
+    if isinstance(voted_at, str):
+        data["voted_at"] = datetime.fromisoformat(voted_at)
+    return ArbitrationVote(**data)
 
 
 class SqlAnnotationSubmissionRepository:
@@ -662,7 +673,7 @@ class SqlAnnotationArbitrationRepository:
             quorum=row.quorum,
             trigger=row.trigger,
             status=row.status,
-            votes=tuple(row.votes or ()),
+            votes=tuple(_vote_from_payload(item) for item in (row.votes or ())),
             final_decision=row.final_decision,
             reason=row.reason,
             resolved_at=as_utc(row.resolved_at),
