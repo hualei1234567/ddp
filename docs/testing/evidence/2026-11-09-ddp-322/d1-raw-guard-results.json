@@ -1,0 +1,86 @@
+[
+  {
+    "name": "submission",
+    "table": "annotation_submissions",
+    "column": "record_refs",
+    "row_id": "e1364cc8-6258-4eb4-8127-3685159cae04",
+    "expected_message": "annotation_submission_immutable",
+    "status": "PASS",
+    "exception": "CheckViolation",
+    "actual": "annotation_submission_immutable",
+    "operator_error": false,
+    "business_error": true
+  },
+  {
+    "name": "record",
+    "table": "annotation_records",
+    "column": "labels",
+    "row_id": "03ae012d-790b-4530-9477-38415b14e980",
+    "expected_message": "annotation_record_immutable",
+    "status": "PASS",
+    "exception": "CheckViolation",
+    "actual": "annotation_record_immutable",
+    "operator_error": false,
+    "business_error": true
+  },
+  {
+    "name": "review",
+    "table": "annotation_reviews",
+    "column": "issues",
+    "row_id": "e592d943-5eed-45e9-9199-54beb2e6f837",
+    "expected_message": "annotation_review_immutable",
+    "status": "PASS",
+    "exception": "CheckViolation",
+    "actual": "annotation_review_immutable",
+    "operator_error": false,
+    "business_error": true
+  },
+  {
+    "name": "arbitration",
+    "table": "annotation_arbitrations",
+    "column": "votes",
+    "row_id": "4e294bf4-b207-4a6e-bfde-76df879833f0",
+    "expected_message": "annotation_arbitration_immutable",
+    "status": "PASS",
+    "exception": "CheckViolation",
+    "actual": "annotation_arbitration_immutable",
+    "operator_error": false,
+    "business_error": true
+  },
+  {
+    "name": "gold_set",
+    "table": "annotation_gold_sets",
+    "column": "items",
+    "row_id": "050f1755-ccb4-4df1-a6e4-535fe28edc3a",
+    "expected_message": "annotation_gold_set_immutable",
+    "status": "PASS",
+    "exception": "CheckViolation",
+    "actual": "annotation_gold_set_immutable",
+    "operator_error": false,
+    "business_error": true
+  },
+  {
+    "name": "quality_sample",
+    "table": "annotation_quality_samples",
+    "column": "item_refs",
+    "row_id": "ee8ab24d-bd50-41ce-a79e-d6f2bbde82e9",
+    "expected_message": "annotation_quality_sample_immutable",
+    "status": "PASS",
+    "exception": "CheckViolation",
+    "actual": "annotation_quality_sample_immutable",
+    "operator_error": false,
+    "business_error": true
+  },
+  {
+    "name": "iaa_report",
+    "table": "annotation_iaa_reports",
+    "column": "metrics",
+    "row_id": "de6fa97c-efff-4047-93aa-868d7ca9cf68",
+    "expected_message": "annotation_iaa_report_immutable",
+    "status": "PASS",
+    "exception": "CheckViolation",
+    "actual": "annotation_iaa_report_immutable",
+    "operator_error": false,
+    "business_error": true
+  }
+]

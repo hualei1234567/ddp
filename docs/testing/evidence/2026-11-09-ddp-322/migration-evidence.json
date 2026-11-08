@@ -1,0 +1,996 @@
+[
+  {
+    "action": "upgrade",
+    "revision": "0011",
+    "actual": "0011",
+    "tables": 0,
+    "triggers": 0
+  },
+  {
+    "action": "upgrade",
+    "revision": "0012",
+    "actual": "0012",
+    "tables": 3,
+    "triggers": [
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_delete"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_insert"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_update"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_initial_status"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_no_delete"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_transition"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_initial_status"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_no_delete"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_transition"
+      }
+    ]
+  },
+  {
+    "action": "upgrade",
+    "revision": "0013",
+    "actual": "0013",
+    "tables": 7,
+    "triggers": [
+      {
+        "table": "annotation_assignment_events",
+        "trigger": "trg_annotation_assignment_events_no_delete"
+      },
+      {
+        "table": "annotation_assignment_events",
+        "trigger": "trg_annotation_assignment_events_no_update"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_initial_status"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_no_delete"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_separation"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_transition"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_initial_status"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_no_delete"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_transition"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_delete"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_insert"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_update"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_initial_status"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_no_delete"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_transition"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_initial_status"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_no_delete"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_transition"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_binding_immutable"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_binding_insert"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_initial_status"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_no_delete"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_transition"
+      }
+    ]
+  },
+  {
+    "action": "upgrade",
+    "revision": "0014",
+    "actual": "0014",
+    "tables": 11,
+    "triggers": [
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_decision"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_immutable"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_initial_status"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_no_delete"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_transition"
+      },
+      {
+        "table": "annotation_assignment_events",
+        "trigger": "trg_annotation_assignment_events_no_delete"
+      },
+      {
+        "table": "annotation_assignment_events",
+        "trigger": "trg_annotation_assignment_events_no_update"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_initial_status"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_no_delete"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_separation"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_transition"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_initial_status"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_no_delete"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_transition"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_immutable"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_initial_status"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_no_delete"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_transition"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_immutable"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_initial_status"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_no_delete"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_separation"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_transition"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_delete"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_insert"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_update"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_initial_status"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_no_delete"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_transition"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_initial_status"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_no_delete"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_transition"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_immutable"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_initial_status"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_no_delete"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_snapshot"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_transition"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_binding_immutable"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_binding_insert"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_initial_status"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_no_delete"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_transition"
+      }
+    ]
+  },
+  {
+    "action": "upgrade",
+    "revision": "0015",
+    "actual": "0015",
+    "tables": 16,
+    "triggers": [
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_decision"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_immutable"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_initial_status"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_no_delete"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_transition"
+      },
+      {
+        "table": "annotation_assignment_events",
+        "trigger": "trg_annotation_assignment_events_no_delete"
+      },
+      {
+        "table": "annotation_assignment_events",
+        "trigger": "trg_annotation_assignment_events_no_update"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_initial_status"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_no_delete"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_separation"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_transition"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_initial_status"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_no_delete"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_transition"
+      },
+      {
+        "table": "annotation_gold_set_evaluations",
+        "trigger": "trg_annotation_gold_set_evaluations_append_only"
+      },
+      {
+        "table": "annotation_gold_set_evaluations",
+        "trigger": "trg_annotation_gold_set_evaluations_no_delete"
+      },
+      {
+        "table": "annotation_gold_set_exposures",
+        "trigger": "trg_annotation_gold_set_exposures_append_only"
+      },
+      {
+        "table": "annotation_gold_set_exposures",
+        "trigger": "trg_annotation_gold_set_exposures_no_delete"
+      },
+      {
+        "table": "annotation_gold_sets",
+        "trigger": "trg_annotation_gold_sets_immutable"
+      },
+      {
+        "table": "annotation_gold_sets",
+        "trigger": "trg_annotation_gold_sets_initial_status"
+      },
+      {
+        "table": "annotation_gold_sets",
+        "trigger": "trg_annotation_gold_sets_no_delete"
+      },
+      {
+        "table": "annotation_gold_sets",
+        "trigger": "trg_annotation_gold_sets_transition"
+      },
+      {
+        "table": "annotation_iaa_reports",
+        "trigger": "trg_annotation_iaa_reports_immutable"
+      },
+      {
+        "table": "annotation_iaa_reports",
+        "trigger": "trg_annotation_iaa_reports_initial_status"
+      },
+      {
+        "table": "annotation_iaa_reports",
+        "trigger": "trg_annotation_iaa_reports_no_delete"
+      },
+      {
+        "table": "annotation_iaa_reports",
+        "trigger": "trg_annotation_iaa_reports_transition"
+      },
+      {
+        "table": "annotation_quality_samples",
+        "trigger": "trg_annotation_quality_samples_immutable"
+      },
+      {
+        "table": "annotation_quality_samples",
+        "trigger": "trg_annotation_quality_samples_initial_status"
+      },
+      {
+        "table": "annotation_quality_samples",
+        "trigger": "trg_annotation_quality_samples_no_delete"
+      },
+      {
+        "table": "annotation_quality_samples",
+        "trigger": "trg_annotation_quality_samples_transition"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_immutable"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_initial_status"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_no_delete"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_transition"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_immutable"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_initial_status"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_no_delete"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_separation"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_transition"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_delete"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_insert"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_update"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_initial_status"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_no_delete"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_transition"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_initial_status"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_no_delete"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_transition"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_immutable"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_initial_status"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_no_delete"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_snapshot"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_transition"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_binding_immutable"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_binding_insert"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_initial_status"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_no_delete"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_transition"
+      }
+    ]
+  },
+  {
+    "action": "guard_source_after_0015",
+    "functions": {
+      "ddp_annotation_arbitration_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 3054
+      },
+      "ddp_annotation_gold_set_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 2766
+      },
+      "ddp_annotation_iaa_report_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 2865
+      },
+      "ddp_annotation_quality_sample_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 3009
+      },
+      "ddp_annotation_record_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 3582
+      },
+      "ddp_annotation_review_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 2675
+      },
+      "ddp_annotation_submission_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 4666
+      }
+    }
+  },
+  {
+    "action": "legacy_guards_injected",
+    "functions": [
+      "ddp_annotation_submission_guard",
+      "ddp_annotation_record_guard",
+      "ddp_annotation_review_guard",
+      "ddp_annotation_arbitration_guard",
+      "ddp_annotation_gold_set_guard",
+      "ddp_annotation_quality_sample_guard",
+      "ddp_annotation_iaa_report_guard"
+    ],
+    "source": {
+      "ddp_annotation_arbitration_guard": {
+        "has_cast": false,
+        "legacy_json_compare_lines": [
+          "AND ((OLD.task_id <> NEW.task_id OR (OLD.task_id IS NULL AND NEW.task_id IS NOT NULL) OR (OLD.task_id IS NOT NULL AND NEW.task_id IS NULL)) OR (OLD.submission_id <> NEW.submission_id OR (OLD.submission_id IS NULL AND NEW.submission_id IS NOT NULL) OR (OLD.submission_id IS NOT NULL AND NEW.submission_id IS NULL)) OR (OLD.review_id <> NEW.review_id OR (OLD.review_id IS NULL AND NEW.review_id IS NOT NULL) OR (OLD.review_id IS NOT NULL AND NEW.review_id IS NULL)) OR (OLD.arbiter_ids <> NEW.arbiter_ids OR (OLD.arbiter_ids IS NULL AND NEW.arbiter_ids IS NOT NULL) OR (OLD.arbiter_ids IS NOT NULL AND NEW.arbiter_ids IS NULL)) OR (OLD.quorum <> NEW.quorum OR (OLD.quorum IS NULL AND NEW.quorum IS NOT NULL) OR (OLD.quorum IS NOT NULL AND NEW.quorum IS NULL)) OR (OLD.trigger <> NEW.trigger OR (OLD.trigger IS NULL AND NEW.trigger IS NOT NULL) OR (OLD.trigger IS NOT NULL AND NEW.trigger IS NULL)) OR (OLD.votes <> NEW.votes OR (OLD.votes IS NULL AND NEW.votes IS NOT NULL) OR (OLD.votes IS NOT NULL AND NEW.votes IS NULL)) OR (OLD.final_decision <> NEW.final_decision OR (OLD.final_decision IS NULL AND NEW.final_decision IS NOT NULL) OR (OLD.final_decision IS NOT NULL AND NEW.final_decision IS NULL)) OR (OLD.reason <> NEW.reason OR (OLD.reason IS NULL AND NEW.reason IS NOT NULL) OR (OLD.reason IS NOT NULL AND NEW.reason IS NULL))) THEN"
+        ],
+        "length": 2802
+      },
+      "ddp_annotation_gold_set_guard": {
+        "has_cast": false,
+        "legacy_json_compare_lines": [
+          "IF OLD.status IN ('ACTIVE', 'RETIRED', 'REVOKED') AND ((OLD.schema_id <> NEW.schema_id OR (OLD.schema_id IS NULL AND NEW.schema_id IS NOT NULL) OR (OLD.schema_id IS NOT NULL AND NEW.schema_id IS NULL)) OR (OLD.schema_version <> NEW.schema_version OR (OLD.schema_version IS NULL AND NEW.schema_version IS NOT NULL) OR (OLD.schema_version IS NOT NULL AND NEW.schema_version IS NULL)) OR (OLD.schema_sha256 <> NEW.schema_sha256 OR (OLD.schema_sha256 IS NULL AND NEW.schema_sha256 IS NOT NULL) OR (OLD.schema_sha256 IS NOT NULL AND NEW.schema_sha256 IS NULL)) OR (OLD.blind <> NEW.blind OR (OLD.blind IS NULL AND NEW.blind IS NOT NULL) OR (OLD.blind IS NOT NULL AND NEW.blind IS NULL)) OR (OLD.items <> NEW.items OR (OLD.items IS NULL AND NEW.items IS NOT NULL) OR (OLD.items IS NOT NULL AND NEW.items IS NULL)) OR (OLD.exposure_policy <> NEW.exposure_policy OR (OLD.exposure_policy IS NULL AND NEW.exposure_policy IS NOT NULL) OR (OLD.exposure_policy IS NOT NULL AND NEW.exposure_policy IS NULL)) OR (OLD.max_exposure_per_annotator <> NEW.max_exposure_per_annotator OR (OLD.max_exposure_per_annotator IS NULL AND NEW.max_exposure_per_annotator IS NOT NULL) OR (OLD.max_exposure_per_annotator IS NOT NULL AND NEW.max_exposure_per_annotator IS NULL)) OR (OLD.rotation_policy <> NEW.rotation_policy OR (OLD.rotation_policy IS NULL AND NEW.rotation_policy IS NOT NULL) OR (OLD.rotation_policy IS NOT NULL AND NEW.rotation_policy IS NULL)) OR (OLD.usage_policy <> NEW.usage_policy OR (OLD.usage_policy IS NULL AND NEW.usage_policy IS NOT NULL) OR (OLD.usage_policy IS NOT NULL AND NEW.usage_policy IS NULL))) THEN"
+        ],
+        "length": 2514
+      },
+      "ddp_annotation_iaa_report_guard": {
+        "has_cast": false,
+        "legacy_json_compare_lines": [
+          "AND ((OLD.task_id <> NEW.task_id OR (OLD.task_id IS NULL AND NEW.task_id IS NOT NULL) OR (OLD.task_id IS NOT NULL AND NEW.task_id IS NULL)) OR (OLD.schema_id <> NEW.schema_id OR (OLD.schema_id IS NULL AND NEW.schema_id IS NOT NULL) OR (OLD.schema_id IS NOT NULL AND NEW.schema_id IS NULL)) OR (OLD.schema_version <> NEW.schema_version OR (OLD.schema_version IS NULL AND NEW.schema_version IS NOT NULL) OR (OLD.schema_version IS NOT NULL AND NEW.schema_version IS NULL)) OR (OLD.metric_definitions_version <> NEW.metric_definitions_version OR (OLD.metric_definitions_version IS NULL AND NEW.metric_definitions_version IS NOT NULL) OR (OLD.metric_definitions_version IS NOT NULL AND NEW.metric_definitions_version IS NULL)) OR (OLD.sample_item_count <> NEW.sample_item_count OR (OLD.sample_item_count IS NULL AND NEW.sample_item_count IS NOT NULL) OR (OLD.sample_item_count IS NOT NULL AND NEW.sample_item_count IS NULL)) OR (OLD.overlap_item_count <> NEW.overlap_item_count OR (OLD.overlap_item_count IS NULL AND NEW.overlap_item_count IS NOT NULL) OR (OLD.overlap_item_count IS NOT NULL AND NEW.overlap_item_count IS NULL)) OR (OLD.annotator_count <> NEW.annotator_count OR (OLD.annotator_count IS NULL AND NEW.annotator_count IS NOT NULL) OR (OLD.annotator_count IS NOT NULL AND NEW.annotator_count IS NULL)) OR (OLD.excluded_items <> NEW.excluded_items OR (OLD.excluded_items IS NULL AND NEW.excluded_items IS NOT NULL) OR (OLD.excluded_items IS NOT NULL AND NEW.excluded_items IS NULL)) OR (OLD.metrics <> NEW.metrics OR (OLD.metrics IS NULL AND NEW.metrics IS NOT NULL) OR (OLD.metrics IS NOT NULL AND NEW.metrics IS NULL))) THEN"
+        ],
+        "length": 2613
+      },
+      "ddp_annotation_quality_sample_guard": {
+        "has_cast": false,
+        "legacy_json_compare_lines": [
+          "IF OLD.status IN ('CLOSED', 'CANCELLED') AND ((OLD.task_id <> NEW.task_id OR (OLD.task_id IS NULL AND NEW.task_id IS NOT NULL) OR (OLD.task_id IS NOT NULL AND NEW.task_id IS NULL)) OR (OLD.submission_id <> NEW.submission_id OR (OLD.submission_id IS NULL AND NEW.submission_id IS NOT NULL) OR (OLD.submission_id IS NOT NULL AND NEW.submission_id IS NULL)) OR (OLD.annotator_id <> NEW.annotator_id OR (OLD.annotator_id IS NULL AND NEW.annotator_id IS NOT NULL) OR (OLD.annotator_id IS NOT NULL AND NEW.annotator_id IS NULL)) OR (OLD.sampling_policy_version <> NEW.sampling_policy_version OR (OLD.sampling_policy_version IS NULL AND NEW.sampling_policy_version IS NOT NULL) OR (OLD.sampling_policy_version IS NOT NULL AND NEW.sampling_policy_version IS NULL)) OR (OLD.sample_type <> NEW.sample_type OR (OLD.sample_type IS NULL AND NEW.sample_type IS NOT NULL) OR (OLD.sample_type IS NOT NULL AND NEW.sample_type IS NULL)) OR (OLD.stratum <> NEW.stratum OR (OLD.stratum IS NULL AND NEW.stratum IS NOT NULL) OR (OLD.stratum IS NOT NULL AND NEW.stratum IS NULL)) OR (OLD.sample_reason <> NEW.sample_reason OR (OLD.sample_reason IS NULL AND NEW.sample_reason IS NOT NULL) OR (OLD.sample_reason IS NOT NULL AND NEW.sample_reason IS NULL)) OR (OLD.item_refs <> NEW.item_refs OR (OLD.item_refs IS NULL AND NEW.item_refs IS NOT NULL) OR (OLD.item_refs IS NOT NULL AND NEW.item_refs IS NULL)) OR (OLD.metadata <> NEW.metadata OR (OLD.metadata IS NULL AND NEW.metadata IS NOT NULL) OR (OLD.metadata IS NOT NULL AND NEW.metadata IS NULL))) THEN"
+        ],
+        "length": 2757
+      },
+      "ddp_annotation_record_guard": {
+        "has_cast": false,
+        "legacy_json_compare_lines": [
+          "IF OLD.status <> 'DRAFT' AND ((OLD.submission_id <> NEW.submission_id OR (OLD.submission_id IS NULL AND NEW.submission_id IS NOT NULL) OR (OLD.submission_id IS NOT NULL AND NEW.submission_id IS NULL)) OR (OLD.task_id <> NEW.task_id OR (OLD.task_id IS NULL AND NEW.task_id IS NOT NULL) OR (OLD.task_id IS NOT NULL AND NEW.task_id IS NULL)) OR (OLD.episode_id <> NEW.episode_id OR (OLD.episode_id IS NULL AND NEW.episode_id IS NOT NULL) OR (OLD.episode_id IS NOT NULL AND NEW.episode_id IS NULL)) OR (OLD.episode_version <> NEW.episode_version OR (OLD.episode_version IS NULL AND NEW.episode_version IS NOT NULL) OR (OLD.episode_version IS NOT NULL AND NEW.episode_version IS NULL)) OR (OLD.annotation_lineage_id <> NEW.annotation_lineage_id OR (OLD.annotation_lineage_id IS NULL AND NEW.annotation_lineage_id IS NOT NULL) OR (OLD.annotation_lineage_id IS NOT NULL AND NEW.annotation_lineage_id IS NULL)) OR (OLD.annotation_version <> NEW.annotation_version OR (OLD.annotation_version IS NULL AND NEW.annotation_version IS NOT NULL) OR (OLD.annotation_version IS NOT NULL AND NEW.annotation_version IS NULL)) OR (OLD.schema_id <> NEW.schema_id OR (OLD.schema_id IS NULL AND NEW.schema_id IS NOT NULL) OR (OLD.schema_id IS NOT NULL AND NEW.schema_id IS NULL)) OR (OLD.schema_version <> NEW.schema_version OR (OLD.schema_version IS NULL AND NEW.schema_version IS NOT NULL) OR (OLD.schema_version IS NOT NULL AND NEW.schema_version IS NULL)) OR (OLD.time_range <> NEW.time_range OR (OLD.time_range IS NULL AND NEW.time_range IS NOT NULL) OR (OLD.time_range IS NOT NULL AND NEW.time_range IS NULL)) OR (OLD.labels <> NEW.labels OR (OLD.labels IS NULL AND NEW.labels IS NOT NULL) OR (OLD.labels IS NOT NULL AND NEW.labels IS NULL)) OR (OLD.evidence_refs <> NEW.evidence_refs OR (OLD.evidence_refs IS NULL AND NEW.evidence_refs IS NOT NULL) OR (OLD.evidence_refs IS NOT NULL AND NEW.evidence_refs IS NULL)) OR (OLD.record_sha256 <> NEW.record_sha256 OR (OLD.record_sha256 IS NULL AND NEW.record_sha256 IS NOT NULL) OR (OLD.record_sha256 IS NOT NULL AND NEW.record_sha256 IS NULL)) OR (OLD.supersedes_id <> NEW.supersedes_id OR (OLD.supersedes_id IS NULL AND NEW.supersedes_id IS NOT NULL) OR (OLD.supersedes_id IS NOT NULL AND NEW.supersedes_id IS NULL))) THEN"
+        ],
+        "length": 3218
+      },
+      "ddp_annotation_review_guard": {
+        "has_cast": false,
+        "legacy_json_compare_lines": [
+          "AND ((OLD.submission_id <> NEW.submission_id OR (OLD.submission_id IS NULL AND NEW.submission_id IS NOT NULL) OR (OLD.submission_id IS NOT NULL AND NEW.submission_id IS NULL)) OR (OLD.task_id <> NEW.task_id OR (OLD.task_id IS NULL AND NEW.task_id IS NOT NULL) OR (OLD.task_id IS NOT NULL AND NEW.task_id IS NULL)) OR (OLD.reviewer_id <> NEW.reviewer_id OR (OLD.reviewer_id IS NULL AND NEW.reviewer_id IS NOT NULL) OR (OLD.reviewer_id IS NOT NULL AND NEW.reviewer_id IS NULL)) OR (OLD.review_round <> NEW.review_round OR (OLD.review_round IS NULL AND NEW.review_round IS NOT NULL) OR (OLD.review_round IS NOT NULL AND NEW.review_round IS NULL)) OR (OLD.decision <> NEW.decision OR (OLD.decision IS NULL AND NEW.decision IS NOT NULL) OR (OLD.decision IS NOT NULL AND NEW.decision IS NULL)) OR (OLD.issues <> NEW.issues OR (OLD.issues IS NULL AND NEW.issues IS NOT NULL) OR (OLD.issues IS NOT NULL AND NEW.issues IS NULL)) OR (OLD.checklist <> NEW.checklist OR (OLD.checklist IS NULL AND NEW.checklist IS NOT NULL) OR (OLD.checklist IS NOT NULL AND NEW.checklist IS NULL)) OR (OLD.reason <> NEW.reason OR (OLD.reason IS NULL AND NEW.reason IS NOT NULL) OR (OLD.reason IS NOT NULL AND NEW.reason IS NULL))) THEN"
+        ],
+        "length": 2451
+      },
+      "ddp_annotation_submission_guard": {
+        "has_cast": false,
+        "legacy_json_compare_lines": [
+          "IF OLD.status <> 'DRAFT' AND ((OLD.task_id <> NEW.task_id OR (OLD.task_id IS NULL AND NEW.task_id IS NOT NULL) OR (OLD.task_id IS NOT NULL AND NEW.task_id IS NULL)) OR (OLD.batch_id <> NEW.batch_id OR (OLD.batch_id IS NULL AND NEW.batch_id IS NOT NULL) OR (OLD.batch_id IS NOT NULL AND NEW.batch_id IS NULL)) OR (OLD.assignment_id <> NEW.assignment_id OR (OLD.assignment_id IS NULL AND NEW.assignment_id IS NOT NULL) OR (OLD.assignment_id IS NOT NULL AND NEW.assignment_id IS NULL)) OR (OLD.annotator_id <> NEW.annotator_id OR (OLD.annotator_id IS NULL AND NEW.annotator_id IS NOT NULL) OR (OLD.annotator_id IS NOT NULL AND NEW.annotator_id IS NULL)) OR (OLD.submission_version <> NEW.submission_version OR (OLD.submission_version IS NULL AND NEW.submission_version IS NOT NULL) OR (OLD.submission_version IS NOT NULL AND NEW.submission_version IS NULL)) OR (OLD.schema_id <> NEW.schema_id OR (OLD.schema_id IS NULL AND NEW.schema_id IS NOT NULL) OR (OLD.schema_id IS NOT NULL AND NEW.schema_id IS NULL)) OR (OLD.schema_version <> NEW.schema_version OR (OLD.schema_version IS NULL AND NEW.schema_version IS NOT NULL) OR (OLD.schema_version IS NOT NULL AND NEW.schema_version IS NULL)) OR (OLD.schema_sha256 <> NEW.schema_sha256 OR (OLD.schema_sha256 IS NULL AND NEW.schema_sha256 IS NOT NULL) OR (OLD.schema_sha256 IS NOT NULL AND NEW.schema_sha256 IS NULL)) OR (OLD.item_count <> NEW.item_count OR (OLD.item_count IS NULL AND NEW.item_count IS NOT NULL) OR (OLD.item_count IS NOT NULL AND NEW.item_count IS NULL)) OR (OLD.records_digest <> NEW.records_digest OR (OLD.records_digest IS NULL AND NEW.records_digest IS NOT NULL) OR (OLD.records_digest IS NOT NULL AND NEW.records_digest IS NULL)) OR (OLD.data_source <> NEW.data_source OR (OLD.data_source IS NULL AND NEW.data_source IS NOT NULL) OR (OLD.data_source IS NOT NULL AND NEW.data_source IS NULL)) OR (OLD.record_refs <> NEW.record_refs OR (OLD.record_refs IS NULL AND NEW.record_refs IS NOT NULL) OR (OLD.record_refs IS NOT NULL AND NEW.record_refs IS NULL)) OR (OLD.supersedes_id <> NEW.supersedes_id OR (OLD.supersedes_id IS NULL AND NEW.supersedes_id IS NOT NULL) OR (OLD.supersedes_id IS NOT NULL AND NEW.supersedes_id IS NULL))) THEN"
+        ],
+        "length": 4302
+      }
+    }
+  },
+  {
+    "action": "guard_source_after_0016",
+    "functions": {
+      "ddp_annotation_arbitration_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 3054
+      },
+      "ddp_annotation_gold_set_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 2766
+      },
+      "ddp_annotation_iaa_report_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 2865
+      },
+      "ddp_annotation_quality_sample_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 3009
+      },
+      "ddp_annotation_record_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 3582
+      },
+      "ddp_annotation_review_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 2675
+      },
+      "ddp_annotation_submission_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 4666
+      }
+    },
+    "revision": "0016"
+  },
+  {
+    "action": "downgrade",
+    "revision": "0015",
+    "actual": "0015",
+    "triggers": 58,
+    "functions": {
+      "ddp_annotation_arbitration_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 3054
+      },
+      "ddp_annotation_gold_set_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 2766
+      },
+      "ddp_annotation_iaa_report_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 2865
+      },
+      "ddp_annotation_quality_sample_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 3009
+      },
+      "ddp_annotation_record_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 3582
+      },
+      "ddp_annotation_review_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 2675
+      },
+      "ddp_annotation_submission_guard": {
+        "has_cast": true,
+        "legacy_json_compare_lines": [],
+        "length": 4666
+      }
+    }
+  },
+  {
+    "action": "upgrade",
+    "revision": "head",
+    "actual": "0016",
+    "tables": 16,
+    "triggers": [
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_decision"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_immutable"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_initial_status"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_no_delete"
+      },
+      {
+        "table": "annotation_arbitrations",
+        "trigger": "trg_annotation_arbitrations_transition"
+      },
+      {
+        "table": "annotation_assignment_events",
+        "trigger": "trg_annotation_assignment_events_no_delete"
+      },
+      {
+        "table": "annotation_assignment_events",
+        "trigger": "trg_annotation_assignment_events_no_update"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_initial_status"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_no_delete"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_separation"
+      },
+      {
+        "table": "annotation_assignments",
+        "trigger": "trg_annotation_assignments_transition"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_initial_status"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_no_delete"
+      },
+      {
+        "table": "annotation_batches",
+        "trigger": "trg_annotation_batches_transition"
+      },
+      {
+        "table": "annotation_gold_set_evaluations",
+        "trigger": "trg_annotation_gold_set_evaluations_append_only"
+      },
+      {
+        "table": "annotation_gold_set_evaluations",
+        "trigger": "trg_annotation_gold_set_evaluations_no_delete"
+      },
+      {
+        "table": "annotation_gold_set_exposures",
+        "trigger": "trg_annotation_gold_set_exposures_append_only"
+      },
+      {
+        "table": "annotation_gold_set_exposures",
+        "trigger": "trg_annotation_gold_set_exposures_no_delete"
+      },
+      {
+        "table": "annotation_gold_sets",
+        "trigger": "trg_annotation_gold_sets_immutable"
+      },
+      {
+        "table": "annotation_gold_sets",
+        "trigger": "trg_annotation_gold_sets_initial_status"
+      },
+      {
+        "table": "annotation_gold_sets",
+        "trigger": "trg_annotation_gold_sets_no_delete"
+      },
+      {
+        "table": "annotation_gold_sets",
+        "trigger": "trg_annotation_gold_sets_transition"
+      },
+      {
+        "table": "annotation_iaa_reports",
+        "trigger": "trg_annotation_iaa_reports_immutable"
+      },
+      {
+        "table": "annotation_iaa_reports",
+        "trigger": "trg_annotation_iaa_reports_initial_status"
+      },
+      {
+        "table": "annotation_iaa_reports",
+        "trigger": "trg_annotation_iaa_reports_no_delete"
+      },
+      {
+        "table": "annotation_iaa_reports",
+        "trigger": "trg_annotation_iaa_reports_transition"
+      },
+      {
+        "table": "annotation_quality_samples",
+        "trigger": "trg_annotation_quality_samples_immutable"
+      },
+      {
+        "table": "annotation_quality_samples",
+        "trigger": "trg_annotation_quality_samples_initial_status"
+      },
+      {
+        "table": "annotation_quality_samples",
+        "trigger": "trg_annotation_quality_samples_no_delete"
+      },
+      {
+        "table": "annotation_quality_samples",
+        "trigger": "trg_annotation_quality_samples_transition"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_immutable"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_initial_status"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_no_delete"
+      },
+      {
+        "table": "annotation_records",
+        "trigger": "trg_annotation_records_transition"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_immutable"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_initial_status"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_no_delete"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_separation"
+      },
+      {
+        "table": "annotation_reviews",
+        "trigger": "trg_annotation_reviews_transition"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_delete"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_insert"
+      },
+      {
+        "table": "annotation_sample_episodes",
+        "trigger": "trg_annotation_sample_episodes_update"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_initial_status"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_no_delete"
+      },
+      {
+        "table": "annotation_sample_sets",
+        "trigger": "trg_annotation_sample_sets_transition"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_initial_status"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_no_delete"
+      },
+      {
+        "table": "annotation_schemas",
+        "trigger": "trg_annotation_schemas_transition"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_immutable"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_initial_status"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_no_delete"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_snapshot"
+      },
+      {
+        "table": "annotation_submissions",
+        "trigger": "trg_annotation_submissions_transition"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_binding_immutable"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_binding_insert"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_initial_status"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_no_delete"
+      },
+      {
+        "table": "annotation_tasks",
+        "trigger": "trg_annotation_tasks_transition"
+      }
+    ]
+  }
+]
