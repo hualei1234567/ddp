@@ -257,6 +257,50 @@ body {
   gap: var(--ddp-space-sm);
 }
 
+/* 筛选区：内联纵向均可复用，窄屏抽屉使用 stacked。 */
+.ddp-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ddp-space-sm);
+  width: 100%;
+}
+
+.ddp-filters-stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.ddp-filter-scope {
+  margin: 0;
+}
+
+.ddp-mobile-filters {
+  width: 100%;
+}
+
+.ddp-filter-drawer .ant-drawer-body {
+  overflow-y: auto;
+}
+
+/* 长 ID：省略展示，完整值走 Tooltip；复制按钮保持独立触控目标。 */
+.ddp-identifier {
+  max-width: 100%;
+}
+
+.ddp-identifier-text {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.ddp-identifier .ant-typography {
+  white-space: nowrap;
+}
+
+.ddp-inline-link {
+  align-self: flex-start;
+}
+
 .ddp-page-body {
   min-width: 0;
 }
@@ -350,7 +394,37 @@ body {
   }
 
   .ddp-content .ant-btn {
-    min-height: 40px;
+    min-height: 44px;
+  }
+
+  .ddp-content .ant-input,
+  .ddp-content .ant-input-affix-wrapper,
+  .ddp-content .ant-select-selector {
+    min-height: 44px;
+  }
+
+  .ddp-content .ant-select-single .ant-select-selector {
+    align-items: center;
+  }
+
+  .ddp-content .ant-tabs-tab {
+    min-height: 44px;
+    align-items: center;
+  }
+
+  /* 表格行内触控目标：用内边距把行高提升到 44px 以上。 */
+  .ddp-content .ant-table-tbody > tr > td {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .ddp-icon-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .ddp-touch-target {
+    min-height: 44px;
   }
 }
 

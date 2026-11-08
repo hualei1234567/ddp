@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import StatusTag from "../../components/devices/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
+import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageState from "../../components/ui/PageState";
 import { useCursorPage } from "../../hooks/useCursorPage";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
@@ -28,8 +29,18 @@ interface SensorListProps {
 
 const columns: TableColumnsType<Sensor> = [
   {
+    title: "传感器 ID",
+    dataIndex: "sensor_id",
+    width: 210,
+    fixed: "left",
+    render: (value: string) => (
+      <IdentifierValue value={value} label="传感器 ID" />
+    ),
+  },
+  {
     title: "编码",
     dataIndex: "code",
+    width: 140,
     render: (value: string) => <Typography.Text code>{value}</Typography.Text>,
   },
   {
@@ -74,8 +85,32 @@ const columns: TableColumnsType<Sensor> = [
       ),
   },
   {
+    title: "标定引用",
+    key: "calibration_refs",
+    width: 230,
+    render: (_value, record) => (
+      <Space direction="vertical" size={2}>
+        <Space size={4} align="center">
+          <Typography.Text type="secondary">内参：</Typography.Text>
+          <IdentifierValue
+            value={record.intrinsic_calibration_id}
+            label="内参标定 ID"
+          />
+        </Space>
+        <Space size={4} align="center">
+          <Typography.Text type="secondary">外参：</Typography.Text>
+          <IdentifierValue
+            value={record.extrinsic_calibration_id}
+            label="外参标定 ID"
+          />
+        </Space>
+      </Space>
+    ),
+  },
+  {
     title: "状态",
     dataIndex: "status",
+    width: 120,
     render: (value: string) => <StatusTag kind="sensor" value={value} />,
   },
   {
@@ -162,7 +197,7 @@ export default function SensorList({
         columns={columns}
         dataSource={items}
         pagination={false}
-        scroll={{ x: 900 }}
+        scroll={{ x: 1180 }}
       />
       <LoadMoreBar
         loadedCount={items.length}

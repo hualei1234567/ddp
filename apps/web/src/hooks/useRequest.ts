@@ -24,6 +24,31 @@ const INITIAL_STATE = {
   updatedAt: null,
 } satisfies RequestState<never>;
 
+export function requestSuccessState<T>(data: T): RequestState<T> {
+  return {
+    data,
+    error: null,
+    loading: false,
+    refreshing: false,
+    stale: false,
+    updatedAt: Date.now(),
+  };
+}
+
+/** 刷新失败时保留旧数据并标记 Stale；首次失败没有旧数据可保留。 */
+export function requestFailureState<T>(
+  previous: RequestState<T>,
+  error: ApiError,
+): RequestState<T> {
+  return {
+    ...previous,
+    loading: false,
+    refreshing: false,
+    error,
+    stale: previous.data !== null,
+  };
+}
+
 /**
  * 轻量请求状态机：首次加载、手动刷新、取消、刷新失败保留旧数据（Stale）。
  * 只负责状态，不承担数据转换；业务聚合放在 services。
@@ -53,14 +78,7 @@ export function useRequest<T>(
       if (controller.signal.aborted) {
         return;
       }
-      setState({
-        data,
-        error: null,
-        loading: false,
-        refreshing: false,
-        stale: false,
-        updatedAt: Date.now(),
-      });
+      setState(requestSuccessState(data));
     } catch (caught) {
       if (controller.signal.aborted) {
         return;
@@ -73,13 +91,7 @@ export function useRequest<T>(
               message: "请求失败，请检查网络或服务状态。",
               cause: caught,
             });
-      setState((previous) => ({
-        ...previous,
-        loading: false,
-        refreshing: false,
-        error,
-        stale: previous.data !== null,
-      }));
+      setState((previous) => requestFailureState(previous, error));
     }
   }, []);
 

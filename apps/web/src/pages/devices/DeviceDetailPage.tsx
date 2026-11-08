@@ -6,6 +6,7 @@ import {
   Descriptions,
   Space,
   Tabs,
+  Tag,
   Typography,
 } from "antd";
 import type { ReactNode } from "react";
@@ -19,23 +20,31 @@ import {
 
 import StatusTag from "../../components/devices/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
+import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
+import type { ApiError } from "../../services/api";
 import {
   DEFAULT_DEVICE_DETAIL_TAB,
   buildDeviceSearch,
   readDeviceListFilters,
   resolveDeviceDetailTab,
 } from "../../services/deviceListUrl";
+import type { DeviceDetailTab } from "../../services/deviceListUrl";
 import { devicesApi } from "../../services/devices";
+import { evaluateDeviceFreshness } from "../../services/deviceFreshness";
+import type {
+  CalibrationExpirySummary,
+  DeviceFreshness,
+} from "../../services/deviceFreshness";
 import { resolveDevicePagePhase } from "../../services/devicePageState";
+import type { DevicePagePhase } from "../../services/devicePageState";
 import { getDeviceType } from "../../services/devicePresentation";
 import {
   formatCapabilityProfile,
   formatDateTime,
-  formatIdentifier,
   formatText,
   formatTimestamp,
 } from "../../services/format";
@@ -43,7 +52,25 @@ import type { Device } from "../../types/device";
 import CalibrationList from "./CalibrationList";
 import SensorList from "./SensorList";
 
-function DeviceOverview({ device }: { device: Device }) {
+function freshnessLabel(freshness: DeviceFreshness): string {
+  if (freshness.level === "fresh") {
+    return "正常（服务端判定）";
+  }
+  if (freshness.level === "stale") {
+    return freshness.lastHeartbeatAt
+      ? `可能过期（最近心跳 ${formatDateTime(freshness.lastHeartbeatAt)}）`
+      : "可能过期（已超过服务端新鲜度阈值）";
+  }
+  return "未知（服务端未下发新鲜度阈值）";
+}
+
+function DeviceOverview({
+  device,
+  freshness,
+}: {
+  device: Device;
+  freshness: DeviceFreshness;
+}) {
   return (
     <Space direction="vertical" size={16} className="ddp-stack">
       <Alert
@@ -52,11 +79,7 @@ function DeviceOverview({ device }: { device: Device }) {
         message="状态以服务端为准"
         description="本页只展示设备档案与标定记录；状态变更、维修与退役动作将在设备写入流程接入后开放。"
       />
-      <Descriptions
-        column={{ xs: 1, sm: 1, md: 2 }}
-        size="middle"
-        bordered
-      >
+      <Descriptions column={{ xs: 1, sm: 1, md: 2 }} size="middle" bordered>
         <Descriptions.Item label="设备名称">
           {device.name}
         </Descriptions.Item>
@@ -64,12 +87,24 @@ function DeviceOverview({ device }: { device: Device }) {
           {device.code}
         </Descriptions.Item>
         <Descriptions.Item label="设备 ID">
-          <Typography.Text code copyable>
-            {device.device_id}
-          </Typography.Text>
+          <IdentifierValue value={device.device_id} label="设备 ID" />
         </Descriptions.Item>
         <Descriptions.Item label="状态">
-          <StatusTag kind="device" value={device.status} />
+          <Space wrap>
+            <StatusTag
+              kind="device"
+              value={device.status}
+              stale={freshness.level === "stale"}
+              staleHint={
+                freshness.lastHeartbeatAt
+                  ? `最近心跳为 ${formatDateTime(freshness.lastHeartbeatAt)}`
+                  : undefined
+              }
+            />
+            {freshness.level === "unknown" ? (
+              <Tag>新鲜度未知</Tag>
+            ) : null}
+          </Space>
         </Descriptions.Item>
         <Descriptions.Item label="设备类型">
           {getDeviceType(device.device_type).label}
@@ -92,16 +127,19 @@ function DeviceOverview({ device }: { device: Device }) {
           )}
         </Descriptions.Item>
         <Descriptions.Item label="挂载机器人">
-          {formatIdentifier(device.robot_id)}
+          <IdentifierValue value={device.robot_id} label="机器人 ID" />
         </Descriptions.Item>
         <Descriptions.Item label="位置">
-          {formatIdentifier(device.location_id)}
+          <IdentifierValue value={device.location_id} label="位置 ID" />
         </Descriptions.Item>
         <Descriptions.Item label="负责人">
-          {formatIdentifier(device.owner_user_id)}
+          <IdentifierValue value={device.owner_user_id} label="负责人 ID" />
         </Descriptions.Item>
         <Descriptions.Item label="标定配置">
-          {formatIdentifier(device.calibration_profile_id)}
+          <IdentifierValue
+            value={device.calibration_profile_id}
+            label="标定配置 ID"
+          />
         </Descriptions.Item>
         <Descriptions.Item label="能力描述">
           <Typography.Text
@@ -109,6 +147,19 @@ function DeviceOverview({ device }: { device: Device }) {
           >
             {formatCapabilityProfile(device.capability_profile)}
           </Typography.Text>
+        </Descriptions.Item>
+        <Descriptions.Item label="状态新鲜度">
+          <Typography.Text
+            type={freshness.level === "stale" ? "danger" : "secondary"}
+          >
+            {freshnessLabel(freshness)}
+          </Typography.Text>
+        </Descriptions.Item>
+        <Descriptions.Item label="最近心跳">
+          {formatDateTime(device.last_heartbeat_at ?? null)}
+        </Descriptions.Item>
+        <Descriptions.Item label="最近同步">
+          {formatDateTime(device.last_synced_at ?? null)}
         </Descriptions.Item>
         <Descriptions.Item label="档案版本">
           v{device.version}
@@ -124,6 +175,172 @@ function DeviceOverview({ device }: { device: Device }) {
   );
 }
 
+export interface DeviceDetailBodyProps {
+  projectId: string;
+  deviceId: string;
+  data: Device | null;
+  phase: DevicePagePhase;
+  error: ApiError | null;
+  /** 最近一次刷新失败但保留了旧数据。 */
+  stale: boolean;
+  activeTab: DeviceDetailTab;
+  listSearch: string;
+  tabsRefreshToken: number;
+  /** 标定 Tab 回报的过期摘要；未加载时为 null。 */
+  calibrationExpiry?: CalibrationExpirySummary | null;
+  onTabChange: (key: string) => void;
+  onExpiryChange?: (summary: CalibrationExpirySummary) => void;
+  onRetry: () => void;
+  onBackToList: () => void;
+  now?: number;
+}
+
+/**
+ * 设备详情主体。与请求状态解耦，便于覆盖 403/404/空态/Stale 与 Tab 跳转。
+ */
+export function DeviceDetailBody({
+  projectId,
+  deviceId,
+  data,
+  phase,
+  error,
+  stale,
+  activeTab,
+  listSearch,
+  tabsRefreshToken,
+  calibrationExpiry = null,
+  onTabChange,
+  onExpiryChange,
+  onRetry,
+  onBackToList,
+  now = Date.now(),
+}: DeviceDetailBodyProps) {
+  const errorBody = error ? (
+    <ApiErrorState error={error} onRetry={onRetry} />
+  ) : null;
+  const freshness = data ? evaluateDeviceFreshness(data, now) : null;
+  const heartbeatStale = freshness?.level === "stale";
+  const calibrationStale = (calibrationExpiry?.expiredCount ?? 0) > 0;
+
+  let body: ReactNode;
+  if (phase === "forbidden") {
+    // 权限被拒时整页 Forbidden，不展示缓存的设备敏感信息。
+    body = errorBody;
+  } else if (phase === "not-found") {
+    body = (
+      <PageState
+        variant="empty"
+        title="设备不存在或无权查看"
+        description="服务端未找到该设备；该设备可能属于其他项目，或已被移除。"
+        action={
+          <Button type="primary" onClick={onBackToList}>
+            返回设备列表
+          </Button>
+        }
+      />
+    );
+  } else if (phase === "loading") {
+    body = (
+      <PageState
+        variant="loading"
+        title="正在加载设备详情"
+        description="正在读取设备档案、传感器与标定记录。"
+      />
+    );
+  } else if (phase === "error") {
+    body = errorBody;
+  } else if (data && freshness) {
+    const staleDescription = [
+      heartbeatStale
+        ? `最近心跳 ${formatDateTime(
+            data.last_heartbeat_at ?? null,
+          )}，已超过服务端下发的新鲜度阈值；状态可能已过期，请刷新或重新检测。`
+        : null,
+      calibrationStale
+        ? `已加载范围中有 ${calibrationExpiry?.expiredCount ?? 0} 条标定已过期${
+            calibrationExpiry?.latestExpiredValidTo
+              ? `（最近有效期截止：${formatDateTime(
+                  calibrationExpiry.latestExpiredValidTo,
+                )}）`
+              : ""
+          }；请重新标定后再使用。`
+        : null,
+      stale ? "最近一次刷新失败，当前展示的是上次成功获取的数据。" : null,
+    ]
+      .filter((text): text is string => Boolean(text))
+      .join(" ");
+
+    body = (
+      <Space direction="vertical" size={16} className="ddp-stack">
+        {stale || heartbeatStale || calibrationStale ? (
+          <PageState
+            variant="stale"
+            compact
+            title={
+              heartbeatStale
+                ? "设备状态可能已过期"
+                : calibrationStale
+                  ? "标定可能已过期"
+                  : undefined
+            }
+            description={staleDescription}
+            onRetry={onRetry}
+          />
+        ) : null}
+        <Card>
+          <Tabs
+            activeKey={activeTab}
+            onChange={onTabChange}
+            items={[
+              {
+                key: "overview",
+                label: "概览",
+                children: (
+                  <DeviceOverview device={data} freshness={freshness} />
+                ),
+              },
+              {
+                key: "sensors",
+                label: "传感器",
+                children: (
+                  <SensorList
+                    projectId={projectId}
+                    deviceId={deviceId}
+                    refreshToken={tabsRefreshToken}
+                  />
+                ),
+              },
+              {
+                key: "calibrations",
+                label: "标定记录",
+                // 概览需要标定过期提示，提前挂载并加载标定摘要。
+                forceRender: true,
+                children: (
+                  <CalibrationList
+                    projectId={projectId}
+                    deviceId={deviceId}
+                    refreshToken={tabsRefreshToken}
+                    onExpiryChange={onExpiryChange}
+                  />
+                ),
+              },
+            ]}
+          />
+        </Card>
+        {stale ? (
+          <Link to={`/devices${listSearch}`} className="ddp-inline-link">
+            返回设备列表
+          </Link>
+        ) : null}
+      </Space>
+    );
+  } else {
+    body = <PageState variant="empty" title="暂无设备详情" />;
+  }
+
+  return <>{body}</>;
+}
+
 function DeviceDetailContent({
   projectId,
   deviceId,
@@ -131,16 +348,31 @@ function DeviceDetailContent({
   projectId: string;
   deviceId: string;
 }) {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = resolveDeviceDetailTab(searchParams.get("tab"));
   const listSearch = buildDeviceSearch(
     projectId,
     readDeviceListFilters(searchParams),
   );
+  const navigate = useNavigate();
 
   // 每次主动刷新递增令牌，已挂载的传感器/标定 Tab 据此同步重新加载。
   const [tabsRefreshToken, setTabsRefreshToken] = useState(0);
+  const [calibrationExpiry, setCalibrationExpiry] =
+    useState<CalibrationExpirySummary | null>(null);
+
+  const handleCalibrationExpiry = useCallback(
+    (summary: CalibrationExpirySummary) => {
+      setCalibrationExpiry((previous) =>
+        previous &&
+        previous.expiredCount === summary.expiredCount &&
+        previous.latestExpiredValidTo === summary.latestExpiredValidTo
+          ? previous
+          : summary,
+      );
+    },
+    [],
+  );
 
   const loadDevice = useCallback(
     (signal: AbortSignal) => devicesApi.getDevice(projectId, deviceId, { signal }),
@@ -178,96 +410,38 @@ function DeviceDetailContent({
     loading,
     error,
   });
-  const errorBody = error ? (
-    <ApiErrorState error={error} onRetry={reload} />
-  ) : null;
 
-  let body: ReactNode;
-  if (phase === "forbidden") {
-    // 权限被拒时整页 Forbidden，不展示缓存的设备敏感信息。
-    body = errorBody;
-  } else if (phase === "not-found") {
-    body = (
-      <PageState
-        variant="empty"
-        title="设备不存在或无权查看"
-        description="服务端未找到该设备；该设备可能属于其他项目，或已被移除。"
-        action={
-          <Button type="primary" onClick={() => navigate(`/devices${listSearch}`)}>
-            返回设备列表
-          </Button>
-        }
-      />
-    );
-  } else if (phase === "loading") {
-    body = (
-      <PageState
-        variant="loading"
-        title="正在加载设备详情"
-        description="正在读取设备档案、传感器与标定记录。"
-      />
-    );
-  } else if (phase === "error") {
-    body = errorBody;
-  } else if (data) {
-    body = (
-      <Space direction="vertical" size={16} className="ddp-stack">
-        {stale ? (
-          <PageState variant="stale" compact onRetry={reload} />
-        ) : null}
-        <Card>
-          <Tabs
-            activeKey={activeTab}
-            onChange={handleTabChange}
-            items={[
-              {
-                key: "overview",
-                label: "概览",
-                children: <DeviceOverview device={data} />,
-              },
-              {
-                key: "sensors",
-                label: "传感器",
-                children: (
-                  <SensorList
-                    projectId={projectId}
-                    deviceId={deviceId}
-                    refreshToken={tabsRefreshToken}
-                  />
-                ),
-              },
-              {
-                key: "calibrations",
-                label: "标定记录",
-                children: (
-                  <CalibrationList
-                    projectId={projectId}
-                    deviceId={deviceId}
-                    refreshToken={tabsRefreshToken}
-                  />
-                ),
-              },
-            ]}
-          />
-        </Card>
-      </Space>
-    );
-  } else {
-    body = <PageState variant="empty" title="暂无设备详情" />;
-  }
+  const freshness = data ? evaluateDeviceFreshness(data) : null;
+  const heartbeatStale = freshness?.level === "stale";
 
   const title = data ? (
     <Space wrap>
       <span>{data.name}</span>
-      <StatusTag kind="device" value={data.status} />
+      <StatusTag
+        kind="device"
+        value={data.status}
+        stale={heartbeatStale}
+        staleHint={
+          freshness?.lastHeartbeatAt
+            ? `最近心跳为 ${formatDateTime(freshness.lastHeartbeatAt)}`
+            : undefined
+        }
+      />
     </Space>
   ) : (
     "设备详情"
   );
 
-  const description = data
-    ? `${data.code} · 设备 ID：${data.device_id}`
-    : "查看设备档案、传感器与标定记录。敏感字段与权限以服务端返回为准。";
+  const description = data ? (
+    <Space wrap size={4}>
+      <span>{data.code}</span>
+      <span>· 设备 ID：</span>
+      <IdentifierValue value={data.device_id} label="设备 ID" />
+      <span>· 最近心跳：{formatDateTime(data.last_heartbeat_at ?? null)}</span>
+    </Space>
+  ) : (
+    "查看设备档案、传感器与标定记录。敏感字段与权限以服务端返回为准。"
+  );
 
   const extra = (
     <Space wrap>
@@ -288,12 +462,23 @@ function DeviceDetailContent({
   );
 
   return (
-    <PageContainer
-      title={title}
-      description={description}
-      extra={extra}
-    >
-      {body}
+    <PageContainer title={title} description={description} extra={extra}>
+      <DeviceDetailBody
+        projectId={projectId}
+        deviceId={deviceId}
+        data={data}
+        phase={phase}
+        error={error}
+        stale={stale}
+        activeTab={activeTab}
+        listSearch={listSearch}
+        tabsRefreshToken={tabsRefreshToken}
+        calibrationExpiry={calibrationExpiry}
+        onTabChange={handleTabChange}
+        onExpiryChange={handleCalibrationExpiry}
+        onRetry={reload}
+        onBackToList={() => navigate(`/devices${listSearch}`)}
+      />
     </PageContainer>
   );
 }

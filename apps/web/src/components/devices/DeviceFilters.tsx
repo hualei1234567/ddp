@@ -13,6 +13,10 @@ interface DeviceFiltersProps {
   disabled: boolean;
   onChange: (key: string, value: string) => void;
   onReset: () => void;
+  /** 窄屏抽屉内改为纵向全宽，避免横向溢出。 */
+  layout?: "inline" | "stacked";
+  /** 搜索后可选地关闭抽屉；桌面内联筛选不传。 */
+  onSearchSubmit?: () => void;
 }
 
 /**
@@ -30,29 +34,35 @@ export default function DeviceFilters({
   disabled,
   onChange,
   onReset,
+  layout = "inline",
+  onSearchSubmit,
 }: DeviceFiltersProps) {
   const [searchText, setSearchText] = useState(keyword);
+  const stacked = layout === "stacked";
 
   useEffect(() => {
     setSearchText(keyword);
   }, [keyword]);
 
   return (
-    <>
+    <div className={stacked ? "ddp-filters ddp-filters-stacked" : "ddp-filters"}>
       <Input.Search
         allowClear
         value={searchText}
         placeholder="搜索已加载设备（名称、编码、序列号或厂商）"
-        style={{ width: 320, maxWidth: "100%" }}
+        style={stacked ? { width: "100%" } : { width: 320, maxWidth: "100%" }}
         onChange={(event) => setSearchText(event.target.value)}
-        onSearch={(value) => onChange("q", value.trim())}
+        onSearch={(value) => {
+          onChange("q", value.trim());
+          onSearchSubmit?.();
+        }}
       />
       <Select
         allowClear
         showSearch
         optionFilterProp="label"
         placeholder="设备状态（已加载范围）"
-        style={{ width: 180 }}
+        style={stacked ? { width: "100%" } : { width: 180 }}
         value={statusFilter || undefined}
         options={statusOptions}
         disabled={disabled}
@@ -63,17 +73,19 @@ export default function DeviceFilters({
         showSearch
         optionFilterProp="label"
         placeholder="设备类型（已加载范围）"
-        style={{ width: 180 }}
+        style={stacked ? { width: "100%" } : { width: 180 }}
         value={typeFilter || undefined}
         options={typeOptions}
         disabled={disabled}
         onChange={(value) => onChange("device_type", value ?? "")}
       />
-      <Button onClick={onReset}>清空筛选</Button>
-      <Typography.Text type="secondary">
+      <Button block={stacked} onClick={onReset}>
+        清空筛选
+      </Button>
+      <Typography.Text type="secondary" className="ddp-filter-scope">
         筛选与统计作用于已加载的 {loadedCount} 台设备
         {hasMore ? "；可继续加载更多" : ""}
       </Typography.Text>
-    </>
+    </div>
   );
 }

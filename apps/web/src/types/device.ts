@@ -27,6 +27,15 @@ export interface Device {
   updated_at: string | null;
   created_by: string | null;
   updated_by: string | null;
+  /**
+   * 以下为服务端新鲜度元数据（契约冻结前按可选字段读取）。
+   * 阈值一律由服务端下发；前端只做存在性判断，不提供默认超时时间，
+   * 避免把旧数据误判为实时数据或把正常数据误判为过期。
+   */
+  freshness?: string | null;
+  last_synced_at?: string | null;
+  last_heartbeat_at?: string | null;
+  heartbeat_timeout_seconds?: number | null;
 }
 
 export interface Sensor {

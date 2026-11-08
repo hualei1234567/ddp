@@ -93,6 +93,22 @@ export function parseDevice(value: unknown, path = "设备"): Device {
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
     created_by: readOptionalString(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalString(record, "updated_by", `${path}.updated_by`),
+    freshness: readOptionalString(record, "freshness", `${path}.freshness`),
+    last_synced_at: readOptionalString(
+      record,
+      "last_synced_at",
+      `${path}.last_synced_at`,
+    ),
+    last_heartbeat_at: readOptionalString(
+      record,
+      "last_heartbeat_at",
+      `${path}.last_heartbeat_at`,
+    ),
+    heartbeat_timeout_seconds: readOptionalNumber(
+      record,
+      "heartbeat_timeout_seconds",
+      `${path}.heartbeat_timeout_seconds`,
+    ),
   };
 }
 
