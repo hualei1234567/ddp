@@ -19,6 +19,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.domain.devices.enums import (
+    CalibrationTargetType,
     DeviceType,
     LifecycleStatus,
     SensorSyncMode,
@@ -42,6 +43,7 @@ from app.infrastructure.repositories.calibration_records import (
     SqlCalibrationProfileRepository,
     SqlCalibrationRecordRepository,
 )
+from app.infrastructure.repositories.calibration_target_refs import upsert_target_ref
 
 __all__ = [
     "SqlCalibrationProfileRepository",
@@ -197,6 +199,13 @@ class SqlRobotRepository:
     def add(self, scope: ProjectScope, robot: Robot) -> Robot:
         scope.ensure(robot.project_id)
         ensure_initial_version(robot.version)
+        upsert_target_ref(
+            self._session,
+            project_id=robot.project_id,
+            target_type=CalibrationTargetType.ROBOT,
+            target_id=robot.robot_id,
+            lifecycle_status=robot.status,
+        )
         row = RobotModel(
             id=robot.robot_id,
             project_id=robot.project_id,
@@ -271,6 +280,13 @@ class SqlRobotRepository:
                 "机器人",
                 expected_version,
             )
+        upsert_target_ref(
+            self._session,
+            project_id=robot.project_id,
+            target_type=CalibrationTargetType.ROBOT,
+            target_id=robot.robot_id,
+            lifecycle_status=robot.status,
+        )
         return replace(robot, version=expected_version + 1)
 
 
@@ -281,6 +297,13 @@ class SqlDeviceRepository:
     def add(self, scope: ProjectScope, device: Device) -> Device:
         scope.ensure(device.project_id)
         ensure_initial_version(device.version)
+        upsert_target_ref(
+            self._session,
+            project_id=device.project_id,
+            target_type=CalibrationTargetType.DEVICE,
+            target_id=device.device_id,
+            lifecycle_status=device.status,
+        )
         row = DeviceModel(
             id=device.device_id,
             project_id=device.project_id,
@@ -355,6 +378,13 @@ class SqlDeviceRepository:
                 "设备",
                 expected_version,
             )
+        upsert_target_ref(
+            self._session,
+            project_id=device.project_id,
+            target_type=CalibrationTargetType.DEVICE,
+            target_id=device.device_id,
+            lifecycle_status=device.status,
+        )
         return replace(device, version=expected_version + 1)
 
 
@@ -365,6 +395,13 @@ class SqlSensorRepository:
     def add(self, scope: ProjectScope, sensor: Sensor) -> Sensor:
         scope.ensure(sensor.project_id)
         ensure_initial_version(sensor.version)
+        upsert_target_ref(
+            self._session,
+            project_id=sensor.project_id,
+            target_type=CalibrationTargetType.SENSOR,
+            target_id=sensor.sensor_id,
+            lifecycle_status=sensor.status,
+        )
         row = SensorModel(
             id=sensor.sensor_id,
             project_id=sensor.project_id,
@@ -448,4 +485,11 @@ class SqlSensorRepository:
                 "传感器",
                 expected_version,
             )
+        upsert_target_ref(
+            self._session,
+            project_id=sensor.project_id,
+            target_type=CalibrationTargetType.SENSOR,
+            target_id=sensor.sensor_id,
+            lifecycle_status=sensor.status,
+        )
         return replace(sensor, version=expected_version + 1)

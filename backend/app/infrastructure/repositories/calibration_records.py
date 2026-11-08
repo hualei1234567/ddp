@@ -53,6 +53,10 @@ from app.infrastructure.repositories._sql_support import (
     raise_update_failure,
     scoped_select,
 )
+from app.infrastructure.repositories.calibration_target_refs import (
+    ensure_system_target_ref,
+    upsert_target_ref,
+)
 from app.infrastructure.repositories.identity import SqlProjectMembershipRepository
 
 # 标定目标的实体表；SYSTEM 没有独立实体表，约定 target_id == project_id。
@@ -165,7 +169,11 @@ def _ensure_target_in_project(
     target_type: CalibrationTargetType | str,
     target_id: UUID,
 ) -> None:
-    """按 target_type 校验目标存在且属于当前项目；跨项目一律按不存在处理。"""
+    """按 target_type 校验目标存在且属于当前项目；跨项目一律按不存在处理。
+
+    校验通过后同事务维护 ``calibration_target_refs`` 投影行，供
+    ``calibration_records`` 的复合外键/触发器做数据库级兜底。
+    """
     try:
         resolved = CalibrationTargetType(target_type)
     except ValueError as exc:
@@ -173,20 +181,28 @@ def _ensure_target_in_project(
     if resolved is CalibrationTargetType.SYSTEM:
         if target_id != scope.project_id:
             raise DomainValidationError("SYSTEM 标定的 target_id 必须等于当前项目 ID")
+        ensure_system_target_ref(session, scope.project_id)
         return
     model = _TARGET_MODELS[resolved]
-    found = session.scalar(
-        select(model.id).where(  # type: ignore[attr-defined]
+    found = session.execute(
+        select(model.id, model.status).where(  # type: ignore[attr-defined]
             model.id == target_id,  # type: ignore[attr-defined]
             model.project_id == scope.project_id,  # type: ignore[attr-defined]
         )
-    )
+    ).first()
     if found is None:
         raise ResourceNotFoundError(
             "标定目标",
             target_id,
             code="calibration_target_invalid",
         )
+    upsert_target_ref(
+        session,
+        project_id=scope.project_id,
+        target_type=resolved,
+        target_id=target_id,
+        lifecycle_status=found.status,
+    )
 
 
 def _ensure_profile_in_project(

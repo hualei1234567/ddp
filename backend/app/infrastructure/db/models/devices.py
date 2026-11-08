@@ -14,6 +14,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -87,6 +88,64 @@ class ProjectScopedMixin:
         Uuid,
         ForeignKey("users.id"),
         nullable=False,
+    )
+
+
+class CalibrationTargetRef(Base):
+    """标定目标的多态投影表（契约冻结 v1 §10）。
+
+    该表是 ``calibration_records.target_id`` 完整性的数据库权威防线：
+    ROBOT/DEVICE/SENSOR 由仓储在写入目标实体时同步维护；SYSTEM 行在首次
+    使用时按 ``target_id == project_id`` 维护。``calibration_records`` 通过
+    ``(project_id, target_type, target_id)`` 复合外键引用本表，从而拒绝
+    不存在、跨项目或类型错配的目标。
+
+    SQLite 无法给已存在的表追加外键，迁移在 SQLite 上以等价触发器实现
+    同一语义；PostgreSQL 使用真实复合外键。
+    """
+
+    __tablename__ = "calibration_target_refs"
+
+    project_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    target_type: Mapped[str] = mapped_column(String(32), primary_key=True)
+    target_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    lifecycle_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    is_retired: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+    )
+
+    __table_args__ = (
+        _enum_check(
+            "target_type",
+            CalibrationTargetType,
+            "target_type_allowed",
+        ),
+        _enum_check(
+            "lifecycle_status",
+            LifecycleStatus,
+            "lifecycle_status_allowed",
+        ),
+        CheckConstraint(
+            "is_retired = (lifecycle_status = 'RETIRED')",
+            name="retired_flag_consistent",
+        ),
+        CheckConstraint(
+            "target_type <> 'SYSTEM' OR target_id = project_id",
+            name="system_target_matches_project",
+        ),
     )
 
 
@@ -268,6 +327,16 @@ class CalibrationRecord(Base, ProjectScopedMixin):
             ["project_id", "profile_id"],
             ["calibration_profiles.project_id", "calibration_profiles.id"],
             name="fk_calibration_records_project_profile",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "target_type", "target_id"],
+            [
+                "calibration_target_refs.project_id",
+                "calibration_target_refs.target_type",
+                "calibration_target_refs.target_id",
+            ],
+            name="fk_calibration_records_project_target_ref",
+            ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
             ["project_id", "supersedes_id"],
