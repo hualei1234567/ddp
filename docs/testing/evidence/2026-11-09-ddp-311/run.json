@@ -1,0 +1,452 @@
+{
+  "baseline": "fcbec76",
+  "checks": [
+    {
+      "at": "2026-11-08T16:45:55.462779+00:00",
+      "detail": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit；server_version_num=160015",
+      "id": "ENV-POSTGRES",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:55.500293+00:00",
+      "detail": "临时数据库 ddp_qa_311_mig_3e5b8d17 已创建",
+      "id": "ENV-MIGDB",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:55.832730+00:00",
+      "detail": "upgrade 0006 完成，revision=0006，表数=13",
+      "id": "MIG-UP-0006",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:55.958467+00:00",
+      "detail": "upgrade 0007 完成，revision=0007，表数=17",
+      "id": "MIG-UP-0007",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.074293+00:00",
+      "detail": "upgrade 0008 完成，revision=0008，表数=21",
+      "id": "MIG-UP-0008",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.187289+00:00",
+      "detail": "upgrade 0009 完成，revision=0009，表数=26",
+      "id": "MIG-UP-0009",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.246106+00:00",
+      "detail": "upgrade 0010 完成，revision=0010，表数=26",
+      "id": "MIG-UP-0010",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.248471+00:00",
+      "detail": "head=0010；阶段 2 表 14 张齐全；上传触发器 11/11、Episode/血缘触发器 15/15 齐全",
+      "id": "MIG-HEAD-0010",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.293445+00:00",
+      "detail": "downgrade 0010→0009；Episode/血缘触发器已移除",
+      "id": "MIG-DOWN-0010",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.359972+00:00",
+      "detail": "downgrade 0009→0008；0009 表已移除",
+      "id": "MIG-DOWN-0009",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.437415+00:00",
+      "detail": "downgrade 0008→0007；上传表与 11 个触发器已移除",
+      "id": "MIG-DOWN-0008",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.529270+00:00",
+      "detail": "re-upgrade 0008；上传表 4/4，触发器 11/11",
+      "id": "MIG-REUP-0008",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.658122+00:00",
+      "detail": "head=0010；阶段 2 表 14 张齐全；上传触发器 11/11、Episode/血缘触发器 15/15 齐全",
+      "id": "MIG-REUP-HEAD",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:56.820710+00:00",
+      "detail": "downgrade 全链→0005；阶段 2 表全部移除",
+      "id": "MIG-DOWN-0005",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.064369+00:00",
+      "detail": "head=0010；阶段 2 表 14 张齐全；上传触发器 11/11、Episode/血缘触发器 15/15 齐全",
+      "id": "MIG-REUP-ALL",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.065847+00:00",
+      "detail": "上传触发器 11/11、Episode/血缘触发器 15/15 存在",
+      "id": "DB-TRG-INVENTORY",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.094054+00:00",
+      "detail": "upload_session_initial_status_invalid",
+      "id": "DB-TRG-01",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.103177+00:00",
+      "detail": "upload_session_state_transition_invalid",
+      "id": "DB-TRG-02",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.106341+00:00",
+      "detail": "upload_part_immutable",
+      "id": "DB-TRG-03",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.107076+00:00",
+      "detail": "upload_part_delete_forbidden",
+      "id": "DB-TRG-04",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.107758+00:00",
+      "detail": "raw_asset_initial_status_invalid",
+      "id": "DB-TRG-05",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.109412+00:00",
+      "detail": "raw_asset_content_immutable",
+      "id": "DB-TRG-06",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.109925+00:00",
+      "detail": "raw_asset_state_transition_invalid",
+      "id": "DB-TRG-07",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.110422+00:00",
+      "detail": "raw_asset_delete_forbidden",
+      "id": "DB-TRG-08",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.113414+00:00",
+      "detail": "raw_asset_link_delete_forbidden",
+      "id": "DB-TRG-09",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.114898+00:00",
+      "detail": "ingestion_job_initial_status_invalid",
+      "id": "DB-TRG-10",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.117596+00:00",
+      "detail": "ingestion_job_input_immutable",
+      "id": "DB-TRG-11",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.119127+00:00",
+      "detail": "episode_initial_status_invalid",
+      "id": "DB-TRG-12",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.123418+00:00",
+      "detail": "episode_data_immutable",
+      "id": "DB-TRG-13",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.124021+00:00",
+      "detail": "episode_delete_forbidden",
+      "id": "DB-TRG-14",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.126079+00:00",
+      "detail": "lineage_node_ref_identity_immutable",
+      "id": "DB-TRG-15",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.130320+00:00",
+      "detail": "lineage_edge_append_only",
+      "id": "DB-TRG-16",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.130922+00:00",
+      "detail": "lineage_edge_append_only",
+      "id": "DB-TRG-17",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.131428+00:00",
+      "detail": "lineage_edge_self_forbidden",
+      "id": "DB-TRG-18",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.132508+00:00",
+      "detail": "insert or update on table \"data_lineage_edges\" violates foreign key constraint \"fk_data_lineage_edges_project_to_node\"",
+      "id": "DB-TRG-19",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.169522+00:00",
+      "detail": "临时数据库 ddp_qa_311_mig_3e5b8d17 已删除",
+      "id": "ENV-MIGDB-CLEANUP",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.204935+00:00",
+      "detail": "临时数据库 ddp_qa_311_app_91d97e12 已创建",
+      "id": "ENV-APPDB",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.633422+00:00",
+      "detail": "应用库迁移到 0010",
+      "id": "ENV-APPDB-HEAD",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:57.649743+00:00",
+      "detail": "项目 A=ce3bce59-c45e-4c52-b2a3-0e792927b8f2，B=a89f8158-3271-4529-a065-2568da548a01；editor/owner/viewer/outsider 就绪",
+      "id": "ENV-SEED",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:58.501162+00:00",
+      "detail": "MinIO 已启动 127.0.0.1:9100；binary_size=135938217；sha256=229154e06dfe3cdd3be9bd5aef3d4504cecdafe2a0c4da9a505089a26724a028",
+      "id": "S3-MINIO-START",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:58.632572+00:00",
+      "detail": "boto3 创建 bucket=ddp-raw",
+      "id": "S3-BUCKET",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:58.632604+00:00",
+      "detail": "实际 --version 输出：minio version DEVELOPMENT.GOGET (commit-id=DEVELOPMENT.GOGET)；声明版本 RELEASE.2024-08-17T01-24-54Z/commit 72cff79c8a7c",
+      "id": "S3-MINIO-VERSION",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:45:59.634832+00:00",
+      "detail": "uvicorn 127.0.0.1:8010 /health=200；{'status': 'ok', 'service': 'DDP', 'version': '0.1.0', 'env': 'local'}",
+      "id": "ENV-API",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:00.953378+00:00",
+      "detail": "真实 MinIO ListParts 2 个分片（complete 前）；ETag/Size 与 PUT 及 MD5 一致；session=19503744-1b27-4141-82d3-68249a58fe7e，asset=fe2eda44-2271-46df-a03e-7755385302af",
+      "id": "S3-PRESIGN-ACK-COMPLETE",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:00.991488+00:00",
+      "detail": "会话 COMPLETED、资产初始 VALIDATING、使用关系 1 条",
+      "id": "UPLOAD-DB-STATE",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:01.001892+00:00",
+      "detail": "HEAD size=5243904；Range GET 206/prefix=b'\\x89MCAP0\\r\\n'；对象 ETag=\"185c3b02883238609b35386eb826e733-2\"",
+      "id": "S3-COMPLETE-RANGE-GET",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:01.847139+00:00",
+      "detail": "Worker --drain 退出码 0；资产 VALIDATING→VALID；validated 事件 1 条、源事件已 PUBLISHED",
+      "id": "WORKER-VALIDATING-TO-VALID",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:02.148377+00:00",
+      "detail": "预签名下载 200 且内容一致；Range GET 206；X-Amz-Expires=15；expires_at 剩余 15.0s",
+      "id": "DOWNLOAD-URL-FETCH-RANGE",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:02.160197+00:00",
+      "detail": "download_requested 审计 1 条；不含 URL、X-Amz、http、主机明文",
+      "id": "DOWNLOAD-AUDIT-NO-PLAINTEXT",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:19.037225+00:00",
+      "detail": "过期后访问预签名 URL 返回 403（拒绝）",
+      "id": "DOWNLOAD-URL-EXPIRES",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:20.143221+00:00",
+      "detail": "第二份资产完成，asset=544aebf0-3513-403e-be88-19c800e4470c",
+      "id": "TAMPER-UPLOAD-COMPLETE",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:21.121612+00:00",
+      "detail": "对象同大小内容篡改后 Worker 校验：资产 QUARANTINED、码含 hash_mismatch；审计 FAILURE；下载地址 422 asset_not_usable",
+      "id": "WORKER-HASH-MISMATCH-QUARANTINE",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:22.060349+00:00",
+      "detail": "并发会话就绪 session=a21e04b9-d878-4e5d-92cd-21fbd5a667c3，version=4，分片=2",
+      "id": "D01-PREPARE",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:22.310057+00:00",
+      "detail": "并发状态码=[202, 409]，无 503；响应=[(202, 'false', '{\"upload_session\":{\"upload_session_id\":\"a21e04b9-d878-4e5d-92cd-21fbd5a667c3\",\"project_id\":\"ce3bce59-c45e-4c52-b2a3-0e792927b8f2\",\"collection_task_id\":null,\"batch_id\":null,\"status\":\"COMPLETED\",\"verification_status\":\"PENDING\",\"verification_error_code\":null,\"verified_at\":null,\"original_filename\":\"conc'), (409, None, '{\"error\":{\"code\":\"version_conflict\",\"message\":\"资源版本已变化，请重新读取后再试\",\"request_id\":\"afcb78d36ed04ad788db0bcebf807399\"}}')]",
+      "id": "D01-CONCURRENT-COMPLETE",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:22.350783+00:00",
+      "detail": "会话 COMPLETED；该会话资产数=1、使用关系=1（无重复可用资产）",
+      "id": "D01-SINGLE-ASSET",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:23.088426+00:00",
+      "detail": "Worker 后该会话可用资产=1（status=VALID，asset=f8b6ce91-60fa-4625-83ea-564e31b19f1e）",
+      "id": "D01-SINGLE-VALID-ASSET",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:23.446276+00:00",
+      "detail": "创建 201（PENDING/version=1/ETag=1）；同键同请求重放 replayed=true；同键异体 409 idempotency_key_reused",
+      "id": "D02-EPISODE-CREATE-IDEMPOTENT",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:24.333847+00:00",
+      "detail": "ready 200/ETag=3、重放 replayed=true；quality-check→quality-result(PASS)→accept→complete 均 200；revisions 201/version=2/supersedes 指向旧版/重放 true",
+      "id": "D02-EPISODE-ACTIONS-REVISIONS",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:25.325792+00:00",
+      "detail": "分页 limit=2 游标遍历无重复，共 6 条；非法游标/状态 422",
+      "id": "D02-EPISODE-LIST-PAGINATION",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:26.282060+00:00",
+      "detail": "缺 If-Match/Idempotency-Key=428；陈旧版本=409；未知动作/额外字段=422；viewer 写=403；外部用户=403；跨项目详情=404、列表为空；随机 ID=404",
+      "id": "D02-EPISODE-ERROR-PERMISSIONS",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:27.436861+00:00",
+      "detail": "Episode 反向含 SEGMENTED_INTO、RawAsset 正向含 SEGMENTED_INTO；修订版正向含 SUPERSEDES、反向含来源资产；非法方向/缺项目 422；随机/跨项目 404；外部用户 403",
+      "id": "D02-LINEAGE-DIRECTIONS-ISOLATION",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:27.924599+00:00",
+      "detail": "viewer 200；外部用户 403；跨项目 404；随机资产 404；缺 project_id 422",
+      "id": "D02-DOWNLOAD-PERMISSIONS",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:29.036826+00:00",
+      "detail": "创建 201/QUEUED/ETag=1；同键重放 true；同键异体 409；详情 200；分页两页无交集；非法游标/状态 422",
+      "id": "D02-JOB-CREATE-LIST-DETAIL",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:29.481154+00:00",
+      "detail": "cancel 200/CANCELLING/ETag=2；重放 true；重复取消 409；FAILED 任务 retry 200/QUEUED/attempt=2",
+      "id": "D02-JOB-ACTIONS",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:30.435763+00:00",
+      "detail": "缺幂等键/If-Match=428；未知动作/额外字段/非法类型=422；缺失资产=404；viewer 写=403；外部用户=403；跨项目详情=404、列表为空",
+      "id": "D02-JOB-ERROR-PERMISSIONS",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:30.448063+00:00",
+      "detail": "上传/Episode/校验关键审计 20 条，均带 request_id",
+      "id": "AUDIT-REQUEST-ID",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:30.456029+00:00",
+      "detail": "download_requested 审计 2 条，其中 2 条缺少 request_id；下载路由未向 create_download_url 传递 request_id（P2 可追溯性缺陷）",
+      "id": "AUDIT-DOWNLOAD-REQUEST-ID",
+      "status": "FAIL"
+    },
+    {
+      "at": "2026-11-08T16:46:30.456263+00:00",
+      "detail": "api/worker 日志均不含 X-Amz-Signature 或下载 URL 明文",
+      "id": "LOGS-NO-SIGNED-URL",
+      "status": "PASS"
+    },
+    {
+      "at": "2026-11-08T16:46:30.737197+00:00",
+      "detail": "临时数据库 ddp_qa_311_app_91d97e12 已删除",
+      "id": "ENV-CLEANUP",
+      "status": "PASS"
+    }
+  ],
+  "environment": {
+    "baseline": "fcbec76",
+    "health": {
+      "env": "local",
+      "service": "DDP",
+      "status": "ok",
+      "version": "0.1.0"
+    },
+    "minio": {
+      "binary": "/usr/local/bin/minio",
+      "binary_sha256": "229154e06dfe3cdd3be9bd5aef3d4504cecdafe2a0c4da9a505089a26724a028",
+      "binary_size": 135938217,
+      "declared_commit": "72cff79c8a7c",
+      "declared_release": "RELEASE.2024-08-17T01-24-54Z",
+      "stderr": "",
+      "stdout": "minio version DEVELOPMENT.GOGET (commit-id=DEVELOPMENT.GOGET)\nRuntime: go1.22.5 linux/amd64\nLicense: GNU AGPLv3 - https://www.gnu.org/licenses/agpl-3.0.html\nCopyright: 2015-0000 MinIO, Inc."
+    },
+    "minio_binary": "/usr/local/bin/minio",
+    "postgres": "PostgreSQL 16.15 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "postgres_server_version_num": "160015",
+    "python": "3.11.18 (main, Oct 26 2026, 15:28:54) [GCC 11.4.0]",
+    "started_at": "2026-11-08T16:45:55.449092+00:00",
+    "task": "DDP-311"
+  },
+  "finished_at": "2026-11-08T16:46:30.737285+00:00",
+  "log": "/home/user/agent-team/ddp-team/worktrees/ddp-qa/docs/testing/evidence/2026-11-09-ddp-311/run.log",
+  "started_at": "2026-11-08T16:45:55.449092+00:00",
+  "summary": {
+    "BLOCKED": 0,
+    "FAIL": 1,
+    "PASS": 68
+  },
+  "task": "DDP-311"
+}
