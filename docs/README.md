@@ -15,6 +15,7 @@
 | [architecture/阶段1-设备域契约冻结-v1.md](architecture/阶段1-设备域契约冻结-v1.md) | 设备域契约冻结候选：字段、版本、状态、错误码、参数 Schema | 待用户批准 |
 | [adr/0009-device-contract-freeze.md](adr/0009-device-contract-freeze.md) | ADR-0009 设备域契约冻结与不可变决策 | 已提议 |
 | [testing/阶段0-1测试策略.md](testing/阶段0-1测试策略.md) | 阶段 0/1 测试矩阵、CI 门禁、验收清单与 P0 阻断项 | 待审阅 |
+| [operations/JWT认证与staging启动.md](operations/JWT认证与staging启动.md) | Bearer JWT 配置、启动自检、staging 重建与回滚 | 现行 |
 | [reviews/2026-11-08-security-device-review.md](reviews/2026-11-08-security-device-review.md) | 设备域安全审查：1 个 P0、5 个 P1、7 个 P2 | 待修复 |
 | [reviews/2026-11-08-qa-device-review.md](reviews/2026-11-08-qa-device-review.md) | QA 代码审查：契约漂移、激活原子性、测试盲区 | 待修复 |
 | [reviews/2026-11-08-architect-device-review.md](reviews/2026-11-08-architect-device-review.md) | 架构审查：F1–F15 与 D1–D9 契约偏差 | 待冻结 |
