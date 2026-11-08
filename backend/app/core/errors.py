@@ -18,6 +18,11 @@ class AppError(Exception):
         self.status_code = status_code
 
 
+class AuthenticationError(AppError):
+    def __init__(self, message: str = "未认证") -> None:
+        super().__init__("not_authenticated", message, 401)
+
+
 class NotFoundError(AppError):
     def __init__(self, message: str = "资源不存在") -> None:
         super().__init__("not_found", message, 404)

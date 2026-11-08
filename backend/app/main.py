@@ -1,7 +1,7 @@
 """后端应用入口。
 
 分层：api → application → domain ← infrastructure。
-阶段 0 只提供服务骨架与健康检查，不包含业务表。
+阶段 0 提供服务骨架、健康检查与身份/项目隔离基础，不包含设备业务。
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.errors import AppError
 from app.core.logging import configure_logging
+from app.domain.identity.errors import CrossProjectAccessError
 
 
 def create_app() -> FastAPI:
@@ -49,6 +50,22 @@ def create_app() -> FastAPI:
                 "error": {
                     "code": exc.code,
                     "message": exc.message,
+                    "request_id": getattr(request.state, "request_id", None),
+                }
+            },
+        )
+
+    @app.exception_handler(CrossProjectAccessError)
+    async def handle_cross_project_error(
+        request: Request,
+        exc: CrossProjectAccessError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": {
+                    "code": "forbidden",
+                    "message": "跨项目访问被拒绝",
                     "request_id": getattr(request.state, "request_id", None),
                 }
             },

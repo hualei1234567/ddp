@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +27,11 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
 
     database_url: str = "postgresql+psycopg://ddp:ddp@localhost:5432/ddp"
+    database_pool_size: int = Field(default=10, ge=1)
+    database_max_overflow: int = Field(default=20, ge=0)
+    database_pool_timeout_seconds: int = Field(default=5, ge=1)
+    database_connect_timeout_seconds: int = Field(default=5, ge=1)
+    database_echo: bool = False
     redis_url: str = "redis://localhost:6379/0"
 
     s3_endpoint: str = "http://localhost:9000"

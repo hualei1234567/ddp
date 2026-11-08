@@ -1,15 +1,17 @@
 """Alembic 环境。
 
-数据库 URL 统一从 ``DDP_DATABASE_URL`` 读取，避免在 alembic.ini 里写死。
-阶段 0 只有基线版本，不含业务表。
+数据库 URL 优先使用调用方传入的 ``sqlalchemy.url``（测试/CI 用），
+否则从 ``DDP_DATABASE_URL`` 读取，避免在 alembic.ini 里写死。
 """
 
 from __future__ import annotations
 
 from logging.config import fileConfig
 
+import app.infrastructure.db.models  # noqa: F401 - 注册 ORM 模型到 metadata
 from alembic import context
 from app.core.config import get_settings
+from app.infrastructure.db.base import Base
 from sqlalchemy import engine_from_config, pool
 
 config = context.config
@@ -17,9 +19,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+if not config.get_main_option("sqlalchemy.url"):
+    config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
