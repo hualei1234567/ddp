@@ -444,7 +444,10 @@ class AdapterCallbackUseCases:
             raise ResourceNotFoundError("外部训练引用", external_run_id)
         if reference.adapter_version != adapter_version:
             raise DomainValidationError("回调 adapter_version 与登记引用不一致")
-        status = ExternalTrainingStatus(external_status)
+        try:
+            status = ExternalTrainingStatus(external_status)
+        except ValueError as exc:
+            raise DomainValidationError("external_status 取值非法") from exc
         if reference.effective_status in {
             ExternalTrainingStatus.SUCCEEDED,
             ExternalTrainingStatus.FAILED,

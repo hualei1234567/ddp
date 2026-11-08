@@ -410,10 +410,18 @@ def _uuid_tuple(value: object, field_name: str) -> tuple[UUID, ...]:
         raise DomainValidationError(f"{field_name} 必须是 UUID 列表")
     result: list[UUID] = []
     for item in value:
-        if not isinstance(item, UUID):
+        parsed: UUID
+        if isinstance(item, UUID):
+            parsed = item
+        elif isinstance(item, str):
+            try:
+                parsed = UUID(item)
+            except ValueError as exc:
+                raise DomainValidationError(f"{field_name} 必须是 UUID 列表") from exc
+        else:
             raise DomainValidationError(f"{field_name} 必须是 UUID 列表")
-        if item not in result:
-            result.append(item)
+        if parsed not in result:
+            result.append(parsed)
     return tuple(result)
 
 

@@ -32,9 +32,13 @@ from app.domain.datasets.training_state_machines import (
 _JSON_COLUMNS = frozenset({"snapshot", "split_counts", "scope"})
 
 
-def _pairs_sql(pairs: frozenset[tuple[str, str]]) -> str:
+def _pairs_sql(
+    pairs: frozenset[tuple[str, str]],
+    *,
+    column: str = "status",
+) -> str:
     return " OR ".join(
-        f"(OLD.status = '{current}' AND NEW.status = '{target}')"
+        f"(OLD.{column} = '{current}' AND NEW.{column} = '{target}')"
         for current, target in sorted(pairs)
     )
 
@@ -77,12 +81,18 @@ def _insert_initial_sqlite(table: str, status: str, message: str) -> str:
     """
 
 
-def _transition_sqlite(table: str, pairs: str, message: str) -> str:
+def _transition_sqlite(
+    table: str,
+    pairs: str,
+    message: str,
+    *,
+    column: str = "status",
+) -> str:
     return f"""
     CREATE TRIGGER IF NOT EXISTS trg_{table}_transition
     BEFORE UPDATE ON {table}
     FOR EACH ROW
-    WHEN OLD.status <> NEW.status AND NOT ({pairs})
+    WHEN OLD.{column} <> NEW.{column} AND NOT ({pairs})
     BEGIN
         SELECT RAISE(ABORT, '{message}');
     END
@@ -127,7 +137,7 @@ def _no_delete_sqlite(table: str, message: str) -> str:
 _REQUEST_PAIRS = _pairs_sql(request_transition_pairs())
 _REVISION_PAIRS = _pairs_sql(revision_transition_pairs())
 _DELIVERY_PAIRS = _pairs_sql(delivery_transition_pairs())
-_EXTERNAL_PAIRS = _pairs_sql(external_transition_pairs())
+_EXTERNAL_PAIRS = _pairs_sql(external_transition_pairs(), column="external_status")
 _GRANT_PAIRS = _pairs_sql(grant_transition_pairs())
 _REQUEST_TERMINAL_SQL = _terminal_sql(frozenset({"CLOSED", "CANCELLED"}))
 _REVISION_TERMINAL_SQL = _terminal_sql(frozenset({"SUPERSEDED"}))
@@ -216,6 +226,7 @@ _SQLITE_STATEMENTS = (
         "external_training_references",
         _EXTERNAL_PAIRS,
         "external_training_reference_state_transition_invalid",
+        column="external_status",
     ),
     _immutable_sqlite(
         "external_training_references",

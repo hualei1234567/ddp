@@ -9,7 +9,11 @@ from uuid import UUID, uuid4
 
 import pytest
 from app.infrastructure.db.base import Base
-from app.infrastructure.db.models.training import DatasetGrantModel, TrainingRequestModel
+from app.infrastructure.db.models.training import (
+    DatasetGrantModel,
+    ExternalTrainingReferenceModel,
+    TrainingRequestModel,
+)
 from sqlalchemy import create_engine, delete, text, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
@@ -62,8 +66,8 @@ def postgres_engine() -> Iterator[Engine]:
         admin.dispose()
 
 
-def _seed(engine: Engine) -> tuple[UUID, UUID]:
-    request_id, grant_id = uuid4(), uuid4()
+def _seed(engine: Engine) -> tuple[UUID, UUID, UUID]:
+    request_id, grant_id, external_id = uuid4(), uuid4(), uuid4()
     project_id, dataset_id, grantee_project_id, user_id = uuid4(), uuid4(), uuid4(), uuid4()
     with engine.begin() as connection:
         connection.execute(text("SET session_replication_role = replica"))
@@ -102,12 +106,34 @@ def _seed(engine: Engine) -> tuple[UUID, UUID]:
                 "user_id": user_id,
             },
         )
+        connection.execute(
+            text(
+                "INSERT INTO external_training_references ("
+                "id, project_id, adapter_id, adapter_version, training_delivery_id, "
+                "training_request_revision_id, dataset_version_id, external_run_id, "
+                "external_status, status_stale, submitted_at, last_synced_at, "
+                "correlation_id, idempotency_key, version, created_at, updated_at, "
+                "created_by, updated_by"
+                ") VALUES (:id, :project_id, 'lerobot', '1.0.0', :delivery_id, "
+                ":revision_id, :version_id, 'run-1', 'SUBMITTED', false, :now, :now, "
+                "'corr-1', 'idem-ref-0001', 1, :now, :now, :user_id, :user_id)"
+            ),
+            {
+                "id": external_id,
+                "project_id": project_id,
+                "delivery_id": uuid4(),
+                "revision_id": uuid4(),
+                "version_id": uuid4(),
+                "now": NOW,
+                "user_id": user_id,
+            },
+        )
         connection.execute(text("SET session_replication_role = origin"))
-    return request_id, grant_id
+    return request_id, grant_id, external_id
 
 
 def test_postgres_training_guards(postgres_engine: Engine) -> None:
-    request_id, grant_id = _seed(postgres_engine)
+    request_id, grant_id, external_id = _seed(postgres_engine)
     with postgres_engine.connect() as connection:
         names = {
             str(row[0])
@@ -116,6 +142,23 @@ def test_postgres_training_guards(postgres_engine: Engine) -> None:
             )
         }
     assert not (_EXPECTED - names)
+
+    # 隔离外部引用的无关外键，专注验证状态机/不可变触发器本身。
+    with postgres_engine.begin() as connection:
+        fk_names = [
+            row[0]
+            for row in connection.execute(
+                text(
+                    "SELECT conname FROM pg_constraint "
+                    "WHERE conrelid = 'external_training_references'::regclass "
+                    "AND contype = 'f'"
+                )
+            )
+        ]
+        for name in fk_names:
+            connection.execute(
+                text("ALTER TABLE external_training_references " f'DROP CONSTRAINT "{name}"')
+            )
 
     with postgres_engine.begin() as connection:
         with pytest.raises(IntegrityError, match="training_request_state_transition_invalid"):
@@ -131,6 +174,29 @@ def test_postgres_training_guards(postgres_engine: Engine) -> None:
                 update(DatasetGrantModel)
                 .where(DatasetGrantModel.id == grant_id)
                 .values(status="REVOKED")
+            )
+
+    with postgres_engine.begin() as connection:
+        connection.execute(
+            update(ExternalTrainingReferenceModel)
+            .where(ExternalTrainingReferenceModel.id == external_id)
+            .values(external_status="RUNNING", last_synced_at=NOW)
+        )
+        connection.execute(
+            update(ExternalTrainingReferenceModel)
+            .where(ExternalTrainingReferenceModel.id == external_id)
+            .values(external_status="SUCCEEDED", last_synced_at=NOW)
+        )
+
+    with postgres_engine.begin() as connection:
+        with pytest.raises(
+            IntegrityError,
+            match="external_training_reference_terminal_immutable",
+        ):
+            connection.execute(
+                update(ExternalTrainingReferenceModel)
+                .where(ExternalTrainingReferenceModel.id == external_id)
+                .values(model_ref={"ref": "model-1"})
             )
 
     with postgres_engine.begin() as connection:

@@ -22,6 +22,7 @@ from app.domain.datasets.enums import (
     ValidityStatus,
 )
 from app.domain.datasets.errors import (
+    DomainValidationError,
     InvalidStateTransitionError,
     LeakageWaiverForbiddenError,
 )
@@ -468,3 +469,25 @@ def test_manifest_hash_is_deterministic_and_detects_change() -> None:
         created_at=NOW,
     )
     assert changed.manifest_sha256 != first.manifest_sha256
+
+
+def test_selection_filters_accept_json_string_uuids() -> None:
+    """HTTP JSON 传入的字符串 UUID 必须被解析，而不是 422（DDP-329 D2-1）。"""
+    episode_id = uuid4()
+    robot_id = uuid4()
+    device_id = uuid4()
+    filters = SelectionFilters.from_mapping(
+        {
+            "episode_ids": [str(episode_id)],
+            "robot_ids": [str(robot_id)],
+            "device_ids": [str(device_id)],
+        }
+    )
+    assert filters.episode_ids == (episode_id,)
+    assert filters.robot_ids == (robot_id,)
+    assert filters.device_ids == (device_id,)
+
+
+def test_selection_filters_reject_invalid_uuid_strings() -> None:
+    with pytest.raises(DomainValidationError):
+        SelectionFilters.from_mapping({"episode_ids": ["not-a-uuid"]})

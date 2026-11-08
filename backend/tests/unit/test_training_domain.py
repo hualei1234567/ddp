@@ -342,3 +342,63 @@ def test_callback_signature_window_nonce_and_replay_guards() -> None:
             body=body,
             now=NOW,
         )
+
+
+def test_adapter_callback_invalid_external_status_is_domain_error() -> None:
+    """非法 external_status 必须映射为业务错误，而不是 500（DDP-329 D6-M1）。"""
+    from types import SimpleNamespace
+
+    from app.application.datasets.training_references import AdapterCallbackUseCases
+    from app.domain.datasets.errors import DomainValidationError
+
+    reference = SimpleNamespace(
+        adapter_version="1.0.0",
+        effective_status=SimpleNamespace(value="SUBMITTED"),
+    )
+
+    class _References:
+        def get_by_run(self, *, adapter_id: str, external_run_id: str) -> object:
+            return reference
+
+    class _Callbacks:
+        def get_by_event(self, adapter_id: str, event_id: str) -> None:
+            return None
+
+        def get_by_nonce(self, adapter_id: str, nonce: str) -> None:
+            return None
+
+        def add(self, record: object) -> None:
+            return None
+
+        def prune_before(self, received_before: object) -> None:
+            return None
+
+    class _Outbox:
+        def enqueue(self, *args: object, **kwargs: object) -> None:
+            return None
+
+    class _Uow:
+        def commit(self) -> None:
+            return None
+
+    use_cases = AdapterCallbackUseCases(
+        references=_References(),
+        callbacks=_Callbacks(),
+        outbox=_Outbox(),
+        uow=_Uow(),
+        nonce_ttl_seconds=600,
+    )
+    with pytest.raises(DomainValidationError):
+        use_cases.handle(
+            adapter_id="lerobot",
+            nonce="nonce-0123456789abcdef",
+            event_id="event-1",
+            adapter_version="1.0.0",
+            external_run_id="run-1",
+            external_status="BOGUS",
+            model_ref=None,
+            evaluation_ref=None,
+            error_code=None,
+            error_summary=None,
+            payload={"event_id": "event-1"},
+        )
