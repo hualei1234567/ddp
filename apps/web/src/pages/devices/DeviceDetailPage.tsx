@@ -9,8 +9,13 @@ import {
   Typography,
 } from "antd";
 import type { ReactNode } from "react";
-import { useCallback } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useCallback, useState } from "react";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
 import StatusTag from "../../components/devices/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
@@ -18,6 +23,12 @@ import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
+import {
+  DEFAULT_DEVICE_DETAIL_TAB,
+  buildDeviceSearch,
+  readDeviceListFilters,
+  resolveDeviceDetailTab,
+} from "../../services/deviceListUrl";
 import { devicesApi } from "../../services/devices";
 import { resolveDevicePagePhase } from "../../services/devicePageState";
 import { getDeviceType } from "../../services/devicePresentation";
@@ -28,7 +39,6 @@ import {
   formatText,
   formatTimestamp,
 } from "../../services/format";
-import { buildProjectQuery } from "../../services/project";
 import type { Device } from "../../types/device";
 import CalibrationList from "./CalibrationList";
 import SensorList from "./SensorList";
@@ -122,7 +132,15 @@ function DeviceDetailContent({
   deviceId: string;
 }) {
   const navigate = useNavigate();
-  const projectSearch = buildProjectQuery(projectId);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = resolveDeviceDetailTab(searchParams.get("tab"));
+  const listSearch = buildDeviceSearch(
+    projectId,
+    readDeviceListFilters(searchParams),
+  );
+
+  // 每次主动刷新递增令牌，已挂载的传感器/标定 Tab 据此同步重新加载。
+  const [tabsRefreshToken, setTabsRefreshToken] = useState(0);
 
   const loadDevice = useCallback(
     (signal: AbortSignal) => devicesApi.getDevice(projectId, deviceId, { signal }),
@@ -130,6 +148,30 @@ function DeviceDetailContent({
   );
   const { data, error, loading, refreshing, stale, updatedAt, reload } =
     useRequest(loadDevice);
+
+  const refreshAll = useCallback(() => {
+    reload();
+    setTabsRefreshToken((token) => token + 1);
+  }, [reload]);
+
+  const handleTabChange = useCallback(
+    (key: string) => {
+      const tab = resolveDeviceDetailTab(key);
+      setSearchParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          if (tab === DEFAULT_DEVICE_DETAIL_TAB) {
+            next.delete("tab");
+          } else {
+            next.set("tab", tab);
+          }
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
 
   const phase = resolveDevicePagePhase({
     hasData: data !== null,
@@ -151,7 +193,7 @@ function DeviceDetailContent({
         title="设备不存在或无权查看"
         description="服务端未找到该设备；该设备可能属于其他项目，或已被移除。"
         action={
-          <Button type="primary" onClick={() => navigate(`/devices${projectSearch}`)}>
+          <Button type="primary" onClick={() => navigate(`/devices${listSearch}`)}>
             返回设备列表
           </Button>
         }
@@ -175,7 +217,8 @@ function DeviceDetailContent({
         ) : null}
         <Card>
           <Tabs
-            defaultActiveKey="overview"
+            activeKey={activeTab}
+            onChange={handleTabChange}
             items={[
               {
                 key: "overview",
@@ -186,7 +229,11 @@ function DeviceDetailContent({
                 key: "sensors",
                 label: "传感器",
                 children: (
-                  <SensorList projectId={projectId} deviceId={deviceId} />
+                  <SensorList
+                    projectId={projectId}
+                    deviceId={deviceId}
+                    refreshToken={tabsRefreshToken}
+                  />
                 ),
               },
               {
@@ -196,6 +243,7 @@ function DeviceDetailContent({
                   <CalibrationList
                     projectId={projectId}
                     deviceId={deviceId}
+                    refreshToken={tabsRefreshToken}
                   />
                 ),
               },
@@ -226,13 +274,13 @@ function DeviceDetailContent({
       <Typography.Text type="secondary">
         更新于 {formatTimestamp(updatedAt)}
       </Typography.Text>
-      <Link to={`/devices${projectSearch}`}>
+      <Link to={`/devices${listSearch}`}>
         <Button icon={<ArrowLeftOutlined />}>返回列表</Button>
       </Link>
       <Button
         icon={<ReloadOutlined />}
         loading={refreshing}
-        onClick={reload}
+        onClick={refreshAll}
       >
         刷新
       </Button>
@@ -254,6 +302,11 @@ export default function DeviceDetailPage() {
   const projectId = useProjectId();
   const navigate = useNavigate();
   const { deviceId } = useParams<{ deviceId: string }>();
+  const [searchParams] = useSearchParams();
+  const listSearch = buildDeviceSearch(
+    projectId,
+    readDeviceListFilters(searchParams),
+  );
 
   if (!projectId) {
     return (
@@ -285,7 +338,7 @@ export default function DeviceDetailPage() {
           action={
             <Button
               type="primary"
-              onClick={() => navigate(`/devices${buildProjectQuery(projectId)}`)}
+              onClick={() => navigate(`/devices${listSearch}`)}
             >
               返回设备列表
             </Button>

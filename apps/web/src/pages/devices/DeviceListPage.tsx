@@ -1,12 +1,9 @@
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
-  Alert,
   Button,
   Card,
   Descriptions,
   Grid,
-  Input,
-  Select,
   Space,
   Table,
   Tag,
@@ -15,15 +12,23 @@ import {
 } from "antd";
 import type { TableColumnsType } from "antd";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
+import DeviceFilters from "../../components/devices/DeviceFilters";
+import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import StatusTag from "../../components/devices/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
+import { useCursorPage } from "../../hooks/useCursorPage";
+import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
-import { useRequest } from "../../hooks/useRequest";
+import {
+  buildDeviceSearch,
+  hasDeviceListFilters,
+  readDeviceListFilters,
+} from "../../services/deviceListUrl";
 import { devicesApi } from "../../services/devices";
 import { resolveDevicePagePhase } from "../../services/devicePageState";
 import {
@@ -36,73 +41,7 @@ import {
   getDeviceStatus,
   getDeviceType,
 } from "../../services/devicePresentation";
-import { buildProjectQuery } from "../../services/project";
 import type { Device } from "../../types/device";
-
-function DeviceFilters({
-  keyword,
-  statusFilter,
-  typeFilter,
-  statusOptions,
-  typeOptions,
-  disabled,
-  onChange,
-  onReset,
-}: {
-  keyword: string;
-  statusFilter: string;
-  typeFilter: string;
-  statusOptions: { value: string; label: string }[];
-  typeOptions: { value: string; label: string }[];
-  disabled: boolean;
-  onChange: (key: string, value: string) => void;
-  onReset: () => void;
-}) {
-  const [searchText, setSearchText] = useState(keyword);
-
-  useEffect(() => {
-    setSearchText(keyword);
-  }, [keyword]);
-
-  return (
-    <>
-      <Input.Search
-        allowClear
-        value={searchText}
-        placeholder="搜索名称、编码、序列号或厂商（当前页）"
-        style={{ width: 320, maxWidth: "100%" }}
-        onChange={(event) => setSearchText(event.target.value)}
-        onSearch={(value) => onChange("q", value.trim())}
-      />
-      <Select
-        allowClear
-        showSearch
-        optionFilterProp="label"
-        placeholder="设备状态（当前页）"
-        style={{ width: 180 }}
-        value={statusFilter || undefined}
-        options={statusOptions}
-        disabled={disabled}
-        onChange={(value) => onChange("status", value ?? "")}
-      />
-      <Select
-        allowClear
-        showSearch
-        optionFilterProp="label"
-        placeholder="设备类型（当前页）"
-        style={{ width: 180 }}
-        value={typeFilter || undefined}
-        options={typeOptions}
-        disabled={disabled}
-        onChange={(value) => onChange("device_type", value ?? "")}
-      />
-      <Button onClick={onReset}>清空筛选</Button>
-      <Typography.Text type="secondary">
-        筛选仅作用于已加载数据
-      </Typography.Text>
-    </>
-  );
-}
 
 function DeviceListContent({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
@@ -110,19 +49,30 @@ function DeviceListContent({ projectId }: { projectId: string }) {
   const isMobile = screens.md === false;
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const keyword = searchParams.get("q") ?? "";
-  const statusFilter = searchParams.get("status") ?? "";
-  const typeFilter = searchParams.get("device_type") ?? "";
-  const projectSearch = buildProjectQuery(projectId);
+  const filters = readDeviceListFilters(searchParams);
+  const filtersActive = hasDeviceListFilters(filters);
 
   const loadDevices = useCallback(
-    (signal: AbortSignal) => devicesApi.listDevices(projectId, { signal }),
+    (options: CursorPageRequestOptions) =>
+      devicesApi.listDevices(projectId, {
+        cursor: options.cursor,
+        signal: options.signal,
+      }),
     [projectId],
   );
-  const { data, error, loading, refreshing, stale, updatedAt, reload } =
-    useRequest(loadDevices);
-
-  const items = useMemo<Device[]>(() => data?.items ?? [], [data]);
+  const {
+    items,
+    hasMore,
+    loading,
+    refreshing,
+    loadingMore,
+    error,
+    loadMoreError,
+    stale,
+    updatedAt,
+    reload,
+    loadMore,
+  } = useCursorPage(loadDevices, (device) => device.device_id);
 
   const statusOptions = useMemo(() => {
     const values = new Set(items.map((item) => item.status));
@@ -139,12 +89,12 @@ function DeviceListContent({ projectId }: { projectId: string }) {
   }, [items]);
 
   const filteredItems = useMemo(() => {
-    const search = keyword.trim().toLowerCase();
+    const search = filters.keyword.toLowerCase();
     return items.filter((item) => {
-      if (statusFilter && item.status !== statusFilter) {
+      if (filters.status && item.status !== filters.status) {
         return false;
       }
-      if (typeFilter && item.device_type !== typeFilter) {
+      if (filters.deviceType && item.device_type !== filters.deviceType) {
         return false;
       }
       if (search === "") {
@@ -154,10 +104,7 @@ function DeviceListContent({ projectId }: { projectId: string }) {
         .filter((value): value is string => typeof value === "string")
         .some((value) => value.toLowerCase().includes(search));
     });
-  }, [items, keyword, statusFilter, typeFilter]);
-
-  const filtersActive =
-    keyword.trim() !== "" || statusFilter !== "" || typeFilter !== "";
+  }, [items, filters.keyword, filters.status, filters.deviceType]);
 
   const updateFilter = useCallback(
     (key: string, value: string) => {
@@ -191,10 +138,14 @@ function DeviceListContent({ projectId }: { projectId: string }) {
     );
   }, [setSearchParams]);
 
-  const detailTarget = (deviceId: string) => ({
-    pathname: `/devices/${encodeURIComponent(deviceId)}`,
-    search: projectSearch,
-  });
+  /** 详情链接携带列表筛选，返回列表与刷新后仍可恢复。 */
+  const detailTarget = useCallback(
+    (deviceId: string) => ({
+      pathname: `/devices/${encodeURIComponent(deviceId)}`,
+      search: buildDeviceSearch(projectId, filters),
+    }),
+    [projectId, filters],
+  );
 
   const columns: TableColumnsType<Device> = [
     {
@@ -268,14 +219,24 @@ function DeviceListContent({ projectId }: { projectId: string }) {
     return [...counts.entries()];
   }, [items]);
 
+  // 首次成功加载（包括空列表）后 updatedAt 才有值，用于区分“未加载”和“已加载但为空”。
+  const hasLoaded = updatedAt !== null;
   const phase = resolveDevicePagePhase({
-    hasData: data !== null,
+    hasData: hasLoaded,
     loading,
     error,
   });
   const errorBody = error ? (
     <ApiErrorState error={error} onRetry={reload} />
   ) : null;
+
+  const scopeText = filtersActive
+    ? hasMore
+      ? `统计为已加载 ${items.length} 台设备的状态分布；筛选作用于同一范围，还有更多设备未加载。`
+      : `统计与筛选覆盖当前项目全部 ${items.length} 台设备。`
+    : hasMore
+      ? `统计为已加载 ${items.length} 台设备的状态分布；还有更多设备未加载。`
+      : `统计覆盖当前项目全部 ${items.length} 台设备。`;
 
   let body: ReactNode;
   if (phase === "forbidden" || phase === "not-found") {
@@ -291,7 +252,7 @@ function DeviceListContent({ projectId }: { projectId: string }) {
     );
   } else if (phase === "error") {
     body = errorBody;
-  } else if (data) {
+  } else {
     let content: ReactNode;
     if (items.length === 0) {
       content = (
@@ -300,8 +261,12 @@ function DeviceListContent({ projectId }: { projectId: string }) {
           title={filtersActive ? "无匹配结果" : "尚未登记设备"}
           description={
             filtersActive
-              ? "当前筛选条件下没有设备，可清空筛选后重试。"
-              : "当前项目还没有设备记录；设备创建流程接入后会在此显示。"
+              ? hasMore
+                ? "已加载的设备中没有匹配项；还有更多设备未加载，可继续加载后再筛选。"
+                : "当前筛选条件下没有设备，可清空筛选后重试。"
+              : hasMore
+                ? "已加载范围内没有设备，可继续加载更多。"
+                : "当前项目还没有设备记录；设备创建流程接入后会在此显示。"
           }
           action={
             filtersActive ? (
@@ -315,7 +280,11 @@ function DeviceListContent({ projectId }: { projectId: string }) {
         <PageState
           variant="empty"
           title="无匹配结果"
-          description="当前筛选条件下没有设备，可清空筛选后重试。"
+          description={
+            hasMore
+              ? "已加载的设备中没有匹配项；还有更多设备未加载，可继续加载后再筛选。"
+              : "当前筛选条件下没有设备，可清空筛选后重试。"
+          }
           action={<Button onClick={resetFilters}>清空筛选</Button>}
         />
       );
@@ -392,33 +361,37 @@ function DeviceListContent({ projectId }: { projectId: string }) {
             </Tag>
           ))}
         </Space>
-        {data.next_cursor ? (
-          <Alert
-            type="info"
-            showIcon
-            message="已加载部分设备"
-            description="服务端返回了 next_cursor；分页加载将在后续任务接入。"
-          />
-        ) : null}
+        <Typography.Text type="secondary">{scopeText}</Typography.Text>
         {content}
+        <LoadMoreBar
+          loadedCount={items.length}
+          unit="台设备"
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          disabled={loading || refreshing}
+          error={loadMoreError}
+          onLoadMore={loadMore}
+          block={isMobile}
+        />
       </Space>
     );
-  } else {
-    body = <PageState variant="empty" title="暂无设备数据" />;
   }
 
-  const filters = phase === "forbidden" || phase === "not-found" ? undefined : (
-    <DeviceFilters
-      keyword={keyword}
-      statusFilter={statusFilter}
-      typeFilter={typeFilter}
-      statusOptions={statusOptions}
-      typeOptions={typeOptions}
-      disabled={items.length === 0}
-      onChange={updateFilter}
-      onReset={resetFilters}
-    />
-  );
+  const filtersElement =
+    phase === "forbidden" || phase === "not-found" ? undefined : (
+      <DeviceFilters
+        keyword={filters.keyword}
+        statusFilter={filters.status}
+        typeFilter={filters.deviceType}
+        statusOptions={statusOptions}
+        typeOptions={typeOptions}
+        loadedCount={items.length}
+        hasMore={hasMore}
+        disabled={items.length === 0}
+        onChange={updateFilter}
+        onReset={resetFilters}
+      />
+    );
 
   const extra = (
     <Space wrap>
@@ -436,6 +409,7 @@ function DeviceListContent({ projectId }: { projectId: string }) {
         icon={<ReloadOutlined />}
         loading={refreshing}
         onClick={reload}
+        title="重新从第一页加载"
       >
         刷新
       </Button>
@@ -445,9 +419,9 @@ function DeviceListContent({ projectId }: { projectId: string }) {
   return (
     <PageContainer
       title="设备纳管"
-      description="按 DDP-101 设备域契约展示设备档案、状态与标定信息。状态与可用动作以服务端返回为准，前端不做权威权限校验。"
+      description="按 DDP-101 设备域契约展示设备档案、状态与标定信息。列表按游标分页加载；筛选与统计基于已加载数据，并随地址栏保留。状态与可用动作以服务端返回为准，前端不做权威权限校验。"
       extra={extra}
-      filters={filters}
+      filters={filtersElement}
     >
       {body}
     </PageContainer>

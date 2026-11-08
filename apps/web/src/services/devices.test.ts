@@ -48,6 +48,24 @@ describe("设备域 API", () => {
     );
   });
 
+  it("加载更多时携带 next_cursor 与单页上限", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse({ items: [device], next_cursor: null }),
+    );
+    const api = createDevicesApi(
+      new ApiClient({
+        baseUrl: "http://api.test",
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+      }),
+    );
+
+    await api.listDevices(projectId, { cursor: "cursor-2", limit: 100 });
+
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      `http://api.test/api/v1/projects/${projectId}/devices?cursor=cursor-2&limit=100`,
+    );
+  });
+
   it("详情路径对 ID 做 URL 编码", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse(device));
     const api = createDevicesApi(

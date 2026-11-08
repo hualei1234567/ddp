@@ -1,11 +1,14 @@
-import { Alert, Space, Table, Typography } from "antd";
+import { Space, Table, Typography } from "antd";
 import type { TableColumnsType } from "antd";
 import { useCallback } from "react";
 
+import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import StatusTag from "../../components/devices/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageState from "../../components/ui/PageState";
-import { useRequest } from "../../hooks/useRequest";
+import { useCursorPage } from "../../hooks/useCursorPage";
+import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
+import { useRefreshOnToken } from "../../hooks/useRefreshOnToken";
 import { devicesApi } from "../../services/devices";
 import {
   formatDateTime,
@@ -19,6 +22,8 @@ import type { Sensor } from "../../types/device";
 interface SensorListProps {
   projectId: string;
   deviceId: string;
+  /** 详情页刷新令牌；变化时重新从第一页加载。 */
+  refreshToken?: number;
 }
 
 const columns: TableColumnsType<Sensor> = [
@@ -80,15 +85,35 @@ const columns: TableColumnsType<Sensor> = [
   },
 ];
 
-export default function SensorList({ projectId, deviceId }: SensorListProps) {
+export default function SensorList({
+  projectId,
+  deviceId,
+  refreshToken = 0,
+}: SensorListProps) {
   const loadSensors = useCallback(
-    (signal: AbortSignal) =>
-      devicesApi.listSensors(projectId, deviceId, { signal }),
+    (options: CursorPageRequestOptions) =>
+      devicesApi.listSensors(projectId, deviceId, {
+        cursor: options.cursor,
+        signal: options.signal,
+      }),
     [projectId, deviceId],
   );
-  const { data, error, loading, stale, reload } = useRequest(loadSensors);
+  const {
+    items,
+    hasMore,
+    loading,
+    refreshing,
+    loadingMore,
+    error,
+    loadMoreError,
+    stale,
+    reload,
+    loadMore,
+  } = useCursorPage(loadSensors, (sensor) => sensor.sensor_id);
 
-  if (!data && loading) {
+  useRefreshOnToken(refreshToken, reload);
+
+  if (items.length === 0 && loading) {
     return (
       <PageState
         variant="loading"
@@ -99,38 +124,54 @@ export default function SensorList({ projectId, deviceId }: SensorListProps) {
     );
   }
 
-  if (!data && error) {
+  if (items.length === 0 && error) {
     return <ApiErrorState error={error} onRetry={reload} compact />;
   }
 
-  if (!data || data.items.length === 0) {
+  if (items.length === 0) {
     return (
-      <PageState
-        variant="empty"
-        compact
-        title="暂无传感器"
-        description="该设备还没有关联传感器记录；传感器写入流程接入后会在此显示。"
-      />
+      <Space direction="vertical" size={12} className="ddp-stack">
+        <PageState
+          variant="empty"
+          compact
+          title="暂无传感器"
+          description={
+            hasMore
+              ? "已加载范围内没有传感器记录，可继续加载更多。"
+              : "该设备还没有关联传感器记录；传感器写入流程接入后会在此显示。"
+          }
+        />
+        <LoadMoreBar
+          loadedCount={items.length}
+          unit="条传感器记录"
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          disabled={loading || refreshing}
+          error={loadMoreError}
+          onLoadMore={loadMore}
+        />
+      </Space>
     );
   }
 
   return (
     <Space direction="vertical" size={12} className="ddp-stack">
       {stale ? <PageState variant="stale" compact onRetry={reload} /> : null}
-      {data.next_cursor ? (
-        <Alert
-          type="info"
-          showIcon
-          message="已加载部分传感器"
-          description="服务端返回了 next_cursor；分页加载将在后续任务接入。"
-        />
-      ) : null}
       <Table<Sensor>
         rowKey="sensor_id"
         columns={columns}
-        dataSource={data.items}
+        dataSource={items}
         pagination={false}
         scroll={{ x: 900 }}
+      />
+      <LoadMoreBar
+        loadedCount={items.length}
+        unit="条传感器记录"
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        disabled={loading}
+        error={loadMoreError}
+        onLoadMore={loadMore}
       />
     </Space>
   );

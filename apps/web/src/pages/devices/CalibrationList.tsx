@@ -1,11 +1,14 @@
-import { Alert, Space, Table, Typography } from "antd";
+import { Space, Table, Typography } from "antd";
 import type { TableColumnsType } from "antd";
 import { useCallback } from "react";
 
+import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import StatusTag from "../../components/devices/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageState from "../../components/ui/PageState";
-import { useRequest } from "../../hooks/useRequest";
+import { useCursorPage } from "../../hooks/useCursorPage";
+import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
+import { useRefreshOnToken } from "../../hooks/useRefreshOnToken";
 import { devicesApi } from "../../services/devices";
 import {
   formatCapabilityProfile,
@@ -18,6 +21,8 @@ import type { CalibrationRecord } from "../../types/device";
 interface CalibrationListProps {
   projectId: string;
   deviceId: string;
+  /** 详情页刷新令牌；变化时重新从第一页加载。 */
+  refreshToken?: number;
 }
 
 function formatValidity(
@@ -95,16 +100,32 @@ const columns: TableColumnsType<CalibrationRecord> = [
 export default function CalibrationList({
   projectId,
   deviceId,
+  refreshToken = 0,
 }: CalibrationListProps) {
   const loadCalibrations = useCallback(
-    (signal: AbortSignal) =>
-      devicesApi.listCalibrations(projectId, deviceId, { signal }),
+    (options: CursorPageRequestOptions) =>
+      devicesApi.listCalibrations(projectId, deviceId, {
+        cursor: options.cursor,
+        signal: options.signal,
+      }),
     [projectId, deviceId],
   );
-  const { data, error, loading, stale, reload } =
-    useRequest(loadCalibrations);
+  const {
+    items,
+    hasMore,
+    loading,
+    refreshing,
+    loadingMore,
+    error,
+    loadMoreError,
+    stale,
+    reload,
+    loadMore,
+  } = useCursorPage(loadCalibrations, (record) => record.calibration_id);
 
-  if (!data && loading) {
+  useRefreshOnToken(refreshToken, reload);
+
+  if (items.length === 0 && loading) {
     return (
       <PageState
         variant="loading"
@@ -115,38 +136,54 @@ export default function CalibrationList({
     );
   }
 
-  if (!data && error) {
+  if (items.length === 0 && error) {
     return <ApiErrorState error={error} onRetry={reload} compact />;
   }
 
-  if (!data || data.items.length === 0) {
+  if (items.length === 0) {
     return (
-      <PageState
-        variant="empty"
-        compact
-        title="暂无标定记录"
-        description="该设备还没有标定记录；标定登记流程接入后会在此显示。"
-      />
+      <Space direction="vertical" size={12} className="ddp-stack">
+        <PageState
+          variant="empty"
+          compact
+          title="暂无标定记录"
+          description={
+            hasMore
+              ? "已加载范围内没有标定记录，可继续加载更多。"
+              : "该设备还没有标定记录；标定登记流程接入后会在此显示。"
+          }
+        />
+        <LoadMoreBar
+          loadedCount={items.length}
+          unit="条标定记录"
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          disabled={loading || refreshing}
+          error={loadMoreError}
+          onLoadMore={loadMore}
+        />
+      </Space>
     );
   }
 
   return (
     <Space direction="vertical" size={12} className="ddp-stack">
       {stale ? <PageState variant="stale" compact onRetry={reload} /> : null}
-      {data.next_cursor ? (
-        <Alert
-          type="info"
-          showIcon
-          message="已加载部分标定记录"
-          description="服务端返回了 next_cursor；分页加载将在后续任务接入。"
-        />
-      ) : null}
       <Table<CalibrationRecord>
         rowKey="calibration_id"
         columns={columns}
-        dataSource={data.items}
+        dataSource={items}
         pagination={false}
         scroll={{ x: 1040 }}
+      />
+      <LoadMoreBar
+        loadedCount={items.length}
+        unit="条标定记录"
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        disabled={loading}
+        error={loadMoreError}
+        onLoadMore={loadMore}
       />
     </Space>
   );
