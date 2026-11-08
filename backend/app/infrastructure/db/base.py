@@ -6,6 +6,8 @@ from sqlalchemy import MetaData, event
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase
 
+from app.infrastructure.db.annotation_catalog_guards import install_catalog_guards
+from app.infrastructure.db.annotation_work_guards import install_work_guards
 from app.infrastructure.db.collection_guards import (
     install_audit_guards,
     install_collection_state_guards,
@@ -43,3 +45,5 @@ def _install_ddp_guards(
     install_collection_state_guards(connection)
     install_ingestion_state_guards(connection)
     install_episode_state_guards(connection)
+    install_catalog_guards(connection)
+    install_work_guards(connection)

@@ -1,5 +1,16 @@
 """ORM 模型聚合，供 Alembic 与仓储导入。"""
 
+from app.infrastructure.db.models.annotation_catalog import (
+    AnnotationSampleEpisode,
+    AnnotationSampleSet,
+    AnnotationSchema,
+)
+from app.infrastructure.db.models.annotation_work import (
+    AnnotationAssignment,
+    AnnotationAssignmentEvent,
+    AnnotationBatch,
+    AnnotationTask,
+)
 from app.infrastructure.db.models.collection import (
     AuditLog,
     CollectionBatch,
@@ -34,6 +45,13 @@ from app.infrastructure.db.models.ingestion import (
 from app.infrastructure.db.models.jobs import IngestionJobModel
 
 __all__ = [
+    "AnnotationAssignment",
+    "AnnotationAssignmentEvent",
+    "AnnotationBatch",
+    "AnnotationSampleEpisode",
+    "AnnotationSampleSet",
+    "AnnotationSchema",
+    "AnnotationTask",
     "AuditLog",
     "CalibrationProfile",
     "CalibrationRecord",

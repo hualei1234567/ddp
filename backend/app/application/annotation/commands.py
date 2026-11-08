@@ -1,0 +1,71 @@
+"""标注应用层命令 DTO。"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from datetime import datetime
+from uuid import UUID
+
+
+@dataclass(frozen=True, slots=True)
+class NewAnnotationSchema:
+    code: str
+    name: str
+    annotation_levels: tuple[str, ...]
+    labels: tuple[Mapping[str, object], ...]
+    description: str | None = None
+    compatibility: str = "BACKWARD_COMPATIBLE"
+    schema_lineage_id: UUID | None = None
+    schema_version: int = 1
+    supersedes_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewAnnotationSampleSet:
+    code: str
+    filters: Mapping[str, object] = field(default_factory=dict)
+    name: str | None = None
+    strategy: str = "FILTER"
+    selection_rule_version: str = "stage3-sample-selection/1"
+    strata: tuple[Mapping[str, object], ...] = ()
+    dedup_key: str = "EPISODE_LINEAGE"
+    data_source: str = "UNKNOWN"
+    warn_confirmed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class NewAnnotationTask:
+    code: str
+    name: str
+    sample_set_id: UUID
+    schema_id: UUID
+    target_item_count: int
+    target_episode_count: int
+    description: str | None = None
+    schema_version: int | None = None
+    due_at: datetime | None = None
+    priority: str = "P1"
+    assignment_mode: str = "MANUAL"
+    iaa_policy: Mapping[str, object] = field(default_factory=dict)
+    quality_policy: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class NewAnnotationBatch:
+    planned_item_count: int
+    code: str | None = None
+    sequence_no: int | None = None
+    name: str | None = None
+    stratum: str | None = None
+    item_refs: tuple[UUID, ...] = ()
+    due_at: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewAnnotationAssignment:
+    assignee_id: UUID
+    assignment_role: str = "ANNOTATOR"
+    planned_item_count: int = 0
+    planned_minutes: int = 0
+    lease_expires_at: datetime | None = None
