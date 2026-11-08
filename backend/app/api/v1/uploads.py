@@ -24,6 +24,7 @@ from app.api.v1.upload_schemas import (
     UploadPartAckRequest,
     UploadPartListOut,
     UploadPartUrlOut,
+    UploadPartUrlRequest,
     UploadSessionCreate,
     UploadSessionOut,
 )
@@ -124,11 +125,13 @@ def create_upload_part_url(
     request: Request,
     scope: WriteScope,
     use_cases: UploadUseCasesDep,
+    payload: UploadPartUrlRequest | None = None,
 ) -> UploadPartUrlOut:
     signed = use_cases.uploads.create_part_url(
         scope,
         upload_session_id,
         part_number,
+        sha256=payload.sha256 if payload is not None else None,
         request_id=_request_id(request),
     )
     return UploadPartUrlOut(

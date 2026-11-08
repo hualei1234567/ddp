@@ -30,6 +30,7 @@ from app.infrastructure.repositories.raw_assets import (
     SqlRawAssetRepository,
 )
 from app.infrastructure.repositories.upload_sessions import (
+    SqlUploadPartChecksumBindingRepository,
     SqlUploadPartRepository,
     SqlUploadSessionRepository,
 )
@@ -40,6 +41,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 NOW = datetime(2026, 11, 8, 12, 0, tzinfo=UTC)
 SHA_A = f"sha256:{'a' * 64}"
+SHA_B = f"sha256:{'b' * 64}"
 
 
 @pytest.fixture()
@@ -259,6 +261,42 @@ def test_active_content_index_is_partial(
             .count()
             == 1
         )
+
+
+def test_checksum_binding_repository_upserts_latest_and_scopes_project(
+    upload_db: tuple[sessionmaker[Session], UUID, UUID, UUID, UUID],
+) -> None:
+    factory, project_a, project_b, user_a, _ = upload_db
+    session = _session(project_a, user_a)
+    scope_a = _scope(project_a, user_a)
+    scope_b = _scope(project_b, user_a)
+    with factory() as db:
+        SqlUploadSessionRepository(db).add(scope_a, session)
+        bindings = SqlUploadPartChecksumBindingRepository(db)
+
+        assert bindings.get(scope_a, session.upload_session_id, 1) is None
+        bindings.upsert(
+            scope_a,
+            session_id=session.upload_session_id,
+            part_number=1,
+            sha256=SHA_A,
+            now=NOW,
+        )
+        db.commit()
+        assert bindings.get(scope_a, session.upload_session_id, 1) == SHA_A
+        # 跨项目不可见。
+        assert bindings.get(scope_b, session.upload_session_id, 1) is None
+
+        # 重复签名同一分片以最新绑定为准。
+        bindings.upsert(
+            scope_a,
+            session_id=session.upload_session_id,
+            part_number=1,
+            sha256=SHA_B,
+            now=NOW,
+        )
+        db.commit()
+        assert bindings.get(scope_a, session.upload_session_id, 1) == SHA_B
 
 
 def test_raw_asset_link_session_uniqueness(

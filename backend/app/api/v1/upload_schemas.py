@@ -37,6 +37,14 @@ class UploadSessionCreate(BaseModel):
     metadata: dict[str, object] = Field(default_factory=dict)
 
 
+class UploadPartUrlRequest(BaseModel):
+    """可选的分片预签名校验和绑定；省略时保持旧客户端行为。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sha256: str | None = Field(default=None, pattern=_SHA256_PATTERN)
+
+
 class UploadPartAckRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

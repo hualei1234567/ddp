@@ -62,6 +62,30 @@ class UploadPartRepository(Protocol):
     def list(self, scope: ProjectScope, session_id: UUID) -> list[UploadPart]: ...
 
 
+class UploadPartChecksumBindingRepository(Protocol):
+    """记录最近一次分片预签名 URL 声明的校验和。
+
+    URL 请求可能早于 ack，绑定值必须持久化；重复签名以最新值为准。
+    """
+
+    def get(
+        self,
+        scope: ProjectScope,
+        session_id: UUID,
+        part_number: int,
+    ) -> str | None: ...
+
+    def upsert(
+        self,
+        scope: ProjectScope,
+        *,
+        session_id: UUID,
+        part_number: int,
+        sha256: str,
+        now: datetime,
+    ) -> str: ...
+
+
 class RawAssetRepository(Protocol):
     def add(self, scope: ProjectScope, asset: RawAsset) -> RawAsset: ...
 

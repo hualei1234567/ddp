@@ -22,6 +22,7 @@ PREVIOUS_TABLES = {
     "idempotency_records",
 }
 STAGE1_TABLES = {"users", "projects", "project_members", "devices", "sensors"}
+CHECKSUM_BINDING_TABLE = "upload_part_checksum_bindings"
 
 
 def _config(db_path: Path) -> Config:
@@ -60,6 +61,49 @@ def test_upload_migration_upgrade_and_downgrade(tmp_path: Path) -> None:
     engine = create_engine(f"sqlite+pysqlite:///{db_path}")
     try:
         assert UPLOAD_TABLES <= set(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()
+
+
+def test_checksum_binding_migration_upgrade_and_downgrade(tmp_path: Path) -> None:
+    db_path = tmp_path / "checksum_binding.db"
+    config = _config(db_path)
+
+    command.upgrade(config, "0011")
+    engine = create_engine(f"sqlite+pysqlite:///{db_path}")
+    try:
+        inspector = inspect(engine)
+        assert CHECKSUM_BINDING_TABLE in inspector.get_table_names()
+
+        pk = inspector.get_pk_constraint(CHECKSUM_BINDING_TABLE)
+        assert tuple(pk["constrained_columns"]) == (
+            "project_id",
+            "upload_session_id",
+            "part_number",
+        )
+        fks = inspector.get_foreign_keys(CHECKSUM_BINDING_TABLE)
+        assert any(
+            item["constrained_columns"] == ["project_id", "upload_session_id"]
+            and item["referred_table"] == "upload_sessions"
+            for item in fks
+        )
+        checks = {item["name"] for item in inspector.get_check_constraints(CHECKSUM_BINDING_TABLE)}
+        assert "ck_upload_part_checksum_bindings_sha256_format" in checks
+        assert "ck_upload_part_checksum_bindings_part_number_range" in checks
+    finally:
+        engine.dispose()
+
+    command.downgrade(config, "0010")
+    engine = create_engine(f"sqlite+pysqlite:///{db_path}")
+    try:
+        assert CHECKSUM_BINDING_TABLE not in set(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()
+
+    command.upgrade(config, "head")
+    engine = create_engine(f"sqlite+pysqlite:///{db_path}")
+    try:
+        assert CHECKSUM_BINDING_TABLE in set(inspect(engine).get_table_names())
     finally:
         engine.dispose()
 

@@ -232,6 +232,39 @@ class UploadPartModel(Base):
     )
 
 
+class UploadPartChecksumBindingModel(Base):
+    """分片预签名 URL 声明的校验和绑定。
+
+    预签名请求可以早于分片 ack；绑定值必须跨请求持久化，ack 时据此拒绝
+    与签名 URL 不一致的分片内容。重复签名同一分片时以最新绑定为准。
+    """
+
+    __tablename__ = "upload_part_checksum_bindings"
+
+    project_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    upload_session_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    part_number: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    bound_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["project_id", "upload_session_id"],
+            ["upload_sessions.project_id", "upload_sessions.id"],
+            name="fk_upload_part_checksum_bindings_project_session",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint(
+            "part_number BETWEEN 1 AND 10000",
+            name="part_number_range",
+        ),
+        CheckConstraint(
+            "length(sha256) = 71 AND substr(sha256, 1, 7) = 'sha256:'",
+            name="sha256_format",
+        ),
+    )
+
+
 class RawAssetModel(Base):
     __tablename__ = "raw_assets"
 

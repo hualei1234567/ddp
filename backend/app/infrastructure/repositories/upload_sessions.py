@@ -19,7 +19,12 @@ from app.domain.ingestion.errors import (
     VersionConflictError,
 )
 from app.domain.ingestion.models import UploadPart, UploadSession
-from app.infrastructure.db.models.ingestion import UploadPartModel, UploadSessionModel
+from app.domain.ingestion.validation import normalize_sha256
+from app.infrastructure.db.models.ingestion import (
+    UploadPartChecksumBindingModel,
+    UploadPartModel,
+    UploadSessionModel,
+)
 from app.infrastructure.repositories._collection_sql import as_utc
 
 
@@ -275,6 +280,67 @@ class SqlUploadPartRepository:
             recorded_at=as_utc(row.recorded_at),
             version=row.version,
         )
+
+
+class SqlUploadPartChecksumBindingRepository:
+    """分片预签名校验和绑定仓储；所有读写强制项目过滤。"""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get(
+        self,
+        scope: ProjectScope,
+        session_id: UUID,
+        part_number: int,
+    ) -> str | None:
+        return self._session.scalar(
+            select(UploadPartChecksumBindingModel.sha256).where(
+                UploadPartChecksumBindingModel.project_id == scope.project_id,
+                UploadPartChecksumBindingModel.upload_session_id == session_id,
+                UploadPartChecksumBindingModel.part_number == part_number,
+            )
+        )
+
+    def upsert(
+        self,
+        scope: ProjectScope,
+        *,
+        session_id: UUID,
+        part_number: int,
+        sha256: str,
+        now: datetime,
+    ) -> str:
+        normalized = normalize_sha256(sha256)
+        assert normalized is not None
+        values = {"sha256": normalized, "bound_at": now}
+        filters = (
+            UploadPartChecksumBindingModel.project_id == scope.project_id,
+            UploadPartChecksumBindingModel.upload_session_id == session_id,
+            UploadPartChecksumBindingModel.part_number == part_number,
+        )
+        result = self._session.execute(
+            update(UploadPartChecksumBindingModel).where(*filters).values(**values)
+        )
+        if result.rowcount:
+            return normalized
+        try:
+            # 并发签名同一分片时，唯一键冲突后以最后写入者为准。
+            with self._session.begin_nested():
+                self._session.add(
+                    UploadPartChecksumBindingModel(
+                        project_id=scope.project_id,
+                        upload_session_id=session_id,
+                        part_number=part_number,
+                        **values,
+                    )
+                )
+                self._session.flush()
+        except IntegrityError:
+            self._session.execute(
+                update(UploadPartChecksumBindingModel).where(*filters).values(**values)
+            )
+        return normalized
 
 
 def _save_failure(

@@ -30,6 +30,7 @@ from app.application.ingestion.ports import (
     RawAssetLinkRepository,
     RawAssetRepository,
     UnitOfWork,
+    UploadPartChecksumBindingRepository,
     UploadPartRepository,
     UploadPolicy,
     UploadSessionDetail,
@@ -72,6 +73,7 @@ from app.domain.ingestion.validation import (
     required_part_count,
     resolve_declared_format,
     sanitize_filename,
+    sha256_to_base64,
     validate_part_number,
 )
 
@@ -83,6 +85,7 @@ class UploadSessionUseCases:
         self,
         sessions: UploadSessionRepository,
         parts: UploadPartRepository,
+        bindings: UploadPartChecksumBindingRepository,
         assets: RawAssetRepository,
         links: RawAssetLinkRepository,
         directory: CollectionDirectory,
@@ -95,6 +98,7 @@ class UploadSessionUseCases:
     ) -> None:
         self._sessions = sessions
         self._parts = parts
+        self._bindings = bindings
         self._directory = directory
         self._storage = storage
         self._audit = audit
@@ -291,6 +295,7 @@ class UploadSessionUseCases:
         session_id: UUID,
         part_number: int,
         *,
+        sha256: str | None = None,
         request_id: str | None = None,
     ) -> PresignedPart:
         session = self._active_session(scope, session_id, request_id=request_id)
@@ -305,6 +310,13 @@ class UploadSessionUseCases:
             session.declared_size_bytes,
             session.part_size_bytes,
         )
+        # 未提供校验和时保持旧客户端行为；提供时必须与已确认分片一致，
+        # 避免用不同内容重新签名已 ack 的分片。
+        bound_sha256 = normalize_sha256(sha256, required=False)
+        if bound_sha256 is not None:
+            existing = self._parts.get(scope, session_id, part_number)
+            if existing is not None and existing.sha256 != bound_sha256:
+                raise UploadPartConflictError("分片已确认的内容与请求的校验和不一致")
         if session.status is UploadSessionStatus.CREATED:
             now = utcnow()
             updated = self._sessions.save(
@@ -333,14 +345,27 @@ class UploadSessionUseCases:
                 occurred_at=now,
             )
             self._uow.commit()
-        return self._storage.presign_upload_part(
+        signed = self._storage.presign_upload_part(
             session.object_key,
             session.multipart_upload_id,
             part_number=part_number,
             content_length=size_bytes,
-            checksum_sha256_base64=None,
+            checksum_sha256_base64=(
+                sha256_to_base64(bound_sha256) if bound_sha256 is not None else None
+            ),
             expires_in_seconds=max(1, int(self._policy.url_ttl.total_seconds())),
         )
+        if bound_sha256 is not None:
+            # 持久化“最近签名绑定值”；ack 时据此拒绝与 URL 不一致的内容。
+            self._bindings.upsert(
+                scope,
+                session_id=session_id,
+                part_number=part_number,
+                sha256=bound_sha256,
+                now=utcnow(),
+            )
+            self._uow.commit()
+        return signed
 
     # --------------------------------------------------------------- 分片确认
     def ack_part(
@@ -369,6 +394,9 @@ class UploadSessionUseCases:
         etag = normalize_etag(command.etag)
         sha256 = normalize_sha256(command.sha256)
         assert sha256 is not None
+        bound_sha256 = self._bindings.get(scope, session_id, part_number)
+        if bound_sha256 is not None and bound_sha256 != sha256:
+            raise UploadPartConflictError("分片校验和与预签名 URL 绑定值不一致")
         now = utcnow()
 
         existing = self._parts.get(scope, session_id, part_number)

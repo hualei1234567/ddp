@@ -27,6 +27,7 @@ from app.infrastructure.db.models.identity import Project, ProjectMember, User
 from app.infrastructure.db.models.ingestion import (
     RawAssetLinkModel,
     RawAssetModel,
+    UploadPartChecksumBindingModel,
     UploadPartModel,
     UploadSessionModel,
 )
@@ -55,6 +56,7 @@ __all__ = [
     "RawAssetModel",
     "Robot",
     "Sensor",
+    "UploadPartChecksumBindingModel",
     "UploadPartModel",
     "UploadSessionModel",
     "User",

@@ -29,6 +29,7 @@ from app.infrastructure.repositories.raw_assets import (
     SqlRawAssetRepository,
 )
 from app.infrastructure.repositories.upload_sessions import (
+    SqlUploadPartChecksumBindingRepository,
     SqlUploadPartRepository,
     SqlUploadSessionRepository,
 )
@@ -74,6 +75,7 @@ def get_upload_use_cases(
     )
     sessions = SqlUploadSessionRepository(session)
     parts = SqlUploadPartRepository(session)
+    bindings = SqlUploadPartChecksumBindingRepository(session)
     assets = SqlRawAssetRepository(session)
     links = SqlRawAssetLinkRepository(session)
     directory = SqlCollectionDirectory(session)
@@ -81,6 +83,7 @@ def get_upload_use_cases(
         uploads=UploadSessionUseCases(
             sessions=sessions,
             parts=parts,
+            bindings=bindings,
             assets=assets,
             links=links,
             directory=directory,
