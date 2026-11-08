@@ -1,0 +1,511 @@
+health:
+  get:
+    operationId: getHealth
+    tags: [platform]
+    security: []
+    summary: 服务健康检查
+    responses:
+      "200": {description: 服务正常, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/HealthResponse"}}}}
+platformMeta:
+  get:
+    operationId: getPlatformMeta
+    tags: [platform]
+    security: []
+    summary: 平台元信息
+    responses:
+      "200": {description: 平台元信息, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/PlatformMeta"}}}}
+devices:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listDevices
+    tags: [devices]
+    summary: 设备列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/LifecycleStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 设备分页结果, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/DevicePage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createDevice
+    tags: [devices]
+    summary: 创建设备档案
+    description: 初始状态固定为 `PROVISIONED`；客户端不得提交 status/project_id/审计字段。
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/DeviceCreate"}}}}
+    responses:
+      "201": {description: 设备已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Device"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+deviceDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeviceId"
+  get:
+    operationId: getDevice
+    tags: [devices]
+    summary: 设备详情
+    responses:
+      "200": {description: 设备详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Device"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  patch:
+    operationId: updateDevice
+    tags: [devices]
+    summary: 修改设备档案（不含状态）
+    description: 仅允许修改白名单字段；必须携带 `If-Match`。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/DevicePatch"}}}}
+    responses:
+      "200": {description: 修改后的设备, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Device"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+deviceActivate:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeviceId"
+  post:
+    operationId: activateDevice
+    tags: [devices]
+    summary: 设备启用（PROVISIONED→ACTIVE）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的设备, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Device"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+deviceMaintenance:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeviceId"
+  post:
+    operationId: enterDeviceMaintenance
+    tags: [devices]
+    summary: 设备进入维护（ACTIVE/FAULT→IN_MAINTENANCE）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的设备, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Device"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+deviceFault:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeviceId"
+  post:
+    operationId: reportDeviceFault
+    tags: [devices]
+    summary: 上报设备故障（ACTIVE/IN_MAINTENANCE→FAULT）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的设备, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Device"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+deviceSuspend:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeviceId"
+  post:
+    operationId: suspendDevice
+    tags: [devices]
+    summary: 挂起设备（任意非终态→SUSPENDED）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的设备, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Device"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+deviceRetire:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeviceId"
+  post:
+    operationId: retireDevice
+    tags: [devices]
+    summary: 设备退役（任意非终态→RETIRED，终态）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的设备, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Device"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+sensors:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listSensors
+    tags: [sensors]
+    summary: 传感器列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/LifecycleStatus"}}
+      - {name: sensor_type, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/SensorType"}}
+      - {name: robot_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - {name: device_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 传感器分页结果, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/SensorPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createSensor
+    tags: [sensors]
+    summary: 创建传感器档案
+    description: 必须至少关联 `robot_id` 或 `device_id`；引用必须同项目。
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/SensorCreate"}}}}
+    responses:
+      "201": {description: 传感器已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Sensor"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+sensorDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SensorId"
+  get:
+    operationId: getSensor
+    tags: [sensors]
+    summary: 传感器详情
+    responses:
+      "200": {description: 传感器详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Sensor"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  patch:
+    operationId: updateSensor
+    tags: [sensors]
+    summary: 修改传感器档案（不含状态）
+    description: 必须携带 `If-Match`；引用变更会重新校验同项目与标定目标一致性。
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/SensorPatch"}}}}
+    responses:
+      "200": {description: 修改后的传感器, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Sensor"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+sensorActivate:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SensorId"
+  post:
+    operationId: activateSensor
+    tags: [sensors]
+    summary: 传感器启用（PROVISIONED→ACTIVE）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的传感器, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Sensor"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+sensorMaintenance:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SensorId"
+  post:
+    operationId: enterSensorMaintenance
+    tags: [sensors]
+    summary: 传感器进入维护
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的传感器, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Sensor"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+sensorFault:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SensorId"
+  post:
+    operationId: reportSensorFault
+    tags: [sensors]
+    summary: 上报传感器故障（ACTIVE/IN_MAINTENANCE→FAULT）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的传感器, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Sensor"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+sensorSuspend:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SensorId"
+  post:
+    operationId: suspendSensor
+    tags: [sensors]
+    summary: 挂起传感器（任意非终态→SUSPENDED）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的传感器, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Sensor"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+sensorRetire:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SensorId"
+  post:
+    operationId: retireSensor
+    tags: [sensors]
+    summary: 传感器退役（终态）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的传感器, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Sensor"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrations:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listCalibrations
+    tags: [calibrations]
+    summary: 标定记录列表（游标分页）
+    parameters:
+      - {name: target_type, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/CalibrationTargetType"}}
+      - {name: target_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/CalibrationStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 标定记录分页结果, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CalibrationPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createCalibration
+    tags: [calibrations]
+    summary: 创建标定草案
+    description: 初始状态固定为 `DRAFT`；`performed_by` 与 `checksum` 由服务端写入。
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CalibrationCreate"}}}}
+    responses:
+      "201": {description: 标定草案已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Calibration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrationDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CalibrationId"
+  get:
+    operationId: getCalibration
+    tags: [calibrations]
+    summary: 标定记录详情
+    responses:
+      "200": {description: 标定记录详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Calibration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  patch:
+    operationId: updateCalibration
+    tags: [calibrations]
+    summary: 修改标定草案（仅 DRAFT）
+    description: 非 DRAFT 记录返回 `resource_immutable`；必须携带 `If-Match`。
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CalibrationPatch"}}}}
+    responses:
+      "200": {description: 修改后的标定记录, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Calibration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrationSubmit:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CalibrationId"
+  post:
+    operationId: submitCalibration
+    tags: [calibrations]
+    summary: 提交标定（DRAFT→SUBMITTED）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 提交后的标定记录, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Calibration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrationValidate:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CalibrationId"
+  post:
+    operationId: validateCalibration
+    tags: [calibrations]
+    summary: 校验标定（SUBMITTED→VALIDATED）
+    description: 要求项目 VALIDATE 权限，且执行人与校验人分离（四眼）。
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 校验后的标定记录, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Calibration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrationReject:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CalibrationId"
+  post:
+    operationId: rejectCalibration
+    tags: [calibrations]
+    summary: 驳回标定（SUBMITTED→REJECTED）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 驳回后的标定记录, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Calibration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrationActivate:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CalibrationId"
+  post:
+    operationId: activateCalibration
+    tags: [calibrations]
+    summary: 激活标定（VALIDATED→ACTIVE）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 激活后的标定记录, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Calibration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrationRevoke:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CalibrationId"
+  post:
+    operationId: revokeCalibration
+    tags: [calibrations]
+    summary: 作废标定（ACTIVE→REVOKED，终态）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 作废后的标定记录, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Calibration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrationExpire:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CalibrationId"
+  post:
+    operationId: expireCalibration
+    tags: [calibrations]
+    summary: 标记标定过期（ACTIVE→EXPIRED，终态）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 过期后的标定记录, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Calibration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}

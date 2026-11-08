@@ -1,0 +1,48 @@
+EpisodeCreate:
+  type: object
+  required: [raw_asset_ids, segmentation, time_base, calibration_snapshot, canonical_schema_version, pipeline_id, pipeline_version]
+  additionalProperties: false
+  properties:
+    raw_asset_ids: {type: array, minItems: 1, maxItems: 64, uniqueItems: true, items: {type: string, format: uuid}}
+    segmentation: {$ref: "./schemas.stage2.yaml#/EpisodeSegmentation"}
+    time_base: {$ref: "./schemas.stage2.yaml#/TimeBase"}
+    calibration_snapshot: {type: array, minItems: 1, items: {$ref: "./schemas.stage2.yaml#/CalibrationSnapshotItem"}}
+    canonical_schema_version: {type: string, minLength: 1, maxLength: 64}
+    pipeline_id: {type: string, minLength: 1, maxLength: 128}
+    pipeline_version: {type: string, minLength: 1, maxLength: 64}
+    code: {type: [string, "null"], minLength: 1, maxLength: 64}
+    task_id: {type: [string, "null"], format: uuid}
+    batch_id: {type: [string, "null"], format: uuid}
+    robot_id: {type: [string, "null"], format: uuid}
+    device_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    sensor_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    scene_labels: {type: array, items: {type: string, maxLength: 100}, uniqueItems: true}
+    language_instruction: {type: [string, "null"], maxLength: 1000}
+    success: {type: [boolean, "null"]}
+    failure_reason: {type: [string, "null"], maxLength: 1000}
+    ingestion_job_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    evidence_role: {type: string, minLength: 1, maxLength: 32, default: INPUT}
+IngestionJobCreate:
+  type: object
+  required: [job_type, timeout_sec]
+  additionalProperties: false
+  anyOf:
+    - required: [raw_asset_ids]
+      properties:
+        raw_asset_ids: {type: array, minItems: 1, maxItems: 64, uniqueItems: true, items: {type: string, format: uuid}}
+    - required: [input_manifest_key]
+      properties:
+        input_manifest_key: {type: string, maxLength: 1024}
+  properties:
+    job_type: {$ref: "./schemas.stage2.yaml#/IngestionJobType"}
+    timeout_sec: {type: integer, minimum: 1, maximum: 86400}
+    raw_asset_ids: {type: array, maxItems: 64, items: {type: string, format: uuid}, uniqueItems: true}
+    input_manifest_key: {type: [string, "null"], maxLength: 1024}
+    idempotency_key: {type: [string, "null"], minLength: 8, maxLength: 128}
+    max_attempts: {type: integer, minimum: 1, maximum: 100, default: 3}
+    pipeline_id: {type: [string, "null"], maxLength: 128}
+    pipeline_version: {type: [string, "null"], maxLength: 64}
+    parser_id: {type: [string, "null"], maxLength: 128}
+    parser_version: {type: [string, "null"], maxLength: 64}
+    config_hash: {type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$'}
+    metrics: {type: object, additionalProperties: true}

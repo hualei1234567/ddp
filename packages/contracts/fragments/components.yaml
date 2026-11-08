@@ -1,0 +1,255 @@
+parameters:
+  ProjectId:
+    name: project_id
+    in: path
+    required: true
+    description: 项目 ID；服务端校验当前主体成员资格，不信任客户端声明。
+    schema:
+      type: string
+      format: uuid
+  ProjectIdQuery:
+    name: project_id
+    in: query
+    required: true
+    description: 无项目路径前缀的资源使用查询参数定位项目；服务端仍做成员资格与资源归属双重校验。
+    schema:
+      type: string
+      format: uuid
+  TaskId:
+    name: task_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  BatchId:
+    name: batch_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  UploadSessionId:
+    name: upload_session_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  AssetId:
+    name: asset_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  JobId:
+    name: job_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  EpisodeId:
+    name: episode_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  DeviceId:
+    name: device_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  SensorId:
+    name: sensor_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  CalibrationId:
+    name: calibration_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  PartNumber:
+    name: part_number
+    in: path
+    required: true
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 10000
+  Cursor:
+    name: cursor
+    in: query
+    required: false
+    description: 不透明游标；由上一页 `next_cursor` 返回；非法返回 `validation_failed`。
+    schema:
+      type: string
+  Limit:
+    name: limit
+    in: query
+    required: false
+    description: 每页数量，默认 20，最大 100。
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 20
+  IfMatch:
+    name: If-Match
+    in: header
+    required: true
+    description: |
+      乐观锁版本，格式为 `"<version>"`（可带弱校验前缀 `W/`）。
+      缺失返回 428 `precondition_required`；不匹配返回 409 `version_conflict`。
+    schema:
+      type: string
+      pattern: '^(W/)?"?[1-9][0-9]*"?$'
+  IdempotencyKey:
+    name: Idempotency-Key
+    in: header
+    required: false
+    description: 可选幂等键；长度 8–128。相同键不同请求体返回 409 `idempotency_key_reused`。
+    schema:
+      type: string
+      minLength: 8
+      maxLength: 128
+  RequiredIdempotencyKey:
+    name: Idempotency-Key
+    in: header
+    required: true
+    description: 必填幂等键；缺失返回 428 `precondition_required`，长度非法返回 422。
+    schema:
+      type: string
+      minLength: 8
+      maxLength: 128
+  TaskAction:
+    name: action
+    in: path
+    required: true
+    description: 采集任务状态动作白名单；系统内部动作 `system-data-check` 不对外暴露。
+    schema:
+      type: string
+      enum: [submit-review, return-draft, approve, ready, assign, start, pause, resume, block, unblock, submit, accept, reject, rework, complete, cancel]
+  BatchAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum: [ready, start, pause, resume, block, unblock, submit, accept, reject, rework, complete, cancel]
+  EpisodeAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum: [ready, quality-check, quality-result, accept, reject, complete, invalidate]
+  JobAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum: [cancel, retry]
+  LineageDirection:
+    name: direction
+    in: query
+    required: false
+    schema:
+      type: string
+      enum: [forward, reverse]
+      default: forward
+  LineageDepth:
+    name: depth
+    in: query
+    required: false
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 5
+      default: 1
+  LineageLimit:
+    name: limit
+    in: query
+    required: false
+    schema:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 20
+responses:
+  Unauthorized:
+    description: 未认证或令牌无效（`not_authenticated`，401）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  Forbidden:
+    description: 权限不足、职责分离违规或跨项目访问（`forbidden`，403）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  NotFound:
+    description: 资源不存在或跨项目不可见（`resource_not_found` / `not_found`，404）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  Conflict:
+    description: 状态/版本/分片/幂等/唯一性冲突（409）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  Gone:
+    description: 上传会话过期或资产不可用（`upload_session_expired`，410）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  PayloadTooLarge:
+    description: 文件超过允许大小（`file_too_large`，413）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  UnsupportedMediaType:
+    description: 声明的内容类型不在白名单（`file_type_unsupported`，415）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  UnprocessableEntity:
+    description: 参数或领域校验失败（422）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  PreconditionRequired:
+    description: 缺少 `If-Match` 或必填 `Idempotency-Key`（428）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  TooManyRequests:
+    description: 触发写路径/认证路径限流（`rate_limited`，429）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"
+  ServiceUnavailable:
+    description: 依赖不可用（`object_storage_unavailable`，503）。
+    content:
+      application/json:
+        schema:
+          $ref: "./schemas.common.yaml#/ErrorEnvelope"

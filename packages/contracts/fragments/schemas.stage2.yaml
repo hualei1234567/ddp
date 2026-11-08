@@ -1,0 +1,602 @@
+CollectionTaskStatus:
+  type: string
+  enum: [DRAFT, PENDING_REVIEW, APPROVED, READY, ASSIGNED, IN_PROGRESS, PAUSED, BLOCKED, SUBMITTED, DATA_CHECKING, ACCEPTED, REJECTED, REWORK, COMPLETED, CANCELLED]
+CollectionBatchStatus:
+  type: string
+  enum: [PLANNED, READY, IN_PROGRESS, PAUSED, BLOCKED, SUBMITTED, ACCEPTED, REJECTED, REWORK, CANCELLED]
+TaskPriority:
+  type: string
+  enum: [P0, P1, P2]
+CollectionTask:
+  type: object
+  required: [task_id, project_id, code, name, requirement_id, plan_id, sop_id, sop_version, scenario_id, action_spec_id, action_spec_version, status, priority, assigned_to, assigned_robot_id, assigned_device_ids, assigned_sensor_ids, location_id, scheduled_start, scheduled_end, actual_start, actual_end, target_episode_count, target_duration_sec, submitted_episode_count, accepted_episode_count, quality_summary, status_reason, blocked_reason, version, created_at, updated_at, created_by, updated_by]
+  additionalProperties: false
+  properties:
+    task_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    requirement_id: {type: [string, "null"], format: uuid}
+    plan_id: {type: [string, "null"], format: uuid}
+    sop_id: {type: [string, "null"], format: uuid}
+    sop_version: {type: [string, "null"], maxLength: 64}
+    scenario_id: {type: [string, "null"], format: uuid}
+    action_spec_id: {type: [string, "null"], format: uuid}
+    action_spec_version: {type: [string, "null"], maxLength: 64}
+    status: {$ref: "#/CollectionTaskStatus"}
+    priority: {$ref: "#/TaskPriority"}
+    assigned_to: {type: [string, "null"], format: uuid}
+    assigned_robot_id: {type: [string, "null"], format: uuid}
+    assigned_device_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    assigned_sensor_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    location_id: {type: [string, "null"], format: uuid}
+    scheduled_start: {type: [string, "null"], format: date-time}
+    scheduled_end: {type: [string, "null"], format: date-time}
+    actual_start: {type: [string, "null"], format: date-time}
+    actual_end: {type: [string, "null"], format: date-time}
+    target_episode_count: {type: integer, minimum: 0}
+    target_duration_sec: {type: integer, minimum: 0}
+    submitted_episode_count: {type: integer, minimum: 0}
+    accepted_episode_count: {type: integer, minimum: 0}
+    quality_summary: {type: [object, "null"], additionalProperties: true}
+    status_reason: {type: [string, "null"], maxLength: 1000}
+    blocked_reason: {type: [string, "null"], maxLength: 1000}
+    version: {type: integer, minimum: 1}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+    created_by: {type: [string, "null"], format: uuid}
+    updated_by: {type: [string, "null"], format: uuid}
+CollectionTaskCreate:
+  type: object
+  required: [code, name, priority, target_episode_count, target_duration_sec]
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    requirement_id: {type: [string, "null"], format: uuid}
+    plan_id: {type: [string, "null"], format: uuid}
+    sop_id: {type: [string, "null"], format: uuid}
+    sop_version: {type: [string, "null"], maxLength: 64}
+    scenario_id: {type: [string, "null"], format: uuid}
+    action_spec_id: {type: [string, "null"], format: uuid}
+    action_spec_version: {type: [string, "null"], maxLength: 64}
+    priority: {$ref: "#/TaskPriority"}
+    scheduled_start: {type: [string, "null"], format: date-time}
+    scheduled_end: {type: [string, "null"], format: date-time}
+    target_episode_count: {type: integer, minimum: 0}
+    target_duration_sec: {type: integer, minimum: 0}
+    location_id: {type: [string, "null"], format: uuid}
+CollectionTaskPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    name: {type: [string, "null"], minLength: 1, maxLength: 200}
+    priority: {type: [string, "null"], enum: [P0, P1, P2, null]}
+    sop_version: {type: [string, "null"], maxLength: 64}
+    scheduled_start: {type: [string, "null"], format: date-time}
+    scheduled_end: {type: [string, "null"], format: date-time}
+    target_episode_count: {type: [integer, "null"], minimum: 0}
+    target_duration_sec: {type: [integer, "null"], minimum: 0}
+    location_id: {type: [string, "null"], format: uuid}
+CollectionTaskActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 1000}
+    assigned_to: {type: [string, "null"], format: uuid}
+    assigned_robot_id: {type: [string, "null"], format: uuid}
+    assigned_device_ids: {type: [array, "null"], items: {type: string, format: uuid}, uniqueItems: true}
+    assigned_sensor_ids: {type: [array, "null"], items: {type: string, format: uuid}, uniqueItems: true}
+    location_id: {type: [string, "null"], format: uuid}
+    scheduled_start: {type: [string, "null"], format: date-time}
+    scheduled_end: {type: [string, "null"], format: date-time}
+    waiver_reason: {type: [string, "null"], maxLength: 1000}
+CollectionTaskPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/CollectionTask"}}
+    next_cursor: {type: [string, "null"]}
+CollectionBatch:
+  type: object
+  required: [batch_id, project_id, task_id, code, sequence_no, status, assigned_to, scheduled_start, scheduled_end, expected_count, submitted_count, accepted_count, status_reason, version, created_at, updated_at]
+  additionalProperties: false
+  properties:
+    batch_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    task_id: {type: string, format: uuid}
+    code: {type: string, minLength: 1, maxLength: 64}
+    sequence_no: {type: integer, minimum: 1}
+    status: {$ref: "#/CollectionBatchStatus"}
+    assigned_to: {type: [string, "null"], format: uuid}
+    scheduled_start: {type: [string, "null"], format: date-time}
+    scheduled_end: {type: [string, "null"], format: date-time}
+    expected_count: {type: integer, minimum: 0}
+    submitted_count: {type: integer, minimum: 0}
+    accepted_count: {type: integer, minimum: 0}
+    status_reason: {type: [string, "null"], maxLength: 1000}
+    version: {type: integer, minimum: 1}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+CollectionBatchCreate:
+  type: object
+  required: [expected_count]
+  additionalProperties: false
+  properties:
+    code: {type: [string, "null"], maxLength: 64}
+    sequence_no: {type: [integer, "null"], minimum: 1}
+    expected_count: {type: integer, minimum: 0}
+    assigned_to: {type: [string, "null"], format: uuid}
+    scheduled_start: {type: [string, "null"], format: date-time}
+    scheduled_end: {type: [string, "null"], format: date-time}
+CollectionBatchPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    expected_count: {type: [integer, "null"], minimum: 0}
+    assigned_to: {type: [string, "null"], format: uuid}
+    scheduled_start: {type: [string, "null"], format: date-time}
+    scheduled_end: {type: [string, "null"], format: date-time}
+CollectionBatchActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 1000}
+    assigned_to: {type: [string, "null"], format: uuid}
+CollectionBatchPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/CollectionBatch"}}
+    next_cursor: {type: [string, "null"]}
+UploadSessionStatus:
+  type: string
+  enum: [CREATED, UPLOADING, COMPLETING, COMPLETED, ABORTED, EXPIRED, FAILED]
+UploadVerificationStatus:
+  type: string
+  enum: [PENDING, VERIFIED, REJECTED]
+RawAssetStatus:
+  type: string
+  enum: [VALIDATING, VALID, QUARANTINED, REJECTED, ARCHIVED, TOMBSTONED]
+RawAssetFormat:
+  type: string
+  enum: [MCAP, ROSBAG2, HDF5, MP4, PARQUET, CSV, JSON, ZIP, UNKNOWN]
+RawAssetSourceType:
+  type: string
+  enum: [UPLOAD, DEVICE, IMPORT]
+StorageClass:
+  type: string
+  enum: [STANDARD, INFREQUENT, ARCHIVE]
+UploadPartSummary:
+  type: object
+  required: [part_number, size_bytes, etag, sha256, recorded_at]
+  additionalProperties: false
+  properties:
+    part_number: {type: integer, minimum: 1, maximum: 10000}
+    size_bytes: {type: integer, minimum: 1}
+    etag: {type: string, minLength: 1, maxLength: 256}
+    sha256: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    recorded_at: {type: string, format: date-time}
+UploadSession:
+  type: object
+  required: [upload_session_id, project_id, collection_task_id, batch_id, status, verification_status, verification_error_code, verified_at, original_filename, declared_content_type, declared_size_bytes, expected_sha256, format_hint, part_size_bytes, max_size_bytes, allowed_content_types, object_key_prefix, object_key, expires_at, completed_at, aborted_at, failure_code, failure_summary, uploaded_bytes, uploaded_part_count, missing_part_numbers, uploaded_parts, deduplicated, deduplicated_asset_id, asset_id, version, created_at, updated_at, created_by]
+  additionalProperties: false
+  properties:
+    upload_session_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    collection_task_id: {type: [string, "null"], format: uuid}
+    batch_id: {type: [string, "null"], format: uuid}
+    status: {$ref: "#/UploadSessionStatus"}
+    verification_status: {$ref: "#/UploadVerificationStatus"}
+    verification_error_code: {type: [string, "null"], maxLength: 64}
+    verified_at: {type: [string, "null"], format: date-time}
+    original_filename: {type: string, minLength: 1, maxLength: 255}
+    declared_content_type: {type: string, minLength: 1, maxLength: 200}
+    declared_size_bytes: {type: integer, minimum: 1}
+    expected_sha256: {type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$'}
+    format_hint: {type: [string, "null"], enum: [MCAP, ROSBAG2, HDF5, MP4, PARQUET, CSV, JSON, ZIP, UNKNOWN, null]}
+    part_size_bytes: {type: integer, minimum: 1}
+    max_size_bytes: {type: integer, minimum: 1}
+    allowed_content_types: {type: array, items: {type: string}, minItems: 1}
+    object_key_prefix: {type: string}
+    object_key: {type: string}
+    expires_at: {type: string, format: date-time}
+    completed_at: {type: [string, "null"], format: date-time}
+    aborted_at: {type: [string, "null"], format: date-time}
+    failure_code: {type: [string, "null"], maxLength: 64}
+    failure_summary: {type: [string, "null"], maxLength: 2000}
+    uploaded_bytes: {type: integer, minimum: 0}
+    uploaded_part_count: {type: integer, minimum: 0}
+    missing_part_numbers: {type: array, items: {type: integer, minimum: 1, maximum: 10000}, uniqueItems: true}
+    uploaded_parts: {type: array, items: {$ref: "#/UploadPartSummary"}}
+    deduplicated: {type: boolean}
+    deduplicated_asset_id: {type: [string, "null"], format: uuid}
+    asset_id: {type: [string, "null"], format: uuid}
+    version: {type: integer, minimum: 1}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+    created_by: {type: [string, "null"], format: uuid}
+UploadSessionCreate:
+  type: object
+  required: [original_filename, declared_content_type, declared_size_bytes]
+  additionalProperties: false
+  properties:
+    collection_task_id: {type: [string, "null"], format: uuid}
+    batch_id: {type: [string, "null"], format: uuid}
+    original_filename: {type: string, minLength: 1, maxLength: 255}
+    declared_content_type: {type: string, minLength: 1, maxLength: 200}
+    declared_size_bytes: {type: integer, minimum: 1}
+    expected_sha256: {type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$'}
+    format_hint: {type: [string, "null"], enum: [MCAP, ROSBAG2, HDF5, MP4, PARQUET, CSV, JSON, ZIP, UNKNOWN, null]}
+    part_size_bytes: {type: [integer, "null"], minimum: 1}
+    metadata: {type: object, additionalProperties: true}
+UploadPartUrlRequest:
+  type: object
+  additionalProperties: false
+  description: |
+    可选分片校验和绑定。省略时保持旧客户端行为；提供时服务端在预签名 URL 上
+    绑定 `x-amz-checksum-sha256`，ack 与绑定值不一致返回 409 `upload_part_conflict`。
+  properties:
+    sha256: {type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$'}
+UploadPartUrlResponse:
+  type: object
+  required: [part_number, method, url, headers, expires_at]
+  additionalProperties: false
+  properties:
+    part_number: {type: integer, minimum: 1, maximum: 10000}
+    method: {type: string, const: PUT}
+    url: {type: string, format: uri}
+    headers: {type: object, additionalProperties: {type: string}}
+    expires_at: {type: string, format: date-time}
+UploadPartAckRequest:
+  type: object
+  required: [etag, size_bytes, sha256]
+  additionalProperties: false
+  properties:
+    etag: {type: string, minLength: 1, maxLength: 256}
+    size_bytes: {type: integer, minimum: 1}
+    sha256: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+UploadPartAckResponse:
+  type: object
+  required: [part_number, etag, size_bytes, sha256, recorded_at, uploaded_bytes, uploaded_part_count]
+  additionalProperties: false
+  properties:
+    part_number: {type: integer, minimum: 1, maximum: 10000}
+    etag: {type: string, minLength: 1, maxLength: 256}
+    size_bytes: {type: integer, minimum: 1}
+    sha256: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    recorded_at: {type: string, format: date-time}
+    uploaded_bytes: {type: integer, minimum: 0}
+    uploaded_part_count: {type: integer, minimum: 0}
+UploadPartList:
+  type: object
+  required: [items, missing_part_numbers, uploaded_bytes]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/UploadPartSummary"}}
+    missing_part_numbers: {type: array, items: {type: integer, minimum: 1, maximum: 10000}, uniqueItems: true}
+    uploaded_bytes: {type: integer, minimum: 0}
+CompleteUploadPart:
+  type: object
+  required: [part_number, etag, size_bytes, sha256]
+  additionalProperties: false
+  properties:
+    part_number: {type: integer, minimum: 1, maximum: 10000}
+    etag: {type: string, minLength: 1, maxLength: 256}
+    size_bytes: {type: integer, minimum: 1}
+    sha256: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+CompleteUploadRequest:
+  type: object
+  required: [expected_sha256, expected_size_bytes, parts]
+  additionalProperties: false
+  properties:
+    expected_sha256: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    expected_size_bytes: {type: integer, minimum: 1}
+    parts: {type: array, minItems: 1, maxItems: 10000, items: {$ref: "#/CompleteUploadPart"}}
+    metadata: {type: object, additionalProperties: true}
+RawAsset:
+  type: object
+  required: [asset_id, project_id, code, source_type, collection_task_id, batch_id, upload_session_id, original_filename, object_key, size_bytes, content_type, format, sha256, status, captured_at, ingested_at, device_ids, sensor_ids, sensor_snapshot, device_time_raw, raw_metadata, storage_class, retention_policy_id, quarantine_reason, quarantine_codes, scan_report_key, verified_at, archived_at, tombstoned_at, duplicate_of_asset_id, uploaded_by, version, created_at, updated_at, created_by, updated_by]
+  additionalProperties: false
+  properties:
+    asset_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    code: {type: string, minLength: 1, maxLength: 64}
+    source_type: {$ref: "#/RawAssetSourceType"}
+    collection_task_id: {type: [string, "null"], format: uuid}
+    batch_id: {type: [string, "null"], format: uuid}
+    upload_session_id: {type: [string, "null"], format: uuid}
+    original_filename: {type: string, minLength: 1, maxLength: 255}
+    object_key: {type: string, maxLength: 1024}
+    size_bytes: {type: integer, minimum: 1}
+    content_type: {type: string, minLength: 1, maxLength: 200}
+    format: {$ref: "#/RawAssetFormat"}
+    sha256: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    status: {$ref: "#/RawAssetStatus"}
+    captured_at: {type: [string, "null"], format: date-time}
+    ingested_at: {type: string, format: date-time}
+    device_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    sensor_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    sensor_snapshot: {type: [object, "null"], additionalProperties: true}
+    device_time_raw: {type: [object, "null"], additionalProperties: true}
+    raw_metadata: {type: object, additionalProperties: true}
+    storage_class: {$ref: "#/StorageClass"}
+    retention_policy_id: {type: [string, "null"], format: uuid}
+    quarantine_reason: {type: [string, "null"], maxLength: 1000}
+    quarantine_codes: {type: array, items: {type: string}, uniqueItems: true}
+    scan_report_key: {type: [string, "null"], maxLength: 1024}
+    verified_at: {type: [string, "null"], format: date-time}
+    archived_at: {type: [string, "null"], format: date-time}
+    tombstoned_at: {type: [string, "null"], format: date-time}
+    duplicate_of_asset_id: {type: [string, "null"], format: uuid}
+    uploaded_by: {type: string, format: uuid}
+    version: {type: integer, minimum: 1}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+    created_by: {type: [string, "null"], format: uuid}
+    updated_by: {type: [string, "null"], format: uuid}
+RawAssetPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/RawAsset"}}
+    next_cursor: {type: [string, "null"]}
+CompleteUploadResponse:
+  type: object
+  required: [upload_session, raw_asset, deduplicated, validation_job_id, replayed]
+  additionalProperties: false
+  properties:
+    upload_session: {$ref: "#/UploadSession"}
+    raw_asset: {oneOf: [{$ref: "#/RawAsset"}, {type: "null"}]}
+    deduplicated: {type: boolean}
+    validation_job_id: {type: string, format: uuid}
+    replayed: {type: boolean}
+AbortUploadRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 1000}
+DownloadUrlResponse:
+  type: object
+  required: [url, expires_at]
+  additionalProperties: false
+  properties:
+    url: {type: string, format: uri}
+    expires_at: {type: string, format: date-time}
+LineageNodeType:
+  type: string
+  enum: [RAW_ASSET, UPLOAD_SESSION, COLLECTION_TASK, COLLECTION_BATCH, INGESTION_JOB, EPISODE, QUALITY_RUN, ANNOTATION, DATASET_VERSION, TRAINING_RUN]
+LineageRelation:
+  type: string
+  enum: [UPLOADED_BY, PRODUCED_BY, USED_AS_INPUT, PRODUCED, SEGMENTED_INTO, SUPERSEDES, INVALIDATES, EVALUATED_BY, ANNOTATED_BY, INCLUDED_IN]
+LineageEdge:
+  type: object
+  required: [edge_id, project_id, from_node_type, from_node_id, to_node_type, to_node_id, relation, metadata, created_by, created_at]
+  additionalProperties: false
+  properties:
+    edge_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    from_node_type: {$ref: "#/LineageNodeType"}
+    from_node_id: {type: string, format: uuid}
+    to_node_type: {$ref: "#/LineageNodeType"}
+    to_node_id: {type: string, format: uuid}
+    relation: {$ref: "#/LineageRelation"}
+    metadata: {type: object, additionalProperties: true}
+    created_by: {type: string, format: uuid}
+    created_at: {type: string, format: date-time}
+LineageResponse:
+  type: object
+  required: [items, direction]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/LineageEdge"}}
+    direction: {type: string, enum: [forward, reverse]}
+EpisodeStatus:
+  type: string
+  enum: [PENDING, PROCESSING, READY, QUALITY_CHECKING, ACCEPTED, COMPLETED, ARCHIVED, FAILED, REJECTED, INVALIDATED]
+EpisodeQualityStatus:
+  type: string
+  enum: [NOT_CHECKED, PASS, WARN, FAIL]
+EpisodeAnnotationStatus:
+  type: string
+  enum: [NOT_STARTED, IN_PROGRESS, SUBMITTED, APPROVED, REJECTED]
+EpisodeSegmentation:
+  type: object
+  required: [method, rule_version]
+  additionalProperties: false
+  properties:
+    method: {type: string, enum: [MANUAL_TIME_RANGE, RULE]}
+    rule_version: {type: string, minLength: 1, maxLength: 64}
+    start_time_ns: {type: [integer, "null"], minimum: 0}
+    end_time_ns: {type: [integer, "null"], minimum: 0}
+    time_domain: {type: string, enum: [UTC], default: UTC}
+    allow_overlap: {type: boolean, default: false}
+    overlap_reason: {type: [string, "null"], maxLength: 1000}
+    rule_parameters: {type: object, additionalProperties: true}
+TimeBase:
+  type: object
+  required: [time_domain, clock_source, sync_method, sync_status]
+  additionalProperties: false
+  properties:
+    time_domain: {type: string, enum: [UTC, ROS, DEVICE, HOST, MONOTONIC, UNKNOWN]}
+    clock_source: {type: string, enum: [PTP, NTP, ROS_CLOCK, DEVICE_CLOCK, HOST_CLOCK, MONOTONIC, EXTERNAL, UNKNOWN]}
+    clock_id: {type: [string, "null"], maxLength: 200}
+    offset_to_utc_ns: {type: [integer, "null"]}
+    drift_ppm: {type: [number, "null"]}
+    uncertainty_ns: {type: [integer, "null"]}
+    sync_method: {type: string, enum: [PTP, NTP, HARDWARE_TRIGGER, SOFTWARE_ESTIMATE, MANUAL, NONE]}
+    sync_ref: {type: [string, "null"], maxLength: 200}
+    sync_status: {type: string, enum: [VERIFIED, DEGRADED, UNVERIFIED, FAILED]}
+CalibrationSnapshotItem:
+  type: object
+  required: [calibration_id, calibration_version, checksum, target_type, target_id, schema_version]
+  additionalProperties: false
+  properties:
+    calibration_id: {type: string, format: uuid}
+    calibration_version: {type: integer, minimum: 1}
+    checksum: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    target_type: {type: string, enum: [ROBOT, DEVICE, SENSOR, SYSTEM]}
+    target_id: {type: string, format: uuid}
+    schema_version: {type: string, minLength: 1, maxLength: 64}
+Episode:
+  type: object
+  required: [episode_id, project_id, episode_lineage_id, episode_version, code, task_id, batch_id, robot_id, device_ids, sensor_ids, status, quality_status, annotation_status, success, failure_reason, scene_labels, language_instruction, start_time_ns, end_time_ns, duration_ns, time_base, canonical_schema_version, pipeline_id, pipeline_version, segmentation_rule_version, frame_count, calibration_snapshot, manifest_key, manifest_sha256, preview_refs, supersedes_id, attempt, max_attempts, version, created_at, updated_at, created_by, updated_by]
+  additionalProperties: false
+  properties:
+    episode_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    episode_lineage_id: {type: string, format: uuid}
+    episode_version: {type: integer, minimum: 1}
+    code: {type: string, minLength: 1, maxLength: 64}
+    task_id: {type: [string, "null"], format: uuid}
+    batch_id: {type: [string, "null"], format: uuid}
+    robot_id: {type: [string, "null"], format: uuid}
+    device_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    sensor_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    status: {$ref: "#/EpisodeStatus"}
+    quality_status: {$ref: "#/EpisodeQualityStatus"}
+    annotation_status: {$ref: "#/EpisodeAnnotationStatus"}
+    success: {type: [boolean, "null"]}
+    failure_reason: {type: [string, "null"], maxLength: 2000}
+    scene_labels: {type: array, items: {type: string, maxLength: 100}, uniqueItems: true}
+    language_instruction: {type: [string, "null"], maxLength: 1000}
+    start_time_ns: {type: integer}
+    end_time_ns: {type: integer}
+    duration_ns: {type: integer}
+    time_base: {$ref: "#/TimeBase"}
+    canonical_schema_version: {type: string, minLength: 1, maxLength: 64}
+    pipeline_id: {type: string, minLength: 1, maxLength: 128}
+    pipeline_version: {type: string, minLength: 1, maxLength: 64}
+    segmentation_rule_version: {type: string, minLength: 1, maxLength: 64}
+    frame_count: {type: integer, minimum: 0}
+    calibration_snapshot: {type: array, items: {$ref: "#/CalibrationSnapshotItem"}}
+    manifest_key: {type: [string, "null"], maxLength: 1024}
+    manifest_sha256: {type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$'}
+    preview_refs: {type: array, items: {type: object, additionalProperties: true}}
+    supersedes_id: {type: [string, "null"], format: uuid}
+    attempt: {type: integer, minimum: 1}
+    max_attempts: {type: integer, minimum: 1}
+    version: {type: integer, minimum: 1}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+    created_by: {type: [string, "null"], format: uuid}
+    updated_by: {type: [string, "null"], format: uuid}
+EpisodeCreate:
+  type: object
+  required: [raw_asset_ids, segmentation, time_base, canonical_schema_version, pipeline_id, pipeline_version]
+  additionalProperties: false
+  properties:
+    raw_asset_ids: {type: array, minItems: 1, maxItems: 64, uniqueItems: true, items: {type: string, format: uuid}}
+    segmentation: {$ref: "#/EpisodeSegmentation"}
+    time_base: {$ref: "#/TimeBase"}
+    calibration_snapshot: {type: array, items: {$ref: "#/CalibrationSnapshotItem"}, default: []}
+    canonical_schema_version: {type: string, minLength: 1, maxLength: 64}
+    pipeline_id: {type: string, minLength: 1, maxLength: 128}
+    pipeline_version: {type: string, minLength: 1, maxLength: 64}
+    code: {type: [string, "null"], minLength: 1, maxLength: 64}
+    task_id: {type: [string, "null"], format: uuid}
+    batch_id: {type: [string, "null"], format: uuid}
+    robot_id: {type: [string, "null"], format: uuid}
+    device_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    sensor_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    scene_labels: {type: array, items: {type: string, maxLength: 100}, uniqueItems: true}
+    language_instruction: {type: [string, "null"], maxLength: 1000}
+    success: {type: [boolean, "null"]}
+    failure_reason: {type: [string, "null"], maxLength: 1000}
+    ingestion_job_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    evidence_role: {type: string, minLength: 1, maxLength: 32, default: INPUT}
+EpisodeActionRequest:
+  type: object
+  additionalProperties: false
+  description: |
+    `ready` 必须提供 `manifest` 与 `frame_count`，且不接受 `quality_status`；
+    `quality-result` 必须提供 `quality_status`；`reject`/`invalidate` 必须提供 `reason`；
+    其余动作禁止 manifest/frame_count。
+  properties:
+    reason: {type: [string, "null"], maxLength: 1000}
+    quality_status: {type: [string, "null"], enum: [PASS, WARN, FAIL, null]}
+    manifest: {type: [object, "null"], additionalProperties: true}
+    frame_count: {type: [integer, "null"], minimum: 0}
+EpisodeRevisionCreate:
+  type: object
+  required: [code]
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+EpisodePage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/Episode"}}
+    next_cursor: {type: [string, "null"]}
+IngestionJobType:
+  type: string
+  enum: [VALIDATE, PARSE_METADATA, SEGMENT_EPISODE, REVALIDATE]
+IngestionJobStatus:
+  type: string
+  enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLING, CANCELLED]
+IngestionJob:
+  type: object
+  required: [job_id, project_id, job_type, raw_asset_ids, input_manifest_key, idempotency_key, status, attempt, max_attempts, timeout_sec, pipeline_id, pipeline_version, parser_id, parser_version, config_hash, started_at, finished_at, error_code, error_summary, output_refs, log_ref, metrics, version, created_at, updated_at, created_by, updated_by]
+  additionalProperties: false
+  properties:
+    job_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    job_type: {$ref: "#/IngestionJobType"}
+    raw_asset_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
+    input_manifest_key: {type: [string, "null"], maxLength: 1024}
+    idempotency_key: {type: [string, "null"], maxLength: 128}
+    status: {$ref: "#/IngestionJobStatus"}
+    attempt: {type: integer, minimum: 1}
+    max_attempts: {type: integer, minimum: 1}
+    timeout_sec: {type: integer, minimum: 1, maximum: 86400}
+    pipeline_id: {type: [string, "null"], maxLength: 128}
+    pipeline_version: {type: [string, "null"], maxLength: 64}
+    parser_id: {type: [string, "null"], maxLength: 128}
+    parser_version: {type: [string, "null"], maxLength: 64}
+    config_hash: {type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$'}
+    started_at: {type: [string, "null"], format: date-time}
+    finished_at: {type: [string, "null"], format: date-time}
+    error_code: {type: [string, "null"], maxLength: 64}
+    error_summary: {type: [string, "null"], maxLength: 2000}
+    output_refs: {type: array, items: {type: object, additionalProperties: true}}
+    log_ref: {type: [string, "null"], maxLength: 1024}
+    metrics: {type: object, additionalProperties: true}
+    version: {type: integer, minimum: 1}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+    created_by: {type: [string, "null"], format: uuid}
+    updated_by: {type: [string, "null"], format: uuid}
+IngestionJobCreate:
+  type: object
+  required: [job_type, timeout_sec]
+  additionalProperties: false
+  properties:
+    job_type: {$ref: "#/IngestionJobType"}
+    timeout_sec: {type: integer, minimum: 1, maximum: 86400}
+    raw_asset_ids: {type: array, maxItems: 64, items: {type: string, format: uuid}, uniqueItems: true}
+    input_manifest_key: {type: [string, "null"], maxLength: 1024}
+    idempotency_key: {type: [string, "null"], minLength: 8, maxLength: 128}
+    max_attempts: {type: integer, minimum: 1, maximum: 100, default: 3}
+    pipeline_id: {type: [string, "null"], maxLength: 128}
+    pipeline_version: {type: [string, "null"], maxLength: 64}
+    parser_id: {type: [string, "null"], maxLength: 128}
+    parser_version: {type: [string, "null"], maxLength: 64}
+    config_hash: {type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$'}
+    metrics: {type: object, additionalProperties: true}
+IngestionJobActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 1000}
+IngestionJobPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/IngestionJob"}}
+    next_cursor: {type: [string, "null"]}

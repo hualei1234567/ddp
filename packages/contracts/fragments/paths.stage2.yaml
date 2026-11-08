@@ -1,0 +1,540 @@
+collectionTasks:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listCollectionTasks
+    tags: [collection]
+    summary: 采集任务列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/CollectionTaskStatus"}}
+      - {name: assigned_to, in: query, required: false, schema: {type: string, format: uuid}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 任务分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionTaskPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createCollectionTask
+    tags: [collection]
+    summary: 创建采集任务（初始 DRAFT）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionTaskCreate"}}}}
+    responses:
+      "201": {description: 任务已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionTask"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+collectionTaskDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/TaskId"
+  get:
+    operationId: getCollectionTask
+    tags: [collection]
+    summary: 任务详情
+    responses:
+      "200": {description: 任务详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionTask"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  patch:
+    operationId: updateCollectionTask
+    tags: [collection]
+    summary: 修改任务（仅 DRAFT 核心字段）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionTaskPatch"}}}}
+    responses:
+      "200": {description: 修改后的任务, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionTask"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+collectionTaskActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/TaskId"
+    - $ref: "../openapi.yaml#/components/parameters/TaskAction"
+  post:
+    operationId: actOnCollectionTask
+    tags: [collection]
+    summary: 任务状态动作（白名单）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionTaskActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的任务, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionTask"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+collectionBatches:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/TaskId"
+  get:
+    operationId: listCollectionBatches
+    tags: [collection]
+    summary: 批次列表
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/CollectionBatchStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 批次分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionBatchPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createCollectionBatch
+    tags: [collection]
+    summary: 拆分批次（初始 PLANNED）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionBatchCreate"}}}}
+    responses:
+      "201": {description: 批次已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionBatch"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+collectionBatchDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+  get:
+    operationId: getCollectionBatch
+    tags: [collection]
+    summary: 批次详情
+    responses:
+      "200": {description: 批次详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionBatch"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  patch:
+    operationId: updateCollectionBatch
+    tags: [collection]
+    summary: 修改批次（仅 PLANNED 核心字段）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionBatchPatch"}}}}
+    responses:
+      "200": {description: 修改后的批次, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionBatch"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+collectionBatchActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchAction"
+  post:
+    operationId: actOnCollectionBatch
+    tags: [collection]
+    summary: 批次状态动作（白名单）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionBatchActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的批次, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CollectionBatch"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+uploadSessions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: createUploadSession
+    tags: [uploads]
+    summary: 创建上传会话
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/UploadSessionCreate"}}}}
+    responses:
+      "201": {description: 会话已创建, headers: {ETag: {schema: {type: string}}, Idempotent-Replayed: {schema: {type: string, enum: ["true", "false"]}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/UploadSession"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "413": {$ref: "../openapi.yaml#/components/responses/PayloadTooLarge"}
+      "415": {$ref: "../openapi.yaml#/components/responses/UnsupportedMediaType"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+uploadSessionDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/UploadSessionId"
+  get:
+    operationId: getUploadSession
+    tags: [uploads]
+    summary: 断点状态与已确认分片
+    responses:
+      "200": {description: 会话状态, headers: {ETag: {schema: {type: string}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/UploadSession"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "410": {$ref: "../openapi.yaml#/components/responses/Gone"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+      "503": {$ref: "../openapi.yaml#/components/responses/ServiceUnavailable"}
+uploadParts:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/UploadSessionId"
+  get:
+    operationId: listUploadParts
+    tags: [uploads]
+    summary: 已确认分片列表与缺失分片
+    responses:
+      "200": {description: 分片列表, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/UploadPartList"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "410": {$ref: "../openapi.yaml#/components/responses/Gone"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+      "503": {$ref: "../openapi.yaml#/components/responses/ServiceUnavailable"}
+uploadPartUrl:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/UploadSessionId"
+    - $ref: "../openapi.yaml#/components/parameters/PartNumber"
+  post:
+    operationId: createUploadPartUrl
+    tags: [uploads]
+    summary: 获取分片预签名 URL（可绑定可选 sha256）
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/UploadPartUrlRequest"}}}}
+    responses:
+      "200": {description: 分片上传 URL 与必填头, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/UploadPartUrlResponse"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "410": {$ref: "../openapi.yaml#/components/responses/Gone"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+uploadPartAck:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/UploadSessionId"
+    - $ref: "../openapi.yaml#/components/parameters/PartNumber"
+  post:
+    operationId: ackUploadPart
+    tags: [uploads]
+    summary: 确认分片（ETag/大小/SHA256，同内容幂等）
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/UploadPartAckRequest"}}}}
+    responses:
+      "200": {description: 分片已确认, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/UploadPartAckResponse"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "410": {$ref: "../openapi.yaml#/components/responses/Gone"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+uploadComplete:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/UploadSessionId"
+  post:
+    operationId: completeUploadSession
+    tags: [uploads]
+    summary: 完成上传并登记/命中 RawAsset（异步校验，返回 uploaded_parts）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CompleteUploadRequest"}}}}
+    responses:
+      "202": {description: 完成已受理，等待 VALIDATE Job, headers: {ETag: {schema: {type: string}}, Idempotent-Replayed: {schema: {type: string, enum: ["true", "false"]}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CompleteUploadResponse"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "410": {$ref: "../openapi.yaml#/components/responses/Gone"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+      "503": {$ref: "../openapi.yaml#/components/responses/ServiceUnavailable"}
+uploadAbort:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/UploadSessionId"
+  post:
+    operationId: abortUploadSession
+    tags: [uploads]
+    summary: 中止上传会话（终态重复调用返回原状态）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AbortUploadRequest"}}}}
+    responses:
+      "200": {description: 会话已中止或原状态返回, headers: {ETag: {schema: {type: string}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/UploadSession"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "410": {$ref: "../openapi.yaml#/components/responses/Gone"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+rawAssets:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listRawAssets
+    tags: [raw-assets]
+    summary: RawAsset 列表与筛选（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/RawAssetStatus"}}
+      - {name: collection_task_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - {name: format, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/RawAssetFormat"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 资产分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/RawAssetPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+rawAssetDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AssetId"
+  get:
+    operationId: getRawAsset
+    tags: [raw-assets]
+    summary: RawAsset 详情
+    responses:
+      "200": {description: 资产详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/RawAsset"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+rawAssetLineage:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/AssetId"
+    - $ref: "../openapi.yaml#/components/parameters/ProjectIdQuery"
+    - $ref: "../openapi.yaml#/components/parameters/LineageDirection"
+    - $ref: "../openapi.yaml#/components/parameters/LineageDepth"
+    - $ref: "../openapi.yaml#/components/parameters/LineageLimit"
+  get:
+    operationId: getRawAssetLineage
+    tags: [lineage]
+    summary: RawAsset 血缘正/反向遍历
+    responses:
+      "200": {description: 血缘遍历结果, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/LineageResponse"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+rawAssetDownloadUrl:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/AssetId"
+    - $ref: "../openapi.yaml#/components/parameters/ProjectIdQuery"
+  get:
+    operationId: createRawAssetDownloadUrl
+    tags: [raw-assets]
+    summary: 短期下载地址（仅 VALID/ARCHIVED，强审计）
+    responses:
+      "200": {description: 短期签名地址, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/DownloadUrlResponse"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+episodes:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listEpisodes
+    tags: [episodes]
+    summary: Episode 列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/EpisodeStatus"}}
+      - {name: task_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - {name: batch_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: Episode 分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/EpisodePage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createEpisode
+    tags: [episodes]
+    summary: 从 VALID/ARCHIVED 资产创建基础切片（PENDING）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/RequiredIdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/EpisodeCreate"}}}}
+    responses:
+      "201": {description: Episode 已创建, headers: {ETag: {schema: {type: string}}, Idempotent-Replayed: {schema: {type: string, enum: ["true", "false"]}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Episode"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+episodeDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/EpisodeId"
+  get:
+    operationId: getEpisode
+    tags: [episodes]
+    summary: Episode 详情
+    responses:
+      "200": {description: Episode 详情, headers: {ETag: {schema: {type: string}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Episode"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+episodeActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/EpisodeId"
+    - $ref: "../openapi.yaml#/components/parameters/EpisodeAction"
+  post:
+    operationId: actOnEpisode
+    tags: [episodes]
+    summary: Episode 状态动作（ready/quality-check/quality-result/accept/reject/complete/invalidate）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/RequiredIdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/EpisodeActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的 Episode, headers: {ETag: {schema: {type: string}}, Idempotent-Replayed: {schema: {type: string, enum: ["true", "false"]}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Episode"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+episodeRevisions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/EpisodeId"
+  post:
+    operationId: reviseEpisode
+    tags: [episodes]
+    summary: 创建 Episode 修订（新 episode_id、episode_version+1、supersedes_id）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/RequiredIdempotencyKey"
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/EpisodeRevisionCreate"}}}}
+    responses:
+      "201": {description: 修订 Episode 已创建, headers: {ETag: {schema: {type: string}}, Idempotent-Replayed: {schema: {type: string, enum: ["true", "false"]}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Episode"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+episodeLineage:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/EpisodeId"
+    - $ref: "../openapi.yaml#/components/parameters/ProjectIdQuery"
+    - $ref: "../openapi.yaml#/components/parameters/LineageDirection"
+    - $ref: "../openapi.yaml#/components/parameters/LineageDepth"
+    - $ref: "../openapi.yaml#/components/parameters/LineageLimit"
+  get:
+    operationId: getEpisodeLineage
+    tags: [lineage]
+    summary: Episode 血缘正/反向遍历
+    responses:
+      "200": {description: 血缘遍历结果, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/LineageResponse"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+ingestionJobs:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: createIngestionJob
+    tags: [ingestion-jobs]
+    summary: 创建解析/校验 Job（初始 QUEUED）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/RequiredIdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IngestionJobCreate"}}}}
+    responses:
+      "201": {description: Job 已创建, headers: {ETag: {schema: {type: string}}, Idempotent-Replayed: {schema: {type: string, enum: ["true", "false"]}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IngestionJob"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  get:
+    operationId: listIngestionJobs
+    tags: [ingestion-jobs]
+    summary: IngestionJob 列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/IngestionJobStatus"}}
+      - {name: raw_asset_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: Job 分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IngestionJobPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+ingestionJobDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/JobId"
+  get:
+    operationId: getIngestionJob
+    tags: [ingestion-jobs]
+    summary: IngestionJob 详情
+    responses:
+      "200": {description: Job 详情, headers: {ETag: {schema: {type: string}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IngestionJob"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+ingestionJobActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/JobId"
+    - $ref: "../openapi.yaml#/components/parameters/JobAction"
+  post:
+    operationId: actOnIngestionJob
+    tags: [ingestion-jobs]
+    summary: 取消或重试 IngestionJob
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/RequiredIdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IngestionJobActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的 Job, headers: {ETag: {schema: {type: string}}, Idempotent-Replayed: {schema: {type: string, enum: ["true", "false"]}}}, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IngestionJob"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}

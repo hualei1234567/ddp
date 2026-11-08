@@ -1,0 +1,283 @@
+HealthResponse:
+  type: object
+  required: [status, service, version, env]
+  additionalProperties: false
+  properties:
+    status: {type: string, const: ok}
+    service: {type: string}
+    version: {type: string}
+    env: {type: string}
+PlatformMeta:
+  type: object
+  required: [name, version, env, phase, modules]
+  additionalProperties: false
+  properties:
+    name: {type: string}
+    version: {type: string}
+    env: {type: string}
+    phase: {type: string}
+    modules: {type: array, items: {type: string}}
+LifecycleStatus:
+  type: string
+  enum: [PROVISIONED, ACTIVE, IN_MAINTENANCE, FAULT, SUSPENDED, RETIRED]
+DeviceType:
+  type: string
+  enum: [COMPUTE, CONTROLLER, CAMERA_RIG, TELEOP, GRIPPER, OTHER]
+SensorType:
+  type: string
+  enum: [RGB, RGB_D, DEPTH, IMU, JOINT_STATE, END_EFFECTOR, FORCE_TORQUE, MOCAP, AUDIO]
+SensorSyncMode:
+  type: string
+  enum: [PTP, NTP, HARDWARE_TRIGGER, SOFTWARE_ESTIMATE, MANUAL, NONE]
+CalibrationScope:
+  type: string
+  enum: [ROBOT, DEVICE, SENSOR, SYSTEM]
+CalibrationTargetType:
+  type: string
+  enum: [ROBOT, DEVICE, SENSOR, SYSTEM]
+CalibrationType:
+  type: string
+  enum: [INTRINSICS, EXTRINSICS, HAND_EYE, IMU, JOINT_OFFSET, TIME_OFFSET, FORCE_TORQUE, DEPTH_ALIGNMENT]
+CalibrationStatus:
+  type: string
+  enum: [DRAFT, SUBMITTED, VALIDATED, ACTIVE, REJECTED, SUPERSEDED, REVOKED, EXPIRED]
+Device:
+  type: object
+  required: [device_id, project_id, robot_id, code, name, device_type, vendor, model, serial_number, firmware_version, hardware_version, calibration_profile_id, capability_profile, status, location_id, owner_user_id, version, created_at, updated_at, created_by, updated_by]
+  additionalProperties: false
+  properties:
+    device_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    robot_id: {type: [string, "null"], format: uuid}
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    device_type: {$ref: "#/DeviceType"}
+    vendor: {type: [string, "null"], maxLength: 120}
+    model: {type: [string, "null"], maxLength: 120}
+    serial_number: {type: [string, "null"], maxLength: 120}
+    firmware_version: {type: [string, "null"], maxLength: 64}
+    hardware_version: {type: [string, "null"], maxLength: 64}
+    calibration_profile_id: {type: [string, "null"], format: uuid}
+    capability_profile: {type: object, additionalProperties: true}
+    status: {$ref: "#/LifecycleStatus"}
+    location_id: {type: [string, "null"], format: uuid}
+    owner_user_id: {type: [string, "null"], format: uuid}
+    version: {type: integer, minimum: 1, description: "乐观锁；仅表示档案版本，不表示业务修订历史"}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+    created_by: {type: [string, "null"], format: uuid}
+    updated_by: {type: [string, "null"], format: uuid}
+DeviceCreate:
+  type: object
+  required: [code, name, device_type]
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    device_type: {$ref: "#/DeviceType"}
+    robot_id: {type: [string, "null"], format: uuid}
+    vendor: {type: [string, "null"], maxLength: 120}
+    model: {type: [string, "null"], maxLength: 120}
+    serial_number: {type: [string, "null"], maxLength: 120}
+    firmware_version: {type: [string, "null"], maxLength: 64}
+    hardware_version: {type: [string, "null"], maxLength: 64}
+    calibration_profile_id: {type: [string, "null"], format: uuid}
+    capability_profile: {type: object, additionalProperties: true, default: {}}
+    location_id: {type: [string, "null"], format: uuid}
+    owner_user_id: {type: [string, "null"], format: uuid}
+DevicePatch:
+  type: object
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    device_type: {$ref: "#/DeviceType"}
+    robot_id: {type: [string, "null"], format: uuid}
+    vendor: {type: [string, "null"], maxLength: 120}
+    model: {type: [string, "null"], maxLength: 120}
+    serial_number: {type: [string, "null"], maxLength: 120}
+    firmware_version: {type: [string, "null"], maxLength: 64}
+    hardware_version: {type: [string, "null"], maxLength: 64}
+    calibration_profile_id: {type: [string, "null"], format: uuid}
+    capability_profile: {type: object, additionalProperties: true}
+    location_id: {type: [string, "null"], format: uuid}
+    owner_user_id: {type: [string, "null"], format: uuid}
+DevicePage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/Device"}}
+    next_cursor: {type: [string, "null"]}
+Sensor:
+  type: object
+  required: [sensor_id, project_id, robot_id, device_id, code, sensor_type, vendor, model, serial_number, sample_rate_hz, resolution_w, resolution_h, bit_depth, channels, intrinsic_calibration_id, extrinsic_calibration_id, coordinate_frame, sync_mode, sync_group, firmware_version, calibration_profile_id, status, mount_position, version, created_at, updated_at]
+  additionalProperties: false
+  properties:
+    sensor_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    robot_id: {type: [string, "null"], format: uuid}
+    device_id: {type: [string, "null"], format: uuid}
+    code: {type: string, minLength: 1, maxLength: 64}
+    sensor_type: {$ref: "#/SensorType"}
+    vendor: {type: [string, "null"], maxLength: 120}
+    model: {type: [string, "null"], maxLength: 120}
+    serial_number: {type: [string, "null"], maxLength: 120}
+    sample_rate_hz: {type: number, exclusiveMinimum: 0}
+    resolution_w: {type: [integer, "null"], minimum: 1}
+    resolution_h: {type: [integer, "null"], minimum: 1}
+    bit_depth: {type: [integer, "null"], minimum: 1}
+    channels: {type: [integer, "null"], minimum: 1, description: "整数通道数；不是字符串数组"}
+    intrinsic_calibration_id: {type: [string, "null"], format: uuid}
+    extrinsic_calibration_id: {type: [string, "null"], format: uuid}
+    coordinate_frame: {type: string, minLength: 1, maxLength: 200, deprecated: true, description: "当前实现字段；冻结目标更名 frame_id（差距 G-08）"}
+    sync_mode: {$ref: "#/SensorSyncMode"}
+    sync_group: {type: [string, "null"], maxLength: 64}
+    firmware_version: {type: [string, "null"], maxLength: 64}
+    calibration_profile_id: {type: [string, "null"], format: uuid}
+    status: {$ref: "#/LifecycleStatus"}
+    mount_position: {type: [string, "null"], maxLength: 200}
+    version: {type: integer, minimum: 1}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+SensorCreate:
+  type: object
+  required: [code, sensor_type, sample_rate_hz, coordinate_frame]
+  additionalProperties: false
+  anyOf:
+    - required: [robot_id]
+    - required: [device_id]
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    sensor_type: {$ref: "#/SensorType"}
+    sample_rate_hz: {type: number, exclusiveMinimum: 0}
+    coordinate_frame: {type: string, minLength: 1, maxLength: 200}
+    robot_id: {type: [string, "null"], format: uuid}
+    device_id: {type: [string, "null"], format: uuid}
+    vendor: {type: [string, "null"], maxLength: 120}
+    model: {type: [string, "null"], maxLength: 120}
+    serial_number: {type: [string, "null"], maxLength: 120}
+    resolution_w: {type: [integer, "null"], minimum: 1}
+    resolution_h: {type: [integer, "null"], minimum: 1}
+    bit_depth: {type: [integer, "null"], minimum: 1}
+    channels: {type: [integer, "null"], minimum: 1}
+    intrinsic_calibration_id: {type: [string, "null"], format: uuid}
+    extrinsic_calibration_id: {type: [string, "null"], format: uuid}
+    sync_mode: {$ref: "#/SensorSyncMode"}
+    sync_group: {type: [string, "null"], maxLength: 64}
+    firmware_version: {type: [string, "null"], maxLength: 64}
+    calibration_profile_id: {type: [string, "null"], format: uuid}
+    mount_position: {type: [string, "null"], maxLength: 200}
+SensorPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    sensor_type: {$ref: "#/SensorType"}
+    robot_id: {type: [string, "null"], format: uuid}
+    device_id: {type: [string, "null"], format: uuid}
+    vendor: {type: [string, "null"], maxLength: 120}
+    model: {type: [string, "null"], maxLength: 120}
+    serial_number: {type: [string, "null"], maxLength: 120}
+    sample_rate_hz: {type: number, exclusiveMinimum: 0}
+    resolution_w: {type: [integer, "null"], minimum: 1}
+    resolution_h: {type: [integer, "null"], minimum: 1}
+    bit_depth: {type: [integer, "null"], minimum: 1}
+    channels: {type: [integer, "null"], minimum: 1}
+    intrinsic_calibration_id: {type: [string, "null"], format: uuid}
+    extrinsic_calibration_id: {type: [string, "null"], format: uuid}
+    coordinate_frame: {type: string, minLength: 1, maxLength: 200, deprecated: true}
+    sync_mode: {$ref: "#/SensorSyncMode"}
+    sync_group: {type: [string, "null"], maxLength: 64}
+    firmware_version: {type: [string, "null"], maxLength: 64}
+    calibration_profile_id: {type: [string, "null"], format: uuid}
+    mount_position: {type: [string, "null"], maxLength: 200}
+SensorPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/Sensor"}}
+    next_cursor: {type: [string, "null"]}
+Calibration:
+  type: object
+  required: [calibration_id, project_id, profile_id, scope, target_type, target_id, calibration_type, method, parameters, parent_frame, child_frame, valid_from, valid_to, status, evidence_asset_ids, source, checksum, uncertainty, performed_by, validated_by, validated_at, supersedes_id, version, created_at, updated_at]
+  additionalProperties: false
+  properties:
+    calibration_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    profile_id: {type: string, format: uuid}
+    scope: {$ref: "#/CalibrationScope"}
+    target_type: {$ref: "#/CalibrationTargetType"}
+    target_id: {type: string, format: uuid}
+    calibration_type: {$ref: "#/CalibrationType"}
+    method: {type: string, minLength: 1, maxLength: 200}
+    parameters: {type: object, additionalProperties: true}
+    parent_frame: {type: [string, "null"], maxLength: 200}
+    child_frame: {type: [string, "null"], maxLength: 200}
+    valid_from: {type: string, format: date-time}
+    valid_to: {type: [string, "null"], format: date-time}
+    status: {$ref: "#/CalibrationStatus"}
+    evidence_asset_ids: {type: array, items: {type: string, format: uuid}}
+    source: {type: [string, "null"], maxLength: 120}
+    checksum: {type: string, pattern: '^sha256:[0-9a-f]{64}$'}
+    uncertainty: {type: object, additionalProperties: true}
+    performed_by: {type: string, format: uuid}
+    validated_by: {type: [string, "null"], format: uuid}
+    validated_at: {type: [string, "null"], format: date-time}
+    supersedes_id: {type: [string, "null"], format: uuid}
+    version: {type: integer, minimum: 1, deprecated: true}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+CalibrationCreate:
+  type: object
+  required: [profile_id, target_type, target_id, calibration_type, method, parameters, valid_from]
+  additionalProperties: false
+  properties:
+    profile_id: {type: string, format: uuid}
+    target_type: {$ref: "#/CalibrationTargetType"}
+    target_id: {type: string, format: uuid}
+    calibration_type: {$ref: "#/CalibrationType"}
+    method: {type: string, minLength: 1, maxLength: 200}
+    parameters: {type: object, additionalProperties: true}
+    valid_from: {type: string, format: date-time}
+    valid_to: {type: [string, "null"], format: date-time}
+    parent_frame: {type: [string, "null"], maxLength: 200}
+    child_frame: {type: [string, "null"], maxLength: 200}
+    evidence_asset_ids: {type: array, items: {type: string, format: uuid}, default: []}
+    source: {type: [string, "null"], maxLength: 120}
+    uncertainty: {type: object, additionalProperties: true, default: {}}
+CalibrationPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    profile_id: {type: string, format: uuid}
+    target_type: {$ref: "#/CalibrationTargetType"}
+    target_id: {type: string, format: uuid}
+    calibration_type: {$ref: "#/CalibrationType"}
+    method: {type: string, minLength: 1, maxLength: 200}
+    parameters: {type: object, additionalProperties: true}
+    valid_from: {type: string, format: date-time}
+    valid_to: {type: [string, "null"], format: date-time}
+    parent_frame: {type: [string, "null"], maxLength: 200}
+    child_frame: {type: [string, "null"], maxLength: 200}
+    evidence_asset_ids: {type: array, items: {type: string, format: uuid}}
+    source: {type: [string, "null"], maxLength: 120}
+    uncertainty: {type: object, additionalProperties: true}
+CalibrationPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/Calibration"}}
+    next_cursor: {type: [string, "null"]}
+ActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 1000}
+    fault_code: {type: [string, "null"], maxLength: 64}
+    fault_detail: {type: [string, "null"], maxLength: 2000}
+    occurred_at: {type: [string, "null"], format: date-time}
+    maintenance_record_id: {type: [string, "null"], format: uuid}
+    evidence_refs: {type: [array, "null"], items: {type: string, format: uuid}}

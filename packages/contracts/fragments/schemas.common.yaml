@@ -1,0 +1,62 @@
+ErrorCode:
+  type: string
+  description: 稳定错误码；客户端按 code 分支，未知错误不得默认成功。
+  enum:
+    - not_authenticated
+    - forbidden
+    - not_found
+    - resource_not_found
+    - conflict
+    - state_transition_invalid
+    - version_conflict
+    - resource_immutable
+    - duplicate_resource
+    - calibration_active_conflict
+    - validation_failed
+    - calibration_invalid
+    - calibration_target_invalid
+    - calibration_profile_invalid
+    - calibration_checksum_mismatch
+    - calibration_not_active
+    - precondition_required
+    - rate_limited
+    - idempotency_key_reused
+    - upload_incomplete
+    - upload_part_conflict
+    - upload_session_not_uploading
+    - upload_session_expired
+    - file_too_large
+    - file_type_unsupported
+    - filename_invalid
+    - file_signature_mismatch
+    - hash_mismatch
+    - size_mismatch
+    - object_storage_unavailable
+    - object_missing
+    - asset_not_usable
+    - job_not_retryable
+    - job_timeout
+    - episode_overlap_conflict
+    - manifest_hash_mismatch
+    - manifest_schema_invalid
+    - episode_time_base_invalid
+    - lineage_conflict
+ErrorEnvelope:
+  type: object
+  required: [error]
+  additionalProperties: false
+  properties:
+    error:
+      type: object
+      required: [code, message]
+      additionalProperties: false
+      properties:
+        code:
+          $ref: "#/ErrorCode"
+        message:
+          type: string
+        request_id:
+          type: [string, "null"]
+        details:
+          type: [object, "null"]
+          additionalProperties: true

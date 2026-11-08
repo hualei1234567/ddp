@@ -1,0 +1,5824 @@
+openapi: 3.1.0
+info:
+  title: DDP API
+  version: 1.0.0
+  description: |
+    DDP（Embodied AI Data Platform）HTTP API 契约。
+
+    - `1.0.0` 是**阶段 1 + 阶段 2 已实现端点冻结快照**：覆盖 `/health`、平台元信息、
+      devices / sensors / calibrations，以及阶段 2 的 collection-tasks / collection-batches、
+      upload-sessions、raw-assets、episodes、ingestion-jobs 与血缘查询。
+    - 阶段 1 设备域冻结目标为 `ddp.device/1.0.0`（已批准）。
+    - 阶段 2 冻结版本为 `ddp.stage2/1.0.0`（DDP-312，v1.0 FROZEN）。
+    - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
+    - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
+      `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
+
+    本文件是唯一 OpenAPI 入口；为保证可维护性，路径项与 Schema 拆分到 `fragments/`
+    并由本文件解析。Redocly/oasdiff 的输入始终是 `packages/contracts/openapi.yaml`。
+
+    认证：生产环境使用 `Authorization: Bearer <JWT>`；本地环境可显式启用 loopback
+    `X-User-Id` 后门，不属于对外契约。所有项目路由由服务端校验成员资格，不信任客户端
+    传入的 `project_id`。错误体统一为 `{"error": {"code", "message", "request_id", "details?"}}`。
+    响应头携带 `X-Request-Id`；写动作按端点要求 `If-Match: "<version>"` 与 `Idempotency-Key`。
+  contact:
+    name: DDP System Architect
+  license:
+    name: Proprietary
+servers:
+  - url: http://localhost:8000
+    description: 本地开发
+security:
+  - bearerAuth: []
+tags:
+  - name: platform
+    description: 健康检查与平台元信息
+  - name: devices
+    description: 设备档案、项目隔离、乐观锁与生命周期动作
+  - name: sensors
+    description: 传感器档案、参照校验、乐观锁与生命周期动作
+  - name: calibrations
+    description: 标定记录草案、提交/校验/驳回/激活/作废/过期
+  - name: collection
+    description: 采集任务与批次、分配、拆分与状态动作
+  - name: uploads
+    description: 上传会话、分片预签名、确认、断点、完成与中止
+  - name: raw-assets
+    description: RawAsset 列表、详情与短期下载地址
+  - name: episodes
+    description: Episode 创建、列表、详情、状态动作与修订
+  - name: ingestion-jobs
+    description: 解析/校验 Job 创建、列表、详情、取消与重试
+  - name: lineage
+    description: RawAsset 与 Episode 血缘正/反向查询
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags:
+        - platform
+      security: []
+      summary: 服务健康检查
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/platform/meta:
+    get:
+      operationId: getPlatformMeta
+      tags:
+        - platform
+      security: []
+      summary: 平台元信息
+      responses:
+        '200':
+          description: 平台元信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformMeta'
+  /api/v1/projects/{project_id}/devices:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listDevices
+      tags:
+        - devices
+      summary: 设备列表（游标分页）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/LifecycleStatus'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 设备分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevicePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createDevice
+      tags:
+        - devices
+      summary: 创建设备档案
+      description: 初始状态固定为 `PROVISIONED`；客户端不得提交 status/project_id/审计字段。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceCreate'
+      responses:
+        '201':
+          description: 设备已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/devices/{device_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DeviceId'
+    get:
+      operationId: getDevice
+      tags:
+        - devices
+      summary: 设备详情
+      responses:
+        '200':
+          description: 设备详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateDevice
+      tags:
+        - devices
+      summary: 修改设备档案（不含状态）
+      description: 仅允许修改白名单字段；必须携带 `If-Match`。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevicePatch'
+      responses:
+        '200':
+          description: 修改后的设备
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/devices/{device_id}/activate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DeviceId'
+    post:
+      operationId: activateDevice
+      tags:
+        - devices
+      summary: 设备启用（PROVISIONED→ACTIVE）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/devices/{device_id}/maintenance:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DeviceId'
+    post:
+      operationId: enterDeviceMaintenance
+      tags:
+        - devices
+      summary: 设备进入维护（ACTIVE/FAULT→IN_MAINTENANCE）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/devices/{device_id}/fault:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DeviceId'
+    post:
+      operationId: reportDeviceFault
+      tags:
+        - devices
+      summary: 上报设备故障（ACTIVE/IN_MAINTENANCE→FAULT）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/devices/{device_id}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DeviceId'
+    post:
+      operationId: suspendDevice
+      tags:
+        - devices
+      summary: 挂起设备（任意非终态→SUSPENDED）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/devices/{device_id}/retire:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/DeviceId'
+    post:
+      operationId: retireDevice
+      tags:
+        - devices
+      summary: 设备退役（任意非终态→RETIRED，终态）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的设备
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/sensors:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listSensors
+      tags:
+        - sensors
+      summary: 传感器列表（游标分页）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/LifecycleStatus'
+        - name: sensor_type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/SensorType'
+        - name: robot_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: device_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 传感器分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createSensor
+      tags:
+        - sensors
+      summary: 创建传感器档案
+      description: 必须至少关联 `robot_id` 或 `device_id`；引用必须同项目。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SensorCreate'
+      responses:
+        '201':
+          description: 传感器已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sensor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/sensors/{sensor_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/SensorId'
+    get:
+      operationId: getSensor
+      tags:
+        - sensors
+      summary: 传感器详情
+      responses:
+        '200':
+          description: 传感器详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sensor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateSensor
+      tags:
+        - sensors
+      summary: 修改传感器档案（不含状态）
+      description: 必须携带 `If-Match`；引用变更会重新校验同项目与标定目标一致性。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SensorPatch'
+      responses:
+        '200':
+          description: 修改后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sensor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/activate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/SensorId'
+    post:
+      operationId: activateSensor
+      tags:
+        - sensors
+      summary: 传感器启用（PROVISIONED→ACTIVE）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sensor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/maintenance:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/SensorId'
+    post:
+      operationId: enterSensorMaintenance
+      tags:
+        - sensors
+      summary: 传感器进入维护
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sensor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/fault:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/SensorId'
+    post:
+      operationId: reportSensorFault
+      tags:
+        - sensors
+      summary: 上报传感器故障（ACTIVE/IN_MAINTENANCE→FAULT）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sensor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/suspend:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/SensorId'
+    post:
+      operationId: suspendSensor
+      tags:
+        - sensors
+      summary: 挂起传感器（任意非终态→SUSPENDED）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sensor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/sensors/{sensor_id}/retire:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/SensorId'
+    post:
+      operationId: retireSensor
+      tags:
+        - sensors
+      summary: 传感器退役（终态）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 动作后的传感器
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sensor'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/calibrations:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listCalibrations
+      tags:
+        - calibrations
+      summary: 标定记录列表（游标分页）
+      parameters:
+        - name: target_type
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CalibrationTargetType'
+        - name: target_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CalibrationStatus'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 标定记录分页结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalibrationPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createCalibration
+      tags:
+        - calibrations
+      summary: 创建标定草案
+      description: 初始状态固定为 `DRAFT`；`performed_by` 与 `checksum` 由服务端写入。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalibrationCreate'
+      responses:
+        '201':
+          description: 标定草案已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calibration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/CalibrationId'
+    get:
+      operationId: getCalibration
+      tags:
+        - calibrations
+      summary: 标定记录详情
+      responses:
+        '200':
+          description: 标定记录详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calibration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateCalibration
+      tags:
+        - calibrations
+      summary: 修改标定草案（仅 DRAFT）
+      description: 非 DRAFT 记录返回 `resource_immutable`；必须携带 `If-Match`。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalibrationPatch'
+      responses:
+        '200':
+          description: 修改后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calibration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/submit:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/CalibrationId'
+    post:
+      operationId: submitCalibration
+      tags:
+        - calibrations
+      summary: 提交标定（DRAFT→SUBMITTED）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 提交后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calibration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/validate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/CalibrationId'
+    post:
+      operationId: validateCalibration
+      tags:
+        - calibrations
+      summary: 校验标定（SUBMITTED→VALIDATED）
+      description: 要求项目 VALIDATE 权限，且执行人与校验人分离（四眼）。
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 校验后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calibration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/reject:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/CalibrationId'
+    post:
+      operationId: rejectCalibration
+      tags:
+        - calibrations
+      summary: 驳回标定（SUBMITTED→REJECTED）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 驳回后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calibration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/activate:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/CalibrationId'
+    post:
+      operationId: activateCalibration
+      tags:
+        - calibrations
+      summary: 激活标定（VALIDATED→ACTIVE）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 激活后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calibration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/revoke:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/CalibrationId'
+    post:
+      operationId: revokeCalibration
+      tags:
+        - calibrations
+      summary: 作废标定（ACTIVE→REVOKED，终态）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 作废后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calibration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/calibrations/{calibration_id}/expire:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/CalibrationId'
+    post:
+      operationId: expireCalibration
+      tags:
+        - calibrations
+      summary: 标记标定过期（ACTIVE→EXPIRED，终态）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActionRequest'
+      responses:
+        '200':
+          description: 过期后的标定记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Calibration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/collection-tasks:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listCollectionTasks
+      tags:
+        - collection
+      summary: 采集任务列表（游标分页）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CollectionTaskStatus'
+        - name: assigned_to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 任务分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionTaskPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createCollectionTask
+      tags:
+        - collection
+      summary: 创建采集任务（初始 DRAFT）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionTaskCreate'
+      responses:
+        '201':
+          description: 任务已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionTask'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/collection-tasks/{task_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      operationId: getCollectionTask
+      tags:
+        - collection
+      summary: 任务详情
+      responses:
+        '200':
+          description: 任务详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionTask'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateCollectionTask
+      tags:
+        - collection
+      summary: 修改任务（仅 DRAFT 核心字段）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionTaskPatch'
+      responses:
+        '200':
+          description: 修改后的任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionTask'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/collection-tasks/{task_id}/actions/{action}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/TaskId'
+      - $ref: '#/components/parameters/TaskAction'
+    post:
+      operationId: actOnCollectionTask
+      tags:
+        - collection
+      summary: 任务状态动作（白名单）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionTaskActionRequest'
+      responses:
+        '200':
+          description: 动作后的任务
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionTask'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/collection-tasks/{task_id}/batches:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/TaskId'
+    get:
+      operationId: listCollectionBatches
+      tags:
+        - collection
+      summary: 批次列表
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/CollectionBatchStatus'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 批次分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionBatchPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createCollectionBatch
+      tags:
+        - collection
+      summary: 拆分批次（初始 PLANNED）
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionBatchCreate'
+      responses:
+        '201':
+          description: 批次已创建
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionBatch'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/collection-batches/{batch_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/BatchId'
+    get:
+      operationId: getCollectionBatch
+      tags:
+        - collection
+      summary: 批次详情
+      responses:
+        '200':
+          description: 批次详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionBatch'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    patch:
+      operationId: updateCollectionBatch
+      tags:
+        - collection
+      summary: 修改批次（仅 PLANNED 核心字段）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionBatchPatch'
+      responses:
+        '200':
+          description: 修改后的批次
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionBatch'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/collection-batches/{batch_id}/actions/{action}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/BatchId'
+      - $ref: '#/components/parameters/BatchAction'
+    post:
+      operationId: actOnCollectionBatch
+      tags:
+        - collection
+      summary: 批次状态动作（白名单）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionBatchActionRequest'
+      responses:
+        '200':
+          description: 动作后的批次
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionBatch'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/upload-sessions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: createUploadSession
+      tags:
+        - uploads
+      summary: 创建上传会话
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadSessionCreate'
+      responses:
+        '201':
+          description: 会话已创建
+          headers:
+            ETag:
+              schema:
+                type: string
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                  - 'true'
+                  - 'false'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaType'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/UploadSessionId'
+    get:
+      operationId: getUploadSession
+      tags:
+        - uploads
+      summary: 断点状态与已确认分片
+      responses:
+        '200':
+          description: 会话状态
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/parts:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/UploadSessionId'
+    get:
+      operationId: listUploadParts
+      tags:
+        - uploads
+      summary: 已确认分片列表与缺失分片
+      responses:
+        '200':
+          description: 分片列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadPartList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/parts/{part_number}/url:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/UploadSessionId'
+      - $ref: '#/components/parameters/PartNumber'
+    post:
+      operationId: createUploadPartUrl
+      tags:
+        - uploads
+      summary: 获取分片预签名 URL（可绑定可选 sha256）
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadPartUrlRequest'
+      responses:
+        '200':
+          description: 分片上传 URL 与必填头
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadPartUrlResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/parts/{part_number}/ack:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/UploadSessionId'
+      - $ref: '#/components/parameters/PartNumber'
+    post:
+      operationId: ackUploadPart
+      tags:
+        - uploads
+      summary: 确认分片（ETag/大小/SHA256，同内容幂等）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadPartAckRequest'
+      responses:
+        '200':
+          description: 分片已确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadPartAckResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/complete:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/UploadSessionId'
+    post:
+      operationId: completeUploadSession
+      tags:
+        - uploads
+      summary: 完成上传并登记/命中 RawAsset（异步校验，返回 uploaded_parts）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteUploadRequest'
+      responses:
+        '202':
+          description: 完成已受理，等待 VALIDATE Job
+          headers:
+            ETag:
+              schema:
+                type: string
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                  - 'true'
+                  - 'false'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompleteUploadResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/abort:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/UploadSessionId'
+    post:
+      operationId: abortUploadSession
+      tags:
+        - uploads
+      summary: 中止上传会话（终态重复调用返回原状态）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AbortUploadRequest'
+      responses:
+        '200':
+          description: 会话已中止或原状态返回
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '410':
+          $ref: '#/components/responses/Gone'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/raw-assets:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listRawAssets
+      tags:
+        - raw-assets
+      summary: RawAsset 列表与筛选（游标分页）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/RawAssetStatus'
+        - name: collection_task_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: format
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/RawAssetFormat'
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: 资产分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RawAssetPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/raw-assets/{asset_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/AssetId'
+    get:
+      operationId: getRawAsset
+      tags:
+        - raw-assets
+      summary: RawAsset 详情
+      responses:
+        '200':
+          description: 资产详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RawAsset'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/raw-assets/{asset_id}/lineage:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+      - $ref: '#/components/parameters/ProjectIdQuery'
+      - $ref: '#/components/parameters/LineageDirection'
+      - $ref: '#/components/parameters/LineageDepth'
+      - $ref: '#/components/parameters/LineageLimit'
+    get:
+      operationId: getRawAssetLineage
+      tags:
+        - lineage
+      summary: RawAsset 血缘正/反向遍历
+      responses:
+        '200':
+          description: 血缘遍历结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/raw-assets/{asset_id}/download-url:
+    parameters:
+      - $ref: '#/components/parameters/AssetId'
+      - $ref: '#/components/parameters/ProjectIdQuery'
+    get:
+      operationId: createRawAssetDownloadUrl
+      tags:
+        - raw-assets
+      summary: 短期下载地址（仅 VALID/ARCHIVED，强审计）
+      responses:
+        '200':
+          description: 短期签名地址
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadUrlResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/episodes:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    get:
+      operationId: listEpisodes
+      tags:
+        - episodes
+      summary: Episode 列表（游标分页）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/EpisodeStatus'
+        - name: task_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: batch_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Episode 分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpisodePage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    post:
+      operationId: createEpisode
+      tags:
+        - episodes
+      summary: 从 VALID/ARCHIVED 资产创建基础切片（PENDING）
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EpisodeCreate'
+      responses:
+        '201':
+          description: Episode 已创建
+          headers:
+            ETag:
+              schema:
+                type: string
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                  - 'true'
+                  - 'false'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Episode'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/episodes/{episode_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    get:
+      operationId: getEpisode
+      tags:
+        - episodes
+      summary: Episode 详情
+      responses:
+        '200':
+          description: Episode 详情
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Episode'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/episodes/{episode_id}/actions/{action}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+      - $ref: '#/components/parameters/EpisodeAction'
+    post:
+      operationId: actOnEpisode
+      tags:
+        - episodes
+      summary: Episode 状态动作（ready/quality-check/quality-result/accept/reject/complete/invalidate）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EpisodeActionRequest'
+      responses:
+        '200':
+          description: 动作后的 Episode
+          headers:
+            ETag:
+              schema:
+                type: string
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                  - 'true'
+                  - 'false'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Episode'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/episodes/{episode_id}/revisions:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/EpisodeId'
+    post:
+      operationId: reviseEpisode
+      tags:
+        - episodes
+      summary: 创建 Episode 修订（新 episode_id、episode_version+1、supersedes_id）
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EpisodeRevisionCreate'
+      responses:
+        '201':
+          description: 修订 Episode 已创建
+          headers:
+            ETag:
+              schema:
+                type: string
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                  - 'true'
+                  - 'false'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Episode'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/episodes/{episode_id}/lineage:
+    parameters:
+      - $ref: '#/components/parameters/EpisodeId'
+      - $ref: '#/components/parameters/ProjectIdQuery'
+      - $ref: '#/components/parameters/LineageDirection'
+      - $ref: '#/components/parameters/LineageDepth'
+      - $ref: '#/components/parameters/LineageLimit'
+    get:
+      operationId: getEpisodeLineage
+      tags:
+        - lineage
+      summary: Episode 血缘正/反向遍历
+      responses:
+        '200':
+          description: 血缘遍历结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LineageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/ingestion-jobs:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+    post:
+      operationId: createIngestionJob
+      tags:
+        - ingestion-jobs
+      summary: 创建解析/校验 Job（初始 QUEUED）
+      parameters:
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestionJobCreate'
+      responses:
+        '201':
+          description: Job 已创建
+          headers:
+            ETag:
+              schema:
+                type: string
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                  - 'true'
+                  - 'false'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestionJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+    get:
+      operationId: listIngestionJobs
+      tags:
+        - ingestion-jobs
+      summary: IngestionJob 列表（游标分页）
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/IngestionJobStatus'
+        - name: raw_asset_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/Cursor'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Job 分页
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestionJobPage'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/ingestion-jobs/{job_id}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/JobId'
+    get:
+      operationId: getIngestionJob
+      tags:
+        - ingestion-jobs
+      summary: IngestionJob 详情
+      responses:
+        '200':
+          description: Job 详情
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestionJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/projects/{project_id}/ingestion-jobs/{job_id}/actions/{action}:
+    parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/JobId'
+      - $ref: '#/components/parameters/JobAction'
+    post:
+      operationId: actOnIngestionJob
+      tags:
+        - ingestion-jobs
+      summary: 取消或重试 IngestionJob
+      parameters:
+        - $ref: '#/components/parameters/IfMatch'
+        - $ref: '#/components/parameters/RequiredIdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestionJobActionRequest'
+      responses:
+        '200':
+          description: 动作后的 Job
+          headers:
+            ETag:
+              schema:
+                type: string
+            Idempotent-Replayed:
+              schema:
+                type: string
+                enum:
+                  - 'true'
+                  - 'false'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IngestionJob'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        '428':
+          $ref: '#/components/responses/PreconditionRequired'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 生产环境使用 Bearer JWT；本地 X-User-Id 后门不属于对外契约。
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      description: 项目 ID；服务端校验当前主体成员资格，不信任客户端声明。
+      schema:
+        type: string
+        format: uuid
+    ProjectIdQuery:
+      name: project_id
+      in: query
+      required: true
+      description: 无项目路径前缀的资源使用查询参数定位项目；服务端仍做成员资格与资源归属双重校验。
+      schema:
+        type: string
+        format: uuid
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    BatchId:
+      name: batch_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UploadSessionId:
+      name: upload_session_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AssetId:
+      name: asset_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    JobId:
+      name: job_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    EpisodeId:
+      name: episode_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DeviceId:
+      name: device_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SensorId:
+      name: sensor_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CalibrationId:
+      name: calibration_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PartNumber:
+      name: part_number
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 10000
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: 不透明游标；由上一页 `next_cursor` 返回；非法返回 `validation_failed`。
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: 每页数量，默认 20，最大 100。
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: |
+        乐观锁版本，格式为 `"<version>"`（可带弱校验前缀 `W/`）。
+        缺失返回 428 `precondition_required`；不匹配返回 409 `version_conflict`。
+      schema:
+        type: string
+        pattern: ^(W/)?"?[1-9][0-9]*"?$
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: 可选幂等键；长度 8–128。相同键不同请求体返回 409 `idempotency_key_reused`。
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    RequiredIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: 必填幂等键；缺失返回 428 `precondition_required`，长度非法返回 422。
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+    TaskAction:
+      name: action
+      in: path
+      required: true
+      description: 采集任务状态动作白名单；系统内部动作 `system-data-check` 不对外暴露。
+      schema:
+        type: string
+        enum:
+          - submit-review
+          - return-draft
+          - approve
+          - ready
+          - assign
+          - start
+          - pause
+          - resume
+          - block
+          - unblock
+          - submit
+          - accept
+          - reject
+          - rework
+          - complete
+          - cancel
+    BatchAction:
+      name: action
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+          - ready
+          - start
+          - pause
+          - resume
+          - block
+          - unblock
+          - submit
+          - accept
+          - reject
+          - rework
+          - complete
+          - cancel
+    EpisodeAction:
+      name: action
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+          - ready
+          - quality-check
+          - quality-result
+          - accept
+          - reject
+          - complete
+          - invalidate
+    JobAction:
+      name: action
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+          - cancel
+          - retry
+    LineageDirection:
+      name: direction
+      in: query
+      required: false
+      schema:
+        type: string
+        enum:
+          - forward
+          - reverse
+        default: forward
+    LineageDepth:
+      name: depth
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 5
+        default: 1
+    LineageLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+  responses:
+    Unauthorized:
+      description: 未认证或令牌无效（`not_authenticated`，401）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: 权限不足、职责分离违规或跨项目访问（`forbidden`，403）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: 资源不存在或跨项目不可见（`resource_not_found` / `not_found`，404）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Conflict:
+      description: 状态/版本/分片/幂等/唯一性冲突（409）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Gone:
+      description: 上传会话过期或资产不可用（`upload_session_expired`，410）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    PayloadTooLarge:
+      description: 文件超过允许大小（`file_too_large`，413）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    UnsupportedMediaType:
+      description: 声明的内容类型不在白名单（`file_type_unsupported`，415）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    UnprocessableEntity:
+      description: 参数或领域校验失败（422）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    PreconditionRequired:
+      description: 缺少 `If-Match` 或必填 `Idempotency-Key`（428）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    TooManyRequests:
+      description: 触发写路径/认证路径限流（`rate_limited`，429）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    ServiceUnavailable:
+      description: 依赖不可用（`object_storage_unavailable`，503）。
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    ErrorCode:
+      type: string
+      description: 稳定错误码；客户端按 code 分支，未知错误不得默认成功。
+      enum:
+        - not_authenticated
+        - forbidden
+        - not_found
+        - resource_not_found
+        - conflict
+        - state_transition_invalid
+        - version_conflict
+        - resource_immutable
+        - duplicate_resource
+        - calibration_active_conflict
+        - validation_failed
+        - calibration_invalid
+        - calibration_target_invalid
+        - calibration_profile_invalid
+        - calibration_checksum_mismatch
+        - calibration_not_active
+        - precondition_required
+        - rate_limited
+        - idempotency_key_reused
+        - upload_incomplete
+        - upload_part_conflict
+        - upload_session_not_uploading
+        - upload_session_expired
+        - file_too_large
+        - file_type_unsupported
+        - filename_invalid
+        - file_signature_mismatch
+        - hash_mismatch
+        - size_mismatch
+        - object_storage_unavailable
+        - object_missing
+        - asset_not_usable
+        - job_not_retryable
+        - job_timeout
+        - episode_overlap_conflict
+        - manifest_hash_mismatch
+        - manifest_schema_invalid
+        - episode_time_base_invalid
+        - lineage_conflict
+    ErrorEnvelope:
+      type: object
+      required:
+        - error
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          additionalProperties: false
+          properties:
+            code:
+              $ref: '#/components/schemas/ErrorCode'
+            message:
+              type: string
+            request_id:
+              type:
+                - string
+                - 'null'
+            details:
+              type:
+                - object
+                - 'null'
+              additionalProperties: true
+    HealthResponse:
+      type: object
+      required:
+        - status
+        - service
+        - version
+        - env
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          const: ok
+        service:
+          type: string
+        version:
+          type: string
+        env:
+          type: string
+    PlatformMeta:
+      type: object
+      required:
+        - name
+        - version
+        - env
+        - phase
+        - modules
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        env:
+          type: string
+        phase:
+          type: string
+        modules:
+          type: array
+          items:
+            type: string
+    LifecycleStatus:
+      type: string
+      enum:
+        - PROVISIONED
+        - ACTIVE
+        - IN_MAINTENANCE
+        - FAULT
+        - SUSPENDED
+        - RETIRED
+    DeviceType:
+      type: string
+      enum:
+        - COMPUTE
+        - CONTROLLER
+        - CAMERA_RIG
+        - TELEOP
+        - GRIPPER
+        - OTHER
+    SensorType:
+      type: string
+      enum:
+        - RGB
+        - RGB_D
+        - DEPTH
+        - IMU
+        - JOINT_STATE
+        - END_EFFECTOR
+        - FORCE_TORQUE
+        - MOCAP
+        - AUDIO
+    SensorSyncMode:
+      type: string
+      enum:
+        - PTP
+        - NTP
+        - HARDWARE_TRIGGER
+        - SOFTWARE_ESTIMATE
+        - MANUAL
+        - NONE
+    CalibrationScope:
+      type: string
+      enum:
+        - ROBOT
+        - DEVICE
+        - SENSOR
+        - SYSTEM
+    CalibrationTargetType:
+      type: string
+      enum:
+        - ROBOT
+        - DEVICE
+        - SENSOR
+        - SYSTEM
+    CalibrationType:
+      type: string
+      enum:
+        - INTRINSICS
+        - EXTRINSICS
+        - HAND_EYE
+        - IMU
+        - JOINT_OFFSET
+        - TIME_OFFSET
+        - FORCE_TORQUE
+        - DEPTH_ALIGNMENT
+    CalibrationStatus:
+      type: string
+      enum:
+        - DRAFT
+        - SUBMITTED
+        - VALIDATED
+        - ACTIVE
+        - REJECTED
+        - SUPERSEDED
+        - REVOKED
+        - EXPIRED
+    Device:
+      type: object
+      required:
+        - device_id
+        - project_id
+        - robot_id
+        - code
+        - name
+        - device_type
+        - vendor
+        - model
+        - serial_number
+        - firmware_version
+        - hardware_version
+        - calibration_profile_id
+        - capability_profile
+        - status
+        - location_id
+        - owner_user_id
+        - version
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      additionalProperties: false
+      properties:
+        device_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        device_type:
+          $ref: '#/components/schemas/DeviceType'
+        vendor:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        model:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        serial_number:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        firmware_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        hardware_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        calibration_profile_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        capability_profile:
+          type: object
+          additionalProperties: true
+        status:
+          $ref: '#/components/schemas/LifecycleStatus'
+        location_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        owner_user_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+          description: 乐观锁；仅表示档案版本，不表示业务修订历史
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        created_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        updated_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    DeviceCreate:
+      type: object
+      required:
+        - code
+        - name
+        - device_type
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        device_type:
+          $ref: '#/components/schemas/DeviceType'
+        robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        vendor:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        model:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        serial_number:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        firmware_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        hardware_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        calibration_profile_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        capability_profile:
+          type: object
+          additionalProperties: true
+          default: {}
+        location_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        owner_user_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    DevicePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        device_type:
+          $ref: '#/components/schemas/DeviceType'
+        robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        vendor:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        model:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        serial_number:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        firmware_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        hardware_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        calibration_profile_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        capability_profile:
+          type: object
+          additionalProperties: true
+        location_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        owner_user_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    DevicePage:
+      type: object
+      required:
+        - items
+        - next_cursor
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Device'
+        next_cursor:
+          type:
+            - string
+            - 'null'
+    Sensor:
+      type: object
+      required:
+        - sensor_id
+        - project_id
+        - robot_id
+        - device_id
+        - code
+        - sensor_type
+        - vendor
+        - model
+        - serial_number
+        - sample_rate_hz
+        - resolution_w
+        - resolution_h
+        - bit_depth
+        - channels
+        - intrinsic_calibration_id
+        - extrinsic_calibration_id
+        - coordinate_frame
+        - sync_mode
+        - sync_group
+        - firmware_version
+        - calibration_profile_id
+        - status
+        - mount_position
+        - version
+        - created_at
+        - updated_at
+      additionalProperties: false
+      properties:
+        sensor_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        device_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sensor_type:
+          $ref: '#/components/schemas/SensorType'
+        vendor:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        model:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        serial_number:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        sample_rate_hz:
+          type: number
+          exclusiveMinimum: 0
+        resolution_w:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        resolution_h:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        bit_depth:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        channels:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+          description: 整数通道数；不是字符串数组
+        intrinsic_calibration_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        extrinsic_calibration_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        coordinate_frame:
+          type: string
+          minLength: 1
+          maxLength: 200
+          deprecated: true
+          description: 当前实现字段；冻结目标更名 frame_id（差距 G-08）
+        sync_mode:
+          $ref: '#/components/schemas/SensorSyncMode'
+        sync_group:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        firmware_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        calibration_profile_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        status:
+          $ref: '#/components/schemas/LifecycleStatus'
+        mount_position:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+        version:
+          type: integer
+          minimum: 1
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    SensorCreate:
+      type: object
+      required:
+        - code
+        - sensor_type
+        - sample_rate_hz
+        - coordinate_frame
+      additionalProperties: false
+      anyOf:
+        - required:
+            - robot_id
+        - required:
+            - device_id
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sensor_type:
+          $ref: '#/components/schemas/SensorType'
+        sample_rate_hz:
+          type: number
+          exclusiveMinimum: 0
+        coordinate_frame:
+          type: string
+          minLength: 1
+          maxLength: 200
+        robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        device_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        vendor:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        model:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        serial_number:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        resolution_w:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        resolution_h:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        bit_depth:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        channels:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        intrinsic_calibration_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        extrinsic_calibration_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        sync_mode:
+          $ref: '#/components/schemas/SensorSyncMode'
+        sync_group:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        firmware_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        calibration_profile_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        mount_position:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+    SensorPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sensor_type:
+          $ref: '#/components/schemas/SensorType'
+        robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        device_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        vendor:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        model:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        serial_number:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        sample_rate_hz:
+          type: number
+          exclusiveMinimum: 0
+        resolution_w:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        resolution_h:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        bit_depth:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        channels:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        intrinsic_calibration_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        extrinsic_calibration_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        coordinate_frame:
+          type: string
+          minLength: 1
+          maxLength: 200
+          deprecated: true
+        sync_mode:
+          $ref: '#/components/schemas/SensorSyncMode'
+        sync_group:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        firmware_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        calibration_profile_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        mount_position:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+    SensorPage:
+      type: object
+      required:
+        - items
+        - next_cursor
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sensor'
+        next_cursor:
+          type:
+            - string
+            - 'null'
+    Calibration:
+      type: object
+      required:
+        - calibration_id
+        - project_id
+        - profile_id
+        - scope
+        - target_type
+        - target_id
+        - calibration_type
+        - method
+        - parameters
+        - parent_frame
+        - child_frame
+        - valid_from
+        - valid_to
+        - status
+        - evidence_asset_ids
+        - source
+        - checksum
+        - uncertainty
+        - performed_by
+        - validated_by
+        - validated_at
+        - supersedes_id
+        - version
+        - created_at
+        - updated_at
+      additionalProperties: false
+      properties:
+        calibration_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        profile_id:
+          type: string
+          format: uuid
+        scope:
+          $ref: '#/components/schemas/CalibrationScope'
+        target_type:
+          $ref: '#/components/schemas/CalibrationTargetType'
+        target_id:
+          type: string
+          format: uuid
+        calibration_type:
+          $ref: '#/components/schemas/CalibrationType'
+        method:
+          type: string
+          minLength: 1
+          maxLength: 200
+        parameters:
+          type: object
+          additionalProperties: true
+        parent_frame:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+        child_frame:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        status:
+          $ref: '#/components/schemas/CalibrationStatus'
+        evidence_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        source:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        checksum:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+        uncertainty:
+          type: object
+          additionalProperties: true
+        performed_by:
+          type: string
+          format: uuid
+        validated_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        validated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        supersedes_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+          deprecated: true
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    CalibrationCreate:
+      type: object
+      required:
+        - profile_id
+        - target_type
+        - target_id
+        - calibration_type
+        - method
+        - parameters
+        - valid_from
+      additionalProperties: false
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        target_type:
+          $ref: '#/components/schemas/CalibrationTargetType'
+        target_id:
+          type: string
+          format: uuid
+        calibration_type:
+          $ref: '#/components/schemas/CalibrationType'
+        method:
+          type: string
+          minLength: 1
+          maxLength: 200
+        parameters:
+          type: object
+          additionalProperties: true
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        parent_frame:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+        child_frame:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+        evidence_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          default: []
+        source:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        uncertainty:
+          type: object
+          additionalProperties: true
+          default: {}
+    CalibrationPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        profile_id:
+          type: string
+          format: uuid
+        target_type:
+          $ref: '#/components/schemas/CalibrationTargetType'
+        target_id:
+          type: string
+          format: uuid
+        calibration_type:
+          $ref: '#/components/schemas/CalibrationType'
+        method:
+          type: string
+          minLength: 1
+          maxLength: 200
+        parameters:
+          type: object
+          additionalProperties: true
+        valid_from:
+          type: string
+          format: date-time
+        valid_to:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        parent_frame:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+        child_frame:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+        evidence_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        source:
+          type:
+            - string
+            - 'null'
+          maxLength: 120
+        uncertainty:
+          type: object
+          additionalProperties: true
+    CalibrationPage:
+      type: object
+      required:
+        - items
+        - next_cursor
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Calibration'
+        next_cursor:
+          type:
+            - string
+            - 'null'
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        fault_code:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        fault_detail:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
+        occurred_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        maintenance_record_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        evidence_refs:
+          type:
+            - array
+            - 'null'
+          items:
+            type: string
+            format: uuid
+    CollectionTaskStatus:
+      type: string
+      enum:
+        - DRAFT
+        - PENDING_REVIEW
+        - APPROVED
+        - READY
+        - ASSIGNED
+        - IN_PROGRESS
+        - PAUSED
+        - BLOCKED
+        - SUBMITTED
+        - DATA_CHECKING
+        - ACCEPTED
+        - REJECTED
+        - REWORK
+        - COMPLETED
+        - CANCELLED
+    CollectionBatchStatus:
+      type: string
+      enum:
+        - PLANNED
+        - READY
+        - IN_PROGRESS
+        - PAUSED
+        - BLOCKED
+        - SUBMITTED
+        - ACCEPTED
+        - REJECTED
+        - REWORK
+        - CANCELLED
+    TaskPriority:
+      type: string
+      enum:
+        - P0
+        - P1
+        - P2
+    CollectionTask:
+      type: object
+      required:
+        - task_id
+        - project_id
+        - code
+        - name
+        - requirement_id
+        - plan_id
+        - sop_id
+        - sop_version
+        - scenario_id
+        - action_spec_id
+        - action_spec_version
+        - status
+        - priority
+        - assigned_to
+        - assigned_robot_id
+        - assigned_device_ids
+        - assigned_sensor_ids
+        - location_id
+        - scheduled_start
+        - scheduled_end
+        - actual_start
+        - actual_end
+        - target_episode_count
+        - target_duration_sec
+        - submitted_episode_count
+        - accepted_episode_count
+        - quality_summary
+        - status_reason
+        - blocked_reason
+        - version
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      additionalProperties: false
+      properties:
+        task_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        requirement_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        plan_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        sop_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        sop_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        scenario_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        action_spec_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        action_spec_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        status:
+          $ref: '#/components/schemas/CollectionTaskStatus'
+        priority:
+          $ref: '#/components/schemas/TaskPriority'
+        assigned_to:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        assigned_robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        assigned_device_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        assigned_sensor_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        location_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        scheduled_start:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        scheduled_end:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        actual_start:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        actual_end:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        target_episode_count:
+          type: integer
+          minimum: 0
+        target_duration_sec:
+          type: integer
+          minimum: 0
+        submitted_episode_count:
+          type: integer
+          minimum: 0
+        accepted_episode_count:
+          type: integer
+          minimum: 0
+        quality_summary:
+          type:
+            - object
+            - 'null'
+          additionalProperties: true
+        status_reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        blocked_reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        version:
+          type: integer
+          minimum: 1
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        created_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        updated_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    CollectionTaskCreate:
+      type: object
+      required:
+        - code
+        - name
+        - priority
+        - target_episode_count
+        - target_duration_sec
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        requirement_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        plan_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        sop_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        sop_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        scenario_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        action_spec_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        action_spec_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        priority:
+          $ref: '#/components/schemas/TaskPriority'
+        scheduled_start:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        scheduled_end:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        target_episode_count:
+          type: integer
+          minimum: 0
+        target_duration_sec:
+          type: integer
+          minimum: 0
+        location_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    CollectionTaskPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type:
+            - string
+            - 'null'
+          minLength: 1
+          maxLength: 200
+        priority:
+          type:
+            - string
+            - 'null'
+          enum:
+            - P0
+            - P1
+            - P2
+            - null
+        sop_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        scheduled_start:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        scheduled_end:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        target_episode_count:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        target_duration_sec:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        location_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    CollectionTaskActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        assigned_to:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        assigned_robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        assigned_device_ids:
+          type:
+            - array
+            - 'null'
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        assigned_sensor_ids:
+          type:
+            - array
+            - 'null'
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        location_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        scheduled_start:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        scheduled_end:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        waiver_reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+    CollectionTaskPage:
+      type: object
+      required:
+        - items
+        - next_cursor
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionTask'
+        next_cursor:
+          type:
+            - string
+            - 'null'
+    CollectionBatch:
+      type: object
+      required:
+        - batch_id
+        - project_id
+        - task_id
+        - code
+        - sequence_no
+        - status
+        - assigned_to
+        - scheduled_start
+        - scheduled_end
+        - expected_count
+        - submitted_count
+        - accepted_count
+        - status_reason
+        - version
+        - created_at
+        - updated_at
+      additionalProperties: false
+      properties:
+        batch_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        task_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        sequence_no:
+          type: integer
+          minimum: 1
+        status:
+          $ref: '#/components/schemas/CollectionBatchStatus'
+        assigned_to:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        scheduled_start:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        scheduled_end:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        expected_count:
+          type: integer
+          minimum: 0
+        submitted_count:
+          type: integer
+          minimum: 0
+        accepted_count:
+          type: integer
+          minimum: 0
+        status_reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        version:
+          type: integer
+          minimum: 1
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    CollectionBatchCreate:
+      type: object
+      required:
+        - expected_count
+      additionalProperties: false
+      properties:
+        code:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        sequence_no:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        expected_count:
+          type: integer
+          minimum: 0
+        assigned_to:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        scheduled_start:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        scheduled_end:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    CollectionBatchPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        expected_count:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        assigned_to:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        scheduled_start:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        scheduled_end:
+          type:
+            - string
+            - 'null'
+          format: date-time
+    CollectionBatchActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        assigned_to:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    CollectionBatchPage:
+      type: object
+      required:
+        - items
+        - next_cursor
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CollectionBatch'
+        next_cursor:
+          type:
+            - string
+            - 'null'
+    UploadSessionStatus:
+      type: string
+      enum:
+        - CREATED
+        - UPLOADING
+        - COMPLETING
+        - COMPLETED
+        - ABORTED
+        - EXPIRED
+        - FAILED
+    UploadVerificationStatus:
+      type: string
+      enum:
+        - PENDING
+        - VERIFIED
+        - REJECTED
+    RawAssetStatus:
+      type: string
+      enum:
+        - VALIDATING
+        - VALID
+        - QUARANTINED
+        - REJECTED
+        - ARCHIVED
+        - TOMBSTONED
+    RawAssetFormat:
+      type: string
+      enum:
+        - MCAP
+        - ROSBAG2
+        - HDF5
+        - MP4
+        - PARQUET
+        - CSV
+        - JSON
+        - ZIP
+        - UNKNOWN
+    RawAssetSourceType:
+      type: string
+      enum:
+        - UPLOAD
+        - DEVICE
+        - IMPORT
+    StorageClass:
+      type: string
+      enum:
+        - STANDARD
+        - INFREQUENT
+        - ARCHIVE
+    UploadPartSummary:
+      type: object
+      required:
+        - part_number
+        - size_bytes
+        - etag
+        - sha256
+        - recorded_at
+      additionalProperties: false
+      properties:
+        part_number:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        size_bytes:
+          type: integer
+          minimum: 1
+        etag:
+          type: string
+          minLength: 1
+          maxLength: 256
+        sha256:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+        recorded_at:
+          type: string
+          format: date-time
+    UploadSession:
+      type: object
+      required:
+        - upload_session_id
+        - project_id
+        - collection_task_id
+        - batch_id
+        - status
+        - verification_status
+        - verification_error_code
+        - verified_at
+        - original_filename
+        - declared_content_type
+        - declared_size_bytes
+        - expected_sha256
+        - format_hint
+        - part_size_bytes
+        - max_size_bytes
+        - allowed_content_types
+        - object_key_prefix
+        - object_key
+        - expires_at
+        - completed_at
+        - aborted_at
+        - failure_code
+        - failure_summary
+        - uploaded_bytes
+        - uploaded_part_count
+        - missing_part_numbers
+        - uploaded_parts
+        - deduplicated
+        - deduplicated_asset_id
+        - asset_id
+        - version
+        - created_at
+        - updated_at
+        - created_by
+      additionalProperties: false
+      properties:
+        upload_session_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        collection_task_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        batch_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        status:
+          $ref: '#/components/schemas/UploadSessionStatus'
+        verification_status:
+          $ref: '#/components/schemas/UploadVerificationStatus'
+        verification_error_code:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        verified_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        original_filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+        declared_content_type:
+          type: string
+          minLength: 1
+          maxLength: 200
+        declared_size_bytes:
+          type: integer
+          minimum: 1
+        expected_sha256:
+          type:
+            - string
+            - 'null'
+          pattern: ^sha256:[0-9a-f]{64}$
+        format_hint:
+          type:
+            - string
+            - 'null'
+          enum:
+            - MCAP
+            - ROSBAG2
+            - HDF5
+            - MP4
+            - PARQUET
+            - CSV
+            - JSON
+            - ZIP
+            - UNKNOWN
+            - null
+        part_size_bytes:
+          type: integer
+          minimum: 1
+        max_size_bytes:
+          type: integer
+          minimum: 1
+        allowed_content_types:
+          type: array
+          items:
+            type: string
+          minItems: 1
+        object_key_prefix:
+          type: string
+        object_key:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        completed_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        aborted_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        failure_code:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        failure_summary:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
+        uploaded_bytes:
+          type: integer
+          minimum: 0
+        uploaded_part_count:
+          type: integer
+          minimum: 0
+        missing_part_numbers:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 10000
+          uniqueItems: true
+        uploaded_parts:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPartSummary'
+        deduplicated:
+          type: boolean
+        deduplicated_asset_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        asset_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        created_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    UploadSessionCreate:
+      type: object
+      required:
+        - original_filename
+        - declared_content_type
+        - declared_size_bytes
+      additionalProperties: false
+      properties:
+        collection_task_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        batch_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        original_filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+        declared_content_type:
+          type: string
+          minLength: 1
+          maxLength: 200
+        declared_size_bytes:
+          type: integer
+          minimum: 1
+        expected_sha256:
+          type:
+            - string
+            - 'null'
+          pattern: ^sha256:[0-9a-f]{64}$
+        format_hint:
+          type:
+            - string
+            - 'null'
+          enum:
+            - MCAP
+            - ROSBAG2
+            - HDF5
+            - MP4
+            - PARQUET
+            - CSV
+            - JSON
+            - ZIP
+            - UNKNOWN
+            - null
+        part_size_bytes:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+        metadata:
+          type: object
+          additionalProperties: true
+    UploadPartUrlRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        可选分片校验和绑定。省略时保持旧客户端行为；提供时服务端在预签名 URL 上
+        绑定 `x-amz-checksum-sha256`，ack 与绑定值不一致返回 409 `upload_part_conflict`。
+      properties:
+        sha256:
+          type:
+            - string
+            - 'null'
+          pattern: ^sha256:[0-9a-f]{64}$
+    UploadPartUrlResponse:
+      type: object
+      required:
+        - part_number
+        - method
+        - url
+        - headers
+        - expires_at
+      additionalProperties: false
+      properties:
+        part_number:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        method:
+          type: string
+          const: PUT
+        url:
+          type: string
+          format: uri
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        expires_at:
+          type: string
+          format: date-time
+    UploadPartAckRequest:
+      type: object
+      required:
+        - etag
+        - size_bytes
+        - sha256
+      additionalProperties: false
+      properties:
+        etag:
+          type: string
+          minLength: 1
+          maxLength: 256
+        size_bytes:
+          type: integer
+          minimum: 1
+        sha256:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+    UploadPartAckResponse:
+      type: object
+      required:
+        - part_number
+        - etag
+        - size_bytes
+        - sha256
+        - recorded_at
+        - uploaded_bytes
+        - uploaded_part_count
+      additionalProperties: false
+      properties:
+        part_number:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        etag:
+          type: string
+          minLength: 1
+          maxLength: 256
+        size_bytes:
+          type: integer
+          minimum: 1
+        sha256:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+        recorded_at:
+          type: string
+          format: date-time
+        uploaded_bytes:
+          type: integer
+          minimum: 0
+        uploaded_part_count:
+          type: integer
+          minimum: 0
+    UploadPartList:
+      type: object
+      required:
+        - items
+        - missing_part_numbers
+        - uploaded_bytes
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadPartSummary'
+        missing_part_numbers:
+          type: array
+          items:
+            type: integer
+            minimum: 1
+            maximum: 10000
+          uniqueItems: true
+        uploaded_bytes:
+          type: integer
+          minimum: 0
+    CompleteUploadPart:
+      type: object
+      required:
+        - part_number
+        - etag
+        - size_bytes
+        - sha256
+      additionalProperties: false
+      properties:
+        part_number:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        etag:
+          type: string
+          minLength: 1
+          maxLength: 256
+        size_bytes:
+          type: integer
+          minimum: 1
+        sha256:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+    CompleteUploadRequest:
+      type: object
+      required:
+        - expected_sha256
+        - expected_size_bytes
+        - parts
+      additionalProperties: false
+      properties:
+        expected_sha256:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+        expected_size_bytes:
+          type: integer
+          minimum: 1
+        parts:
+          type: array
+          minItems: 1
+          maxItems: 10000
+          items:
+            $ref: '#/components/schemas/CompleteUploadPart'
+        metadata:
+          type: object
+          additionalProperties: true
+    CompleteUploadResponse:
+      type: object
+      required:
+        - upload_session
+        - raw_asset
+        - deduplicated
+        - validation_job_id
+        - replayed
+      additionalProperties: false
+      properties:
+        upload_session:
+          $ref: '#/components/schemas/UploadSession'
+        raw_asset:
+          oneOf:
+            - $ref: '#/components/schemas/RawAsset'
+            - type: 'null'
+        deduplicated:
+          type: boolean
+        validation_job_id:
+          type: string
+          format: uuid
+        replayed:
+          type: boolean
+    AbortUploadRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+    RawAsset:
+      type: object
+      required:
+        - asset_id
+        - project_id
+        - code
+        - source_type
+        - collection_task_id
+        - batch_id
+        - upload_session_id
+        - original_filename
+        - object_key
+        - size_bytes
+        - content_type
+        - format
+        - sha256
+        - status
+        - captured_at
+        - ingested_at
+        - device_ids
+        - sensor_ids
+        - sensor_snapshot
+        - device_time_raw
+        - raw_metadata
+        - storage_class
+        - retention_policy_id
+        - quarantine_reason
+        - quarantine_codes
+        - scan_report_key
+        - verified_at
+        - archived_at
+        - tombstoned_at
+        - duplicate_of_asset_id
+        - uploaded_by
+        - version
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      additionalProperties: false
+      properties:
+        asset_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        source_type:
+          $ref: '#/components/schemas/RawAssetSourceType'
+        collection_task_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        batch_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        upload_session_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        original_filename:
+          type: string
+          minLength: 1
+          maxLength: 255
+        object_key:
+          type: string
+          maxLength: 1024
+        size_bytes:
+          type: integer
+          minimum: 1
+        content_type:
+          type: string
+          minLength: 1
+          maxLength: 200
+        format:
+          $ref: '#/components/schemas/RawAssetFormat'
+        sha256:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+        status:
+          $ref: '#/components/schemas/RawAssetStatus'
+        captured_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        ingested_at:
+          type: string
+          format: date-time
+        device_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        sensor_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        sensor_snapshot:
+          type:
+            - object
+            - 'null'
+          additionalProperties: true
+        device_time_raw:
+          type:
+            - object
+            - 'null'
+          additionalProperties: true
+        raw_metadata:
+          type: object
+          additionalProperties: true
+        storage_class:
+          $ref: '#/components/schemas/StorageClass'
+        retention_policy_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        quarantine_reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        quarantine_codes:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+        scan_report_key:
+          type:
+            - string
+            - 'null'
+          maxLength: 1024
+        verified_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        archived_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        tombstoned_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        duplicate_of_asset_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        uploaded_by:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          minimum: 1
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        created_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        updated_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    RawAssetPage:
+      type: object
+      required:
+        - items
+        - next_cursor
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/RawAsset'
+        next_cursor:
+          type:
+            - string
+            - 'null'
+    DownloadUrlResponse:
+      type: object
+      required:
+        - url
+        - expires_at
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          format: uri
+        expires_at:
+          type: string
+          format: date-time
+    LineageNodeType:
+      type: string
+      enum:
+        - RAW_ASSET
+        - UPLOAD_SESSION
+        - COLLECTION_TASK
+        - COLLECTION_BATCH
+        - INGESTION_JOB
+        - EPISODE
+        - QUALITY_RUN
+        - ANNOTATION
+        - DATASET_VERSION
+        - TRAINING_RUN
+    LineageRelation:
+      type: string
+      enum:
+        - UPLOADED_BY
+        - PRODUCED_BY
+        - USED_AS_INPUT
+        - PRODUCED
+        - SEGMENTED_INTO
+        - SUPERSEDES
+        - INVALIDATES
+        - EVALUATED_BY
+        - ANNOTATED_BY
+        - INCLUDED_IN
+    LineageEdge:
+      type: object
+      required:
+        - edge_id
+        - project_id
+        - from_node_type
+        - from_node_id
+        - to_node_type
+        - to_node_id
+        - relation
+        - metadata
+        - created_by
+        - created_at
+      additionalProperties: false
+      properties:
+        edge_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        from_node_type:
+          $ref: '#/components/schemas/LineageNodeType'
+        from_node_id:
+          type: string
+          format: uuid
+        to_node_type:
+          $ref: '#/components/schemas/LineageNodeType'
+        to_node_id:
+          type: string
+          format: uuid
+        relation:
+          $ref: '#/components/schemas/LineageRelation'
+        metadata:
+          type: object
+          additionalProperties: true
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: string
+          format: date-time
+    LineageResponse:
+      type: object
+      required:
+        - items
+        - direction
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LineageEdge'
+        direction:
+          type: string
+          enum:
+            - forward
+            - reverse
+    EpisodeStatus:
+      type: string
+      enum:
+        - PENDING
+        - PROCESSING
+        - READY
+        - QUALITY_CHECKING
+        - ACCEPTED
+        - COMPLETED
+        - ARCHIVED
+        - FAILED
+        - REJECTED
+        - INVALIDATED
+    EpisodeQualityStatus:
+      type: string
+      enum:
+        - NOT_CHECKED
+        - PASS
+        - WARN
+        - FAIL
+    EpisodeAnnotationStatus:
+      type: string
+      enum:
+        - NOT_STARTED
+        - IN_PROGRESS
+        - SUBMITTED
+        - APPROVED
+        - REJECTED
+    EpisodeSegmentation:
+      type: object
+      required:
+        - method
+        - rule_version
+      additionalProperties: false
+      properties:
+        method:
+          type: string
+          enum:
+            - MANUAL_TIME_RANGE
+            - RULE
+        rule_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+        start_time_ns:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        end_time_ns:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+        time_domain:
+          type: string
+          enum:
+            - UTC
+          default: UTC
+        allow_overlap:
+          type: boolean
+          default: false
+        overlap_reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        rule_parameters:
+          type: object
+          additionalProperties: true
+    TimeBase:
+      type: object
+      required:
+        - time_domain
+        - clock_source
+        - sync_method
+        - sync_status
+      additionalProperties: false
+      properties:
+        time_domain:
+          type: string
+          enum:
+            - UTC
+            - ROS
+            - DEVICE
+            - HOST
+            - MONOTONIC
+            - UNKNOWN
+        clock_source:
+          type: string
+          enum:
+            - PTP
+            - NTP
+            - ROS_CLOCK
+            - DEVICE_CLOCK
+            - HOST_CLOCK
+            - MONOTONIC
+            - EXTERNAL
+            - UNKNOWN
+        clock_id:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+        offset_to_utc_ns:
+          type:
+            - integer
+            - 'null'
+        drift_ppm:
+          type:
+            - number
+            - 'null'
+        uncertainty_ns:
+          type:
+            - integer
+            - 'null'
+        sync_method:
+          type: string
+          enum:
+            - PTP
+            - NTP
+            - HARDWARE_TRIGGER
+            - SOFTWARE_ESTIMATE
+            - MANUAL
+            - NONE
+        sync_ref:
+          type:
+            - string
+            - 'null'
+          maxLength: 200
+        sync_status:
+          type: string
+          enum:
+            - VERIFIED
+            - DEGRADED
+            - UNVERIFIED
+            - FAILED
+    CalibrationSnapshotItem:
+      type: object
+      required:
+        - calibration_id
+        - calibration_version
+        - checksum
+        - target_type
+        - target_id
+        - schema_version
+      additionalProperties: false
+      properties:
+        calibration_id:
+          type: string
+          format: uuid
+        calibration_version:
+          type: integer
+          minimum: 1
+        checksum:
+          type: string
+          pattern: ^sha256:[0-9a-f]{64}$
+        target_type:
+          type: string
+          enum:
+            - ROBOT
+            - DEVICE
+            - SENSOR
+            - SYSTEM
+        target_id:
+          type: string
+          format: uuid
+        schema_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+    Episode:
+      type: object
+      required:
+        - episode_id
+        - project_id
+        - episode_lineage_id
+        - episode_version
+        - code
+        - task_id
+        - batch_id
+        - robot_id
+        - device_ids
+        - sensor_ids
+        - status
+        - quality_status
+        - annotation_status
+        - success
+        - failure_reason
+        - scene_labels
+        - language_instruction
+        - start_time_ns
+        - end_time_ns
+        - duration_ns
+        - time_base
+        - canonical_schema_version
+        - pipeline_id
+        - pipeline_version
+        - segmentation_rule_version
+        - frame_count
+        - calibration_snapshot
+        - manifest_key
+        - manifest_sha256
+        - preview_refs
+        - supersedes_id
+        - attempt
+        - max_attempts
+        - version
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      additionalProperties: false
+      properties:
+        episode_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        episode_lineage_id:
+          type: string
+          format: uuid
+        episode_version:
+          type: integer
+          minimum: 1
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+        task_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        batch_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        device_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        sensor_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        status:
+          $ref: '#/components/schemas/EpisodeStatus'
+        quality_status:
+          $ref: '#/components/schemas/EpisodeQualityStatus'
+        annotation_status:
+          $ref: '#/components/schemas/EpisodeAnnotationStatus'
+        success:
+          type:
+            - boolean
+            - 'null'
+        failure_reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
+        scene_labels:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+          uniqueItems: true
+        language_instruction:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        start_time_ns:
+          type: integer
+        end_time_ns:
+          type: integer
+        duration_ns:
+          type: integer
+        time_base:
+          $ref: '#/components/schemas/TimeBase'
+        canonical_schema_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+        pipeline_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        pipeline_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+        segmentation_rule_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+        frame_count:
+          type: integer
+          minimum: 0
+        calibration_snapshot:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalibrationSnapshotItem'
+        manifest_key:
+          type:
+            - string
+            - 'null'
+          maxLength: 1024
+        manifest_sha256:
+          type:
+            - string
+            - 'null'
+          pattern: ^sha256:[0-9a-f]{64}$
+        preview_refs:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        supersedes_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        attempt:
+          type: integer
+          minimum: 1
+        max_attempts:
+          type: integer
+          minimum: 1
+        version:
+          type: integer
+          minimum: 1
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        created_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        updated_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    EpisodeCreate:
+      type: object
+      required:
+        - raw_asset_ids
+        - segmentation
+        - time_base
+        - calibration_snapshot
+        - canonical_schema_version
+        - pipeline_id
+        - pipeline_version
+      additionalProperties: false
+      properties:
+        raw_asset_ids:
+          type: array
+          minItems: 1
+          maxItems: 64
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+        segmentation:
+          $ref: '#/components/schemas/EpisodeSegmentation'
+        time_base:
+          $ref: '#/components/schemas/TimeBase'
+        calibration_snapshot:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CalibrationSnapshotItem'
+        canonical_schema_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+        pipeline_id:
+          type: string
+          minLength: 1
+          maxLength: 128
+        pipeline_version:
+          type: string
+          minLength: 1
+          maxLength: 64
+        code:
+          type:
+            - string
+            - 'null'
+          minLength: 1
+          maxLength: 64
+        task_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        batch_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        robot_id:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        device_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        sensor_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        scene_labels:
+          type: array
+          items:
+            type: string
+            maxLength: 100
+          uniqueItems: true
+        language_instruction:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        success:
+          type:
+            - boolean
+            - 'null'
+        failure_reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        ingestion_job_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        evidence_role:
+          type: string
+          minLength: 1
+          maxLength: 32
+          default: INPUT
+    EpisodeActionRequest:
+      type: object
+      additionalProperties: false
+      description: |
+        `ready` 必须提供 `manifest` 与 `frame_count`，且不接受 `quality_status`；
+        `quality-result` 必须提供 `quality_status`；`reject`/`invalidate` 必须提供 `reason`；
+        其余动作禁止 manifest/frame_count。
+      properties:
+        reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+        quality_status:
+          type:
+            - string
+            - 'null'
+          enum:
+            - PASS
+            - WARN
+            - FAIL
+            - null
+        manifest:
+          type:
+            - object
+            - 'null'
+          additionalProperties: true
+        frame_count:
+          type:
+            - integer
+            - 'null'
+          minimum: 0
+    EpisodeRevisionCreate:
+      type: object
+      required:
+        - code
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 64
+    EpisodePage:
+      type: object
+      required:
+        - items
+        - next_cursor
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Episode'
+        next_cursor:
+          type:
+            - string
+            - 'null'
+    IngestionJobType:
+      type: string
+      enum:
+        - VALIDATE
+        - PARSE_METADATA
+        - SEGMENT_EPISODE
+        - REVALIDATE
+    IngestionJobStatus:
+      type: string
+      enum:
+        - QUEUED
+        - RUNNING
+        - SUCCEEDED
+        - FAILED
+        - CANCELLING
+        - CANCELLED
+    IngestionJob:
+      type: object
+      required:
+        - job_id
+        - project_id
+        - job_type
+        - raw_asset_ids
+        - input_manifest_key
+        - idempotency_key
+        - status
+        - attempt
+        - max_attempts
+        - timeout_sec
+        - pipeline_id
+        - pipeline_version
+        - parser_id
+        - parser_version
+        - config_hash
+        - started_at
+        - finished_at
+        - error_code
+        - error_summary
+        - output_refs
+        - log_ref
+        - metrics
+        - version
+        - created_at
+        - updated_at
+        - created_by
+        - updated_by
+      additionalProperties: false
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        project_id:
+          type: string
+          format: uuid
+        job_type:
+          $ref: '#/components/schemas/IngestionJobType'
+        raw_asset_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        input_manifest_key:
+          type:
+            - string
+            - 'null'
+          maxLength: 1024
+        idempotency_key:
+          type:
+            - string
+            - 'null'
+          maxLength: 128
+        status:
+          $ref: '#/components/schemas/IngestionJobStatus'
+        attempt:
+          type: integer
+          minimum: 1
+        max_attempts:
+          type: integer
+          minimum: 1
+        timeout_sec:
+          type: integer
+          minimum: 1
+          maximum: 86400
+        pipeline_id:
+          type:
+            - string
+            - 'null'
+          maxLength: 128
+        pipeline_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        parser_id:
+          type:
+            - string
+            - 'null'
+          maxLength: 128
+        parser_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        config_hash:
+          type:
+            - string
+            - 'null'
+          pattern: ^sha256:[0-9a-f]{64}$
+        started_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        finished_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        error_code:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        error_summary:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000
+        output_refs:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        log_ref:
+          type:
+            - string
+            - 'null'
+          maxLength: 1024
+        metrics:
+          type: object
+          additionalProperties: true
+        version:
+          type: integer
+          minimum: 1
+        created_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        updated_at:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        created_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        updated_by:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    IngestionJobCreate:
+      type: object
+      required:
+        - job_type
+        - timeout_sec
+      additionalProperties: false
+      anyOf:
+        - required:
+            - raw_asset_ids
+          properties:
+            raw_asset_ids:
+              type: array
+              minItems: 1
+              maxItems: 64
+              uniqueItems: true
+              items:
+                type: string
+                format: uuid
+        - required:
+            - input_manifest_key
+          properties:
+            input_manifest_key:
+              type: string
+              maxLength: 1024
+      properties:
+        job_type:
+          $ref: '#/components/schemas/IngestionJobType'
+        timeout_sec:
+          type: integer
+          minimum: 1
+          maximum: 86400
+        raw_asset_ids:
+          type: array
+          maxItems: 64
+          items:
+            type: string
+            format: uuid
+          uniqueItems: true
+        input_manifest_key:
+          type:
+            - string
+            - 'null'
+          maxLength: 1024
+        idempotency_key:
+          type:
+            - string
+            - 'null'
+          minLength: 8
+          maxLength: 128
+        max_attempts:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 3
+        pipeline_id:
+          type:
+            - string
+            - 'null'
+          maxLength: 128
+        pipeline_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        parser_id:
+          type:
+            - string
+            - 'null'
+          maxLength: 128
+        parser_version:
+          type:
+            - string
+            - 'null'
+          maxLength: 64
+        config_hash:
+          type:
+            - string
+            - 'null'
+          pattern: ^sha256:[0-9a-f]{64}$
+        metrics:
+          type: object
+          additionalProperties: true
+    IngestionJobActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+    IngestionJobPage:
+      type: object
+      required:
+        - items
+        - next_cursor
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/IngestionJob'
+        next_cursor:
+          type:
+            - string
+            - 'null'
+x-ddp-contract:
+  kind: implemented-snapshot
+  version: 1.0.0
+  stages:
+    device:
+      version: ddp.device/1.0.0
+      frozen_status: approved
+      approved_at: '2026-11-08'
+      frozen_document: docs/architecture/阶段1-设备域契约冻结-v1.md
+      gap_document: docs/architecture/阶段1-设备域冻结字段实现差距与排期.md
+      approval_record: docs/adr/0009-device-contract-freeze.md
+    stage2:
+      version: ddp.stage2/1.0.0
+      frozen_status: frozen
+      frozen_at: '2026-11-09'
+      task: DDP-312
+      implemented_baseline_task: DDP-311
+      frozen_document: docs/architecture/阶段2-契约冻结-v1.0.md
+      index_document: docs/architecture/阶段2-契约索引.md
+      approval_record: docs/adr/0010-stage2-collection-ingestion-contract.md
+      validation_status: NOT RUN
+      validation_note: |
+        本会话无 Bash 工具；Redocly lint、oasdiff 与冻结脚本均未运行。
+        可重复命令与首次冻结命令见 packages/contracts/README.md 与
+        docs/architecture/阶段2-契约冻结-v1.0.md。
