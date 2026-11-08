@@ -34,9 +34,7 @@ def coerce_enum(value: object, enum_type: type[EnumT], field_name: str) -> EnumT
         return enum_type(value)  # type: ignore[call-arg]
     except ValueError as exc:
         allowed = ", ".join(item.value for item in enum_type)
-        raise DomainValidationError(
-            f"{field_name} 取值非法：{value!r}，允许值：{allowed}"
-        ) from exc
+        raise DomainValidationError(f"{field_name} 取值非法：{value!r}，允许值：{allowed}") from exc
 
 
 def frozen_mapping(value: object, field_name: str) -> Mapping[str, object]:

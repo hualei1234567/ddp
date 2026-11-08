@@ -86,8 +86,7 @@ class CalibrationProfile:
             self,
             "required_types",
             tuple(
-                coerce_enum(item, CalibrationType, "required_types")
-                for item in self.required_types
+                coerce_enum(item, CalibrationType, "required_types") for item in self.required_types
             ),
         )
         object.__setattr__(
@@ -166,9 +165,7 @@ class CalibrationRecord:
         # DDP-101 §3.2：DRAFT→SUBMITTED 要求证据已登记；
         # 非 DRAFT 快照若没有证据，说明状态被绕过迁移直接构造，必须拒绝。
         if self.status is not CalibrationStatus.DRAFT and not self.evidence_asset_ids:
-            raise DomainValidationError(
-                f"{self.status.value} 状态必须登记证据"
-            )
+            raise DomainValidationError(f"{self.status.value} 状态必须登记证据")
         object.__setattr__(self, "valid_from", aware_datetime(self.valid_from, "valid_from"))
         if self.valid_to is not None:
             valid_to = aware_datetime(self.valid_to, "valid_to")

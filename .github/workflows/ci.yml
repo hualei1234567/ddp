@@ -42,7 +42,9 @@ jobs:
       - name: 安装依赖
         run: pip install -r requirements-dev.txt
       - name: ruff
-        run: ruff check app tests migrations
+        run: |
+          ruff check app tests migrations
+          ruff format --check app tests migrations
       - name: Alembic 升级
         run: alembic upgrade head
       - name: pytest

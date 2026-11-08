@@ -276,9 +276,7 @@ def test_calibration_rejects_invalid_transitions(
         evidence_asset_ids=(uuid4(),),
         validated_by=uuid4() if status is not CalibrationStatus.DRAFT else None,
         validated_at=(
-            datetime(2026, 1, 2, tzinfo=UTC)
-            if status is not CalibrationStatus.DRAFT
-            else None
+            datetime(2026, 1, 2, tzinfo=UTC) if status is not CalibrationStatus.DRAFT else None
         ),
     )
     with pytest.raises(InvalidStateTransitionError):

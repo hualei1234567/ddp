@@ -65,15 +65,13 @@ def test_device_migration_creates_contract_constraints(tmp_path: Path) -> None:
 
         for table in ("robots", "devices", "sensors"):
             unique_columns = {
-                tuple(item["column_names"])
-                for item in inspector.get_unique_constraints(table)
+                tuple(item["column_names"]) for item in inspector.get_unique_constraints(table)
             }
             assert ("project_id", "code") in unique_columns
             assert ("project_id", "serial_number") in unique_columns
 
         calibration_indexes = {
-            item["name"]: item
-            for item in inspector.get_indexes("calibration_records")
+            item["name"]: item for item in inspector.get_indexes("calibration_records")
         }
         active_index = calibration_indexes["uq_calibration_records_active_target"]
         assert bool(active_index["unique"]) is True
@@ -85,9 +83,7 @@ def test_device_migration_creates_contract_constraints(tmp_path: Path) -> None:
             "calibration_type",
         )
 
-        sensor_checks = {
-            item["name"] for item in inspector.get_check_constraints("sensors")
-        }
+        sensor_checks = {item["name"] for item in inspector.get_check_constraints("sensors")}
         assert "ck_sensors_mount_required" in sensor_checks
         assert "ck_sensors_sample_rate_positive" in sensor_checks
     finally:

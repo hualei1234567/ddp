@@ -712,9 +712,7 @@ class SqlCalibrationRecordRepository:
                 CalibrationRecordModel.scope == _enum_value(record.scope),
                 CalibrationRecordModel.target_type == _enum_value(record.target_type),
                 CalibrationRecordModel.target_id == record.target_id,
-                CalibrationRecordModel.calibration_type == _enum_value(
-                    record.calibration_type
-                ),
+                CalibrationRecordModel.calibration_type == _enum_value(record.calibration_type),
                 CalibrationRecordModel.status == CalibrationStatus.ACTIVE.value,
                 CalibrationRecordModel.id != record.calibration_id,
             )

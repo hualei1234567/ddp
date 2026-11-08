@@ -14,8 +14,8 @@ if [[ ! -d apps/web/node_modules ]]; then
   exit 1
 fi
 
-echo "[1/6] 后端 ruff"
-(cd backend && .venv/bin/ruff check app tests migrations)
+echo "[1/6] 后端 ruff check + format"
+(cd backend && .venv/bin/ruff check app tests migrations && .venv/bin/ruff format --check app tests migrations)
 
 echo "[2/6] 后端 pytest"
 (cd backend && .venv/bin/python -m pytest -q)
