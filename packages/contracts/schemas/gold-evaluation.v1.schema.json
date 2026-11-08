@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/gold-evaluation.v1.schema.json",
+  "title": "GoldEvaluationOut",
+  "description": "由后端实际响应模型 GoldEvaluationOut 生成；字段与 packages/contracts/openapi.yaml 阶段 3 实现快照一致。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "properties": {
+    "evaluation_id": {
+      "format": "uuid",
+      "title": "Evaluation Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "gold_set_id": {
+      "format": "uuid",
+      "title": "Gold Set Id",
+      "type": "string"
+    },
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "format": "uuid",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "evaluated_count": {
+      "title": "Evaluated Count",
+      "type": "integer"
+    },
+    "passed_count": {
+      "title": "Passed Count",
+      "type": "integer"
+    },
+    "accuracy": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Accuracy"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "sample_size": {
+      "title": "Sample Size",
+      "type": "integer"
+    },
+    "results": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Results",
+      "type": "array"
+    },
+    "computed_at": {
+      "format": "date-time",
+      "title": "Computed At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "evaluation_id",
+    "project_id",
+    "gold_set_id",
+    "task_id",
+    "submission_id",
+    "evaluated_count",
+    "passed_count",
+    "accuracy",
+    "status",
+    "sample_size",
+    "results",
+    "computed_at"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

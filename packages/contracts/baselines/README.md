@@ -7,17 +7,21 @@
 
 ```bash
 bash packages/contracts/scripts/check-stage2-freeze.sh --freeze
+bash packages/contracts/scripts/check-stage3-freeze.sh --freeze
 ```
 
 首次冻结生成：
 
 - `openapi.stage2.v1.0.0.bundle.yaml`
 - `openapi.stage2.v1.0.0.sha256`
+- `openapi.stage3.v1.0.0.bundle.yaml`
+- `openapi.stage3.v1.0.0.sha256`
 
 ## 检查
 
 ```bash
 bash packages/contracts/scripts/check-stage2-freeze.sh --check
+bash packages/contracts/scripts/check-stage3-freeze.sh --check
 ```
 
 检查会：

@@ -1,0 +1,527 @@
+# 阶段 3 标注域 Schema 片段。
+# 响应对象以 packages/contracts/schemas/*.json 为唯一来源；本文件只放
+# 请求 DTO、分页包装与共享枚举，避免与后端实际响应重复维护。
+
+AnnotationSchemaStatus:
+  type: string
+  enum: [DRAFT, PENDING_REVIEW, PUBLISHED, DEPRECATED, REVOKED]
+
+AnnotationSampleSetStatus:
+  type: string
+  enum: [DRAFT, PREVIEW, SNAPSHOTTED, CONSUMED, CANCELLED]
+
+AnnotationTaskStatus:
+  type: string
+  enum:
+    - DRAFT
+    - PENDING_REVIEW
+    - APPROVED
+    - READY
+    - ASSIGNED
+    - IN_PROGRESS
+    - PAUSED
+    - BLOCKED
+    - SUBMITTED
+    - REVIEWING
+    - ARBITRATION
+    - ACCEPTED
+    - REJECTED
+    - REWORK
+    - COMPLETED
+    - CANCELLED
+    - ARCHIVED
+
+AnnotationBatchStatus:
+  type: string
+  enum:
+    - PLANNED
+    - READY
+    - ASSIGNED
+    - IN_PROGRESS
+    - PAUSED
+    - BLOCKED
+    - SUBMITTED
+    - REVIEWING
+    - ARBITRATION
+    - ACCEPTED
+    - REJECTED
+    - REWORK
+    - CANCELLED
+
+AnnotationAssignmentStatus:
+  type: string
+  enum: [ASSIGNED, CLAIMED, IN_PROGRESS, SUBMITTED, COMPLETED, REVOKED, EXPIRED]
+
+AnnotationSubmissionStatus:
+  type: string
+  enum:
+    - DRAFT
+    - SUBMITTED
+    - IN_REVIEW
+    - APPROVED
+    - REJECTED
+    - ESCALATED
+    - ARBITRATING
+    - RESOLVED_APPROVED
+    - RESOLVED_REJECTED
+    - RESOLVED_REWORK
+    - REWORK_REQUIRED
+    - WITHDRAWN
+    - SUPERSEDED
+
+AnnotationReviewStatus:
+  type: string
+  enum: [PENDING, IN_REVIEW, APPROVED, REJECTED, ESCALATED, CANCELLED]
+
+AnnotationArbitrationStatus:
+  type: string
+  enum:
+    - PENDING
+    - IN_ARBITRATION
+    - RESOLVED_APPROVED
+    - RESOLVED_REJECTED
+    - RESOLVED_REWORK
+    - CANCELLED
+
+GoldSetStatus:
+  type: string
+  enum: [DRAFT, PENDING_REVIEW, ACTIVE, RETIRED, REVOKED]
+
+QualitySampleStatus:
+  type: string
+  enum:
+    - PLANNED
+    - SAMPLED
+    - ASSIGNED
+    - IN_REVIEW
+    - PASSED
+    - FAILED
+    - ESCALATED
+    - CLOSED
+    - CANCELLED
+
+IAAReportStatus:
+  type: string
+  enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, INSUFFICIENT_DATA, CANCELLED]
+
+AnnotationLevel:
+  type: string
+  enum: [TASK, EPISODE, TIME_RANGE, ACTION_SEGMENT, FRAME, OBJECT_TRACK]
+
+AnnotationSchemaCreate:
+  type: object
+  required: [code, name, annotation_levels, labels]
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    description: {type: [string, "null"], maxLength: 2000}
+    annotation_levels:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: {$ref: "#/AnnotationLevel"}
+    labels:
+      type: array
+      minItems: 1
+      items: {type: object, additionalProperties: true}
+    compatibility: {type: string, enum: [BACKWARD_COMPATIBLE, BREAKING], default: BACKWARD_COMPATIBLE}
+    schema_lineage_id: {type: [string, "null"], format: uuid}
+    schema_version: {type: integer, minimum: 1, default: 1}
+    supersedes_id: {type: [string, "null"], format: uuid}
+
+AnnotationSchemaPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    name: {type: string, minLength: 1, maxLength: 200}
+    description: {type: [string, "null"], maxLength: 2000}
+    annotation_levels:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: {$ref: "#/AnnotationLevel"}
+    labels:
+      type: array
+      minItems: 1
+      items: {type: object, additionalProperties: true}
+    compatibility: {type: string, enum: [BACKWARD_COMPATIBLE, BREAKING]}
+
+AnnotationSchemaActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 2000}
+
+SampleSetCreate:
+  type: object
+  required: [code]
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: [string, "null"], maxLength: 200}
+    strategy: {type: string, enum: [FILTER, STRATIFIED, RISK_BASED, MANUAL], default: FILTER}
+    selection_rule_version: {type: string, minLength: 1, maxLength: 64, default: stage3-sample-selection/1}
+    filters: {type: object, additionalProperties: true, default: {}}
+    strata: {type: array, items: {type: object, additionalProperties: true}, default: []}
+    dedup_key: {type: string, enum: [EPISODE_LINEAGE, EPISODE_VERSION, NONE], default: EPISODE_LINEAGE}
+    data_source: {type: string, enum: [REAL, SYNTHETIC, MIXED, UNKNOWN], default: UNKNOWN}
+    warn_confirmed: {type: boolean, default: false}
+
+SampleSetActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 2000}
+    filters: {type: [object, "null"], additionalProperties: true}
+    strata: {type: [array, "null"], items: {type: object, additionalProperties: true}}
+    warn_confirmed: {type: boolean, default: false}
+
+AnnotationTaskCreate:
+  type: object
+  required: [code, name, sample_set_id, schema_id, target_item_count, target_episode_count]
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    description: {type: [string, "null"], maxLength: 2000}
+    sample_set_id: {type: string, format: uuid}
+    schema_id: {type: string, format: uuid}
+    schema_version: {type: [integer, "null"], minimum: 1}
+    target_item_count: {type: integer, minimum: 1}
+    target_episode_count: {type: integer, minimum: 1}
+    due_at: {type: [string, "null"], format: date-time}
+    priority: {type: string, enum: [P0, P1, P2, P3], default: P1}
+    assignment_mode: {type: string, enum: [MANUAL, CLAIM, MIXED], default: MANUAL}
+    iaa_policy: {type: object, additionalProperties: true, default: {}}
+    quality_policy: {type: object, additionalProperties: true, default: {}}
+
+AnnotationTaskPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    description: {type: [string, "null"], maxLength: 2000}
+    target_item_count: {type: [integer, "null"], minimum: 1}
+    target_episode_count: {type: [integer, "null"], minimum: 1}
+    due_at: {type: [string, "null"], format: date-time}
+    priority: {type: string, enum: [P0, P1, P2, P3]}
+    assignment_mode: {type: string, enum: [MANUAL, CLAIM, MIXED]}
+    iaa_policy: {type: [object, "null"], additionalProperties: true}
+    quality_policy: {type: [object, "null"], additionalProperties: true}
+
+AnnotationTaskActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 2000}
+    waiver_reason: {type: [string, "null"], maxLength: 2000}
+
+AnnotationBatchCreate:
+  type: object
+  required: [planned_item_count]
+  additionalProperties: false
+  properties:
+    planned_item_count: {type: integer, minimum: 0}
+    code: {type: [string, "null"], maxLength: 64}
+    sequence_no: {type: [integer, "null"], minimum: 1}
+    name: {type: [string, "null"], maxLength: 200}
+    stratum: {type: [string, "null"], maxLength: 100}
+    item_refs: {type: array, items: {type: string, format: uuid}, uniqueItems: true, default: []}
+    due_at: {type: [string, "null"], format: date-time}
+
+AnnotationBatchPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    name: {type: [string, "null"], maxLength: 200}
+    stratum: {type: [string, "null"], maxLength: 100}
+    item_refs: {type: [array, "null"], items: {type: string, format: uuid}, uniqueItems: true}
+    planned_item_count: {type: [integer, "null"], minimum: 0}
+    due_at: {type: [string, "null"], format: date-time}
+
+AnnotationBatchActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 2000}
+
+AnnotationAssignmentCreate:
+  type: object
+  required: [batch_id, assignee_id]
+  additionalProperties: false
+  properties:
+    batch_id: {type: string, format: uuid}
+    assignee_id: {type: string, format: uuid}
+    assignment_role: {type: string, enum: [ANNOTATOR, REVIEWER, ARBITER], default: ANNOTATOR}
+    planned_item_count: {type: integer, minimum: 0, default: 0}
+    planned_minutes: {type: integer, minimum: 0, default: 0}
+    lease_expires_at: {type: [string, "null"], format: date-time}
+
+AnnotationAssignmentActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 2000}
+    actual_minutes: {type: [integer, "null"], minimum: 0}
+    submitted_item_count: {type: [integer, "null"], minimum: 0}
+    approved_item_count: {type: [integer, "null"], minimum: 0}
+
+AnnotationSubmissionCreate:
+  type: object
+  required: [assignment_id, records]
+  additionalProperties: false
+  properties:
+    assignment_id: {type: string, format: uuid}
+    records:
+      type: array
+      minItems: 1
+      items: {type: object, additionalProperties: true}
+    data_source: {type: string, enum: [REAL, SYNTHETIC, MIXED, UNKNOWN], default: UNKNOWN}
+
+AnnotationSubmissionActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 2000}
+
+AnnotationReviewCreate:
+  type: object
+  required: [submission_id, reviewer_id]
+  additionalProperties: false
+  properties:
+    submission_id: {type: string, format: uuid}
+    reviewer_id: {type: string, format: uuid}
+
+AnnotationSubmissionReviewCreate:
+  type: object
+  required: [reviewer_id]
+  additionalProperties: false
+  properties:
+    reviewer_id: {type: string, format: uuid}
+
+AnnotationReviewActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 2000}
+    issues: {type: [array, "null"], items: {type: object, additionalProperties: true}}
+    checklist: {type: [array, "null"], items: {type: object, additionalProperties: true}}
+    review_duration_sec: {type: [integer, "null"], minimum: 0}
+
+AnnotationArbitrationCreate:
+  type: object
+  required: [submission_id, arbiter_ids, quorum, trigger]
+  additionalProperties: false
+  properties:
+    submission_id: {type: string, format: uuid}
+    arbiter_ids: {type: array, minItems: 1, uniqueItems: true, items: {type: string, format: uuid}}
+    quorum: {type: integer, minimum: 1}
+    trigger: {type: string, enum: [REVIEWER_DISAGREEMENT, ANNOTATOR_DISPUTE, GOLD_SET_CONFLICT, IAA_CONFLICT, HIGH_RISK, POLICY]}
+    review_id: {type: [string, "null"], format: uuid}
+
+AnnotationSubmissionArbitrationCreate:
+  type: object
+  required: [arbiter_ids, quorum, trigger]
+  additionalProperties: false
+  properties:
+    arbiter_ids: {type: array, minItems: 1, uniqueItems: true, items: {type: string, format: uuid}}
+    quorum: {type: integer, minimum: 1}
+    trigger: {type: string, enum: [REVIEWER_DISAGREEMENT, ANNOTATOR_DISPUTE, GOLD_SET_CONFLICT, IAA_CONFLICT, HIGH_RISK, POLICY]}
+    review_id: {type: [string, "null"], format: uuid}
+
+AnnotationArbitrationActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 2000}
+
+AnnotationArbitrationVoteRequest:
+  type: object
+  required: [decision]
+  additionalProperties: false
+  properties:
+    decision: {type: string, enum: [APPROVE, REJECT, REWORK, ABSTAIN]}
+    reason: {type: [string, "null"], maxLength: 2000}
+
+GoldSetCreate:
+  type: object
+  required: [code, schema_id, items]
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: [string, "null"], maxLength: 200}
+    schema_id: {type: string, format: uuid}
+    schema_version: {type: [integer, "null"], minimum: 1}
+    schema_sha256: {type: [string, "null"], maxLength: 80}
+    items: {type: array, minItems: 1, items: {type: object, additionalProperties: true}}
+    exposure_policy: {type: string, enum: [HIDDEN, ROTATING, CONTROLLED], default: HIDDEN}
+    max_exposure_per_annotator: {type: integer, minimum: 1, default: 1}
+    rotation_policy: {type: string, enum: [NONE, PER_TASK, PER_PERIOD, PER_ANNOTATOR], default: NONE}
+    usage_policy: {type: object, additionalProperties: true, default: {}}
+
+GoldSetActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 2000}
+
+GoldEvaluationCreate:
+  type: object
+  required: [task_id, submission_id]
+  additionalProperties: false
+  properties:
+    task_id: {type: string, format: uuid}
+    submission_id: {type: string, format: uuid}
+
+GoldInjectionCreate:
+  type: object
+  required: [task_id, annotator_id, item_ids]
+  additionalProperties: false
+  properties:
+    task_id: {type: string, format: uuid}
+    annotator_id: {type: string, format: uuid}
+    item_ids: {type: array, minItems: 1, items: {type: string, format: uuid}}
+
+QualitySampleCreate:
+  type: object
+  required: [task_id, submission_id, annotator_id, sampling_policy_version, sample_type, sample_reason]
+  additionalProperties: false
+  properties:
+    task_id: {type: string, format: uuid}
+    submission_id: {type: string, format: uuid}
+    annotator_id: {type: string, format: uuid}
+    sampling_policy_version: {type: string, minLength: 1, maxLength: 64}
+    sample_type: {type: string, enum: [RANDOM, STRATIFIED, RISK_BASED, GOLD_SET, IAA_OVERLAP]}
+    sample_reason: {type: string, minLength: 1, maxLength: 500}
+    item_refs: {type: array, items: {type: string, format: uuid}, uniqueItems: true, default: []}
+    stratum: {type: [string, "null"], maxLength: 100}
+    due_at: {type: [string, "null"], format: date-time}
+    metadata: {type: object, additionalProperties: true, default: {}}
+
+QualitySamplePlanCandidate:
+  type: object
+  required: [submission_id]
+  additionalProperties: false
+  properties:
+    submission_id: {type: string, format: uuid}
+    stratum: {type: [string, "null"], maxLength: 100}
+    risk_score: {type: number, minimum: 0, maximum: 1, default: 0}
+
+QualitySamplePlan:
+  type: object
+  required: [task_id, candidates, sampling_policy_version, sample_type, sample_size, sample_reason]
+  additionalProperties: false
+  properties:
+    task_id: {type: string, format: uuid}
+    candidates:
+      type: array
+      minItems: 1
+      maxItems: 500
+      items: {$ref: "#/QualitySamplePlanCandidate"}
+    sampling_policy_version: {type: string, minLength: 1, maxLength: 64}
+    sample_type: {type: string, enum: [RANDOM, STRATIFIED, RISK_BASED]}
+    sample_size: {type: integer, minimum: 1}
+    sample_reason: {type: string, minLength: 1, maxLength: 500}
+    stratum: {type: [string, "null"], maxLength: 100}
+    risk_threshold: {type: [number, "null"], minimum: 0, maximum: 1}
+    due_at: {type: [string, "null"], format: date-time}
+
+QualitySampleActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reviewer_id: {type: [string, "null"], format: uuid}
+    reason: {type: [string, "null"], maxLength: 2000}
+
+IAAReportCreate:
+  type: object
+  required: [task_id, metric_definitions_version]
+  additionalProperties: false
+  properties:
+    task_id: {type: string, format: uuid}
+    metric_definitions_version: {type: string, minLength: 1, maxLength: 64}
+    iou_threshold: {type: number, minimum: 0, maximum: 1, default: 0.5}
+
+AnnotationSchemaPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/annotation-schema.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+AnnotationSampleSetPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/annotation-sample-set.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+AnnotationTaskPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/annotation-task.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+AnnotationBatchPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/annotation-batch.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+AnnotationAssignmentPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/annotation-assignment.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+AnnotationSubmissionPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/annotation-submission.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+AnnotationRecordPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/annotation-record.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+AnnotationReviewPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/annotation-review.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+AnnotationArbitrationPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/annotation-arbitration.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+GoldSetPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/gold-set.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+QualitySamplePage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/quality-sample.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}
+
+IAAReportPage:
+  type: object
+  required: [items]
+  properties:
+    items: {type: array, items: {$ref: "../schemas/iaa-report.v1.schema.json"}}
+    next_cursor: {type: [string, "null"]}

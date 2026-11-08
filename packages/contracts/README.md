@@ -13,14 +13,20 @@
 | 版本 | 范围 | 状态 |
 |---|---|---|
 | `1.0.0` | 阶段 1 设备域 + 阶段 2 采集/上传/RawAsset/Episode/IngestionJob 已实现端点 | **FROZEN（DDP-312）** |
+| `1.1.0` | 在 `1.0.0` 基础上增量加入阶段 3 标注域已实现端点 | **FROZEN（DDP-323）** |
 | `ddp.device/1.0.0` | 阶段 1 设备域冻结目标 | 已批准 |
 | `ddp.stage2/1.0.0` | 阶段 2 契约冻结版本 | v1.0 FROZEN |
+| `ddp.stage3/1.0.0` | 阶段 3 标注契约冻结版本 | v1.0 FROZEN |
 
 阶段 1 尚未关闭的实现差距不在本快照中声明为可用，清单见
 `docs/architecture/阶段1-设备域冻结字段实现差距与排期.md`。
 
 阶段 2 的冻结字段、端点清单、错误码、`If-Match`/`Idempotency-Key` 与变更流程见
 `docs/architecture/阶段2-契约冻结-v1.0.md`。
+
+阶段 3 的端点矩阵、错误码、状态机同步、兼容与变更流程见
+`docs/architecture/阶段3-契约冻结-v1.0.md`。未实现的样本项、工作量、血缘、
+审计与指标端点不在本快照中声明为可用。
 
 ## 文件
 
@@ -29,17 +35,21 @@
 | `openapi.yaml` | OpenAPI 3.1 唯一入口；声明信息、路径键与组件引用 |
 | `fragments/paths.stage1.yaml` | 阶段 1 路径项与操作 |
 | `fragments/paths.stage2.yaml` | 阶段 2 路径项与操作 |
+| `fragments/paths.stage3.yaml` | 阶段 3 标注域路径项与操作（仅已实现端点） |
 | `fragments/schemas.stage1.yaml` | 阶段 1 Schema |
 | `fragments/schemas.stage2.yaml` | 阶段 2 Schema |
 | `fragments/schemas.stage2.required.yaml` | 阶段 2 服务端必填约束更正（Episode 标定快照、IngestionJob 输入） |
+| `fragments/schemas.stage3.yaml` | 阶段 3 请求 DTO、分页包装与共享枚举 |
+| `fragments/components.stage3.yaml` | 阶段 3 路径参数、动作白名单与响应引用 |
 | `fragments/schemas.common.yaml` | 稳定错误码与错误体 |
 | `fragments/components.yaml` | 公共参数与错误响应 |
 | `redocly.yaml` | OpenAPI lint 规则（Redocly CLI） |
 | `scripts/check-compatibility.sh` | 基于 git 基线的 `oasdiff breaking` 检查（支持 fragments） |
 | `scripts/check-stage2-freeze.sh` | 阶段 2 基线冻结、lint 与兼容性检查 |
+| `scripts/check-stage3-freeze.sh` | 阶段 3 基线冻结、lint、SHA256 与兼容性检查 |
 | `baselines/` | 自包含冻结基线（由脚本生成，禁止手工编辑） |
 | `reports/` | 冻结/兼容性检查报告（由脚本生成） |
-| `schemas/*.json` | 可复用 JSON Schema（错误体等） |
+| `schemas/*.json` | 可复用 JSON Schema（错误体、阶段 3 响应对象等） |
 
 `openapi.yaml` 通过相对 `$ref` 引用 `fragments/`。Redocly 与 oasdiff 的输入始终是
 `packages/contracts/openapi.yaml`；基线脚本会用 Redocly bundle 生成自包含文件。
@@ -66,6 +76,23 @@
 阶段 2 未实现/未冻结为 HTTP 端点的动作（如隔离放行、墓碑、重新校验、Job 日志 URL、
 Episode Manifest 下载）**不在本快照中声明**。
 
+阶段 3（40 个路径项 / 54 个操作）：
+
+- AnnotationSchemas：列表、创建、详情、修改、`actions/{action}`
+- AnnotationSampleSets：列表、创建、详情、`actions/{action}`（`preview`/`snapshot` 等）
+- AnnotationTasks：列表、创建、详情、修改、`actions/{action}`、任务批次列表/拆分
+- AnnotationBatches：详情、修改、`actions/{action}`
+- AnnotationAssignments：列表、创建、详情、`actions/{action}`
+- AnnotationSubmissions：列表、创建、详情、`actions/{action}`、`records`、`reviews`、`arbitrations`
+- AnnotationReviews：创建、详情、`actions/{action}`
+- AnnotationArbitrations：创建、详情、`actions/{action}`、`votes`
+- GoldSets：列表、创建、详情、`answers`、`actions/{action}`、`evaluations`、`injections`
+- QualitySamples：列表、创建、详情、`plan`（响应数组）、`actions/{action}`
+- IAAReports：列表、创建（同步 201）、详情
+
+阶段 3 未实现/未冻结为 HTTP 端点的能力（样本项列表、工作台、工作量、血缘、审计、
+指标摘要、IAA 异步 Job、数据集导出）**不在本快照中声明**。
+
 ## 本地校验
 
 ```bash
@@ -79,6 +106,12 @@ bash packages/contracts/scripts/check-stage2-freeze.sh --freeze
 # 阶段 2 基线与当前契约兼容性
 bash packages/contracts/scripts/check-stage2-freeze.sh --check
 
+# 阶段 3 基线冻结（首次）
+bash packages/contracts/scripts/check-stage3-freeze.sh --freeze
+
+# 阶段 3 基线与当前契约兼容性（SHA256 + lint + oasdiff）
+bash packages/contracts/scripts/check-stage3-freeze.sh --check
+
 # git 基线兼容性（CI/PR）
 bash packages/contracts/scripts/check-compatibility.sh \
   packages/contracts/openapi.yaml origin/main
@@ -87,9 +120,12 @@ bash packages/contracts/scripts/check-compatibility.sh \
 CI 的 `contract` job 会对 PR 使用 `pull_request.base.sha`、对 push 使用
 `github.event.before` 作为基线；首次提交或无基线时跳过并明确提示。
 
-> 本次 DDP-312 会话无 Bash 工具，上述 Redocly/oasdiff/脚本命令均 **NOT RUN**；
-> 不以此声称 lint 或兼容性检查已通过。执行记录见
-> `docs/architecture/阶段2-契约冻结-v1.0.md`。
+> 阶段 2（DDP-312）会话无 Bash 工具，相关命令当时均 **NOT RUN**；不以此声称
+> lint 或兼容性检查已通过。执行记录见 `docs/architecture/阶段2-契约冻结-v1.0.md`。
+>
+> 阶段 3（DDP-323）已实际执行并通过 Redocly lint、`check-stage3-freeze.sh --freeze`
+> 与 `--check`、`check-compatibility.sh`（main `7a2264b`）及后端 pytest；详细结果见
+> `docs/architecture/阶段3-契约冻结-v1.0.md` 第 8 节。
 
 ## 版本与变更流程
 
@@ -97,12 +133,15 @@ CI 的 `contract` job 会对 PR 使用 `pull_request.base.sha`、对 push 使用
 2. Architect 评审；破坏性变更（删除/改名/改类型/改语义/必填化/状态迁移变化）
    必须新建 ADR 并获用户批准。
 3. 更新契约、lint 规则与兼容性基线；补契约测试。
-4. 执行 Redocly lint、`check-stage2-freeze.sh --check` 与相关 API 测试。
+4. 执行 Redocly lint、`check-stage2-freeze.sh --check` / `check-stage3-freeze.sh --check`
+   与相关 API 测试。
 5. 通知所有相关角色；冻结产物记录版本、日期、SHA256 与批准人。
 
 版本策略：
 
 - `1.0.0`：阶段 1 + 阶段 2 已实现端点冻结快照（DDP-312）。
+- `1.1.0`：在 `1.0.0` 上增量加入阶段 3 已实现端点（DDP-323）。
 - `ddp.device/1.0.0`：设备域冻结目标（已批准）；差距关闭后才允许调整设备域快照。
 - `ddp.stage2/1.0.0`：阶段 2 冻结版本；破坏性变更需新 ADR 并提升契约版本。
+- `ddp.stage3/1.0.0`：阶段 3 冻结版本；破坏性变更需新 ADR 并提升契约版本。
 - `/api/v1`：HTTP 主版本；移除/重命名/改语义属于破坏性变更。

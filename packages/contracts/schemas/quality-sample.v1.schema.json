@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/quality-sample.v1.schema.json",
+  "title": "QualitySampleOut",
+  "description": "由后端实际响应模型 QualitySampleOut 生成；字段与 packages/contracts/openapi.yaml 阶段 3 实现快照一致。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "properties": {
+    "quality_sample_id": {
+      "format": "uuid",
+      "title": "Quality Sample Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "format": "uuid",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "annotator_id": {
+      "format": "uuid",
+      "title": "Annotator Id",
+      "type": "string"
+    },
+    "sampling_policy_version": {
+      "title": "Sampling Policy Version",
+      "type": "string"
+    },
+    "sample_type": {
+      "title": "Sample Type",
+      "type": "string"
+    },
+    "sample_reason": {
+      "title": "Sample Reason",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "stratum": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Stratum"
+    },
+    "item_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Item Refs",
+      "type": "array"
+    },
+    "reviewer_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reviewer Id"
+    },
+    "review_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Review Id"
+    },
+    "arbitration_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Arbitration Id"
+    },
+    "due_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Due At"
+    },
+    "outcome": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Outcome"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reason"
+    },
+    "closed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Closed At"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created At"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated At"
+    },
+    "created_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created By"
+    },
+    "updated_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated By"
+    }
+  },
+  "required": [
+    "quality_sample_id",
+    "project_id",
+    "task_id",
+    "submission_id",
+    "annotator_id",
+    "sampling_policy_version",
+    "sample_type",
+    "sample_reason",
+    "status",
+    "stratum",
+    "item_refs",
+    "reviewer_id",
+    "review_id",
+    "arbitration_id",
+    "due_at",
+    "outcome",
+    "reason",
+    "closed_at",
+    "metadata",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

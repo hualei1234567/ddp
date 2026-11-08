@@ -1,0 +1,169 @@
+parameters:
+  SchemaId:
+    name: schema_id
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  SampleSetId:
+    name: sample_set_id
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  AssignmentId:
+    name: assignment_id
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  SubmissionId:
+    name: submission_id
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  ReviewId:
+    name: review_id
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  ArbitrationId:
+    name: arbitration_id
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  GoldSetId:
+    name: gold_set_id
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  QualitySampleId:
+    name: quality_sample_id
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+  IaaReportId:
+    name: iaa_report_id
+    in: path
+    required: true
+    schema: {type: string, format: uuid}
+
+  AnnotationSchemaAction:
+    name: action
+    in: path
+    required: true
+    description: Schema 状态动作白名单；非法动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum: [submit-review, return-draft, publish, deprecate, revoke]
+  SampleSetAction:
+    name: action
+    in: path
+    required: true
+    description: 样本集动作白名单（preview/snapshot/consume/cancel）；非法动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum: [preview, snapshot, consume, cancel]
+  AnnotationTaskAction:
+    name: action
+    in: path
+    required: true
+    description: 标注任务状态动作白名单；非法动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum:
+        - submit-review
+        - return-draft
+        - approve
+        - ready
+        - assign
+        - start
+        - pause
+        - resume
+        - block
+        - unblock
+        - submit
+        - system-review
+        - accept
+        - reject
+        - escalate
+        - resolve-accepted
+        - resolve-rejected
+        - rework
+        - resume-work
+        - complete
+        - archive
+        - cancel
+  AnnotationBatchAction:
+    name: action
+    in: path
+    required: true
+    description: 标注批次状态动作白名单；非法动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum:
+        - ready
+        - assign
+        - start
+        - pause
+        - resume
+        - block
+        - unblock
+        - submit
+        - system-review
+        - accept
+        - reject
+        - escalate
+        - resolve-accepted
+        - resolve-rejected
+        - rework
+        - resume-work
+        - cancel
+  AnnotationAssignmentAction:
+    name: action
+    in: path
+    required: true
+    description: 分配动作白名单；非法动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum: [claim, revoke, system-expire, start, release, submit, complete, rework]
+  AnnotationSubmissionAction:
+    name: action
+    in: path
+    required: true
+    description: |
+      提交资源只开放标注人动作：submit/withdraw/require-rework。
+      approve/reject/escalate 等裁决动作必须经复核或仲裁资源执行；
+      其它动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum: [submit, withdraw, require-rework]
+  AnnotationReviewAction:
+    name: action
+    in: path
+    required: true
+    description: 复核动作白名单；非法动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum: [claim, approve, reject, escalate, cancel]
+  AnnotationArbitrationAction:
+    name: action
+    in: path
+    required: true
+    description: 仲裁动作白名单；非法动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum: [claim, recuse, resolve-approved, resolve-rejected, resolve-rework, cancel]
+  GoldSetAction:
+    name: action
+    in: path
+    required: true
+    description: 黄金集动作白名单；非法动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum: [submit-review, return-draft, activate, retire, revoke]
+  QualitySampleAction:
+    name: action
+    in: path
+    required: true
+    description: 质检抽检动作白名单；非法动作返回 422 validation_failed。
+    schema:
+      type: string
+      enum: [sample, assign, start, pass, fail, escalate, close, cancel]

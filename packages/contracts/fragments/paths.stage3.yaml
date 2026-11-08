@@ -1,0 +1,931 @@
+# 阶段 3 标注域路径片段。
+# 仅声明 backend/app/api/v1/annotation_{catalog,work,results,quality}.py 实际实现且
+# include_in_schema=True 的端点；隐藏别名（annotation-batches / annotation-gold-sets /
+# annotation-quality-samples / annotation-iaa-reports）不进入契约。
+
+annotationSchemas:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listAnnotationSchemas
+    tags: [annotation-schemas]
+    summary: 标签 Schema 列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSchemaStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: Schema 分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSchemaPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createAnnotationSchema
+    tags: [annotation-schemas]
+    summary: 创建标签 Schema（初始 DRAFT）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSchemaCreate"}}}}
+    responses:
+      "201": {description: Schema 已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSchema"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSchemaDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SchemaId"
+  get:
+    operationId: getAnnotationSchema
+    tags: [annotation-schemas]
+    summary: Schema 详情
+    responses:
+      "200": {description: Schema 详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSchema"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  patch:
+    operationId: updateAnnotationSchema
+    tags: [annotation-schemas]
+    summary: 修改 DRAFT Schema（If-Match 乐观锁）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSchemaPatch"}}}}
+    responses:
+      "200": {description: 修改后的 Schema, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSchema"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSchemaActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SchemaId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotationSchemaAction"
+  post:
+    operationId: actOnAnnotationSchema
+    tags: [annotation-schemas]
+    summary: Schema 状态动作（submit-review/return-draft/publish/deprecate/revoke）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSchemaActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的 Schema, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSchema"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSampleSets:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listAnnotationSampleSets
+    tags: [annotation-samples]
+    summary: 样本集列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSampleSetStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 样本集分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSampleSetPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createAnnotationSampleSet
+    tags: [annotation-samples]
+    summary: 创建样本集（初始 DRAFT）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/SampleSetCreate"}}}}
+    responses:
+      "201": {description: 样本集已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSampleSet"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSampleSetDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SampleSetId"
+  get:
+    operationId: getAnnotationSampleSet
+    tags: [annotation-samples]
+    summary: 样本集详情
+    responses:
+      "200": {description: 样本集详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSampleSet"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSampleSetActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SampleSetId"
+    - $ref: "../openapi.yaml#/components/parameters/SampleSetAction"
+  post:
+    operationId: actOnAnnotationSampleSet
+    tags: [annotation-samples]
+    summary: 样本集动作（preview/snapshot/consume/cancel）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/SampleSetActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的样本集, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSampleSet"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationTasks:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listAnnotationTasks
+    tags: [annotation-tasks]
+    summary: 标注任务列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTaskStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 任务分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTaskPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createAnnotationTask
+    tags: [annotation-tasks]
+    summary: 创建标注任务（初始 DRAFT）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTaskCreate"}}}}
+    responses:
+      "201": {description: 任务已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTask"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationTaskDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/TaskId"
+  get:
+    operationId: getAnnotationTask
+    tags: [annotation-tasks]
+    summary: 标注任务详情
+    responses:
+      "200": {description: 任务详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTask"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  patch:
+    operationId: updateAnnotationTask
+    tags: [annotation-tasks]
+    summary: 修改标注任务（If-Match 乐观锁）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTaskPatch"}}}}
+    responses:
+      "200": {description: 修改后的任务, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTask"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationTaskActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/TaskId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotationTaskAction"
+  post:
+    operationId: actOnAnnotationTask
+    tags: [annotation-tasks]
+    summary: 任务状态动作（白名单）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTaskActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的任务, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTask"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationTaskBatches:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/TaskId"
+  get:
+    operationId: listAnnotationBatches
+    tags: [annotation-tasks]
+    summary: 任务下的批次列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationBatchStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 批次分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationBatchPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createAnnotationBatch
+    tags: [annotation-tasks]
+    summary: 拆分批次（初始 PLANNED）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationBatchCreate"}}}}
+    responses:
+      "201": {description: 批次已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationBatch"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationBatchDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+  get:
+    operationId: getAnnotationBatch
+    tags: [annotation-tasks]
+    summary: 批次详情
+    responses:
+      "200": {description: 批次详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationBatch"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  patch:
+    operationId: updateAnnotationBatch
+    tags: [annotation-tasks]
+    summary: 修改批次（If-Match 乐观锁）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationBatchPatch"}}}}
+    responses:
+      "200": {description: 修改后的批次, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationBatch"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationBatchActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotationBatchAction"
+  post:
+    operationId: actOnAnnotationBatch
+    tags: [annotation-tasks]
+    summary: 批次状态动作（白名单）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationBatchActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的批次, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationBatch"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationAssignments:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listAnnotationAssignments
+    tags: [annotation-assignments]
+    summary: 分配列表（游标分页；AN 仅本人可见）
+    parameters:
+      - {name: task_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - {name: batch_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - {name: assignee_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationAssignmentStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 分配分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationAssignmentPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createAnnotationAssignment
+    tags: [annotation-assignments]
+    summary: 创建分配（校验容量与职责分离）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationAssignmentCreate"}}}}
+    responses:
+      "201": {description: 分配已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationAssignment"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationAssignmentDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AssignmentId"
+  get:
+    operationId: getAnnotationAssignment
+    tags: [annotation-assignments]
+    summary: 分配详情
+    responses:
+      "200": {description: 分配详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationAssignment"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationAssignmentActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AssignmentId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotationAssignmentAction"
+  post:
+    operationId: actOnAnnotationAssignment
+    tags: [annotation-assignments]
+    summary: 分配动作（claim/start/submit/complete/release/revoke/system-expire/rework）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationAssignmentActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的分配, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationAssignment"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "410": {$ref: "../openapi.yaml#/components/responses/Gone"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSubmissions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listAnnotationSubmissions
+    tags: [annotation-submissions]
+    summary: 任务下提交列表（AN 仅本人 DRAFT）
+    parameters:
+      - {name: task_id, in: query, required: true, schema: {type: string, format: uuid}}
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSubmissionStatus"}}
+      - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+    responses:
+      "200": {description: 提交分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSubmissionPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createAnnotationSubmission
+    tags: [annotation-submissions]
+    summary: 创建提交草稿（初始 DRAFT）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSubmissionCreate"}}}}
+    responses:
+      "201": {description: 提交已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSubmission"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSubmissionDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubmissionId"
+  get:
+    operationId: getAnnotationSubmission
+    tags: [annotation-submissions]
+    summary: 提交详情（他人 DRAFT 返回 403）
+    responses:
+      "200": {description: 提交详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSubmission"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSubmissionActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubmissionId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotationSubmissionAction"
+  post:
+    operationId: actOnAnnotationSubmission
+    tags: [annotation-submissions]
+    summary: 提交动作（submit/withdraw/require-rework）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSubmissionActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的提交, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSubmission"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSubmissionRecords:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubmissionId"
+  get:
+    operationId: listAnnotationRecords
+    tags: [annotation-submissions]
+    summary: 提交记录列表
+    responses:
+      "200": {description: 记录分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationRecordPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSubmissionReviews:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubmissionId"
+  get:
+    operationId: listSubmissionReviews
+    tags: [annotation-submissions]
+    summary: 提交的复核列表
+    responses:
+      "200": {description: 复核分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationReviewPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createSubmissionReview
+    tags: [annotation-submissions]
+    summary: 为提交创建复核（复核人不得是标注人）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSubmissionReviewCreate"}}}}
+    responses:
+      "201": {description: 复核已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationReview"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationReviews:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: createAnnotationReview
+    tags: [annotation-submissions]
+    summary: 创建复核（指定提交与复核人）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationReviewCreate"}}}}
+    responses:
+      "201": {description: 复核已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationReview"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationReviewDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ReviewId"
+  get:
+    operationId: getAnnotationReview
+    tags: [annotation-submissions]
+    summary: 复核详情
+    responses:
+      "200": {description: 复核详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationReview"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationReviewActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ReviewId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotationReviewAction"
+  post:
+    operationId: actOnAnnotationReview
+    tags: [annotation-submissions]
+    summary: 复核动作（claim/approve/reject/escalate/cancel）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationReviewActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的复核, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationReview"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSubmissionArbitrations:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubmissionId"
+  get:
+    operationId: listSubmissionArbitrations
+    tags: [annotation-submissions]
+    summary: 提交的仲裁列表
+    responses:
+      "200": {description: 仲裁分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationArbitrationPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createSubmissionArbitration
+    tags: [annotation-submissions]
+    summary: 为提交创建仲裁（仲裁人不得是标注人或首轮复核人）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationSubmissionArbitrationCreate"}}}}
+    responses:
+      "201": {description: 仲裁已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationArbitration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationArbitrations:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: createAnnotationArbitration
+    tags: [annotation-submissions]
+    summary: 创建仲裁（指定提交、仲裁人与法定人数）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationArbitrationCreate"}}}}
+    responses:
+      "201": {description: 仲裁已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationArbitration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationArbitrationDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ArbitrationId"
+  get:
+    operationId: getAnnotationArbitration
+    tags: [annotation-submissions]
+    summary: 仲裁详情
+    responses:
+      "200": {description: 仲裁详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationArbitration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationArbitrationActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ArbitrationId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotationArbitrationAction"
+  post:
+    operationId: actOnAnnotationArbitration
+    tags: [annotation-submissions]
+    summary: 仲裁动作（claim/recuse/resolve-approved/resolve-rejected/resolve-rework/cancel）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationArbitrationActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的仲裁, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationArbitration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationArbitrationVotes:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ArbitrationId"
+  post:
+    operationId: voteOnAnnotationArbitration
+    tags: [annotation-submissions]
+    summary: 仲裁投票（If-Match 乐观锁；投满法定人数后可决议）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IfMatch"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationArbitrationVoteRequest"}}}}
+    responses:
+      "200": {description: 投票后的仲裁, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationArbitration"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+goldSets:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listGoldSets
+    tags: [annotation-quality]
+    summary: 黄金集列表（脱敏视图，不含 expected_labels）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/GoldSetStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 黄金集分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldSetPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createGoldSet
+    tags: [annotation-quality]
+    summary: 创建黄金集（初始 DRAFT）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldSetCreate"}}}}
+    responses:
+      "201": {description: 黄金集已创建（脱敏）, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldSet"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+goldSetDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/GoldSetId"
+  get:
+    operationId: getGoldSet
+    tags: [annotation-quality]
+    summary: 黄金集详情（按角色脱敏）
+    responses:
+      "200": {description: 黄金集详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldSet"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+goldSetAnswers:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/GoldSetId"
+  get:
+    operationId: getGoldSetAnswers
+    tags: [annotation-quality]
+    summary: 黄金集授权答案视图（仅授权角色；拒绝写审计）
+    responses:
+      "200": {description: 含 expected_labels 的答案视图, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldSetAnswer"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+goldSetActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/GoldSetId"
+    - $ref: "../openapi.yaml#/components/parameters/GoldSetAction"
+  post:
+    operationId: actOnGoldSet
+    tags: [annotation-quality]
+    summary: 黄金集动作（submit-review/return-draft/activate/retire/revoke）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldSetActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的黄金集（脱敏）, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldSet"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+goldSetEvaluations:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/GoldSetId"
+  post:
+    operationId: evaluateGoldSet
+    tags: [annotation-quality]
+    summary: 按黄金集评估提交准确率
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldEvaluationCreate"}}}}
+    responses:
+      "201": {description: 评估结果, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldEvaluation"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+goldSetInjections:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/GoldSetId"
+  post:
+    operationId: injectGoldSet
+    tags: [annotation-quality]
+    summary: 向标注员注入隐藏黄金集样本（响应不含 expected_labels）
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldInjectionCreate"}}}}
+    responses:
+      "201": {description: 注入结果（脱敏）, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/GoldInjection"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+qualitySamples:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listQualitySamples
+    tags: [annotation-quality]
+    summary: 任务下的质检抽检列表
+    parameters:
+      - {name: task_id, in: query, required: true, schema: {type: string, format: uuid}}
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/QualitySampleStatus"}}
+      - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+    responses:
+      "200": {description: 抽检分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/QualitySamplePage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createQualitySample
+    tags: [annotation-quality]
+    summary: 创建单条抽检（标注人不得自选）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/QualitySampleCreate"}}}}
+    responses:
+      "201": {description: 抽检已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/QualitySample"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+qualitySamplePlan:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: planQualitySamples
+    tags: [annotation-quality]
+    summary: 按抽样策略与候选集生成抽检计划（返回数组）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/QualitySamplePlan"}}}}
+    responses:
+      "201":
+        description: 已生成的抽检样本数组
+        content:
+          application/json:
+            schema:
+              type: array
+              items: {$ref: "../openapi.yaml#/components/schemas/QualitySample"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+qualitySampleDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/QualitySampleId"
+  get:
+    operationId: getQualitySample
+    tags: [annotation-quality]
+    summary: 抽检详情
+    responses:
+      "200": {description: 抽检详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/QualitySample"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+qualitySampleActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/QualitySampleId"
+    - $ref: "../openapi.yaml#/components/parameters/QualitySampleAction"
+  post:
+    operationId: actOnQualitySample
+    tags: [annotation-quality]
+    summary: 抽检动作（sample/assign/start/pass/fail/escalate/close/cancel）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/QualitySampleActionRequest"}}}}
+    responses:
+      "200": {description: 动作后的抽检, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/QualitySample"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+iaaReports:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listIAAReports
+    tags: [annotation-quality]
+    summary: 任务下的 IAA 报告列表
+    parameters:
+      - {name: task_id, in: query, required: true, schema: {type: string, format: uuid}}
+      - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 100, default: 20}}
+    responses:
+      "200": {description: IAA 报告分页, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IAAReportPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createIAAReport
+    tags: [annotation-quality]
+    summary: 创建 IAA 计算（同步返回；样本不足 status=INSUFFICIENT_DATA）
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IAAReportCreate"}}}}
+    responses:
+      "201": {description: IAA 报告, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IAAReport"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+iaaReportDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/IaaReportId"
+  get:
+    operationId: getIAAReport
+    tags: [annotation-quality]
+    summary: IAA 报告详情
+    responses:
+      "200": {description: IAA 报告详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/IAAReport"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}

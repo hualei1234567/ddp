@@ -1,15 +1,19 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.0.0
+  version: 1.1.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
     - `1.0.0` 是**阶段 1 + 阶段 2 已实现端点冻结快照**：覆盖 `/health`、平台元信息、
       devices / sensors / calibrations，以及阶段 2 的 collection-tasks / collection-batches、
       upload-sessions、raw-assets、episodes、ingestion-jobs 与血缘查询。
+    - `1.1.0` 在 `1.0.0` 基础上**增量加入阶段 3 标注域已实现端点**：标签 Schema、样本集、
+      任务/批次/分配、提交/记录、复核/仲裁、黄金集、质检抽检与 IAA 报告。
     - 阶段 1 设备域冻结目标为 `ddp.device/1.0.0`（已批准）。
     - 阶段 2 冻结版本为 `ddp.stage2/1.0.0`（DDP-312，v1.0 FROZEN）。
+    - 阶段 3 冻结版本为 `ddp.stage3/1.0.0`（DDP-323）；冻结端点矩阵、错误码与
+      `If-Match`/`Idempotency-Key` 规则见 `docs/architecture/阶段3-契约冻结-v1.0.md`。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -27,7 +31,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.0.0
+  version: 1.1.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -50,6 +54,21 @@ x-ddp-contract:
         本会话无 Bash 工具；Redocly lint、oasdiff 与冻结脚本均未运行。
         可重复命令与首次冻结命令见 packages/contracts/README.md 与
         docs/architecture/阶段2-契约冻结-v1.0.md。
+    stage3:
+      version: ddp.stage3/1.0.0
+      frozen_status: frozen
+      frozen_at: "2026-11-09"
+      task: DDP-323
+      implemented_baseline_task: DDP-322
+      frozen_document: docs/architecture/阶段3-契约冻结-v1.0.md
+      index_document: docs/architecture/阶段3-标注契约索引.md
+      approval_record: docs/adr/0011-stage3-annotation-contract.md
+      validation_status: PASS
+      validation_note: |
+        2026-11-09 DDP-323 已执行：Redocly lint（0 error，4 个既有 warning）、
+        check-stage3-freeze.sh --freeze/--check、oasdiff breaking（No changes detected）、
+        后端 pytest（668 collected：655 passed / 13 skipped，exit 0）。
+        详细记录见 docs/architecture/阶段3-契约冻结-v1.0.md。
 servers:
   - url: http://localhost:8000
     description: 本地开发
@@ -76,6 +95,18 @@ tags:
     description: 解析/校验 Job 创建、列表、详情、取消与重试
   - name: lineage
     description: RawAsset 与 Episode 血缘正/反向查询
+  - name: annotation-schemas
+    description: 标签 Schema 版本、审批与发布（发布后不可原地修改）
+  - name: annotation-samples
+    description: 标注样本选择、预览与样本集快照
+  - name: annotation-tasks
+    description: 标注任务、批次与状态动作
+  - name: annotation-assignments
+    description: 分配、领取与职责分离
+  - name: annotation-submissions
+    description: 提交、记录、复核与仲裁
+  - name: annotation-quality
+    description: 黄金集、质检抽检与 IAA 报告
 paths:
   /health:
     $ref: "./fragments/paths.stage1.yaml#/health"
@@ -175,6 +206,86 @@ paths:
     $ref: "./fragments/paths.stage2.yaml#/ingestionJobDetail"
   /api/v1/projects/{project_id}/ingestion-jobs/{job_id}/actions/{action}:
     $ref: "./fragments/paths.stage2.yaml#/ingestionJobActions"
+  /api/v1/projects/{project_id}/annotation-schemas:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSchemas"
+  /api/v1/projects/{project_id}/annotation-schemas/{schema_id}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSchemaDetail"
+  /api/v1/projects/{project_id}/annotation-schemas/{schema_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSchemaActions"
+  /api/v1/projects/{project_id}/annotation-sample-sets:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSampleSets"
+  /api/v1/projects/{project_id}/annotation-sample-sets/{sample_set_id}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSampleSetDetail"
+  /api/v1/projects/{project_id}/annotation-sample-sets/{sample_set_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSampleSetActions"
+  /api/v1/projects/{project_id}/annotation-tasks:
+    $ref: "./fragments/paths.stage3.yaml#/annotationTasks"
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationTaskDetail"
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationTaskActions"
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}/batches:
+    $ref: "./fragments/paths.stage3.yaml#/annotationTaskBatches"
+  /api/v1/projects/{project_id}/annotation-batches/{batch_id}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationBatchDetail"
+  /api/v1/projects/{project_id}/annotation-batches/{batch_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationBatchActions"
+  /api/v1/projects/{project_id}/annotation-assignments:
+    $ref: "./fragments/paths.stage3.yaml#/annotationAssignments"
+  /api/v1/projects/{project_id}/annotation-assignments/{assignment_id}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationAssignmentDetail"
+  /api/v1/projects/{project_id}/annotation-assignments/{assignment_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationAssignmentActions"
+  /api/v1/projects/{project_id}/annotation-submissions:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSubmissions"
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSubmissionDetail"
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSubmissionActions"
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/records:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSubmissionRecords"
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/reviews:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSubmissionReviews"
+  /api/v1/projects/{project_id}/annotation-reviews:
+    $ref: "./fragments/paths.stage3.yaml#/annotationReviews"
+  /api/v1/projects/{project_id}/annotation-reviews/{review_id}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationReviewDetail"
+  /api/v1/projects/{project_id}/annotation-reviews/{review_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationReviewActions"
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/arbitrations:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSubmissionArbitrations"
+  /api/v1/projects/{project_id}/annotation-arbitrations:
+    $ref: "./fragments/paths.stage3.yaml#/annotationArbitrations"
+  /api/v1/projects/{project_id}/annotation-arbitrations/{arbitration_id}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationArbitrationDetail"
+  /api/v1/projects/{project_id}/annotation-arbitrations/{arbitration_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationArbitrationActions"
+  /api/v1/projects/{project_id}/annotation-arbitrations/{arbitration_id}/votes:
+    $ref: "./fragments/paths.stage3.yaml#/annotationArbitrationVotes"
+  /api/v1/projects/{project_id}/gold-sets:
+    $ref: "./fragments/paths.stage3.yaml#/goldSets"
+  /api/v1/projects/{project_id}/gold-sets/{gold_set_id}:
+    $ref: "./fragments/paths.stage3.yaml#/goldSetDetail"
+  /api/v1/projects/{project_id}/gold-sets/{gold_set_id}/answers:
+    $ref: "./fragments/paths.stage3.yaml#/goldSetAnswers"
+  /api/v1/projects/{project_id}/gold-sets/{gold_set_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/goldSetActions"
+  /api/v1/projects/{project_id}/gold-sets/{gold_set_id}/evaluations:
+    $ref: "./fragments/paths.stage3.yaml#/goldSetEvaluations"
+  /api/v1/projects/{project_id}/gold-sets/{gold_set_id}/injections:
+    $ref: "./fragments/paths.stage3.yaml#/goldSetInjections"
+  /api/v1/projects/{project_id}/quality-samples:
+    $ref: "./fragments/paths.stage3.yaml#/qualitySamples"
+  /api/v1/projects/{project_id}/quality-samples/plan:
+    $ref: "./fragments/paths.stage3.yaml#/qualitySamplePlan"
+  /api/v1/projects/{project_id}/quality-samples/{quality_sample_id}:
+    $ref: "./fragments/paths.stage3.yaml#/qualitySampleDetail"
+  /api/v1/projects/{project_id}/quality-samples/{quality_sample_id}/actions/{action}:
+    $ref: "./fragments/paths.stage3.yaml#/qualitySampleActions"
+  /api/v1/projects/{project_id}/iaa-reports:
+    $ref: "./fragments/paths.stage3.yaml#/iaaReports"
+  /api/v1/projects/{project_id}/iaa-reports/{iaa_report_id}:
+    $ref: "./fragments/paths.stage3.yaml#/iaaReportDetail"
 components:
   securitySchemes:
     bearerAuth:
@@ -207,6 +318,25 @@ components:
     LineageDirection: {$ref: "./fragments/components.yaml#/parameters/LineageDirection"}
     LineageDepth: {$ref: "./fragments/components.yaml#/parameters/LineageDepth"}
     LineageLimit: {$ref: "./fragments/components.yaml#/parameters/LineageLimit"}
+    SchemaId: {$ref: "./fragments/components.stage3.yaml#/parameters/SchemaId"}
+    SampleSetId: {$ref: "./fragments/components.stage3.yaml#/parameters/SampleSetId"}
+    AssignmentId: {$ref: "./fragments/components.stage3.yaml#/parameters/AssignmentId"}
+    SubmissionId: {$ref: "./fragments/components.stage3.yaml#/parameters/SubmissionId"}
+    ReviewId: {$ref: "./fragments/components.stage3.yaml#/parameters/ReviewId"}
+    ArbitrationId: {$ref: "./fragments/components.stage3.yaml#/parameters/ArbitrationId"}
+    GoldSetId: {$ref: "./fragments/components.stage3.yaml#/parameters/GoldSetId"}
+    QualitySampleId: {$ref: "./fragments/components.stage3.yaml#/parameters/QualitySampleId"}
+    IaaReportId: {$ref: "./fragments/components.stage3.yaml#/parameters/IaaReportId"}
+    AnnotationSchemaAction: {$ref: "./fragments/components.stage3.yaml#/parameters/AnnotationSchemaAction"}
+    SampleSetAction: {$ref: "./fragments/components.stage3.yaml#/parameters/SampleSetAction"}
+    AnnotationTaskAction: {$ref: "./fragments/components.stage3.yaml#/parameters/AnnotationTaskAction"}
+    AnnotationBatchAction: {$ref: "./fragments/components.stage3.yaml#/parameters/AnnotationBatchAction"}
+    AnnotationAssignmentAction: {$ref: "./fragments/components.stage3.yaml#/parameters/AnnotationAssignmentAction"}
+    AnnotationSubmissionAction: {$ref: "./fragments/components.stage3.yaml#/parameters/AnnotationSubmissionAction"}
+    AnnotationReviewAction: {$ref: "./fragments/components.stage3.yaml#/parameters/AnnotationReviewAction"}
+    AnnotationArbitrationAction: {$ref: "./fragments/components.stage3.yaml#/parameters/AnnotationArbitrationAction"}
+    GoldSetAction: {$ref: "./fragments/components.stage3.yaml#/parameters/GoldSetAction"}
+    QualitySampleAction: {$ref: "./fragments/components.stage3.yaml#/parameters/QualitySampleAction"}
   responses:
     Unauthorized: {$ref: "./fragments/components.yaml#/responses/Unauthorized"}
     Forbidden: {$ref: "./fragments/components.yaml#/responses/Forbidden"}
@@ -300,3 +430,71 @@ components:
     IngestionJobCreate: {$ref: "./fragments/schemas.stage2.required.yaml#/IngestionJobCreate"}
     IngestionJobActionRequest: {$ref: "./fragments/schemas.stage2.yaml#/IngestionJobActionRequest"}
     IngestionJobPage: {$ref: "./fragments/schemas.stage2.yaml#/IngestionJobPage"}
+    AnnotationSchemaStatus: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSchemaStatus"}
+    AnnotationSampleSetStatus: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSampleSetStatus"}
+    AnnotationTaskStatus: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationTaskStatus"}
+    AnnotationBatchStatus: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationBatchStatus"}
+    AnnotationAssignmentStatus: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationAssignmentStatus"}
+    AnnotationSubmissionStatus: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSubmissionStatus"}
+    AnnotationReviewStatus: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationReviewStatus"}
+    AnnotationArbitrationStatus: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationArbitrationStatus"}
+    GoldSetStatus: {$ref: "./fragments/schemas.stage3.yaml#/GoldSetStatus"}
+    QualitySampleStatus: {$ref: "./fragments/schemas.stage3.yaml#/QualitySampleStatus"}
+    IAAReportStatus: {$ref: "./fragments/schemas.stage3.yaml#/IAAReportStatus"}
+    AnnotationSchema: {$ref: "./schemas/annotation-schema.v1.schema.json"}
+    AnnotationSampleSet: {$ref: "./schemas/annotation-sample-set.v1.schema.json"}
+    AnnotationTask: {$ref: "./schemas/annotation-task.v1.schema.json"}
+    AnnotationBatch: {$ref: "./schemas/annotation-batch.v1.schema.json"}
+    AnnotationAssignment: {$ref: "./schemas/annotation-assignment.v1.schema.json"}
+    AnnotationSubmission: {$ref: "./schemas/annotation-submission.v1.schema.json"}
+    AnnotationRecord: {$ref: "./schemas/annotation-record.v1.schema.json"}
+    AnnotationReview: {$ref: "./schemas/annotation-review.v1.schema.json"}
+    AnnotationArbitration: {$ref: "./schemas/annotation-arbitration.v1.schema.json"}
+    GoldSet: {$ref: "./schemas/gold-set.v1.schema.json"}
+    GoldSetAnswer: {$ref: "./schemas/gold-set-answer.v1.schema.json"}
+    GoldEvaluation: {$ref: "./schemas/gold-evaluation.v1.schema.json"}
+    GoldInjection: {$ref: "./schemas/gold-injection.v1.schema.json"}
+    QualitySample: {$ref: "./schemas/quality-sample.v1.schema.json"}
+    IAAReport: {$ref: "./schemas/iaa-report.v1.schema.json"}
+    AnnotationSchemaCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSchemaCreate"}
+    AnnotationSchemaPatch: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSchemaPatch"}
+    AnnotationSchemaActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSchemaActionRequest"}
+    SampleSetCreate: {$ref: "./fragments/schemas.stage3.yaml#/SampleSetCreate"}
+    SampleSetActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/SampleSetActionRequest"}
+    AnnotationTaskCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationTaskCreate"}
+    AnnotationTaskPatch: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationTaskPatch"}
+    AnnotationTaskActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationTaskActionRequest"}
+    AnnotationBatchCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationBatchCreate"}
+    AnnotationBatchPatch: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationBatchPatch"}
+    AnnotationBatchActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationBatchActionRequest"}
+    AnnotationAssignmentCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationAssignmentCreate"}
+    AnnotationAssignmentActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationAssignmentActionRequest"}
+    AnnotationSubmissionCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSubmissionCreate"}
+    AnnotationSubmissionActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSubmissionActionRequest"}
+    AnnotationReviewCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationReviewCreate"}
+    AnnotationSubmissionReviewCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSubmissionReviewCreate"}
+    AnnotationReviewActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationReviewActionRequest"}
+    AnnotationArbitrationCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationArbitrationCreate"}
+    AnnotationSubmissionArbitrationCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSubmissionArbitrationCreate"}
+    AnnotationArbitrationActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationArbitrationActionRequest"}
+    AnnotationArbitrationVoteRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationArbitrationVoteRequest"}
+    GoldSetCreate: {$ref: "./fragments/schemas.stage3.yaml#/GoldSetCreate"}
+    GoldSetActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/GoldSetActionRequest"}
+    GoldEvaluationCreate: {$ref: "./fragments/schemas.stage3.yaml#/GoldEvaluationCreate"}
+    GoldInjectionCreate: {$ref: "./fragments/schemas.stage3.yaml#/GoldInjectionCreate"}
+    QualitySampleCreate: {$ref: "./fragments/schemas.stage3.yaml#/QualitySampleCreate"}
+    QualitySamplePlan: {$ref: "./fragments/schemas.stage3.yaml#/QualitySamplePlan"}
+    QualitySampleActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/QualitySampleActionRequest"}
+    IAAReportCreate: {$ref: "./fragments/schemas.stage3.yaml#/IAAReportCreate"}
+    AnnotationSchemaPage: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSchemaPage"}
+    AnnotationSampleSetPage: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSampleSetPage"}
+    AnnotationTaskPage: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationTaskPage"}
+    AnnotationBatchPage: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationBatchPage"}
+    AnnotationAssignmentPage: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationAssignmentPage"}
+    AnnotationSubmissionPage: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSubmissionPage"}
+    AnnotationRecordPage: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationRecordPage"}
+    AnnotationReviewPage: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationReviewPage"}
+    AnnotationArbitrationPage: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationArbitrationPage"}
+    GoldSetPage: {$ref: "./fragments/schemas.stage3.yaml#/GoldSetPage"}
+    QualitySamplePage: {$ref: "./fragments/schemas.stage3.yaml#/QualitySamplePage"}
+    IAAReportPage: {$ref: "./fragments/schemas.stage3.yaml#/IAAReportPage"}

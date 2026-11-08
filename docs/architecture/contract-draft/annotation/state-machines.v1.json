@@ -1,10 +1,11 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://ddp.local/schemas/annotation/state-machines.v1.json",
-  "title": "DDP 阶段 3 标注域状态机 v1（草案）",
-  "description": "阶段 3 标注 Schema、样本集、任务、批次、分配、提交、记录、复核、仲裁、黄金集、抽检、IAA 的权威迁移表。状态文本使用大写下划线；非法迁移统一 state_transition_invalid（409）。本文件是测试与实现共用的机器可读基线，未冻结。",
-  "version": "ddp.stage3/1.0.0-draft",
-  "status": "DRAFT",
+  "title": "DDP 阶段 3 标注域状态机 v1（冻结）",
+  "description": "阶段 3 标注 Schema、样本集、任务、批次、分配、提交、记录、复核、仲裁、黄金集、抽检、IAA 的权威迁移表。状态文本使用大写下划线；非法迁移统一 state_transition_invalid（409）。本文件是测试与实现共用的机器可读基线，已随 DDP-323 冻结为 ddp.stage3/1.0.0；实现差异见 docs/architecture/阶段3-契约冻结-v1.0.md。",
+  "version": "ddp.stage3/1.0.0",
+  "status": "FROZEN",
+  "frozen_at": "2026-11-09",
   "common": {
     "error": "state_transition_invalid",
     "http_status": 409,
@@ -12,6 +13,13 @@
     "audit_required": true,
     "optimistic_lock": "动作接口必须带 If-Match: \"<version>\"；缺失 428 precondition_required，失配 409 version_conflict",
     "idempotency": "写动作支持 Idempotency-Key，作用域 (project_id, user_id, key)，至少 24h",
+    "rework_limit": {
+      "error": "annotation_task_rework_limit_exceeded",
+      "http_status": 409,
+      "config": "task.quality_policy.max_rework_rounds",
+      "trigger": "复核驳回后 require-rework 超过配置上限",
+      "resolution": "需 PO 升级或调整策略，不得静默继续返工"
+    },
     "project_scope": "所有对象与迁移必须同项目；跨项目统一 404/403，不泄漏存在性"
   },
   "machines": {
@@ -190,7 +198,8 @@
         {"from": "RESOLVED_REJECTED", "to": "REWORK_REQUIRED", "action": "require-rework", "roles": ["AR", "AM"], "requires_reason": true, "preconditions": ["返工要求明确"]},
         {"from": "RESOLVED_REWORK", "to": "REWORK_REQUIRED", "action": "require-rework", "roles": ["AR", "AM"], "requires_reason": true, "preconditions": ["返工要求明确"]},
         {"from": "REWORK_REQUIRED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["新 submission_version 已创建并引用旧版本"]},
-        {"from": "APPROVED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM", "AM"], "requires_reason": true, "preconditions": ["标签/Episode 修订被批准", "旧版本保留"]}
+        {"from": "APPROVED", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM", "AM"], "requires_reason": true, "preconditions": ["标签/Episode 修订被批准", "旧版本保留"]},
+        {"from": "WITHDRAWN", "to": "SUPERSEDED", "action": "system-supersede", "roles": ["SYSTEM"], "requires_reason": false, "preconditions": ["新 submission_version 已创建并引用旧版本"]}
       ],
       "forbidden_examples": [
         {"from": "DRAFT", "to": "APPROVED", "reason": "跳过提交/复核"},

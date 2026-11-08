@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-arbitration.v1.schema.json",
+  "title": "AnnotationArbitrationOut",
+  "description": "由后端实际响应模型 AnnotationArbitrationOut 生成；字段与 packages/contracts/openapi.yaml 阶段 3 实现快照一致。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "properties": {
+    "arbitration_id": {
+      "format": "uuid",
+      "title": "Arbitration Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "format": "uuid",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "review_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Review Id"
+    },
+    "arbiter_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Arbiter Ids",
+      "type": "array"
+    },
+    "quorum": {
+      "title": "Quorum",
+      "type": "integer"
+    },
+    "trigger": {
+      "title": "Trigger",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "votes": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Votes",
+      "type": "array"
+    },
+    "effective_vote_count": {
+      "title": "Effective Vote Count",
+      "type": "integer"
+    },
+    "final_decision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Final Decision"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reason"
+    },
+    "resolved_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Resolved At"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created At"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated At"
+    },
+    "created_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created By"
+    },
+    "updated_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated By"
+    }
+  },
+  "required": [
+    "arbitration_id",
+    "project_id",
+    "task_id",
+    "submission_id",
+    "review_id",
+    "arbiter_ids",
+    "quorum",
+    "trigger",
+    "status",
+    "votes",
+    "effective_vote_count",
+    "final_decision",
+    "reason",
+    "resolved_at",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

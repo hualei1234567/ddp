@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-review.v1.schema.json",
+  "title": "AnnotationReviewOut",
+  "description": "由后端实际响应模型 AnnotationReviewOut 生成；字段与 packages/contracts/openapi.yaml 阶段 3 实现快照一致。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "properties": {
+    "review_id": {
+      "format": "uuid",
+      "title": "Review Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "submission_id": {
+      "format": "uuid",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "reviewer_id": {
+      "format": "uuid",
+      "title": "Reviewer Id",
+      "type": "string"
+    },
+    "review_round": {
+      "title": "Review Round",
+      "type": "integer"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "decision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Decision"
+    },
+    "issues": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "checklist": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Checklist",
+      "type": "array"
+    },
+    "review_duration_sec": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Review Duration Sec"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reason"
+    },
+    "decided_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Decided At"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created At"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated At"
+    },
+    "created_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created By"
+    },
+    "updated_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated By"
+    }
+  },
+  "required": [
+    "review_id",
+    "project_id",
+    "submission_id",
+    "task_id",
+    "reviewer_id",
+    "review_round",
+    "status",
+    "decision",
+    "issues",
+    "checklist",
+    "review_duration_sec",
+    "reason",
+    "decided_at",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

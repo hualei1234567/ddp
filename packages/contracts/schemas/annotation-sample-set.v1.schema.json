@@ -1,0 +1,289 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-sample-set.v1.schema.json",
+  "title": "AnnotationSampleSetOut",
+  "description": "由后端实际响应模型 AnnotationSampleSetOut 生成；字段与 packages/contracts/openapi.yaml 阶段 3 实现快照一致。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "$defs": {
+    "SampleEpisodeRefOut": {
+      "properties": {
+        "episode_id": {
+          "format": "uuid",
+          "title": "Episode Id",
+          "type": "string"
+        },
+        "episode_lineage_id": {
+          "format": "uuid",
+          "title": "Episode Lineage Id",
+          "type": "string"
+        },
+        "episode_version": {
+          "title": "Episode Version",
+          "type": "integer"
+        },
+        "sample_role": {
+          "title": "Sample Role",
+          "type": "string"
+        },
+        "selected_reason": {
+          "title": "Selected Reason",
+          "type": "string"
+        },
+        "stratum": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Stratum"
+        },
+        "time_domain": {
+          "title": "Time Domain",
+          "type": "string"
+        },
+        "start_time_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Time Ns"
+        },
+        "end_time_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Time Ns"
+        }
+      },
+      "required": [
+        "episode_id",
+        "episode_lineage_id",
+        "episode_version",
+        "sample_role",
+        "selected_reason",
+        "stratum",
+        "time_domain"
+      ],
+      "title": "SampleEpisodeRefOut",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "sample_set_id": {
+      "format": "uuid",
+      "title": "Sample Set Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "code": {
+      "title": "Code",
+      "type": "string"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Name"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "selection_rule_version": {
+      "title": "Selection Rule Version",
+      "type": "string"
+    },
+    "strategy": {
+      "title": "Strategy",
+      "type": "string"
+    },
+    "filters": {
+      "additionalProperties": true,
+      "title": "Filters",
+      "type": "object"
+    },
+    "strata": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Strata",
+      "type": "array"
+    },
+    "episode_refs": {
+      "items": {
+        "$ref": "#/$defs/SampleEpisodeRefOut"
+      },
+      "title": "Episode Refs",
+      "type": "array"
+    },
+    "dedup_key": {
+      "title": "Dedup Key",
+      "type": "string"
+    },
+    "candidate_count": {
+      "title": "Candidate Count",
+      "type": "integer"
+    },
+    "selected_count": {
+      "title": "Selected Count",
+      "type": "integer"
+    },
+    "excluded_count": {
+      "title": "Excluded Count",
+      "type": "integer"
+    },
+    "deduplicated_count": {
+      "title": "Deduplicated Count",
+      "type": "integer"
+    },
+    "snapshot_sha256": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Snapshot Sha256"
+    },
+    "snapshot_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Snapshot At"
+    },
+    "cancelled_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Cancelled Reason"
+    },
+    "data_source": {
+      "title": "Data Source",
+      "type": "string"
+    },
+    "exclusion_summary": {
+      "additionalProperties": true,
+      "title": "Exclusion Summary",
+      "type": "object"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created At"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated At"
+    },
+    "created_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created By"
+    },
+    "updated_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated By"
+    }
+  },
+  "required": [
+    "sample_set_id",
+    "project_id",
+    "code",
+    "name",
+    "status",
+    "selection_rule_version",
+    "strategy",
+    "filters",
+    "strata",
+    "episode_refs",
+    "dedup_key",
+    "candidate_count",
+    "selected_count",
+    "excluded_count",
+    "deduplicated_count",
+    "snapshot_sha256",
+    "snapshot_at",
+    "cancelled_reason",
+    "data_source",
+    "exclusion_summary",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

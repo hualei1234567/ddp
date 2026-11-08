@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-assignment.v1.schema.json",
+  "title": "AnnotationAssignmentOut",
+  "description": "由后端实际响应模型 AnnotationAssignmentOut 生成；字段与 packages/contracts/openapi.yaml 阶段 3 实现快照一致。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "properties": {
+    "assignment_id": {
+      "format": "uuid",
+      "title": "Assignment Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "batch_id": {
+      "format": "uuid",
+      "title": "Batch Id",
+      "type": "string"
+    },
+    "assignee_id": {
+      "format": "uuid",
+      "title": "Assignee Id",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "assignment_role": {
+      "title": "Assignment Role",
+      "type": "string"
+    },
+    "planned_item_count": {
+      "title": "Planned Item Count",
+      "type": "integer"
+    },
+    "claimed_item_count": {
+      "title": "Claimed Item Count",
+      "type": "integer"
+    },
+    "submitted_item_count": {
+      "title": "Submitted Item Count",
+      "type": "integer"
+    },
+    "approved_item_count": {
+      "title": "Approved Item Count",
+      "type": "integer"
+    },
+    "planned_minutes": {
+      "title": "Planned Minutes",
+      "type": "integer"
+    },
+    "actual_minutes": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Actual Minutes"
+    },
+    "lease_expires_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Lease Expires At"
+    },
+    "claimed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Claimed At"
+    },
+    "submitted_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Submitted At"
+    },
+    "completed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Completed At"
+    },
+    "revoked_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Revoked Reason"
+    },
+    "status_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Status Reason"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created At"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated At"
+    },
+    "created_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created By"
+    },
+    "updated_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated By"
+    }
+  },
+  "required": [
+    "assignment_id",
+    "project_id",
+    "task_id",
+    "batch_id",
+    "assignee_id",
+    "status",
+    "assignment_role",
+    "planned_item_count",
+    "claimed_item_count",
+    "submitted_item_count",
+    "approved_item_count",
+    "planned_minutes",
+    "actual_minutes",
+    "lease_expires_at",
+    "claimed_at",
+    "submitted_at",
+    "completed_at",
+    "revoked_reason",
+    "status_reason",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

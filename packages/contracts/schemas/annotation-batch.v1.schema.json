@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-batch.v1.schema.json",
+  "title": "AnnotationBatchOut",
+  "description": "由后端实际响应模型 AnnotationBatchOut 生成；字段与 packages/contracts/openapi.yaml 阶段 3 实现快照一致。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "properties": {
+    "batch_id": {
+      "format": "uuid",
+      "title": "Batch Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "code": {
+      "title": "Code",
+      "type": "string"
+    },
+    "sequence_no": {
+      "title": "Sequence No",
+      "type": "integer"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Name"
+    },
+    "stratum": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Stratum"
+    },
+    "item_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Item Refs",
+      "type": "array"
+    },
+    "planned_item_count": {
+      "title": "Planned Item Count",
+      "type": "integer"
+    },
+    "assignee_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Assignee Ids",
+      "type": "array"
+    },
+    "reviewer_pool_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Reviewer Pool Ids",
+      "type": "array"
+    },
+    "due_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Due At"
+    },
+    "submitted_item_count": {
+      "title": "Submitted Item Count",
+      "type": "integer"
+    },
+    "approved_item_count": {
+      "title": "Approved Item Count",
+      "type": "integer"
+    },
+    "rejected_item_count": {
+      "title": "Rejected Item Count",
+      "type": "integer"
+    },
+    "rework_count": {
+      "title": "Rework Count",
+      "type": "integer"
+    },
+    "quality_summary": {
+      "additionalProperties": true,
+      "title": "Quality Summary",
+      "type": "object"
+    },
+    "status_reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Status Reason"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created At"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated At"
+    },
+    "created_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created By"
+    },
+    "updated_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated By"
+    }
+  },
+  "required": [
+    "batch_id",
+    "project_id",
+    "task_id",
+    "code",
+    "sequence_no",
+    "status",
+    "name",
+    "stratum",
+    "item_refs",
+    "planned_item_count",
+    "assignee_ids",
+    "reviewer_pool_ids",
+    "due_at",
+    "submitted_item_count",
+    "approved_item_count",
+    "rejected_item_count",
+    "rework_count",
+    "quality_summary",
+    "status_reason",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

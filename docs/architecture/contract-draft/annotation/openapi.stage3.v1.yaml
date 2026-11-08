@@ -8,10 +8,12 @@ info:
     血缘与指标摘要。
     - 所有项目路由由服务端强制 project scope；不信任客户端 project_id。
     - 写动作使用 If-Match；缺失 428，失配 409；写动作支持 Idempotency-Key。
-    - 本文件是 DRAFT，不得声称已实现或已冻结。
+    - 本文件是设计基线（`ddp.stage3/1.0.0-draft`），已被
+      `packages/contracts/openapi.yaml` 的实现快照取代；端点、字段与错误码以
+      实现快照和 `docs/architecture/阶段3-契约冻结-v1.0.md` 为准。
     - 复杂响应 Schema 以同目录 JSON Schema 为准。
   contact:
-    name: DDP System Architect (待确认)
+    name: DDP System Architect
   license:
     name: Proprietary
 servers:

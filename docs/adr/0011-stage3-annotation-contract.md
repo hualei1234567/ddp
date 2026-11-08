@@ -1,13 +1,13 @@
 # ADR-0011 阶段 3 标注域契约与质量闭环决策
 
-- 状态：**已提议（PROPOSED，待用户批准；未冻结）**
-- 日期：2026-11-08
-- 决策者：System Architect（待确认）；批准人：待用户
-- 任务：DDP-315（P1）
+- 状态：**ACCEPTED（已接受，DDP-323 冻结 `ddp.stage3/1.0.0`）**
+- 日期：2026-11-08（提出）；2026-11-09（接受并冻结）
+- 决策者：System Architect；批准人：用户（DDP 长期授权 + DDP-323 任务指令）
+- 任务：DDP-315（P1，提出）；DDP-323（P0，契约冻结）
 - 起草：Product Manager（按任务要求起草草案，架构决策需 System Architect 评审）
-- 关联：ADR-0002、ADR-0003、ADR-0004、ADR-0005、ADR-0010；`docs/product/阶段3-标注PRD.md`；`docs/product/阶段3-标注验收标准.md`；`docs/architecture/阶段3-标注契约索引.md`；`docs/architecture/contract-draft/annotation/*`
-- 契约草案版本：`ddp.stage3/1.0.0-draft`
-- 边界：本 ADR 只做设计与契约决策；不修改 `backend/**`、`apps/web/**`、`backend/migrations/**`、`packages/contracts/**`，不执行迁移或部署。
+- 关联：ADR-0002、ADR-0003、ADR-0004、ADR-0005、ADR-0010；`docs/product/阶段3-标注PRD.md`；`docs/product/阶段3-标注验收标准.md`；`docs/architecture/阶段3-标注契约索引.md`；`docs/architecture/阶段3-契约冻结-v1.0.md`；`docs/architecture/contract-draft/annotation/*`
+- 契约版本：`ddp.stage3/1.0.0`（已冻结；草案版本 `ddp.stage3/1.0.0-draft` 已被取代）
+- 边界：本 ADR 只做设计与契约决策；不修改 `backend/**`、`apps/web/**`、`backend/migrations/**` 业务实现，不执行迁移或部署。
 
 ## 1. 背景
 
@@ -102,7 +102,8 @@
 ### 2.11 错误码与版本
 
 - 新增标注错误码见 `error-codes.v1.json`；客户端按 `code` 分支；未知 code 不得默认成功。
-- 契约草案版本 `ddp.stage3/1.0.0-draft`；HTTP 主版本仍 `/api/v1`。
+- 契约版本 `ddp.stage3/1.0.0`（DDP-323 冻结）；HTTP 主版本仍 `/api/v1`。
+- 冻结时按 `backend/app/api/errors.py` 与 `backend/app/domain/annotation/errors.py` 校正六个错误码的 HTTP 状态；未实现代码标记 `implemented=false`，不得据此声称可用。差异见 `docs/architecture/阶段3-契约冻结-v1.0.md` 第 5 节。
 - 破坏性变更（删除/改名/改类型/改语义/必填化/状态迁移变化/血缘枚举变化）必须新 ADR + 用户批准。
 - 理由：保证前后端与契约测试可稳定演进。
 
@@ -144,20 +145,23 @@
 
 ## 5. 批准与生效
 
-- 当前状态：**已提议，未批准**。本 ADR 与阶段 3 草案不构成冻结契约，不得据此声称实现完成或进入阶段验收。
-- 批准后生效范围：阶段 3 标注领域模型、状态机、Schema/样本/任务/提交/复核/仲裁/黄金集/IAA/抽检语义、权限矩阵、审计/outbox、血缘扩展、错误码与迁移策略。
+- 当前状态：**ACCEPTED**。DDP-323 已按本 ADR 将阶段 3 已实现端点写入
+  `packages/contracts/openapi.yaml`（`1.1.0`，增量于 `1.0.0`），并冻结
+  `ddp.stage3/1.0.0`；冻结文档为 `docs/architecture/阶段3-契约冻结-v1.0.md`。
+- 生效范围：阶段 3 标注领域模型、状态机、Schema/样本/任务/提交/复核/仲裁/黄金集/IAA/抽检语义、权限矩阵、审计/outbox、血缘扩展、错误码与迁移策略。
 - 不包含：迁移执行、生产部署、发布、真实数据处理、物理删除、容量/性能/准确率承诺、外部标注工具采购。
-- 批准后维护规则：`packages/contracts/**` 由 System Architect/契约 Owner 单一维护；实现完成并通过契约测试后才允许写入实现快照；破坏性变更必须新建 ADR；冻结文档 SHA256、批准人、日期与变更记录必须归档。
+- 维护规则：`packages/contracts/**` 由 System Architect/契约 Owner 单一维护；实现完成并通过契约测试后才允许写入实现快照；破坏性变更必须新建 ADR；冻结文档 SHA256、批准人、日期与变更记录必须归档。
 
 ## 6. 验收与证据
 
 - 设计覆盖：Schema、样本集、任务/批次、分配/工作量、提交/记录、复核/仲裁、黄金集、抽检、IAA、权限/隔离、审计/outbox、血缘、错误码、迁移策略。
-- 机器可读草案：`docs/architecture/contract-draft/annotation/` 下 OpenAPI、JSON Schema、状态机、错误码、血缘扩展。
-- 未执行：`pytest`、`ruff`、`tsc`、Alembic、Redocly、oasdiff、JSON Schema 校验、Markdown lint 全部 `NOT RUN`；本会话无 Bash 工具。
-- 实施验收必须附：PostgreSQL 跨项目负向测试、并发领取/复核/仲裁、状态触发器、冻结字段篡改、黄金集答案脱敏、IAA 手工复算、抽检策略、审计 outbox 回滚、血缘正反向与成环证据。
+- 机器可读基线：`docs/architecture/contract-draft/annotation/` 下 OpenAPI、JSON Schema、状态机、错误码、血缘扩展；其中状态机与错误码已随 DDP-323 更新为 `ddp.stage3/1.0.0` / FROZEN。
+- DDP-323 已执行：Redocly lint、`check-stage3-freeze.sh --freeze`、`check-stage3-freeze.sh --check`、后端 pytest（结果见冻结核对文档与提交记录）；未执行项在冻结文档中保留 `NOT RUN`。
+- 实施验收必须附：PostgreSQL 跨项目负向测试、并发领取/复核/仲裁、状态触发器、冻结字段篡改、黄金集答案脱敏、IAA 手工复算、抽检策略、审计 outbox 回滚、血缘正反向与成环证据。真实标注验收仍以真实人员/数据为前提，未满足时标 `BLOCKED`。
 
 ## 7. 变更记录
 
 | 日期 | 变更 | 任务 |
 |---|---|---|
 | 2026-11-08 | 首次提出；状态「已提议（待批准）」 | DDP-315 |
+| 2026-11-09 | 状态改为 ACCEPTED；按 DDP-322 已实现端点冻结 `ddp.stage3/1.0.0`；同步 WITHDRAWN→SUPERSEDED 与返工上限错误码 | DDP-323 |

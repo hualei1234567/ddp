@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-schema.v1.schema.json",
+  "title": "AnnotationSchemaOut",
+  "description": "由后端实际响应模型 AnnotationSchemaOut 生成；字段与 packages/contracts/openapi.yaml 阶段 3 实现快照一致。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "$defs": {
+    "LabelDefinitionOut": {
+      "properties": {
+        "label_key": {
+          "title": "Label Key",
+          "type": "string"
+        },
+        "label_type": {
+          "title": "Label Type",
+          "type": "string"
+        },
+        "required": {
+          "title": "Required",
+          "type": "boolean"
+        },
+        "level": {
+          "title": "Level",
+          "type": "string"
+        },
+        "visibility": {
+          "title": "Visibility",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "value_spec": {
+          "additionalProperties": true,
+          "title": "Value Spec",
+          "type": "object"
+        },
+        "quality_rules": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Quality Rules",
+          "type": "array"
+        }
+      },
+      "required": [
+        "label_key",
+        "label_type",
+        "required",
+        "level",
+        "visibility",
+        "value_spec",
+        "quality_rules"
+      ],
+      "title": "LabelDefinitionOut",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_id": {
+      "format": "uuid",
+      "title": "Schema Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "code": {
+      "title": "Code",
+      "type": "string"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Description"
+    },
+    "schema_lineage_id": {
+      "format": "uuid",
+      "title": "Schema Lineage Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "annotation_levels": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Annotation Levels",
+      "type": "array"
+    },
+    "labels": {
+      "items": {
+        "$ref": "#/$defs/LabelDefinitionOut"
+      },
+      "title": "Labels",
+      "type": "array"
+    },
+    "compatibility": {
+      "title": "Compatibility",
+      "type": "string"
+    },
+    "schema_sha256": {
+      "title": "Schema Sha256",
+      "type": "string"
+    },
+    "supersedes_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Supersedes Id"
+    },
+    "published_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Published At"
+    },
+    "deprecated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Deprecated At"
+    },
+    "revoked_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Revoked At"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created At"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated At"
+    },
+    "created_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created By"
+    },
+    "updated_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated By"
+    }
+  },
+  "required": [
+    "schema_id",
+    "project_id",
+    "code",
+    "name",
+    "description",
+    "schema_lineage_id",
+    "schema_version",
+    "status",
+    "annotation_levels",
+    "labels",
+    "compatibility",
+    "schema_sha256",
+    "supersedes_id",
+    "published_at",
+    "deprecated_at",
+    "revoked_at",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

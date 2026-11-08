@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/gold-set-answer.v1.schema.json",
+  "title": "GoldSetAnswerOut",
+  "description": "授权答案视图；仅由权限校验通过的端点使用。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "properties": {
+    "gold_set_id": {
+      "format": "uuid",
+      "title": "Gold Set Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "code": {
+      "title": "Code",
+      "type": "string"
+    },
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Name"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "schema_id": {
+      "format": "uuid",
+      "title": "Schema Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "schema_sha256": {
+      "title": "Schema Sha256",
+      "type": "string"
+    },
+    "blind": {
+      "title": "Blind",
+      "type": "boolean"
+    },
+    "exposure_policy": {
+      "title": "Exposure Policy",
+      "type": "string"
+    },
+    "max_exposure_per_annotator": {
+      "title": "Max Exposure Per Annotator",
+      "type": "integer"
+    },
+    "rotation_policy": {
+      "title": "Rotation Policy",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "gold_set_id",
+    "project_id",
+    "code",
+    "name",
+    "status",
+    "schema_id",
+    "schema_version",
+    "schema_sha256",
+    "blind",
+    "exposure_policy",
+    "max_exposure_per_annotator",
+    "rotation_policy",
+    "items",
+    "version"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

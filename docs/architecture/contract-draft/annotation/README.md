@@ -1,19 +1,21 @@
 # 阶段 3 标注契约草案（annotation）
 
-- 状态：**DRAFT，未冻结**
-- 版本：`ddp.stage3/1.0.0-draft`
-- 任务：DDP-315（P1）
-- Owner：System Architect（待确认）；本草案由 Product Manager 按任务要求起草，架构决策需 System Architect 评审
+- 状态：**FROZEN（`ddp.stage3/1.0.0`，DDP-323）**；本目录保留机器可读设计基线
+- 版本：`ddp.stage3/1.0.0`
+- 任务：DDP-315（P1，草案）；DDP-323（P0，冻结）
+- Owner：System Architect
 - 完整索引：`docs/architecture/阶段3-标注契约索引.md`
+- 冻结文档：`docs/architecture/阶段3-契约冻结-v1.0.md`
 - 主文档：`docs/product/阶段3-标注PRD.md`、`docs/product/阶段3-标注验收标准.md`
-- ADR：`docs/adr/0011-stage3-annotation-contract.md`（已提议，待批准）
+- ADR：`docs/adr/0011-stage3-annotation-contract.md`（ACCEPTED）
 
-本目录只放阶段 3 的 OpenAPI、JSON Schema、状态机与错误码草案。按角色边界与契约 Owner 规则：
+本目录保留阶段 3 的 OpenAPI、JSON Schema、状态机与错误码基线。已实现端点快照与
+自包含基线以 `packages/contracts/` 为准；本目录不得反向覆盖实现快照。
 
-- **不要**直接把本目录内容复制到 `packages/contracts/`；
-- 待用户批准、实现完成并通过契约测试后，由 System Architect/契约 Owner 统一升级 `packages/contracts/openapi.yaml` 与版本；
-- 破坏性变更必须新建 ADR；未跑测试不得声称冻结或通过；
-- 不要修改阶段 2 的 `contract-draft/collection/*`；阶段 3 通过新版本扩展血缘枚举与错误码。
+- 实现快照：`packages/contracts/openapi.yaml`（`info.version=1.1.0`）
+- 冻结基线：`packages/contracts/baselines/openapi.stage3.v1.0.0.bundle.yaml`
+- 状态机与错误码已同步为 `ddp.stage3/1.0.0` / FROZEN；与实现差异见冻结文档第 5 节。
+- 破坏性变更必须新建 ADR；未跑测试不得声称冻结或通过。
 
 文件：
 

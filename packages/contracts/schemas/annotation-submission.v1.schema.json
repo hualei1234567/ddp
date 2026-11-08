@@ -1,0 +1,446 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/annotation-submission.v1.schema.json",
+  "title": "AnnotationSubmissionOut",
+  "description": "由后端实际响应模型 AnnotationSubmissionOut 生成；字段与 packages/contracts/openapi.yaml 阶段 3 实现快照一致。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "FROZEN",
+  "$defs": {
+    "AnnotationRecordOut": {
+      "properties": {
+        "annotation_id": {
+          "format": "uuid",
+          "title": "Annotation Id",
+          "type": "string"
+        },
+        "annotation_lineage_id": {
+          "format": "uuid",
+          "title": "Annotation Lineage Id",
+          "type": "string"
+        },
+        "annotation_version": {
+          "title": "Annotation Version",
+          "type": "integer"
+        },
+        "project_id": {
+          "format": "uuid",
+          "title": "Project Id",
+          "type": "string"
+        },
+        "submission_id": {
+          "format": "uuid",
+          "title": "Submission Id",
+          "type": "string"
+        },
+        "episode_id": {
+          "format": "uuid",
+          "title": "Episode Id",
+          "type": "string"
+        },
+        "episode_version": {
+          "title": "Episode Version",
+          "type": "integer"
+        },
+        "task_id": {
+          "format": "uuid",
+          "title": "Task Id",
+          "type": "string"
+        },
+        "schema_id": {
+          "format": "uuid",
+          "title": "Schema Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "time_range": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Time Range"
+        },
+        "labels": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Labels",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "record_sha256": {
+          "title": "Record Sha256",
+          "type": "string"
+        },
+        "supersedes_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Supersedes Id"
+        },
+        "approved_by": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Approved By"
+        },
+        "approved_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Approved At"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Created At"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Updated At"
+        },
+        "created_by": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Created By"
+        },
+        "updated_by": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Updated By"
+        }
+      },
+      "required": [
+        "annotation_id",
+        "annotation_lineage_id",
+        "annotation_version",
+        "project_id",
+        "submission_id",
+        "episode_id",
+        "episode_version",
+        "task_id",
+        "schema_id",
+        "schema_version",
+        "status",
+        "time_range",
+        "labels",
+        "evidence_refs",
+        "record_sha256",
+        "supersedes_id",
+        "approved_by",
+        "approved_at",
+        "version",
+        "created_at",
+        "updated_at",
+        "created_by",
+        "updated_by"
+      ],
+      "title": "AnnotationRecordOut",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "submission_id": {
+      "format": "uuid",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "batch_id": {
+      "format": "uuid",
+      "title": "Batch Id",
+      "type": "string"
+    },
+    "assignment_id": {
+      "format": "uuid",
+      "title": "Assignment Id",
+      "type": "string"
+    },
+    "annotator_id": {
+      "format": "uuid",
+      "title": "Annotator Id",
+      "type": "string"
+    },
+    "submission_version": {
+      "title": "Submission Version",
+      "type": "integer"
+    },
+    "schema_id": {
+      "format": "uuid",
+      "title": "Schema Id",
+      "type": "string"
+    },
+    "schema_version": {
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "schema_sha256": {
+      "title": "Schema Sha256",
+      "type": "string"
+    },
+    "records_digest": {
+      "title": "Records Digest",
+      "type": "string"
+    },
+    "item_count": {
+      "title": "Item Count",
+      "type": "integer"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "data_source": {
+      "title": "Data Source",
+      "type": "string"
+    },
+    "record_refs": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Record Refs",
+      "type": "array"
+    },
+    "records": {
+      "items": {
+        "$ref": "#/$defs/AnnotationRecordOut"
+      },
+      "title": "Records",
+      "type": "array"
+    },
+    "review_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Review Id"
+    },
+    "arbitration_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Arbitration Id"
+    },
+    "supersedes_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Supersedes Id"
+    },
+    "submitted_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Submitted At"
+    },
+    "decided_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Decided At"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reason"
+    },
+    "version": {
+      "title": "Version",
+      "type": "integer"
+    },
+    "created_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created At"
+    },
+    "updated_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated At"
+    },
+    "created_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Created By"
+    },
+    "updated_by": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Updated By"
+    }
+  },
+  "required": [
+    "submission_id",
+    "project_id",
+    "task_id",
+    "batch_id",
+    "assignment_id",
+    "annotator_id",
+    "submission_version",
+    "schema_id",
+    "schema_version",
+    "schema_sha256",
+    "records_digest",
+    "item_count",
+    "status",
+    "data_source",
+    "record_refs",
+    "records",
+    "review_id",
+    "arbitration_id",
+    "supersedes_id",
+    "submitted_at",
+    "decided_at",
+    "reason",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by",
+    "updated_by"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}
