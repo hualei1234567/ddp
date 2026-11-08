@@ -106,9 +106,7 @@ def test_postgres_export_job_guards(postgres_engine: Engine) -> None:
     with postgres_engine.begin() as connection:
         with pytest.raises(IntegrityError, match="export_job_state_transition_invalid"):
             connection.execute(
-                update(ExportJobModel)
-                .where(ExportJobModel.id == job_id)
-                .values(status="SUCCEEDED")
+                update(ExportJobModel).where(ExportJobModel.id == job_id).values(status="SUCCEEDED")
             )
 
     with postgres_engine.begin() as connection:
