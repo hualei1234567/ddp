@@ -46,6 +46,80 @@ export function readOptionalString(
   return value;
 }
 
+/** 标准 8-4-4-4-12 十六进制 UUID；不限制版本，兼容服务端未来升级。 */
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** 后端按 `sha256:<64 位小写十六进制>` 下发标定校验和。 */
+const SHA256_CHECKSUM_PATTERN = /^sha256:[0-9a-f]{64}$/;
+
+export function readUuid(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string {
+  const value = readString(record, key, path);
+  if (!UUID_PATTERN.test(value)) {
+    throw new ContractValidationError(`${path} 必须是 UUID`);
+  }
+  return value;
+}
+
+export function readOptionalUuid(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string | null {
+  if (record[key] === undefined || record[key] === null) {
+    return null;
+  }
+  return readUuid(record, key, path);
+}
+
+export function readUuidArray(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string[] {
+  const values = readStringArray(record, key, path);
+  values.forEach((value, index) => {
+    if (!UUID_PATTERN.test(value)) {
+      throw new ContractValidationError(`${path}[${index}] 必须是 UUID`);
+    }
+  });
+  return values;
+}
+
+export function readEnum<T extends string>(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+  allowed: readonly T[],
+): T {
+  const value = readString(record, key, path);
+  const matched = allowed.find((item) => item === value);
+  if (matched === undefined) {
+    throw new ContractValidationError(
+      `${path} 必须是以下枚举之一：${allowed.join(" / ")}`,
+    );
+  }
+  return matched;
+}
+
+export function readSha256Checksum(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string {
+  const value = readString(record, key, path);
+  if (!SHA256_CHECKSUM_PATTERN.test(value)) {
+    throw new ContractValidationError(
+      `${path} 必须是 sha256:<64 位小写十六进制>`,
+    );
+  }
+  return value;
+}
+
 export function readNumber(
   record: Record<string, unknown>,
   key: string,

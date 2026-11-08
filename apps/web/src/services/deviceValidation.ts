@@ -5,14 +5,26 @@ import type {
   Sensor,
 } from "../types/device";
 import {
+  CALIBRATION_SCOPE_VALUES,
+  CALIBRATION_TARGET_TYPE_VALUES,
+  CALIBRATION_TYPE_VALUES,
+  DEVICE_TYPE_VALUES,
+  SENSOR_SYNC_MODE_VALUES,
+  SENSOR_TYPE_VALUES,
+} from "../types/device";
+import {
   ContractValidationError,
   asRecord,
+  readEnum,
   readInteger,
   readOptionalNumber,
   readOptionalRecord,
   readOptionalString,
-  readOptionalStringArray,
+  readOptionalUuid,
+  readSha256Checksum,
   readString,
+  readUuid,
+  readUuidArray,
 } from "./validation";
 
 function parseCursorPage<T>(
@@ -44,12 +56,17 @@ function parseCursorPage<T>(
 export function parseDevice(value: unknown, path = "设备"): Device {
   const record = asRecord(value, path);
   return {
-    device_id: readString(record, "device_id", `${path}.device_id`),
-    project_id: readString(record, "project_id", `${path}.project_id`),
-    robot_id: readOptionalString(record, "robot_id", `${path}.robot_id`),
+    device_id: readUuid(record, "device_id", `${path}.device_id`),
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    robot_id: readOptionalUuid(record, "robot_id", `${path}.robot_id`),
     code: readString(record, "code", `${path}.code`),
     name: readString(record, "name", `${path}.name`),
-    device_type: readString(record, "device_type", `${path}.device_type`),
+    device_type: readEnum(
+      record,
+      "device_type",
+      `${path}.device_type`,
+      DEVICE_TYPE_VALUES,
+    ),
     vendor: readOptionalString(record, "vendor", `${path}.vendor`),
     model: readOptionalString(record, "model", `${path}.model`),
     serial_number: readOptionalString(
@@ -67,7 +84,7 @@ export function parseDevice(value: unknown, path = "设备"): Device {
       "hardware_version",
       `${path}.hardware_version`,
     ),
-    calibration_profile_id: readOptionalString(
+    calibration_profile_id: readOptionalUuid(
       record,
       "calibration_profile_id",
       `${path}.calibration_profile_id`,
@@ -78,12 +95,8 @@ export function parseDevice(value: unknown, path = "设备"): Device {
       `${path}.capability_profile`,
     ),
     status: readString(record, "status", `${path}.status`),
-    location_id: readOptionalString(
-      record,
-      "location_id",
-      `${path}.location_id`,
-    ),
-    owner_user_id: readOptionalString(
+    location_id: readOptionalUuid(record, "location_id", `${path}.location_id`),
+    owner_user_id: readOptionalUuid(
       record,
       "owner_user_id",
       `${path}.owner_user_id`,
@@ -91,8 +104,8 @@ export function parseDevice(value: unknown, path = "设备"): Device {
     version: readInteger(record, "version", `${path}.version`),
     created_at: readOptionalString(record, "created_at", `${path}.created_at`),
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
-    created_by: readOptionalString(record, "created_by", `${path}.created_by`),
-    updated_by: readOptionalString(record, "updated_by", `${path}.updated_by`),
+    created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
+    updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
     freshness: readOptionalString(record, "freshness", `${path}.freshness`),
     last_synced_at: readOptionalString(
       record,
@@ -119,12 +132,17 @@ export function parseDevicePage(value: unknown): CursorPage<Device> {
 export function parseSensor(value: unknown, path = "传感器"): Sensor {
   const record = asRecord(value, path);
   return {
-    sensor_id: readString(record, "sensor_id", `${path}.sensor_id`),
-    project_id: readString(record, "project_id", `${path}.project_id`),
-    robot_id: readOptionalString(record, "robot_id", `${path}.robot_id`),
-    device_id: readOptionalString(record, "device_id", `${path}.device_id`),
+    sensor_id: readUuid(record, "sensor_id", `${path}.sensor_id`),
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    robot_id: readOptionalUuid(record, "robot_id", `${path}.robot_id`),
+    device_id: readOptionalUuid(record, "device_id", `${path}.device_id`),
     code: readString(record, "code", `${path}.code`),
-    sensor_type: readString(record, "sensor_type", `${path}.sensor_type`),
+    sensor_type: readEnum(
+      record,
+      "sensor_type",
+      `${path}.sensor_type`,
+      SENSOR_TYPE_VALUES,
+    ),
     vendor: readOptionalString(record, "vendor", `${path}.vendor`),
     model: readOptionalString(record, "model", `${path}.model`),
     serial_number: readOptionalString(
@@ -149,12 +167,12 @@ export function parseSensor(value: unknown, path = "传感器"): Sensor {
     ),
     bit_depth: readOptionalNumber(record, "bit_depth", `${path}.bit_depth`),
     channels: readOptionalNumber(record, "channels", `${path}.channels`),
-    intrinsic_calibration_id: readOptionalString(
+    intrinsic_calibration_id: readOptionalUuid(
       record,
       "intrinsic_calibration_id",
       `${path}.intrinsic_calibration_id`,
     ),
-    extrinsic_calibration_id: readOptionalString(
+    extrinsic_calibration_id: readOptionalUuid(
       record,
       "extrinsic_calibration_id",
       `${path}.extrinsic_calibration_id`,
@@ -164,14 +182,19 @@ export function parseSensor(value: unknown, path = "传感器"): Sensor {
       "coordinate_frame",
       `${path}.coordinate_frame`,
     ),
-    sync_mode: readOptionalString(record, "sync_mode", `${path}.sync_mode`),
+    sync_mode: readEnum(
+      record,
+      "sync_mode",
+      `${path}.sync_mode`,
+      SENSOR_SYNC_MODE_VALUES,
+    ),
     sync_group: readOptionalString(record, "sync_group", `${path}.sync_group`),
     firmware_version: readOptionalString(
       record,
       "firmware_version",
       `${path}.firmware_version`,
     ),
-    calibration_profile_id: readOptionalString(
+    calibration_profile_id: readOptionalUuid(
       record,
       "calibration_profile_id",
       `${path}.calibration_profile_id`,
@@ -202,29 +225,40 @@ export function parseCalibrationRecord(
     "uncertainty",
     `${path}.uncertainty`,
   );
-  const evidenceAssetIds = readOptionalStringArray(
+  const evidenceAssetIds = readUuidArray(
     record,
     "evidence_asset_ids",
     `${path}.evidence_asset_ids`,
   );
 
   return {
-    calibration_id: readString(
+    calibration_id: readUuid(
       record,
       "calibration_id",
       `${path}.calibration_id`,
     ),
-    project_id: readString(record, "project_id", `${path}.project_id`),
-    profile_id: readOptionalString(record, "profile_id", `${path}.profile_id`),
-    scope: readOptionalString(record, "scope", `${path}.scope`),
-    target_type: readString(record, "target_type", `${path}.target_type`),
-    target_id: readString(record, "target_id", `${path}.target_id`),
-    calibration_type: readString(
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    profile_id: readUuid(record, "profile_id", `${path}.profile_id`),
+    scope: readEnum(
+      record,
+      "scope",
+      `${path}.scope`,
+      CALIBRATION_SCOPE_VALUES,
+    ),
+    target_type: readEnum(
+      record,
+      "target_type",
+      `${path}.target_type`,
+      CALIBRATION_TARGET_TYPE_VALUES,
+    ),
+    target_id: readUuid(record, "target_id", `${path}.target_id`),
+    calibration_type: readEnum(
       record,
       "calibration_type",
       `${path}.calibration_type`,
+      CALIBRATION_TYPE_VALUES,
     ),
-    method: readOptionalString(record, "method", `${path}.method`),
+    method: readString(record, "method", `${path}.method`),
     parameters: readOptionalRecord(
       record,
       "parameters",
@@ -243,16 +277,16 @@ export function parseCalibrationRecord(
     valid_from: readOptionalString(record, "valid_from", `${path}.valid_from`),
     valid_to: readOptionalString(record, "valid_to", `${path}.valid_to`),
     status: readString(record, "status", `${path}.status`),
-    evidence_asset_ids: evidenceAssetIds ?? [],
+    evidence_asset_ids: evidenceAssetIds,
     source: readOptionalString(record, "source", `${path}.source`),
-    checksum: readOptionalString(record, "checksum", `${path}.checksum`),
+    checksum: readSha256Checksum(record, "checksum", `${path}.checksum`),
     uncertainty,
-    performed_by: readOptionalString(
+    performed_by: readUuid(
       record,
       "performed_by",
       `${path}.performed_by`,
     ),
-    validated_by: readOptionalString(
+    validated_by: readOptionalUuid(
       record,
       "validated_by",
       `${path}.validated_by`,
@@ -262,7 +296,7 @@ export function parseCalibrationRecord(
       "validated_at",
       `${path}.validated_at`,
     ),
-    supersedes_id: readOptionalString(
+    supersedes_id: readOptionalUuid(
       record,
       "supersedes_id",
       `${path}.supersedes_id`,

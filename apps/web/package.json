@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --max-warnings=0",
     "test": "vitest run",
+    "contract:check": "python3 scripts/device_contract_snapshot.py --check",
+    "contract:update": "python3 scripts/device_contract_snapshot.py --write",
     "format": "prettier --write 'src/**/*.{ts,tsx,css}'"
   },
   "dependencies": {

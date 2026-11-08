@@ -3,7 +3,65 @@
  *
  * 字段名保持与契约一致；状态类字段使用 string，而不是封闭枚举，
  * 这样服务端新增状态时前端仍能展示原始值，不会因契约 minor 升级直接报错。
+ * 结构型枚举在 `deviceValidation` 入参处校验，避免非法值进入 UI。
  */
+
+/** 后端领域枚举权威值；用于响应校验，不用于推断状态流转。 */
+export const DEVICE_TYPE_VALUES = [
+  "COMPUTE",
+  "CONTROLLER",
+  "CAMERA_RIG",
+  "TELEOP",
+  "GRIPPER",
+  "OTHER",
+] as const;
+
+export const SENSOR_TYPE_VALUES = [
+  "RGB",
+  "RGB_D",
+  "DEPTH",
+  "IMU",
+  "JOINT_STATE",
+  "END_EFFECTOR",
+  "FORCE_TORQUE",
+  "MOCAP",
+  "AUDIO",
+] as const;
+
+export const SENSOR_SYNC_MODE_VALUES = [
+  "PTP",
+  "NTP",
+  "HARDWARE_TRIGGER",
+  "SOFTWARE_ESTIMATE",
+  "MANUAL",
+  "NONE",
+] as const;
+
+export const CALIBRATION_SCOPE_VALUES = [
+  "ROBOT",
+  "DEVICE",
+  "SENSOR",
+  "SYSTEM",
+] as const;
+
+export const CALIBRATION_TARGET_TYPE_VALUES = [
+  "ROBOT",
+  "DEVICE",
+  "SENSOR",
+  "SYSTEM",
+] as const;
+
+export const CALIBRATION_TYPE_VALUES = [
+  "INTRINSICS",
+  "EXTRINSICS",
+  "HAND_EYE",
+  "IMU",
+  "JOINT_OFFSET",
+  "TIME_OFFSET",
+  "FORCE_TORQUE",
+  "DEPTH_ALIGNMENT",
+] as const;
+
 export interface Device {
   device_id: string;
   project_id: string;
@@ -57,7 +115,8 @@ export interface Sensor {
   intrinsic_calibration_id: string | null;
   extrinsic_calibration_id: string | null;
   coordinate_frame: string | null;
-  sync_mode: string | null;
+  /** 同步方式，后端枚举见 `SENSOR_SYNC_MODE_VALUES`。 */
+  sync_mode: string;
   sync_group: string | null;
   firmware_version: string | null;
   calibration_profile_id: string | null;
@@ -71,12 +130,12 @@ export interface Sensor {
 export interface CalibrationRecord {
   calibration_id: string;
   project_id: string;
-  profile_id: string | null;
-  scope: string | null;
+  profile_id: string;
+  scope: string;
   target_type: string;
   target_id: string;
   calibration_type: string;
-  method: string | null;
+  method: string;
   /** 标定参数由 Canonical Schema 约束，前端不解释具体字段含义。 */
   parameters: Record<string, unknown> | null;
   parent_frame: string | null;
@@ -86,13 +145,13 @@ export interface CalibrationRecord {
   status: string;
   evidence_asset_ids: string[];
   source: string | null;
-  checksum: string | null;
+  checksum: string;
   /**
    * 不确定度，后端序列化为 JSON 对象（如 `{ translation_m, rotation_rad }`）。
    * 具体键由 Canonical 标定 Schema 约束，前端不解释业务语义。
    */
   uncertainty: Record<string, unknown> | null;
-  performed_by: string | null;
+  performed_by: string;
   validated_by: string | null;
   validated_at: string | null;
   supersedes_id: string | null;

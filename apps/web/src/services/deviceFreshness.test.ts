@@ -146,8 +146,16 @@ describe("标定有效期新鲜度", () => {
   it("汇总过期条数与最近有效期截止时间", () => {
     const summary = summarizeCalibrationExpiry(
       [
-        { ...backendCalibrationFixture, valid_to: "2026-11-01T00:00:00Z" },
-        { ...backendCalibrationFixture, valid_to: "2026-11-07T00:00:00Z" },
+        {
+          ...backendCalibrationFixture,
+          status: "ACTIVE",
+          valid_to: "2026-11-01T00:00:00Z",
+        },
+        {
+          ...backendCalibrationFixture,
+          status: "ACTIVE",
+          valid_to: "2026-11-07T00:00:00Z",
+        },
         { ...backendCalibrationFixture, valid_to: null, status: "ACTIVE" },
       ],
       NOW,
