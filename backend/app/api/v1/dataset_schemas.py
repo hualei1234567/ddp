@@ -183,7 +183,9 @@ def _iso(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 
 
-def dataset_out(dataset: Dataset, *, allowed_actions: frozenset[str] = frozenset()) -> dict[str, Any]:
+def dataset_out(
+    dataset: Dataset, *, allowed_actions: frozenset[str] = frozenset()
+) -> dict[str, Any]:
     return {
         "dataset_id": dataset.dataset_id,
         "project_id": dataset.project_id,

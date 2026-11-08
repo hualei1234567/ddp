@@ -89,15 +89,25 @@ class DatasetPolicyUseCases:
             created_by=scope.actor_id,
         )
         self._policies.add_dedup(scope, policy)
-        self._audit_policy(scope, "DEDUP_POLICY", policy.dedup_policy_id, policy.version, request_id, now)
+        self._audit_policy(
+            scope, "DEDUP_POLICY", policy.dedup_policy_id, policy.version, request_id, now
+        )
         self._idempotency.store(
-            scope, key, method=method, path=path, body=body, response_status=201,
-            response_ref=str(policy.dedup_policy_id), now=now,
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=201,
+            response_ref=str(policy.dedup_policy_id),
+            now=now,
         )
         self._uow.commit()
         return policy
 
-    def list_dedup(self, scope: ProjectScope, dataset_id: UUID, *, limit: int = 20) -> list[DedupPolicy]:
+    def list_dedup(
+        self, scope: ProjectScope, dataset_id: UUID, *, limit: int = 20
+    ) -> list[DedupPolicy]:
         self._ensure_dataset(scope, dataset_id)
         return self._policies.list_dedup(scope, dataset_id=dataset_id, limit=limit)
 
@@ -149,15 +159,25 @@ class DatasetPolicyUseCases:
             created_by=scope.actor_id,
         )
         self._policies.add_split(scope, policy)
-        self._audit_policy(scope, "SPLIT_POLICY", policy.split_policy_id, policy.version, request_id, now)
+        self._audit_policy(
+            scope, "SPLIT_POLICY", policy.split_policy_id, policy.version, request_id, now
+        )
         self._idempotency.store(
-            scope, key, method=method, path=path, body=body, response_status=201,
-            response_ref=str(policy.split_policy_id), now=now,
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=201,
+            response_ref=str(policy.split_policy_id),
+            now=now,
         )
         self._uow.commit()
         return policy
 
-    def list_split(self, scope: ProjectScope, dataset_id: UUID, *, limit: int = 20) -> list[SplitPolicy]:
+    def list_split(
+        self, scope: ProjectScope, dataset_id: UUID, *, limit: int = 20
+    ) -> list[SplitPolicy]:
         self._ensure_dataset(scope, dataset_id)
         return self._policies.list_split(scope, dataset_id=dataset_id, limit=limit)
 
@@ -206,8 +226,14 @@ class DatasetPolicyUseCases:
             scope, "LEAKAGE_POLICY", policy.leakage_policy_id, policy.version, request_id, now
         )
         self._idempotency.store(
-            scope, key, method=method, path=path, body=body, response_status=201,
-            response_ref=str(policy.leakage_policy_id), now=now,
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=201,
+            response_ref=str(policy.leakage_policy_id),
+            now=now,
         )
         self._uow.commit()
         return policy
@@ -259,8 +285,14 @@ class DatasetPolicyUseCases:
             scope, "QUALITY_POLICY", policy.quality_policy_id, policy.version, request_id, now
         )
         self._idempotency.store(
-            scope, key, method=method, path=path, body=body, response_status=201,
-            response_ref=str(policy.quality_policy_id), now=now,
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=201,
+            response_ref=str(policy.quality_policy_id),
+            now=now,
         )
         self._uow.commit()
         return policy

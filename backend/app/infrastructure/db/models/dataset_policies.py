@@ -102,8 +102,7 @@ class DatasetDedupPolicyModel(Base, DatasetPolicyBase):
         CheckConstraint("version >= 1", name="version_positive"),
         CheckConstraint(_SHA, name="policy_sha256_format"),
         CheckConstraint(
-            "near_duplicate_enforcement IN "
-            f"({_values(NearDuplicateEnforcement)})",
+            "near_duplicate_enforcement IN " f"({_values(NearDuplicateEnforcement)})",
             name="near_duplicate_enforcement_allowed",
         ),
         CheckConstraint(f"retain_rule IN ({_values(RetainRule)})", name="retain_rule_allowed"),
@@ -170,7 +169,9 @@ class DatasetSplitPolicyModel(Base, DatasetPolicyBase):
             f"empty_split_policy IN ({_values(EmptySplitPolicy)})",
             name="empty_split_policy_allowed",
         ),
-        CheckConstraint(f"rounding_rule IN ({_values(RoundingRule)})", name="rounding_rule_allowed"),
+        CheckConstraint(
+            f"rounding_rule IN ({_values(RoundingRule)})", name="rounding_rule_allowed"
+        ),
         CheckConstraint("seed >= 0", name="seed_non_negative"),
         CheckConstraint("min_item_count >= 1", name="min_item_count_positive"),
         CheckConstraint("min_duration_ns >= 0", name="min_duration_non_negative"),

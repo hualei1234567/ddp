@@ -31,45 +31,47 @@ _DATASET_RULES: Mapping[DatasetStatus, Mapping[str, DatasetStatus]] = MappingPro
     }
 )
 
-_VERSION_RULES: Mapping[DatasetVersionStatus, Mapping[str, DatasetVersionStatus]] = MappingProxyType(
-    {
-        DatasetVersionStatus.DRAFT: {
-            "build": DatasetVersionStatus.BUILDING,
-            "cancel": DatasetVersionStatus.CANCELLED,
-        },
-        DatasetVersionStatus.BUILDING: {
-            "system-build-complete": DatasetVersionStatus.VALIDATING,
-            "system-build-fail": DatasetVersionStatus.VALIDATION_FAILED,
-            "cancel": DatasetVersionStatus.CANCELLED,
-        },
-        DatasetVersionStatus.VALIDATING: {
-            "system-validate-pass": DatasetVersionStatus.READY,
-            "validate": DatasetVersionStatus.READY,
-            "ready": DatasetVersionStatus.READY,
-            "system-validate-fail": DatasetVersionStatus.VALIDATION_FAILED,
-            "validate-fail": DatasetVersionStatus.VALIDATION_FAILED,
-            "cancel": DatasetVersionStatus.CANCELLED,
-        },
-        DatasetVersionStatus.VALIDATION_FAILED: {
-            "return-draft": DatasetVersionStatus.DRAFT,
-            "validate": DatasetVersionStatus.READY,
-            "cancel": DatasetVersionStatus.CANCELLED,
-        },
-        DatasetVersionStatus.READY: {
-            "freeze": DatasetVersionStatus.FROZEN,
-            "return-draft": DatasetVersionStatus.DRAFT,
-            "cancel": DatasetVersionStatus.CANCELLED,
-        },
-        DatasetVersionStatus.FROZEN: {
-            "system-supersede": DatasetVersionStatus.SUPERSEDED,
-            "archive": DatasetVersionStatus.ARCHIVED,
-        },
-        DatasetVersionStatus.SUPERSEDED: {
-            "archive": DatasetVersionStatus.ARCHIVED,
-        },
-        DatasetVersionStatus.CANCELLED: {},
-        DatasetVersionStatus.ARCHIVED: {},
-    }
+_VERSION_RULES: Mapping[DatasetVersionStatus, Mapping[str, DatasetVersionStatus]] = (
+    MappingProxyType(
+        {
+            DatasetVersionStatus.DRAFT: {
+                "build": DatasetVersionStatus.BUILDING,
+                "cancel": DatasetVersionStatus.CANCELLED,
+            },
+            DatasetVersionStatus.BUILDING: {
+                "system-build-complete": DatasetVersionStatus.VALIDATING,
+                "system-build-fail": DatasetVersionStatus.VALIDATION_FAILED,
+                "cancel": DatasetVersionStatus.CANCELLED,
+            },
+            DatasetVersionStatus.VALIDATING: {
+                "system-validate-pass": DatasetVersionStatus.READY,
+                "validate": DatasetVersionStatus.READY,
+                "ready": DatasetVersionStatus.READY,
+                "system-validate-fail": DatasetVersionStatus.VALIDATION_FAILED,
+                "validate-fail": DatasetVersionStatus.VALIDATION_FAILED,
+                "cancel": DatasetVersionStatus.CANCELLED,
+            },
+            DatasetVersionStatus.VALIDATION_FAILED: {
+                "return-draft": DatasetVersionStatus.DRAFT,
+                "validate": DatasetVersionStatus.READY,
+                "cancel": DatasetVersionStatus.CANCELLED,
+            },
+            DatasetVersionStatus.READY: {
+                "freeze": DatasetVersionStatus.FROZEN,
+                "return-draft": DatasetVersionStatus.DRAFT,
+                "cancel": DatasetVersionStatus.CANCELLED,
+            },
+            DatasetVersionStatus.FROZEN: {
+                "system-supersede": DatasetVersionStatus.SUPERSEDED,
+                "archive": DatasetVersionStatus.ARCHIVED,
+            },
+            DatasetVersionStatus.SUPERSEDED: {
+                "archive": DatasetVersionStatus.ARCHIVED,
+            },
+            DatasetVersionStatus.CANCELLED: {},
+            DatasetVersionStatus.ARCHIVED: {},
+        }
+    )
 )
 
 _VALIDITY_RULES: Mapping[ValidityStatus, Mapping[str, ValidityStatus]] = MappingProxyType(

@@ -76,7 +76,7 @@ def optional_sha256(value: object, field_name: str) -> str | None:
 
 
 def enum_list(value: object, enum_type: type, field_name: str) -> tuple:
-    if not isinstance(value, (list, tuple)) or not value:
+    if not isinstance(value, list | tuple) or not value:
         raise DomainValidationError(f"{field_name} 必须是非空列表")
     result = []
     for item in value:
@@ -92,7 +92,7 @@ def enum_list(value: object, enum_type: type, field_name: str) -> tuple:
 def optional_enum_list(value: object, enum_type: type, field_name: str) -> tuple:
     if value is None:
         return ()
-    if not isinstance(value, (list, tuple)):
+    if not isinstance(value, list | tuple):
         raise DomainValidationError(f"{field_name} 必须是列表")
     result = []
     for item in value:

@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from itertools import combinations
 from uuid import UUID
@@ -17,6 +17,7 @@ from app.domain.datasets.enums import (
     HARD_LEAKAGE_RULES,
     LeakageRule,
     LeakageStatus,
+    Split,
 )
 from app.domain.datasets.errors import LeakageWaiverForbiddenError
 from app.domain.datasets.policies import LeakagePolicy, PolicyRef
@@ -24,13 +25,13 @@ from app.domain.datasets.validation import (
     aware_datetime,
     optional_aware_datetime,
     optional_text,
-    optional_uuid,
     positive_int,
     required_uuid,
-    sha256_value as ensure_sha,
     text_value,
 )
-from app.domain.datasets.enums import Split
+from app.domain.datasets.validation import (
+    sha256_value as ensure_sha,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +51,9 @@ class LeakageItem:
     end_time_ns: int = 0
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "split", self.split if isinstance(self.split, Split) else Split(self.split))
+        object.__setattr__(
+            self, "split", self.split if isinstance(self.split, Split) else Split(self.split)
+        )
         if not self.raw_asset_ids:
             raise ValueError("raw_asset_ids 不得为空")
 
@@ -66,13 +69,21 @@ class LeakageWaiver:
     expires_at: datetime | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "rule", self.rule if isinstance(self.rule, LeakageRule) else LeakageRule(self.rule))
+        object.__setattr__(
+            self,
+            "rule",
+            self.rule if isinstance(self.rule, LeakageRule) else LeakageRule(self.rule),
+        )
         required_uuid(self.approved_by, "approved_by")
         object.__setattr__(self, "reason", text_value(self.reason, "reason", max_length=2000))
         object.__setattr__(self, "approved_at", aware_datetime(self.approved_at, "approved_at"))
-        object.__setattr__(self, "audit_ref", text_value(self.audit_ref, "audit_ref", max_length=256))
+        object.__setattr__(
+            self, "audit_ref", text_value(self.audit_ref, "audit_ref", max_length=256)
+        )
         object.__setattr__(self, "impact", optional_text(self.impact, "impact", max_length=1000))
-        object.__setattr__(self, "expires_at", optional_aware_datetime(self.expires_at, "expires_at"))
+        object.__setattr__(
+            self, "expires_at", optional_aware_datetime(self.expires_at, "expires_at")
+        )
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -135,9 +146,13 @@ class LeakageReport:
         object.__setattr__(
             self,
             "leakage_status",
-            self.leakage_status if isinstance(self.leakage_status, LeakageStatus) else LeakageStatus(self.leakage_status),
+            self.leakage_status
+            if isinstance(self.leakage_status, LeakageStatus)
+            else LeakageStatus(self.leakage_status),
         )
-        object.__setattr__(self, "checked_rule_count", positive_int(self.checked_rule_count, "checked_rule_count"))
+        object.__setattr__(
+            self, "checked_rule_count", positive_int(self.checked_rule_count, "checked_rule_count")
+        )
         object.__setattr__(self, "violations", tuple(self.violations))
         object.__setattr__(self, "waivers", tuple(self.waivers))
         object.__setattr__(self, "checked_at", aware_datetime(self.checked_at, "checked_at"))
@@ -159,7 +174,10 @@ class LeakageReport:
         )
         object.__setattr__(self, "version", positive_int(self.version, "version"))
         digest = sha256_value(self._payload())
-        if self.report_sha256 is not None and ensure_sha(self.report_sha256, "report_sha256") != digest:
+        if (
+            self.report_sha256 is not None
+            and ensure_sha(self.report_sha256, "report_sha256") != digest
+        ):
             raise ValueError("report_sha256 与泄漏报告内容不一致")
         object.__setattr__(self, "report_sha256", digest)
 

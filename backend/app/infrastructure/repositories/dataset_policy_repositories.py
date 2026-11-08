@@ -45,7 +45,6 @@ from app.infrastructure.db.models.dataset_reports import (
 from app.infrastructure.repositories._dataset_sql import (
     as_utc,
     bounded_limit,
-    enum_value,
     flush_or_duplicate,
 )
 
@@ -378,9 +377,7 @@ class SqlDatasetPolicyRepository:
             version=row.version,
             exact_keys=tuple(DedupKey(item) for item in (row.exact_keys or [])),
             near_duplicate_enabled=row.near_duplicate_enabled,
-            near_duplicate_enforcement=NearDuplicateEnforcement(
-                row.near_duplicate_enforcement
-            ),
+            near_duplicate_enforcement=NearDuplicateEnforcement(row.near_duplicate_enforcement),
             similarity_method=row.similarity_method,
             similarity_threshold=row.similarity_threshold,
             similarity_min_cluster_size=row.similarity_min_cluster_size,
@@ -498,7 +495,9 @@ class SqlDatasetReportRepository:
                 DatasetLeakageReportModel.project_id == scope.project_id,
                 DatasetLeakageReportModel.dataset_version_id == dataset_version_id,
             )
-            .order_by(DatasetLeakageReportModel.checked_at.desc(), DatasetLeakageReportModel.id.desc())
+            .order_by(
+                DatasetLeakageReportModel.checked_at.desc(), DatasetLeakageReportModel.id.desc()
+            )
             .limit(1)
         )
         return self._leakage_from_row(row) if row is not None else None
@@ -549,7 +548,9 @@ class SqlDatasetReportRepository:
                 DatasetQualityReportModel.project_id == scope.project_id,
                 DatasetQualityReportModel.dataset_version_id == dataset_version_id,
             )
-            .order_by(DatasetQualityReportModel.created_at.desc(), DatasetQualityReportModel.id.desc())
+            .order_by(
+                DatasetQualityReportModel.created_at.desc(), DatasetQualityReportModel.id.desc()
+            )
             .limit(1)
         )
         return self._quality_from_row(row) if row is not None else None
@@ -574,9 +575,7 @@ class SqlDatasetReportRepository:
                 reason=item["reason"],
                 impact=item.get("impact"),
                 approved_at=_parse_dt(item["approved_at"]),
-                expires_at=(
-                    _parse_dt(item["expires_at"]) if item.get("expires_at") else None
-                ),
+                expires_at=(_parse_dt(item["expires_at"]) if item.get("expires_at") else None),
                 audit_ref=item["audit_ref"],
             )
             for item in (row.waivers or [])
@@ -614,9 +613,7 @@ class SqlDatasetReportRepository:
             excluded_count=row.excluded_count,
             duplicated_count=row.duplicated_count,
             split_counts=dict(row.split_counts),
-            distributions={
-                key: dict(value) for key, value in (row.distributions or {}).items()
-            },
+            distributions={key: dict(value) for key, value in (row.distributions or {}).items()},
             total_duration_ns=row.total_duration_ns,
             total_bytes=row.total_bytes,
             coverage=dict(row.coverage),

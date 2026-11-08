@@ -27,7 +27,8 @@ from app.infrastructure.db.models.datasets import (
     DatasetModel,
     DatasetVersionModel,
 )
-from app.infrastructure.repositories._dataset_sql import (    as_utc,
+from app.infrastructure.repositories._dataset_sql import (
+    as_utc,
     bounded_limit,
     ensure_expected_version,
     ensure_initial_version,

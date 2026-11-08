@@ -19,8 +19,10 @@ from app.domain.datasets.validation import (
     optional_text,
     positive_int,
     required_uuid,
-    sha256_value as ensure_sha,
     text_value,
+)
+from app.domain.datasets.validation import (
+    sha256_value as ensure_sha,
 )
 
 _DISTRIBUTION_KEYS = frozenset({"scene", "action", "robot", "device", "label", "quality_status"})
@@ -85,7 +87,11 @@ class QualityReport:
         object.__setattr__(self, "leakage_summary", dict(self.leakage_summary))
         object.__setattr__(self, "warnings", tuple(self.warnings))
         object.__setattr__(self, "blocking_issues", tuple(self.blocking_issues))
-        object.__setattr__(self, "source_snapshot_at", aware_datetime(self.source_snapshot_at, "source_snapshot_at"))
+        object.__setattr__(
+            self,
+            "source_snapshot_at",
+            aware_datetime(self.source_snapshot_at, "source_snapshot_at"),
+        )
         object.__setattr__(self, "created_at", aware_datetime(self.created_at, "created_at"))
         object.__setattr__(
             self,
@@ -103,7 +109,10 @@ class QualityReport:
         )
         object.__setattr__(self, "version", positive_int(self.version, "version"))
         digest = sha256_value(self._payload())
-        if self.report_sha256 is not None and ensure_sha(self.report_sha256, "report_sha256") != digest:
+        if (
+            self.report_sha256 is not None
+            and ensure_sha(self.report_sha256, "report_sha256") != digest
+        ):
             raise DomainValidationError("report_sha256 与质量报告内容不一致")
         object.__setattr__(self, "report_sha256", digest)
 
@@ -144,7 +153,9 @@ class QualityReport:
         return payload
 
 
-def leakage_summary(leakage_status: LeakageStatus | str | None, hard: int, soft: int, sha256: str | None) -> dict[str, object]:
+def leakage_summary(
+    leakage_status: LeakageStatus | str | None, hard: int, soft: int, sha256: str | None
+) -> dict[str, object]:
     if leakage_status is None:
         return {
             "status": LeakageStatus.UNKNOWN.value,
@@ -152,7 +163,11 @@ def leakage_summary(leakage_status: LeakageStatus | str | None, hard: int, soft:
             "soft_violation_count": 0,
             "report_sha256": None,
         }
-    status = leakage_status if isinstance(leakage_status, LeakageStatus) else LeakageStatus(leakage_status)
+    status = (
+        leakage_status
+        if isinstance(leakage_status, LeakageStatus)
+        else LeakageStatus(leakage_status)
+    )
     return {
         "status": status.value,
         "hard_violation_count": hard,

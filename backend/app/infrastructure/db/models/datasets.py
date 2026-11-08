@@ -53,7 +53,9 @@ class DatasetAuditMixin:
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
     )
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -171,7 +173,9 @@ class DatasetVersionModel(Base, DatasetAuditMixin):
     leakage_report_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     leakage_report_sha256: Mapped[str | None] = mapped_column(String(71), nullable=True)
     leakage_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    source_snapshot_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_snapshot_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     build_attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     freeze_approval_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     frozen_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
@@ -276,12 +280,14 @@ class DatasetVersionModel(Base, DatasetAuditMixin):
         ),
         CheckConstraint(
             "quality_report_sha256 IS NULL OR ("
-            "length(quality_report_sha256) = 71 AND substr(quality_report_sha256, 1, 7) = 'sha256:')",
+            "length(quality_report_sha256) = 71 "
+            "AND substr(quality_report_sha256, 1, 7) = 'sha256:')",
             name="quality_report_sha256_format",
         ),
         CheckConstraint(
             "leakage_report_sha256 IS NULL OR ("
-            "length(leakage_report_sha256) = 71 AND substr(leakage_report_sha256, 1, 7) = 'sha256:')",
+            "length(leakage_report_sha256) = 71 "
+            "AND substr(leakage_report_sha256, 1, 7) = 'sha256:')",
             name="leakage_report_sha256_format",
         ),
         CheckConstraint(
@@ -343,7 +349,9 @@ class DatasetItemModel(Base):
     split: Mapped[str] = mapped_column(String(16), nullable=False)
     stratum: Mapped[str | None] = mapped_column(String(200), nullable=True)
     sample_role: Mapped[str] = mapped_column(String(16), nullable=False)
-    weight: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default=text("1.0"))
+    weight: Mapped[float] = mapped_column(
+        Float, nullable=False, default=1.0, server_default=text("1.0")
+    )
     dedup_group_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     similarity_group_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     scene_group_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)

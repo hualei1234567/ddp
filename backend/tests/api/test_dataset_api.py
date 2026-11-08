@@ -5,13 +5,13 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
+from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
+from app.infrastructure.db.models.datasets import DatasetModel, DatasetVersionModel
+from app.infrastructure.db.models.episodes import EpisodeModel
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
-from app.infrastructure.db.models.datasets import DatasetModel, DatasetVersionModel
-from app.infrastructure.db.models.episodes import EpisodeModel
 from tests.api.conftest import ApiIds, make_client
 from tests.api.dataset_support import (
     create_dataset,
@@ -138,9 +138,7 @@ def test_dataset_version_lifecycle_reports_and_freeze(
     assert splits.count("VALIDATION") == 1
     assert splits.count("TEST") == 1
 
-    manifest = editor.get(
-        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/manifest")
-    )
+    manifest = editor.get(url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/manifest"))
     assert manifest.status_code == 200, manifest.text
     assert manifest.json()["manifest_sha256"] == ready["manifest_sha256"]
     assert len(manifest.json()["items"]) == 10
@@ -321,9 +319,7 @@ def test_selection_exclusion_and_duplicate_statistics(
     )
     with factory() as session:
         session.execute(
-            update(EpisodeModel)
-            .where(EpisodeModel.id == episodes[8])
-            .values(status="INVALIDATED")
+            update(EpisodeModel).where(EpisodeModel.id == episodes[8]).values(status="INVALIDATED")
         )
         session.execute(
             update(EpisodeModel)

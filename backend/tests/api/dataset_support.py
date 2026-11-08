@@ -5,9 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import update
-from sqlalchemy.orm import Session, sessionmaker
-
 from app.infrastructure.db.models.annotation_catalog import AnnotationSampleSet, AnnotationSchema
 from app.infrastructure.db.models.annotation_results import AnnotationRecord, AnnotationSubmission
 from app.infrastructure.db.models.annotation_work import (
@@ -17,6 +14,8 @@ from app.infrastructure.db.models.annotation_work import (
 )
 from app.infrastructure.db.models.episodes import EpisodeModel, EpisodeRawAssetModel
 from app.infrastructure.db.models.ingestion import RawAssetModel
+from sqlalchemy import update
+from sqlalchemy.orm import Session, sessionmaker
 
 NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
 SHA = "sha256:" + "a" * 64
@@ -65,9 +64,16 @@ def seed_dataset_episodes(
                 description=None,
                 status="DRAFT",
                 annotation_levels=["EPISODE"],
-                labels=[{"label_key": "action", "label_type": "ENUM", "required": False,
-                         "level": "EPISODE", "visibility": "ANNOTATOR",
-                         "value_spec": {"enum_values": ["PICK"]}}],
+                labels=[
+                    {
+                        "label_key": "action",
+                        "label_type": "ENUM",
+                        "required": False,
+                        "level": "EPISODE",
+                        "visibility": "ANNOTATOR",
+                        "value_spec": {"enum_values": ["PICK"]},
+                    }
+                ],
                 compatibility="BACKWARD_COMPATIBLE",
                 schema_sha256=SCHEMA_SHA,
                 version=1,
@@ -349,9 +355,7 @@ def seed_dataset_episodes(
                     pipeline_version="1.0.0",
                     segmentation_rule_version="seg-v1",
                     frame_count=10,
-                    calibration_snapshot=[
-                        {"calibration_id": str(uuid4()), "status": "ACTIVE"}
-                    ],
+                    calibration_snapshot=[{"calibration_id": str(uuid4()), "status": "ACTIVE"}],
                     manifest_key=f"canonical/{project_id}/{episode_id}/1/manifest.json",
                     manifest_sha256=manifest_sha,
                     preview_refs=[],
@@ -390,9 +394,7 @@ def seed_dataset_episodes(
                 .values(status="PROCESSING")
             )
             session.execute(
-                update(EpisodeModel)
-                .where(EpisodeModel.id == episode_id)
-                .values(status="READY")
+                update(EpisodeModel).where(EpisodeModel.id == episode_id).values(status="READY")
             )
             session.execute(
                 update(EpisodeModel)
@@ -400,9 +402,7 @@ def seed_dataset_episodes(
                 .values(status="QUALITY_CHECKING", quality_status="PASS")
             )
             session.execute(
-                update(EpisodeModel)
-                .where(EpisodeModel.id == episode_id)
-                .values(status="ACCEPTED")
+                update(EpisodeModel).where(EpisodeModel.id == episode_id).values(status="ACCEPTED")
             )
             session.add(
                 AnnotationRecord(
@@ -433,9 +433,11 @@ def seed_dataset_episodes(
             )
             session.flush()
 
-        record_ids = session.query(AnnotationRecord.id).filter(
-            AnnotationRecord.submission_id == submission_id
-        ).all()
+        record_ids = (
+            session.query(AnnotationRecord.id)
+            .filter(AnnotationRecord.submission_id == submission_id)
+            .all()
+        )
         session.execute(
             update(AnnotationSubmission)
             .where(AnnotationSubmission.id == submission_id)
@@ -456,7 +458,7 @@ def seed_dataset_episodes(
             .where(AnnotationSubmission.id == submission_id)
             .values(status="APPROVED", decided_at=NOW, version=4)
         )
-        for record_id, in record_ids:
+        for (record_id,) in record_ids:
             session.execute(
                 update(AnnotationRecord)
                 .where(AnnotationRecord.id == record_id)

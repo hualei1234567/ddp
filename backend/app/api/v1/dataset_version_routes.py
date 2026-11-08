@@ -131,8 +131,7 @@ def act_on_version(
     payload: VersionActionRequest | None = None,
 ) -> dict[str, Any]:
     if action == "archive" and not (
-        context.is_platform_admin or context.role is not None
-        and context.role.value == "owner"
+        context.is_platform_admin or context.role is not None and context.role.value == "owner"
     ):
         raise ForbiddenError("归档要求项目负责人权限")
     body = payload or VersionActionRequest()

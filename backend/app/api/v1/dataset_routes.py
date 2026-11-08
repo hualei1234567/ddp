@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from app.api.deps import get_project_context
 from app.api.v1.dataset_dependencies import (
     ActionName,
     DatasetUseCasesDep,
@@ -38,7 +39,6 @@ from app.application.datasets.commands import (
 from app.core.errors import ForbiddenError
 from app.domain.datasets.state_machines import allowed_dataset_actions
 from app.domain.identity.models import ProjectContext
-from app.api.deps import get_project_context
 
 router = APIRouter(prefix="/projects/{project_id}/datasets", tags=["datasets"])
 
@@ -144,8 +144,7 @@ def act_on_dataset(
     payload: DatasetActionRequest | None = None,
 ) -> dict[str, Any]:
     if action in {"archive", "restore"} and not (
-        context.is_platform_admin or context.role is not None
-        and context.role.value == "owner"
+        context.is_platform_admin or context.role is not None and context.role.value == "owner"
     ):
         raise ForbiddenError("归档/恢复要求项目负责人权限")
     dataset = use_cases.datasets.apply_action(

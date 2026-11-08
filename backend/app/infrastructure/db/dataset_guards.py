@@ -260,7 +260,12 @@ _TRIGGERS = (
     ("trg_datasets_transition", "datasets", "UPDATE", "ddp_dataset_guard"),
     ("trg_datasets_identity_immutable", "datasets", "UPDATE", "ddp_dataset_guard"),
     ("trg_datasets_no_delete", "datasets", "DELETE", "ddp_dataset_delete_guard"),
-    ("trg_dataset_versions_initial_status", "dataset_versions", "INSERT", "ddp_dataset_version_guard"),
+    (
+        "trg_dataset_versions_initial_status",
+        "dataset_versions",
+        "INSERT",
+        "ddp_dataset_version_guard",
+    ),
     ("trg_dataset_versions_transition", "dataset_versions", "UPDATE", "ddp_dataset_version_guard"),
     (
         "trg_dataset_versions_validity_transition",

@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.application.datasets.ports import AuditRecord, IdempotencyRecord, OutboxEvent
 from app.domain.datasets.errors import ConflictError
 from app.domain.identity.models import ProjectScope
-from app.infrastructure.db.models.collection import AuditLog, IdempotencyRecord as IdempotencyModel
+from app.infrastructure.db.models.collection import AuditLog
+from app.infrastructure.db.models.collection import IdempotencyRecord as IdempotencyModel
 from app.infrastructure.db.models.collection import OutboxEvent as OutboxModel
 from app.infrastructure.repositories._dataset_sql import as_utc
 

@@ -18,6 +18,8 @@ from app.domain.datasets.validation import (
     optional_text,
     positive_int,
     required_uuid,
+)
+from app.domain.datasets.validation import (
     sha256_value as ensure_sha,
 )
 
@@ -54,7 +56,9 @@ class Manifest:
             "created_by",
         ):
             required_uuid(getattr(self, name), name)
-        object.__setattr__(self, "dataset_version", positive_int(self.dataset_version, "dataset_version"))
+        object.__setattr__(
+            self, "dataset_version", positive_int(self.dataset_version, "dataset_version")
+        )
         object.__setattr__(self, "created_at", aware_datetime(self.created_at, "created_at"))
         object.__setattr__(
             self,
@@ -102,10 +106,14 @@ class Manifest:
         if self.size_bytes is not None and self.size_bytes < 0:
             raise ValueError("size_bytes 必须是非负整数")
         digest = sha256_value(self._hash_payload())
-        if self.manifest_sha256 is not None and ensure_sha(
-            self.manifest_sha256,
-            "manifest_sha256",
-        ) != digest:
+        if (
+            self.manifest_sha256 is not None
+            and ensure_sha(
+                self.manifest_sha256,
+                "manifest_sha256",
+            )
+            != digest
+        ):
             raise ManifestMismatchError("manifest_sha256 与 Manifest 内容不一致")
         object.__setattr__(self, "manifest_sha256", digest)
 
@@ -134,7 +142,9 @@ class Manifest:
             "canonicalization": "RFC8785_JCS",
         }
 
-    def to_payload(self, *, inline: bool = True, download_url: str | None = None) -> dict[str, object]:
+    def to_payload(
+        self, *, inline: bool = True, download_url: str | None = None
+    ) -> dict[str, object]:
         payload = self._hash_payload()
         payload["manifest_sha256"] = self.manifest_sha256
         payload["manifest_key"] = self.manifest_key

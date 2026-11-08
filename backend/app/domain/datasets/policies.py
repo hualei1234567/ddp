@@ -34,8 +34,10 @@ from app.domain.datasets.validation import (
     optional_uuid,
     positive_int,
     required_uuid,
-    sha256_value as ensure_sha,
     text_value,
+)
+from app.domain.datasets.validation import (
+    sha256_value as ensure_sha,
 )
 
 
@@ -66,9 +68,7 @@ class DedupPolicy:
     version: int
     exact_keys: tuple[DedupKey, ...]
     near_duplicate_enabled: bool = False
-    near_duplicate_enforcement: NearDuplicateEnforcement | str = (
-        NearDuplicateEnforcement.WARN_ONLY
-    )
+    near_duplicate_enforcement: NearDuplicateEnforcement | str = NearDuplicateEnforcement.WARN_ONLY
     retain_rule: RetainRule | str = RetainRule.NEWEST_ACCEPTED
     name: str | None = None
     similarity_method: str | None = None
@@ -94,7 +94,9 @@ class DedupPolicy:
                 "near_duplicate_enforcement",
             ),
         )
-        object.__setattr__(self, "retain_rule", coerce_enum(self.retain_rule, RetainRule, "retain_rule"))
+        object.__setattr__(
+            self, "retain_rule", coerce_enum(self.retain_rule, RetainRule, "retain_rule")
+        )
         object.__setattr__(self, "name", optional_text(self.name, "name", max_length=200))
         object.__setattr__(
             self,
@@ -114,11 +116,16 @@ class DedupPolicy:
             ),
         )
         digest = sha256_value(self._payload())
-        if self.policy_sha256 is not None and ensure_sha(self.policy_sha256, "policy_sha256") != digest:
+        if (
+            self.policy_sha256 is not None
+            and ensure_sha(self.policy_sha256, "policy_sha256") != digest
+        ):
             raise DomainValidationError("dedup_policy_sha256 与策略内容不一致")
         object.__setattr__(self, "policy_sha256", digest)
         object.__setattr__(self, "row_version", positive_int(self.row_version, "row_version"))
-        object.__setattr__(self, "created_at", optional_aware_datetime(self.created_at, "created_at"))
+        object.__setattr__(
+            self, "created_at", optional_aware_datetime(self.created_at, "created_at")
+        )
         object.__setattr__(self, "created_by", optional_uuid(self.created_by, "created_by"))
 
     def _payload(self) -> dict[str, object]:
@@ -178,7 +185,9 @@ class SplitPolicy:
             "empty_split_policy",
             coerce_enum(self.empty_split_policy, EmptySplitPolicy, "empty_split_policy"),
         )
-        object.__setattr__(self, "min_item_count", positive_int(self.min_item_count, "min_item_count"))
+        object.__setattr__(
+            self, "min_item_count", positive_int(self.min_item_count, "min_item_count")
+        )
         object.__setattr__(
             self,
             "min_duration_ns",
@@ -217,11 +226,16 @@ class SplitPolicy:
             if self.train_count == 0 or self.validation_count == 0:
                 raise DomainValidationError("训练与验证划分不得为 0")
         digest = sha256_value(self._payload())
-        if self.policy_sha256 is not None and ensure_sha(self.policy_sha256, "policy_sha256") != digest:
+        if (
+            self.policy_sha256 is not None
+            and ensure_sha(self.policy_sha256, "policy_sha256") != digest
+        ):
             raise DomainValidationError("split_policy_sha256 与策略内容不一致")
         object.__setattr__(self, "policy_sha256", digest)
         object.__setattr__(self, "row_version", positive_int(self.row_version, "row_version"))
-        object.__setattr__(self, "created_at", optional_aware_datetime(self.created_at, "created_at"))
+        object.__setattr__(
+            self, "created_at", optional_aware_datetime(self.created_at, "created_at")
+        )
         object.__setattr__(self, "created_by", optional_uuid(self.created_by, "created_by"))
 
     def _payload(self) -> dict[str, object]:
@@ -272,7 +286,9 @@ class LeakagePolicy:
         for name in ("leakage_policy_id", "project_id", "dataset_id"):
             required_uuid(getattr(self, name), name)
         positive_int(self.version, "version")
-        object.__setattr__(self, "hard_rules", enum_list(self.hard_rules, LeakageRule, "hard_rules"))
+        object.__setattr__(
+            self, "hard_rules", enum_list(self.hard_rules, LeakageRule, "hard_rules")
+        )
         object.__setattr__(
             self,
             "soft_rules",
@@ -297,11 +313,16 @@ class LeakagePolicy:
             raise DomainValidationError("waiver_allowed_rules 必须是 soft_rules 的子集")
         object.__setattr__(self, "name", optional_text(self.name, "name", max_length=200))
         digest = sha256_value(self._payload())
-        if self.policy_sha256 is not None and ensure_sha(self.policy_sha256, "policy_sha256") != digest:
+        if (
+            self.policy_sha256 is not None
+            and ensure_sha(self.policy_sha256, "policy_sha256") != digest
+        ):
             raise DomainValidationError("leakage_policy_sha256 与策略内容不一致")
         object.__setattr__(self, "policy_sha256", digest)
         object.__setattr__(self, "row_version", positive_int(self.row_version, "row_version"))
-        object.__setattr__(self, "created_at", optional_aware_datetime(self.created_at, "created_at"))
+        object.__setattr__(
+            self, "created_at", optional_aware_datetime(self.created_at, "created_at")
+        )
         object.__setattr__(self, "created_by", optional_uuid(self.created_by, "created_by"))
 
     def _payload(self) -> dict[str, object]:
@@ -348,11 +369,16 @@ class QualityPolicy:
         )
         object.__setattr__(self, "name", optional_text(self.name, "name", max_length=200))
         digest = sha256_value(self._payload())
-        if self.policy_sha256 is not None and ensure_sha(self.policy_sha256, "policy_sha256") != digest:
+        if (
+            self.policy_sha256 is not None
+            and ensure_sha(self.policy_sha256, "policy_sha256") != digest
+        ):
             raise DomainValidationError("quality_policy_sha256 与策略内容不一致")
         object.__setattr__(self, "policy_sha256", digest)
         object.__setattr__(self, "row_version", positive_int(self.row_version, "row_version"))
-        object.__setattr__(self, "created_at", optional_aware_datetime(self.created_at, "created_at"))
+        object.__setattr__(
+            self, "created_at", optional_aware_datetime(self.created_at, "created_at")
+        )
         object.__setattr__(self, "created_by", optional_uuid(self.created_by, "created_by"))
 
     def _payload(self) -> dict[str, object]:

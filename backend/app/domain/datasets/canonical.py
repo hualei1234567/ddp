@@ -49,7 +49,7 @@ def plain(value: Any) -> Any:
     """把 dataclass/枚举/元组递归转换为可 JSON 化的普通值。"""
     if isinstance(value, Mapping):
         return {str(key): plain(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
+    if isinstance(value, list | tuple | set | frozenset):
         return [plain(item) for item in value]
     if hasattr(value, "value") and type(value).__module__ != "builtins":
         return value.value

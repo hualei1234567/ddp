@@ -70,10 +70,14 @@ class DatasetLeakageReportModel(Base):
     )
     unknown_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    source_snapshot_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_snapshot_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     report_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     report_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
 
     __table_args__ = (
         UniqueConstraint(
@@ -163,7 +167,9 @@ class DatasetQualityReportModel(Base):
     report_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     report_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
 
     __table_args__ = (
         UniqueConstraint(

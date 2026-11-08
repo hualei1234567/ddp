@@ -33,8 +33,10 @@ from app.domain.datasets.validation import (
     optional_uuid,
     positive_int,
     required_uuid,
-    sha256_value as ensure_sha,
     text_value,
+)
+from app.domain.datasets.validation import (
+    sha256_value as ensure_sha,
 )
 
 
@@ -102,7 +104,9 @@ class Dataset:
             "frozen_version_count",
             non_negative_int(self.frozen_version_count, "frozen_version_count"),
         )
-        object.__setattr__(self, "archived_at", optional_aware_datetime(self.archived_at, "archived_at"))
+        object.__setattr__(
+            self, "archived_at", optional_aware_datetime(self.archived_at, "archived_at")
+        )
         object.__setattr__(self, "archived_by", optional_uuid(self.archived_by, "archived_by"))
         object.__setattr__(
             self,
@@ -411,7 +415,9 @@ class DatasetItem:
         for name in ("dedup_group_id", "similarity_group_id", "scene_group_id"):
             object.__setattr__(self, name, optional_uuid(getattr(self, name), name))
         object.__setattr__(self, "time_range", dict(self.time_range or {}) or None)
-        object.__setattr__(self, "created_at", optional_aware_datetime(self.created_at, "created_at"))
+        object.__setattr__(
+            self, "created_at", optional_aware_datetime(self.created_at, "created_at")
+        )
         digest = sha256_value(self._payload())
         if self.item_sha256 is not None and ensure_sha(self.item_sha256, "item_sha256") != digest:
             raise DomainValidationError("item_sha256 与条目内容不一致")
@@ -511,12 +517,18 @@ class SelectionPreview:
             "items_sample",
             tuple(dict(item) for item in self.items_sample),
         )
-        object.__setattr__(self, "created_at", optional_aware_datetime(self.created_at, "created_at"))
+        object.__setattr__(
+            self, "created_at", optional_aware_datetime(self.created_at, "created_at")
+        )
         digest = sha256_value(self._payload())
-        if self.preview_sha256 is not None and ensure_sha(
-            self.preview_sha256,
-            "preview_sha256",
-        ) != digest:
+        if (
+            self.preview_sha256 is not None
+            and ensure_sha(
+                self.preview_sha256,
+                "preview_sha256",
+            )
+            != digest
+        ):
             raise DomainValidationError("preview_sha256 与预览内容不一致")
         object.__setattr__(self, "preview_sha256", digest)
 

@@ -65,7 +65,9 @@ class SplitOutcome:
 
 def assign_splits(candidates: tuple[EpisodeCandidate, ...], policy: SplitPolicy) -> SplitOutcome:
     if not candidates:
-        return SplitOutcome({}, {}, _zero_counts(), SplitStatus.INSUFFICIENT_DATA, (), (), policy.rounding_rule)
+        return SplitOutcome(
+            {}, {}, _zero_counts(), SplitStatus.INSUFFICIENT_DATA, (), (), policy.rounding_rule
+        )
     total_duration = sum(item.duration_ns for item in candidates)
     if len(candidates) < policy.min_item_count or total_duration < policy.min_duration_ns:
         return SplitOutcome(

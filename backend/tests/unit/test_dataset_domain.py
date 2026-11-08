@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 import pytest
-
 from app.domain.datasets.dedup import deduplicate
 from app.domain.datasets.enums import (
     DatasetVersionStatus,
@@ -197,9 +196,7 @@ def test_usage_policy_blocks_without_waiver() -> None:
     assert blocked.exclusion_summary[0]["code"] == "USAGE_POLICY_DENIED"
     waived = evaluate_selection(
         (candidate(0),),
-        filters=SelectionFilters.from_mapping(
-            {"usage_policy_waiver_reason": "PO 书面批准"}
-        ),
+        filters=SelectionFilters.from_mapping({"usage_policy_waiver_reason": "PO 书面批准"}),
         usage_policy="TRAINING_DENIED",
     )
     assert waived.selected_count == 1
@@ -225,9 +222,7 @@ def test_exact_dedup_is_deterministic_and_traced() -> None:
     assert [item.episode_id for item in first.selected] == [
         item.episode_id for item in second.selected
     ]
-    assert {item.group_id for item in first.groups} == {
-        item.group_id for item in second.groups
-    }
+    assert {item.group_id for item in first.groups} == {item.group_id for item in second.groups}
     codes = {item.code for item in first.excluded}
     assert codes == {
         "DUPLICATE_EPISODE_LINEAGE",
@@ -306,13 +301,6 @@ def test_hard_leakage_fails_and_cannot_be_waived() -> None:
     )
     assert report.leakage_status is LeakageStatus.FAIL
     assert report.hard_violation_count == 1
-    waiver = LeakageWaiver(
-        rule=LeakageRule.EPISODE_LINEAGE_CROSS_SPLIT,
-        approved_by=uuid4(),
-        reason="尝试豁免",
-        approved_at=NOW,
-        audit_ref="audit-1",
-    )
     with pytest.raises(LeakageWaiverForbiddenError):
         check_leakage(
             items,

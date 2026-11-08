@@ -73,7 +73,9 @@ class SelectionFilters:
         if unknown:
             raise DomainValidationError("selection_filters 包含未知字段")
         allow_warn = bool(raw.get("allow_warn", False))
-        warn_reason = _optional_text(raw.get("warn_confirmation_reason"), "warn_confirmation_reason")
+        warn_reason = _optional_text(
+            raw.get("warn_confirmation_reason"), "warn_confirmation_reason"
+        )
         if allow_warn and warn_reason is None:
             raise DomainValidationError("允许 WARN Episode 必须提供确认原因")
         allow_degraded = bool(raw.get("allow_degraded_time_sync", False))
@@ -222,7 +224,11 @@ def evaluate_selection(
     filters: SelectionFilters,
     usage_policy: DatasetUsagePolicy | str,
 ) -> SelectionOutcome:
-    usage = usage_policy if isinstance(usage_policy, DatasetUsagePolicy) else DatasetUsagePolicy(usage_policy)
+    usage = (
+        usage_policy
+        if isinstance(usage_policy, DatasetUsagePolicy)
+        else DatasetUsagePolicy(usage_policy)
+    )
     matched = tuple(candidate for candidate in candidates if filters.matches(candidate))
     selected: list[EpisodeCandidate] = []
     excluded: list[ExcludedCandidate] = []

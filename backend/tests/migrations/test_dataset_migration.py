@@ -181,9 +181,7 @@ def test_dataset_triggers_reject_illegal_direct_writes(tmp_path: Path) -> None:
         with pytest.raises(IntegrityError):
             with engine.begin() as connection:
                 connection.execute(
-                    text(
-                        "UPDATE dataset_versions SET manifest_sha256 = :sha WHERE id = :id"
-                    ),
+                    text("UPDATE dataset_versions SET manifest_sha256 = :sha WHERE id = :id"),
                     {"id": version_id, "sha": SHA},
                 )
         with pytest.raises(IntegrityError):
@@ -196,9 +194,7 @@ def test_dataset_triggers_reject_illegal_direct_writes(tmp_path: Path) -> None:
         engine.dispose()
 
 
-_POSTGRES_URL = os.environ.get("DDP_TEST_POSTGRES_URL") or os.environ.get(
-    "DDP_DATABASE_URL"
-)
+_POSTGRES_URL = os.environ.get("DDP_TEST_POSTGRES_URL") or os.environ.get("DDP_DATABASE_URL")
 
 
 @pytest.mark.skipif(

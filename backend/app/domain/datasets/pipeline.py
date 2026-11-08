@@ -121,9 +121,7 @@ def run_pipeline(
     dedup_summary = {
         "exact_group_count": len(dedup.groups),
         "excluded_duplicate_count": dedup.duplicated_count,
-        "near_duplicate_status": (
-            "UNKNOWN" if dedup_policy.near_duplicate_enabled else "DISABLED"
-        ),
+        "near_duplicate_status": ("UNKNOWN" if dedup_policy.near_duplicate_enabled else "DISABLED"),
     }
     leakage_summary_payload = leakage_summary(
         leakage_report.leakage_status,
@@ -137,7 +135,10 @@ def run_pipeline(
         item.quality_status == "WARN" for item in dedup.selected
     ):
         blocking.append("QUALITY_POLICY_WARN_NOT_ALLOWED")
-    if quality_policy.require_leakage_pass and leakage_report.leakage_status is not LeakageStatus.PASS:
+    if (
+        quality_policy.require_leakage_pass
+        and leakage_report.leakage_status is not LeakageStatus.PASS
+    ):
         blocking.append("QUALITY_POLICY_LEAKAGE_NOT_PASS")
     quality_report = QualityReport(
         quality_report_id=quality_report_id,
@@ -388,9 +389,7 @@ def _exclusion_summary(
             {
                 "code": "DUPLICATE",
                 "count": dedup.duplicated_count,
-                "sample_episode_ids": [
-                    str(item.episode_id) for item in dedup.excluded[:5]
-                ],
+                "sample_episode_ids": [str(item.episode_id) for item in dedup.excluded[:5]],
             }
         )
     return {"items": summary}
@@ -471,9 +470,7 @@ def _preview(
         duplicated_count=dedup.duplicated_count,
         split_counts=split.counts_payload(),
         split_preview_status=split.status.value,
-        exclusion_summary=tuple(
-            _exclusion_summary(selection.exclusion_summary, dedup)["items"]
-        ),
+        exclusion_summary=tuple(_exclusion_summary(selection.exclusion_summary, dedup)["items"]),
         warnings=tuple(dict.fromkeys(warnings)),
         blocking_issues=tuple(dict.fromkeys(blocking)),
         source_snapshot_at=source_snapshot_at,
