@@ -14,6 +14,7 @@ from app.infrastructure.db.collection_guards import (
     install_audit_guards,
     install_collection_state_guards,
 )
+from app.infrastructure.db.dataset_guards import install_dataset_guards
 from app.infrastructure.db.episode_guards import install_episode_state_guards
 from app.infrastructure.db.guards import (
     install_calibration_record_guards,
@@ -51,3 +52,4 @@ def _install_ddp_guards(
     install_work_guards(connection)
     install_result_guards(connection)
     install_quality_guards(connection)
+    install_dataset_guards(connection)

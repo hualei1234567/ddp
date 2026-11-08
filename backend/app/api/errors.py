@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.errors import AppError
 from app.domain.annotation.errors import AnnotationDomainError
 from app.domain.collection.errors import CollectionDomainError
+from app.domain.datasets.errors import DatasetDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.ingestion.errors import IngestionDomainError
@@ -328,6 +329,81 @@ def domain_error_to_app(exc: DeviceDomainError) -> AppError:
         code,
         _MESSAGES.get(code, _FALLBACK_MESSAGE),
         _STATUS_BY_CODE[code],
+    )
+
+
+_DATASET_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "dataset_access_denied": 403,
+    "dataset_freeze_approval_forbidden": 403,
+    "dataset_leakage_waiver_forbidden": 403,
+    "forbidden": 403,
+    "resource_not_found": 404,
+    "state_transition_invalid": 409,
+    "version_conflict": 409,
+    "resource_immutable": 409,
+    "dataset_version_immutable": 409,
+    "dataset_version_not_frozen": 409,
+    "dataset_not_ready": 409,
+    "dataset_leakage_check_failed": 409,
+    "dataset_leakage_check_unknown": 409,
+    "dataset_quality_gate_failed": 409,
+    "dataset_annotation_not_approved": 409,
+    "dataset_upstream_invalidated": 409,
+    "dataset_manifest_mismatch": 409,
+    "dataset_freeze_requires_approval": 409,
+    "dataset_archive_blocked": 409,
+    "duplicate_resource": 409,
+    "conflict": 409,
+    "idempotency_key_reused": 409,
+    "dataset_empty": 422,
+    "dataset_insufficient_data": 422,
+    "dataset_item_ineligible": 422,
+    "dataset_split_invalid": 422,
+    "dataset_annotation_snapshot_mismatch": 422,
+}
+
+_DATASET_MESSAGES = {
+    "validation_failed": "请求参数或数据集域规则校验失败",
+    "dataset_access_denied": "无权访问该数据集资源",
+    "dataset_freeze_approval_forbidden": "构建人不得作为唯一冻结审批人",
+    "dataset_leakage_waiver_forbidden": "硬规则不可豁免，或豁免未经策略授权",
+    "forbidden": "无权执行该操作",
+    "resource_not_found": "资源不存在或不属于当前项目",
+    "state_transition_invalid": "数据集版本当前状态不允许该动作",
+    "version_conflict": "资源版本已变化，请重新读取后再试",
+    "resource_immutable": "资源已冻结或包含不可变字段",
+    "dataset_version_immutable": "冻结或终态数据集版本不可原地修改",
+    "dataset_version_not_frozen": "数据集版本尚未冻结",
+    "dataset_not_ready": "数据集版本尚未就绪",
+    "dataset_leakage_check_failed": "泄漏硬规则失败，禁止冻结与导出",
+    "dataset_leakage_check_unknown": "泄漏检查无法完成，按失败关闭",
+    "dataset_quality_gate_failed": "质量门禁未通过",
+    "dataset_annotation_not_approved": "引用了未批准的标注",
+    "dataset_upstream_invalidated": "上游数据失效，数据集版本已陈旧",
+    "dataset_manifest_mismatch": "Manifest Hash 或内容不一致",
+    "dataset_freeze_requires_approval": "缺少独立 QA 核验或冻结审批",
+    "dataset_archive_blocked": "归档或恢复条件不满足",
+    "duplicate_resource": "项目内业务键重复",
+    "conflict": "数据集资源存在未处理冲突",
+    "idempotency_key_reused": "同一幂等键对应了不同请求体",
+    "dataset_empty": "入选样本为空，不能创建数据集版本",
+    "dataset_insufficient_data": "候选数据不足，或训练/验证/测试划分非法",
+    "dataset_item_ineligible": "Episode/标注/Manifest/标定/时间同步不合格",
+    "dataset_split_invalid": "划分比例、计数或分组非法",
+    "dataset_annotation_snapshot_mismatch": "标注/Schema 快照不一致",
+}
+_DATASET_FALLBACK = "数据集域规则校验失败"
+
+
+def dataset_error_to_app(exc: DatasetDomainError) -> AppError:
+    code = getattr(exc, "code", None)
+    if not isinstance(code, str) or code not in _DATASET_STATUS_BY_CODE:
+        return AppError("validation_failed", _DATASET_FALLBACK, 422)
+    return AppError(
+        code,
+        _DATASET_MESSAGES.get(code, _DATASET_FALLBACK),
+        _DATASET_STATUS_BY_CODE[code],
     )
 
 

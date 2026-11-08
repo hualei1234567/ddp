@@ -11,6 +11,8 @@ from app.api.v1 import (
     annotation,
     calibrations,
     collection,
+    dataset_routes,
+    dataset_version_routes,
     devices,
     episodes,
     ingestion_jobs,
@@ -31,3 +33,5 @@ api_router.include_router(ingestion_jobs.router)
 api_router.include_router(episodes.router)
 api_router.include_router(lineage.router)
 api_router.include_router(annotation.router)
+api_router.include_router(dataset_routes.router)
+api_router.include_router(dataset_version_routes.router)

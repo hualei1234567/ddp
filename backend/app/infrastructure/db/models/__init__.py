@@ -33,6 +33,21 @@ from app.infrastructure.db.models.collection import (
     IdempotencyRecord,
     OutboxEvent,
 )
+from app.infrastructure.db.models.dataset_policies import (
+    DatasetDedupPolicyModel,
+    DatasetLeakagePolicyModel,
+    DatasetQualityPolicyModel,
+    DatasetSplitPolicyModel,
+)
+from app.infrastructure.db.models.dataset_reports import (
+    DatasetLeakageReportModel,
+    DatasetQualityReportModel,
+)
+from app.infrastructure.db.models.datasets import (
+    DatasetItemModel,
+    DatasetModel,
+    DatasetVersionModel,
+)
 from app.infrastructure.db.models.devices import (
     CalibrationProfile,
     CalibrationRecord,
@@ -78,6 +93,15 @@ __all__ = [
     "CollectionTaskDevice",
     "CollectionTaskSensor",
     "DataLineageEdgeModel",
+    "DatasetDedupPolicyModel",
+    "DatasetItemModel",
+    "DatasetLeakagePolicyModel",
+    "DatasetLeakageReportModel",
+    "DatasetModel",
+    "DatasetQualityPolicyModel",
+    "DatasetQualityReportModel",
+    "DatasetSplitPolicyModel",
+    "DatasetVersionModel",
     "Device",
     "EpisodeModel",
     "EpisodeRawAssetModel",
