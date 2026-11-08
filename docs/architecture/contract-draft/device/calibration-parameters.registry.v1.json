@@ -1,0 +1,52 @@
+{
+  "schema_version": "ddp.device.calibration-parameters/1.0.0",
+  "parameters_schema": "calibration-parameters.v1.schema.json",
+  "by_calibration_type": {
+    "INTRINSICS": {
+      "parameters_ref": "#/$defs/INTRINSICS",
+      "frames": "NONE",
+      "uncertainty_required": [
+        "fx_px",
+        "fy_px",
+        "cx_px",
+        "cy_px",
+        "reprojection_rms_px"
+      ]
+    },
+    "EXTRINSICS": {
+      "parameters_ref": "#/$defs/EXTRINSICS",
+      "frames": "REQUIRED",
+      "uncertainty_required": ["translation_m", "rotation_rad"]
+    },
+    "HAND_EYE": {
+      "parameters_ref": "#/$defs/HAND_EYE",
+      "frames": "REQUIRED",
+      "uncertainty_required": ["translation_m", "rotation_rad"]
+    },
+    "IMU": {
+      "parameters_ref": "#/$defs/IMU",
+      "frames": "CONDITIONAL_EXTRINSICS",
+      "uncertainty_required": ["accel_bias_m_s2", "gyro_bias_rad_s"]
+    },
+    "JOINT_OFFSET": {
+      "parameters_ref": "#/$defs/JOINT_OFFSET",
+      "frames": "NONE",
+      "uncertainty_required": ["offset_values"]
+    },
+    "TIME_OFFSET": {
+      "parameters_ref": "#/$defs/TIME_OFFSET",
+      "frames": "NONE",
+      "uncertainty_required": ["offset_ns"]
+    },
+    "FORCE_TORQUE": {
+      "parameters_ref": "#/$defs/FORCE_TORQUE",
+      "frames": "REQUIRED",
+      "uncertainty_required": ["force_n", "torque_nm"]
+    },
+    "DEPTH_ALIGNMENT": {
+      "parameters_ref": "#/$defs/DEPTH_ALIGNMENT",
+      "frames": "REQUIRED",
+      "uncertainty_required": ["translation_m", "rotation_rad", "depth_m"]
+    }
+  }
+}
