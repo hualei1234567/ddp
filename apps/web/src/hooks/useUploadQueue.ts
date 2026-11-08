@@ -291,10 +291,10 @@ export function useUploadQueue({
         );
         const blob = file.slice(part.start, part.end);
         const checksum = await computePartChecksum(blob);
-        const headers = {
-          ...partUrl.headers,
-          "x-amz-checksum-sha256": checksum.base64,
-        };
+        // 对象存储的 x-amz-checksum-sha256 必须由预签名 URL 绑定签名。
+        // 服务端未在 partUrl.headers 中返回该校验头时，不能自行追加未签名头，
+        // 否则 MinIO/S3 会以签名不匹配拒绝；分片 SHA256 仍通过 ack 提交。
+        const headers = { ...partUrl.headers };
 
         let etag = "";
         let lastError: unknown = null;

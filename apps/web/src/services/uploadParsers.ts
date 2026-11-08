@@ -1,6 +1,7 @@
 import type {
   CompleteUploadResponse,
   RawAsset,
+  RawAssetPage,
   UploadPartAckResponse,
   UploadPartList,
   UploadPartSummary,
@@ -27,6 +28,7 @@ import {
   readString,
   readUuid,
   readUuidArray,
+  parseCursorPage,
   ContractValidationError,
 } from "./validation";
 
@@ -213,7 +215,8 @@ export function parseUploadSession(
     version: readPositiveInteger(record, "version", `${path}.version`),
     created_at: readString(record, "created_at", `${path}.created_at`),
     updated_at: readString(record, "updated_at", `${path}.updated_at`),
-    created_by: readUuid(record, "created_by", `${path}.created_by`),
+    // 契约未将 created_by 列为 required，服务端类型也允许 null。
+    created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
   };
 }
 
@@ -383,6 +386,11 @@ export function parseRawAsset(value: unknown, path = "原始资产"): RawAsset {
       "sensor_snapshot",
       `${path}.sensor_snapshot`,
     ),
+    device_time_raw: readOptionalRecord(
+      record,
+      "device_time_raw",
+      `${path}.device_time_raw`,
+    ),
     raw_metadata:
       readOptionalRecord(record, "raw_metadata", `${path}.raw_metadata`) ?? {},
     storage_class: readEnumValue(
@@ -438,6 +446,10 @@ export function parseRawAsset(value: unknown, path = "原始资产"): RawAsset {
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
   };
+}
+
+export function parseRawAssetPage(value: unknown): RawAssetPage {
+  return parseCursorPage(value, "原始资产列表", parseRawAsset);
 }
 
 export function parseCompleteUploadResponse(

@@ -230,7 +230,7 @@ export interface UploadSession {
   version: number;
   created_at: string;
   updated_at: string;
-  created_by: string;
+  created_by: string | null;
 }
 
 export interface UploadPartUrlResponse {
@@ -268,6 +268,7 @@ export interface RawAsset {
   project_id: string;
   code: string;
   source_type: "UPLOAD" | "DEVICE" | "IMPORT";
+  device_time_raw: Record<string, unknown> | null;
   collection_task_id: string | null;
   batch_id: string | null;
   upload_session_id: string | null;
@@ -395,6 +396,26 @@ export interface Episode {
 export type CollectionTaskPage = CursorPage<CollectionTask>;
 export type CollectionBatchPage = CursorPage<CollectionBatch>;
 export type EpisodePage = CursorPage<Episode>;
+export type RawAssetPage = CursorPage<RawAsset>;
+
+/** 与服务端 `CollectionTaskCreate` 一致；状态、版本与计数由服务端维护。 */
+export interface CollectionTaskCreateInput {
+  code: string;
+  name: string;
+  priority: CollectionPriority;
+  target_episode_count: number;
+  target_duration_sec: number;
+  requirement_id?: string | null;
+  plan_id?: string | null;
+  sop_id?: string | null;
+  sop_version?: string | null;
+  scenario_id?: string | null;
+  action_spec_id?: string | null;
+  action_spec_version?: string | null;
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+  location_id?: string | null;
+}
 
 export interface UploadSessionCreateInput {
   collection_task_id?: string | null;
@@ -405,6 +426,7 @@ export interface UploadSessionCreateInput {
   expected_sha256?: string | null;
   format_hint?: AssetFormat | null;
   part_size_bytes?: number | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CompleteUploadPartInput {
@@ -418,4 +440,5 @@ export interface CompleteUploadInput {
   expected_sha256: string;
   expected_size_bytes: number;
   parts: CompleteUploadPartInput[];
+  metadata?: Record<string, unknown>;
 }

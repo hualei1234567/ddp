@@ -1,0 +1,20 @@
+[1/6] 启动临时 MinIO（127.0.0.1:9100）
+本地无 minio/minio:latest，尝试拉取
+Error response from daemon: unknown: failed to resolve reference "docker.io/minio/minio:latest": unexpected status from HEAD request to https://docker.m.daocloud.io/v2/minio/minio/manifests/latest?ns=docker.io: 403 Forbidden
+拉取 minio/minio:latest 失败
+本地无 docker.1ms.run/minio/minio:latest，尝试拉取
+Error response from daemon: failed to resolve reference "docker.1ms.run/minio/minio:latest": docker.1ms.run/minio/minio:latest: not found
+拉取 docker.1ms.run/minio/minio:latest 失败
+本地无 registry-1.docker.io/minio/minio:latest，尝试拉取
+Error response from daemon: failed to resolve reference "registry-1.docker.io/minio/minio:latest": failed to do request: Head "https://registry-1.docker.io/v2/minio/minio/manifests/latest": dial tcp [2a03:2880:f12c:83:face:b00c:0:25de]:443: i/o timeout
+拉取 registry-1.docker.io/minio/minio:latest 失败
+本地无 quay.io/minio/minio:latest，尝试拉取
+Error response from daemon: unknown: failed to resolve reference "quay.io/minio/minio:latest": unexpected status from HEAD request to https://quay.io/v2/minio/minio/manifests/latest: 401 UNAUTHORIZED
+拉取 quay.io/minio/minio:latest 失败
+无法启动 MinIO：本地无镜像且 registry 拉取失败。
+本地相关镜像：
+dataplatform-api:latest
+dataplatform-web:latest
+redis:7-alpine
+postgres:16-alpine
+临时 MinIO 容器已删除；SQLite 保留在 /tmp/ddp-it-307.db（仅本任务临时数据）。

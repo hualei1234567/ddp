@@ -1,0 +1,11 @@
+
+ RUN  v2.1.8 /home/user/agent-team/ddp-team/worktrees/ddp-fe/apps/web
+
+ ✓ src/integration/stage2Contract.integration.test.ts > DDP-307 真实后端契约冒烟 > 创建采集任务并在列表中可见
+ ✓ src/integration/stage2Contract.integration.test.ts > DDP-307 真实后端契约冒烟 > 声明内容类型不在白名单返回 415
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  23:20:55
+   Duration  427ms (transform 100ms, setup 0ms, collect 108ms, tests 145ms, environment 0ms, prepare 50ms)
+

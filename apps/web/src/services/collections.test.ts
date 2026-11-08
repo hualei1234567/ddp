@@ -68,6 +68,42 @@ describe("阶段 2 采集 API client", () => {
     });
   });
 
+  it("创建任务只提交服务端允许字段并携带幂等键", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(collectionTaskFixture, 201),
+    );
+    const api = createCollectionsApi(clientWith(fetchImpl));
+
+    const task = await api.createTask(
+      PROJECT_ID,
+      {
+        code: "IT-307",
+        name: "DDP-307 集成测试任务",
+        priority: "P1",
+        target_episode_count: 0,
+        target_duration_sec: 0,
+      },
+      { idempotencyKey: "idem-create-307" },
+    );
+
+    const init = fetchImpl.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(task.task_id).toBe(TASK_ID);
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      `http://api.test/api/v1/projects/${PROJECT_ID}/collection-tasks`,
+    );
+    expect(init?.method).toBe("POST");
+    expect(init?.headers).toMatchObject({
+      "Idempotency-Key": "idem-create-307",
+    });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      code: "IT-307",
+      name: "DDP-307 集成测试任务",
+      priority: "P1",
+      target_episode_count: 0,
+      target_duration_sec: 0,
+    });
+  });
+
   it("任务动作带 If-Match、Idempotency-Key 与原因", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () =>
       jsonResponse(collectionTaskFixture),

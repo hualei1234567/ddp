@@ -1,0 +1,29 @@
+[1/6] 跳过 MinIO（仅诊断迁移/种子/后端启动）
+[2/6] 在临时目录执行 Alembic 升级（不读取仓库 .env）
+INFO  [alembic.runtime.migration] Context impl SQLiteImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001, baseline
+INFO  [alembic.runtime.migration] Running upgrade 0001 -> 0002, identity foundation
+INFO  [alembic.runtime.migration] Running upgrade 0002 -> 0003, stage1 device and calibration
+INFO  [alembic.runtime.migration] Running upgrade 0003 -> 0004, calibration target refs and immutability guards
+INFO  [alembic.runtime.migration] Running upgrade 0004 -> 0005, fix calibration immutable guard json comparisons
+INFO  [alembic.runtime.migration] Running upgrade 0005 -> 0006, stage2 audit, outbox and idempotency
+INFO  [alembic.runtime.migration] Running upgrade 0006 -> 0007, stage2 collection tasks, batches and assignments
+INFO  [alembic.runtime.migration] Running upgrade 0007 -> 0008, stage2 upload sessions, parts, raw assets and usage links
+[3/6] 写入测试项目/成员并创建 ddp-raw 桶
+{"project_id": "11111111-1111-7111-8111-111111111111", "user_id": "88888888-8888-7888-8888-888888888888", "project_code": "ddp-it-307", "database_url": "sqlite+pysqlite:////tmp/ddp-it-307.db", "bucket": "ddp-raw"}
+[4/6] 启动后端 127.0.0.1:8010
+[5/6] 运行真实后端集成测试
+
+ RUN  v2.1.8 /home/user/agent-team/ddp-team/worktrees/ddp-fe/apps/web
+
+ ✓ src/integration/stage2Contract.integration.test.ts > DDP-307 真实后端契约冒烟 > 创建采集任务并在列表中可见
+ ✓ src/integration/stage2Contract.integration.test.ts > DDP-307 真实后端契约冒烟 > 声明内容类型不在白名单返回 415
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  23:20:55
+   Duration  427ms (transform 100ms, setup 0ms, collect 108ms, tests 145ms, environment 0ms, prepare 50ms)
+
+[6/6] 完成；原始输出见 /home/user/agent-team/ddp-team/worktrees/ddp-fe/docs/testing/evidence/2026-11-08-ddp-307/smoke.txt 与 backend.txt
+临时 MinIO 容器已删除；SQLite 保留在 /tmp/ddp-it-307.db（仅本任务临时数据）。

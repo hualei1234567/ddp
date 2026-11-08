@@ -1,6 +1,7 @@
 import type {
   CollectionBatchPage,
   CollectionTask,
+  CollectionTaskCreateInput,
   CollectionTaskPage,
   EpisodePage,
 } from "../types/collection";
@@ -39,11 +40,22 @@ export interface TaskActionOptions {
   signal?: AbortSignal;
 }
 
+/** 创建任务只需要幂等键与取消信号，没有 If-Match。 */
+export interface TaskCreateOptions {
+  idempotencyKey?: string;
+  signal?: AbortSignal;
+}
+
 export interface CollectionsApi {
   listTasks: (
     projectId: string,
     options?: TaskListOptions,
   ) => Promise<CollectionTaskPage>;
+  createTask: (
+    projectId: string,
+    input: CollectionTaskCreateInput,
+    options?: TaskCreateOptions,
+  ) => Promise<CollectionTask>;
   getTask: (
     projectId: string,
     taskId: string,
@@ -88,6 +100,20 @@ export function createCollectionsApi(client: ApiClient): CollectionsApi {
             projectId,
             "采集任务列表",
           ),
+      });
+    },
+
+    async createTask(projectId, input, options = {}) {
+      return client.request(projectPath(projectId, "/collection-tasks"), {
+        method: "POST",
+        signal: options.signal,
+        headers: {
+          "Idempotency-Key":
+            options.idempotencyKey ?? createIdempotencyKey(),
+        },
+        body: input,
+        validate: (value) =>
+          assertProjectScope(parseCollectionTask(value), projectId, "采集任务"),
       });
     },
 
