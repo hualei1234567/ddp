@@ -347,3 +347,28 @@ def test_postgres_annotation_result_quality_trigger_inventory(
         }
     missing = _EXPECTED_ANNOTATION_RESULT_TRIGGERS - names
     assert not missing, f"缺少触发器：{sorted(missing)}"
+
+
+def test_postgres_published_schema_json_immutable(postgres_engine: Engine) -> None:
+    """PUBLISHED Schema 的 JSON 字段不可直写（PostgreSQL JSONB 比较回归）。"""
+    factory = create_session_factory(postgres_engine)
+    project_id, user_id = uuid4(), uuid4()
+    with factory() as session:
+        session.add_all(
+            [
+                Project(id=project_id, code=f"p-{project_id.hex[:8]}", name="P"),
+                User(id=user_id, display_name="U"),
+            ]
+        )
+        session.flush()
+        schema = _add_schema(session, ProjectScope(project_id, actor_id=user_id))
+        session.commit()
+
+        with pytest.raises(IntegrityError, match="annotation_schema_immutable"):
+            session.execute(
+                update(AnnotationSchemaModel)
+                .where(AnnotationSchemaModel.id == schema.schema_id)
+                .values(annotation_levels=["EPISODE", "FRAME"])
+            )
+            session.flush()
+        session.rollback()

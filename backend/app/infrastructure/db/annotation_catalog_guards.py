@@ -28,8 +28,10 @@ _SAMPLE_SET_PAIRS = " OR ".join(
 
 def _changed(column: str) -> str:
     """跨 SQLite/PostgreSQL 的 NULL 安全“字段已变化”表达式。"""
+    # JSON/JSONB 在 PostgreSQL 无通用 <> 运算符；统一按文本比较，
+    # SQLite 的 JSON 以 TEXT 存储，两端语义一致。
     return (
-        f"(OLD.{column} <> NEW.{column}"
+        f"(CAST(OLD.{column} AS TEXT) <> CAST(NEW.{column} AS TEXT)"
         f" OR (OLD.{column} IS NULL AND NEW.{column} IS NOT NULL)"
         f" OR (OLD.{column} IS NOT NULL AND NEW.{column} IS NULL))"
     )

@@ -346,7 +346,7 @@ def _match_spans(
 
 
 def _span_metrics(
-    spans_by_item: Mapping[UUID, Mapping[UUID, tuple[Span, ...]]],
+    overlap: Mapping[UUID, Mapping[UUID, IAAObservation]],
     label_key: str,
     threshold: float,
 ) -> tuple[IAAMetricResult, IAAMetricResult]:
@@ -356,12 +356,16 @@ def _span_metrics(
     boundary_error = 0.0
     matched_total = 0
     pairs = 0
-    for per_annotator in spans_by_item.values():
+    for per_annotator in overlap.values():
         annotators = list(per_annotator)
         for index, left in enumerate(annotators):
             for right in annotators[index + 1 :]:
-                reference = [item for item in per_annotator[left] if item.label_key == label_key]
-                prediction = [item for item in per_annotator[right] if item.label_key == label_key]
+                reference = [
+                    item for item in per_annotator[left].spans if item.label_key == label_key
+                ]
+                prediction = [
+                    item for item in per_annotator[right].spans if item.label_key == label_key
+                ]
                 if not reference and not prediction:
                     continue
                 pairs += 1
