@@ -11,6 +11,7 @@ import {
   Layout,
   Menu,
   Tag,
+  Tooltip,
   Typography,
 } from "antd";
 import type { MenuProps } from "antd";
@@ -23,6 +24,8 @@ import {
   PLATFORM_STAGE_LABEL,
 } from "../app/navigation";
 import { designTokens } from "../app/theme";
+import { useProjectId } from "../hooks/useProjectId";
+import { formatIdentifier } from "../services/format";
 
 const { Header, Sider, Content } = Layout;
 
@@ -82,6 +85,7 @@ export default function AppLayout() {
   const isDesktop = screens.lg ?? true;
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const projectId = useProjectId();
 
   const match = findNavItem(location.pathname);
   const pageTitle =
@@ -161,7 +165,22 @@ export default function AppLayout() {
               </div>
             </div>
             <div className="ddp-header-actions">
-              <Tag className="ddp-context-tag">项目上下文待接入</Tag>
+              <Tooltip
+                title={
+                  projectId
+                    ? `当前项目：${projectId}`
+                    : "请通过 URL 参数 project_id 指定项目，或在部署环境配置 VITE_PROJECT_ID"
+                }
+              >
+                <Tag
+                  className="ddp-context-tag"
+                  color={projectId ? "blue" : undefined}
+                >
+                  {projectId
+                    ? `项目 ${formatIdentifier(projectId)}`
+                    : "未选择项目"}
+                </Tag>
+              </Tooltip>
               <Tag color="blue">{PLATFORM_STAGE_LABEL}</Tag>
             </div>
           </Header>

@@ -157,7 +157,7 @@ export const navSections: NavSection[] = [
         label: "设备纳管",
         description: "管理机器人、传感器、标定信息与设备状态。",
         icon: createElement(ClusterOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/operations",

@@ -9,14 +9,17 @@ export class ContractValidationError extends Error {
   }
 }
 
-function asRecord(value: unknown, path: string): Record<string, unknown> {
+export function asRecord(
+  value: unknown,
+  path: string,
+): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new ContractValidationError(`${path} 必须是对象`);
   }
   return value as Record<string, unknown>;
 }
 
-function readString(
+export function readString(
   record: Record<string, unknown>,
   key: string,
   path: string,
@@ -26,6 +29,100 @@ function readString(
     throw new ContractValidationError(`${path} 必须是字符串`);
   }
   return value;
+}
+
+export function readOptionalString(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string | null {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "string") {
+    throw new ContractValidationError(`${path} 必须是字符串或 null`);
+  }
+  return value;
+}
+
+export function readNumber(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): number {
+  const value = record[key];
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new ContractValidationError(`${path} 必须是有限数字`);
+  }
+  return value;
+}
+
+export function readOptionalNumber(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): number | null {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw new ContractValidationError(`${path} 必须是有限数字或 null`);
+  }
+  return value;
+}
+
+export function readInteger(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): number {
+  const value = readNumber(record, key, path);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new ContractValidationError(`${path} 必须是非负整数`);
+  }
+  return value;
+}
+
+export function readStringArray(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string[] {
+  const value = record[key];
+  if (!Array.isArray(value)) {
+    throw new ContractValidationError(`${path} 必须是数组`);
+  }
+  return value.map((item, index) => {
+    if (typeof item !== "string") {
+      throw new ContractValidationError(`${path}[${index}] 必须是字符串`);
+    }
+    return item;
+  });
+}
+
+export function readOptionalStringArray(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string[] | null {
+  if (record[key] === undefined || record[key] === null) {
+    return null;
+  }
+  return readStringArray(record, key, path);
+}
+
+export function readOptionalRecord(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): Record<string, unknown> | null {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  return asRecord(value, path);
 }
 
 export function parseHealthResponse(value: unknown): HealthResponse {

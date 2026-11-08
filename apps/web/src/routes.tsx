@@ -2,6 +2,8 @@ import { Route, Routes } from "react-router-dom";
 
 import { navSections } from "./app/navigation";
 import AppLayout from "./components/AppLayout";
+import DeviceDetailPage from "./pages/devices/DeviceDetailPage";
+import DeviceListPage from "./pages/devices/DeviceListPage";
 import Forbidden from "./pages/Forbidden";
 import ModulePage from "./pages/ModulePage";
 import NotFound from "./pages/NotFound";
@@ -20,6 +22,8 @@ export default function AppRoutes() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<Workbench />} />
+        <Route path="devices" element={<DeviceListPage />} />
+        <Route path="devices/:deviceId" element={<DeviceDetailPage />} />
         {plannedRoutes.map((item) => (
           <Route
             key={item.path}
