@@ -15,6 +15,11 @@
 | [architecture/阶段1-设备域契约冻结-v1.md](architecture/阶段1-设备域契约冻结-v1.md) | 设备域契约冻结 v1：字段、版本、状态、错误码、参数 Schema | 已批准（2026-11-08） |
 | [architecture/阶段1-设备域冻结字段实现差距与排期.md](architecture/阶段1-设备域冻结字段实现差距与排期.md) | 冻结字段实现差距 `G-01`–`G-20`、建议批次与关闭门禁 | 跟踪中 |
 | [adr/0009-device-contract-freeze.md](adr/0009-device-contract-freeze.md) | ADR-0009 设备域契约冻结与不可变决策 | 已批准 |
+| [product/阶段2-采集与上传PRD.md](product/阶段2-采集与上传PRD.md) | 阶段 2 需求、流程、角色、页面状态与验收基线 | 待评审 |
+| [architecture/阶段2-契约索引.md](architecture/阶段2-契约索引.md) | 阶段 2 契约草案索引：任务/批次、上传、RawAsset、Episode、血缘 | DRAFT |
+| [adr/0010-stage2-collection-ingestion-contract.md](adr/0010-stage2-collection-ingestion-contract.md) | ADR-0010 阶段 2 采集接入契约决策 | 已提议 |
+| [testing/阶段2测试策略与验收矩阵.md](testing/阶段2测试策略与验收矩阵.md) | 阶段 2 采集/上传/Episode 测试策略、S2-T01–T30 验收矩阵 | 待执行 |
+| [testing/阶段2采集样例包设计与清单.md](testing/阶段2采集样例包设计与清单.md) | 多相机+机器人状态合成样例、负向文件与元数据用例 | 现行（T2） |
 | [testing/阶段1设备域安全与契约验收.md](testing/阶段1设备域安全与契约验收.md) | DDP-205 独立验收：安全门禁 PARTIAL，数据库兜底/契约 fixture/PG 证据待关闭 | 待整改 |
 | [testing/阶段0-1测试策略.md](testing/阶段0-1测试策略.md) | 阶段 0/1 测试矩阵、CI 门禁、验收清单与 P0 阻断项 | 待审阅 |
 | [operations/JWT认证与staging启动.md](operations/JWT认证与staging启动.md) | Bearer JWT 配置、启动自检、staging 重建与回滚 | 现行 |

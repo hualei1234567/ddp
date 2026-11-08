@@ -1,0 +1,65 @@
+[
+  {
+    "args": "delay 100ms",
+    "duration_sec": 120,
+    "expected": "上传变慢但最终 Hash 一致",
+    "id": "NET-DELAY-100MS",
+    "tool": "tc-netem"
+  },
+  {
+    "args": "delay 1000ms",
+    "duration_sec": 120,
+    "expected": "不超时；进度可见；最终 Hash 一致",
+    "id": "NET-DELAY-1000MS",
+    "tool": "tc-netem"
+  },
+  {
+    "args": "loss 5%",
+    "duration_sec": 120,
+    "expected": "失败分片重试；无重复资产",
+    "id": "NET-LOSS-5",
+    "tool": "tc-netem"
+  },
+  {
+    "args": "loss 20%",
+    "duration_sec": 120,
+    "expected": "退避有上限；最终可恢复或明确失败",
+    "id": "NET-LOSS-20",
+    "tool": "tc-netem"
+  },
+  {
+    "args": "rate 1mbit",
+    "duration_sec": 300,
+    "expected": "不伪造进度；超时策略生效",
+    "id": "NET-BW-1M",
+    "tool": "tc-netem"
+  },
+  {
+    "args": "drop all for 30s",
+    "duration_sec": 30,
+    "expected": "断点续传；已确认分片不重传",
+    "id": "NET-DISCONNECT-30S",
+    "tool": "iptables/tc"
+  },
+  {
+    "args": "corrupt 1%",
+    "duration_sec": 120,
+    "expected": "Hash/校验失败被发现；不得登记可用资产",
+    "id": "NET-CORRUPT-1",
+    "tool": "tc-netem"
+  },
+  {
+    "args": "duplicate 1%",
+    "duration_sec": 120,
+    "expected": "分片重复 ack 幂等；无重复资产",
+    "id": "NET-DUPLICATE-1",
+    "tool": "tc-netem"
+  },
+  {
+    "args": "reorder 1% 50%",
+    "duration_sec": 120,
+    "expected": "乱序分片可完成；无损坏",
+    "id": "NET-REORDER-1",
+    "tool": "tc-netem"
+  }
+]

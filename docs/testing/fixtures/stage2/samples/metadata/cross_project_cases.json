@@ -1,0 +1,38 @@
+[
+  {
+    "actor_project": "018f2a3b-4c5d-7100-819b-0c1d2e3f0001",
+    "expected": "列表不泄漏",
+    "id": "XP-LIST",
+    "target_project": "018f2a3b-4c5d-7200-829b-0c1d2e3f0002"
+  },
+  {
+    "actor_project": "018f2a3b-4c5d-7100-819b-0c1d2e3f0001",
+    "expected": "404 resource_not_found",
+    "id": "XP-DETAIL",
+    "target_project": "018f2a3b-4c5d-7200-829b-0c1d2e3f0002"
+  },
+  {
+    "actor_project": "018f2a3b-4c5d-7100-819b-0c1d2e3f0001",
+    "expected": "404；审计跨项目拒绝",
+    "id": "XP-DOWNLOAD",
+    "target_project": "018f2a3b-4c5d-7200-829b-0c1d2e3f0002"
+  },
+  {
+    "actor_project": "018f2a3b-4c5d-7100-819b-0c1d2e3f0001",
+    "expected": "同内容不跨项目去重；两个资产",
+    "id": "XP-DEDUP",
+    "target_project": "018f2a3b-4c5d-7200-829b-0c1d2e3f0002"
+  },
+  {
+    "actor_project": "018f2a3b-4c5d-7100-819b-0c1d2e3f0001",
+    "expected": "跨项目血缘边被 DB 触发器拒绝",
+    "id": "XP-LINEAGE",
+    "target_project": "018f2a3b-4c5d-7200-829b-0c1d2e3f0002"
+  },
+  {
+    "actor_project": "018f2a3b-4c5d-7100-819b-0c1d2e3f0001",
+    "expected": "422/404；不得引用跨项目资产",
+    "id": "XP-EPISODE-ASSET",
+    "target_project": "018f2a3b-4c5d-7200-829b-0c1d2e3f0002"
+  }
+]

@@ -1,0 +1,19 @@
+{
+  "data_source": "SYNTHETIC",
+  "instructions": [
+    {
+      "end_time_ns": "1730000005000000000",
+      "instruction_id": "instr-001",
+      "language": "zh-CN",
+      "start_time_ns": "1730000000000000000",
+      "text": "请将红色方块放入左侧托盘。"
+    },
+    {
+      "end_time_ns": "1730000010000000000",
+      "instruction_id": "instr-002",
+      "language": "en-US",
+      "start_time_ns": "1730000005000000000",
+      "text": "Pick up the blue cube and place it on the right tray."
+    }
+  ]
+}

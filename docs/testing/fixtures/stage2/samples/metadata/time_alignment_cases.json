@@ -1,0 +1,79 @@
+[
+  {
+    "drift_ppm": 0.0,
+    "expected": "PASS",
+    "id": "TS-VERIFIED-0",
+    "offset_ns": "0",
+    "sync_status": "VERIFIED"
+  },
+  {
+    "drift_ppm": 0.0,
+    "expected": "PASS_OR_WARN_BY_PROJECT_THRESHOLD",
+    "id": "TS-OFFSET-100US",
+    "offset_ns": "100000",
+    "sync_status": "VERIFIED"
+  },
+  {
+    "drift_ppm": 0.0,
+    "expected": "QUALITY_WARN",
+    "id": "TS-OFFSET-10MS",
+    "offset_ns": "10000000",
+    "sync_status": "DEGRADED"
+  },
+  {
+    "drift_ppm": 0.0,
+    "expected": "BLOCK_EPISODE",
+    "id": "TS-OFFSET-2S",
+    "offset_ns": "2000000000",
+    "sync_status": "FAILED"
+  },
+  {
+    "drift_ppm": null,
+    "expected": "BLOCK_TRAINING_DATASET",
+    "id": "TS-UNVERIFIED",
+    "offset_ns": null,
+    "sync_status": "UNVERIFIED"
+  },
+  {
+    "drift_ppm": null,
+    "expected": "BLOCK_EPISODE",
+    "id": "TS-FAILED",
+    "offset_ns": null,
+    "sync_status": "FAILED"
+  },
+  {
+    "drift_ppm": 0.0,
+    "expected": "QUALITY_FAIL",
+    "id": "TS-NONMONOTONIC",
+    "offset_ns": "0",
+    "sync_status": "VERIFIED"
+  },
+  {
+    "drift_ppm": 0.0,
+    "expected": "QUALITY_FAIL",
+    "id": "TS-DUPLICATE",
+    "offset_ns": "0",
+    "sync_status": "VERIFIED"
+  },
+  {
+    "drift_ppm": 0.0,
+    "expected": "WARN_AT_DEFAULT_THRESHOLD",
+    "id": "TS-SAMPLE-RATE-5PCT",
+    "offset_ns": "0",
+    "sync_status": "VERIFIED"
+  },
+  {
+    "drift_ppm": 0.0,
+    "expected": "WARN_OR_FAIL_BY_PROJECT_THRESHOLD",
+    "id": "TS-SAMPLE-RATE-6PCT",
+    "offset_ns": "0",
+    "sync_status": "VERIFIED"
+  },
+  {
+    "drift_ppm": null,
+    "expected": "BLOCKED_UNTIL_PROJECT_THRESHOLD_APPROVED",
+    "id": "TS-THRESHOLD-PENDING",
+    "offset_ns": null,
+    "sync_status": "UNVERIFIED"
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "asset_id": "018f2a3b-4c5d-7208-889b-0c1d2e3f0008",
+  "content_source": "../robot/robot_state.csv",
+  "data_source": "SYNTHETIC",
+  "expected": "与项目 A 同内容但不得跨项目去重或互相可见",
+  "project_id": "018f2a3b-4c5d-7200-829b-0c1d2e3f0002",
+  "sha256": "sha256:d9e154e927d37a2a8321efd2348f16dbce0bc413c037ef703981e6668b1f605d",
+  "size_bytes": 90007
+}

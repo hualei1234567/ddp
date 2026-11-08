@@ -1,0 +1,3 @@
+PASS samples.manifest.json 一致（35 个文件）
+PASS SHA256SUMS 一致
+PASS 逐文件 SHA256 与大小一致

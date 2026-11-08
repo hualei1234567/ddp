@@ -1,0 +1,111 @@
+[
+  {
+    "expected": "202 + RawAsset VALIDATING",
+    "id": "UPL-COMPLETE",
+    "steps": [
+      "part 1",
+      "part 2",
+      "part 3",
+      "complete"
+    ]
+  },
+  {
+    "expected": "409 upload_incomplete; details [2]",
+    "id": "UPL-MISSING-PART",
+    "steps": [
+      "part 1",
+      "part 3",
+      "complete"
+    ]
+  },
+  {
+    "expected": "idempotent; one record",
+    "id": "UPL-DUP-PART-SAME",
+    "steps": [
+      "ack 1",
+      "ack 1 same etag/size/hash"
+    ]
+  },
+  {
+    "expected": "409 upload_part_conflict",
+    "id": "UPL-DUP-PART-DIFF",
+    "steps": [
+      "ack 1",
+      "ack 1 different hash"
+    ]
+  },
+  {
+    "expected": "422 size_mismatch; session correctable",
+    "id": "UPL-SIZE-MISMATCH",
+    "steps": [
+      "complete with wrong size"
+    ]
+  },
+  {
+    "expected": "422 file_signature_mismatch; no usable asset",
+    "id": "UPL-SIGNATURE-MISMATCH",
+    "steps": [
+      "declare MP4",
+      "upload text"
+    ]
+  },
+  {
+    "expected": "RawAsset REJECTED; hash_mismatch",
+    "id": "UPL-HASH-MISMATCH",
+    "steps": [
+      "complete",
+      "async validate fails"
+    ]
+  },
+  {
+    "expected": "deduplicated=true; one usable asset",
+    "id": "UPL-DEDUP-SAME-PROJECT",
+    "steps": [
+      "complete twice same content"
+    ]
+  },
+  {
+    "expected": "two assets; no cross-project dedup",
+    "id": "UPL-NO-DEDUP-CROSS-PROJECT",
+    "steps": [
+      "complete same content in A and B"
+    ]
+  },
+  {
+    "expected": "one succeeds; one idempotent or 409; no duplicate usable asset",
+    "id": "UPL-CONCURRENT-COMPLETE",
+    "steps": [
+      "two complete concurrently"
+    ]
+  },
+  {
+    "expected": "410 upload_session_expired",
+    "id": "UPL-EXPIRED",
+    "steps": [
+      "wait expires_at",
+      "request part url"
+    ]
+  },
+  {
+    "expected": "current state; no repeated delete",
+    "id": "UPL-ABORT-IDEMPOTENT",
+    "steps": [
+      "abort",
+      "abort again"
+    ]
+  },
+  {
+    "expected": "404; audit",
+    "id": "UPL-CROSS-PROJECT",
+    "steps": [
+      "A user accesses B session"
+    ]
+  },
+  {
+    "expected": "403 forbidden",
+    "id": "UPL-QUARANTINE-RELEASE-SELF",
+    "steps": [
+      "same user propose and approve"
+    ]
+  }
+]

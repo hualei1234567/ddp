@@ -1,0 +1,42 @@
+[
+  {
+    "expected": "422 filename_invalid 或安全清洗；对象 Key 不含该名",
+    "filename": "../../etc/passwd",
+    "id": "FN-PATH-TRAVERSAL"
+  },
+  {
+    "expected": "拒绝或安全清洗",
+    "filename": "%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+    "id": "FN-URL-ENCODED"
+  },
+  {
+    "expected": "拒绝或安全清洗",
+    "filename": "..\\..\\windows\\system32\\config",
+    "id": "FN-BACKSLASH"
+  },
+  {
+    "expected": "拒绝；不得截断绕过",
+    "filename": "video.mp4\\u0000.exe",
+    "id": "FN-NUL"
+  },
+  {
+    "expected": "按内容签名判定；扩展名不作为放行依据",
+    "filename": "video.mp4.exe",
+    "id": "FN-DOUBLE-EXT"
+  },
+  {
+    "expected": "422 filename_invalid",
+    "filename": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.mp4",
+    "id": "FN-LONG"
+  },
+  {
+    "expected": "拒绝或清洗",
+    "filename": "video\\u0001.mp4",
+    "id": "FN-CONTROL"
+  },
+  {
+    "expected": "415/422；不得登记",
+    "filename": ".env",
+    "id": "FN-HIDDEN"
+  }
+]

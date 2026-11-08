@@ -1,0 +1,61 @@
+{
+  "asset_ids": [
+    "018f2a3b-4c5d-7106-869b-0c1d2e3f0006",
+    "018f2a3b-4c5d-7107-879b-0c1d2e3f0007"
+  ],
+  "batch_id": "018f2a3b-4c5d-7104-849b-0c1d2e3f0004",
+  "data_source": "SYNTHETIC",
+  "end_time_ns": "1730000060000000000",
+  "fixture_version": "ddp.stage2.testfixtures/1.0.0",
+  "limitations": [
+    "MP4/MCAP/HDF5/PARQUET 为签名容器样例，不包含真实编码帧或数据集",
+    "真实解码/解析验收需要 T1 脱敏真实样例或真实设备数据",
+    "时间同步阈值需由项目配置冻结后批准，本样例只提供偏移梯度"
+  ],
+  "project_id": "018f2a3b-4c5d-7100-819b-0c1d2e3f0001",
+  "start_time_ns": "1730000000000000000",
+  "streams": [
+    {
+      "container": "MP4_SYNTHETIC_CONTAINER_ONLY",
+      "declared_frame_count": 600,
+      "dropped_count": 0,
+      "modality": "RGB",
+      "path": "cameras/cam_front.mp4",
+      "sample_rate_hz": 10,
+      "sensor_id": "018f2a3b-4c5d-710c-8c9b-0c1d2e3f000c",
+      "stream_id": "cam_front"
+    },
+    {
+      "container": "MP4_SYNTHETIC_CONTAINER_ONLY",
+      "declared_frame_count": 600,
+      "dropped_count": 0,
+      "modality": "RGB",
+      "path": "cameras/cam_wrist.mp4",
+      "sample_rate_hz": 10,
+      "sensor_id": "018f2a3b-4c5d-710d-8d9b-0c1d2e3f000d",
+      "stream_id": "cam_wrist"
+    },
+    {
+      "container": "CSV",
+      "declared_frame_count": 600,
+      "dropped_count": 0,
+      "modality": "PROPRIOCEPTION",
+      "path": "robot/robot_state.csv",
+      "sample_rate_hz": 10,
+      "sensor_id": "018f2a3b-4c5d-710e-8e9b-0c1d2e3f000e",
+      "stream_id": "robot_state"
+    }
+  ],
+  "task_id": "018f2a3b-4c5d-7103-839b-0c1d2e3f0003",
+  "time_base": {
+    "clock_id": "host-stage2-fixture-01",
+    "clock_source": "PTP",
+    "drift_ppm": 0.0,
+    "offset_to_utc_ns": "0",
+    "sync_method": "PTP",
+    "sync_ref": "ptp-master-fixture-01",
+    "sync_status": "VERIFIED",
+    "time_domain": "UTC",
+    "uncertainty_ns": "1000000"
+  }
+}

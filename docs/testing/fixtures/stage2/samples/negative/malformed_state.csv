@@ -1,0 +1,4 @@
+timestamp_ns,sequence,joint_1,joint_2
+not-a-number,0,0.1,0.2
+1730000000100000000,1,NaN,0.3
+1730000000200000000,2,0.4

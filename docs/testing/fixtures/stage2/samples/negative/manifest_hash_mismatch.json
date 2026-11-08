@@ -1,0 +1,6 @@
+{
+  "episode_id": "018f2a3b-4c5d-7109-899b-0c1d2e3f0009",
+  "manifest_sha256": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "note": "故意错误的 manifest_sha256，用于服务端重新计算后比对失败",
+  "schema_version": "ddp.canonical/1.0.0-draft"
+}

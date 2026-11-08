@@ -1,0 +1,97 @@
+[
+  {
+    "end_ns": "1",
+    "expected": "ALLOW_IF_WITHIN_ASSET",
+    "id": "EP-MIN",
+    "note": "最短非零区间",
+    "start_ns": "0"
+  },
+  {
+    "end_ns": "1730000060000000000",
+    "expected": "ALLOW",
+    "id": "EP-EXACT",
+    "note": "正好等于资产范围",
+    "start_ns": "1730000000000000000"
+  },
+  {
+    "end_ns": "1730000000000000000",
+    "expected": "422 episode_time_range_invalid",
+    "id": "EP-ZERO",
+    "note": "start=end",
+    "start_ns": "1730000000000000000"
+  },
+  {
+    "end_ns": "1730000000000000000",
+    "expected": "422 episode_time_range_invalid",
+    "id": "EP-REVERSED",
+    "note": "end<start",
+    "start_ns": "1730000001000000000"
+  },
+  {
+    "end_ns": "1730000001000000000",
+    "expected": "422 episode_time_range_invalid",
+    "id": "EP-OUTSIDE-BEFORE",
+    "note": "早于资产范围",
+    "start_ns": "1729999999999999999"
+  },
+  {
+    "end_ns": "1730000061000000000",
+    "expected": "422 episode_time_range_invalid",
+    "id": "EP-OUTSIDE-AFTER",
+    "note": "晚于资产范围",
+    "start_ns": "1730000059000000000"
+  },
+  {
+    "end_ns": "1730000120000000000",
+    "expected": "422 episode_time_range_invalid",
+    "id": "EP-GAP",
+    "note": "跨资产缺失时间",
+    "start_ns": "1730000000000000000"
+  },
+  {
+    "end_ns": "1730000005000000000",
+    "expected": "409 episode_overlap_conflict",
+    "id": "EP-OVERLAP-DENY",
+    "note": "与既有 Episode 重叠且 allow_overlap=false",
+    "start_ns": "1730000001000000000"
+  },
+  {
+    "end_ns": "1730000005000000000",
+    "expected": "201 + audit",
+    "id": "EP-OVERLAP-ALLOW",
+    "note": "DE/QI allow_overlap=true 且填写原因",
+    "start_ns": "1730000001000000000"
+  },
+  {
+    "asset_count": 64,
+    "expected": "ALLOW",
+    "id": "EP-ASSETS-64",
+    "note": "契约上限"
+  },
+  {
+    "asset_count": 65,
+    "expected": "422 validation_failed",
+    "id": "EP-ASSETS-65",
+    "note": "超过上限"
+  },
+  {
+    "expected": "IDENTICAL_BOUNDARIES",
+    "id": "EP-RULE-REPLAY",
+    "note": "同输入+规则版本+配置 Hash 必须得到相同边界"
+  },
+  {
+    "expected": "409 resource_immutable",
+    "id": "EP-READY-IMMUTABLE",
+    "note": "READY 后 PATCH 数据字段"
+  },
+  {
+    "expected": "NEW_EPISODE_ID_VERSION_PLUS_1",
+    "id": "EP-REVISION",
+    "note": "旧版本不变，supersedes_id 指向旧版"
+  },
+  {
+    "expected": "INVALIDATED + lineage edge",
+    "id": "EP-INVALIDATE",
+    "note": "墓碑/隔离/标定撤销传播"
+  }
+]

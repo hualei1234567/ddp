@@ -1,0 +1,22 @@
+{
+  "calibration_id": "018f2a3b-4c5d-7111-819b-0c1d2e3f0011",
+  "calibration_version": 4,
+  "captured_at": "2026-11-08T00:00:00Z",
+  "checksum": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "extrinsics": {
+    "child_frame": "sensor/cam_front_optical",
+    "parent_frame": "robot/base_link"
+  },
+  "intrinsics": {
+    "cx": 320.0,
+    "cy": 240.0,
+    "fx": 615.0,
+    "fy": 615.0
+  },
+  "schema_version": "ddp.calibration/1.0.0",
+  "status": "REVOKED",
+  "target_id": "018f2a3b-4c5d-710c-8c9b-0c1d2e3f000c",
+  "target_type": "SENSOR",
+  "valid_from": "2026-11-07T00:00:00Z",
+  "valid_to": "2026-11-09T00:00:00Z"
+}
