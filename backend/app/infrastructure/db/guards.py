@@ -45,6 +45,8 @@ _FROZEN_COLUMNS = (
     "validated_by",
     "validated_at",
 )
+# PostgreSQL 的 json 类型没有等号运算符；这些列必须转 text 后再比较。
+_PG_JSON_COLUMNS = frozenset({"parameters", "evidence_asset_ids", "uncertainty"})
 
 _SQLITE_TARGET_GUARD_STATEMENTS = (
     """
@@ -112,9 +114,13 @@ _SQLITE_IMMUTABLE_STATEMENTS = (
 
 
 def _postgres_function_sql() -> str:
-    frozen = " OR ".join(
-        f"OLD.{column} IS DISTINCT FROM NEW.{column}" for column in _FROZEN_COLUMNS
-    )
+    comparisons = []
+    for column in _FROZEN_COLUMNS:
+        if column in _PG_JSON_COLUMNS:
+            comparisons.append(f"OLD.{column}::text IS DISTINCT FROM NEW.{column}::text")
+        else:
+            comparisons.append(f"OLD.{column} IS DISTINCT FROM NEW.{column}")
+    frozen = " OR ".join(comparisons)
     return f"""
     CREATE OR REPLACE FUNCTION ddp_calibration_records_immutable_guard()
     RETURNS trigger
