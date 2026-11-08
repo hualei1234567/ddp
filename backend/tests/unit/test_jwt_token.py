@@ -85,7 +85,7 @@ def test_nbf_in_the_future_is_rejected() -> None:
 
 def test_wrong_signature_is_rejected() -> None:
     with pytest.raises(TokenValidationError):
-        _decode(make_token(secret="another-secret"))  # noqa: S106 - 错误签名用例
+        _decode(make_token(secret=uuid4().hex))  # 错误签名用例：随机密钥
 
 
 def test_tampered_payload_is_rejected() -> None:

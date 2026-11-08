@@ -147,7 +147,7 @@ def test_wrong_signature_is_rejected() -> None:
 
     response = client.get(
         "/test/me",
-        headers=_bearer(make_token(secret="attacker-known-secret")),  # noqa: S106 - 负向用例
+        headers=_bearer(make_token(secret=uuid4().hex)),  # noqa: S106 - 负向用例
     )
 
     _assert_unauthorized(response)
@@ -215,7 +215,7 @@ def test_expired_and_bad_signature_share_the_same_message() -> None:
     expired = client.get("/test/me", headers=_bearer(make_token(expires_in=-120)))
     bad_signature = client.get(
         "/test/me",
-        headers=_bearer(make_token(secret="attacker-known-secret")),  # noqa: S106 - 负向用例
+        headers=_bearer(make_token(secret=uuid4().hex)),  # noqa: S106 - 负向用例
     )
 
     assert expired.json()["error"]["message"] == bad_signature.json()["error"]["message"]
@@ -276,7 +276,7 @@ def test_invalid_bearer_does_not_fall_back_to_header_identity() -> None:
     response = client.get(
         "/test/me",
         headers={
-            **_bearer(make_token(secret="attacker-known-secret")),  # noqa: S106 - 负向用例
+            **_bearer(make_token(secret=uuid4().hex)),  # noqa: S106 - 负向用例
             "X-User-Id": str(uuid4()),
         },
     )
