@@ -47,6 +47,10 @@ jobs:
           ruff format --check app tests migrations
       - name: Alembic 升级
         run: alembic upgrade head
+      - name: Alembic 降级/再升级（PostgreSQL）
+        run: |
+          alembic downgrade 0003
+          alembic upgrade head
       - name: pytest
         run: python -m pytest -q
 
