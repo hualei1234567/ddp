@@ -8,11 +8,15 @@ import {
   Button,
   Drawer,
   Grid,
+  Input,
   Layout,
   Menu,
+  Modal,
+  Space,
   Tag,
   Tooltip,
   Typography,
+  message,
 } from "antd";
 import type { MenuProps } from "antd";
 import { useEffect, useState } from "react";
@@ -25,6 +29,11 @@ import {
 } from "../app/navigation";
 import { designTokens } from "../app/theme";
 import { useProjectId } from "../hooks/useProjectId";
+import {
+  clearAccessToken,
+  readAccessToken,
+  storeAccessToken,
+} from "../services/authToken";
 import { formatIdentifier } from "../services/format";
 
 const { Header, Sider, Content } = Layout;
@@ -85,6 +94,10 @@ export default function AppLayout() {
   const isDesktop = screens.lg ?? true;
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [tokenOpen, setTokenOpen] = useState(false);
+  const [tokenDraft, setTokenDraft] = useState("");
+  const [hasToken, setHasToken] = useState(() => readAccessToken() !== null);
+  const [messageApi, contextHolder] = message.useMessage();
   const projectId = useProjectId();
 
   const match = findNavItem(location.pathname);
@@ -181,6 +194,17 @@ export default function AppLayout() {
                     : "未选择项目"}
                 </Tag>
               </Tooltip>
+              <Tooltip title={hasToken ? "已设置访问令牌" : "未设置访问令牌，受保护接口会返回 401"}>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setTokenDraft(readAccessToken() ?? "");
+                    setTokenOpen(true);
+                  }}
+                >
+                  {hasToken ? "令牌已设置" : "设置令牌"}
+                </Button>
+              </Tooltip>
               <Tag color="blue">{PLATFORM_STAGE_LABEL}</Tag>
             </div>
           </Header>
@@ -189,6 +213,49 @@ export default function AppLayout() {
           </Content>
         </Layout>
       </Layout>
+
+      {contextHolder}
+      <Modal
+        title="访问令牌"
+        open={tokenOpen}
+        okText="保存"
+        cancelText="取消"
+        onCancel={() => setTokenOpen(false)}
+        onOk={() => {
+          const stored = storeAccessToken(tokenDraft);
+          setHasToken(stored !== null);
+          setTokenOpen(false);
+          messageApi.success(stored ? "令牌已保存（仅当前浏览器会话）" : "令牌为空，未保存");
+        }}
+        footer={(_, { OkBtn, CancelBtn }) => (
+          <Space>
+            <Button
+              danger
+              onClick={() => {
+                clearAccessToken();
+                setHasToken(false);
+                setTokenDraft("");
+                setTokenOpen(false);
+                messageApi.success("令牌已清除");
+              }}
+            >
+              清除令牌
+            </Button>
+            <CancelBtn />
+            <OkBtn />
+          </Space>
+        )}
+      >
+        <Typography.Paragraph type="secondary">
+          粘贴外部签发的 Bearer JWT。令牌只保存在浏览器会话中，不写入 URL 或服务端存储。
+        </Typography.Paragraph>
+        <Input.TextArea
+          rows={4}
+          value={tokenDraft}
+          placeholder="eyJhbGciOiJIUzI1NiJ9..."
+          onChange={(event) => setTokenDraft(event.target.value)}
+        />
+      </Modal>
 
       <Drawer
         open={!isDesktop && menuOpen}

@@ -1,5 +1,6 @@
 import type { ErrorEnvelope } from "../types/api";
 import type { HealthResponse, PlatformMeta } from "../types/platform";
+import { readAccessToken } from "./authToken";
 import {
   parseErrorEnvelope,
   parseHealthResponse,
@@ -271,6 +272,10 @@ export class ApiClient {
       "X-Request-Id": requestId,
       ...options.headers,
     };
+    const accessToken = readAccessToken();
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
 
     let payload: BodyInit | undefined;
     let isJsonBody = false;
