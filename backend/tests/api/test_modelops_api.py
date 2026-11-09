@@ -21,11 +21,15 @@ SECRET = "placeholder-model-adapter-secret-0123456789abcdef"
 
 
 class FakeInspector(ArtifactInspector):
-    def __init__(self, size: int) -> None:
+    def __init__(self, size: int, sha: str = SHA) -> None:
         self.size = size
+        self.sha = sha
 
     def object_size(self, object_key: str) -> int | None:
         return self.size
+
+    def object_sha256(self, object_key: str) -> str | None:
+        return self.sha
 
 
 def _model_payload(owner_id, code: str | None = None) -> dict[str, object]:
@@ -420,3 +424,127 @@ def test_model_callback_replay_rejected(api_db) -> None:
         },
     )
     assert bad.status_code == 401
+
+
+def test_publish_requires_different_actor(api_db) -> None:
+    factory, ids = api_db
+    owner = _client(factory, ids.owner_a, FakeInspector(128))
+    # 负责人自己是版本创建人时，角色门禁通过，但领域规则禁止自审发布。
+    model = _create_model(owner, ids.project_a, ids.owner_a)
+    version = _ready_version(owner, ids.project_a, model["model_id"])
+
+    response = owner.post(
+        url(
+            ids.project_a,
+            f"/models/{model['model_id']}/versions/{version['model_version_id']}/actions/publish",
+        ),
+        headers={"If-Match": f'"{version["version"]}"'},
+        json={},
+    )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "model_release_approval_forbidden"
+
+
+def test_inference_task_without_adapter_returns_503(api_db) -> None:
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+
+    task = editor.post(
+        url(ids.project_a, "/inference-tasks"),
+        json={
+            "model_version_id": version["model_version_id"],
+            "episode_ids": [str(uuid4())],
+            "adapter_id": "mock",
+        },
+    )
+    assert task.status_code == 503
+    assert task.json()["error"]["code"] == "model_adapter_unavailable"
+
+
+def test_precondition_and_evaluation_dataset_gate(api_db) -> None:
+    from tests.api.dataset_support import create_dataset, create_policies, version_payload
+
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+
+    missing = editor.post(
+        url(ids.project_a, f"/models/{model['model_id']}/actions/activate"),
+        json={},
+    )
+    assert missing.status_code == 428
+    assert missing.json()["error"]["code"] == "precondition_required"
+
+    dataset = create_dataset(editor, ids.project_a, ids.owner_a, f"gate-{uuid4().hex[:6]}")
+    policies = create_policies(editor, ids.project_a, dataset["dataset_id"])
+    created_version = editor.post(
+        url(ids.project_a, f"/datasets/{dataset['dataset_id']}/versions"),
+        json=version_payload(policies),
+    )
+    assert created_version.status_code == 201, created_version.text
+
+    evaluation = editor.post(
+        url(ids.project_a, "/evaluations"),
+        json={
+            "model_version_id": version["model_version_id"],
+            "dataset_version_id": created_version.json()["dataset_version_id"],
+            "metrics": {},
+            "thresholds": {"success_rate": {"min": 0.9}},
+        },
+    )
+    assert evaluation.status_code == 409
+    assert evaluation.json()["error"]["code"] == "evaluation_dataset_not_ready"
+
+
+def test_requirement_creator_cannot_self_approve(api_db) -> None:
+    factory, ids = api_db
+    owner = _client(factory, ids.owner_a, FakeInspector(128))
+    created = owner.post(
+        url(ids.project_a, "/data-requirements"),
+        json={
+            "code": f"DR-{uuid4().hex[:6]}",
+            "title": "自审拦截验证",
+            "source_type": "MANUAL",
+            "dimensions": [{"dimension_type": "SCENE", "dimension_value": "kitchen"}],
+            "owner_id": str(ids.owner_a),
+        },
+    )
+    assert created.status_code == 201, created.text
+    requirement_id = created.json()["requirement_id"]
+    submitted = owner.post(
+        url(ids.project_a, f"/data-requirements/{requirement_id}/actions/submit"),
+        headers={"If-Match": f'"{created.json()["version"]}"'},
+        json={},
+    )
+    assert submitted.status_code == 200, submitted.text
+    approved = owner.post(
+        url(ids.project_a, f"/data-requirements/{requirement_id}/actions/approve"),
+        headers={"If-Match": f'"{submitted.json()["version"]}"'},
+        json={},
+    )
+    assert approved.status_code == 403
+    assert approved.json()["error"]["code"] == "data_requirement_approval_forbidden"
+
+
+def test_artifact_checksum_mismatch_blocks_ready(api_db) -> None:
+    factory, ids = api_db
+    wrong_sha = "sha256:" + "b" * 64
+    editor = _client(factory, ids.editor_a, FakeInspector(128, sha=wrong_sha))
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    created = editor.post(
+        url(ids.project_a, f"/models/{model['model_id']}/versions"), json=_version_payload(128)
+    )
+    assert created.status_code == 201, created.text
+    validated = editor.post(
+        url(
+            ids.project_a,
+            f"/models/{model['model_id']}/versions/{created.json()['model_version_id']}/actions/validate",
+        ),
+        headers={"If-Match": f'"{created.json()["version"]}"'},
+        json={},
+    )
+    assert validated.status_code == 422
+    assert validated.json()["error"]["code"] == "model_artifact_checksum_mismatch"

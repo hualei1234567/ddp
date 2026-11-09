@@ -73,6 +73,11 @@ class LocalFileInspector(ArtifactInspector):
     def object_size(self, object_key: str) -> int | None:
         return ARTIFACT.stat().st_size if ARTIFACT.exists() else None
 
+    def object_sha256(self, object_key: str) -> str | None:
+        if not ARTIFACT.exists():
+            return None
+        return "sha256:" + hashlib.sha256(ARTIFACT.read_bytes()).hexdigest()
+
 
 def seed_identity(factory) -> None:
     with factory() as session:

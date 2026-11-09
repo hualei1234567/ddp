@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/modelops/error-codes.v1.json",
+  "title": "DDP 阶段 5 模型闭环错误码注册表 v1（冻结）",
+  "description": "阶段 5 HTTP 与领域错误码。客户端必须按 code 分支；未知 code 不得默认成功。阶段 5 已实现；implemented=true 表示服务端会返回该 code。",
+  "version": "ddp.stage5/1.0.0",
+  "status": "FROZEN",
+  "frozen_at": "2026-11-09",
+  "envelope": {
+    "required": [
+      "error"
+    ],
+    "properties": {
+      "error": {
+        "required": [
+          "code",
+          "message"
+        ],
+        "optional": [
+          "request_id",
+          "details"
+        ]
+      }
+    }
+  },
+  "codes": [
+    {
+      "code": "validation_failed",
+      "http": 422,
+      "implemented": true,
+      "message": "请求参数或领域规则校验失败"
+    },
+    {
+      "code": "resource_not_found",
+      "http": 404,
+      "implemented": true,
+      "message": "资源不存在或不属于当前项目"
+    },
+    {
+      "code": "forbidden",
+      "http": 403,
+      "implemented": true,
+      "message": "无权执行该操作"
+    },
+    {
+      "code": "state_transition_invalid",
+      "http": 409,
+      "implemented": true,
+      "message": "资源状态不允许该操作"
+    },
+    {
+      "code": "version_conflict",
+      "http": 409,
+      "implemented": true,
+      "message": "资源版本已变化，请重新读取后再试"
+    },
+    {
+      "code": "precondition_required",
+      "http": 428,
+      "implemented": true,
+      "message": "写动作缺少 If-Match"
+    },
+    {
+      "code": "idempotency_key_reused",
+      "http": 409,
+      "implemented": true,
+      "message": "同一幂等键对应不同请求体"
+    },
+    {
+      "code": "duplicate_resource",
+      "http": 409,
+      "implemented": true,
+      "message": "项目内业务编码或版本重复"
+    },
+    {
+      "code": "model_not_active",
+      "http": 409,
+      "implemented": true,
+      "message": "模型未激活或已归档"
+    },
+    {
+      "code": "model_version_immutable",
+      "http": 409,
+      "implemented": true,
+      "message": "已发布版本不可原地修改"
+    },
+    {
+      "code": "model_version_in_use",
+      "http": 409,
+      "implemented": true,
+      "message": "存在 ACTIVE 推理服务，版本不可归档"
+    },
+    {
+      "code": "model_release_approval_forbidden",
+      "http": 403,
+      "implemented": true,
+      "message": "发布人不得是版本唯一创建人"
+    },
+    {
+      "code": "model_artifact_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "模型产物缺失、格式不支持或大小非法"
+    },
+    {
+      "code": "model_artifact_checksum_mismatch",
+      "http": 422,
+      "implemented": true,
+      "message": "模型产物 SHA256 与声明不一致"
+    },
+    {
+      "code": "model_runtime_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "运行环境字段不完整或不受支持"
+    },
+    {
+      "code": "model_training_source_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "训练来源引用不存在、跨项目或不匹配"
+    },
+    {
+      "code": "evaluation_dataset_not_ready",
+      "http": 409,
+      "implemented": true,
+      "message": "评测数据集版本必须已冻结且有效"
+    },
+    {
+      "code": "evaluation_immutable",
+      "http": 409,
+      "implemented": true,
+      "message": "已完成的评测结果不可修改"
+    },
+    {
+      "code": "evaluation_metrics_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "指标或阈值非法"
+    },
+    {
+      "code": "evaluation_baseline_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "基线评测不存在、跨项目或数据集不一致"
+    },
+    {
+      "code": "inference_service_unavailable",
+      "http": 503,
+      "implemented": true,
+      "message": "推理服务未配置或不可达"
+    },
+    {
+      "code": "inference_service_not_active",
+      "http": 409,
+      "implemented": true,
+      "message": "推理服务未激活"
+    },
+    {
+      "code": "inference_task_input_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "推理输入必须提供数据集版本或 Episode，且同项目"
+    },
+    {
+      "code": "inference_task_result_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "推理结果引用非法或 Hash 不匹配"
+    },
+    {
+      "code": "feedback_dimensions_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "反馈维度为空或重复"
+    },
+    {
+      "code": "feedback_source_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "反馈来源评测/推理不存在或跨项目"
+    },
+    {
+      "code": "feedback_already_converted",
+      "http": 409,
+      "implemented": true,
+      "message": "反馈已转为数据需求"
+    },
+    {
+      "code": "feedback_terminal",
+      "http": 409,
+      "implemented": true,
+      "message": "反馈已关闭或已忽略"
+    },
+    {
+      "code": "data_requirement_approval_forbidden",
+      "http": 403,
+      "implemented": true,
+      "message": "提交人不得审批自己提交的需求"
+    },
+    {
+      "code": "data_requirement_not_satisfied",
+      "http": 409,
+      "implemented": true,
+      "message": "需求不满足：缺少目标维度样本或未关联冻结数据集版本"
+    },
+    {
+      "code": "data_requirement_dataset_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "关联数据集版本不存在、未冻结或跨项目"
+    },
+    {
+      "code": "data_requirement_retest_invalid",
+      "http": 422,
+      "implemented": true,
+      "message": "复测评测不存在、跨项目或未引用关联版本"
+    },
+    {
+      "code": "data_requirement_terminal",
+      "http": 409,
+      "implemented": true,
+      "message": "数据需求已关闭、驳回或取消"
+    },
+    {
+      "code": "model_adapter_unavailable",
+      "http": 503,
+      "implemented": true,
+      "message": "模型平台 Adapter 不可用或未配置"
+    },
+    {
+      "code": "model_adapter_unsupported",
+      "http": 422,
+      "implemented": true,
+      "message": "Adapter 未声明所需能力"
+    },
+    {
+      "code": "model_callback_invalid",
+      "http": 401,
+      "implemented": true,
+      "message": "回调签名、时间戳或 nonce 非法"
+    },
+    {
+      "code": "model_callback_replayed",
+      "http": 409,
+      "implemented": true,
+      "message": "回调重放或同一 event_id 内容不一致"
+    }
+  ]
+}

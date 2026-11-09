@@ -209,6 +209,9 @@ class DatasetGate(Protocol):
 class ArtifactInspector(Protocol):
     def object_size(self, object_key: str) -> int | None: ...
 
+    def object_sha256(self, object_key: str) -> str | None:
+        """返回对象的 `sha256:<hex>`；对象不存在返回 None。"""
+
 
 class ModelPlatformGateway(Protocol):
     def capabilities(self, adapter_id: str) -> frozenset[str]: ...

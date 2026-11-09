@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from uuid import UUID
 
 from app.application.modelops.ports import (
@@ -9,6 +10,7 @@ from app.application.modelops.ports import (
     ModelPlatformGateway,
 )
 from app.core.config import Settings
+from app.domain.ingestion.errors import ObjectNotFoundError
 from app.domain.modelops.errors import ModelAdapterUnavailableError
 from app.infrastructure.storage.s3 import S3MultipartStorage
 
@@ -62,6 +64,15 @@ class S3ArtifactInspector(ArtifactInspector):
 
     def object_size(self, object_key: str) -> int | None:
         return self._storage.object_size(object_key)
+
+    def object_sha256(self, object_key: str) -> str | None:
+        digest = hashlib.sha256()
+        try:
+            for chunk in self._storage.stream_object(object_key, chunk_size=1024 * 1024):
+                digest.update(chunk)
+        except ObjectNotFoundError:
+            return None
+        return f"sha256:{digest.hexdigest()}"
 
 
 __all__ = ["ConfiguredModelPlatformGateway", "S3ArtifactInspector", "ModelPlatformGateway"]

@@ -26,6 +26,8 @@ from app.domain.modelops.errors import (
     DomainValidationError,
     DuplicateResourceError,
     InvalidStateTransitionError,
+    ModelArtifactChecksumMismatchError,
+    ModelArtifactInvalidError,
     ModelReleaseApprovalForbiddenError,
     ModelVersionInUseError,
     ResourceNotFoundError,
@@ -508,11 +510,16 @@ class ModelVersionUseCases:
     def _inspect_artifact(self, artifact: ModelArtifact) -> None:
         size = self._artifacts.object_size(artifact.object_key)
         if size is None:
-            raise DomainValidationError("模型产物不存在")
+            raise ModelArtifactInvalidError("模型产物不存在")
         if size != artifact.size_bytes:
-            raise DomainValidationError(
+            raise ModelArtifactInvalidError(
                 f"模型产物大小与声明不一致：actual={size} declared={artifact.size_bytes}"
             )
+        actual_sha = self._artifacts.object_sha256(artifact.object_key)
+        if actual_sha is None:
+            raise ModelArtifactInvalidError("模型产物内容读取失败")
+        if actual_sha != artifact.sha256:
+            raise ModelArtifactChecksumMismatchError("模型产物 SHA256 与声明不一致")
 
     def _replay(
         self, scope: ProjectScope, model_id: UUID, response_ref: str | None

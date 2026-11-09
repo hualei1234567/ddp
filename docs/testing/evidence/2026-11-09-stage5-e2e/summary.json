@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-09T04:34:18.838692+00:00",
+  "generated_at": "2026-11-09T04:41:52.573998+00:00",
   "database": "PostgreSQL 16.15 local (alembic 0021)",
   "artifact": "[SYNTHETIC] local file; S3 HEAD not covered",
   "steps": [
@@ -7,14 +7,14 @@
       "step": "冻结数据集版本",
       "status": 200,
       "detail": {
-        "dataset_version_id": "7c21f6fd-e25d-4ca6-9374-a4f48d731120"
+        "dataset_version_id": "17567c31-d1b1-4594-9142-04c40a5deb1a"
       }
     },
     {
       "step": "创建模型",
       "status": 201,
       "detail": {
-        "model_id": "9724a28a-eb3b-4b94-88ae-5b4a7a7db195",
+        "model_id": "fe1bbf39-ce7d-4bf9-bdbd-61f4186af0c1",
         "status": "DRAFT"
       }
     },
@@ -22,7 +22,7 @@
       "step": "创建模型版本",
       "status": 201,
       "detail": {
-        "model_version_id": "ab9dad66-4d64-48e2-a421-2a167e9e5f6c",
+        "model_version_id": "52ca1375-64cd-401c-a834-50f4e2910494",
         "artifact_size": 4096
       }
     },
@@ -37,7 +37,7 @@
       "step": "发布版本→RELEASED",
       "status": 200,
       "detail": {
-        "released_at": "2026-11-09T04:34:18.698743+00:00"
+        "released_at": "2026-11-09T04:41:52.416853+00:00"
       }
     },
     {
@@ -54,7 +54,7 @@
       "step": "评测入队",
       "status": 202,
       "detail": {
-        "evaluation_id": "8b6a0b4a-fc06-4944-a3c9-c9999d307339",
+        "evaluation_id": "3ea2c3c7-7749-4ded-94ed-b975541348cb",
         "status": "QUEUED"
       }
     },
@@ -70,7 +70,7 @@
       "step": "登记模型反馈",
       "status": 201,
       "detail": {
-        "feedback_id": "3a1841ab-2688-4a8b-a7fd-885f0ab9e0f8"
+        "feedback_id": "f59744a4-d389-466b-adce-d8920408e073"
       }
     },
     {
@@ -84,7 +84,7 @@
       "step": "反馈转数据需求",
       "status": 200,
       "detail": {
-        "requirement_id": "20f0fbf8-4253-4cfb-ac87-cc7cccc20503",
+        "requirement_id": "ec1a86f5-e2aa-4b38-b29a-d3efe4ae031e",
         "feedback_status": "REQUIREMENT_CREATED"
       }
     },
@@ -124,7 +124,7 @@
       "status": 200,
       "detail": {
         "retest_evaluation_ids": [
-          "40808ae4-f058-4e1d-8784-5266d0b263e6"
+          "86007d08-b794-4106-af20-c450ec2fa0a3"
         ]
       }
     },
