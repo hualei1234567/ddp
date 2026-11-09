@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from itertools import combinations
 from uuid import UUID
 
@@ -58,6 +58,15 @@ class LeakageItem:
             raise ValueError("raw_asset_ids 不得为空")
 
 
+def _utc_iso(value: datetime | None) -> str | None:
+    """报告 Hash 必须与数据库时区无关：统一按 UTC 规范化后再序列化。"""
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("报告时间必须带时区")
+    return value.astimezone(UTC).isoformat()
+
+
 @dataclass(frozen=True, slots=True)
 class LeakageWaiver:
     rule: LeakageRule
@@ -91,8 +100,8 @@ class LeakageWaiver:
             "approved_by": str(self.approved_by),
             "reason": self.reason,
             "impact": self.impact,
-            "approved_at": self.approved_at.isoformat(),
-            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "approved_at": _utc_iso(self.approved_at),
+            "expires_at": _utc_iso(self.expires_at) if self.expires_at else None,
             "audit_ref": self.audit_ref,
         }
 
@@ -200,10 +209,8 @@ class LeakageReport:
             "violations": [item.to_payload() for item in self.violations],
             "waivers": [item.to_payload() for item in self.waivers],
             "unknown_reason": self.unknown_reason,
-            "checked_at": self.checked_at.isoformat(),
-            "source_snapshot_at": (
-                self.source_snapshot_at.isoformat() if self.source_snapshot_at else None
-            ),
+            "checked_at": _utc_iso(self.checked_at),
+            "source_snapshot_at": _utc_iso(self.source_snapshot_at),
         }
 
     def to_payload(self) -> dict[str, object]:

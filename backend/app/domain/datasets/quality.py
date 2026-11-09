@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from app.domain.datasets.canonical import sha256_value
@@ -26,6 +26,15 @@ from app.domain.datasets.validation import (
 )
 
 _DISTRIBUTION_KEYS = frozenset({"scene", "action", "robot", "device", "label", "quality_status"})
+
+
+def _utc_iso(value: datetime | None) -> str | None:
+    """报告 Hash 必须与数据库时区无关：统一按 UTC 规范化后再序列化。"""
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("报告时间必须带时区")
+    return value.astimezone(UTC).isoformat()
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,9 +148,9 @@ class QualityReport:
             "leakage_summary": self.leakage_summary,
             "warnings": list(self.warnings),
             "blocking_issues": list(self.blocking_issues),
-            "source_snapshot_at": self.source_snapshot_at.isoformat(),
+            "source_snapshot_at": _utc_iso(self.source_snapshot_at),
             "generator_version": self.generator_version,
-            "created_at": self.created_at.isoformat(),
+            "created_at": _utc_iso(self.created_at),
         }
 
     def to_payload(self) -> dict[str, object]:

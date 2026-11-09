@@ -17,7 +17,7 @@ from tests.api.dataset_support import url
 from tests.api.export_support import build_frozen_version
 
 SHA = "sha256:" + "a" * 64
-SECRET = "model-adapter-secret-0123456789abcdef"
+SECRET = "placeholder-model-adapter-secret-0123456789abcdef"
 
 
 class FakeInspector(ArtifactInspector):

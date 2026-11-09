@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 import pytest
@@ -26,10 +26,20 @@ from app.domain.datasets.errors import (
     InvalidStateTransitionError,
     LeakageWaiverForbiddenError,
 )
-from app.domain.datasets.leakage import LeakageItem, LeakageWaiver, check_leakage
+from app.domain.datasets.leakage import (
+    LeakageItem,
+    LeakageReport,
+    LeakageWaiver,
+    check_leakage,
+)
+from app.domain.datasets.leakage import (
+    _utc_iso as leakage_utc_iso,
+)
+from app.domain.datasets.manifest import _utc_iso as manifest_utc_iso
 from app.domain.datasets.manifest import build_manifest
 from app.domain.datasets.models import DatasetItem, DatasetVersion
 from app.domain.datasets.policies import DedupPolicy, LeakagePolicy, PolicyRef, SplitPolicy
+from app.domain.datasets.quality import _utc_iso as quality_utc_iso
 from app.domain.datasets.selection import (
     EpisodeCandidate,
     SelectionFilters,
@@ -320,6 +330,45 @@ def test_hard_leakage_fails_and_cannot_be_waived() -> None:
                 ),
             ),
         )
+
+
+def test_report_hashes_are_timezone_independent() -> None:
+    """数据库会话时区不同不得改变报告 Hash（真实 PG 默认 Asia/Shanghai 曾暴露此缺陷）。"""
+    shanghai = timezone(timedelta(hours=8))
+    local = datetime(2026, 11, 9, 12, 0, tzinfo=shanghai)
+    utc = datetime(2026, 11, 9, 4, 0, tzinfo=UTC)
+    assert leakage_utc_iso(local) == leakage_utc_iso(utc) == "2026-11-09T04:00:00+00:00"
+    assert quality_utc_iso(local) == quality_utc_iso(utc)
+    assert manifest_utc_iso(local) == manifest_utc_iso(utc)
+
+    items = _leakage_items({0: Split.TRAIN, 1: Split.TEST})
+    report = check_leakage(
+        items,
+        leakage_policy(),
+        leakage_report_id=uuid4(),
+        project_id=uuid4(),
+        dataset_version_id=uuid4(),
+        checked_at=local,
+        source_snapshot_at=local,
+    )
+    rebuilt = LeakageReport(
+        leakage_report_id=report.leakage_report_id,
+        project_id=report.project_id,
+        dataset_version_id=report.dataset_version_id,
+        policy_ref=report.policy_ref,
+        leakage_status=report.leakage_status,
+        checked_rule_count=report.checked_rule_count,
+        violations=report.violations,
+        waivers=report.waivers,
+        checked_at=utc,
+        unknown_reason=report.unknown_reason,
+        source_snapshot_at=utc,
+        status=report.status,
+        report_key=report.report_key,
+        report_sha256=report.report_sha256,
+        version=report.version,
+    )
+    assert rebuilt.report_sha256 == report.report_sha256
 
 
 def test_soft_leakage_warn_then_waived() -> None:

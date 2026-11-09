@@ -7,7 +7,7 @@ Manifest 使用 RFC 8785 JCS 风格的规范化 JSON，服务端计算 SHA256；
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from app.domain.datasets.canonical import sha256_value
@@ -24,6 +24,15 @@ from app.domain.datasets.validation import (
 )
 
 MANIFEST_SCHEMA_VERSION = "ddp.dataset.manifest/1.0.0"
+
+
+def _utc_iso(value: datetime | None) -> str | None:
+    """Manifest Hash 必须与数据库时区无关：统一按 UTC 规范化后再序列化。"""
+    if value is None:
+        return None
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("Manifest 时间必须带时区")
+    return value.astimezone(UTC).isoformat()
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,10 +134,10 @@ class Manifest:
             "dataset_version": self.dataset_version,
             "project_id": str(self.project_id),
             "created_by": str(self.created_by),
-            "created_at": self.created_at.isoformat(),
+            "created_at": _utc_iso(self.created_at),
             "policy_refs": self.policy_refs,
             "selection_rule_version": self.selection_rule_version,
-            "source_snapshot_at": self.source_snapshot_at.isoformat(),
+            "source_snapshot_at": _utc_iso(self.source_snapshot_at),
             "items": [
                 item.to_payload()
                 for item in sorted(self.items, key=lambda item: str(item.dataset_item_id))
