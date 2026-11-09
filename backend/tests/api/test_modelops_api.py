@@ -12,7 +12,7 @@ from app.api.v1.modelops_dependencies import get_artifact_inspector
 from app.application.modelops.ports import ArtifactInspector
 from app.core.config import Settings
 
-from tests.api.conftest import make_client
+from tests.api.conftest import ApiIds, make_client
 from tests.api.dataset_support import url
 from tests.api.export_support import build_frozen_version
 
@@ -548,3 +548,196 @@ def test_artifact_checksum_mismatch_blocks_ready(api_db) -> None:
     )
     assert validated.status_code == 422
     assert validated.json()["error"]["code"] == "model_artifact_checksum_mismatch"
+
+
+def test_completed_evaluation_is_immutable(api_db) -> None:
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    context = build_frozen_version(factory, ids)
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    created = editor.post(
+        url(ids.project_a, "/evaluations"),
+        json={
+            "model_version_id": version["model_version_id"],
+            "dataset_version_id": str(context["version_id"]),
+            "thresholds": {"success_rate": {"min": 0.9}},
+        },
+    )
+    assert created.status_code == 202, created.text
+    evaluation_id = created.json()["evaluation_id"]
+    first = _callback(
+        editor,
+        {
+            "event_id": f"evt-{uuid4().hex[:8]}",
+            "adapter_version": "1.0.0",
+            "event_type": "evaluation.completed",
+            "project_id": str(ids.project_a),
+            "evaluation_id": evaluation_id,
+            "metrics": {"success_rate": 0.95},
+        },
+    )
+    assert first.status_code == 204, first.text
+    again = _callback(
+        editor,
+        {
+            "event_id": f"evt-{uuid4().hex[:8]}",
+            "adapter_version": "1.0.0",
+            "event_type": "evaluation.completed",
+            "project_id": str(ids.project_a),
+            "evaluation_id": evaluation_id,
+            "metrics": {"success_rate": 0.1},
+        },
+    )
+    # 已完成评测的重复回调按幂等处理，但结果不得被覆盖。
+    assert again.status_code == 204
+    stored = editor.get(url(ids.project_a, f"/evaluations/{evaluation_id}")).json()
+    assert stored["metrics"] == {"success_rate": 0.95}
+    assert stored["verdict"] == "PASS"
+
+
+def test_evaluation_rejects_cross_project_dataset(api_db) -> None:
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    from app.domain.identity.models import ProjectRole
+    from app.infrastructure.db.models.identity import ProjectMember
+
+    with factory() as session:
+        session.add(
+            ProjectMember(
+                project_id=ids.project_b,
+                user_id=ids.editor_a,
+                role=ProjectRole.EDITOR.value,
+            )
+        )
+        session.commit()
+    foreign_ids = ApiIds(
+        project_a=ids.project_b,
+        project_b=ids.project_a,
+        editor_a=ids.editor_a,
+        owner_a=ids.owner_a,
+        viewer_a=ids.owner_a,
+        outsider=ids.outsider,
+    )
+    foreign = build_frozen_version(factory, foreign_ids)
+    response = editor.post(
+        url(ids.project_a, "/evaluations"),
+        json={
+            "model_version_id": version["model_version_id"],
+            "dataset_version_id": str(foreign["version_id"]),
+            "thresholds": {"success_rate": {"min": 0.9}},
+        },
+    )
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "resource_not_found"
+
+
+def test_archive_blocked_by_active_service(api_db) -> None:
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    owner = _client(factory, ids.owner_a, FakeInspector(128))
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    published = owner.post(
+        url(
+            ids.project_a,
+            f"/models/{model['model_id']}/versions/{version['model_version_id']}/actions/publish",
+        ),
+        headers={"If-Match": f'"{version["version"]}"'},
+        json={},
+    )
+    assert published.status_code == 200, published.text
+    service = editor.post(
+        url(ids.project_a, "/inference-services"),
+        json={
+            "model_version_id": version["model_version_id"],
+            "environment": "DEV",
+            "endpoint_url": "http://inference.internal:8080",
+        },
+    )
+    assert service.status_code == 201, service.text
+    service_id = service.json()["service_id"]
+    deployed = editor.post(
+        url(ids.project_a, f"/inference-services/{service_id}/actions/deploy"),
+        headers={"If-Match": f'"{service.json()["version"]}"'},
+        json={},
+    )
+    assert deployed.status_code == 200, deployed.text
+    active = editor.post(
+        url(ids.project_a, f"/inference-services/{service_id}/actions/activate"),
+        headers={"If-Match": f'"{deployed.json()["version"]}"'},
+        json={},
+    )
+    assert active.status_code == 200, active.text
+    assert active.json()["status"] == "ACTIVE"
+
+    archived = owner.post(
+        url(
+            ids.project_a,
+            f"/models/{model['model_id']}/versions/{version['model_version_id']}/actions/archive",
+        ),
+        headers={"If-Match": f'"{published.json()["version"]}"'},
+        json={"reason": "尝试在服务运行中归档"},
+    )
+    assert archived.status_code == 409
+    assert archived.json()["error"]["code"] == "model_version_in_use"
+
+
+def test_requirement_terminal_cannot_reopen(api_db) -> None:
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    created = editor.post(
+        url(ids.project_a, "/data-requirements"),
+        json={
+            "code": f"DR-{uuid4().hex[:6]}",
+            "title": "终态不可回退验证",
+            "source_type": "MANUAL",
+            "dimensions": [{"dimension_type": "SCENE", "dimension_value": "kitchen"}],
+            "owner_id": str(ids.owner_a),
+        },
+    )
+    assert created.status_code == 201, created.text
+    requirement_id = created.json()["requirement_id"]
+    cancelled = editor.post(
+        url(ids.project_a, f"/data-requirements/{requirement_id}/actions/cancel"),
+        headers={"If-Match": f'"{created.json()["version"]}"'},
+        json={"reason": "需求取消"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "CANCELLED"
+    again = editor.post(
+        url(ids.project_a, f"/data-requirements/{requirement_id}/actions/submit"),
+        headers={"If-Match": f'"{cancelled.json()["version"]}"'},
+        json={},
+    )
+    assert again.status_code == 409
+    assert again.json()["error"]["code"] == "data_requirement_terminal"
+
+
+def test_idempotency_key_reuse_with_different_body(api_db) -> None:
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    key = f"idem-{uuid4().hex[:12]}"
+    payload = _model_payload(ids.owner_a)
+    first = editor.post(
+        url(ids.project_a, "/models"),
+        json=payload,
+        headers={"Idempotency-Key": key},
+    )
+    assert first.status_code == 201, first.text
+    replay = editor.post(
+        url(ids.project_a, "/models"),
+        json=payload,
+        headers={"Idempotency-Key": key},
+    )
+    assert replay.status_code == 201, replay.text
+    assert replay.json()["model_id"] == first.json()["model_id"]
+    different = editor.post(
+        url(ids.project_a, "/models"),
+        json={**payload, "name": "不同请求体"},
+        headers={"Idempotency-Key": key},
+    )
+    assert different.status_code == 409
+    assert different.json()["error"]["code"] == "idempotency_key_reused"
