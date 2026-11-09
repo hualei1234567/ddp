@@ -109,6 +109,26 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  export-worker:
+    # 导出 Job 常驻 Worker：消费 dataset.export.requested 事件并写入对象存储。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-export-worker
+    command: ["python", "-m", "app.workers.exports"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+      DDP_REDIS_URL: redis://redis:6379/0
+      DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   web:
     profiles: ["app"]
     build:

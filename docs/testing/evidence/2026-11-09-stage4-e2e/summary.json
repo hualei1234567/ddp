@@ -1,0 +1,11 @@
+{
+  "dataset_version_id": "c6202f99-2d14-411b-8fa9-b8d321f7de5f",
+  "export_job_id": "6e59b17b-2067-4d73-a572-6c031d282f52",
+  "training_request_id": "9e428f46-abd6-4945-b746-8a60798e5e53",
+  "delivery_id": "1a9f2d16-d6c7-43f0-a0ff-39ae6b798fa5",
+  "delivery_status": "ACCEPTED",
+  "request_status": "ACCEPTED",
+  "artifact_count": 4,
+  "aggregate_sha256": "sha256:6b91006e533a5bbb1bbe10f2410e61d3c2236d2d14cc20760f857944bf608153",
+  "download_url_issued": true
+}
