@@ -28,6 +28,7 @@ import {
   presentTaskType,
 } from "../../services/modelopsPresentation";
 import { modelDetailPath } from "../../services/modelopsUrl";
+import { formatDateTime } from "../../services/format";
 import { resolvePagePhase } from "../../services/pagePhase";
 import {
   MODEL_STATUS_VALUES,
@@ -216,7 +217,12 @@ function ModelListContent({
           "—"
         ),
     },
-    { title: "更新时间", dataIndex: "updated_at", width: 190 },
+    {
+      title: "更新时间",
+      dataIndex: "updated_at",
+      width: 190,
+      render: (value: string) => formatDateTime(value),
+    },
   ];
 
   return (

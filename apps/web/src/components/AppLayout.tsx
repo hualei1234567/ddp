@@ -144,7 +144,7 @@ export default function AppLayout() {
               <div className="ddp-sider-footer">
                 <Tag color="blue">{PLATFORM_STAGE_LABEL}</Tag>
                 <Typography.Text type="secondary">
-                  路由、布局与 API 骨架
+                  采集 · 标注 · 数据集 · 模型闭环
                 </Typography.Text>
               </div>
             ) : null}

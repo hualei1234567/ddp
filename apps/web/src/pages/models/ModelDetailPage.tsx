@@ -29,6 +29,7 @@ import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
 import { modelOpsApi, type ModelVersionCreateInput } from "../../services/modelops";
 import {
+  presentAction,
   presentModelStatus,
   presentTaskType,
   presentVersionStatus,
@@ -275,7 +276,7 @@ function VersionsSection({
               loading={busy === item.model_version_id}
               onClick={() => void act(item, action)}
             >
-              {action === "publish" ? "发布" : action === "validate" ? "校验" : action}
+              {presentAction(action)}
             </Button>
           ))}
           {item.allowed_actions.length === 0 ? (
