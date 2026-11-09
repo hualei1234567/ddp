@@ -315,7 +315,7 @@ export interface TrainingDelivery {
   aggregate_sha256: string;
   item_count: number;
   split_counts: Record<string, number>;
-  quality_report_ref: Record<string, unknown> | null;
+  quality_report_ref: string | null;
   status: string;
   delivered_at: string | null;
   accepted_at: string | null;

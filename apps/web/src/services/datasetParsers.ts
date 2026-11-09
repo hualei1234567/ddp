@@ -528,7 +528,7 @@ export function parseTrainingDelivery(value: unknown): TrainingDelivery {
     aggregate_sha256: readSha256Checksum(record, "aggregate_sha256", "trainingDelivery"),
     item_count: readInteger(record, "item_count", "trainingDelivery"),
     split_counts: readCountMap(record, "split_counts", "trainingDelivery"),
-    quality_report_ref: readOptionalRecord(record, "quality_report_ref", "trainingDelivery"),
+    quality_report_ref: readOptionalString(record, "quality_report_ref", "trainingDelivery"),
     status: readString(record, "status", "trainingDelivery"),
     delivered_at: readOptionalString(record, "delivered_at", "trainingDelivery"),
     accepted_at: readOptionalString(record, "accepted_at", "trainingDelivery"),
