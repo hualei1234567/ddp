@@ -43,7 +43,7 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const PLATFORM_STAGE_LABEL = "阶段 0 · 基建";
+export const PLATFORM_STAGE_LABEL = "阶段 4 · 数据集与训练支撑";
 
 /**
  * 一级导航分区，依据规范 §18.2。
@@ -136,14 +136,22 @@ export const navSections: NavSection[] = [
         label: "数据集管理",
         description: "构建、冻结与交付训练数据集。",
         icon: createElement(DatabaseOutlined),
-        available: false,
+        available: true,
       },
       {
-        path: "/training",
+        path: "/exports",
+        label: "导出任务",
+        description: "管理异步导出、产物清单与下载。",
+        icon: createElement(CloudUploadOutlined),
+        available: true,
+      },
+      {
+        path: "/training-requests",
         label: "训练支撑",
-        description: "管理训练任务、训练数据与产物登记。",
+        description: "管理训练需求、交付与外部训练引用。",
         icon: createElement(ThunderboltOutlined),
-        available: false,
+        available: true,
+        aliases: ["/training", "/training-deliveries"],
       },
       {
         path: "/models",

@@ -20,6 +20,14 @@ import AnnotationTaskDetailPage from "./pages/annotation/AnnotationTaskDetailPag
 import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
 import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
 import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPage";
+import DatasetDetailPage from "./pages/datasets/DatasetDetailPage";
+import DatasetListPage from "./pages/datasets/DatasetListPage";
+import DatasetVersionDetailPage from "./pages/datasets/DatasetVersionDetailPage";
+import ExportDetailPage from "./pages/datasets/ExportDetailPage";
+import ExportListPage from "./pages/datasets/ExportListPage";
+import TrainingDeliveryDetailPage from "./pages/datasets/TrainingDeliveryDetailPage";
+import TrainingRequestDetailPage from "./pages/datasets/TrainingRequestDetailPage";
+import TrainingRequestListPage from "./pages/datasets/TrainingRequestListPage";
 import CollectionTaskListPage from "./pages/collection/CollectionTaskListPage";
 import WorkbenchPage from "./pages/collection/WorkbenchPage";
 import DeviceDetailPage from "./pages/devices/DeviceDetailPage";
@@ -45,6 +53,16 @@ function CollectionIndexRedirect() {
   return (
     <Navigate
       to={{ pathname: "/collection/tasks", search: location.search }}
+      replace
+    />
+  );
+}
+
+function TrainingIndexRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: "/training-requests", search: location.search }}
       replace
     />
   );
@@ -133,6 +151,24 @@ export default function AppRoutes() {
         <Route
           path="annotation/quality-samples/:qualitySampleId"
           element={<AnnotationQualityDetailPage />}
+        />
+        <Route path="datasets" element={<DatasetListPage />} />
+        <Route path="datasets/:datasetId" element={<DatasetDetailPage />} />
+        <Route
+          path="datasets/:datasetId/versions/:versionId"
+          element={<DatasetVersionDetailPage />}
+        />
+        <Route path="exports" element={<ExportListPage />} />
+        <Route path="exports/:exportJobId" element={<ExportDetailPage />} />
+        <Route path="training" element={<TrainingIndexRedirect />} />
+        <Route path="training-requests" element={<TrainingRequestListPage />} />
+        <Route
+          path="training-requests/:requestId"
+          element={<TrainingRequestDetailPage />}
+        />
+        <Route
+          path="training-deliveries/:deliveryId"
+          element={<TrainingDeliveryDetailPage />}
         />
         {plannedRoutes.map((item) => (
           <Route
