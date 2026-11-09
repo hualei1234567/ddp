@@ -16940,6 +16940,7 @@ components:
         - revision_sha256
         - created_at
         - created_by
+        - version
       additionalProperties: false
       properties:
         revision_id:
@@ -17014,6 +17015,16 @@ components:
           $ref: '#/components/schemas/date_time'
         created_by:
           $ref: '#/components/schemas/uuid'
+        allowed_actions:
+          type: array
+          items:
+            type: string
+            maxLength: 64
+          uniqueItems: true
+        version:
+          type: integer
+          minimum: 1
+          description: 乐观锁版本，用于 If-Match。
       $defs:
         uuid:
           type: string
