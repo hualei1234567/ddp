@@ -1,0 +1,1343 @@
+# 阶段 4 数据集与训练域路径片段。
+# 仅声明 backend/app/api/v1/{dataset*,export*,training*,adapter_callback}_routes.py 实际实现的端点；
+# 草案中的 asset-catalog、Dataset/TrainingRequest 血缘与 DatasetVersion PATCH 尚未实现，不进入快照。
+# 由 openapi.yaml 通过 $ref 解析；引用回入口文件以复用公共参数与响应。
+
+datasets:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listDatasets
+    tags: [datasets]
+    summary: Dataset 列表
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/DatasetStatus" }
+      - name: purpose
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/DatasetPurpose" }
+      - name: usage_policy
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/DatasetUsagePolicy" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: Dataset 分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createDataset
+    tags: [datasets]
+    summary: 创建 Dataset（DRAFT）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DatasetCreate" }
+    responses:
+      "201":
+        description: Dataset 已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Dataset" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+  get:
+    operationId: getDataset
+    tags: [datasets]
+    summary: Dataset 详情
+    responses:
+      "200":
+        description: Dataset 详情
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Dataset" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  patch:
+    operationId: updateDataset
+    tags: [datasets]
+    summary: 修改 Dataset 非样本字段（ARCHIVED 不可编辑）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DatasetPatch" }
+    responses:
+      "200":
+        description: 修改后的 Dataset
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Dataset" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetAction"
+  post:
+    operationId: actOnDataset
+    tags: [datasets]
+    summary: Dataset 状态动作（archive/restore；restore 需 PO 审批并审计）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DatasetActionRequest" }
+    responses:
+      "200":
+        description: 动作后的 Dataset
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Dataset" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetVersions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+  get:
+    operationId: listDatasetVersions
+    tags: [dataset-versions]
+    summary: DatasetVersion 列表
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/DatasetVersionStatus" }
+      - name: validity_status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/ValidityStatus" }
+      - name: leakage_status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/LeakageStatus" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: DatasetVersion 分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetVersionPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createDatasetVersion
+    tags: [dataset-versions]
+    summary: 创建 DatasetVersion 草稿（显式策略版本与选择快照）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DatasetVersionCreate" }
+    responses:
+      "201":
+        description: 草稿已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetVersion" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetVersionDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/VersionId"
+  get:
+    operationId: getDatasetVersion
+    tags: [dataset-versions]
+    summary: DatasetVersion 详情
+    responses:
+      "200":
+        description: 版本详情
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetVersion" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetVersionActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/VersionId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetVersionAction"
+  post:
+    operationId: actOnDatasetVersion
+    tags: [dataset-versions]
+    summary: 版本动作（build/validate/return-draft/freeze/archive/cancel）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DatasetVersionActionRequest" }
+    responses:
+      "200":
+        description: 同步动作后的版本（validate/freeze 等）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetVersion" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "410": { $ref: "../openapi.yaml#/components/responses/Gone" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/ServiceUnavailable" }
+
+datasetItems:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/VersionId"
+  get:
+    operationId: listDatasetItems
+    tags: [dataset-items]
+    summary: DatasetItem 列表
+    parameters:
+      - name: split
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/SplitName" }
+      - name: sample_role
+        in: query
+        schema: { type: string, enum: [NORMAL, HOLDOUT, HARD_CASE, EVALUATION] }
+      - name: episode_id
+        in: query
+        schema: { type: string, format: uuid }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: DatasetItem 分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetItemPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetItemDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/VersionId"
+    - $ref: "../openapi.yaml#/components/parameters/ItemId"
+  get:
+    operationId: getDatasetItem
+    tags: [dataset-items]
+    summary: DatasetItem 详情
+    responses:
+      "200":
+        description: DatasetItem 详情
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetItem" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetVersionSelectionPreview:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/VersionId"
+  post:
+    operationId: previewDatasetSelection
+    tags: [dataset-reports]
+    summary: 选择预览（不冻结；数据不足/空测试集显式失败）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/SelectionPreviewRequest" }
+    responses:
+      "200":
+        description: 预览结果
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SelectionPreview" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetVersionQualityReport:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/VersionId"
+  get:
+    operationId: getDatasetQualityReport
+    tags: [dataset-reports]
+    summary: 质量报告（STALE 时不得用于冻结/导出）
+    responses:
+      "200":
+        description: 质量报告
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityReport" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/ServiceUnavailable" }
+
+datasetVersionLeakageReport:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/VersionId"
+  get:
+    operationId: getDatasetLeakageReport
+    tags: [dataset-reports]
+    summary: 泄漏报告（FAIL/UNKNOWN 阻断；WAIVED 仅在软规则且 PO 审批后）
+    responses:
+      "200":
+        description: 泄漏报告
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/LeakageReport" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/ServiceUnavailable" }
+
+datasetVersionManifest:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/VersionId"
+  get:
+    operationId: getDatasetManifest
+    tags: [dataset-reports]
+    summary: Manifest（内联或短期签名 URL；服务端计算 SHA256）
+    parameters:
+      - name: inline
+        in: query
+        description: true 时内联 items；超过 1 MiB 时服务端可强制返回签名 URL
+        schema: { type: boolean, default: true }
+    responses:
+      "200":
+        description: Manifest
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Manifest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/ServiceUnavailable" }
+
+dedupPolicies:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+  get:
+    operationId: listDedupPolicies
+    tags: [dataset-policies]
+    summary: 去重策略列表
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 去重策略分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DedupPolicyPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createDedupPolicy
+    tags: [dataset-policies]
+    summary: 创建去重策略（近似重复默认 WARN_ONLY）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DedupPolicyCreate" }
+    responses:
+      "201":
+        description: 去重策略已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DedupPolicy" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dedupPolicyDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/DedupPolicyId"
+  get:
+    operationId: getDedupPolicy
+    tags: [dataset-policies]
+    summary: 去重策略详情
+    responses:
+      "200":
+        description: 去重策略
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DedupPolicy" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+splitPolicies:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+  get:
+    operationId: listSplitPolicies
+    tags: [dataset-policies]
+    summary: 划分策略列表
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 划分策略分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SplitPolicyPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createSplitPolicy
+    tags: [dataset-policies]
+    summary: 创建划分策略（默认 Episode 级 80/10/10，空测试集失败）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/SplitPolicyCreate" }
+    responses:
+      "201":
+        description: 划分策略已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SplitPolicy" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+splitPolicyDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/SplitPolicyId"
+  get:
+    operationId: getSplitPolicy
+    tags: [dataset-policies]
+    summary: 划分策略详情
+    responses:
+      "200":
+        description: 划分策略
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SplitPolicy" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+leakagePolicies:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+  get:
+    operationId: listLeakagePolicies
+    tags: [dataset-policies]
+    summary: 泄漏策略列表
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 泄漏策略分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/LeakagePolicyPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createLeakagePolicy
+    tags: [dataset-policies]
+    summary: 创建泄漏策略（硬规则不可豁免；软规则默认告警）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/LeakagePolicyCreate" }
+    responses:
+      "201":
+        description: 泄漏策略已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/LeakagePolicy" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+leakagePolicyDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/LeakagePolicyId"
+  get:
+    operationId: getLeakagePolicy
+    tags: [dataset-policies]
+    summary: 泄漏策略详情
+    responses:
+      "200":
+        description: 泄漏策略
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/LeakagePolicy" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetGrants:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+  get:
+    operationId: listDatasetGrants
+    tags: [dataset-grants]
+    summary: 数据集授权列表
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/GrantStatus" }
+      - name: grantee_project_id
+        in: query
+        schema: { type: string, format: uuid }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 授权分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetGrantPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createDatasetGrant
+    tags: [dataset-grants]
+    summary: 创建跨项目授权（默认 PENDING_APPROVAL，需 PO 审批）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DatasetGrantCreate" }
+    responses:
+      "201":
+        description: 授权已创建，等待 PO 审批
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetGrant" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetGrantDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/GrantId"
+  get:
+    operationId: getDatasetGrant
+    tags: [dataset-grants]
+    summary: 授权详情
+    responses:
+      "200":
+        description: 授权详情
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetGrant" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+datasetGrantActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/GrantId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetGrantAction"
+  post:
+    operationId: actOnDatasetGrant
+    tags: [dataset-grants]
+    summary: 授权动作（approve/reject/revoke；仅 PO）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrainingActionRequest" }
+    responses:
+      "200":
+        description: 动作后的授权
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DatasetGrant" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "410": { $ref: "../openapi.yaml#/components/responses/Gone" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+exportJobs:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listExportJobs
+    tags: [exports]
+    summary: 导出 Job 列表
+    parameters:
+      - name: dataset_version_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/ExportJobStatus" }
+      - name: format
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/ExportFormat" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 导出 Job 分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExportJobPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createExportJob
+    tags: [exports]
+    summary: 创建异步导出 Job（仅 FROZEN 且有效版本）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ExportJobCreate" }
+    responses:
+      "202":
+        description: 导出已受理
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExportJob" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/ServiceUnavailable" }
+
+exportJobDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ExportJobId"
+  get:
+    operationId: getExportJob
+    tags: [exports]
+    summary: 导出 Job 详情
+    responses:
+      "200":
+        description: 导出 Job
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExportJob" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+exportJobActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ExportJobId"
+    - $ref: "../openapi.yaml#/components/parameters/ExportJobAction"
+  post:
+    operationId: actOnExportJob
+    tags: [exports]
+    summary: 导出动作（retry/cancel；PARTIAL 不可重试为成功）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ExportJobActionRequest" }
+    responses:
+      "200":
+        description: 动作后的导出 Job
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExportJob" }
+      "202":
+        description: 重试已受理
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExportJob" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "410": { $ref: "../openapi.yaml#/components/responses/Gone" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+exportJobArtifacts:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ExportJobId"
+  get:
+    operationId: getExportArtifactManifest
+    tags: [exports]
+    summary: 导出产物清单（逐文件 SHA256 + 汇总 SHA256）
+    responses:
+      "200":
+        description: 产物清单
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ArtifactManifest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingRequests:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listTrainingRequests
+    tags: [training-requests]
+    summary: 训练需求列表
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestStatus" }
+      - name: priority
+        in: query
+        schema: { type: string, enum: [P0, P1, P2, P3] }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 训练需求分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createTrainingRequest
+    tags: [training-requests]
+    summary: 创建训练需求（含第一个 DRAFT revision）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestCreate" }
+    responses:
+      "201":
+        description: 训练需求已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingRequestDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RequestId"
+  get:
+    operationId: getTrainingRequest
+    tags: [training-requests]
+    summary: 训练需求详情
+    responses:
+      "200":
+        description: 训练需求详情
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingRequestActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RequestId"
+    - $ref: "../openapi.yaml#/components/parameters/TrainingRequestAction"
+  post:
+    operationId: actOnTrainingRequest
+    tags: [training-requests]
+    summary: 需求级动作（block/unblock/cancel/close；close 需已验收）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrainingActionRequest" }
+    responses:
+      "200":
+        description: 动作后的需求
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingRequestRevisions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RequestId"
+  get:
+    operationId: listTrainingRequestRevisions
+    tags: [training-requests]
+    summary: 需求 revision 列表
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/RevisionStatus" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: revision 分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestRevisionPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createTrainingRequestRevision
+    tags: [training-requests]
+    summary: 创建新 revision（revision_no 递增，需重新审批）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestRevisionCreate" }
+    responses:
+      "201":
+        description: 新 revision 已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestRevision" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingRequestRevisionDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RequestId"
+    - $ref: "../openapi.yaml#/components/parameters/RevisionId"
+  get:
+    operationId: getTrainingRequestRevision
+    tags: [training-requests]
+    summary: revision 详情
+    responses:
+      "200":
+        description: revision 详情
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestRevision" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  patch:
+    operationId: updateTrainingRequestRevision
+    tags: [training-requests]
+    summary: 修改 DRAFT revision（SUBMITTED 后不可原地修改）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestRevisionPatch" }
+    responses:
+      "200":
+        description: 修改后的 revision
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestRevision" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingRequestRevisionActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RequestId"
+    - $ref: "../openapi.yaml#/components/parameters/RevisionId"
+    - $ref: "../openapi.yaml#/components/parameters/TrainingRequestRevisionAction"
+  post:
+    operationId: actOnTrainingRequestRevision
+    tags: [training-requests]
+    summary: revision 动作（submit/approve/reject；提交人不得自批）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrainingActionRequest" }
+    responses:
+      "200":
+        description: 动作后的 revision
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRequestRevision" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingDeliveries:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listTrainingDeliveries
+    tags: [training-deliveries]
+    summary: 训练交付列表
+    parameters:
+      - name: training_request_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/TrainingDeliveryStatus" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 交付分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingDeliveryPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createTrainingDelivery
+    tags: [training-deliveries]
+    summary: 创建交付单（校验 revision/版本/导出/校验和）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrainingDeliveryCreate" }
+    responses:
+      "201":
+        description: 交付单已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingDelivery" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingDeliveryDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeliveryId"
+  get:
+    operationId: getTrainingDelivery
+    tags: [training-deliveries]
+    summary: 交付详情
+    responses:
+      "200":
+        description: 交付详情
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingDelivery" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingDeliveryActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeliveryId"
+    - $ref: "../openapi.yaml#/components/parameters/TrainingDeliveryAction"
+  post:
+    operationId: actOnTrainingDelivery
+    tags: [training-deliveries]
+    summary: 交付动作（ready/deliver/accept/reject/rework/cancel；验收人不得是唯一交付人）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrainingActionRequest" }
+    responses:
+      "200":
+        description: 动作后的交付
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingDelivery" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingDeliveryExternalReferences:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeliveryId"
+  get:
+    operationId: listExternalTrainingReferences
+    tags: [training-adapters]
+    summary: 交付关联的外部训练引用
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 外部引用分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExternalTrainingReferencePage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createExternalTrainingReference
+    tags: [training-adapters]
+    summary: 提交外部训练引用（Adapter 幂等；不支持能力显式 Unsupported）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ExternalTrainingReferenceCreate" }
+    responses:
+      "202":
+        description: 外部提交已受理
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExternalTrainingReference" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/ServiceUnavailable" }
+
+externalTrainingReferenceDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ExternalRefId"
+  get:
+    operationId: getExternalTrainingReference
+    tags: [training-adapters]
+    summary: 外部训练引用详情（未知/不可达显示 Unknown/Stale）
+    responses:
+      "200":
+        description: 外部引用详情
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExternalTrainingReference" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+externalTrainingReferenceActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ExternalRefId"
+    - $ref: "../openapi.yaml#/components/parameters/ExternalTrainingReferenceAction"
+  post:
+    operationId: actOnExternalTrainingReference
+    tags: [training-adapters]
+    summary: 外部引用动作（sync/cancel；取消需 Adapter 支持）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    responses:
+      "200":
+        description: 动作后的外部引用
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExternalTrainingReference" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/ServiceUnavailable" }
+
+adapterCallback:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/AdapterId"
+  post:
+    operationId: receiveTrainingAdapterCallback
+    tags: [training-adapters]
+    summary: Adapter 回调（HMAC-SHA256 + 时间窗 + nonce 防重放；幂等）
+    security:
+      - adapterHmac: []
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/CallbackSignature"
+      - $ref: "../openapi.yaml#/components/parameters/CallbackTimestamp"
+      - $ref: "../openapi.yaml#/components/parameters/CallbackNonce"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AdapterCallbackPayload" }
+    responses:
+      "204":
+        description: 回调已接受（重复回调幂等，不重复更新）
+      "400": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+qualityPolicies:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+  get:
+    operationId: listQualityPolicies
+    tags: [dataset-policies]
+    summary: 质量策略列表
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 质量策略分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityPolicyPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createQualityPolicy
+    tags: [dataset-policies]
+    summary: 创建质量策略
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/QualityPolicyCreate" }
+    responses:
+      "201":
+        description: 质量策略已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityPolicy" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+qualityPolicyDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/QualityPolicyId"
+  get:
+    operationId: getQualityPolicy
+    tags: [dataset-policies]
+    summary: 质量策略详情
+    responses:
+      "200":
+        description: 质量策略
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityPolicy" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+exportJobArtifactDownload:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ExportJobId"
+    - name: artifact_path
+      in: path
+      required: true
+      description: 产物清单中的相对路径；禁止绝对路径、`..` 与反斜杠。
+      schema: { type: string, minLength: 1, maxLength: 1024 }
+  get:
+    operationId: downloadExportArtifact
+    tags: [exports]
+    summary: 获取导出产物下载地址（短期签名 URL）
+    responses:
+      "200":
+        description: 产物下载地址
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ExportArtifactDownload" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

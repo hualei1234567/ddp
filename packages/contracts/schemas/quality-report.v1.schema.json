@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/quality-report.v1.schema.json",
+  "title": "DDP DatasetQualityReport v1（阶段 4 草案）",
+  "description": "数据集质量报告。覆盖数量、划分、分布、时长/大小、去重、覆盖、泄漏摘要、警告与阻断项；输入或策略变化后置 STALE，不得继续用于冻结/导出。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "quality_report_id",
+    "project_id",
+    "dataset_version_id",
+    "status",
+    "quality_policy_ref",
+    "candidate_count",
+    "selected_count",
+    "excluded_count",
+    "duplicated_count",
+    "split_counts",
+    "distributions",
+    "total_duration_ns",
+    "total_bytes",
+    "coverage",
+    "dedup_summary",
+    "leakage_summary",
+    "warnings",
+    "blocking_issues",
+    "source_snapshot_at",
+    "generator_version",
+    "report_sha256",
+    "created_at",
+    "version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "quality_report_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "dataset_version_id": {"$ref": "#/$defs/uuid"},
+    "status": {"type": "string", "enum": ["GENERATING", "READY", "FAILED", "STALE"]},
+    "quality_policy_ref": {"$ref": "#/$defs/policy_ref"},
+    "candidate_count": {"type": "integer", "minimum": 0},
+    "selected_count": {"type": "integer", "minimum": 0},
+    "excluded_count": {"type": "integer", "minimum": 0},
+    "duplicated_count": {"type": "integer", "minimum": 0},
+    "split_counts": {"$ref": "#/$defs/split_counts"},
+    "distributions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scene": {"$ref": "#/$defs/count_map"},
+        "action": {"$ref": "#/$defs/count_map"},
+        "robot": {"$ref": "#/$defs/count_map"},
+        "device": {"$ref": "#/$defs/count_map"},
+        "label": {"$ref": "#/$defs/count_map"},
+        "quality_status": {"$ref": "#/$defs/count_map"}
+      }
+    },
+    "total_duration_ns": {"type": "integer", "minimum": 0},
+    "total_bytes": {"type": "integer", "minimum": 0},
+    "coverage": {
+      "type": "object",
+      "required": ["status", "required_dimensions", "covered_dimensions", "details"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"type": "string", "enum": ["OK", "PARTIAL", "N/A", "UNKNOWN", "STALE"]},
+        "required_dimensions": {"type": "integer", "minimum": 0},
+        "covered_dimensions": {"type": "integer", "minimum": 0},
+        "details": {"type": "array", "items": {"type": "object", "additionalProperties": true}}
+      }
+    },
+    "dedup_summary": {
+      "type": "object",
+      "required": ["exact_group_count", "excluded_duplicate_count", "near_duplicate_status"],
+      "additionalProperties": false,
+      "properties": {
+        "exact_group_count": {"type": "integer", "minimum": 0},
+        "excluded_duplicate_count": {"type": "integer", "minimum": 0},
+        "near_duplicate_status": {"type": "string", "enum": ["DISABLED", "OK", "WARN", "UNKNOWN", "N/A"]}
+      }
+    },
+    "leakage_summary": {
+      "type": "object",
+      "required": ["status", "hard_violation_count", "soft_violation_count", "report_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {"type": "string", "enum": ["PASS", "WARN", "FAIL", "UNKNOWN", "WAIVED"]},
+        "hard_violation_count": {"type": "integer", "minimum": 0},
+        "soft_violation_count": {"type": "integer", "minimum": 0},
+        "report_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+      }
+    },
+    "warnings": {"type": "array", "items": {"type": "string", "maxLength": 500}, "uniqueItems": true},
+    "blocking_issues": {"type": "array", "items": {"type": "string", "maxLength": 500}, "uniqueItems": true},
+    "source_snapshot_at": {"$ref": "#/$defs/date_time"},
+    "generator_version": {"type": "string", "minLength": 1, "maxLength": 100},
+    "report_sha256": {"$ref": "#/$defs/sha256"},
+    "report_key": {"type": ["string", "null"], "maxLength": 1024},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "version": {"type": "integer", "minimum": 1}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "count_map": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "split_counts": {
+      "type": "object",
+      "required": ["train", "validation", "test"],
+      "additionalProperties": false,
+      "properties": {
+        "train": {"type": "integer", "minimum": 0},
+        "validation": {"type": "integer", "minimum": 0},
+        "test": {"type": "integer", "minimum": 0}
+      }
+    },
+    "policy_ref": {
+      "type": "object",
+      "required": ["policy_id", "version", "policy_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "policy_id": {"$ref": "#/$defs/uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

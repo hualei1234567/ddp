@@ -1,12 +1,12 @@
 # ADR-0012 阶段 4 数据集与训练支撑契约决策
 
-- 状态：**Proposed（已提议，待审阅；契约草案 `ddp.stage4/1.0.0-draft`）**
+- 状态：**ACCEPTED（已接受并冻结；`ddp.stage4/1.0.0`）**
 - 日期：2026-11-09
-- 决策者：System Architect；批准人：用户（待批准）
-- 任务：DDP-325
-- 关联：ADR-0002、ADR-0003、ADR-0004、ADR-0005、ADR-0010、ADR-0011；`docs/product/阶段4-数据集与训练支撑PRD.md`；`docs/product/阶段4-数据集与训练支撑验收标准.md`；`docs/architecture/阶段3-契约冻结-v1.0.md`；`docs/architecture/contract-draft/dataset/*`
-- 契约版本：`ddp.stage4/1.0.0-draft`
-- 边界：本 ADR 只做设计与契约决策；不修改 `packages/contracts/**`、`backend/**`、`apps/web/**`、`backend/migrations/**`，不执行迁移、部署或生产数据操作。
+- 决策者：System Architect；批准人：用户（长期授权）
+- 任务：DDP-325（设计）、DDP-331（契约冻结）
+- 关联：ADR-0002、ADR-0003、ADR-0004、ADR-0005、ADR-0010、ADR-0011；`docs/product/阶段4-数据集与训练支撑PRD.md`；`docs/product/阶段4-数据集与训练支撑验收标准.md`；`docs/architecture/阶段3-契约冻结-v1.0.md`；`docs/architecture/阶段4-契约冻结-v1.0.md`；`docs/architecture/contract-draft/dataset/*`
+- 契约版本：`ddp.stage4/1.0.0`（冻结基线 `packages/contracts/baselines/openapi.stage4.v1.0.0.bundle.yaml`）
+- 边界：本 ADR 记录阶段 4 设计与契约决策；实现已落地于 `backend/**` 与迁移 0017–0020，契约快照已冻结于 `packages/contracts/**`。生产发布与生产数据操作仍需用户单独批准。
 
 ## 1. 背景
 
@@ -132,6 +132,7 @@
 ### 4.1 阶段 4 负责
 
 - 资产目录只读检索视图与新鲜度语义（权威数据仍在阶段 2/3 对象）。
+  **状态：未实现；不进入 `ddp.stage4/1.0.0` 冻结快照。**
 - Dataset、不可变 DatasetVersion、DatasetItem、SelectionPreview。
 - DedupPolicy、SplitPolicy、LeakagePolicy/LeakageReport、QualityReport、Manifest。
 - 冻结、复现、授权（DatasetGrant）、归档（不删除）。
@@ -264,14 +265,21 @@ DatasetItem 必须显式引用：
 ## 10. 验收与证据
 
 - 设计覆盖：资产目录、Dataset/Version/Item、选择/去重/划分/泄漏、报告/Manifest、冻结/复现/授权/归档、ExportJob、TrainingRequest/Revision、TrainingDelivery、ExternalTrainingReference、Adapter 回调、权限/隔离、审计/outbox、血缘、错误码、版本与回滚。
-- 机器可读基线：`docs/architecture/contract-draft/dataset/openapi.stage4.v1.yaml`、`*.schema.json`、`state-machines.v1.json`、`error-codes.v1.json`。
-- 本次已执行：YAML/JSON 解析自检（见提交说明）；未执行 Redocly lint、oasdiff、pytest、迁移或部署，相关项 `NOT RUN`。
+- 机器可读设计基线：`docs/architecture/contract-draft/dataset/openapi.stage4.v1.yaml`、`*.schema.json`、`state-machines.v1.json`、`error-codes.v1.json`。
+- 实现与冻结（2026-11-09 DDP-331）：
+  - 实现基线 `f4d32a4`；迁移 0017–0020；真实 PostgreSQL 16.15 + MinIO 复验
+    508 项探针 PASS、全量 pytest 724 passed（DDP-330）。
+  - 冻结快照 `packages/contracts/openapi.yaml` `1.2.0`，55 个阶段 4 操作，
+    与运行期 FastAPI OpenAPI 端点集合零差异。
+  - Redocly lint 0 error（4 个既存 warning）；`oasdiff breaking` No changes detected。
+  - 详细矩阵、错误码与差异见 `docs/architecture/阶段4-契约冻结-v1.0.md`。
 - 实施验收必须附：跨项目负向测试、并发冻结/导出、冻结后篡改、泄漏硬/软规则、去重确定性、划分复现、Manifest/报告 Hash、导出校验和/重试/取消/部分失败、Adapter 回调签名/重放、审计/outbox 回滚、血缘正反向与成环证据。真实训练交付以真实人员/平台/数据为前提，未满足时 `BLOCKED`。
 
 ## 11. 批准与生效
 
-- 当前状态：**Proposed**。批准后生效范围为阶段 4 数据集与训练支撑契约草案；不构成实现完成、迁移批准或生产发布批准。
-- 批准人：用户；维护：System Architect 单一 Owner。
+- 当前状态：**ACCEPTED**。生效范围为阶段 4 数据集与训练支撑契约 `ddp.stage4/1.0.0`；
+  不构成生产发布批准或真实训练交付验收。
+- 批准人：用户（长期授权，2026-11-08 起）；维护：System Architect 单一 Owner。
 - 生效后，任何破坏性变更必须新建 ADR；任何未验证项必须在实现验收前关闭或继续显式标注。
 
 ## 12. 变更记录
@@ -279,3 +287,4 @@ DatasetItem 必须显式引用：
 | 日期 | 变更 | 任务 |
 |---|---|---|
 | 2026-11-09 | 首次提出：阶段 4 边界、非目标、血缘衔接、七项 [DECISION] 默认结论、版本/变更/回滚、未验证项与风险 | DDP-325 |
+| 2026-11-09 | 状态更新为 ACCEPTED；记录实现与冻结结果（55 操作、lint/oasdiff 通过）；资产目录标记未实现、不进入快照 | DDP-331 |

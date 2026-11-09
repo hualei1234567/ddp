@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/dataset-grant.v1.schema.json",
+  "title": "DDP DatasetGrant v1（阶段 4 草案）",
+  "description": "跨项目/跨团队数据集显式授权。[DECISION] 默认 PO 审批，必须带范围、到期时间、原因，可撤销；到期/撤销立即生效。默认禁止跨项目。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "grant_id",
+    "project_id",
+    "dataset_id",
+    "grantee_project_id",
+    "scope",
+    "status",
+    "reason",
+    "expires_at",
+    "version",
+    "created_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "grant_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid", "description": "数据集所属项目（授权方）。"},
+    "dataset_id": {"$ref": "#/$defs/uuid"},
+    "dataset_version_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}], "description": "为空表示 Dataset 级别授权；非空表示指定版本。"},
+    "grantee_project_id": {"$ref": "#/$defs/uuid"},
+    "grantee_team": {"type": ["string", "null"], "maxLength": 200},
+    "scope": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["VIEW", "DOWNLOAD", "EXPORT"]}
+    },
+    "status": {"type": "string", "enum": ["PENDING_APPROVAL", "ACTIVE", "REJECTED", "EXPIRED", "REVOKED"]},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "approved_by": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "approved_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "rejected_by": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "rejected_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "rejection_reason": {"type": ["string", "null"], "maxLength": 2000},
+    "expires_at": {"$ref": "#/$defs/date_time"},
+    "revoked_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "revoked_by": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "revoke_reason": {"type": ["string", "null"], "maxLength": 2000},
+    "allowed_actions": {"type": "array", "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "date_time": {"type": "string", "format": "date-time"}
+  }
+}

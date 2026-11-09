@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/training-request.v1.schema.json",
+  "title": "DDP TrainingRequest v1（阶段 4 草案）",
+  "description": "算法团队训练数据需求。批准后的 revision 不可原地修改；变更创建新 revision 并重新审批。当前 revision 以显式 revision_id 引用。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "training_request_id",
+    "project_id",
+    "code",
+    "title",
+    "status",
+    "priority",
+    "owner_id",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "training_request_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "code": {"type": "string", "minLength": 1, "maxLength": 64},
+    "title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "status": {
+      "type": "string",
+      "enum": ["DRAFT", "SUBMITTED", "PENDING_REVIEW", "APPROVED", "IN_DELIVERY", "DELIVERED", "ACCEPTED", "CLOSED", "REJECTED", "REVISION_REQUIRED", "BLOCKED", "CANCELLED"]
+    },
+    "current_revision_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "current_revision_no": {"type": ["integer", "null"], "minimum": 1},
+    "priority": {"type": "string", "enum": ["P0", "P1", "P2", "P3"]},
+    "owner_id": {"$ref": "#/$defs/uuid"},
+    "blocked_reason": {"type": ["string", "null"], "maxLength": 2000},
+    "blocked_from_status": {"type": ["string", "null"], "maxLength": 64},
+    "cancel_reason": {"type": ["string", "null"], "maxLength": 2000},
+    "closed_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "allowed_actions": {"type": "array", "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "updated_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "date_time": {"type": "string", "format": "date-time"}
+  }
+}

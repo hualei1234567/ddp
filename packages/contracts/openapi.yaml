@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.1.0
+  version: 1.2.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -14,6 +14,10 @@ info:
     - 阶段 2 冻结版本为 `ddp.stage2/1.0.0`（DDP-312，v1.0 FROZEN）。
     - 阶段 3 冻结版本为 `ddp.stage3/1.0.0`（DDP-323）；冻结端点矩阵、错误码与
       `If-Match`/`Idempotency-Key` 规则见 `docs/architecture/阶段3-契约冻结-v1.0.md`。
+    - `1.2.0` 在 `1.1.0` 基础上**增量加入阶段 4 数据集与训练支撑已实现端点**：Dataset /
+      DatasetVersion / DatasetItem、去重·划分·泄漏·质量策略、选择预览、质量/泄漏报告、
+      Manifest、跨项目授权、导出 Job 与产物、训练需求/修订/交付、外部训练引用与 Adapter 回调。
+      冻结版本 `ddp.stage4/1.0.0`；端点矩阵与错误码见 `docs/architecture/阶段4-契约冻结-v1.0.md`。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -31,7 +35,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.1.0
+  version: 1.2.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -69,6 +73,21 @@ x-ddp-contract:
         check-stage3-freeze.sh --freeze/--check、oasdiff breaking（No changes detected）、
         后端 pytest（668 collected：655 passed / 13 skipped，exit 0）。
         详细记录见 docs/architecture/阶段3-契约冻结-v1.0.md。
+    stage4:
+      version: ddp.stage4/1.0.0
+      frozen_status: frozen
+      frozen_at: "2026-11-09"
+      task: DDP-331
+      implemented_baseline_task: DDP-330
+      frozen_document: docs/architecture/阶段4-契约冻结-v1.0.md
+      index_document: docs/architecture/阶段4-数据集与训练契约索引.md
+      approval_record: docs/adr/0012-stage4-dataset-training-contract.md
+      validation_status: PASS
+      validation_note: |
+        2026-11-09 DDP-331 已执行：Redocly lint（0 error，4 个既有 warning）、
+        check-stage4-freeze.sh --freeze/--check、oasdiff breaking（No changes detected）；
+        契约端点 55 与运行期 FastAPI OpenAPI 阶段 4 端点集合零差异。
+        详细记录见 docs/architecture/阶段4-契约冻结-v1.0.md。
 servers:
   - url: http://localhost:8000
     description: 本地开发
@@ -107,6 +126,26 @@ tags:
     description: 提交、记录、复核与仲裁
   - name: annotation-quality
     description: 黄金集、质检抽检与 IAA 报告
+  - name: datasets
+    description: Dataset 容器、状态动作与生命周期
+  - name: dataset-versions
+    description: DatasetVersion 构建、校验、冻结、复现与归档
+  - name: dataset-items
+    description: DatasetItem 显式版本引用与划分
+  - name: dataset-policies
+    description: 去重、划分、泄漏与质量策略（版本化、不可原地修改）
+  - name: dataset-reports
+    description: 选择预览、质量报告、泄漏报告与 Manifest
+  - name: dataset-grants
+    description: 跨项目数据集显式授权
+  - name: exports
+    description: 异步导出 Job、产物清单、校验和与下载
+  - name: training-requests
+    description: 训练需求、revision 与审批
+  - name: training-deliveries
+    description: 训练交付、验收与返工
+  - name: training-adapters
+    description: 外部训练引用、状态同步与 HMAC 回调
 paths:
   /health:
     $ref: "./fragments/paths.stage1.yaml#/health"
@@ -286,6 +325,88 @@ paths:
     $ref: "./fragments/paths.stage3.yaml#/iaaReports"
   /api/v1/projects/{project_id}/iaa-reports/{iaa_report_id}:
     $ref: "./fragments/paths.stage3.yaml#/iaaReportDetail"
+  /api/v1/projects/{project_id}/datasets:
+    $ref: "./fragments/paths.stage4.yaml#/datasets"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}:
+    $ref: "./fragments/paths.stage4.yaml#/datasetDetail"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/actions/{action}:
+    $ref: "./fragments/paths.stage4.yaml#/datasetActions"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions:
+    $ref: "./fragments/paths.stage4.yaml#/datasetVersions"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}:
+    $ref: "./fragments/paths.stage4.yaml#/datasetVersionDetail"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/actions/{action}:
+    $ref: "./fragments/paths.stage4.yaml#/datasetVersionActions"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/items:
+    $ref: "./fragments/paths.stage4.yaml#/datasetItems"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/items/{item_id}:
+    $ref: "./fragments/paths.stage4.yaml#/datasetItemDetail"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/selection-preview:
+    $ref: "./fragments/paths.stage4.yaml#/datasetVersionSelectionPreview"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/quality-report:
+    $ref: "./fragments/paths.stage4.yaml#/datasetVersionQualityReport"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/leakage-report:
+    $ref: "./fragments/paths.stage4.yaml#/datasetVersionLeakageReport"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/manifest:
+    $ref: "./fragments/paths.stage4.yaml#/datasetVersionManifest"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/dedup-policies:
+    $ref: "./fragments/paths.stage4.yaml#/dedupPolicies"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/dedup-policies/{policy_id}:
+    $ref: "./fragments/paths.stage4.yaml#/dedupPolicyDetail"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/split-policies:
+    $ref: "./fragments/paths.stage4.yaml#/splitPolicies"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/split-policies/{policy_id}:
+    $ref: "./fragments/paths.stage4.yaml#/splitPolicyDetail"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/leakage-policies:
+    $ref: "./fragments/paths.stage4.yaml#/leakagePolicies"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/leakage-policies/{policy_id}:
+    $ref: "./fragments/paths.stage4.yaml#/leakagePolicyDetail"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/grants:
+    $ref: "./fragments/paths.stage4.yaml#/datasetGrants"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/grants/{grant_id}:
+    $ref: "./fragments/paths.stage4.yaml#/datasetGrantDetail"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/grants/{grant_id}/actions/{action}:
+    $ref: "./fragments/paths.stage4.yaml#/datasetGrantActions"
+  /api/v1/projects/{project_id}/exports:
+    $ref: "./fragments/paths.stage4.yaml#/exportJobs"
+  /api/v1/projects/{project_id}/exports/{export_job_id}:
+    $ref: "./fragments/paths.stage4.yaml#/exportJobDetail"
+  /api/v1/projects/{project_id}/exports/{export_job_id}/actions/{action}:
+    $ref: "./fragments/paths.stage4.yaml#/exportJobActions"
+  /api/v1/projects/{project_id}/exports/{export_job_id}/artifacts:
+    $ref: "./fragments/paths.stage4.yaml#/exportJobArtifacts"
+  /api/v1/projects/{project_id}/training-requests:
+    $ref: "./fragments/paths.stage4.yaml#/trainingRequests"
+  /api/v1/projects/{project_id}/training-requests/{request_id}:
+    $ref: "./fragments/paths.stage4.yaml#/trainingRequestDetail"
+  /api/v1/projects/{project_id}/training-requests/{request_id}/actions/{action}:
+    $ref: "./fragments/paths.stage4.yaml#/trainingRequestActions"
+  /api/v1/projects/{project_id}/training-requests/{request_id}/revisions:
+    $ref: "./fragments/paths.stage4.yaml#/trainingRequestRevisions"
+  /api/v1/projects/{project_id}/training-requests/{request_id}/revisions/{revision_id}:
+    $ref: "./fragments/paths.stage4.yaml#/trainingRequestRevisionDetail"
+  /api/v1/projects/{project_id}/training-requests/{request_id}/revisions/{revision_id}/actions/{action}:
+    $ref: "./fragments/paths.stage4.yaml#/trainingRequestRevisionActions"
+  /api/v1/projects/{project_id}/training-deliveries:
+    $ref: "./fragments/paths.stage4.yaml#/trainingDeliveries"
+  /api/v1/projects/{project_id}/training-deliveries/{delivery_id}:
+    $ref: "./fragments/paths.stage4.yaml#/trainingDeliveryDetail"
+  /api/v1/projects/{project_id}/training-deliveries/{delivery_id}/actions/{action}:
+    $ref: "./fragments/paths.stage4.yaml#/trainingDeliveryActions"
+  /api/v1/projects/{project_id}/training-deliveries/{delivery_id}/external-references:
+    $ref: "./fragments/paths.stage4.yaml#/trainingDeliveryExternalReferences"
+  /api/v1/projects/{project_id}/external-training-references/{external_ref_id}:
+    $ref: "./fragments/paths.stage4.yaml#/externalTrainingReferenceDetail"
+  /api/v1/projects/{project_id}/external-training-references/{external_ref_id}/actions/{action}:
+    $ref: "./fragments/paths.stage4.yaml#/externalTrainingReferenceActions"
+  /api/v1/integrations/training-adapters/{adapter_id}/callbacks:
+    $ref: "./fragments/paths.stage4.yaml#/adapterCallback"
+  /api/v1/projects/{project_id}/exports/{export_job_id}/artifacts/{artifact_path}/download:
+    $ref: "./fragments/paths.stage4.yaml#/exportJobArtifactDownload"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/quality-policies:
+    $ref: "./fragments/paths.stage4.yaml#/qualityPolicies"
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/quality-policies/{policy_id}:
+    $ref: "./fragments/paths.stage4.yaml#/qualityPolicyDetail"
 components:
   securitySchemes:
     bearerAuth:
@@ -293,6 +414,14 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: 生产环境使用 Bearer JWT；本地 X-User-Id 后门不属于对外契约。
+    adapterHmac:
+      type: apiKey
+      in: header
+      name: X-DDP-Signature
+      description: |
+        外部训练平台回调签名。算法：HMAC-SHA256(secret, timestamp + "." + nonce + "." + raw_body)，
+        以 `sha256=<hex>` 传输；同时携带 X-DDP-Timestamp（Unix 秒）与 X-DDP-Nonce。
+        时间窗默认 ±300 秒；nonce 在窗口内不得重复；重放返回 409 training_callback_replayed。
   parameters:
     ProjectId: {$ref: "./fragments/components.yaml#/parameters/ProjectId"}
     ProjectIdQuery: {$ref: "./fragments/components.yaml#/parameters/ProjectIdQuery"}
@@ -337,6 +466,32 @@ components:
     AnnotationArbitrationAction: {$ref: "./fragments/components.stage3.yaml#/parameters/AnnotationArbitrationAction"}
     GoldSetAction: {$ref: "./fragments/components.stage3.yaml#/parameters/GoldSetAction"}
     QualitySampleAction: {$ref: "./fragments/components.stage3.yaml#/parameters/QualitySampleAction"}
+    DatasetId: {$ref: "./fragments/components.stage4.yaml#/parameters/DatasetId"}
+    VersionId: {$ref: "./fragments/components.stage4.yaml#/parameters/VersionId"}
+    ItemId: {$ref: "./fragments/components.stage4.yaml#/parameters/ItemId"}
+    DedupPolicyId: {$ref: "./fragments/components.stage4.yaml#/parameters/DedupPolicyId"}
+    SplitPolicyId: {$ref: "./fragments/components.stage4.yaml#/parameters/SplitPolicyId"}
+    LeakagePolicyId: {$ref: "./fragments/components.stage4.yaml#/parameters/LeakagePolicyId"}
+    QualityPolicyId: {$ref: "./fragments/components.stage4.yaml#/parameters/QualityPolicyId"}
+    GrantId: {$ref: "./fragments/components.stage4.yaml#/parameters/GrantId"}
+    ExportJobId: {$ref: "./fragments/components.stage4.yaml#/parameters/ExportJobId"}
+    RequestId: {$ref: "./fragments/components.stage4.yaml#/parameters/RequestId"}
+    RevisionId: {$ref: "./fragments/components.stage4.yaml#/parameters/RevisionId"}
+    DeliveryId: {$ref: "./fragments/components.stage4.yaml#/parameters/DeliveryId"}
+    ExternalRefId: {$ref: "./fragments/components.stage4.yaml#/parameters/ExternalRefId"}
+    AdapterId: {$ref: "./fragments/components.stage4.yaml#/parameters/AdapterId"}
+    CallbackSignature: {$ref: "./fragments/components.stage4.yaml#/parameters/CallbackSignature"}
+    CallbackTimestamp: {$ref: "./fragments/components.stage4.yaml#/parameters/CallbackTimestamp"}
+    CallbackNonce: {$ref: "./fragments/components.stage4.yaml#/parameters/CallbackNonce"}
+    DatasetAction: {$ref: "./fragments/components.stage4.yaml#/parameters/DatasetAction"}
+    DatasetVersionAction: {$ref: "./fragments/components.stage4.yaml#/parameters/DatasetVersionAction"}
+    DatasetGrantAction: {$ref: "./fragments/components.stage4.yaml#/parameters/DatasetGrantAction"}
+    ExportJobAction: {$ref: "./fragments/components.stage4.yaml#/parameters/ExportJobAction"}
+    TrainingRequestAction: {$ref: "./fragments/components.stage4.yaml#/parameters/TrainingRequestAction"}
+    TrainingRequestRevisionAction: {$ref: "./fragments/components.stage4.yaml#/parameters/TrainingRequestRevisionAction"}
+    TrainingDeliveryAction: {$ref: "./fragments/components.stage4.yaml#/parameters/TrainingDeliveryAction"}
+    ExternalTrainingReferenceAction: {$ref: "./fragments/components.stage4.yaml#/parameters/ExternalTrainingReferenceAction"}
+    Stage4Limit: {$ref: "./fragments/components.stage4.yaml#/parameters/Stage4Limit"}
   responses:
     Unauthorized: {$ref: "./fragments/components.yaml#/responses/Unauthorized"}
     Forbidden: {$ref: "./fragments/components.yaml#/responses/Forbidden"}
@@ -498,3 +653,72 @@ components:
     GoldSetPage: {$ref: "./fragments/schemas.stage3.yaml#/GoldSetPage"}
     QualitySamplePage: {$ref: "./fragments/schemas.stage3.yaml#/QualitySamplePage"}
     IAAReportPage: {$ref: "./fragments/schemas.stage3.yaml#/IAAReportPage"}
+    Dataset: {$ref: "./schemas/dataset.v1.schema.json"}
+    DatasetVersion: {$ref: "./schemas/dataset-version.v1.schema.json"}
+    DatasetItem: {$ref: "./schemas/dataset-item.v1.schema.json"}
+    DedupPolicy: {$ref: "./schemas/dedup-policy.v1.schema.json"}
+    SplitPolicy: {$ref: "./schemas/split-policy.v1.schema.json"}
+    LeakagePolicy: {$ref: "./schemas/leakage-policy.v1.schema.json"}
+    LeakageReport: {$ref: "./schemas/leakage-report.v1.schema.json"}
+    QualityPolicy: {$ref: "./schemas/quality-policy.v1.schema.json"}
+    QualityReport: {$ref: "./schemas/quality-report.v1.schema.json"}
+    Manifest: {$ref: "./schemas/manifest.v1.schema.json"}
+    SelectionPreview: {$ref: "./schemas/selection-preview.v1.schema.json"}
+    DatasetGrant: {$ref: "./schemas/dataset-grant.v1.schema.json"}
+    ExportJob: {$ref: "./schemas/export-job.v1.schema.json"}
+    TrainingRequest: {$ref: "./schemas/training-request.v1.schema.json"}
+    TrainingRequestRevision: {$ref: "./schemas/training-request-revision.v1.schema.json"}
+    TrainingDelivery: {$ref: "./schemas/training-delivery.v1.schema.json"}
+    ExternalTrainingReference: {$ref: "./schemas/external-training-reference.v1.schema.json"}
+    DatasetStatus: {$ref: "./fragments/schemas.stage4.yaml#/DatasetStatus"}
+    DatasetPurpose: {$ref: "./fragments/schemas.stage4.yaml#/DatasetPurpose"}
+    DatasetUsagePolicy: {$ref: "./fragments/schemas.stage4.yaml#/DatasetUsagePolicy"}
+    DatasetVersionStatus: {$ref: "./fragments/schemas.stage4.yaml#/DatasetVersionStatus"}
+    ValidityStatus: {$ref: "./fragments/schemas.stage4.yaml#/ValidityStatus"}
+    SplitName: {$ref: "./fragments/schemas.stage4.yaml#/SplitName"}
+    LeakageStatus: {$ref: "./fragments/schemas.stage4.yaml#/LeakageStatus"}
+    ExportJobStatus: {$ref: "./fragments/schemas.stage4.yaml#/ExportJobStatus"}
+    ExportFormat: {$ref: "./fragments/schemas.stage4.yaml#/ExportFormat"}
+    TrainingRequestStatus: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRequestStatus"}
+    RevisionStatus: {$ref: "./fragments/schemas.stage4.yaml#/RevisionStatus"}
+    TrainingDeliveryStatus: {$ref: "./fragments/schemas.stage4.yaml#/TrainingDeliveryStatus"}
+    ExternalStatus: {$ref: "./fragments/schemas.stage4.yaml#/ExternalStatus"}
+    GrantStatus: {$ref: "./fragments/schemas.stage4.yaml#/GrantStatus"}
+    GrantScope: {$ref: "./fragments/schemas.stage4.yaml#/GrantScope"}
+    DatasetActionRequest: {$ref: "./fragments/schemas.stage4.yaml#/DatasetActionRequest"}
+    DatasetVersionActionRequest: {$ref: "./fragments/schemas.stage4.yaml#/DatasetVersionActionRequest"}
+    ExportJobActionRequest: {$ref: "./fragments/schemas.stage4.yaml#/ExportJobActionRequest"}
+    TrainingActionRequest: {$ref: "./fragments/schemas.stage4.yaml#/TrainingActionRequest"}
+    LeakageWaiverRequest: {$ref: "./fragments/schemas.stage4.yaml#/LeakageWaiverRequest"}
+    DatasetCreate: {$ref: "./fragments/schemas.stage4.yaml#/DatasetCreate"}
+    DatasetPatch: {$ref: "./fragments/schemas.stage4.yaml#/DatasetPatch"}
+    DatasetVersionCreate: {$ref: "./fragments/schemas.stage4.yaml#/DatasetVersionCreate"}
+    SelectionPreviewRequest: {$ref: "./fragments/schemas.stage4.yaml#/SelectionPreviewRequest"}
+    DedupPolicyCreate: {$ref: "./fragments/schemas.stage4.yaml#/DedupPolicyCreate"}
+    SplitPolicyCreate: {$ref: "./fragments/schemas.stage4.yaml#/SplitPolicyCreate"}
+    LeakagePolicyCreate: {$ref: "./fragments/schemas.stage4.yaml#/LeakagePolicyCreate"}
+    DatasetGrantCreate: {$ref: "./fragments/schemas.stage4.yaml#/DatasetGrantCreate"}
+    ExportJobCreate: {$ref: "./fragments/schemas.stage4.yaml#/ExportJobCreate"}
+    TrainingRequestCreate: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRequestCreate"}
+    TrainingRequestRevisionCreate: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRequestRevisionCreate"}
+    TrainingRequestRevisionPatch: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRequestRevisionPatch"}
+    RequirementSnapshot: {$ref: "./fragments/schemas.stage4.yaml#/RequirementSnapshot"}
+    TrainingDeliveryCreate: {$ref: "./fragments/schemas.stage4.yaml#/TrainingDeliveryCreate"}
+    ExternalTrainingReferenceCreate: {$ref: "./fragments/schemas.stage4.yaml#/ExternalTrainingReferenceCreate"}
+    AdapterCallbackPayload: {$ref: "./fragments/schemas.stage4.yaml#/AdapterCallbackPayload"}
+    ArtifactManifest: {$ref: "./fragments/schemas.stage4.yaml#/ArtifactManifest"}
+    DatasetPage: {$ref: "./fragments/schemas.stage4.yaml#/DatasetPage"}
+    DatasetVersionPage: {$ref: "./fragments/schemas.stage4.yaml#/DatasetVersionPage"}
+    DatasetItemPage: {$ref: "./fragments/schemas.stage4.yaml#/DatasetItemPage"}
+    DedupPolicyPage: {$ref: "./fragments/schemas.stage4.yaml#/DedupPolicyPage"}
+    SplitPolicyPage: {$ref: "./fragments/schemas.stage4.yaml#/SplitPolicyPage"}
+    LeakagePolicyPage: {$ref: "./fragments/schemas.stage4.yaml#/LeakagePolicyPage"}
+    QualityPolicyCreate: {$ref: "./fragments/schemas.stage4.yaml#/QualityPolicyCreate"}
+    QualityPolicyPage: {$ref: "./fragments/schemas.stage4.yaml#/QualityPolicyPage"}
+    DatasetGrantPage: {$ref: "./fragments/schemas.stage4.yaml#/DatasetGrantPage"}
+    ExportJobPage: {$ref: "./fragments/schemas.stage4.yaml#/ExportJobPage"}
+    TrainingRequestPage: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRequestPage"}
+    TrainingRequestRevisionPage: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRequestRevisionPage"}
+    TrainingDeliveryPage: {$ref: "./fragments/schemas.stage4.yaml#/TrainingDeliveryPage"}
+    ExternalTrainingReferencePage: {$ref: "./fragments/schemas.stage4.yaml#/ExternalTrainingReferencePage"}
+    ExportArtifactDownload: {$ref: "./fragments/schemas.stage4.yaml#/ExportArtifactDownload"}

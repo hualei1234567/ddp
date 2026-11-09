@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/dataset-item.v1.schema.json",
+  "title": "DDP DatasetItem v1（阶段 4 草案）",
+  "description": "DatasetVersion 中一个 Episode（可带时间片段）的引用。必须显式引用 Episode 版本、Manifest Hash、标注版本与 Schema 版本；禁止最新版本隐式解析。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "dataset_item_id",
+    "project_id",
+    "dataset_version_id",
+    "episode_id",
+    "episode_version",
+    "episode_lineage_id",
+    "manifest_sha256",
+    "raw_asset_ids",
+    "annotation_submission_id",
+    "annotation_version",
+    "annotation_record_digest",
+    "schema_id",
+    "schema_version",
+    "schema_sha256",
+    "split",
+    "sample_role",
+    "weight",
+    "selected_reason",
+    "item_sha256",
+    "created_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "dataset_item_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "dataset_version_id": {"$ref": "#/$defs/uuid"},
+    "episode_id": {"$ref": "#/$defs/uuid"},
+    "episode_version": {"type": "integer", "minimum": 1},
+    "episode_lineage_id": {"$ref": "#/$defs/uuid"},
+    "time_range": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "start_ns": {"type": "integer", "minimum": 0},
+        "end_ns": {"type": "integer", "minimum": 0}
+      },
+      "description": "相对 Episode 起点的纳秒区间；null 表示整段 Episode。"
+    },
+    "manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "raw_asset_ids": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/uuid"}, "uniqueItems": true},
+    "annotation_submission_id": {"$ref": "#/$defs/uuid"},
+    "annotation_version": {"type": "integer", "minimum": 1},
+    "annotation_record_digest": {"$ref": "#/$defs/sha256"},
+    "schema_id": {"$ref": "#/$defs/uuid"},
+    "schema_version": {"type": "integer", "minimum": 1},
+    "schema_sha256": {"$ref": "#/$defs/sha256"},
+    "split": {"type": "string", "enum": ["TRAIN", "VALIDATION", "TEST"]},
+    "stratum": {"type": ["string", "null"], "maxLength": 200},
+    "sample_role": {"type": "string", "enum": ["NORMAL", "HOLDOUT", "HARD_CASE", "EVALUATION"]},
+    "weight": {"type": "number", "exclusiveMinimum": 0, "maximum": 1000},
+    "dedup_group_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "similarity_group_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "scene_group_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "selected_reason": {"type": "string", "minLength": 1, "maxLength": 500},
+    "item_sha256": {"$ref": "#/$defs/sha256"},
+    "created_at": {"$ref": "#/$defs/date_time"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"}
+  }
+}

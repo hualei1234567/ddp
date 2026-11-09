@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/dataset.v1.schema.json",
+  "title": "DDP Dataset v1（阶段 4 草案）",
+  "description": "项目内数据集容器。Dataset 自身不承载样本，样本在 DatasetVersion 中冻结。删除不在阶段 4 范围，只允许归档。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "dataset_id",
+    "project_id",
+    "dataset_lineage_id",
+    "code",
+    "name",
+    "purpose",
+    "owner_id",
+    "status",
+    "usage_policy",
+    "version",
+    "created_at",
+    "updated_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "dataset_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "dataset_lineage_id": {"$ref": "#/$defs/uuid", "description": "Dataset 创建时生成，跨版本稳定。"},
+    "code": {"type": "string", "minLength": 1, "maxLength": 64, "description": "项目内唯一业务编码。"},
+    "name": {"type": "string", "minLength": 1, "maxLength": 200},
+    "description": {"type": ["string", "null"], "maxLength": 2000},
+    "purpose": {"type": "string", "enum": ["TRAINING", "EVALUATION", "BENCHMARK", "OTHER"]},
+    "owner_id": {"$ref": "#/$defs/uuid"},
+    "status": {"type": "string", "enum": ["DRAFT", "ACTIVE", "ARCHIVED"]},
+    "current_version_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}], "description": "最近冻结的 DatasetVersion；未冻结时为 null。"},
+    "tags": {"type": "array", "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
+    "usage_policy": {
+      "type": "string",
+      "enum": ["TRAINING_ALLOWED", "TRAINING_DENIED", "UNKNOWN"],
+      "description": "TRAINING_DENIED/UNKNOWN 默认阻断冻结与训练导出，例外需 PO 审批并审计。"
+    },
+    "retention_policy": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {"type": "string", "enum": ["KEEP", "ARCHIVE_AFTER", "LEGAL_HOLD"]},
+        "retain_until": {"type": ["string", "null"], "format": "date-time"},
+        "note": {"type": ["string", "null"], "maxLength": 500}
+      }
+    },
+    "default_dedup_policy_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "default_split_policy_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "default_leakage_policy_id": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "frozen_version_count": {"type": "integer", "minimum": 0},
+    "archived_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "archived_by": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "archive_reason": {"type": ["string", "null"], "maxLength": 2000},
+    "allowed_actions": {"type": "array", "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
+    "version": {"type": "integer", "minimum": 1, "description": "乐观锁版本，用于 If-Match。"},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"},
+    "updated_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "date_time": {"type": "string", "format": "date-time"}
+  }
+}

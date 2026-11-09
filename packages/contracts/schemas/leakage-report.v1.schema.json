@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/leakage-report.v1.schema.json",
+  "title": "DDP LeakageReport v1（阶段 4 草案）",
+  "description": "泄漏检查报告。硬规则失败 FAIL；软规则失败 WARN/WAIVED；无法完成 UNKNOWN。FAIL/UNKNOWN 阻断冻结与导出，不得默认 PASS。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "leakage_report_id",
+    "project_id",
+    "dataset_version_id",
+    "status",
+    "leakage_status",
+    "policy_ref",
+    "checked_rule_count",
+    "violation_count",
+    "hard_violation_count",
+    "soft_violation_count",
+    "violations",
+    "waivers",
+    "checked_at",
+    "report_sha256",
+    "version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "leakage_report_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "dataset_version_id": {"$ref": "#/$defs/uuid"},
+    "status": {"type": "string", "enum": ["GENERATING", "READY", "FAILED", "STALE"]},
+    "leakage_status": {"type": "string", "enum": ["PASS", "WARN", "FAIL", "UNKNOWN", "WAIVED"]},
+    "policy_ref": {"$ref": "#/$defs/policy_ref"},
+    "checked_rule_count": {"type": "integer", "minimum": 0},
+    "violation_count": {"type": "integer", "minimum": 0},
+    "hard_violation_count": {"type": "integer", "minimum": 0},
+    "soft_violation_count": {"type": "integer", "minimum": 0},
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule", "level", "split_a", "split_b", "object_refs"],
+        "additionalProperties": false,
+        "properties": {
+          "rule": {"type": "string", "maxLength": 100},
+          "level": {"type": "string", "enum": ["HARD", "SOFT"]},
+          "split_a": {"type": "string", "enum": ["TRAIN", "VALIDATION", "TEST"]},
+          "split_b": {"type": "string", "enum": ["TRAIN", "VALIDATION", "TEST"]},
+          "group_key": {"type": ["string", "null"], "maxLength": 200},
+          "object_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["object_type", "object_id"],
+              "additionalProperties": false,
+              "properties": {
+                "object_type": {"type": "string", "enum": ["EPISODE", "DATASET_ITEM", "RAW_ASSET", "ANNOTATION_SUBMISSION", "SCENE_GROUP", "SIMILARITY_GROUP", "BATCH"]},
+                "object_id": {"$ref": "#/$defs/uuid"}
+              }
+            }
+          },
+          "evidence": {"type": ["string", "null"], "maxLength": 1000}
+        }
+      }
+    },
+    "waivers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule", "approved_by", "reason", "approved_at", "audit_ref"],
+        "additionalProperties": false,
+        "properties": {
+          "rule": {"type": "string", "enum": ["SCENE_GROUP_CROSS_SPLIT", "BATCH_GROUP_CROSS_SPLIT", "TEMPORAL_OVERLAP_CROSS_SPLIT", "DUPLICATE_ANNOTATION"]},
+          "approved_by": {"$ref": "#/$defs/uuid"},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 2000},
+          "impact": {"type": ["string", "null"], "maxLength": 1000},
+          "approved_at": {"$ref": "#/$defs/date_time"},
+          "expires_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+          "audit_ref": {"type": "string", "minLength": 1, "maxLength": 256}
+        }
+      }
+    },
+    "unknown_reason": {"type": ["string", "null"], "maxLength": 1000},
+    "checked_at": {"$ref": "#/$defs/date_time"},
+    "source_snapshot_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "report_sha256": {"$ref": "#/$defs/sha256"},
+    "report_key": {"type": ["string", "null"], "maxLength": 1024},
+    "version": {"type": "integer", "minimum": 1}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "policy_ref": {
+      "type": "object",
+      "required": ["policy_id", "version", "policy_sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "policy_id": {"$ref": "#/$defs/uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "policy_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

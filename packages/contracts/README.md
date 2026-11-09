@@ -14,9 +14,11 @@
 |---|---|---|
 | `1.0.0` | 阶段 1 设备域 + 阶段 2 采集/上传/RawAsset/Episode/IngestionJob 已实现端点 | **FROZEN（DDP-312）** |
 | `1.1.0` | 在 `1.0.0` 基础上增量加入阶段 3 标注域已实现端点 | **FROZEN（DDP-323）** |
+| `1.2.0` | 在 `1.1.0` 基础上增量加入阶段 4 数据集与训练支撑已实现端点 | **FROZEN（DDP-331）** |
 | `ddp.device/1.0.0` | 阶段 1 设备域冻结目标 | 已批准 |
 | `ddp.stage2/1.0.0` | 阶段 2 契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage3/1.0.0` | 阶段 3 标注契约冻结版本 | v1.0 FROZEN |
+| `ddp.stage4/1.0.0` | 阶段 4 数据集与训练契约冻结版本 | v1.0 FROZEN |
 
 阶段 1 尚未关闭的实现差距不在本快照中声明为可用，清单见
 `docs/architecture/阶段1-设备域冻结字段实现差距与排期.md`。
@@ -27,6 +29,10 @@
 阶段 3 的端点矩阵、错误码、状态机同步、兼容与变更流程见
 `docs/architecture/阶段3-契约冻结-v1.0.md`。未实现的样本项、工作量、血缘、
 审计与指标端点不在本快照中声明为可用。
+
+阶段 4 的端点矩阵（55 个操作）、错误码、状态机与草案差异见
+`docs/architecture/阶段4-契约冻结-v1.0.md`。设计草案中的资产目录、
+Dataset/TrainingRequest 血缘与 DatasetVersion PATCH 未实现，不在本快照中声明为可用。
 
 ## 文件
 
@@ -41,15 +47,19 @@
 | `fragments/schemas.stage2.required.yaml` | 阶段 2 服务端必填约束更正（Episode 标定快照、IngestionJob 输入） |
 | `fragments/schemas.stage3.yaml` | 阶段 3 请求 DTO、分页包装与共享枚举 |
 | `fragments/components.stage3.yaml` | 阶段 3 路径参数、动作白名单与响应引用 |
+| `fragments/paths.stage4.yaml` | 阶段 4 数据集与训练域路径项与操作（仅已实现端点） |
+| `fragments/schemas.stage4.yaml` | 阶段 4 请求 DTO、枚举、分页包装与动作请求体 |
+| `fragments/components.stage4.yaml` | 阶段 4 路径参数与动作白名单 |
 | `fragments/schemas.common.yaml` | 稳定错误码与错误体 |
 | `fragments/components.yaml` | 公共参数与错误响应 |
 | `redocly.yaml` | OpenAPI lint 规则（Redocly CLI） |
 | `scripts/check-compatibility.sh` | 基于 git 基线的 `oasdiff breaking` 检查（支持 fragments） |
 | `scripts/check-stage2-freeze.sh` | 阶段 2 基线冻结、lint 与兼容性检查 |
 | `scripts/check-stage3-freeze.sh` | 阶段 3 基线冻结、lint、SHA256 与兼容性检查 |
+| `scripts/check-stage4-freeze.sh` | 阶段 4 基线冻结、lint、SHA256 与兼容性检查 |
 | `baselines/` | 自包含冻结基线（由脚本生成，禁止手工编辑） |
 | `reports/` | 冻结/兼容性检查报告（由脚本生成） |
-| `schemas/*.json` | 可复用 JSON Schema（错误体、阶段 3 响应对象等） |
+| `schemas/*.json` | 可复用 JSON Schema（错误体、阶段 3/4 响应对象、状态机与错误码注册表） |
 
 `openapi.yaml` 通过相对 `$ref` 引用 `fragments/`。Redocly 与 oasdiff 的输入始终是
 `packages/contracts/openapi.yaml`；基线脚本会用 Redocly bundle 生成自包含文件。

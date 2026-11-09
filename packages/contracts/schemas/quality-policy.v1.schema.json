@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/quality-policy.v1.schema.json",
+  "title": "DDP QualityPolicy v1（阶段 4）",
+  "description": "数据集质量策略：最小入选数量、是否允许 WARN 质量、是否要求泄漏检查通过。",
+  "$comment": "契约版本：ddp.stage4/1.0.0",
+  "type": "object",
+  "required": [
+    "quality_policy_id",
+    "project_id",
+    "dataset_id",
+    "version",
+    "min_selected_count",
+    "allow_warn_quality",
+    "require_leakage_pass",
+    "policy_sha256",
+    "created_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "quality_policy_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "project_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "dataset_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "name": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 200
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "min_selected_count": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "allow_warn_quality": {
+      "type": "boolean"
+    },
+    "require_leakage_pass": {
+      "type": "boolean"
+    },
+    "policy_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "created_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "created_by": {
+      "$ref": "#/$defs/uuid"
+    }
+  },
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

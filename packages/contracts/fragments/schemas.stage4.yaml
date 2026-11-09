@@ -1,0 +1,534 @@
+# 阶段 4 数据集与训练域 Schema 片段。
+# 响应对象以 packages/contracts/schemas/*.json 为唯一来源；本文件只放请求 DTO、枚举与分页包装。
+
+DatasetStatus:
+  type: string
+  enum: [DRAFT, ACTIVE, ARCHIVED]
+
+DatasetPurpose:
+  type: string
+  enum: [TRAINING, EVALUATION, BENCHMARK, OTHER]
+
+DatasetUsagePolicy:
+  type: string
+  enum: [TRAINING_ALLOWED, TRAINING_DENIED, UNKNOWN]
+
+DatasetVersionStatus:
+  type: string
+  enum: [DRAFT, BUILDING, VALIDATING, READY, FROZEN, SUPERSEDED, VALIDATION_FAILED, CANCELLED, ARCHIVED]
+
+ValidityStatus:
+  type: string
+  enum: [VALID, STALE, INVALIDATED, UNKNOWN]
+
+SplitName:
+  type: string
+  enum: [TRAIN, VALIDATION, TEST]
+
+LeakageStatus:
+  type: string
+  enum: [PASS, WARN, FAIL, UNKNOWN, WAIVED]
+
+ExportJobStatus:
+  type: string
+  enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, PARTIAL, CANCELLED]
+
+ExportFormat:
+  type: string
+  enum: [LE_ROBOT]
+
+TrainingRequestStatus:
+  type: string
+  enum: [DRAFT, SUBMITTED, PENDING_REVIEW, APPROVED, IN_DELIVERY, DELIVERED, ACCEPTED, CLOSED, REJECTED, REVISION_REQUIRED, BLOCKED, CANCELLED]
+
+RevisionStatus:
+  type: string
+  enum: [DRAFT, SUBMITTED, PENDING_REVIEW, APPROVED, REJECTED, SUPERSEDED]
+
+TrainingDeliveryStatus:
+  type: string
+  enum: [DRAFT, READY, DELIVERED, ACCEPTED, REJECTED, REWORK, CANCELLED]
+
+ExternalStatus:
+  type: string
+  enum: [SUBMITTED, RUNNING, SUCCEEDED, FAILED, CANCELLED, UNKNOWN, UNAVAILABLE]
+
+GrantStatus:
+  type: string
+  enum: [PENDING_APPROVAL, ACTIVE, REJECTED, EXPIRED, REVOKED]
+
+GrantScope:
+  type: string
+  enum: [VIEW, DOWNLOAD, EXPORT]
+
+DatasetActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: { type: [string, "null"], maxLength: 2000 }
+    comment: { type: [string, "null"], maxLength: 2000 }
+    evidence_refs: { type: array, items: { type: string, maxLength: 1024 }, uniqueItems: true }
+    payload: { type: [object, "null"], additionalProperties: true }
+
+LeakageWaiverRequest:
+  type: object
+  required: [rule, reason]
+  additionalProperties: false
+  properties:
+    rule: { type: string, minLength: 1, maxLength: 100 }
+    reason: { type: string, minLength: 1, maxLength: 2000 }
+    impact: { type: [string, "null"], maxLength: 1000 }
+    expires_at: { type: [string, "null"], format: date-time }
+
+DatasetVersionActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: { type: [string, "null"], maxLength: 2000 }
+    comment: { type: [string, "null"], maxLength: 2000 }
+    evidence_refs: { type: array, items: { type: string, maxLength: 1024 }, uniqueItems: true }
+    payload: { type: [object, "null"], additionalProperties: true }
+    waivers: { type: array, items: { $ref: "../openapi.yaml#/components/schemas/LeakageWaiverRequest" } }
+
+ExportJobActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: { type: [string, "null"], maxLength: 2000 }
+
+TrainingActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: { type: [string, "null"], maxLength: 2000 }
+    comment: { type: [string, "null"], maxLength: 2000 }
+    restore_status: { type: [string, "null"], maxLength: 64 }
+    rework_ref: { type: [string, "null"], format: uuid }
+    acceptance_opinion: { type: [string, "null"], maxLength: 2000 }
+    evidence_refs: { type: array, items: { type: string, maxLength: 1024 }, uniqueItems: true }
+    payload: { type: [object, "null"], additionalProperties: true }
+
+DatasetCreate:
+  type: object
+  required: [code, name, purpose, owner_id, usage_policy]
+  additionalProperties: false
+  properties:
+    code: { type: string, minLength: 1, maxLength: 64 }
+    name: { type: string, minLength: 1, maxLength: 200 }
+    description: { type: [string, "null"], maxLength: 2000 }
+    purpose: { $ref: "../openapi.yaml#/components/schemas/DatasetPurpose" }
+    owner_id: { type: string, format: uuid }
+    tags: { type: array, items: { type: string, maxLength: 64 }, uniqueItems: true }
+    usage_policy: { $ref: "../openapi.yaml#/components/schemas/DatasetUsagePolicy" }
+    retention_policy: { type: [object, "null"], additionalProperties: true }
+    default_dedup_policy_id: { type: [string, "null"], format: uuid }
+    default_split_policy_id: { type: [string, "null"], format: uuid }
+    default_leakage_policy_id: { type: [string, "null"], format: uuid }
+
+DatasetPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    name: { type: string, minLength: 1, maxLength: 200 }
+    description: { type: [string, "null"], maxLength: 2000 }
+    purpose: { $ref: "../openapi.yaml#/components/schemas/DatasetPurpose" }
+    tags: { type: array, items: { type: string, maxLength: 64 }, uniqueItems: true }
+    usage_policy: { $ref: "../openapi.yaml#/components/schemas/DatasetUsagePolicy" }
+    retention_policy: { type: [object, "null"], additionalProperties: true }
+    default_dedup_policy_id: { type: [string, "null"], format: uuid }
+    default_split_policy_id: { type: [string, "null"], format: uuid }
+    default_leakage_policy_id: { type: [string, "null"], format: uuid }
+
+DatasetVersionCreate:
+  type: object
+  required: [selection_rule_version, dedup_policy_id, dedup_policy_version, split_policy_id, split_policy_version, leakage_policy_id, leakage_policy_version, quality_policy_id, quality_policy_version]
+  additionalProperties: false
+  properties:
+    selection_rule_version: { type: string, minLength: 1, maxLength: 64 }
+    selection_filters: { type: object, additionalProperties: true, default: {} }
+    dedup_policy_id: { type: string, format: uuid }
+    dedup_policy_version: { type: integer, minimum: 1 }
+    split_policy_id: { type: string, format: uuid }
+    split_policy_version: { type: integer, minimum: 1 }
+    leakage_policy_id: { type: string, format: uuid }
+    leakage_policy_version: { type: integer, minimum: 1 }
+    quality_policy_id: { type: string, format: uuid }
+    quality_policy_version: { type: integer, minimum: 1 }
+    supersedes_version_id: { type: [string, "null"], format: uuid }
+    build_now: { type: boolean, default: false }
+
+DatasetVersionPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    selection_rule_version: { type: string, minLength: 1, maxLength: 64 }
+    selection_filters: { type: object, additionalProperties: true, default: {} }
+    dedup_policy_id: { type: string, format: uuid }
+    dedup_policy_version: { type: integer, minimum: 1 }
+    split_policy_id: { type: string, format: uuid }
+    split_policy_version: { type: integer, minimum: 1 }
+    leakage_policy_id: { type: string, format: uuid }
+    leakage_policy_version: { type: integer, minimum: 1 }
+    quality_policy_id: { type: string, format: uuid }
+    quality_policy_version: { type: integer, minimum: 1 }
+
+SelectionPreviewRequest:
+  type: object
+  required: [dedup_policy_id, dedup_policy_version, split_policy_id, split_policy_version, leakage_policy_id, leakage_policy_version]
+  additionalProperties: false
+  properties:
+    selection_filters: { type: object, additionalProperties: true, default: {} }
+    dedup_policy_id: { type: string, format: uuid }
+    dedup_policy_version: { type: integer, minimum: 1 }
+    split_policy_id: { type: string, format: uuid }
+    split_policy_version: { type: integer, minimum: 1 }
+    leakage_policy_id: { type: string, format: uuid }
+    leakage_policy_version: { type: integer, minimum: 1 }
+    quality_policy_id: { type: [string, "null"], format: uuid }
+    quality_policy_version: { type: [integer, "null"], minimum: 1 }
+    sample_limit: { type: integer, minimum: 1, maximum: 100, default: 50 }
+
+DedupPolicyCreate:
+  type: object
+  required: [exact_keys]
+  additionalProperties: false
+  properties:
+    name: { type: [string, "null"], maxLength: 200 }
+    exact_keys:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: { type: string, enum: [EPISODE_LINEAGE, MANIFEST_SHA256, RAW_ASSET_SHA256] }
+    near_duplicate_enabled: { type: boolean, default: false }
+    near_duplicate_enforcement: { type: string, enum: [WARN_ONLY, BLOCK], default: WARN_ONLY }
+    similarity_method: { type: [string, "null"], maxLength: 100 }
+    similarity_threshold: { type: [number, "null"], minimum: 0, maximum: 1 }
+    similarity_min_cluster_size: { type: [integer, "null"], minimum: 2 }
+    grouping_keys: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }
+    retain_rule: { type: string, enum: [NEWEST_ACCEPTED, HIGHEST_QUALITY, EARLIEST, MANUAL] }
+
+SplitPolicyCreate:
+  type: object
+  required: [strategy, seed, group_by]
+  additionalProperties: false
+  properties:
+    name: { type: [string, "null"], maxLength: 200 }
+    strategy: { type: string, enum: [RATIO, FIXED_COUNT] }
+    train_ratio: { type: number, minimum: 0, maximum: 1, default: 0.8 }
+    validation_ratio: { type: number, minimum: 0, maximum: 1, default: 0.1 }
+    test_ratio: { type: number, minimum: 0, maximum: 1, default: 0.1 }
+    train_count: { type: [integer, "null"], minimum: 1 }
+    validation_count: { type: [integer, "null"], minimum: 1 }
+    test_count: { type: [integer, "null"], minimum: 0 }
+    seed: { type: integer, minimum: 0 }
+    stratify_by: { type: array, items: { type: string, enum: [SCENE, ACTION, ROBOT, DEVICE, LABEL, QUALITY_STATUS] }, uniqueItems: true }
+    group_by: { type: array, minItems: 1, uniqueItems: true, items: { type: string, enum: [EPISODE_LINEAGE, MANIFEST_SHA256, RAW_ASSET_SHA256, SIMILARITY_GROUP, SCENE_GROUP] }, default: [EPISODE_LINEAGE] }
+    empty_split_policy: { type: string, enum: [FAIL, ALLOW_EMPTY_TEST], default: FAIL }
+    min_item_count: { type: integer, minimum: 1, default: 1 }
+    min_duration_ns: { type: integer, minimum: 0, default: 0 }
+    rounding_rule: { type: string, enum: [FLOOR, ROUND_HALF_UP, LARGEST_REMAINDER], default: LARGEST_REMAINDER }
+
+LeakagePolicyCreate:
+  type: object
+  required: [hard_rules]
+  additionalProperties: false
+  properties:
+    name: { type: [string, "null"], maxLength: 200 }
+    hard_rules:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: { type: string, enum: [EPISODE_LINEAGE_CROSS_SPLIT, MANIFEST_SHA256_CROSS_SPLIT, RAW_ASSET_SHA256_CROSS_SPLIT, SIMILARITY_GROUP_CROSS_SPLIT] }
+    soft_rules:
+      type: array
+      uniqueItems: true
+      items: { type: string, enum: [SCENE_GROUP_CROSS_SPLIT, BATCH_GROUP_CROSS_SPLIT, TEMPORAL_OVERLAP_CROSS_SPLIT, DUPLICATE_ANNOTATION] }
+    waiver_allowed_rules:
+      type: array
+      uniqueItems: true
+      items: { type: string, enum: [SCENE_GROUP_CROSS_SPLIT, BATCH_GROUP_CROSS_SPLIT, TEMPORAL_OVERLAP_CROSS_SPLIT, DUPLICATE_ANNOTATION] }
+    similarity_grouping_enabled: { type: boolean, default: false }
+    scene_grouping_enabled: { type: boolean, default: true }
+    batch_grouping_enabled: { type: boolean, default: false }
+    temporal_overlap_enabled: { type: boolean, default: true }
+
+DatasetGrantCreate:
+  type: object
+  required: [grantee_project_id, scope, reason, expires_at]
+  additionalProperties: false
+  properties:
+    dataset_version_id: { type: [string, "null"], format: uuid }
+    grantee_project_id: { type: string, format: uuid }
+    grantee_team: { type: [string, "null"], maxLength: 200 }
+    scope:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: { $ref: "../openapi.yaml#/components/schemas/GrantScope" }
+    reason: { type: string, minLength: 1, maxLength: 2000 }
+    expires_at: { type: string, format: date-time }
+
+ExportJobCreate:
+  type: object
+  required: [dataset_version_id, format, format_version, exporter_id, exporter_version, mapping_version]
+  additionalProperties: false
+  properties:
+    dataset_version_id: { type: string, format: uuid }
+    format: { $ref: "../openapi.yaml#/components/schemas/ExportFormat" }
+    format_version: { type: string, minLength: 1, maxLength: 64, description: '当前支持 ddp.lerobot/1.0.0。' }
+    exporter_id: { type: string, minLength: 1, maxLength: 100 }
+    exporter_version: { type: string, minLength: 1, maxLength: 100 }
+    mapping_version: { type: string, minLength: 1, maxLength: 100 }
+    config: { type: object, additionalProperties: true }
+    timeout_seconds: { type: integer, minimum: 1, maximum: 86400, default: 3600 }
+    max_attempts: { type: integer, minimum: 1, maximum: 20, default: 3 }
+
+TrainingRequestCreate:
+  type: object
+  required: [code, title, owner_id, priority, snapshot]
+  additionalProperties: false
+  properties:
+    code: { type: string, minLength: 1, maxLength: 64 }
+    title: { type: string, minLength: 1, maxLength: 200 }
+    owner_id: { type: string, format: uuid }
+    priority: { type: string, enum: [P0, P1, P2, P3] }
+    snapshot: { $ref: "../openapi.yaml#/components/schemas/RequirementSnapshot" }
+
+TrainingRequestRevisionCreate:
+  type: object
+  required: [snapshot, change_reason]
+  additionalProperties: false
+  properties:
+    snapshot: { $ref: "../openapi.yaml#/components/schemas/RequirementSnapshot" }
+    change_reason: { type: string, minLength: 1, maxLength: 2000 }
+
+TrainingRequestRevisionPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    snapshot: { $ref: "../openapi.yaml#/components/schemas/RequirementSnapshot" }
+    change_reason: { type: [string, "null"], maxLength: 2000 }
+
+RequirementSnapshot:
+  type: object
+  required: [business_goal, model_type, training_type, data_modalities, scene_targets, action_targets, robot_targets, device_targets, required_labels, required_schema_versions, target_episode_count, target_duration_ns, quality_thresholds, split_requirements, format, format_version, delivery_due_at, acceptance_method, priority]
+  additionalProperties: false
+  properties:
+    business_goal: { type: string, minLength: 1, maxLength: 2000 }
+    model_type: { type: string, minLength: 1, maxLength: 100 }
+    training_type: { type: string, enum: [SUPERVISED, IMITATION, RL, FINE_TUNE, OTHER] }
+    data_modalities: { type: array, minItems: 1, items: { type: string, maxLength: 64 }, uniqueItems: true }
+    scene_targets: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }
+    action_targets: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }
+    robot_targets: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }
+    device_targets: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }
+    required_labels: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }
+    required_schema_versions:
+      type: array
+      items:
+        type: object
+        required: [schema_id, schema_version]
+        additionalProperties: false
+        properties:
+          schema_id: { type: string, format: uuid }
+          schema_version: { type: integer, minimum: 1 }
+    target_episode_count: { type: [integer, "null"], minimum: 1 }
+    target_duration_ns: { type: [integer, "null"], minimum: 1 }
+    quality_thresholds: { type: object, additionalProperties: true }
+    split_requirements:
+      type: [object, "null"]
+      additionalProperties: false
+      properties:
+        train_ratio: { type: number, minimum: 0, maximum: 1 }
+        validation_ratio: { type: number, minimum: 0, maximum: 1 }
+        test_ratio: { type: number, minimum: 0, maximum: 1 }
+        group_by: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }
+    leakage_policy_id: { type: [string, "null"], format: uuid }
+    format: { $ref: "../openapi.yaml#/components/schemas/ExportFormat" }
+    format_version: { type: string, minLength: 1, maxLength: 64, description: '当前支持 ddp.lerobot/1.0.0。' }
+    delivery_due_at: { type: string, format: date-time }
+    acceptance_method: { type: string, minLength: 1, maxLength: 500 }
+    priority: { type: string, enum: [P0, P1, P2, P3] }
+
+TrainingDeliveryCreate:
+  type: object
+  required: [training_request_id, training_request_revision_id, dataset_version_id, export_job_id, recipient_id, delivery_note_no]
+  additionalProperties: false
+  properties:
+    training_request_id: { type: string, format: uuid }
+    training_request_revision_id: { type: string, format: uuid }
+    dataset_version_id: { type: string, format: uuid }
+    export_job_id: { type: string, format: uuid }
+    recipient_id: { type: string, format: uuid }
+    recipient_team: { type: [string, "null"], maxLength: 200 }
+    delivery_note_no: { type: string, minLength: 1, maxLength: 64 }
+
+ExternalTrainingReferenceCreate:
+  type: object
+  required: [adapter_id, adapter_version, correlation_id]
+  additionalProperties: false
+  properties:
+    adapter_id: { type: string, minLength: 1, maxLength: 100 }
+    adapter_version: { type: string, minLength: 1, maxLength: 100 }
+    correlation_id: { type: string, minLength: 1, maxLength: 128 }
+    model_ref: { type: [object, "null"], additionalProperties: true }
+    evaluation_ref: { type: [object, "null"], additionalProperties: true }
+    config: { type: object, additionalProperties: true }
+
+AdapterCallbackPayload:
+  type: object
+  required: [event_id, adapter_id, adapter_version, external_run_id, external_status, occurred_at]
+  additionalProperties: false
+  properties:
+    event_id: { type: string, minLength: 1, maxLength: 128 }
+    adapter_id: { type: string, minLength: 1, maxLength: 100 }
+    adapter_version: { type: string, minLength: 1, maxLength: 100 }
+    external_run_id: { type: string, minLength: 1, maxLength: 200 }
+    external_status: { $ref: "../openapi.yaml#/components/schemas/ExternalStatus" }
+    occurred_at: { type: string, format: date-time }
+    model_ref: { type: [object, "null"], additionalProperties: true }
+    evaluation_ref: { type: [object, "null"], additionalProperties: true }
+    error_code: { type: [string, "null"], maxLength: 100 }
+    error_summary: { type: [string, "null"], maxLength: 2000 }
+    payload: { type: [object, "null"], additionalProperties: true }
+
+ArtifactManifest:
+  type: object
+  required: [export_job_id, format, format_version, exporter_version, mapping_version, config_sha256, artifact_count, total_bytes, artifacts, aggregate_sha256]
+  additionalProperties: false
+  properties:
+    export_job_id: { type: string, format: uuid }
+    format: { $ref: "../openapi.yaml#/components/schemas/ExportFormat" }
+    format_version: { type: string, minLength: 1, maxLength: 64, description: '当前支持 ddp.lerobot/1.0.0。' }
+    exporter_version: { type: string, minLength: 1, maxLength: 100 }
+    mapping_version: { type: string, minLength: 1, maxLength: 100 }
+    config_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    artifact_count: { type: integer, minimum: 0 }
+    total_bytes: { type: integer, minimum: 0 }
+    artifacts:
+      type: array
+      items:
+        type: object
+        required: [path, size_bytes, sha256, content_type]
+        additionalProperties: false
+        properties:
+          path: { type: string, minLength: 1, maxLength: 1024 }
+          size_bytes: { type: integer, minimum: 0 }
+          sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+          content_type: { type: string, maxLength: 200 }
+          episode_refs: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+          time_range: { type: [object, "null"], additionalProperties: true }
+          sidecar: { type: boolean, default: false }
+    aggregate_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    verification_status: { type: string, enum: [UNVERIFIED, VERIFIED_BY_LOADER] }
+
+DatasetPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/dataset.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+DatasetVersionPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/dataset-version.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+DatasetItemPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/dataset-item.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+DedupPolicyPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/dedup-policy.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+SplitPolicyPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/split-policy.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+LeakagePolicyPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/leakage-policy.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+DatasetGrantPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/dataset-grant.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+ExportJobPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/export-job.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+TrainingRequestPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/training-request.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+TrainingRequestRevisionPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/training-request-revision.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+TrainingDeliveryPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/training-delivery.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+ExternalTrainingReferencePage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/external-training-reference.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+QualityPolicyCreate:
+  type: object
+  additionalProperties: false
+  properties:
+    name: { type: [string, "null"], maxLength: 200 }
+    min_selected_count: { type: integer, minimum: 1, default: 1 }
+    allow_warn_quality: { type: boolean, default: false }
+    require_leakage_pass: { type: boolean, default: false }
+
+QualityPolicyPage:
+  type: object
+  required: [items]
+  properties:
+    items: { type: array, items: { $ref: "../schemas/quality-policy.v1.schema.json" } }
+    next_cursor: { type: [string, "null"] }
+
+ExportArtifactDownload:
+  type: object
+  required: [path, sha256, size_bytes, download_url, download_url_expires_at]
+  additionalProperties: false
+  properties:
+    path: { type: string, minLength: 1, maxLength: 1024 }
+    sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    size_bytes: { type: integer, minimum: 0 }
+    download_url: { type: string, format: uri }
+    download_url_expires_at: { type: string, format: date-time }

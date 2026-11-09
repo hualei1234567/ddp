@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/dedup-policy.v1.schema.json",
+  "title": "DDP DedupPolicy v1（阶段 4 草案）",
+  "description": "去重策略。P0 精确去重使用 episode_lineage / manifest_sha256 / raw_asset_sha256；近似重复默认仅告警（WARN_ONLY），不阻断构建或冻结。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "dedup_policy_id",
+    "project_id",
+    "version",
+    "exact_keys",
+    "near_duplicate_enabled",
+    "near_duplicate_enforcement",
+    "retain_rule",
+    "policy_sha256",
+    "created_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "dedup_policy_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "name": {"type": ["string", "null"], "maxLength": 200},
+    "version": {"type": "integer", "minimum": 1, "description": "策略版本，单调递增。"},
+    "exact_keys": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "enum": ["EPISODE_LINEAGE", "MANIFEST_SHA256", "RAW_ASSET_SHA256"]},
+      "description": "默认 ['EPISODE_LINEAGE', 'MANIFEST_SHA256', 'RAW_ASSET_SHA256']。"
+    },
+    "near_duplicate_enabled": {"type": "boolean", "default": false},
+    "near_duplicate_enforcement": {
+      "type": "string",
+      "enum": ["WARN_ONLY", "BLOCK"],
+      "default": "WARN_ONLY",
+      "description": "[DECISION] 近似重复默认仅告警，不阻断；BLOCK 需 PO 显式开启并审计。"
+    },
+    "similarity_method": {"type": ["string", "null"], "maxLength": 100},
+    "similarity_threshold": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "similarity_min_cluster_size": {"type": ["integer", "null"], "minimum": 2},
+    "grouping_keys": {"type": "array", "items": {"type": "string", "maxLength": 100}, "uniqueItems": true},
+    "retain_rule": {
+      "type": "string",
+      "enum": ["NEWEST_ACCEPTED", "HIGHEST_QUALITY", "EARLIEST", "MANUAL"],
+      "description": "保留规则必须确定，不得随机；MANUAL 需逐组记录人工决定。"
+    },
+    "policy_sha256": {"$ref": "#/$defs/sha256"},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"}
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/dataset/training-delivery.v1.schema.json",
+  "title": "DDP TrainingDelivery v1（阶段 4 草案）",
+  "description": "一次针对特定需求 revision 和冻结 DatasetVersion 的交付记录。必须引用 APPROVED revision、FROZEN 且有效版本、SUCCEEDED 且校验通过的 ExportJob。",
+  "$comment": "契约版本：ddp.stage4/1.0.0-draft",
+  "type": "object",
+  "required": [
+    "training_delivery_id",
+    "project_id",
+    "training_request_id",
+    "training_request_revision_id",
+    "dataset_version_id",
+    "export_job_id",
+    "delivery_note_no",
+    "recipient_id",
+    "artifact_manifest_sha256",
+    "aggregate_sha256",
+    "item_count",
+    "split_counts",
+    "status",
+    "version",
+    "created_at",
+    "created_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "training_delivery_id": {"$ref": "#/$defs/uuid"},
+    "project_id": {"$ref": "#/$defs/uuid"},
+    "training_request_id": {"$ref": "#/$defs/uuid"},
+    "training_request_revision_id": {"$ref": "#/$defs/uuid"},
+    "dataset_version_id": {"$ref": "#/$defs/uuid"},
+    "export_job_id": {"$ref": "#/$defs/uuid"},
+    "delivery_note_no": {"type": "string", "minLength": 1, "maxLength": 64},
+    "recipient_id": {"$ref": "#/$defs/uuid"},
+    "recipient_team": {"type": ["string", "null"], "maxLength": 200},
+    "artifact_manifest_key": {"type": ["string", "null"], "maxLength": 1024},
+    "artifact_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "aggregate_sha256": {"$ref": "#/$defs/sha256"},
+    "item_count": {"type": "integer", "minimum": 0},
+    "split_counts": {"$ref": "#/$defs/split_counts"},
+    "format": {"type": "string", "enum": ["LE_ROBOT"]},
+    "format_version": {"type": "string", "const": "ddp.lerobot/1.0.0"},
+    "quality_report_ref": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "status": {"type": "string", "enum": ["DRAFT", "READY", "DELIVERED", "ACCEPTED", "REJECTED", "REWORK", "CANCELLED"]},
+    "delivered_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "accepted_by": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "accepted_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
+    "acceptance_opinion": {"type": ["string", "null"], "maxLength": 2000},
+    "rejection_reason": {"type": ["string", "null"], "maxLength": 2000},
+    "rework_ref": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
+    "allowed_actions": {"type": "array", "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
+    "version": {"type": "integer", "minimum": 1},
+    "created_at": {"$ref": "#/$defs/date_time"},
+    "updated_at": {"$ref": "#/$defs/date_time"},
+    "created_by": {"$ref": "#/$defs/uuid"}
+  },
+  "$defs": {
+    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "date_time": {"type": "string", "format": "date-time"},
+    "split_counts": {
+      "type": "object",
+      "required": ["train", "validation", "test"],
+      "additionalProperties": false,
+      "properties": {
+        "train": {"type": "integer", "minimum": 0},
+        "validation": {"type": "integer", "minimum": 0},
+        "test": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

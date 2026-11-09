@@ -1,0 +1,185 @@
+parameters:
+  DatasetId:
+    name: dataset_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  VersionId:
+    name: version_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  ItemId:
+    name: item_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  DedupPolicyId:
+    name: policy_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  SplitPolicyId:
+    name: policy_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  LeakagePolicyId:
+    name: policy_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  GrantId:
+    name: grant_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  ExportJobId:
+    name: export_job_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  RequestId:
+    name: request_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  RevisionId:
+    name: revision_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  DeliveryId:
+    name: delivery_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  ExternalRefId:
+    name: external_ref_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  AdapterId:
+    name: adapter_id
+    in: path
+    required: true
+    schema: { type: string, minLength: 1, maxLength: 100 }
+
+
+  CallbackSignature:
+    name: X-DDP-Signature
+    in: header
+    required: true
+    description: HMAC-SHA256 签名，格式 sha256=<hex>
+    schema: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+
+  CallbackTimestamp:
+    name: X-DDP-Timestamp
+    in: header
+    required: true
+    description: Unix 秒；与服务器时间偏差超过 300 秒拒绝
+    schema: { type: integer, minimum: 0 }
+
+  CallbackNonce:
+    name: X-DDP-Nonce
+    in: header
+    required: true
+    description: 时间窗内唯一；重放拒绝
+    schema: { type: string, minLength: 8, maxLength: 128 }
+
+  QualityPolicyId:
+    name: policy_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  Stage4Limit:
+    name: limit
+    in: query
+    required: false
+    schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  DatasetAction:
+    name: action
+    in: path
+    required: true
+    description: Dataset 动作白名单；非法动作返回 422 validation_failed。
+    schema: { type: string, enum: [activate, archive, restore] }
+
+  DatasetVersionAction:
+    name: action
+    in: path
+    required: true
+    description: |
+      DatasetVersion 动作白名单。`system-*` 为后台构建/校验流程使用，客户端不得主动调用；
+      普通用户动作：build、cancel、validate、return-draft、freeze、archive。
+    schema:
+      type: string
+      enum:
+        - build
+        - cancel
+        - validate
+        - return-draft
+        - freeze
+        - archive
+        - system-build-complete
+        - system-build-fail
+        - system-validate-pass
+        - system-validate-fail
+        - system-supersede
+
+  DatasetGrantAction:
+    name: action
+    in: path
+    required: true
+    description: 数据集授权动作白名单（approve/reject/revoke）；非法动作返回 422 validation_failed。
+    schema: { type: string, enum: [approve, reject, revoke] }
+
+  ExportJobAction:
+    name: action
+    in: path
+    required: true
+    description: 导出 Job 动作白名单（cancel/retry）；retry 返回 202。
+    schema: { type: string, enum: [cancel, retry] }
+
+  TrainingRequestAction:
+    name: action
+    in: path
+    required: true
+    description: 训练需求动作白名单；非法动作返回 422 validation_failed。
+    schema: { type: string, enum: [block, unblock, cancel, close] }
+
+  TrainingRequestRevisionAction:
+    name: action
+    in: path
+    required: true
+    description: 训练需求修订动作白名单；approve/reject 要求项目负责人权限。
+    schema: { type: string, enum: [submit, approve, reject] }
+
+  TrainingDeliveryAction:
+    name: action
+    in: path
+    required: true
+    description: 训练交付动作白名单；cancel 要求项目负责人权限。
+    schema:
+      type: string
+      enum: [ready, deliver, accept, reject, rework, resume-ready, cancel]
+
+  ExternalTrainingReferenceAction:
+    name: action
+    in: path
+    required: true
+    description: 外部训练引用动作白名单（sync/cancel）。
+    schema: { type: string, enum: [sync, cancel] }
