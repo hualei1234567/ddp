@@ -62,14 +62,15 @@ function readPolicyRef(
   record: Record<string, unknown>,
   key: string,
   path: string,
-): { policy_id: string; policy_version: number } | null {
+): { policy_id: string; version: number; policy_sha256: string } | null {
   const value = readOptionalRecord(record, key, path);
   if (value === null) {
     return null;
   }
   return {
     policy_id: readUuid(value, "policy_id", `${path}.${key}`),
-    policy_version: readPositiveInteger(value, "policy_version", `${path}.${key}`),
+    version: readPositiveInteger(value, "version", `${path}.${key}`),
+    policy_sha256: readSha256Checksum(value, "policy_sha256", `${path}.${key}`),
   };
 }
 

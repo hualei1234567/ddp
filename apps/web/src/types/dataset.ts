@@ -22,7 +22,8 @@ export interface Dataset {
 
 export interface PolicyRef {
   policy_id: string;
-  policy_version: number;
+  version: number;
+  policy_sha256: string;
 }
 
 export interface DatasetVersion {

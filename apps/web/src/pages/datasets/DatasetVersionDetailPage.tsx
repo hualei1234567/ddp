@@ -125,13 +125,13 @@ function PreviewPanel({
       setError(null);
       const result = await datasetApi.previewSelection(projectId, datasetId, version.dataset_version_id, {
         dedup_policy_id: refs.dedup.policy_id,
-        dedup_policy_version: refs.dedup.policy_version,
+        dedup_policy_version: refs.dedup.version,
         split_policy_id: refs.split.policy_id,
-        split_policy_version: refs.split.policy_version,
+        split_policy_version: refs.split.version,
         leakage_policy_id: refs.leakage.policy_id,
-        leakage_policy_version: refs.leakage.policy_version,
+        leakage_policy_version: refs.leakage.version,
         quality_policy_id: refs.quality?.policy_id ?? null,
-        quality_policy_version: refs.quality?.policy_version ?? null,
+        quality_policy_version: refs.quality?.version ?? null,
         selection_filters: version.selection_filters,
       });
       setPreview(result);

@@ -62,10 +62,10 @@ describe("阶段 4 响应解析", () => {
       validity_status: "VALID",
       selection_rule_version: "ddp.selection/1.0.0",
       selection_filters: {},
-      dedup_policy_ref: { policy_id: DATASET, policy_version: 1 },
-      split_policy_ref: { policy_id: DATASET, policy_version: 2 },
-      leakage_policy_ref: { policy_id: DATASET, policy_version: 3 },
-      quality_policy_ref: { policy_id: DATASET, policy_version: 4 },
+      dedup_policy_ref: { policy_id: DATASET, version: 1, policy_sha256: SHA },
+      split_policy_ref: { policy_id: DATASET, version: 2, policy_sha256: SHA },
+      leakage_policy_ref: { policy_id: DATASET, version: 3, policy_sha256: SHA },
+      quality_policy_ref: { policy_id: DATASET, version: 4, policy_sha256: SHA },
       candidate_count: 10,
       selected_count: 9,
       excluded_count: 1,
@@ -91,7 +91,7 @@ describe("阶段 4 响应解析", () => {
       updated_at: "2026-11-09T00:00:00Z",
     });
     expect(version.dataset_version).toBe(3);
-    expect(version.dedup_policy_ref?.policy_version).toBe(1);
+    expect(version.dedup_policy_ref?.version).toBe(1);
     expect(version.test_count).toBe(1);
   });
 
