@@ -14,6 +14,7 @@ from app.domain.datasets.errors import DatasetDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.ingestion.errors import IngestionDomainError
+from app.domain.modelops.errors import ModelOpsDomainError
 
 _STATUS_BY_CODE = {
     "validation_failed": 422,
@@ -463,6 +464,55 @@ def dataset_error_to_app(exc: DatasetDomainError) -> AppError:
         _DATASET_MESSAGES.get(code, _DATASET_FALLBACK),
         _DATASET_STATUS_BY_CODE[code],
     )
+
+
+_MODELOPS_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "resource_not_found": 404,
+    "forbidden": 403,
+    "state_transition_invalid": 409,
+    "version_conflict": 409,
+    "idempotency_key_reused": 409,
+    "duplicate_resource": 409,
+    "conflict": 409,
+    "model_not_active": 409,
+    "model_version_immutable": 409,
+    "model_version_in_use": 409,
+    "model_release_approval_forbidden": 403,
+    "model_artifact_invalid": 422,
+    "model_artifact_checksum_mismatch": 422,
+    "model_runtime_invalid": 422,
+    "model_training_source_invalid": 422,
+    "evaluation_dataset_not_ready": 409,
+    "evaluation_immutable": 409,
+    "evaluation_metrics_invalid": 422,
+    "evaluation_baseline_invalid": 422,
+    "inference_service_unavailable": 503,
+    "inference_service_not_active": 409,
+    "inference_task_input_invalid": 422,
+    "inference_task_result_invalid": 422,
+    "feedback_dimensions_invalid": 422,
+    "feedback_source_invalid": 422,
+    "feedback_already_converted": 409,
+    "feedback_terminal": 409,
+    "data_requirement_approval_forbidden": 403,
+    "data_requirement_not_satisfied": 409,
+    "data_requirement_dataset_invalid": 422,
+    "data_requirement_retest_invalid": 422,
+    "data_requirement_terminal": 409,
+    "model_adapter_unavailable": 503,
+    "model_adapter_unsupported": 422,
+    "model_callback_invalid": 401,
+    "model_callback_replayed": 409,
+}
+
+
+def modelops_error_to_app(exc: ModelOpsDomainError) -> AppError:
+    code = getattr(exc, "code", None)
+    if not isinstance(code, str) or code not in _MODELOPS_STATUS_BY_CODE:
+        return AppError("validation_failed", "模型闭环规则校验失败", 422)
+    message = str(exc) or "模型闭环规则校验失败"
+    return AppError(code, message, _MODELOPS_STATUS_BY_CODE[code])
 
 
 def integrity_error_to_app(exc: IntegrityError) -> AppError:

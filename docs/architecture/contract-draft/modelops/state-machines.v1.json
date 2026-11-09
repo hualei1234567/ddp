@@ -1,0 +1,742 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/modelops/state-machines.v1.json",
+  "title": "DDP 阶段 5 模型闭环状态机 v1（冻结）",
+  "description": "Model、ModelVersion、InferenceService、InferenceTask、EvaluationRun、ModelFeedback、DataRequirement 的权威迁移表。非法迁移统一 state_transition_invalid（409）。本文件与实现一致，随 ddp.stage5/1.0.0 冻结。",
+  "version": "ddp.stage5/1.0.0",
+  "status": "FROZEN",
+  "frozen_at": "2026-11-09",
+  "common": {
+    "error": "state_transition_invalid",
+    "http_status": 409,
+    "terminal_rule": "终态不得回退；变更通过新资源/新版本表达",
+    "audit_required": true,
+    "optimistic_lock": "动作接口必须带 If-Match: \"<version>\"；缺失 428 precondition_required，失配 409 version_conflict",
+    "idempotency": "写动作支持 Idempotency-Key，作用域 (project_id, user_id, key)，至少 24h",
+    "project_scope": "所有对象与引用必须同项目；跨项目统一 404/403，不泄漏存在性"
+  },
+  "machines": {
+    "Model": {
+      "initial": "DRAFT",
+      "terminal": [
+        "ARCHIVED"
+      ],
+      "states": [
+        "DRAFT",
+        "ACTIVE",
+        "DEPRECATED",
+        "ARCHIVED"
+      ],
+      "transitions": [
+        {
+          "from": "DRAFT",
+          "to": "ACTIVE",
+          "action": "activate",
+          "roles": [
+            "OWNER",
+            "ADMIN"
+          ],
+          "requires_reason": false
+        },
+        {
+          "from": "ACTIVE",
+          "to": "DEPRECATED",
+          "action": "deprecate",
+          "roles": [
+            "OWNER",
+            "ADMIN"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "DEPRECATED",
+          "to": "ACTIVE",
+          "action": "restore",
+          "roles": [
+            "OWNER",
+            "ADMIN"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "ACTIVE",
+          "to": "ARCHIVED",
+          "action": "archive",
+          "roles": [
+            "OWNER",
+            "ADMIN"
+          ],
+          "requires_reason": true,
+          "preconditions": [
+            "无 ACTIVE 推理服务"
+          ]
+        },
+        {
+          "from": "DEPRECATED",
+          "to": "ARCHIVED",
+          "action": "archive",
+          "roles": [
+            "OWNER",
+            "ADMIN"
+          ],
+          "requires_reason": true
+        }
+      ],
+      "forbidden_examples": [
+        {
+          "from": "ARCHIVED",
+          "to": "ACTIVE",
+          "reason": "归档终态不可回退"
+        },
+        {
+          "from": "DRAFT",
+          "to": "DEPRECATED",
+          "reason": "未激活模型不得直接弃用"
+        }
+      ]
+    },
+    "ModelVersion": {
+      "initial": "DRAFT",
+      "terminal": [
+        "ARCHIVED"
+      ],
+      "states": [
+        "DRAFT",
+        "VALIDATING",
+        "VALIDATION_FAILED",
+        "READY",
+        "RELEASED",
+        "DEPRECATED",
+        "ARCHIVED"
+      ],
+      "transitions": [
+        {
+          "from": "DRAFT",
+          "to": "VALIDATING",
+          "action": "validate",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "preconditions": [
+            "产物存在且 SHA256/大小匹配"
+          ]
+        },
+        {
+          "from": "VALIDATING",
+          "to": "READY",
+          "action": "system-validate-pass",
+          "roles": [
+            "SYSTEM"
+          ]
+        },
+        {
+          "from": "VALIDATING",
+          "to": "VALIDATION_FAILED",
+          "action": "system-validate-fail",
+          "roles": [
+            "SYSTEM"
+          ]
+        },
+        {
+          "from": "VALIDATION_FAILED",
+          "to": "DRAFT",
+          "action": "return-draft",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "READY",
+          "to": "RELEASED",
+          "action": "publish",
+          "roles": [
+            "OWNER"
+          ],
+          "requires_reason": false,
+          "preconditions": [
+            "发布人不得是唯一创建人"
+          ]
+        },
+        {
+          "from": "RELEASED",
+          "to": "DEPRECATED",
+          "action": "deprecate",
+          "roles": [
+            "OWNER"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "RELEASED",
+          "to": "ARCHIVED",
+          "action": "archive",
+          "roles": [
+            "OWNER"
+          ],
+          "requires_reason": true,
+          "preconditions": [
+            "无 ACTIVE 推理服务"
+          ]
+        },
+        {
+          "from": "DEPRECATED",
+          "to": "ARCHIVED",
+          "action": "archive",
+          "roles": [
+            "OWNER"
+          ],
+          "requires_reason": true
+        }
+      ],
+      "immutable_after": "RELEASED",
+      "immutable_columns": [
+        "artifact",
+        "runtime",
+        "training_request_id",
+        "training_delivery_id",
+        "external_ref_id",
+        "dataset_version_ids"
+      ],
+      "forbidden_examples": [
+        {
+          "from": "RELEASED",
+          "to": "DRAFT",
+          "reason": "已发布版本不可回退编辑"
+        },
+        {
+          "from": "ARCHIVED",
+          "to": "RELEASED",
+          "reason": "归档终态不可回退"
+        }
+      ]
+    },
+    "InferenceService": {
+      "initial": "PENDING",
+      "terminal": [
+        "RETIRED"
+      ],
+      "states": [
+        "PENDING",
+        "DEPLOYING",
+        "ACTIVE",
+        "STOPPED",
+        "FAILED",
+        "RETIRED"
+      ],
+      "transitions": [
+        {
+          "from": "PENDING",
+          "to": "DEPLOYING",
+          "action": "deploy",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ]
+        },
+        {
+          "from": "DEPLOYING",
+          "to": "ACTIVE",
+          "action": "activate",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ]
+        },
+        {
+          "from": "DEPLOYING",
+          "to": "FAILED",
+          "action": "system-deploy-fail",
+          "roles": [
+            "SYSTEM"
+          ]
+        },
+        {
+          "from": "FAILED",
+          "to": "PENDING",
+          "action": "reset",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ]
+        },
+        {
+          "from": "ACTIVE",
+          "to": "STOPPED",
+          "action": "stop",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "STOPPED",
+          "to": "DEPLOYING",
+          "action": "deploy",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ]
+        },
+        {
+          "from": "STOPPED",
+          "to": "RETIRED",
+          "action": "retire",
+          "roles": [
+            "OWNER"
+          ],
+          "requires_reason": true
+        }
+      ],
+      "forbidden_examples": [
+        {
+          "from": "RETIRED",
+          "to": "ACTIVE",
+          "reason": "退役终态不可回退"
+        },
+        {
+          "from": "PENDING",
+          "to": "ACTIVE",
+          "reason": "必须先部署"
+        }
+      ]
+    },
+    "InferenceTask": {
+      "initial": "QUEUED",
+      "terminal": [
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED"
+      ],
+      "states": [
+        "QUEUED",
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED"
+      ],
+      "transitions": [
+        {
+          "from": "QUEUED",
+          "to": "RUNNING",
+          "action": "system-start",
+          "roles": [
+            "SYSTEM",
+            "ADAPTER"
+          ]
+        },
+        {
+          "from": "QUEUED",
+          "to": "CANCELLED",
+          "action": "cancel",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "RUNNING",
+          "to": "SUCCEEDED",
+          "action": "system-succeed",
+          "roles": [
+            "SYSTEM",
+            "ADAPTER"
+          ]
+        },
+        {
+          "from": "RUNNING",
+          "to": "FAILED",
+          "action": "system-fail",
+          "roles": [
+            "SYSTEM",
+            "ADAPTER"
+          ]
+        },
+        {
+          "from": "RUNNING",
+          "to": "CANCELLED",
+          "action": "cancel",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "requires_reason": true
+        }
+      ],
+      "forbidden_examples": [
+        {
+          "from": "SUCCEEDED",
+          "to": "FAILED",
+          "reason": "终态不可回退"
+        },
+        {
+          "from": "FAILED",
+          "to": "SUCCEEDED",
+          "reason": "失败不得静默改为成功"
+        }
+      ]
+    },
+    "EvaluationRun": {
+      "initial": "QUEUED",
+      "terminal": [
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED"
+      ],
+      "states": [
+        "QUEUED",
+        "RUNNING",
+        "SUCCEEDED",
+        "FAILED",
+        "CANCELLED"
+      ],
+      "transitions": [
+        {
+          "from": "QUEUED",
+          "to": "RUNNING",
+          "action": "system-start",
+          "roles": [
+            "SYSTEM",
+            "ADAPTER"
+          ]
+        },
+        {
+          "from": "QUEUED",
+          "to": "CANCELLED",
+          "action": "cancel",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "RUNNING",
+          "to": "SUCCEEDED",
+          "action": "system-succeed",
+          "roles": [
+            "SYSTEM",
+            "ADAPTER"
+          ],
+          "preconditions": [
+            "指标完整且可计算结论"
+          ]
+        },
+        {
+          "from": "RUNNING",
+          "to": "FAILED",
+          "action": "system-fail",
+          "roles": [
+            "SYSTEM",
+            "ADAPTER"
+          ]
+        },
+        {
+          "from": "RUNNING",
+          "to": "CANCELLED",
+          "action": "cancel",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "FAILED",
+          "to": "QUEUED",
+          "action": "retry",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "creates": "new EvaluationRun"
+        }
+      ],
+      "immutable_after": "SUCCEEDED",
+      "forbidden_examples": [
+        {
+          "from": "SUCCEEDED",
+          "to": "RUNNING",
+          "reason": "结果不可变，重跑创建新 run"
+        },
+        {
+          "from": "RUNNING",
+          "to": "SUCCEEDED",
+          "reason": "缺指标时只能 UNKNOWN/FAIL，不得默认 PASS"
+        }
+      ]
+    },
+    "ModelFeedback": {
+      "initial": "OPEN",
+      "terminal": [
+        "RESOLVED",
+        "DISMISSED"
+      ],
+      "states": [
+        "OPEN",
+        "TRIAGED",
+        "REQUIREMENT_CREATED",
+        "RESOLVED",
+        "DISMISSED"
+      ],
+      "transitions": [
+        {
+          "from": "OPEN",
+          "to": "TRIAGED",
+          "action": "triage",
+          "roles": [
+            "OWNER",
+            "EDITOR",
+            "QA"
+          ]
+        },
+        {
+          "from": "OPEN",
+          "to": "DISMISSED",
+          "action": "dismiss",
+          "roles": [
+            "OWNER",
+            "QA"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "TRIAGED",
+          "to": "DISMISSED",
+          "action": "dismiss",
+          "roles": [
+            "OWNER",
+            "QA"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "OPEN",
+          "to": "REQUIREMENT_CREATED",
+          "action": "create-requirement",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "preconditions": [
+            "同项目数据需求创建成功"
+          ]
+        },
+        {
+          "from": "TRIAGED",
+          "to": "REQUIREMENT_CREATED",
+          "action": "create-requirement",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ]
+        },
+        {
+          "from": "REQUIREMENT_CREATED",
+          "to": "RESOLVED",
+          "action": "resolve",
+          "roles": [
+            "OWNER",
+            "QA"
+          ],
+          "preconditions": [
+            "关联需求已满足或复测通过"
+          ]
+        }
+      ],
+      "forbidden_examples": [
+        {
+          "from": "DISMISSED",
+          "to": "OPEN",
+          "reason": "终态不可回退"
+        },
+        {
+          "from": "OPEN",
+          "to": "RESOLVED",
+          "reason": "必须先处理或转需求"
+        }
+      ]
+    },
+    "DataRequirement": {
+      "initial": "DRAFT",
+      "terminal": [
+        "CLOSED",
+        "REJECTED",
+        "CANCELLED"
+      ],
+      "states": [
+        "DRAFT",
+        "SUBMITTED",
+        "APPROVED",
+        "PLANNED",
+        "IN_PROGRESS",
+        "SATISFIED",
+        "CLOSED",
+        "REJECTED",
+        "CANCELLED"
+      ],
+      "transitions": [
+        {
+          "from": "DRAFT",
+          "to": "SUBMITTED",
+          "action": "submit",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ]
+        },
+        {
+          "from": "SUBMITTED",
+          "to": "APPROVED",
+          "action": "approve",
+          "roles": [
+            "OWNER"
+          ],
+          "preconditions": [
+            "审批人不是提交人"
+          ]
+        },
+        {
+          "from": "SUBMITTED",
+          "to": "REJECTED",
+          "action": "reject",
+          "roles": [
+            "OWNER"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "APPROVED",
+          "to": "PLANNED",
+          "action": "plan",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ]
+        },
+        {
+          "from": "PLANNED",
+          "to": "IN_PROGRESS",
+          "action": "start",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ]
+        },
+        {
+          "from": "IN_PROGRESS",
+          "to": "SATISFIED",
+          "action": "satisfy",
+          "roles": [
+            "OWNER",
+            "QA"
+          ],
+          "preconditions": [
+            "关联至少一个 FROZEN DatasetVersion 且包含目标维度样本"
+          ]
+        },
+        {
+          "from": "APPROVED",
+          "to": "SATISFIED",
+          "action": "satisfy",
+          "roles": [
+            "OWNER",
+            "QA"
+          ],
+          "preconditions": [
+            "同上"
+          ]
+        },
+        {
+          "from": "SATISFIED",
+          "to": "CLOSED",
+          "action": "close",
+          "roles": [
+            "OWNER",
+            "QA"
+          ],
+          "preconditions": [
+            "存在复测评测"
+          ]
+        },
+        {
+          "from": "DRAFT",
+          "to": "CANCELLED",
+          "action": "cancel",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "SUBMITTED",
+          "to": "CANCELLED",
+          "action": "cancel",
+          "roles": [
+            "OWNER",
+            "EDITOR"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "APPROVED",
+          "to": "CANCELLED",
+          "action": "cancel",
+          "roles": [
+            "OWNER"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "PLANNED",
+          "to": "CANCELLED",
+          "action": "cancel",
+          "roles": [
+            "OWNER"
+          ],
+          "requires_reason": true
+        },
+        {
+          "from": "IN_PROGRESS",
+          "to": "CANCELLED",
+          "action": "cancel",
+          "roles": [
+            "OWNER"
+          ],
+          "requires_reason": true
+        }
+      ],
+      "aux_actions": [
+        {
+          "action": "link-retest",
+          "allowed_states": [
+            "SATISFIED",
+            "CLOSED"
+          ],
+          "roles": [
+            "OWNER",
+            "QA"
+          ],
+          "effect": "追加 retest_evaluation_ids"
+        }
+      ],
+      "forbidden_examples": [
+        {
+          "from": "CLOSED",
+          "to": "IN_PROGRESS",
+          "reason": "终态不可回退"
+        },
+        {
+          "from": "SUBMITTED",
+          "to": "SATISFIED",
+          "reason": "未审批不得满足"
+        }
+      ]
+    }
+  }
+}

@@ -283,6 +283,19 @@ class S3MultipartStorage:
 
         return _iter_chunks()
 
+    def object_size(self, object_key: str) -> int | None:
+        """返回对象字节数；对象不存在返回 None，其余错误按存储不可用处理。"""
+        try:
+            response = self._client.head_object(Bucket=self.bucket, Key=object_key)
+        except ClientError as exc:
+            if _is_missing_object(exc):
+                return None
+            raise ObjectStorageUnavailableError("读取对象元数据失败") from exc
+        except BotoCoreError as exc:
+            raise ObjectStorageUnavailableError("读取对象元数据失败") from exc
+        length = response.get("ContentLength")
+        return int(length) if length is not None else None
+
     def delete_object(self, object_key: str) -> None:
         try:
             self._client.delete_object(Bucket=self.bucket, Key=object_key)

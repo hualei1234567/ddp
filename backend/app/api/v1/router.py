@@ -17,10 +17,16 @@ from app.api.v1 import (
     dataset_version_routes,
     devices,
     episodes,
+    evaluation_routes,
     export_routes,
+    feedback_routes,
+    inference_routes,
     ingestion_jobs,
     lineage,
+    model_adapter_routes,
+    model_routes,
     platform,
+    requirement_routes,
     sensors,
     training_delivery_routes,
     training_request_routes,
@@ -45,3 +51,9 @@ api_router.include_router(dataset_grant_routes.router)
 api_router.include_router(training_request_routes.router)
 api_router.include_router(training_delivery_routes.router)
 api_router.include_router(adapter_callback_routes.router)
+api_router.include_router(model_routes.router)
+api_router.include_router(evaluation_routes.router)
+api_router.include_router(inference_routes.router)
+api_router.include_router(feedback_routes.router)
+api_router.include_router(requirement_routes.router)
+api_router.include_router(model_adapter_routes.router)

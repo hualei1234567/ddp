@@ -1,0 +1,1369 @@
+openapi: 3.1.0
+info:
+  title: DDP Stage 5 Model Closed-Loop API
+  version: 1.0.0-draft
+  description: |
+    DDP 阶段 5 模型闭环与智能化 HTTP API 草案（`ddp.stage5/1.0.0-draft`）。
+    覆盖模型登记与版本、推理服务/任务、模型评测、模型反馈、数据缺口与数据需求闭环。
+
+    - 本文件是设计基线，不代表阶段 5 已实现。
+    - 所有项目路由由服务端强制 project scope；不信任客户端 project_id。
+    - 写动作使用 If-Match；缺失 428，失配 409；创建与动作支持 Idempotency-Key。
+    - 错误体统一 {"error": {"code", "message", "request_id", "details?"}}。
+    - DDP 不建设训练/推理集群，不托管模型权重；只保存产物引用、服务端点与结果引用。
+    - 真实评测/推理依赖外部 Adapter；未配置时返回 503 `model_adapter_unavailable`，不得伪造成功。
+  contact:
+    name: DDP System Architect
+  license:
+    name: Proprietary
+servers:
+  - url: http://localhost:8000
+    description: 本地开发
+security:
+  - bearerAuth: []
+tags:
+  - name: models
+    description: 模型容器与生命周期
+  - name: model-versions
+    description: 模型版本、产物校验与发布
+  - name: evaluations
+    description: 冻结数据集上的模型评测、指标与结论
+  - name: inference
+    description: 外部推理服务与推理任务登记
+  - name: model-feedback
+    description: 结构化模型问题与数据缺口
+  - name: data-requirements
+    description: 数据需求闭环与满足/复测关联
+  - name: model-adapters
+    description: 模型平台 Adapter 回调（HMAC）
+paths:
+  /api/v1/projects/{project_id}/models:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listModels
+      tags: [models]
+      summary: 模型列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/ModelStatus" }
+        - name: task_type
+          in: query
+          schema: { $ref: "#/components/schemas/ModelTaskType" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 模型分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createModel
+      tags: [models]
+      summary: 创建模型（DRAFT）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelCreate" }
+      responses:
+        "201":
+          description: 模型已创建
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Model" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/models/{model_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ModelId"
+    get:
+      operationId: getModel
+      tags: [models]
+      summary: 模型详情
+      responses:
+        "200":
+          description: 模型
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Model" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    patch:
+      operationId: updateModel
+      tags: [models]
+      summary: 修改模型（If-Match）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelPatch" }
+      responses:
+        "200":
+          description: 修改后的模型
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Model" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/models/{model_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ModelId"
+      - $ref: "#/components/parameters/ModelAction"
+    post:
+      operationId: actOnModel
+      tags: [models]
+      summary: 模型动作（activate/deprecate/archive/restore）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的模型
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Model" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/models/{model_id}/versions:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ModelId"
+    get:
+      operationId: listModelVersions
+      tags: [model-versions]
+      summary: 模型版本列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/ModelVersionStatus" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 版本分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelVersionPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createModelVersion
+      tags: [model-versions]
+      summary: 创建模型版本（DRAFT）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelVersionCreate" }
+      responses:
+        "201":
+          description: 版本已创建
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/models/{model_id}/versions/{version_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ModelId"
+      - $ref: "#/components/parameters/ModelVersionId"
+    get:
+      operationId: getModelVersion
+      tags: [model-versions]
+      summary: 模型版本详情
+      responses:
+        "200":
+          description: 模型版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/models/{model_id}/versions/{version_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/ModelId"
+      - $ref: "#/components/parameters/ModelVersionId"
+      - $ref: "#/components/parameters/ModelVersionAction"
+    post:
+      operationId: actOnModelVersion
+      tags: [model-versions]
+      summary: 版本动作（validate/publish/deprecate/archive/return-draft）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的版本
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelVersion" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/evaluations:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listEvaluations
+      tags: [evaluations]
+      summary: 评测列表
+      parameters:
+        - name: model_version_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: dataset_version_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/EvaluationStatus" }
+        - name: verdict
+          in: query
+          schema: { $ref: "#/components/schemas/EvaluationVerdict" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 评测分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EvaluationPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createEvaluation
+      tags: [evaluations]
+      summary: 在冻结数据集上创建评测（QUEUED）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EvaluationCreate" }
+      responses:
+        "202":
+          description: 评测已受理
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Evaluation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /api/v1/projects/{project_id}/evaluations/{evaluation_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/EvaluationId"
+    get:
+      operationId: getEvaluation
+      tags: [evaluations]
+      summary: 评测详情
+      responses:
+        "200":
+          description: 评测
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Evaluation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/evaluations/{evaluation_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/EvaluationId"
+      - $ref: "#/components/parameters/EvaluationAction"
+    post:
+      operationId: actOnEvaluation
+      tags: [evaluations]
+      summary: 评测动作（cancel/retry）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的评测
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Evaluation" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/inference-services:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listInferenceServices
+      tags: [inference]
+      summary: 推理服务列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/InferenceServiceStatus" }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 服务分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InferenceServicePage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createInferenceService
+      tags: [inference]
+      summary: 登记推理服务（PENDING）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InferenceServiceCreate" }
+      responses:
+        "201":
+          description: 服务已登记
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InferenceService" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/inference-services/{service_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/InferenceServiceId"
+    get:
+      operationId: getInferenceService
+      tags: [inference]
+      summary: 推理服务详情
+      responses:
+        "200":
+          description: 推理服务
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InferenceService" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/inference-services/{service_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/InferenceServiceId"
+      - $ref: "#/components/parameters/InferenceServiceAction"
+    post:
+      operationId: actOnInferenceService
+      tags: [inference]
+      summary: 服务动作（deploy/activate/stop/retire）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的服务
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InferenceService" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/inference-tasks:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listInferenceTasks
+      tags: [inference]
+      summary: 推理任务列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/InferenceTaskStatus" }
+        - name: model_version_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 任务分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InferenceTaskPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createInferenceTask
+      tags: [inference]
+      summary: 创建推理任务（QUEUED）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InferenceTaskCreate" }
+      responses:
+        "202":
+          description: 任务已受理
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InferenceTask" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /api/v1/projects/{project_id}/inference-tasks/{task_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/InferenceTaskId"
+    get:
+      operationId: getInferenceTask
+      tags: [inference]
+      summary: 推理任务详情
+      responses:
+        "200":
+          description: 推理任务
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InferenceTask" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/inference-tasks/{task_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/InferenceTaskId"
+      - $ref: "#/components/parameters/InferenceTaskAction"
+    post:
+      operationId: actOnInferenceTask
+      tags: [inference]
+      summary: 推理任务动作（cancel）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ActionRequest" }
+      responses:
+        "200":
+          description: 动作后的任务
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InferenceTask" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/model-feedback:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listModelFeedback
+      tags: [model-feedback]
+      summary: 模型反馈列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/FeedbackStatus" }
+        - name: issue_type
+          in: query
+          schema: { $ref: "#/components/schemas/FeedbackIssueType" }
+        - name: model_version_id
+          in: query
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 反馈分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeedbackPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createModelFeedback
+      tags: [model-feedback]
+      summary: 创建模型反馈（OPEN）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeedbackCreate" }
+      responses:
+        "201":
+          description: 反馈已创建
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Feedback" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/model-feedback/{feedback_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/FeedbackId"
+    get:
+      operationId: getModelFeedback
+      tags: [model-feedback]
+      summary: 反馈详情
+      responses:
+        "200":
+          description: 反馈
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Feedback" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/model-feedback/{feedback_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/FeedbackId"
+      - $ref: "#/components/parameters/FeedbackAction"
+    post:
+      operationId: actOnModelFeedback
+      tags: [model-feedback]
+      summary: 反馈动作（triage/dismiss/resolve/create-requirement）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FeedbackActionRequest" }
+      responses:
+        "200":
+          description: 动作后的反馈
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Feedback" }
+        "201":
+          description: 已创建数据需求
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Feedback" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/data-gaps:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: getDataGapSummary
+      tags: [model-feedback]
+      summary: 数据缺口聚合（来自 OPEN/TRIAGED 反馈）
+      parameters:
+        - name: dimension_type
+          in: query
+          schema: { $ref: "#/components/schemas/GapDimensionType" }
+      responses:
+        "200":
+          description: 缺口汇总
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataGapSummary" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/data-requirements:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+    get:
+      operationId: listDataRequirements
+      tags: [data-requirements]
+      summary: 数据需求列表
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/RequirementStatus" }
+        - name: priority
+          in: query
+          schema: { type: string, enum: [P0, P1, P2, P3] }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: 需求分页
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RequirementPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+    post:
+      operationId: createDataRequirement
+      tags: [data-requirements]
+      summary: 创建数据需求（DRAFT）
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequirementCreate" }
+      responses:
+        "201":
+          description: 需求已创建
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataRequirement" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/data-requirements/{requirement_id}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/RequirementId"
+    get:
+      operationId: getDataRequirement
+      tags: [data-requirements]
+      summary: 数据需求详情
+      responses:
+        "200":
+          description: 数据需求
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataRequirement" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/projects/{project_id}/data-requirements/{requirement_id}/actions/{action}:
+    parameters:
+      - $ref: "#/components/parameters/ProjectId"
+      - $ref: "#/components/parameters/RequirementId"
+      - $ref: "#/components/parameters/RequirementAction"
+    post:
+      operationId: actOnDataRequirement
+      tags: [data-requirements]
+      summary: 需求动作（submit/approve/reject/plan/start/satisfy/close/cancel/link-retest）
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequirementActionRequest" }
+      responses:
+        "200":
+          description: 动作后的需求
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataRequirement" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "428": { $ref: "#/components/responses/PreconditionRequired" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+  /api/v1/integrations/model-adapters/{adapter_id}/callbacks:
+    parameters:
+      - $ref: "#/components/parameters/AdapterId"
+    post:
+      operationId: receiveModelAdapterCallback
+      tags: [model-adapters]
+      summary: 模型 Adapter 回调（HMAC；评测/推理结果）
+      parameters:
+        - $ref: "#/components/parameters/CallbackSignature"
+        - $ref: "#/components/parameters/CallbackTimestamp"
+        - $ref: "#/components/parameters/CallbackNonce"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelAdapterCallback" }
+      responses:
+        "204":
+          description: 已处理
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/UnprocessableEntity" }
+        "429": { $ref: "#/components/responses/TooManyRequests" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    adapterHmac:
+      type: apiKey
+      in: header
+      name: X-DDP-Signature
+      description: HMAC-SHA256(secret, timestamp + "." + nonce + "." + raw_body)，sha256=<hex>。
+  parameters:
+    ProjectId:
+      name: project_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ModelId:
+      name: model_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    ModelVersionId:
+      name: version_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    EvaluationId:
+      name: evaluation_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InferenceServiceId:
+      name: service_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InferenceTaskId:
+      name: task_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    FeedbackId:
+      name: feedback_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    RequirementId:
+      name: requirement_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    AdapterId:
+      name: adapter_id
+      in: path
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    ModelAction:
+      name: action
+      in: path
+      required: true
+      schema: { type: string, enum: [activate, deprecate, archive, restore] }
+    ModelVersionAction:
+      name: action
+      in: path
+      required: true
+      description: 发布（publish）要求 OWNER 且发布人不得是唯一创建人。
+      schema: { type: string, enum: [validate, publish, deprecate, archive, return-draft] }
+    EvaluationAction:
+      name: action
+      in: path
+      required: true
+      schema: { type: string, enum: [cancel, retry] }
+    InferenceServiceAction:
+      name: action
+      in: path
+      required: true
+      schema: { type: string, enum: [deploy, activate, stop, retire] }
+    InferenceTaskAction:
+      name: action
+      in: path
+      required: true
+      schema: { type: string, enum: [cancel] }
+    FeedbackAction:
+      name: action
+      in: path
+      required: true
+      schema: { type: string, enum: [triage, dismiss, resolve, create-requirement] }
+    RequirementAction:
+      name: action
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [submit, approve, reject, plan, start, satisfy, close, cancel, link-retest]
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      schema: { type: string, maxLength: 512 }
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema: { type: string, pattern: '^"[0-9]+"$' }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, minLength: 8, maxLength: 128 }
+    CallbackSignature:
+      name: X-DDP-Signature
+      in: header
+      required: true
+      schema: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    CallbackTimestamp:
+      name: X-DDP-Timestamp
+      in: header
+      required: true
+      schema: { type: integer, minimum: 0 }
+    CallbackNonce:
+      name: X-DDP-Nonce
+      in: header
+      required: true
+      schema: { type: string, minLength: 8, maxLength: 128 }
+  responses:
+    BadRequest: { description: 请求非法, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+    Unauthorized: { description: 未认证, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+    Forbidden: { description: 无权限, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+    NotFound: { description: 不存在或跨项目, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+    Conflict: { description: 冲突/状态不允许, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+    Gone: { description: 已撤销/过期, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+    UnprocessableEntity: { description: 校验失败, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+    PreconditionRequired: { description: 缺少 If-Match, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+    TooManyRequests: { description: 限流, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+    ServiceUnavailable: { description: 外部依赖不可用, content: { application/json: { schema: { $ref: "#/components/schemas/ErrorEnvelope" } } } }
+  schemas:
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      additionalProperties: false
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          additionalProperties: false
+          properties:
+            code: { type: string, minLength: 1, maxLength: 100 }
+            message: { type: string, minLength: 1, maxLength: 2000 }
+            request_id: { type: [string, "null"], maxLength: 128 }
+            details: { type: [object, "null"], additionalProperties: true }
+    ModelStatus: { type: string, enum: [DRAFT, ACTIVE, DEPRECATED, ARCHIVED] }
+    ModelTaskType: { type: string, enum: [IMITATION, REINFORCEMENT, VLM, OTHER] }
+    ModelVersionStatus:
+      type: string
+      enum: [DRAFT, VALIDATING, VALIDATION_FAILED, READY, RELEASED, DEPRECATED, ARCHIVED]
+    EvaluationStatus: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED] }
+    EvaluationVerdict: { type: string, enum: [PASS, FAIL, UNKNOWN] }
+    InferenceServiceStatus: { type: string, enum: [PENDING, DEPLOYING, ACTIVE, STOPPED, FAILED, RETIRED] }
+    InferenceServiceEnvironment: { type: string, enum: [DEV, STAGING, PROD] }
+    InferenceTaskStatus: { type: string, enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED] }
+    HealthStatus: { type: string, enum: [UNKNOWN, HEALTHY, UNHEALTHY] }
+    FeedbackStatus: { type: string, enum: [OPEN, TRIAGED, REQUIREMENT_CREATED, RESOLVED, DISMISSED] }
+    FeedbackIssueType:
+      type: string
+      enum: [ACTION_COVERAGE, SCENE_COVERAGE, LONG_TAIL, VIEWPOINT, GENERALIZATION, LABEL_GAP, DATA_QUALITY, OTHER]
+    FeedbackSeverity: { type: string, enum: [BLOCKER, MAJOR, MINOR] }
+    GapDimensionType: { type: string, enum: [SCENE, ACTION, ROBOT, DEVICE, LABEL, MODALITY] }
+    RequirementStatus:
+      type: string
+      enum: [DRAFT, SUBMITTED, APPROVED, PLANNED, IN_PROGRESS, SATISFIED, CLOSED, REJECTED, CANCELLED]
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 2000 }
+        comment: { type: [string, "null"], maxLength: 2000 }
+        evidence_refs: { type: array, items: { type: string, maxLength: 1024 }, uniqueItems: true }
+        payload: { type: [object, "null"], additionalProperties: true }
+    ModelArtifact:
+      type: object
+      required: [object_key, sha256, size_bytes, format]
+      additionalProperties: false
+      properties:
+        object_key: { type: string, minLength: 1, maxLength: 1024 }
+        sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+        size_bytes: { type: integer, minimum: 1 }
+        format: { type: string, enum: [ONNX, TORCHSCRIPT, SAFETENSORS, TENSORRT, OTHER] }
+    ModelRuntime:
+      type: object
+      required: [framework, framework_version]
+      additionalProperties: false
+      properties:
+        framework: { type: string, minLength: 1, maxLength: 100 }
+        framework_version: { type: string, minLength: 1, maxLength: 100 }
+        python_version: { type: [string, "null"], maxLength: 32 }
+        cuda_version: { type: [string, "null"], maxLength: 32 }
+        image_ref: { type: [string, "null"], maxLength: 512 }
+    ModelCreate:
+      type: object
+      required: [code, name, task_type, framework, owner_id]
+      additionalProperties: false
+      properties:
+        code: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        task_type: { $ref: "#/components/schemas/ModelTaskType" }
+        framework: { type: string, minLength: 1, maxLength: 100 }
+        owner_id: { type: string, format: uuid }
+        tags: { type: array, items: { type: string, maxLength: 64 }, uniqueItems: true }
+    ModelPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: [string, "null"], minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 2000 }
+        framework: { type: [string, "null"], minLength: 1, maxLength: 100 }
+        tags: { type: array, items: { type: string, maxLength: 64 }, uniqueItems: true }
+    Model:
+      type: object
+      required: [model_id, project_id, code, name, task_type, framework, owner_id, status, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        model_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        description: { type: [string, "null"] }
+        task_type: { $ref: "#/components/schemas/ModelTaskType" }
+        framework: { type: string }
+        owner_id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/ModelStatus" }
+        current_version_id: { type: [string, "null"], format: uuid }
+        tags: { type: array, items: { type: string } }
+        allowed_actions: { type: array, items: { type: string } }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ModelVersionCreate:
+      type: object
+      required: [artifact, runtime]
+      additionalProperties: false
+      properties:
+        artifact: { $ref: "#/components/schemas/ModelArtifact" }
+        runtime: { $ref: "#/components/schemas/ModelRuntime" }
+        training_request_id: { type: [string, "null"], format: uuid }
+        training_delivery_id: { type: [string, "null"], format: uuid }
+        external_ref_id: { type: [string, "null"], format: uuid }
+        dataset_version_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        metrics_summary: { type: object, additionalProperties: true }
+        release_notes: { type: [string, "null"], maxLength: 4000 }
+    ModelVersion:
+      type: object
+      required: [model_version_id, model_id, project_id, version_no, status, artifact, runtime, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        model_version_id: { type: string, format: uuid }
+        model_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        version_no: { type: integer, minimum: 1 }
+        status: { $ref: "#/components/schemas/ModelVersionStatus" }
+        artifact: { $ref: "#/components/schemas/ModelArtifact" }
+        runtime: { $ref: "#/components/schemas/ModelRuntime" }
+        training_request_id: { type: [string, "null"], format: uuid }
+        training_delivery_id: { type: [string, "null"], format: uuid }
+        external_ref_id: { type: [string, "null"], format: uuid }
+        dataset_version_ids: { type: array, items: { type: string, format: uuid } }
+        metrics_summary: { type: object, additionalProperties: true }
+        release_notes: { type: [string, "null"] }
+        validated_at: { type: [string, "null"], format: date-time }
+        released_by: { type: [string, "null"], format: uuid }
+        released_at: { type: [string, "null"], format: date-time }
+        deprecated_at: { type: [string, "null"], format: date-time }
+        deprecation_reason: { type: [string, "null"] }
+        allowed_actions: { type: array, items: { type: string } }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    EvaluationCreate:
+      type: object
+      required: [model_version_id, dataset_version_id, metrics, thresholds]
+      additionalProperties: false
+      properties:
+        model_version_id: { type: string, format: uuid }
+        dataset_version_id: { type: string, format: uuid }
+        baseline_evaluation_id: { type: [string, "null"], format: uuid }
+        metrics: { type: object, additionalProperties: { type: number } }
+        thresholds:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties: false
+            properties:
+              min: { type: [number, "null"] }
+              max: { type: [number, "null"] }
+        adapter_id: { type: string, minLength: 1, maxLength: 100 }
+    Evaluation:
+      type: object
+      required: [evaluation_id, project_id, model_version_id, dataset_version_id, status, metrics, thresholds, verdict, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        evaluation_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        model_version_id: { type: string, format: uuid }
+        dataset_version_id: { type: string, format: uuid }
+        baseline_evaluation_id: { type: [string, "null"], format: uuid }
+        status: { $ref: "#/components/schemas/EvaluationStatus" }
+        metrics: { type: object, additionalProperties: { type: number } }
+        thresholds: { type: object, additionalProperties: true }
+        verdict: { $ref: "#/components/schemas/EvaluationVerdict" }
+        report_ref: { type: [object, "null"], additionalProperties: true }
+        error_code: { type: [string, "null"] }
+        error_summary: { type: [string, "null"] }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        allowed_actions: { type: array, items: { type: string } }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    InferenceServiceCreate:
+      type: object
+      required: [model_version_id, environment, endpoint_url]
+      additionalProperties: false
+      properties:
+        model_version_id: { type: string, format: uuid }
+        environment: { $ref: "#/components/schemas/InferenceServiceEnvironment" }
+        endpoint_url: { type: string, format: uri, maxLength: 1024 }
+        resource_ref: { type: [string, "null"], maxLength: 512 }
+        config: { type: object, additionalProperties: true }
+    InferenceService:
+      type: object
+      required: [service_id, project_id, model_version_id, environment, endpoint_url, status, health_status, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        service_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        model_version_id: { type: string, format: uuid }
+        environment: { $ref: "#/components/schemas/InferenceServiceEnvironment" }
+        endpoint_url: { type: string, format: uri }
+        resource_ref: { type: [string, "null"] }
+        config: { type: object, additionalProperties: true }
+        status: { $ref: "#/components/schemas/InferenceServiceStatus" }
+        health_status: { $ref: "#/components/schemas/HealthStatus" }
+        deployed_at: { type: [string, "null"], format: date-time }
+        stopped_at: { type: [string, "null"], format: date-time }
+        allowed_actions: { type: array, items: { type: string } }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    InferenceTaskCreate:
+      type: object
+      required: [model_version_id]
+      additionalProperties: false
+      properties:
+        model_version_id: { type: string, format: uuid }
+        service_id: { type: [string, "null"], format: uuid }
+        dataset_version_id: { type: [string, "null"], format: uuid }
+        episode_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        adapter_id: { type: string, minLength: 1, maxLength: 100 }
+        config: { type: object, additionalProperties: true }
+    InferenceTask:
+      type: object
+      required: [task_id, project_id, model_version_id, status, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        task_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        model_version_id: { type: string, format: uuid }
+        service_id: { type: [string, "null"], format: uuid }
+        dataset_version_id: { type: [string, "null"], format: uuid }
+        episode_ids: { type: array, items: { type: string, format: uuid } }
+        status: { $ref: "#/components/schemas/InferenceTaskStatus" }
+        result_ref: { type: [object, "null"], additionalProperties: true }
+        metrics: { type: object, additionalProperties: { type: number } }
+        log_ref: { type: [string, "null"], maxLength: 1024 }
+        error_code: { type: [string, "null"] }
+        error_summary: { type: [string, "null"] }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+        allowed_actions: { type: array, items: { type: string } }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    GapDimension:
+      type: object
+      required: [dimension_type, dimension_value]
+      additionalProperties: false
+      properties:
+        dimension_type: { $ref: "#/components/schemas/GapDimensionType" }
+        dimension_value: { type: string, minLength: 1, maxLength: 200 }
+        current_count: { type: [integer, "null"], minimum: 0 }
+        target_count: { type: [integer, "null"], minimum: 0 }
+    FeedbackCreate:
+      type: object
+      required: [model_version_id, issue_type, severity, description, dimensions]
+      additionalProperties: false
+      properties:
+        model_version_id: { type: string, format: uuid }
+        evaluation_id: { type: [string, "null"], format: uuid }
+        inference_task_id: { type: [string, "null"], format: uuid }
+        issue_type: { $ref: "#/components/schemas/FeedbackIssueType" }
+        severity: { $ref: "#/components/schemas/FeedbackSeverity" }
+        description: { type: string, minLength: 1, maxLength: 4000 }
+        dimensions:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/GapDimension" }
+        evidence_refs: { type: array, items: { type: string, maxLength: 1024 }, uniqueItems: true }
+    Feedback:
+      type: object
+      required: [feedback_id, project_id, model_version_id, issue_type, severity, description, dimensions, status, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        feedback_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        model_version_id: { type: string, format: uuid }
+        evaluation_id: { type: [string, "null"], format: uuid }
+        inference_task_id: { type: [string, "null"], format: uuid }
+        issue_type: { $ref: "#/components/schemas/FeedbackIssueType" }
+        severity: { $ref: "#/components/schemas/FeedbackSeverity" }
+        description: { type: string }
+        dimensions: { type: array, items: { $ref: "#/components/schemas/GapDimension" } }
+        evidence_refs: { type: array, items: { type: string } }
+        status: { $ref: "#/components/schemas/FeedbackStatus" }
+        converted_requirement_id: { type: [string, "null"], format: uuid }
+        resolution_note: { type: [string, "null"] }
+        allowed_actions: { type: array, items: { type: string } }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    FeedbackActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 2000 }
+        resolution_note: { type: [string, "null"], maxLength: 2000 }
+        requirement_code: { type: [string, "null"], maxLength: 64 }
+        requirement_title: { type: [string, "null"], maxLength: 200 }
+        target_episode_count: { type: [integer, "null"], minimum: 1 }
+        due_at: { type: [string, "null"], format: date-time }
+        priority: { type: [string, "null"], enum: [P0, P1, P2, P3] }
+    RequirementCreate:
+      type: object
+      required: [code, title, source_type, dimensions]
+      additionalProperties: false
+      properties:
+        code: { type: string, minLength: 1, maxLength: 64 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, "null"], maxLength: 4000 }
+        source_type: { type: string, enum: [MODEL_FEEDBACK, EVALUATION, MANUAL, OPERATION] }
+        source_feedback_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        source_evaluation_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        dimensions: { type: array, minItems: 1, items: { $ref: "#/components/schemas/GapDimension" } }
+        target_episode_count: { type: integer, minimum: 1 }
+        quality_thresholds: { type: object, additionalProperties: true }
+        priority: { type: string, enum: [P0, P1, P2, P3] }
+        due_at: { type: [string, "null"], format: date-time }
+        owner_id: { type: string, format: uuid }
+    DataRequirement:
+      type: object
+      required: [requirement_id, project_id, code, title, source_type, dimensions, priority, status, version, created_at, updated_at]
+      additionalProperties: false
+      properties:
+        requirement_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        code: { type: string }
+        title: { type: string }
+        description: { type: [string, "null"] }
+        source_type: { type: string }
+        source_feedback_ids: { type: array, items: { type: string, format: uuid } }
+        source_evaluation_ids: { type: array, items: { type: string, format: uuid } }
+        dimensions: { type: array, items: { $ref: "#/components/schemas/GapDimension" } }
+        target_episode_count: { type: integer, minimum: 1 }
+        quality_thresholds: { type: object, additionalProperties: true }
+        priority: { type: string }
+        due_at: { type: [string, "null"], format: date-time }
+        owner_id: { type: string, format: uuid }
+        status: { $ref: "#/components/schemas/RequirementStatus" }
+        linked_dataset_version_ids: { type: array, items: { type: string, format: uuid } }
+        retest_evaluation_ids: { type: array, items: { type: string, format: uuid } }
+        satisfied_at: { type: [string, "null"], format: date-time }
+        satisfaction_evidence_ref: { type: [string, "null"], maxLength: 1024 }
+        allowed_actions: { type: array, items: { type: string } }
+        version: { type: integer, minimum: 1 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    RequirementActionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        reason: { type: [string, "null"], maxLength: 2000 }
+        dataset_version_ids: { type: array, items: { type: string, format: uuid }, uniqueItems: true }
+        evaluation_id: { type: [string, "null"], format: uuid }
+        satisfaction_evidence_ref: { type: [string, "null"], maxLength: 1024 }
+    DataGapSummary:
+      type: object
+      required: [items, freshness]
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [dimension_type, dimension_value, open_feedback_count, suggested_episode_count]
+            additionalProperties: false
+            properties:
+              dimension_type: { $ref: "#/components/schemas/GapDimensionType" }
+              dimension_value: { type: string }
+              open_feedback_count: { type: integer, minimum: 0 }
+              current_count: { type: [integer, "null"], minimum: 0 }
+              target_count: { type: [integer, "null"], minimum: 0 }
+              suggested_episode_count: { type: integer, minimum: 0 }
+              requirement_ids: { type: array, items: { type: string, format: uuid } }
+        freshness: { type: string, enum: [FRESH, STALE, UNKNOWN] }
+    ModelAdapterCallback:
+      type: object
+      required: [event_id, adapter_version, event_type]
+      additionalProperties: false
+      properties:
+        event_id: { type: string, minLength: 1, maxLength: 128 }
+        adapter_version: { type: string, minLength: 1, maxLength: 100 }
+        event_type: { type: string, enum: [evaluation.completed, evaluation.failed, inference.completed, inference.failed] }
+        evaluation_id: { type: [string, "null"], format: uuid }
+        task_id: { type: [string, "null"], format: uuid }
+        metrics: { type: object, additionalProperties: { type: number } }
+        verdict: { type: [string, "null"], enum: [PASS, FAIL, UNKNOWN] }
+        report_ref: { type: [object, "null"], additionalProperties: true }
+        result_ref: { type: [object, "null"], additionalProperties: true }
+        log_ref: { type: [string, "null"], maxLength: 1024 }
+        error_code: { type: [string, "null"], maxLength: 100 }
+        error_summary: { type: [string, "null"], maxLength: 2000 }
+    ModelPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Model" } }
+        next_cursor: { type: [string, "null"] }
+    ModelVersionPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ModelVersion" } }
+        next_cursor: { type: [string, "null"] }
+    EvaluationPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Evaluation" } }
+        next_cursor: { type: [string, "null"] }
+    InferenceServicePage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/InferenceService" } }
+        next_cursor: { type: [string, "null"] }
+    InferenceTaskPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/InferenceTask" } }
+        next_cursor: { type: [string, "null"] }
+    FeedbackPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Feedback" } }
+        next_cursor: { type: [string, "null"] }
+    RequirementPage:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/DataRequirement" } }
+        next_cursor: { type: [string, "null"] }

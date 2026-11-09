@@ -35,6 +35,18 @@ import DeviceListPage from "./pages/devices/DeviceListPage";
 import EpisodeDetailPage from "./pages/episodes/EpisodeDetailPage";
 import EpisodeListPage from "./pages/episodes/EpisodeListPage";
 import Forbidden from "./pages/Forbidden";
+import DataGapPage from "./pages/models/DataGapPage";
+import EvaluationDetailPage from "./pages/models/EvaluationDetailPage";
+import EvaluationListPage from "./pages/models/EvaluationListPage";
+import FeedbackDetailPage from "./pages/models/FeedbackDetailPage";
+import FeedbackListPage from "./pages/models/FeedbackListPage";
+import InferenceServiceListPage from "./pages/models/InferenceServiceListPage";
+import InferenceTaskDetailPage from "./pages/models/InferenceTaskDetailPage";
+import InferenceTaskListPage from "./pages/models/InferenceTaskListPage";
+import ModelDetailPage from "./pages/models/ModelDetailPage";
+import ModelListPage from "./pages/models/ModelListPage";
+import RequirementDetailPage from "./pages/models/RequirementDetailPage";
+import RequirementListPage from "./pages/models/RequirementListPage";
 import ModulePage from "./pages/ModulePage";
 import NotFound from "./pages/NotFound";
 import RawAssetDetailPage from "./pages/rawAssets/RawAssetDetailPage";
@@ -169,6 +181,33 @@ export default function AppRoutes() {
         <Route
           path="training-deliveries/:deliveryId"
           element={<TrainingDeliveryDetailPage />}
+        />
+        <Route path="models" element={<ModelListPage />} />
+        <Route path="models/:modelId" element={<ModelDetailPage />} />
+        <Route path="evaluations" element={<EvaluationListPage />} />
+        <Route
+          path="evaluations/:evaluationId"
+          element={<EvaluationDetailPage />}
+        />
+        <Route path="model-feedback" element={<FeedbackListPage />} />
+        <Route
+          path="model-feedback/:feedbackId"
+          element={<FeedbackDetailPage />}
+        />
+        <Route path="data-requirements" element={<RequirementListPage />} />
+        <Route
+          path="data-requirements/:requirementId"
+          element={<RequirementDetailPage />}
+        />
+        <Route path="data-gaps" element={<DataGapPage />} />
+        <Route
+          path="inference-services"
+          element={<InferenceServiceListPage />}
+        />
+        <Route path="inference-tasks" element={<InferenceTaskListPage />} />
+        <Route
+          path="inference-tasks/:taskId"
+          element={<InferenceTaskDetailPage />}
         />
         {plannedRoutes.map((item) => (
           <Route

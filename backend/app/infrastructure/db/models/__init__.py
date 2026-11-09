@@ -141,3 +141,5 @@ __all__ = [
     "UploadSessionModel",
     "User",
 ]
+
+from app.infrastructure.db.models import modelops  # noqa: F401,E402

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.2.0
+  version: 1.3.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -18,6 +18,9 @@ info:
       DatasetVersion / DatasetItem、去重·划分·泄漏·质量策略、选择预览、质量/泄漏报告、
       Manifest、跨项目授权、导出 Job 与产物、训练需求/修订/交付、外部训练引用与 Adapter 回调。
       冻结版本 `ddp.stage4/1.0.0`；端点矩阵与错误码见 `docs/architecture/阶段4-契约冻结-v1.0.md`。
+    - `1.3.0` 在 `1.2.0` 基础上**增量加入阶段 5 模型闭环已实现端点**：Model / ModelVersion
+      产物校验与发布、模型评测、推理服务与推理任务、模型反馈、数据缺口汇总、数据需求闭环，
+      以及模型平台 Adapter 签名回调（HMAC）。冻结版本 `ddp.stage5/1.0.0`。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -35,7 +38,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.2.0
+  version: 1.3.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -88,6 +91,20 @@ x-ddp-contract:
         check-stage4-freeze.sh --freeze/--check、oasdiff breaking（No changes detected）；
         契约端点 55 与运行期 FastAPI OpenAPI 阶段 4 端点集合零差异。
         详细记录见 docs/architecture/阶段4-契约冻结-v1.0.md。
+    stage5:
+      version: ddp.stage5/1.0.0
+      frozen_status: frozen
+      frozen_at: "2026-11-09"
+      task: DDP-341
+      implemented_baseline_task: DDP-340
+      frozen_document: docs/architecture/阶段5-模型闭环契约冻结-v1.0.md
+      index_document: docs/architecture/阶段5-模型闭环契约索引.md
+      approval_record: docs/adr/0013-stage5-model-closed-loop.md
+      validation_status: PASS
+      validation_note: |
+        2026-11-09 DDP-341 已执行：Redocly lint、check-stage5-freeze.sh --freeze/--check、
+        oasdiff breaking（--fail-on ERR）；契约端点 31 与运行期 FastAPI OpenAPI 阶段 5 端点集合零差异。
+        详细记录见 docs/architecture/阶段5-模型闭环契约冻结-v1.0.md。
 servers:
   - url: http://localhost:8000
     description: 本地开发
@@ -146,6 +163,20 @@ tags:
     description: 训练交付、验收与返工
   - name: training-adapters
     description: 外部训练引用、状态同步与 HMAC 回调
+  - name: models
+    description: 模型容器与生命周期
+  - name: model-versions
+    description: 模型版本、产物校验与发布（发布后不可原地修改）
+  - name: evaluations
+    description: 冻结数据集上的模型评测、指标与结论
+  - name: inference
+    description: 外部推理服务与推理任务登记
+  - name: model-feedback
+    description: 结构化模型问题与数据缺口
+  - name: data-requirements
+    description: 数据需求闭环与满足/复测关联
+  - name: model-adapters
+    description: 模型平台 Adapter 回调（HMAC）
 paths:
   /health:
     $ref: "./fragments/paths.stage1.yaml#/health"
@@ -407,6 +438,52 @@ paths:
     $ref: "./fragments/paths.stage4.yaml#/qualityPolicies"
   /api/v1/projects/{project_id}/datasets/{dataset_id}/quality-policies/{policy_id}:
     $ref: "./fragments/paths.stage4.yaml#/qualityPolicyDetail"
+  /api/v1/projects/{project_id}/models:
+    $ref: "./fragments/paths.stage5.yaml#/models"
+  /api/v1/projects/{project_id}/models/{model_id}:
+    $ref: "./fragments/paths.stage5.yaml#/modelDetail"
+  /api/v1/projects/{project_id}/models/{model_id}/actions/{action}:
+    $ref: "./fragments/paths.stage5.yaml#/modelActions"
+  /api/v1/projects/{project_id}/models/{model_id}/versions:
+    $ref: "./fragments/paths.stage5.yaml#/modelVersions"
+  /api/v1/projects/{project_id}/models/{model_id}/versions/{version_id}:
+    $ref: "./fragments/paths.stage5.yaml#/modelVersionDetail"
+  /api/v1/projects/{project_id}/models/{model_id}/versions/{version_id}/actions/{action}:
+    $ref: "./fragments/paths.stage5.yaml#/modelVersionActions"
+  /api/v1/projects/{project_id}/evaluations:
+    $ref: "./fragments/paths.stage5.yaml#/evaluations"
+  /api/v1/projects/{project_id}/evaluations/{evaluation_id}:
+    $ref: "./fragments/paths.stage5.yaml#/evaluationDetail"
+  /api/v1/projects/{project_id}/evaluations/{evaluation_id}/actions/{action}:
+    $ref: "./fragments/paths.stage5.yaml#/evaluationActions"
+  /api/v1/projects/{project_id}/inference-services:
+    $ref: "./fragments/paths.stage5.yaml#/inferenceServices"
+  /api/v1/projects/{project_id}/inference-services/{service_id}:
+    $ref: "./fragments/paths.stage5.yaml#/inferenceServiceDetail"
+  /api/v1/projects/{project_id}/inference-services/{service_id}/actions/{action}:
+    $ref: "./fragments/paths.stage5.yaml#/inferenceServiceActions"
+  /api/v1/projects/{project_id}/inference-tasks:
+    $ref: "./fragments/paths.stage5.yaml#/inferenceTasks"
+  /api/v1/projects/{project_id}/inference-tasks/{task_id}:
+    $ref: "./fragments/paths.stage5.yaml#/inferenceTaskDetail"
+  /api/v1/projects/{project_id}/inference-tasks/{task_id}/actions/{action}:
+    $ref: "./fragments/paths.stage5.yaml#/inferenceTaskActions"
+  /api/v1/projects/{project_id}/model-feedback:
+    $ref: "./fragments/paths.stage5.yaml#/modelFeedback"
+  /api/v1/projects/{project_id}/model-feedback/{feedback_id}:
+    $ref: "./fragments/paths.stage5.yaml#/modelFeedbackDetail"
+  /api/v1/projects/{project_id}/model-feedback/{feedback_id}/actions/{action}:
+    $ref: "./fragments/paths.stage5.yaml#/modelFeedbackActions"
+  /api/v1/projects/{project_id}/data-gaps:
+    $ref: "./fragments/paths.stage5.yaml#/dataGaps"
+  /api/v1/projects/{project_id}/data-requirements:
+    $ref: "./fragments/paths.stage5.yaml#/dataRequirements"
+  /api/v1/projects/{project_id}/data-requirements/{requirement_id}:
+    $ref: "./fragments/paths.stage5.yaml#/dataRequirementDetail"
+  /api/v1/projects/{project_id}/data-requirements/{requirement_id}/actions/{action}:
+    $ref: "./fragments/paths.stage5.yaml#/dataRequirementActions"
+  /api/v1/integrations/model-adapters/{adapter_id}/callbacks:
+    $ref: "./fragments/paths.stage5.yaml#/modelAdapterCallback"
 components:
   securitySchemes:
     bearerAuth:
@@ -419,9 +496,9 @@ components:
       in: header
       name: X-DDP-Signature
       description: |
-        外部训练平台回调签名。算法：HMAC-SHA256(secret, timestamp + "." + nonce + "." + raw_body)，
+        外部训练/模型平台回调签名。算法：HMAC-SHA256(secret, timestamp + "." + nonce + "." + raw_body)，
         以 `sha256=<hex>` 传输；同时携带 X-DDP-Timestamp（Unix 秒）与 X-DDP-Nonce。
-        时间窗默认 ±300 秒；nonce 在窗口内不得重复；重放返回 409 training_callback_replayed。
+        时间窗默认 ±300 秒；nonce 在窗口内不得重复；重放返回 409：训练回调为 training_callback_replayed，模型回调为 model_callback_replayed。
   parameters:
     ProjectId: {$ref: "./fragments/components.yaml#/parameters/ProjectId"}
     ProjectIdQuery: {$ref: "./fragments/components.yaml#/parameters/ProjectIdQuery"}
@@ -492,6 +569,20 @@ components:
     TrainingDeliveryAction: {$ref: "./fragments/components.stage4.yaml#/parameters/TrainingDeliveryAction"}
     ExternalTrainingReferenceAction: {$ref: "./fragments/components.stage4.yaml#/parameters/ExternalTrainingReferenceAction"}
     Stage4Limit: {$ref: "./fragments/components.stage4.yaml#/parameters/Stage4Limit"}
+    ModelId: {$ref: "./fragments/components.stage5.yaml#/parameters/ModelId"}
+    ModelVersionId: {$ref: "./fragments/components.stage5.yaml#/parameters/ModelVersionId"}
+    EvaluationId: {$ref: "./fragments/components.stage5.yaml#/parameters/EvaluationId"}
+    InferenceServiceId: {$ref: "./fragments/components.stage5.yaml#/parameters/InferenceServiceId"}
+    InferenceTaskId: {$ref: "./fragments/components.stage5.yaml#/parameters/InferenceTaskId"}
+    FeedbackId: {$ref: "./fragments/components.stage5.yaml#/parameters/FeedbackId"}
+    RequirementId: {$ref: "./fragments/components.stage5.yaml#/parameters/RequirementId"}
+    ModelAction: {$ref: "./fragments/components.stage5.yaml#/parameters/ModelAction"}
+    ModelVersionAction: {$ref: "./fragments/components.stage5.yaml#/parameters/ModelVersionAction"}
+    EvaluationAction: {$ref: "./fragments/components.stage5.yaml#/parameters/EvaluationAction"}
+    InferenceServiceAction: {$ref: "./fragments/components.stage5.yaml#/parameters/InferenceServiceAction"}
+    InferenceTaskAction: {$ref: "./fragments/components.stage5.yaml#/parameters/InferenceTaskAction"}
+    FeedbackAction: {$ref: "./fragments/components.stage5.yaml#/parameters/FeedbackAction"}
+    RequirementAction: {$ref: "./fragments/components.stage5.yaml#/parameters/RequirementAction"}
   responses:
     Unauthorized: {$ref: "./fragments/components.yaml#/responses/Unauthorized"}
     Forbidden: {$ref: "./fragments/components.yaml#/responses/Forbidden"}
@@ -722,3 +813,47 @@ components:
     TrainingDeliveryPage: {$ref: "./fragments/schemas.stage4.yaml#/TrainingDeliveryPage"}
     ExternalTrainingReferencePage: {$ref: "./fragments/schemas.stage4.yaml#/ExternalTrainingReferencePage"}
     ExportArtifactDownload: {$ref: "./fragments/schemas.stage4.yaml#/ExportArtifactDownload"}
+    ModelStatus: {$ref: "./fragments/schemas.stage5.yaml#/ModelStatus"}
+    ModelTaskType: {$ref: "./fragments/schemas.stage5.yaml#/ModelTaskType"}
+    ModelVersionStatus: {$ref: "./fragments/schemas.stage5.yaml#/ModelVersionStatus"}
+    EvaluationStatus: {$ref: "./fragments/schemas.stage5.yaml#/EvaluationStatus"}
+    EvaluationVerdict: {$ref: "./fragments/schemas.stage5.yaml#/EvaluationVerdict"}
+    InferenceServiceStatus: {$ref: "./fragments/schemas.stage5.yaml#/InferenceServiceStatus"}
+    InferenceServiceEnvironment: {$ref: "./fragments/schemas.stage5.yaml#/InferenceServiceEnvironment"}
+    InferenceTaskStatus: {$ref: "./fragments/schemas.stage5.yaml#/InferenceTaskStatus"}
+    HealthStatus: {$ref: "./fragments/schemas.stage5.yaml#/HealthStatus"}
+    FeedbackStatus: {$ref: "./fragments/schemas.stage5.yaml#/FeedbackStatus"}
+    FeedbackIssueType: {$ref: "./fragments/schemas.stage5.yaml#/FeedbackIssueType"}
+    FeedbackSeverity: {$ref: "./fragments/schemas.stage5.yaml#/FeedbackSeverity"}
+    GapDimensionType: {$ref: "./fragments/schemas.stage5.yaml#/GapDimensionType"}
+    RequirementStatus: {$ref: "./fragments/schemas.stage5.yaml#/RequirementStatus"}
+    ModelArtifact: {$ref: "./fragments/schemas.stage5.yaml#/ModelArtifact"}
+    ModelRuntime: {$ref: "./fragments/schemas.stage5.yaml#/ModelRuntime"}
+    ModelCreate: {$ref: "./fragments/schemas.stage5.yaml#/ModelCreate"}
+    ModelPatch: {$ref: "./fragments/schemas.stage5.yaml#/ModelPatch"}
+    Model: {$ref: "./fragments/schemas.stage5.yaml#/Model"}
+    ModelVersionCreate: {$ref: "./fragments/schemas.stage5.yaml#/ModelVersionCreate"}
+    ModelVersion: {$ref: "./fragments/schemas.stage5.yaml#/ModelVersion"}
+    EvaluationCreate: {$ref: "./fragments/schemas.stage5.yaml#/EvaluationCreate"}
+    Evaluation: {$ref: "./fragments/schemas.stage5.yaml#/Evaluation"}
+    InferenceServiceCreate: {$ref: "./fragments/schemas.stage5.yaml#/InferenceServiceCreate"}
+    InferenceService: {$ref: "./fragments/schemas.stage5.yaml#/InferenceService"}
+    InferenceTaskCreate: {$ref: "./fragments/schemas.stage5.yaml#/InferenceTaskCreate"}
+    InferenceTask: {$ref: "./fragments/schemas.stage5.yaml#/InferenceTask"}
+    GapDimension: {$ref: "./fragments/schemas.stage5.yaml#/GapDimension"}
+    FeedbackCreate: {$ref: "./fragments/schemas.stage5.yaml#/FeedbackCreate"}
+    Feedback: {$ref: "./fragments/schemas.stage5.yaml#/Feedback"}
+    FeedbackActionRequest: {$ref: "./fragments/schemas.stage5.yaml#/FeedbackActionRequest"}
+    RequirementCreate: {$ref: "./fragments/schemas.stage5.yaml#/RequirementCreate"}
+    DataRequirement: {$ref: "./fragments/schemas.stage5.yaml#/DataRequirement"}
+    RequirementActionRequest: {$ref: "./fragments/schemas.stage5.yaml#/RequirementActionRequest"}
+    DataGapSummary: {$ref: "./fragments/schemas.stage5.yaml#/DataGapSummary"}
+    ModelAdapterCallback: {$ref: "./fragments/schemas.stage5.yaml#/ModelAdapterCallback"}
+    ModelPage: {$ref: "./fragments/schemas.stage5.yaml#/ModelPage"}
+    ModelVersionPage: {$ref: "./fragments/schemas.stage5.yaml#/ModelVersionPage"}
+    EvaluationPage: {$ref: "./fragments/schemas.stage5.yaml#/EvaluationPage"}
+    InferenceServicePage: {$ref: "./fragments/schemas.stage5.yaml#/InferenceServicePage"}
+    InferenceTaskPage: {$ref: "./fragments/schemas.stage5.yaml#/InferenceTaskPage"}
+    FeedbackPage: {$ref: "./fragments/schemas.stage5.yaml#/FeedbackPage"}
+    RequirementPage: {$ref: "./fragments/schemas.stage5.yaml#/RequirementPage"}
+    ModelOpsActionRequest: {$ref: "./fragments/schemas.stage5.yaml#/ModelOpsActionRequest"}

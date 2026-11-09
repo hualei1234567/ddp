@@ -43,7 +43,7 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const PLATFORM_STAGE_LABEL = "阶段 4 · 数据集与训练支撑";
+export const PLATFORM_STAGE_LABEL = "阶段 5 · 模型闭环与智能化";
 
 /**
  * 一级导航分区，依据规范 §18.2。
@@ -156,9 +156,17 @@ export const navSections: NavSection[] = [
       {
         path: "/models",
         label: "模型与推理",
-        description: "管理模型版本、推理服务与评测结果。",
+        description: "管理模型版本、评测、推理服务、模型反馈与数据缺口闭环。",
         icon: createElement(RobotOutlined),
-        available: false,
+        available: true,
+        aliases: [
+          "/evaluations",
+          "/model-feedback",
+          "/data-requirements",
+          "/data-gaps",
+          "/inference-services",
+          "/inference-tasks",
+        ],
       },
     ],
   },

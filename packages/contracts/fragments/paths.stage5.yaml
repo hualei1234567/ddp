@@ -1,0 +1,1016 @@
+# 阶段 5 模型闭环域路径片段。
+# 仅声明 backend/app/api/v1/{model_routes,evaluation_routes,inference_routes,
+# feedback_routes,requirement_routes,model_adapter_routes}.py 实际实现的端点。
+# 由 openapi.yaml 通过 $ref 解析；引用回入口文件以复用公共参数与响应。
+
+models:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  get:
+    operationId: listModels
+    tags:
+    - models
+    summary: 模型列表
+    parameters:
+    - name: status
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/ModelStatus
+    - name: task_type
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/ModelTaskType
+    - $ref: ../openapi.yaml#/components/parameters/Cursor
+    - $ref: ../openapi.yaml#/components/parameters/Limit
+    responses:
+      '200':
+        description: 模型分页
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/ModelPage
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+  post:
+    operationId: createModel
+    tags:
+    - models
+    summary: 创建模型（DRAFT）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ModelCreate
+    responses:
+      '201':
+        description: 模型已创建
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Model
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+modelDetail:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/ModelId
+  get:
+    operationId: getModel
+    tags:
+    - models
+    summary: 模型详情
+    responses:
+      '200':
+        description: 模型
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Model
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+  patch:
+    operationId: updateModel
+    tags:
+    - models
+    summary: 修改模型（If-Match）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IfMatch
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ModelPatch
+    responses:
+      '200':
+        description: 修改后的模型
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Model
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '428':
+        $ref: ../openapi.yaml#/components/responses/PreconditionRequired
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+modelActions:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/ModelId
+  - $ref: ../openapi.yaml#/components/parameters/ModelAction
+  post:
+    operationId: actOnModel
+    tags:
+    - models
+    summary: 模型动作（activate/deprecate/archive/restore）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IfMatch
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ModelOpsActionRequest
+    responses:
+      '200':
+        description: 动作后的模型
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Model
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '428':
+        $ref: ../openapi.yaml#/components/responses/PreconditionRequired
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+modelVersions:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/ModelId
+  get:
+    operationId: listModelVersions
+    tags:
+    - model-versions
+    summary: 模型版本列表
+    parameters:
+    - name: status
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/ModelVersionStatus
+    - $ref: ../openapi.yaml#/components/parameters/Cursor
+    - $ref: ../openapi.yaml#/components/parameters/Limit
+    responses:
+      '200':
+        description: 版本分页
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/ModelVersionPage
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+  post:
+    operationId: createModelVersion
+    tags:
+    - model-versions
+    summary: 创建模型版本（DRAFT）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ModelVersionCreate
+    responses:
+      '201':
+        description: 版本已创建
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/ModelVersion
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+modelVersionDetail:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/ModelId
+  - $ref: ../openapi.yaml#/components/parameters/ModelVersionId
+  get:
+    operationId: getModelVersion
+    tags:
+    - model-versions
+    summary: 模型版本详情
+    responses:
+      '200':
+        description: 模型版本
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/ModelVersion
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+modelVersionActions:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/ModelId
+  - $ref: ../openapi.yaml#/components/parameters/ModelVersionId
+  - $ref: ../openapi.yaml#/components/parameters/ModelVersionAction
+  post:
+    operationId: actOnModelVersion
+    tags:
+    - model-versions
+    summary: 版本动作（validate/publish/deprecate/archive/return-draft）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IfMatch
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ModelOpsActionRequest
+    responses:
+      '200':
+        description: 动作后的版本
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/ModelVersion
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '428':
+        $ref: ../openapi.yaml#/components/responses/PreconditionRequired
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+evaluations:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  get:
+    operationId: listEvaluations
+    tags:
+    - evaluations
+    summary: 评测列表
+    parameters:
+    - name: model_version_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: dataset_version_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - name: status
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/EvaluationStatus
+    - name: verdict
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/EvaluationVerdict
+    - $ref: ../openapi.yaml#/components/parameters/Cursor
+    - $ref: ../openapi.yaml#/components/parameters/Limit
+    responses:
+      '200':
+        description: 评测分页
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/EvaluationPage
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+  post:
+    operationId: createEvaluation
+    tags:
+    - evaluations
+    summary: 在冻结数据集上创建评测（QUEUED）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/EvaluationCreate
+    responses:
+      '202':
+        description: 评测已受理
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Evaluation
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+      '503':
+        $ref: ../openapi.yaml#/components/responses/ServiceUnavailable
+evaluationDetail:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/EvaluationId
+  get:
+    operationId: getEvaluation
+    tags:
+    - evaluations
+    summary: 评测详情
+    responses:
+      '200':
+        description: 评测
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Evaluation
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+evaluationActions:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/EvaluationId
+  - $ref: ../openapi.yaml#/components/parameters/EvaluationAction
+  post:
+    operationId: actOnEvaluation
+    tags:
+    - evaluations
+    summary: 评测动作（cancel/retry）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IfMatch
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ModelOpsActionRequest
+    responses:
+      '200':
+        description: 动作后的评测
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Evaluation
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '428':
+        $ref: ../openapi.yaml#/components/responses/PreconditionRequired
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+inferenceServices:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  get:
+    operationId: listInferenceServices
+    tags:
+    - inference
+    summary: 推理服务列表
+    parameters:
+    - name: status
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/InferenceServiceStatus
+    - $ref: ../openapi.yaml#/components/parameters/Cursor
+    - $ref: ../openapi.yaml#/components/parameters/Limit
+    responses:
+      '200':
+        description: 服务分页
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/InferenceServicePage
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+  post:
+    operationId: createInferenceService
+    tags:
+    - inference
+    summary: 登记推理服务（PENDING）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/InferenceServiceCreate
+    responses:
+      '201':
+        description: 服务已登记
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/InferenceService
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+inferenceServiceDetail:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/InferenceServiceId
+  get:
+    operationId: getInferenceService
+    tags:
+    - inference
+    summary: 推理服务详情
+    responses:
+      '200':
+        description: 推理服务
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/InferenceService
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+inferenceServiceActions:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/InferenceServiceId
+  - $ref: ../openapi.yaml#/components/parameters/InferenceServiceAction
+  post:
+    operationId: actOnInferenceService
+    tags:
+    - inference
+    summary: 服务动作（deploy/activate/stop/retire）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IfMatch
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ModelOpsActionRequest
+    responses:
+      '200':
+        description: 动作后的服务
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/InferenceService
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '428':
+        $ref: ../openapi.yaml#/components/responses/PreconditionRequired
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+inferenceTasks:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  get:
+    operationId: listInferenceTasks
+    tags:
+    - inference
+    summary: 推理任务列表
+    parameters:
+    - name: status
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/InferenceTaskStatus
+    - name: model_version_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - $ref: ../openapi.yaml#/components/parameters/Cursor
+    - $ref: ../openapi.yaml#/components/parameters/Limit
+    responses:
+      '200':
+        description: 任务分页
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/InferenceTaskPage
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+  post:
+    operationId: createInferenceTask
+    tags:
+    - inference
+    summary: 创建推理任务（QUEUED）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/InferenceTaskCreate
+    responses:
+      '202':
+        description: 任务已受理
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/InferenceTask
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+      '503':
+        $ref: ../openapi.yaml#/components/responses/ServiceUnavailable
+inferenceTaskDetail:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/InferenceTaskId
+  get:
+    operationId: getInferenceTask
+    tags:
+    - inference
+    summary: 推理任务详情
+    responses:
+      '200':
+        description: 推理任务
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/InferenceTask
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+inferenceTaskActions:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/InferenceTaskId
+  - $ref: ../openapi.yaml#/components/parameters/InferenceTaskAction
+  post:
+    operationId: actOnInferenceTask
+    tags:
+    - inference
+    summary: 推理任务动作（cancel）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IfMatch
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ModelOpsActionRequest
+    responses:
+      '200':
+        description: 动作后的任务
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/InferenceTask
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '428':
+        $ref: ../openapi.yaml#/components/responses/PreconditionRequired
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+modelFeedback:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  get:
+    operationId: listModelFeedback
+    tags:
+    - model-feedback
+    summary: 模型反馈列表
+    parameters:
+    - name: status
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/FeedbackStatus
+    - name: issue_type
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/FeedbackIssueType
+    - name: model_version_id
+      in: query
+      schema:
+        type: string
+        format: uuid
+    - $ref: ../openapi.yaml#/components/parameters/Cursor
+    - $ref: ../openapi.yaml#/components/parameters/Limit
+    responses:
+      '200':
+        description: 反馈分页
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/FeedbackPage
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+  post:
+    operationId: createModelFeedback
+    tags:
+    - model-feedback
+    summary: 创建模型反馈（OPEN）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/FeedbackCreate
+    responses:
+      '201':
+        description: 反馈已创建
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Feedback
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+modelFeedbackDetail:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/FeedbackId
+  get:
+    operationId: getModelFeedback
+    tags:
+    - model-feedback
+    summary: 反馈详情
+    responses:
+      '200':
+        description: 反馈
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Feedback
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+modelFeedbackActions:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/FeedbackId
+  - $ref: ../openapi.yaml#/components/parameters/FeedbackAction
+  post:
+    operationId: actOnModelFeedback
+    tags:
+    - model-feedback
+    summary: 反馈动作（triage/dismiss/resolve/create-requirement）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IfMatch
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/FeedbackActionRequest
+    responses:
+      '200':
+        description: 动作后的反馈
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Feedback
+      '201':
+        description: 已创建数据需求
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/Feedback
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '428':
+        $ref: ../openapi.yaml#/components/responses/PreconditionRequired
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+dataGaps:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  get:
+    operationId: getDataGapSummary
+    tags:
+    - model-feedback
+    summary: 数据缺口聚合（来自 OPEN/TRIAGED 反馈）
+    parameters:
+    - name: dimension_type
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/GapDimensionType
+    responses:
+      '200':
+        description: 缺口汇总
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/DataGapSummary
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+dataRequirements:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  get:
+    operationId: listDataRequirements
+    tags:
+    - data-requirements
+    summary: 数据需求列表
+    parameters:
+    - name: status
+      in: query
+      schema:
+        $ref: ../openapi.yaml#/components/schemas/RequirementStatus
+    - name: priority
+      in: query
+      schema:
+        type: string
+        enum:
+        - P0
+        - P1
+        - P2
+        - P3
+    - $ref: ../openapi.yaml#/components/parameters/Cursor
+    - $ref: ../openapi.yaml#/components/parameters/Limit
+    responses:
+      '200':
+        description: 需求分页
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/RequirementPage
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+  post:
+    operationId: createDataRequirement
+    tags:
+    - data-requirements
+    summary: 创建数据需求（DRAFT）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/RequirementCreate
+    responses:
+      '201':
+        description: 需求已创建
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/DataRequirement
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+dataRequirementDetail:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/RequirementId
+  get:
+    operationId: getDataRequirement
+    tags:
+    - data-requirements
+    summary: 数据需求详情
+    responses:
+      '200':
+        description: 数据需求
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/DataRequirement
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+dataRequirementActions:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - $ref: ../openapi.yaml#/components/parameters/RequirementId
+  - $ref: ../openapi.yaml#/components/parameters/RequirementAction
+  post:
+    operationId: actOnDataRequirement
+    tags:
+    - data-requirements
+    summary: 需求动作（submit/approve/reject/plan/start/satisfy/close/cancel/link-retest）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IfMatch
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/RequirementActionRequest
+    responses:
+      '200':
+        description: 动作后的需求
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/DataRequirement
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '428':
+        $ref: ../openapi.yaml#/components/responses/PreconditionRequired
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+modelAdapterCallback:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/AdapterId
+  post:
+    operationId: receiveModelAdapterCallback
+    tags:
+    - model-adapters
+    summary: 模型 Adapter 回调（HMAC；评测/推理结果）
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/CallbackSignature
+    - $ref: ../openapi.yaml#/components/parameters/CallbackTimestamp
+    - $ref: ../openapi.yaml#/components/parameters/CallbackNonce
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/ModelAdapterCallback
+    responses:
+      '204':
+        description: 已处理
+      '400':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests

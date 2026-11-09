@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     training_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
     training_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
 
+    # 模型平台 Adapter：评测/推理执行与 HMAC 回调；未配置时显式 503。
+    model_adapter_shared_secrets: dict[str, str] = Field(default_factory=dict)
+    model_adapter_capabilities: dict[str, list[str]] = Field(default_factory=dict)
+    model_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
+    model_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
+
     jwt_secret: str = "replace-me-in-production"  # noqa: S105 - 占位符，生产必须覆盖
     jwt_issuer: str = "ddp"
     jwt_audience: str = "ddp-api"
@@ -194,6 +200,7 @@ class Settings(BaseSettings):
         problems.extend(self._validation_worker_config_problems())
         problems.extend(self._export_worker_config_problems())
         problems.extend(self._training_adapter_config_problems())
+        problems.extend(self._model_adapter_config_problems())
         if not self.is_local:
             if self.local_header_auth:
                 problems.append(
@@ -337,6 +344,30 @@ class Settings(BaseSettings):
                 problems.append(f"训练 Adapter {adapter_id!r} 能力声明存在重复项")
         if self.training_callback_nonce_ttl_seconds < self.training_callback_time_window_seconds:
             problems.append("DDP_TRAINING_CALLBACK_NONCE_TTL_SECONDS 不得小于回调时间窗")
+        return problems
+
+    def _model_adapter_config_problems(self) -> list[str]:
+        problems: list[str] = []
+        known_capabilities = {"evaluate", "inference", "callback", "status", "cancel"}
+        for adapter_id, secret in self.model_adapter_shared_secrets.items():
+            if not adapter_id.strip() or adapter_id != adapter_id.strip():
+                problems.append("模型 Adapter ID 不得为空或包含首尾空白")
+            if not secret or secret != secret.strip():
+                problems.append(f"模型 Adapter {adapter_id!r} 的回调密钥为空或含首尾空白")
+            elif not self.is_local and len(secret) < 32:
+                problems.append(f"非本地环境模型 Adapter {adapter_id!r} 的回调密钥长度不足 32")
+        for adapter_id, capabilities in self.model_adapter_capabilities.items():
+            if not adapter_id.strip() or adapter_id != adapter_id.strip():
+                problems.append("模型 Adapter 能力声明的 ID 非法")
+            unknown = set(capabilities) - known_capabilities
+            if unknown:
+                problems.append(
+                    f"模型 Adapter {adapter_id!r} 声明了未知能力：{', '.join(sorted(unknown))}"
+                )
+            if len(set(capabilities)) != len(capabilities):
+                problems.append(f"模型 Adapter {adapter_id!r} 能力声明存在重复项")
+        if self.model_callback_nonce_ttl_seconds < self.model_callback_time_window_seconds:
+            problems.append("DDP_MODEL_CALLBACK_NONCE_TTL_SECONDS 不得小于回调时间窗")
         return problems
 
 

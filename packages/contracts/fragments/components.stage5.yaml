@@ -1,0 +1,130 @@
+# 阶段 5 新增路径参数；ProjectId/Cursor/Limit/IfMatch/Idempotency-Key/回调头复用全局定义。
+parameters:
+  ModelId:
+    name: model_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  ModelVersionId:
+    name: version_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  EvaluationId:
+    name: evaluation_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  InferenceServiceId:
+    name: service_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  InferenceTaskId:
+    name: task_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  FeedbackId:
+    name: feedback_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  RequirementId:
+    name: requirement_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  ModelAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum:
+      - activate
+      - deprecate
+      - archive
+      - restore
+  ModelVersionAction:
+    name: action
+    in: path
+    required: true
+    description: 发布（publish）要求 OWNER 且发布人不得是唯一创建人。
+    schema:
+      type: string
+      enum:
+      - validate
+      - publish
+      - deprecate
+      - archive
+      - return-draft
+  EvaluationAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum:
+      - cancel
+      - retry
+  InferenceServiceAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum:
+      - deploy
+      - activate
+      - stop
+      - retire
+  InferenceTaskAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum:
+      - cancel
+  FeedbackAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum:
+      - triage
+      - dismiss
+      - resolve
+      - create-requirement
+  RequirementAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum:
+      - submit
+      - approve
+      - reject
+      - plan
+      - start
+      - satisfy
+      - close
+      - cancel
+      - link-retest

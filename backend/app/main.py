@@ -35,6 +35,7 @@ from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.identity.errors import CrossProjectAccessError
 from app.domain.ingestion.errors import IngestionDomainError
+from app.domain.modelops.errors import ModelOpsDomainError
 from app.infrastructure.rate_limit import build_rate_limiter
 
 
@@ -151,6 +152,19 @@ def create_app() -> FastAPI:
         exc: DatasetDomainError,
     ) -> JSONResponse:
         error = dataset_error_to_app(exc)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(ModelOpsDomainError)
+    async def handle_modelops_domain_error(
+        request: Request,
+        exc: ModelOpsDomainError,
+    ) -> JSONResponse:
+        from app.api.errors import modelops_error_to_app
+
+        error = modelops_error_to_app(exc)
         return JSONResponse(
             status_code=error.status_code,
             content=_error_payload(request, error),
