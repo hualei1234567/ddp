@@ -1,11 +1,18 @@
 /** 阶段 7 数据平面：外部数据源与导入任务 API。 */
 
 import type { CursorPage } from "../types/api";
-import type { DataSource, DataSourceImport } from "../types/datasource";
+import type {
+  DataSource,
+  DataSourceImport,
+  MediaAsset,
+  MediaPlayback,
+} from "../types/datasource";
 import { apiClient, type ApiClient } from "./api";
 import {
   parseDataSource,
   parseDataSourceImport,
+  parseMediaAsset,
+  parseMediaPlayback,
 } from "./datasourceParsers";
 import { createIdempotencyKey, formatIfMatch } from "./idempotency";
 import {
@@ -16,7 +23,7 @@ import {
   requireIdentifier,
   type PageRequestOptions,
 } from "./projectScope";
-import { parseCursorPage } from "./validation";
+import { asRecord as asRecordLike, parseCursorPage } from "./validation";
 
 export interface CreateOptions {
   idempotencyKey?: string;
@@ -132,6 +139,16 @@ export interface DataSourceApi {
     action: string,
     options: ImportActionOptions,
   ): Promise<DataSourceImport>;
+  listImportAssets(
+    projectId: string,
+    importId: string,
+    options?: { signal?: AbortSignal; limit?: number },
+  ): Promise<MediaAsset[]>;
+  playback(
+    projectId: string,
+    assetId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<MediaPlayback>;
 }
 
 export function createDataSourceApi(client: ApiClient): DataSourceApi {
@@ -224,6 +241,35 @@ export function createDataSourceApi(client: ApiClient): DataSourceApi {
             "导入任务",
           ),
       });
+    },
+    async listImportAssets(projectId, importId, options) {
+      return client.get(importOf(projectId, importId, "/assets"), {
+        signal: options?.signal,
+        query: { limit: options?.limit },
+        validate: (value) => {
+          const record = asRecordLike(value, "媒体资产列表");
+          const items = record.items;
+          if (!Array.isArray(items)) {
+            throw new Error("items 必须是数组");
+          }
+          return items.map((item) => {
+            const asset = parseMediaAsset(item);
+            assertProjectScope(asset, projectId, "媒体资产");
+            return asset;
+          });
+        },
+      });
+    },
+    async playback(projectId, assetId, options) {
+      return client.request(
+        projectPath(projectId, `/media-assets/${requireIdentifier(assetId, "asset_id")}/playback`),
+        {
+          method: "POST",
+          signal: options?.signal,
+          body: {},
+          validate: (value) => parseMediaPlayback(value),
+        },
+      );
     },
     async actImport(projectId, importId, action, options) {
       return client.request(

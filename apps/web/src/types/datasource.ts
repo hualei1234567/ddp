@@ -50,3 +50,32 @@ export interface DataSourceImport {
   /** 服务端计算的可执行动作；前端只按此渲染按钮，不自行推断。 */
   allowed_actions: ImportAction[];
 }
+
+/** 导入产出的一个机位视频。 */
+export interface MediaAsset {
+  asset_id: string;
+  project_id: string;
+  data_source_id: string;
+  import_id: string;
+  episode_key: string;
+  path: string;
+  camera: string;
+  object_key: string;
+  size_bytes: number;
+  sha256: string;
+  content_type: string;
+  task_name: string;
+  excerpt_start_seconds: number | null;
+  excerpt_seconds: number | null;
+  source_fps: number | null;
+  created_at: string;
+}
+
+/** 预签名播放信息；URL 由服务端签发，前端不拼接存储路径。 */
+export interface MediaPlayback {
+  asset_id: string;
+  url: string;
+  expires_in_seconds: number;
+  content_type: string;
+  size_bytes: number;
+}

@@ -20,6 +20,7 @@ import AnnotationTaskDetailPage from "./pages/annotation/AnnotationTaskDetailPag
 import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
 import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
 import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPage";
+import AssetReviewPage from "./pages/datasources/AssetReviewPage";
 import DataSourceListPage from "./pages/datasources/DataSourceListPage";
 import ImportListPage from "./pages/datasources/ImportListPage";
 import DatasetDetailPage from "./pages/datasets/DatasetDetailPage";
@@ -174,6 +175,10 @@ export default function AppRoutes() {
         />
         <Route path="ingestion" element={<DataSourceListPage />} />
         <Route path="data-source-imports" element={<ImportListPage />} />
+        <Route
+          path="data-source-imports/:importId/assets"
+          element={<AssetReviewPage />}
+        />
         <Route path="datasets" element={<DatasetListPage />} />
         <Route path="datasets/:datasetId" element={<DatasetDetailPage />} />
         <Route

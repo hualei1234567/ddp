@@ -207,3 +207,97 @@ describe("createDataSourceApi", () => {
     );
   });
 });
+
+// --- 媒体资产与播放 ---------------------------------------------------------
+
+const assetBody = {
+  asset_id: SOURCE_ID,
+  project_id: PROJECT,
+  data_source_id: SOURCE_ID,
+  import_id: IMPORT_ID,
+  episode_key: "demo_001",
+  path: "videos/demo_001_main.mp4",
+  camera: "main",
+  object_key: `data-sources/${PROJECT}/${SOURCE_ID}/v.mp4`,
+  size_bytes: 754668,
+  sha256: `sha256:${"a".repeat(64)}`,
+  content_type: "video/mp4",
+  task_name: "Sew lace fabric",
+  excerpt_start_seconds: 69.0,
+  excerpt_seconds: 12.0,
+  source_fps: 30.0,
+  created_at: "2026-11-15T00:00:00Z",
+};
+
+describe("媒体资产", () => {
+  it("列出资产的路径与解析", async () => {
+    const { api, fetchImpl } = client(() =>
+      jsonResponse({ items: [assetBody] }),
+    );
+
+    const items = await api.listImportAssets(PROJECT, IMPORT_ID);
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.camera).toBe("main");
+    expect(items[0]?.excerpt_start_seconds).toBe(69.0);
+    const [url] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(`/data-source-imports/${IMPORT_ID}/assets`);
+  });
+
+  it("未知机位不被丢弃", async () => {
+    const { api } = client(() =>
+      jsonResponse({ items: [{ ...assetBody, camera: "overhead_ceiling" }] }),
+    );
+
+    const items = await api.listImportAssets(PROJECT, IMPORT_ID);
+
+    // 服务端可返回新机位；前端保留而不是判为非法。
+    expect(items[0]?.camera).toBe("overhead_ceiling");
+  });
+
+  it("sha256 格式错误时解析失败", async () => {
+    const { api } = client(() =>
+      jsonResponse({ items: [{ ...assetBody, sha256: "sha256:short" }] }),
+    );
+
+    await expect(api.listImportAssets(PROJECT, IMPORT_ID)).rejects.toThrow();
+  });
+
+  it("播放用 POST 签发并校验签名参数", async () => {
+    const url =
+      "http://127.0.0.1:9000/ddp-raw/v.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+      "&X-Amz-Signature=abc";
+    const { api, fetchImpl } = client(() =>
+      jsonResponse({
+        asset_id: SOURCE_ID,
+        url,
+        expires_in_seconds: 900,
+        content_type: "video/mp4",
+        size_bytes: 754668,
+      }),
+    );
+
+    const playback = await api.playback(PROJECT, SOURCE_ID);
+
+    expect(playback.url).toBe(url);
+    const [calledUrl, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(calledUrl).toContain(`/media-assets/${SOURCE_ID}/playback`);
+    expect(init.method).toBe("POST");
+  });
+
+  it("缺少签名的播放 URL 被拒绝", async () => {
+    const { api } = client(() =>
+      jsonResponse({
+        asset_id: SOURCE_ID,
+        url: "http://127.0.0.1:9000/ddp-raw/v.mp4",
+        expires_in_seconds: 900,
+        content_type: "video/mp4",
+        size_bytes: 100,
+      }),
+    );
+
+    await expect(api.playback(PROJECT, SOURCE_ID)).rejects.toThrow(
+      /不符合契约/,
+    );
+  });
+});

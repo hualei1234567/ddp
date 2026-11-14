@@ -14,7 +14,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageContainer from "../../components/ui/PageContainer";
@@ -292,6 +292,18 @@ function ImportListContent({
       render: (value: string | null) => (value ? formatDateTime(value) : "—"),
     },
     {
+      title: "审看",
+      key: "review",
+      width: 90,
+      // 只有成功导入才有媒体资产可看；失败/进行中不显示入口，避免点进去空页面。
+      render: (_, item) =>
+        item.status === "SUCCEEDED" ? (
+          <Link to={`/data-source-imports/${item.import_id}/assets`}>审看</Link>
+        ) : (
+          <Typography.Text type="secondary">—</Typography.Text>
+        ),
+    },
+    {
       title: "操作",
       key: "actions",
       width: 220,
@@ -376,7 +388,7 @@ function ImportListContent({
         columns={phase === "forbidden" ? [] : columns}
         dataSource={phase === "forbidden" ? [] : items}
         pagination={false}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1300 }}
         locale={{ emptyText: error ? "加载失败" : "暂无导入任务" }}
       />
       {error ? <ApiErrorState error={error} onRetry={reload} /> : null}

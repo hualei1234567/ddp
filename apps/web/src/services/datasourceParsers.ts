@@ -7,11 +7,14 @@ import type {
   DataSourceKind,
   ImportScope,
   ImportStatus,
+  MediaAsset,
+  MediaPlayback,
 } from "../types/datasource";
 import {
   asRecord,
   readBoolean,
   readEnum,
+  readNumber,
   readInteger,
   readOptionalNumber,
   readOptionalString,
@@ -138,3 +141,98 @@ export function parseDataSourceImport(value: unknown): DataSourceImport {
 
 /** 供测试与展示使用的整数读取，保持与其他解析器一致的错误口径。 */
 export { readInteger };
+
+/**
+ * 已知机位。**不用于校验**：服务端可能返回新机位（保留原文归一成 slug），
+ * 前端不应因"不认识"就丢数据；这里只用于展示层做类型提示。
+ */
+export type KnownCamera =
+  | "main"
+  | "right"
+  | "stereo"
+  | "wrist_left"
+  | "wrist_right";
+
+function readNullableFloat(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): number | null {
+  return readOptionalNumber(record, key, path);
+}
+
+export function parseMediaAsset(value: unknown): MediaAsset {
+  const record = asRecord(value, "媒体资产");
+  const camera = readString(record, "camera", "camera");
+  const sha256 = readString(record, "sha256", "sha256");
+  if (sha256.length !== 71 || !sha256.startsWith("sha256:")) {
+    throw new Error("sha256 必须是 'sha256:' + 64 位十六进制");
+  }
+  const sizeBytes = readInteger(record, "size_bytes", "size_bytes");
+  if (sizeBytes <= 0) {
+    throw new Error("size_bytes 必须大于 0");
+  }
+  return {
+    asset_id: readUuid(record, "asset_id", "asset_id"),
+    project_id: readUuid(record, "project_id", "project_id"),
+    data_source_id: readUuid(record, "data_source_id", "data_source_id"),
+    import_id: readUuid(record, "import_id", "import_id"),
+    episode_key: readString(record, "episode_key", "episode_key"),
+    path: readString(record, "path", "path"),
+    // 机位是开放的：服务端可能返回未知机位（保留原文归一成 slug），
+    // 前端不因"不认识"就丢数据。
+    camera,
+    object_key: readString(record, "object_key", "object_key"),
+    size_bytes: sizeBytes,
+    sha256,
+    content_type: readString(record, "content_type", "content_type"),
+    task_name: readString(record, "task_name", "task_name"),
+    excerpt_start_seconds: readNullableFloat(
+      record,
+      "excerpt_start_seconds",
+      "excerpt_start_seconds",
+    ),
+    excerpt_seconds: readNullableFloat(
+      record,
+      "excerpt_seconds",
+      "excerpt_seconds",
+    ),
+    source_fps: readNullableFloat(record, "source_fps", "source_fps"),
+    created_at: readString(record, "created_at", "created_at"),
+  };
+}
+
+export function parseMediaPlayback(value: unknown): MediaPlayback {
+  const record = asRecord(value, "播放信息");
+  const url = readString(record, "url", "url");
+  // 必须是 http(s) 且带签名参数；避免把空串或相对路径当成可播放地址。
+  if (!/^https?:\/\//.test(url)) {
+    throw new Error("播放 URL 必须是 http(s) 绝对地址");
+  }
+  if (!url.includes("X-Amz-Signature=")) {
+    throw new Error("播放 URL 缺少签名参数");
+  }
+  return {
+    asset_id: readUuid(record, "asset_id", "asset_id"),
+    url,
+    expires_in_seconds: readInteger(
+      record,
+      "expires_in_seconds",
+      "expires_in_seconds",
+    ),
+    content_type: readString(record, "content_type", "content_type"),
+    size_bytes: readNumber(record, "size_bytes", "size_bytes"),
+  };
+}
+
+/** 机位的展示名；未知机位原样展示，不隐藏。 */
+export function presentCamera(camera: string): string {
+  const labels: Record<string, string> = {
+    main: "主视角",
+    right: "右视角",
+    stereo: "立体",
+    wrist_left: "左腕",
+    wrist_right: "右腕",
+  };
+  return labels[camera] ?? camera;
+}
