@@ -1,4 +1,8 @@
-"""平台元信息接口。"""
+"""平台元信息接口。
+
+``phase`` 与 ``modules`` 来自配置（``DDP_PLATFORM_PHASE`` / ``DDP_PLATFORM_MODULES``），
+不在此处硬编码：阶段推进时只改配置，避免对外元信息与实现脱节。
+"""
 
 from __future__ import annotations
 
@@ -16,6 +20,6 @@ def platform_meta() -> dict[str, object]:
         "name": settings.app_name,
         "version": settings.app_version,
         "env": settings.env,
-        "phase": "0",
-        "modules": ["platform"],
+        "phase": settings.platform_phase,
+        "modules": list(settings.platform_modules),
     }

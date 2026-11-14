@@ -31,38 +31,30 @@ services:
       retries: 20
 
   minio:
-    # 阶段 0 使用 latest 以便在受限网络下拉取；阶段 1 固定 digest。
-    image: minio/minio:latest
+    # 2026-11-14：上游 minio/minio 在 Docker Hub 已不可拉取（object not found），
+    # 改用 Bitnami 归档命名空间的同一 MinIO 二进制（API/控制台端口一致）。
+    # 固定版本 + digest（禁止 latest，CLAUDE.md §三）；2025.7.23 是归档中最后一批稳定构建。
+    # 卷路径为 /bitnami/minio/data（Bitnami 布局）。原 ddp-miniodata 卷经核验为空，
+    # 路径变更无数据损失，见 docs/operations/docker-compose-minio变更说明.md。
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5@sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20
     container_name: ddp-minio
-    command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${DDP_S3_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${DDP_S3_SECRET_KEY:-minioadmin}
+      MINIO_API_PORT_NUMBER: 9000
+      MINIO_CONSOLE_PORT_NUMBER: 9001
+      MINIO_SKIP_CLIENT: "yes"
+      MINIO_DEFAULT_BUCKETS: ${DDP_S3_BUCKET:-ddp-raw}
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - ddp-miniodata:/data
+      - ddp-miniodata:/bitnami/minio/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/live"]
       interval: 5s
       timeout: 3s
       retries: 30
-
-  minio-init:
-    # 阶段 0 使用 latest；阶段 1 固定 digest。
-    image: minio/mc:latest
-    container_name: ddp-minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 ${DDP_S3_ACCESS_KEY:-minioadmin} ${DDP_S3_SECRET_KEY:-minioadmin} &&
-      mc mb --ignore-existing local/${DDP_S3_BUCKET:-ddp-raw} &&
-      echo 'minio bucket ready'
-      "
-    restart: "no"
 
   api:
     profiles: ["app"]

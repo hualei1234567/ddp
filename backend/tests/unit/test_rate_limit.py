@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from app.core.config import Settings
 from app.infrastructure.rate_limit import InMemoryRateLimiter, build_rate_limiter
+from pydantic import ValidationError
 
 
 class FakeClock:
@@ -90,8 +91,7 @@ def test_build_rate_limiter_defaults_to_memory() -> None:
     assert isinstance(limiter, InMemoryRateLimiter)
 
 
-def test_build_rate_limiter_rejects_unimplemented_redis_placeholder() -> None:
-    settings = Settings(env="local", rate_limit_backend="redis")
-
-    with pytest.raises(RuntimeError, match="redis"):
-        build_rate_limiter(settings)
+def test_rate_limit_backend_only_accepts_memory() -> None:
+    """分布式限流未实现前，配置层就拒绝 redis，不留"能配但启动失败"的空壳。"""
+    with pytest.raises(ValidationError):
+        Settings(env="local", rate_limit_backend="redis")

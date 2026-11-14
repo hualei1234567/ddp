@@ -1,9 +1,12 @@
 """HS256 JWT 校验适配器。
 
-使用标准库实现，避免为一次 HS256 校验引入第三方依赖。安全约束：
+签名与 JSON 解析使用 PyJWT（CLAUDE.md《复用优先与代码质量标准》第二节：
+不得手写已知有标准解法的底层协议，HS256 校验在列举范围内）。本模块只把
+PyJWT 的结果映射为领域声明，并施加 DDP 自己的严格策略：
 
 - 只接受 ``HS256``，拒绝 ``none``、非对称算法与未处理的 ``crit`` 扩展；
 - 严格校验签名、``exp``、``nbf``、``iss``、``aud``；
+- ``exp``/``nbf`` 必须是有限数值，显式排除 ``bool``、``NaN``、``Infinity``；
 - 所有失败都抛出 :class:`TokenValidationError`，由 API 层统一映射为 401，
   不向客户端区分“签名错误”“已过期”等内部原因。
 
@@ -12,19 +15,29 @@
 
 from __future__ import annotations
 
-import base64
-import binascii
-import hashlib
-import hmac
-import json
 import math
 import time
 from dataclasses import dataclass
 from typing import Any
 
+import jwt
+
 _ALGORITHM = "HS256"
+_ALLOWED_ALGORITHMS = ("HS256",)
 _MAX_TOKEN_LENGTH = 8192
 _MAX_SUBJECT_LENGTH = 512
+
+# 自行校验声明：PyJWT 只负责签名与结构，claim 策略由本模块统一裁决，
+# 避免“库的宽松语义”与 DDP 的严格语义之间出现两套判定。
+_DECODE_OPTIONS = {
+    "verify_exp": False,
+    "verify_nbf": False,
+    "verify_iat": False,
+    "verify_iss": False,
+    "verify_aud": False,
+    "verify_sub": False,
+    "require": [],
+}
 
 
 class TokenValidationError(Exception):
@@ -67,26 +80,14 @@ def decode_hs256_token(
     if leeway_seconds < 0:
         raise TokenValidationError("时钟容差不能为负")
 
-    parts = token.split(".")
-    if len(parts) != 3:
-        raise TokenValidationError("令牌格式错误")
-    header_b64, payload_b64, signature_b64 = parts
-    if not header_b64 or not payload_b64 or not signature_b64:
-        raise TokenValidationError("令牌格式错误")
-
-    header = _decode_json_object(header_b64)
+    header = _decode_header(token)
     if header.get("alg") != _ALGORITHM:
         raise TokenValidationError("不支持的签名算法")
     if "crit" in header:
         raise TokenValidationError("不支持的 crit 扩展")
 
-    signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
-    expected = hmac.new(secret.encode("utf-8"), signing_input, hashlib.sha256).digest()
-    actual = _b64url_decode(signature_b64)
-    if len(actual) != len(expected) or not hmac.compare_digest(actual, expected):
-        raise TokenValidationError("签名校验失败")
+    payload = _decode_payload(token, secret)
 
-    payload = _decode_json_object(payload_b64)
     current_time = time.time() if now is None else now
     if not _is_timestamp(current_time):
         raise TokenValidationError("时钟无效")
@@ -108,6 +109,32 @@ def decode_hs256_token(
         subject=subject.strip(),
         platform_role=platform_role.strip(),
     )
+
+
+def _decode_header(token: str) -> dict[str, Any]:
+    try:
+        header = jwt.get_unverified_header(token)
+    except jwt.InvalidTokenError as exc:
+        raise TokenValidationError("令牌格式错误") from exc
+    if not isinstance(header, dict):
+        raise TokenValidationError("令牌头必须是 JSON 对象")
+    return header
+
+
+def _decode_payload(token: str, secret: str) -> dict[str, Any]:
+    try:
+        payload = jwt.decode(
+            token,
+            secret,
+            algorithms=list(_ALLOWED_ALGORITHMS),
+            options=_DECODE_OPTIONS,
+        )
+    except jwt.InvalidTokenError as exc:
+        # 签名错误、格式错误、段数不符等统一收敛，不外泄内部原因。
+        raise TokenValidationError("令牌校验失败") from exc
+    if not isinstance(payload, dict):
+        raise TokenValidationError("声明必须是 JSON 对象")
+    return payload
 
 
 def _validate_expiry(
@@ -162,28 +189,3 @@ def _is_timestamp(value: object) -> bool:
     if isinstance(value, float):
         return math.isfinite(value)
     return False
-
-
-def _decode_json_object(segment: str) -> dict[str, Any]:
-    raw = _b64url_decode(segment)
-    try:
-        value = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise TokenValidationError("声明不是合法 JSON") from exc
-    if not isinstance(value, dict):
-        raise TokenValidationError("声明必须是 JSON 对象")
-    return value
-
-
-def _b64url_decode(segment: str) -> bytes:
-    if not segment or not segment.isascii():
-        raise TokenValidationError("Base64URL 编码无效")
-    padding = "=" * (-len(segment) % 4)
-    try:
-        return base64.b64decode(
-            segment + padding,
-            altchars=b"-_",
-            validate=True,
-        )
-    except (binascii.Error, ValueError) as exc:
-        raise TokenValidationError("Base64URL 编码无效") from exc

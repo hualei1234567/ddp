@@ -164,3 +164,52 @@ def test_empty_secret_is_rejected() -> None:
             issuer=JWT_ISSUER,
             audience=JWT_AUDIENCE,
         )
+
+
+# --- PyJWT 迁移后的负向探针 -------------------------------------------------
+# 这些用例锁定"换库不换语义"：手写实现原有的拒绝行为必须全部保留。
+
+
+def test_crit_header_is_rejected() -> None:
+    """``crit`` 扩展意味着校验方必须理解该扩展；未实现时必须拒绝。"""
+    import base64 as _b64
+    import hashlib as _hash
+    import hmac as _hmac
+    import json as _json
+    import time as _time
+
+    header = {"alg": "HS256", "typ": "JWT", "crit": ["exp"]}
+    payload = {
+        "sub": str(uuid4()),
+        "iss": JWT_ISSUER,
+        "aud": JWT_AUDIENCE,
+        "exp": int(_time.time()) + 300,
+    }
+
+    def _seg(value: dict[str, object]) -> str:
+        raw = _json.dumps(value, separators=(",", ":")).encode("utf-8")
+        return _b64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    header_seg, payload_seg = _seg(header), _seg(payload)
+    signing_input = f"{header_seg}.{payload_seg}".encode("ascii")
+    signature = _hmac.new(JWT_SECRET.encode("utf-8"), signing_input, _hash.sha256).digest()
+    token = f"{header_seg}.{payload_seg}."
+    token += _b64.urlsafe_b64encode(signature).rstrip(b"=").decode("ascii")
+
+    with pytest.raises(TokenValidationError, match="crit"):
+        _decode(token)
+
+
+def test_oversized_token_is_rejected() -> None:
+    with pytest.raises(TokenValidationError, match="超长"):
+        _decode("a" * 9000)
+
+
+def test_non_ascii_token_is_rejected() -> None:
+    with pytest.raises(TokenValidationError, match="ASCII"):
+        _decode("课程.令牌.签名")
+
+
+def test_negative_leeway_is_rejected() -> None:
+    with pytest.raises(TokenValidationError, match="容差"):
+        _decode(make_token(), leeway_seconds=-1)

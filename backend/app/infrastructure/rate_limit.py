@@ -1,11 +1,11 @@
 """限流基础设施。
 
 当前提供进程内滑动窗口实现，适合单实例或“每进程限流”。多副本 / 多 worker
-部署时各进程独立计数，无法形成全局配额，必须实现 ``RateLimiter`` 协议的
-Redis 版本（原子计数或 Lua 脚本）后再切换 ``DDP_RATE_LIMIT_BACKEND``。
+部署时各进程独立计数，无法形成全局配额。
 
 接口刻意保持最小：只接收桶键、上限与窗口，返回是否放行及剩余额度，
-便于替换为 Redis 实现而不改动 API 层。
+便于将来替换为分布式实现而不改动 API 层。分布式限流尚未实现，配置层
+（``rate_limit_backend``）因此只接受 ``memory``；实现时再放开枚举并引入依赖。
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ class RateLimitDecision:
 
 
 class RateLimiter(Protocol):
-    """限流后端协议；Redis 实现按同一契约接入。"""
+    """限流后端协议；将来接入分布式实现时沿用同一契约。"""
 
     def check(self, key: str, *, limit: int, window_seconds: int) -> RateLimitDecision:
         """记录一次命中并返回决策。"""
@@ -129,12 +129,8 @@ class InMemoryRateLimiter:
 def build_rate_limiter(settings: Settings) -> RateLimiter:
     """按配置构建限流后端。
 
-    ``redis`` 是显式占位：在提供真实分布式实现前拒绝启动，
-    避免多副本部署误以为拥有全局配额。
+    ``rate_limit_backend`` 目前只有 ``memory`` 一个合法值（pydantic 校验保证），
+    因此这里不做分支；新增后端时在此按枚举分派。
     """
-    if settings.rate_limit_backend == "memory":
-        return InMemoryRateLimiter()
-    raise RuntimeError(
-        "DDP_RATE_LIMIT_BACKEND=redis 尚未实现：当前仅提供进程内限流，"
-        "请实现 RateLimiter 的 Redis 后端后再启用。"
-    )
+    del settings  # 当前唯一的后端不需要配置
+    return InMemoryRateLimiter()

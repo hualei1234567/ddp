@@ -64,6 +64,25 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     log_level: str = "INFO"
 
+    # 对外元信息（GET /api/v1/platform/meta）。当前实现进度只在配置声明一处，
+    # 阶段推进时改这里（或部署期 DDP_PLATFORM_PHASE），不在路由里硬编码。
+    platform_phase: str = "7"
+    platform_modules: list[str] = Field(
+        default_factory=lambda: [
+            "platform",
+            "devices",
+            "collection",
+            "ingestion",
+            "episodes",
+            "annotation",
+            "datasets",
+            "training",
+            "modelops",
+            "suppliers",
+            "data-platform",
+        ]
+    )
+
     # 本地开发专用：仅当显式开启且请求来自 loopback 时，才接受 X-User-Id。
     # 生产环境禁止使用请求头身份；未接入真实认证时启动自检会拒绝启动。
     local_header_auth: bool = False
@@ -74,7 +93,6 @@ class Settings(BaseSettings):
     database_pool_timeout_seconds: int = Field(default=5, ge=1)
     database_connect_timeout_seconds: int = Field(default=5, ge=1)
     database_echo: bool = False
-    redis_url: str = "redis://localhost:6379/0"
 
     s3_endpoint: str = "http://localhost:9000"
     s3_access_key: str = "minioadmin"
@@ -169,7 +187,9 @@ class Settings(BaseSettings):
     # 限流：按客户端 IP 的滑动窗口。认证路径使用更严格的桶。
     # ``memory`` 为进程内实现（默认）；多副本部署需提供 Redis 实现后切换。
     rate_limit_enabled: bool = True
-    rate_limit_backend: Literal["memory", "redis"] = "memory"
+    # 仅 memory。分布式限流（Redis）尚未实现，不在依赖中预置未使用组件；
+    # 实现后在此声明 "redis" 并引入依赖，见 docs/adr/0016。
+    rate_limit_backend: Literal["memory"] = "memory"
     rate_limit_auth_path_prefixes: list[str] = Field(default_factory=lambda: ["/api/v1/auth"])
     rate_limit_auth_requests: int = Field(default=20, ge=1)
     rate_limit_auth_window_seconds: int = Field(default=60, ge=1)
@@ -191,8 +211,7 @@ class Settings(BaseSettings):
 
         - 非本地环境必须配置完整 JWT，且禁止 Header 身份后门；
         - 非本地环境禁止默认/占位 MinIO 凭据；
-        - CORS 来源必须显式且格式合法；
-        - 限流后端若选择尚未实现的 redis，直接拒绝启动（占位）。
+        - CORS 来源必须显式且格式合法。
         """
         problems = self._cors_config_problems()
         problems.extend(self._rate_limit_config_problems())
@@ -268,11 +287,6 @@ class Settings(BaseSettings):
 
     def _rate_limit_config_problems(self) -> list[str]:
         problems: list[str] = []
-        if self.rate_limit_enabled and self.rate_limit_backend == "redis":
-            problems.append(
-                "DDP_RATE_LIMIT_BACKEND=redis 仅为占位，尚未实现分布式限流；"
-                "请使用 memory 或提供 Redis 实现"
-            )
         for prefix in self.rate_limit_auth_path_prefixes:
             if not prefix.startswith("/") or prefix != prefix.strip() or not prefix.rstrip("/"):
                 problems.append(f"限流认证路径前缀非法：{prefix!r}")

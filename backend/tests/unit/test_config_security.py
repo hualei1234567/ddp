@@ -212,13 +212,6 @@ def test_cors_wildcard_with_credentials_is_rejected_even_locally() -> None:
         settings.validate_runtime_security()
 
 
-def test_redis_rate_limit_backend_is_an_explicit_placeholder() -> None:
-    settings = Settings(env="local", rate_limit_backend="redis")
-
-    with pytest.raises(RuntimeError, match="redis"):
-        settings.validate_runtime_security()
-
-
 def test_hsts_preload_requires_include_subdomains() -> None:
     settings = Settings(
         env="local",

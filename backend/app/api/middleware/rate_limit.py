@@ -9,8 +9,8 @@
 ``X-Forwarded-For`` 默认不信任，只有部署在可信代理之后才可显式开启。
 
 说明：当前项目的令牌由外部身份源签发，``/api/v1/auth`` 前缀是为后续
-登录/刷新接口预留的严格桶；真正的分布式实现（Redis）尚未落地，见
-``app.infrastructure.rate_limit`` 中的协议与占位约定。
+登录/刷新接口预留的严格桶。分布式限流尚未实现，``DDP_RATE_LIMIT_BACKEND``
+只接受 ``memory``；协议约定见 ``app.infrastructure.rate_limit``。
 """
 
 from __future__ import annotations
