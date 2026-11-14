@@ -13,6 +13,7 @@ from app.application.idempotency import (
 from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
+from app.domain.datasources.media import MediaAsset as MediaAssetT
 from app.domain.datasources.models import DataSource, DataSourceImport
 from app.domain.identity.models import ProjectScope
 
@@ -80,6 +81,20 @@ class DataSourceImportRepository(Protocol):
     ) -> DataSourceImport: ...
 
 
+class ObjectWriter(Protocol):
+    """对象存储写入端口；实现不得在此层做业务校验。"""
+
+    def put(self, object_key: str, data: bytes, *, content_type: str) -> None: ...
+
+
+class MediaAssetRepository(Protocol):
+    def add(self, scope: ProjectScope, asset: MediaAssetT) -> MediaAssetT: ...
+
+    def list_by_import(
+        self, scope: ProjectScope, import_id: UUID, *, limit: int = 200
+    ) -> list[MediaAssetT]: ...
+
+
 # 审计、outbox 与幂等记录类型统一由 application 顶层声明。
 AuditRecord = object
 OutboxEvent = object
@@ -90,6 +105,8 @@ IdempotencyRepository = _IdempotencyRepository
 
 __all__ = [
     "AuditRepository",
+    "MediaAssetRepository",
+    "ObjectWriter",
     "DataSourceImportRepository",
     "DataSourceRepository",
     "IdempotencyRecord",

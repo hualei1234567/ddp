@@ -20,11 +20,13 @@ from app.domain.datasources.enums import (
     ImportStatus,
 )
 from app.domain.datasources.errors import DuplicateResourceError, VersionConflictError
+from app.domain.datasources.media import MediaAsset
 from app.domain.datasources.models import DataSource, DataSourceImport
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.datasources import (
     DataSourceImportModel,
     DataSourceModel,
+    MediaAssetModel,
 )
 from app.infrastructure.repositories._sql_support import (
     as_utc,
@@ -311,3 +313,80 @@ class SqlDataSourceImportRepository:
             )
         self._session.flush()
         return replace(item, row_version=expected_version + 1)
+
+
+def _asset_from_row(row: MediaAssetModel) -> MediaAsset:
+    return MediaAsset(
+        asset_id=row.id,
+        project_id=row.project_id,
+        data_source_id=row.data_source_id,
+        import_id=row.import_id,
+        episode_key=row.episode_key,
+        path=row.path,
+        camera=row.camera,
+        object_key=row.object_key,
+        size_bytes=row.size_bytes,
+        sha256=row.sha256,
+        content_type=row.content_type,
+        task_name=row.task_name,
+        created_at=as_utc(row.created_at),  # type: ignore[arg-type]
+        excerpt_start_seconds=row.excerpt_start_seconds,
+        excerpt_seconds=row.excerpt_seconds,
+        source_fps=row.source_fps,
+    )
+
+
+class SqlMediaAssetRepository:
+    """导入产出的媒体资产读写；所有查询强制 project 过滤。"""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, scope: ProjectScope, asset: MediaAsset) -> MediaAsset:
+        scope.ensure(asset.project_id)
+        self._session.add(
+            MediaAssetModel(
+                id=asset.asset_id,
+                project_id=asset.project_id,
+                created_by=scope.actor_id,
+                updated_by=scope.actor_id,
+                data_source_id=asset.data_source_id,
+                import_id=asset.import_id,
+                episode_key=asset.episode_key,
+                path=asset.path,
+                camera=asset.camera,
+                object_key=asset.object_key,
+                size_bytes=asset.size_bytes,
+                sha256=asset.sha256,
+                content_type=asset.content_type,
+                task_name=asset.task_name,
+                excerpt_start_seconds=asset.excerpt_start_seconds,
+                excerpt_seconds=asset.excerpt_seconds,
+                source_fps=asset.source_fps,
+            )
+        )
+        try:
+            self._session.flush()
+        except IntegrityError as exc:
+            raise DuplicateResourceError(f"媒体资产重复：{asset.path}") from exc
+        return asset
+
+    def list_by_import(
+        self, scope: ProjectScope, import_id: UUID, *, limit: int = 200
+    ) -> list[MediaAsset]:
+        statement = (
+            scoped_select(MediaAssetModel, scope)
+            .where(MediaAssetModel.import_id == import_id)
+            .order_by(MediaAssetModel.episode_key, MediaAssetModel.camera)
+            .limit(bounded_limit(limit, maximum=1000))
+        )
+        return [_asset_from_row(row) for row in self._session.scalars(statement)]
+
+    def get(self, scope: ProjectScope, asset_id: UUID) -> MediaAsset | None:
+        row = self._session.scalar(
+            select(MediaAssetModel).where(
+                MediaAssetModel.id == asset_id,
+                MediaAssetModel.project_id == scope.project_id,
+            )
+        )
+        return _asset_from_row(row) if row is not None else None

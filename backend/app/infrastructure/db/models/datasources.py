@@ -12,9 +12,11 @@ from uuid import UUID
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -121,5 +123,49 @@ class DataSourceImportModel(Base, ProjectScopedMixin):
             "project_id",
             "data_source_id",
             "status",
+        ),
+    )
+
+
+class MediaAssetModel(Base, ProjectScopedMixin):
+    """导入产出的媒体资产：对象存储引用 + Hash + 审看所需时序提示。"""
+
+    __tablename__ = "data_source_media_assets"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    data_source_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("data_sources.id", ondelete="CASCADE"), nullable=False
+    )
+    import_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("data_source_imports.id", ondelete="CASCADE"), nullable=False
+    )
+    episode_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    path: Mapped[str] = mapped_column(String(1024), nullable=False)
+    camera: Mapped[str] = mapped_column(String(64), nullable=False)
+    object_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    task_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    excerpt_start_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    excerpt_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source_fps: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    __table_args__ = (
+        # 同一导入内同一路径只能出现一次：重复会导致审看列表出现重复项。
+        UniqueConstraint("project_id", "import_id", "path", name="uq_media_assets_import_path"),
+        UniqueConstraint("project_id", "id", name="uq_media_assets_project_id_id"),
+        CheckConstraint("size_bytes > 0", name="media_size_positive"),
+        CheckConstraint("length(sha256) = 71", name="media_sha256_length"),
+        CheckConstraint(
+            "excerpt_start_seconds IS NULL OR excerpt_start_seconds >= 0",
+            name="media_excerpt_start_non_negative",
+        ),
+        CheckConstraint("version >= 1", name="version_positive"),
+        Index(
+            "ix_media_assets_project_episode",
+            "project_id",
+            "data_source_id",
+            "episode_key",
         ),
     )
