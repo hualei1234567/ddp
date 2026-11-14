@@ -402,6 +402,14 @@ class Sensor(Base, ProjectScopedMixin):
     intrinsic_calibration_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     extrinsic_calibration_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     coordinate_frame: Mapped[str] = mapped_column(String(200), nullable=False)
+    # ADR-0019 阶段 1：frame_id 为新字段（回填自 coordinate_frame），
+    # frame_convention 显式表达约定；coordinate_frame 标记 DEPRECATED。
+    # 可空：迁移 0027 回填后由应用层保证非空。直接写 ORM 的测试夹具
+    # 与外部工具不必知道这个派生规则；应用层 create/update 一定写入。
+    frame_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    frame_convention: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default=text("'UNSPECIFIED'")
+    )
     sync_mode: Mapped[str] = mapped_column(String(32), nullable=False)
     sync_group: Mapped[str | None] = mapped_column(String(64), nullable=True)
     firmware_version: Mapped[str | None] = mapped_column(String(64), nullable=True)

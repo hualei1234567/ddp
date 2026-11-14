@@ -34,6 +34,8 @@ class NewSensor:
     sensor_type: str
     sample_rate_hz: float
     coordinate_frame: str
+    frame_id: str | None = None
+    frame_convention: str = "UNSPECIFIED"
     robot_id: UUID | None = None
     device_id: UUID | None = None
     vendor: str | None = None

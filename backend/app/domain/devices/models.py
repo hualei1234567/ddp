@@ -14,6 +14,7 @@ from uuid import UUID
 
 from app.domain.devices.enums import (
     DeviceType,
+    FrameConvention,
     LifecycleStatus,
     SensorSyncMode,
     SensorType,
@@ -226,6 +227,10 @@ class Sensor(_LifecycleActions):
     sensor_type: SensorType | str
     sample_rate_hz: float
     coordinate_frame: str
+    # ADR-0019 阶段 1：frame_id 为坐标系标识，frame_convention 为坐标约定。
+    # coordinate_frame 保留并继续写入（DEPRECATED），阶段 2 移除。
+    frame_id: str | None = None
+    frame_convention: FrameConvention | str = FrameConvention.UNSPECIFIED
     robot_id: UUID | None = None
     device_id: UUID | None = None
     status: LifecycleStatus | str = LifecycleStatus.PROVISIONED
@@ -279,6 +284,29 @@ class Sensor(_LifecycleActions):
             "sample_rate_hz",
             positive_float(self.sample_rate_hz, "sample_rate_hz"),
         )
+        # ADR-0019：frame_id 缺省回落到 coordinate_frame（向后兼容）；
+        # 两者都给且不一致时报错——不静默择一。
+        raw_frame_id = getattr(self, "frame_id", None)
+        if raw_frame_id:
+            resolved = normalized_text(raw_frame_id, "frame_id", max_length=200)
+            if resolved != self.coordinate_frame.strip():
+                raise DomainValidationError(
+                    "frame_id 与 coordinate_frame 不一致；阶段 1 二者必须表达同一坐标系"
+                )
+            object.__setattr__(self, "frame_id", resolved)
+        else:
+            object.__setattr__(self, "frame_id", self.coordinate_frame.strip())
+        convention = getattr(self, "frame_convention", FrameConvention.UNSPECIFIED)
+        object.__setattr__(
+            self,
+            "frame_convention",
+            (
+                convention
+                if isinstance(convention, FrameConvention)
+                else FrameConvention(convention)
+            ),
+        )
+
         object.__setattr__(
             self,
             "coordinate_frame",

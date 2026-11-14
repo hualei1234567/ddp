@@ -28,6 +28,17 @@ export const SENSOR_TYPE_VALUES = [
   "AUDIO",
 ] as const;
 
+/**
+ * 坐标系约定（ADR-0019）。`UNSPECIFIED` 是显式的"来源未声明"，
+ * 不是前端猜出的默认值——展示时应如实呈现为"未声明"。
+ */
+export const FRAME_CONVENTION_VALUES = [
+  "ROS_REP_103",
+  "OPENCV",
+  "UNITY_LHS",
+  "UNSPECIFIED",
+] as const;
+
 export const SENSOR_SYNC_MODE_VALUES = [
   "PTP",
   "NTP",
@@ -114,6 +125,11 @@ export interface Sensor {
   channels: number | null;
   intrinsic_calibration_id: string | null;
   extrinsic_calibration_id: string | null;
+  /** 坐标系标识（ADR-0019）。阶段 1 与 coordinate_frame 等价。 */
+  frame_id: string | null;
+  /** 坐标约定；UNSPECIFIED 表示来源未声明，不是猜出的默认值。 */
+  frame_convention: string;
+  /** @deprecated ADR-0019 阶段 2 移除；请读 frame_id。 */
   coordinate_frame: string | null;
   /** 同步方式，后端枚举见 `SENSOR_SYNC_MODE_VALUES`。 */
   sync_mode: string;

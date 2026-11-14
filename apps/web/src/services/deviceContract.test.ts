@@ -73,6 +73,9 @@ describe("设备域后端契约对齐", () => {
         "device_id",
         "extrinsic_calibration_id",
         "firmware_version",
+        // ADR-0019 阶段 1 新增；coordinate_frame 保留至阶段 2。
+        "frame_convention",
+        "frame_id",
         "intrinsic_calibration_id",
         "model",
         "mount_position",

@@ -9,6 +9,7 @@ import {
   CALIBRATION_TARGET_TYPE_VALUES,
   CALIBRATION_TYPE_VALUES,
   DEVICE_TYPE_VALUES,
+  FRAME_CONVENTION_VALUES,
   SENSOR_SYNC_MODE_VALUES,
   SENSOR_TYPE_VALUES,
 } from "../types/device";
@@ -177,6 +178,14 @@ export function parseSensor(value: unknown, path = "传感器"): Sensor {
       "extrinsic_calibration_id",
       `${path}.extrinsic_calibration_id`,
     ),
+    frame_id: readOptionalString(record, "frame_id", `${path}.frame_id`),
+    frame_convention: readEnum(
+      record,
+      "frame_convention",
+      `${path}.frame_convention`,
+      FRAME_CONVENTION_VALUES,
+    ),
+    // ADR-0019 阶段 1 仍读取旧字段；阶段 2 删除。
     coordinate_frame: readOptionalString(
       record,
       "coordinate_frame",

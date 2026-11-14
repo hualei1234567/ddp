@@ -99,3 +99,16 @@ class CalibrationStatus(StrEnum):
     SUPERSEDED = "SUPERSEDED"
     REVOKED = "REVOKED"
     EXPIRED = "EXPIRED"
+
+
+class FrameConvention(StrEnum):
+    """坐标系约定。
+
+    ``UNSPECIFIED`` 是**显式的"不知道"**，不是默认猜一个：
+    DDP 接入多厂商第一人称数据，把非 ROS 数据错标成 ROS 约定比标注"未知"更危险。
+    """
+
+    ROS_REP_103 = "ROS_REP_103"
+    OPENCV = "OPENCV"
+    UNITY_LHS = "UNITY_LHS"
+    UNSPECIFIED = "UNSPECIFIED"

@@ -66,6 +66,12 @@ class SensorCreate(BaseModel):
     sensor_type: str
     sample_rate_hz: float = Field(gt=0)
     coordinate_frame: str = Field(min_length=1, max_length=200)
+    # ADR-0019：统一填写 frame_id；只给 coordinate_frame 时服务端回落。
+    frame_id: str | None = Field(default=None, min_length=1, max_length=200)
+    frame_convention: str = Field(
+        default="UNSPECIFIED",
+        pattern="^(ROS_REP_103|OPENCV|UNITY_LHS|UNSPECIFIED)$",
+    )
     robot_id: UUID | None = None
     device_id: UUID | None = None
     vendor: str | None = Field(default=None, max_length=120)
@@ -102,6 +108,11 @@ class SensorPatch(BaseModel):
     intrinsic_calibration_id: UUID | None = None
     extrinsic_calibration_id: UUID | None = None
     coordinate_frame: str | None = Field(default=None, min_length=1, max_length=200)
+    frame_id: str | None = Field(default=None, min_length=1, max_length=200)
+    frame_convention: str | None = Field(
+        default=None,
+        pattern="^(ROS_REP_103|OPENCV|UNITY_LHS|UNSPECIFIED)$",
+    )
     sync_mode: str | None = None
     sync_group: str | None = Field(default=None, max_length=64)
     firmware_version: str | None = Field(default=None, max_length=64)
@@ -222,6 +233,8 @@ class SensorOut(BaseModel):
     intrinsic_calibration_id: UUID | None
     extrinsic_calibration_id: UUID | None
     coordinate_frame: str
+    frame_id: str
+    frame_convention: str
     sync_mode: str
     sync_group: str | None
     firmware_version: str | None
@@ -252,6 +265,8 @@ class SensorOut(BaseModel):
             intrinsic_calibration_id=sensor.intrinsic_calibration_id,
             extrinsic_calibration_id=sensor.extrinsic_calibration_id,
             coordinate_frame=sensor.coordinate_frame,
+            frame_id=sensor.frame_id or sensor.coordinate_frame,
+            frame_convention=str(sensor.frame_convention),
             sync_mode=_value(sensor.sync_mode),
             sync_group=sensor.sync_group,
             firmware_version=sensor.firmware_version,
