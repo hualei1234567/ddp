@@ -1,7 +1,7 @@
 # DDP 文档索引
 
 > 项目：DDP（Embodied AI Data Platform）
-> 更新：2026-11-14
+> 更新：2026-11-15
 > 建设基线：`docs/DDP_具身智能数据闭环平台建设总规范_V1.0_FINAL.md`
 > 治理基线：`docs/ddp/00–09`、`prompts/ddp/01–04`、`templates/ddp/*`
 
@@ -11,6 +11,24 @@
 |---|---|---|
 | **[05-现状审计报告-2026-11-14.md](05-现状审计报告-2026-11-14.md)** | 阶段 0–6 实现后的只读全量审计：技术栈事实、模块状态、复用清单、P0/P1 债务、目标架构差距（数据平面 MISSING）、任务 DAG、9 个 OPEN 项 | **待用户确认 OPEN 项** |
 | [ddp/00-项目基线与使用说明.md](ddp/00-项目基线与使用说明.md) | 持续迭代治理文件包入口：基线、原则、模块映射、迭代工作流、Agent 协作、代码质量、数据治理、GitHub 规范、测试验收 | 现行 |
+
+## 阶段 7 数据平面（第一批已实现）
+
+| 文档 | 内容 | 状态 |
+|---|---|---|
+| [product/阶段7-数据平面第一批PRD.md](product/阶段7-数据平面第一批PRD.md) | 外部数据源登记与导入任务：需求、页面状态、明确不做的范围 | 已实现 |
+| [architecture/阶段7-数据平面第一批契约冻结-v1.0.md](architecture/阶段7-数据平面第一批契约冻结-v1.0.md) | `ddp.stage7/1.0.0` 端点矩阵、三条硬约束、状态机、兼容流程 | FROZEN |
+| [adr/0018-stage7-datasource-registry.md](adr/0018-stage7-datasource-registry.md) | 分层决策（`data-platform/` 边界）、revision 必须 sha、许可与 gated 一致性 | ACCEPTED |
+| [adr/0017-video-review-player.md](adr/0017-video-review-player.md) | 视频审看播放器选型：hls.js + 原生 video，不自研内核 | ACCEPTED |
+| [adr/0016-jwt-verification-via-pyjwt.md](adr/0016-jwt-verification-via-pyjwt.md) | JWT 校验迁移到 PyJWT，claim 策略仍由 DDP 裁决 | ACCEPTED |
+
+## 运维
+
+| 文档 | 内容 | 状态 |
+|---|---|---|
+| [operations/备份与恢复演练记录-2026-11-14.md](operations/备份与恢复演练记录-2026-11-14.md) | 真实 PG 16 备份恢复演练：71 表 / 177 触发器一致；对象存储缺口如实登记 | 已执行 |
+| [operations/main-分支保护与评审纪律.md](operations/main-分支保护与评审纪律.md) | 私有仓无平台强制力时的替代方案与重新决策触发条件 | 现行 |
+| [operations/docker-compose-minio变更说明.md](operations/docker-compose-minio变更说明.md) | MinIO 镜像固定与卷路径变更的数据影响说明 | 现行 |
 
 > ⚠️ 本文件下方「阶段 0 交付」一节为 2026-11-08 的历史记录，其中「当前工程为空」
 > 等表述已过期；**当前事实以 `05-现状审计报告-2026-11-14.md` 为准**。
