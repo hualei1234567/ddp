@@ -25,6 +25,8 @@ from app.api.v1.datasource_schemas import (
     DataSourceOut,
     DataSourcePatch,
     ImportActionRequest,
+    MediaAssetOut,
+    MediaAssetPlaybackOut,
 )
 from app.api.v1.preconditions import require_expected_version
 from app.application.datasources import (
@@ -43,6 +45,8 @@ from app.application.datasources.ports import (
     OutboxRepository,
     UnitOfWork,
 )
+from app.core.config import get_settings
+from app.domain.datasources.errors import ResourceNotFoundError
 from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
     SqlDatasetOutboxRepository,
@@ -50,8 +54,11 @@ from app.infrastructure.repositories.dataset_audit import (
 from app.infrastructure.repositories.datasources import (
     SqlDataSourceImportRepository,
     SqlDataSourceRepository,
+    SqlMediaAssetRepository,
 )
 from app.infrastructure.repositories.idempotency import SqlIdempotencyRepository
+from app.infrastructure.storage.data_source_objects import DataSourceObjectReader
+from app.infrastructure.storage.s3 import S3MultipartStorage
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["datasources"])
 
@@ -223,6 +230,48 @@ def create_import(
         request_id=request_id(request),
     )
     return DataSourceImportOut.from_domain(created).model_dump(mode="json")
+
+
+# 播放 URL 有效期：审看是交互行为，短有效期限制泄漏面。
+_PLAYBACK_TTL_SECONDS = 900
+
+
+@router.get("/data-source-imports/{import_id}/assets")
+def list_import_assets(
+    import_id: UUID,
+    scope: ReadScope,
+    session: DbSession,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 500,
+) -> dict[str, Any]:
+    """列出一个导入产出的媒体资产，按 episode + 机位排序，便于逐条审看。"""
+    items = SqlMediaAssetRepository(session).list_by_import(scope, import_id, limit=limit)
+    return {"items": [MediaAssetOut.from_domain(item).model_dump(mode="json") for item in items]}
+
+
+@router.post("/media-assets/{asset_id}/playback")
+def presign_asset_playback(
+    asset_id: UUID,
+    scope: ReadScope,
+    session: DbSession,
+) -> dict[str, Any]:
+    """签发短时播放 URL。
+
+    用 POST 而非 GET：签发 URL 是有副作用的行为（产生一个可访问凭证），
+    不应被浏览器/代理缓存或预取。
+    """
+    repo = SqlMediaAssetRepository(session)
+    asset = repo.get(scope, asset_id)
+    if asset is None:
+        raise ResourceNotFoundError("媒体资产", asset_id)
+    reader = DataSourceObjectReader(S3MultipartStorage(get_settings()))
+    url = reader.presign_get(asset.object_key, expires_seconds=_PLAYBACK_TTL_SECONDS)
+    return MediaAssetPlaybackOut(
+        asset_id=asset.asset_id,
+        url=url,
+        expires_in_seconds=_PLAYBACK_TTL_SECONDS,
+        content_type=asset.content_type,
+        size_bytes=asset.size_bytes,
+    ).model_dump(mode="json")
 
 
 @router.get("/data-source-imports/{import_id}")

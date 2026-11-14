@@ -225,3 +225,142 @@ def test_import_writes_audit_and_outbox(api_db) -> None:
     assert request_event.payload["repo_id"] == "lerobot/aloha_sim_insertion_human"
     assert request_event.payload["revision"] == _SHA
     assert UUID(str(request_event.payload["import_id"])) == UUID(job["import_id"])
+
+
+# --- 媒体资产与播放 URL ------------------------------------------------------
+
+
+def _seed_asset(factory, ids, source_id, import_id):
+    """直接插一条媒体资产：播放 URL 的测试不需要真的下载文件。"""
+    from uuid import UUID, uuid4
+
+    from app.infrastructure.db.models.datasources import MediaAssetModel
+
+    asset_id = uuid4()
+    with factory() as session:
+        session.add(
+            MediaAssetModel(
+                id=asset_id,
+                project_id=ids.project_a,
+                data_source_id=UUID(str(source_id)),
+                import_id=UUID(str(import_id)),
+                episode_key="demo_001",
+                path="videos/demo_001_main.mp4",
+                camera="main",
+                object_key=f"data-sources/{ids.project_a}/{asset_id}/v.mp4",
+                size_bytes=754668,
+                sha256="sha256:" + "a" * 64,
+                content_type="video/mp4",
+                task_name="Sew lace fabric",
+                excerpt_start_seconds=69.0,
+                excerpt_seconds=12.0,
+                source_fps=30.0,
+                created_by=ids.editor_a,
+                updated_by=ids.editor_a,
+            )
+        )
+        session.commit()
+    return str(asset_id)
+
+
+def _an_import_id(factory, ids):
+    from uuid import uuid4
+
+    from app.infrastructure.db.models.datasources import (
+        DataSourceImportModel,
+        DataSourceModel,
+    )
+
+    source_id, import_id = uuid4(), uuid4()
+    with factory() as session:
+        session.add(
+            DataSourceModel(
+                id=source_id,
+                project_id=ids.project_a,
+                code=f"hf-{source_id.hex[:8]}",
+                name="源",
+                kind="HUGGINGFACE",
+                repo_id="nvidia/PhysicalAI-Human-1M-100K",
+                revision=_SHA,
+                license="CC-BY-4.0",
+                access_condition="PUBLIC",
+                is_gated=False,
+                metadata_json={},
+                created_by=ids.editor_a,
+                updated_by=ids.editor_a,
+            )
+        )
+        session.flush()
+        session.add(
+            DataSourceImportModel(
+                id=import_id,
+                project_id=ids.project_a,
+                data_source_id=source_id,
+                status="SUCCEEDED",
+                scope="SAMPLE",
+                tool_name="huggingface_hub",
+                tool_version="0.27.1",
+                sample_limit=15,
+                created_by=ids.editor_a,
+                updated_by=ids.editor_a,
+            )
+        )
+        session.commit()
+    return str(source_id), str(import_id)
+
+
+def test_list_import_assets_returns_seeded_asset(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    asset_id = _seed_asset(factory, ids, source_id, import_id)
+
+    response = client.get(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/assets"
+    )
+
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert [item["asset_id"] for item in items] == [asset_id]
+    assert items[0]["camera"] == "main"
+    assert items[0]["excerpt_start_seconds"] == 69.0
+
+
+def test_playback_url_is_presigned_and_scoped(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    asset_id = _seed_asset(factory, ids, source_id, import_id)
+
+    response = client.post(f"/api/v1/projects/{ids.project_a}/media-assets/{asset_id}/playback")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # URL 必须带 SigV4 签名参数。Credential 里含 access key 是 SigV4 标准行为；
+    # 真正不能出现的是 secret key。
+    assert "X-Amz-Signature" in body["url"]
+    assert "X-Amz-Credential=" in body["url"]
+    assert "X-Amz-Expires=900" in body["url"]
+    assert "aws_secret_access_key" not in body["url"]
+    assert body["expires_in_seconds"] == 900
+    assert body["content_type"] == "video/mp4"
+
+
+def test_playback_requires_project_membership(api_db) -> None:
+    factory, ids = api_db
+    outsider = make_client(factory, ids.outsider)
+    source_id, import_id = _an_import_id(factory, ids)
+    asset_id = _seed_asset(factory, ids, source_id, import_id)
+
+    response = outsider.post(f"/api/v1/projects/{ids.project_a}/media-assets/{asset_id}/playback")
+
+    assert response.status_code in {403, 404}
+
+
+def test_playback_for_unknown_asset_is_404(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+
+    response = client.post(f"/api/v1/projects/{ids.project_a}/media-assets/{uuid4()}/playback")
+
+    assert response.status_code == 404

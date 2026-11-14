@@ -11,6 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.datasources.media import MediaAsset
 from app.domain.datasources.models import DataSource, DataSourceImport
 from app.domain.datasources.state_machines import allowed_import_actions
 
@@ -142,3 +143,53 @@ class DataSourceImportOut(BaseModel):
             version=item.row_version,
             allowed_actions=sorted(allowed_import_actions(item.status)),
         )
+
+
+class MediaAssetOut(BaseModel):
+    asset_id: UUID
+    project_id: UUID
+    data_source_id: UUID
+    import_id: UUID
+    episode_key: str
+    path: str
+    camera: str
+    object_key: str
+    size_bytes: int
+    sha256: str
+    content_type: str
+    task_name: str
+    excerpt_start_seconds: float | None
+    excerpt_seconds: float | None
+    source_fps: float | None
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, item: MediaAsset) -> MediaAssetOut:
+        return cls(
+            asset_id=item.asset_id,
+            project_id=item.project_id,
+            data_source_id=item.data_source_id,
+            import_id=item.import_id,
+            episode_key=item.episode_key,
+            path=item.path,
+            camera=item.camera,
+            object_key=item.object_key,
+            size_bytes=item.size_bytes,
+            sha256=item.sha256,
+            content_type=item.content_type,
+            task_name=item.task_name,
+            excerpt_start_seconds=item.excerpt_start_seconds,
+            excerpt_seconds=item.excerpt_seconds,
+            source_fps=item.source_fps,
+            created_at=item.created_at,
+        )
+
+
+class MediaAssetPlaybackOut(BaseModel):
+    """播放信息：预签名 URL 由服务端签发，前端不自行拼接存储路径。"""
+
+    asset_id: UUID
+    url: str
+    expires_in_seconds: int
+    content_type: str
+    size_bytes: int

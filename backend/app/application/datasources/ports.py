@@ -81,6 +81,12 @@ class DataSourceImportRepository(Protocol):
     ) -> DataSourceImport: ...
 
 
+class ObjectReader(Protocol):
+    """签发临时只读访问；实现负责签名，不把存储凭据交给前端。"""
+
+    def presign_get(self, object_key: str, *, expires_seconds: int) -> str: ...
+
+
 class ObjectWriter(Protocol):
     """对象存储写入端口；实现不得在此层做业务校验。"""
 
@@ -106,6 +112,7 @@ IdempotencyRepository = _IdempotencyRepository
 __all__ = [
     "AuditRepository",
     "MediaAssetRepository",
+    "ObjectReader",
     "ObjectWriter",
     "DataSourceImportRepository",
     "DataSourceRepository",
