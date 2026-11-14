@@ -15,7 +15,8 @@ from tests.api.dataset_support import url
 from tests.api.export_support import build_frozen_version, export_payload
 from tests.api.training_support import add_member
 
-NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
+# 授权到期按真实时钟判断；写死过去时间会让"即将到期"夹具变成已过期。
+NOW = datetime.now(UTC).replace(microsecond=0)
 
 
 def _grant_payload(dataset_version_id, *, scope: list[str], expires_at: datetime, reason: str):

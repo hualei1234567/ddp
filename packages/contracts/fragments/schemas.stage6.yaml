@@ -1,0 +1,281 @@
+# 阶段 6 供应商与到货验收 Schema；错误体与公共动作请求沿用全局/阶段 4 定义。
+SupplierStatus:
+  type: string
+  enum: [DRAFT, ACTIVE, SUSPENDED, TERMINATED]
+
+SupplierCategory:
+  type: string
+  enum: [DATA_COLLECTION, ANNOTATION, HARDWARE, INTEGRATION, OTHER]
+
+DeliveryBatchStatus:
+  type: string
+  enum:
+    - ANNOUNCED
+    - IN_TRANSIT
+    - ARRIVED
+    - SCREENING
+    - ACCEPTED
+    - PARTIALLY_ACCEPTED
+    - REJECTED
+    - REWORK
+    - CLOSED
+
+SegmentStatus:
+  type: string
+  enum: [REGISTERED, PENDING_REVIEW, ACCEPTED, REJECTED, NEED_MORE]
+
+SegmentDecisionKind:
+  type: string
+  enum: [ACCEPT, REJECT, NEED_MORE]
+
+SupplierCreate:
+  type: object
+  required: [code, name]
+  additionalProperties: false
+  properties:
+    code: { type: string, minLength: 1, maxLength: 64 }
+    name: { type: string, minLength: 1, maxLength: 200 }
+    category: { $ref: "../openapi.yaml#/components/schemas/SupplierCategory" }
+    contact_name: { type: [string, "null"], maxLength: 100 }
+    contact_email: { type: [string, "null"], maxLength: 200 }
+    external_ref: { type: [string, "null"], maxLength: 200 }
+    notes: { type: [string, "null"], maxLength: 2000 }
+
+SupplierPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    name: { type: [string, "null"], minLength: 1, maxLength: 200 }
+    category: { type: [string, "null"], enum: [DATA_COLLECTION, ANNOTATION, HARDWARE, INTEGRATION, OTHER, null] }
+    contact_name: { type: [string, "null"], maxLength: 100 }
+    contact_email: { type: [string, "null"], maxLength: 200 }
+    external_ref: { type: [string, "null"], maxLength: 200 }
+    notes: { type: [string, "null"], maxLength: 2000 }
+
+SupplierActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: { type: [string, "null"], maxLength: 2000 }
+
+Supplier:
+  type: object
+  required:
+    - supplier_id
+    - project_id
+    - code
+    - name
+    - category
+    - status
+    - allowed_actions
+    - version
+    - created_at
+    - updated_at
+  additionalProperties: false
+  properties:
+    supplier_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    code: { type: string }
+    name: { type: string }
+    category: { $ref: "../openapi.yaml#/components/schemas/SupplierCategory" }
+    status: { $ref: "../openapi.yaml#/components/schemas/SupplierStatus" }
+    contact_name: { type: [string, "null"] }
+    contact_email: { type: [string, "null"] }
+    external_ref: { type: [string, "null"] }
+    notes: { type: [string, "null"] }
+    allowed_actions: { type: array, items: { type: string } }
+    version: { type: integer, minimum: 1 }
+    created_at: { type: string, format: date-time }
+    updated_at: { type: string, format: date-time }
+
+SupplierMetrics:
+  type: object
+  required:
+    - batch_count
+    - settled_batch_count
+    - accepted_segments
+    - decided_segments
+  additionalProperties: false
+  properties:
+    batch_count: { type: integer, minimum: 0 }
+    settled_batch_count: { type: integer, minimum: 0 }
+    on_time_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
+    first_pass_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
+    rework_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
+    average_cycle_hours: { type: [number, "null"], minimum: 0 }
+    accepted_segments: { type: integer, minimum: 0 }
+    decided_segments: { type: integer, minimum: 0 }
+    segment_pass_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
+
+DeliveryBatchCreate:
+  type: object
+  required: [supplier_id, batch_code]
+  additionalProperties: false
+  properties:
+    supplier_id: { type: string, format: uuid }
+    batch_code: { type: string, minLength: 1, maxLength: 64 }
+    title: { type: [string, "null"], maxLength: 200 }
+    planned_segment_count: { type: integer, minimum: 0 }
+    planned_arrival_date: { type: [string, "null"], format: date-time }
+    storage_prefix: { type: [string, "null"], maxLength: 1024 }
+    notes: { type: [string, "null"], maxLength: 2000 }
+
+DeliveryBatch:
+  type: object
+  required:
+    - batch_id
+    - project_id
+    - supplier_id
+    - batch_code
+    - status
+    - planned_segment_count
+    - received_segment_count
+    - rework_count
+    - allowed_actions
+    - version
+    - created_at
+    - updated_at
+  additionalProperties: false
+  properties:
+    batch_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    supplier_id: { type: string, format: uuid }
+    batch_code: { type: string }
+    title: { type: [string, "null"] }
+    status: { $ref: "../openapi.yaml#/components/schemas/DeliveryBatchStatus" }
+    planned_segment_count: { type: integer, minimum: 0 }
+    received_segment_count: { type: integer, minimum: 0 }
+    planned_arrival_date: { type: [string, "null"], format: date-time }
+    arrived_at: { type: [string, "null"], format: date-time }
+    settled_at: { type: [string, "null"], format: date-time }
+    rework_count: { type: integer, minimum: 0 }
+    storage_prefix: { type: [string, "null"] }
+    notes: { type: [string, "null"] }
+    allowed_actions: { type: array, items: { type: string } }
+    version: { type: integer, minimum: 1 }
+    created_at: { type: string, format: date-time }
+    updated_at: { type: string, format: date-time }
+
+BatchActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: { type: [string, "null"], maxLength: 2000 }
+
+InboundSegmentCreate:
+  type: object
+  required: [segment_code]
+  additionalProperties: false
+  properties:
+    segment_code: { type: string, minLength: 1, maxLength: 64 }
+    raw_asset_id: { type: [string, "null"], format: uuid }
+    # 纳秒级时长超出 int32；按 int64 描述（与 Episode duration_ns 一致）。
+    duration_ns: { type: [integer, "null"], minimum: 0, maximum: 9223372036854775807 }
+    task_name: { type: [string, "null"], maxLength: 200 }
+    diagnostics: { type: object, additionalProperties: true }
+
+SegmentDecisionRequest:
+  type: object
+  required: [decision]
+  additionalProperties: false
+  properties:
+    decision: { $ref: "../openapi.yaml#/components/schemas/SegmentDecisionKind" }
+    reason: { type: [string, "null"], maxLength: 2000 }
+
+InboundSegment:
+  type: object
+  required:
+    - segment_id
+    - project_id
+    - batch_id
+    - segment_code
+    - status
+    - diagnostics
+    - allowed_actions
+    - version
+    - created_at
+    - updated_at
+  additionalProperties: false
+  properties:
+    segment_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    batch_id: { type: string, format: uuid }
+    segment_code: { type: string }
+    status: { $ref: "../openapi.yaml#/components/schemas/SegmentStatus" }
+    raw_asset_id: { type: [string, "null"], format: uuid }
+    # 纳秒级时长超出 int32；按 int64 描述（与 Episode duration_ns 一致）。
+    duration_ns: { type: [integer, "null"], minimum: 0, maximum: 9223372036854775807 }
+    task_name: { type: [string, "null"] }
+    diagnostics: { type: object, additionalProperties: true }
+    decision: { type: [string, "null"], enum: [ACCEPT, REJECT, NEED_MORE, null] }
+    decision_reason: { type: [string, "null"] }
+    decided_by: { type: [string, "null"], format: uuid }
+    decided_at: { type: [string, "null"], format: date-time }
+    registered_by: { type: [string, "null"], format: uuid }
+    allowed_actions: { type: array, items: { type: string } }
+    version: { type: integer, minimum: 1 }
+    created_at: { type: string, format: date-time }
+    updated_at: { type: string, format: date-time }
+
+AcceptanceLedgerEntry:
+  type: object
+  required:
+    - ledger_id
+    - project_id
+    - supplier_id
+    - resource_type
+    - resource_id
+    - action
+    - actor_id
+    - snapshot
+    - occurred_at
+  additionalProperties: false
+  properties:
+    ledger_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    batch_id: { type: [string, "null"], format: uuid }
+    supplier_id: { type: string, format: uuid }
+    resource_type: { type: string }
+    resource_id: { type: string, format: uuid }
+    action: { type: string }
+    from_status: { type: [string, "null"] }
+    to_status: { type: [string, "null"] }
+    actor_id: { type: string, format: uuid }
+    request_id: { type: [string, "null"] }
+    reason: { type: [string, "null"] }
+    snapshot: { type: object, additionalProperties: true }
+    occurred_at: { type: string, format: date-time }
+
+SupplierPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: { type: array, items: { $ref: "../openapi.yaml#/components/schemas/Supplier" } }
+    next_cursor: { type: [string, "null"] }
+
+DeliveryBatchPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: { type: array, items: { $ref: "../openapi.yaml#/components/schemas/DeliveryBatch" } }
+    next_cursor: { type: [string, "null"] }
+
+InboundSegmentPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: { type: array, items: { $ref: "../openapi.yaml#/components/schemas/InboundSegment" } }
+    next_cursor: { type: [string, "null"] }
+
+AcceptanceLedgerPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/AcceptanceLedgerEntry" }
+    next_cursor: { type: [string, "null"] }

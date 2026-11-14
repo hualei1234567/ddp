@@ -23,6 +23,7 @@ from app.infrastructure.db.guards import (
 )
 from app.infrastructure.db.ingestion_guards import install_ingestion_state_guards
 from app.infrastructure.db.modelops_guards import install_modelops_guards
+from app.infrastructure.db.suppliers_guards import install_suppliers_guards
 from app.infrastructure.db.training_guards import install_training_guards
 
 NAMING_CONVENTION = {
@@ -59,3 +60,4 @@ def _install_ddp_guards(
     install_export_guards(connection)
     install_training_guards(connection)
     install_modelops_guards(connection)
+    install_suppliers_guards(connection)

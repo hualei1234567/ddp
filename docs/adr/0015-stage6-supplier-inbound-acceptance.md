@@ -1,7 +1,8 @@
 # ADR-0015 阶段 6 供应商与到货验收域决策
 
-- 状态：**ACCEPTED（设计已定，实现随 DDP-360 落地）**
+- 状态：**ACCEPTED（已实现并冻结 `ddp.stage6/1.0.0`）**
 - 日期：2026-11-14
+- 契约版本：`ddp.stage6/1.0.0`（基线 `packages/contracts/baselines/openapi.stage6.v1.0.0.bundle.yaml`）
 - 决策者：System Architect；批准人：用户（长期授权）
 - 关联：ADR-0002、ADR-0003、ADR-0004、ADR-0012、ADR-0014；
   `docs/product/阶段6-供应商与到货验收PRD.md`；`docs/product/阶段6-供应商与到货验收标准.md`；
@@ -74,3 +75,4 @@
 | 日期 | 变更 | 任务 |
 |---|---|---|
 | 2026-11-14 | 首次决策：命名、边界、状态机、权限与复用清单 | DDP-360 |
+| 2026-11-14 | 实现完成并冻结契约 `ddp.stage6/1.0.0` | DDP-361 |

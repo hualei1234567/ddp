@@ -43,7 +43,7 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const PLATFORM_STAGE_LABEL = "阶段 5 · 模型闭环与智能化";
+export const PLATFORM_STAGE_LABEL = "阶段 6 · 规模化运营";
 
 /**
  * 一级导航分区，依据规范 §18.2。
@@ -198,9 +198,10 @@ export const navSections: NavSection[] = [
       {
         path: "/suppliers",
         label: "供应商与交付",
-        description: "管理供应商、交付验收与结算依据。",
+        description: "供应商档案、到货批次、片段裁决与验收核验账本。",
         icon: createElement(TruckOutlined),
-        available: false,
+        available: true,
+        aliases: ["/inbound-batches", "/acceptance-ledger"],
       },
     ],
   },

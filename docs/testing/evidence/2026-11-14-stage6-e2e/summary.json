@@ -1,0 +1,141 @@
+{
+  "generated_at": "2026-11-14T12:37:11.680407+00:00",
+  "database": "PostgreSQL 16.15 local (alembic 0022)",
+  "data": "[SYNTHETIC] RawAsset 由夹具写入；片段诊断为受控样例",
+  "supplier_id": "27a6b051-f5be-44dd-ae15-edbea8cedf5e",
+  "batch_id": "0da1db36-a971-445c-a054-f1eacbbfdd9f",
+  "steps": [
+    {
+      "step": "登记供应商",
+      "status": 201,
+      "detail": {
+        "status": "DRAFT"
+      }
+    },
+    {
+      "step": "激活供应商",
+      "status": 200,
+      "detail": {
+        "status": "ACTIVE"
+      }
+    },
+    {
+      "step": "只读用户写入被拒绝",
+      "status": 403,
+      "detail": "RBAC 生效"
+    },
+    {
+      "step": "登记到货批次",
+      "status": 201,
+      "detail": {
+        "status": "ANNOUNCED"
+      }
+    },
+    {
+      "step": "通知发货",
+      "status": 200,
+      "detail": {
+        "status": "IN_TRANSIT"
+      }
+    },
+    {
+      "step": "确认到货",
+      "status": 200,
+      "detail": {
+        "status": "ARRIVED"
+      }
+    },
+    {
+      "step": "开始验收",
+      "status": 200,
+      "detail": {
+        "status": "SCREENING"
+      }
+    },
+    {
+      "step": "登记并进入审看的片段",
+      "status": 200,
+      "detail": {
+        "count": 2
+      }
+    },
+    {
+      "step": "登记人自裁决被拒绝",
+      "status": 403,
+      "detail": "segment_decision_forbidden"
+    },
+    {
+      "step": "负责人裁决通过",
+      "status": 200,
+      "detail": {
+        "status": "ACCEPTED"
+      }
+    },
+    {
+      "step": "拒收缺原因被拒绝",
+      "status": 422,
+      "detail": "decision_reason_required"
+    },
+    {
+      "step": "负责人裁决拒收",
+      "status": 200,
+      "detail": {
+        "status": "REJECTED"
+      }
+    },
+    {
+      "step": "编辑者终审被拒绝",
+      "status": 403,
+      "detail": "高风险放行要求负责人"
+    },
+    {
+      "step": "终审 → PARTIALLY_ACCEPTED",
+      "status": 200,
+      "detail": {
+        "settled_at": "2026-11-14T20:37:11.661618+08:00"
+      }
+    },
+    {
+      "step": "核验账本",
+      "status": 200,
+      "detail": {
+        "entries": 11,
+        "actions": [
+          "register",
+          "decide:ACCEPT",
+          "queue-review",
+          "arrive",
+          "dispatch",
+          "decide:REJECT",
+          "register",
+          "start-screening",
+          "finalize",
+          "queue-review",
+          "register"
+        ]
+      }
+    },
+    {
+      "step": "账本禁改触发器",
+      "status": 200,
+      "detail": "UPDATE 被 PostgreSQL 拒绝"
+    },
+    {
+      "step": "供应商绩效（缺失不显示 0）",
+      "status": 200,
+      "detail": {
+        "batch_count": 1,
+        "first_pass_rate": 0.0,
+        "segment_pass_rate": 0.5
+      }
+    },
+    {
+      "step": "审计与 Outbox 落库",
+      "status": 200,
+      "detail": {
+        "audit_logs": 13,
+        "outbox": 13
+      }
+    }
+  ]
+}

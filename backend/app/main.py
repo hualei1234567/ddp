@@ -20,6 +20,7 @@ from app.api.errors import (
     episode_error_to_app,
     ingestion_error_to_app,
     integrity_error_to_app,
+    supplier_error_to_app,
 )
 from app.api.middleware.rate_limit import RateLimitMiddleware
 from app.api.middleware.request_id import RequestIdMiddleware
@@ -36,6 +37,7 @@ from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.identity.errors import CrossProjectAccessError
 from app.domain.ingestion.errors import IngestionDomainError
 from app.domain.modelops.errors import ModelOpsDomainError
+from app.domain.suppliers.errors import SupplierDomainError
 from app.infrastructure.rate_limit import build_rate_limiter
 
 
@@ -165,6 +167,17 @@ def create_app() -> FastAPI:
         from app.api.errors import modelops_error_to_app
 
         error = modelops_error_to_app(exc)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(SupplierDomainError)
+    async def handle_supplier_domain_error(
+        request: Request,
+        exc: SupplierDomainError,
+    ) -> JSONResponse:
+        error = supplier_error_to_app(exc)
         return JSONResponse(
             status_code=error.status_code,
             content=_error_payload(request, error),

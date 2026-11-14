@@ -528,3 +528,48 @@ def _is_unique_violation(exc: IntegrityError) -> bool:
         token in message
         for token in ("unique", "duplicate", "uq_", "duplicate key", "duplicate entry")
     )
+
+
+_SUPPLIER_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "resource_not_found": 404,
+    "forbidden": 403,
+    "state_transition_invalid": 409,
+    "version_conflict": 409,
+    "duplicate_resource": 409,
+    "supplier_not_active": 409,
+    "supplier_terminal": 409,
+    "batch_not_screening": 409,
+    "batch_review_incomplete": 409,
+    "batch_already_settled": 409,
+    "segment_terminal": 409,
+    "segment_decision_forbidden": 403,
+    "decision_reason_required": 422,
+    "segment_raw_asset_missing": 422,
+    "ledger_immutable": 409,
+}
+
+_SUPPLIER_MESSAGES = {
+    "supplier_not_active": "供应商未激活，不能承接新批次",
+    "supplier_terminal": "供应商已终止，不能继续操作",
+    "batch_not_screening": "只有 SCREENING 状态的批次可以裁决片段",
+    "batch_review_incomplete": "仍有片段未裁决或待补件，不能终审",
+    "batch_already_settled": "批次已终审，不能继续操作",
+    "segment_terminal": "片段已裁决，不能再次裁决",
+    "segment_decision_forbidden": "片段登记人不得裁决自己登记的片段",
+    "decision_reason_required": "拒收或待补件必须填写原因",
+    "segment_raw_asset_missing": "已通过片段缺少 RawAsset 引用",
+    "ledger_immutable": "验收账本只允许追加，不能修改或删除",
+}
+_SUPPLIER_FALLBACK = "供应商域规则校验失败"
+
+
+def supplier_error_to_app(exc: Exception) -> AppError:
+    code = getattr(exc, "code", None)
+    if not isinstance(code, str) or code not in _SUPPLIER_STATUS_BY_CODE:
+        return AppError("validation_failed", _SUPPLIER_FALLBACK, 422)
+    return AppError(
+        code,
+        _SUPPLIER_MESSAGES.get(code) or str(exc) or _SUPPLIER_FALLBACK,
+        _SUPPLIER_STATUS_BY_CODE[code],
+    )

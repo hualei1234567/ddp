@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.3.0
+  version: 1.4.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -21,6 +21,8 @@ info:
     - `1.3.0` 在 `1.2.0` 基础上**增量加入阶段 5 模型闭环已实现端点**：Model / ModelVersion
       产物校验与发布、模型评测、推理服务与推理任务、模型反馈、数据缺口汇总、数据需求闭环，
       以及模型平台 Adapter 签名回调（HMAC）。冻结版本 `ddp.stage5/1.0.0`。
+    - `1.4.0` 在 `1.3.0` 基础上**增量加入阶段 6 供应商与到货验收已实现端点**：供应商档案、
+      到货批次、到货片段裁决、只追加验收核验账本与供应商绩效。冻结版本 `ddp.stage6/1.0.0`。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -38,7 +40,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.3.0
+  version: 1.4.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -105,6 +107,20 @@ x-ddp-contract:
         2026-11-09 DDP-341 已执行：Redocly lint、check-stage5-freeze.sh --freeze/--check、
         oasdiff breaking（--fail-on ERR）；契约端点 31 与运行期 FastAPI OpenAPI 阶段 5 端点集合零差异。
         详细记录见 docs/architecture/阶段5-模型闭环契约冻结-v1.0.md。
+    stage6:
+      version: ddp.stage6/1.0.0
+      frozen_status: frozen
+      frozen_at: "2026-11-14"
+      task: DDP-361
+      implemented_baseline_task: DDP-360
+      frozen_document: docs/architecture/阶段6-供应商与到货验收契约冻结-v1.0.md
+      index_document: docs/architecture/阶段6-供应商与到货验收契约索引.md
+      approval_record: docs/adr/0015-stage6-supplier-inbound-acceptance.md
+      validation_status: PASS
+      validation_note: |
+        2026-11-14 DDP-361 已执行：Redocly lint、check-stage6-freeze.sh --freeze/--check、
+        oasdiff breaking（--fail-on ERR）；契约 17 个操作与运行期 FastAPI OpenAPI 端点集合零差异。
+        详细记录见 docs/architecture/阶段6-供应商与到货验收契约冻结-v1.0.md。
 servers:
   - url: http://localhost:8000
     description: 本地开发
@@ -177,6 +193,10 @@ tags:
     description: 数据需求闭环与满足/复测关联
   - name: model-adapters
     description: 模型平台 Adapter 回调（HMAC）
+  - name: suppliers
+    description: 供应商档案、状态机与绩效指标
+  - name: inbound-batches
+    description: 到货批次、片段人工裁决与只追加验收核验账本
 paths:
   /health:
     $ref: "./fragments/paths.stage1.yaml#/health"
@@ -484,6 +504,32 @@ paths:
     $ref: "./fragments/paths.stage5.yaml#/dataRequirementActions"
   /api/v1/integrations/model-adapters/{adapter_id}/callbacks:
     $ref: "./fragments/paths.stage5.yaml#/modelAdapterCallback"
+  /api/v1/projects/{project_id}/suppliers:
+    $ref: "./fragments/paths.stage6.yaml#/suppliers"
+  /api/v1/projects/{project_id}/suppliers/{supplier_id}:
+    $ref: "./fragments/paths.stage6.yaml#/supplierDetail"
+  /api/v1/projects/{project_id}/suppliers/{supplier_id}/actions/{action}:
+    $ref: "./fragments/paths.stage6.yaml#/supplierActions"
+  /api/v1/projects/{project_id}/suppliers/{supplier_id}/metrics:
+    $ref: "./fragments/paths.stage6.yaml#/supplierMetrics"
+  /api/v1/projects/{project_id}/inbound-batches:
+    $ref: "./fragments/paths.stage6.yaml#/inboundBatches"
+  /api/v1/projects/{project_id}/inbound-batches/{batch_id}:
+    $ref: "./fragments/paths.stage6.yaml#/inboundBatchDetail"
+  /api/v1/projects/{project_id}/inbound-batches/{batch_id}/actions/{action}:
+    $ref: "./fragments/paths.stage6.yaml#/inboundBatchActions"
+  /api/v1/projects/{project_id}/inbound-batches/{batch_id}/finalize:
+    $ref: "./fragments/paths.stage6.yaml#/inboundBatchFinalize"
+  /api/v1/projects/{project_id}/inbound-batches/{batch_id}/segments:
+    $ref: "./fragments/paths.stage6.yaml#/inboundSegments"
+  /api/v1/projects/{project_id}/inbound-batches/{batch_id}/segments/{segment_id}:
+    $ref: "./fragments/paths.stage6.yaml#/inboundSegmentDetail"
+  /api/v1/projects/{project_id}/inbound-batches/{batch_id}/segments/{segment_id}/actions/{action}:
+    $ref: "./fragments/paths.stage6.yaml#/inboundSegmentActions"
+  /api/v1/projects/{project_id}/inbound-batches/{batch_id}/segments/{segment_id}/decision:
+    $ref: "./fragments/paths.stage6.yaml#/inboundSegmentDecision"
+  /api/v1/projects/{project_id}/acceptance-ledger:
+    $ref: "./fragments/paths.stage6.yaml#/acceptanceLedger"
 components:
   securitySchemes:
     bearerAuth:
@@ -519,6 +565,7 @@ components:
     RequiredIdempotencyKey: {$ref: "./fragments/components.yaml#/parameters/RequiredIdempotencyKey"}
     TaskAction: {$ref: "./fragments/components.yaml#/parameters/TaskAction"}
     BatchAction: {$ref: "./fragments/components.yaml#/parameters/BatchAction"}
+    InboundBatchAction: {$ref: "./fragments/components.stage6.yaml#/parameters/InboundBatchAction"}
     EpisodeAction: {$ref: "./fragments/components.yaml#/parameters/EpisodeAction"}
     JobAction: {$ref: "./fragments/components.yaml#/parameters/JobAction"}
     LineageDirection: {$ref: "./fragments/components.yaml#/parameters/LineageDirection"}
@@ -583,6 +630,10 @@ components:
     InferenceTaskAction: {$ref: "./fragments/components.stage5.yaml#/parameters/InferenceTaskAction"}
     FeedbackAction: {$ref: "./fragments/components.stage5.yaml#/parameters/FeedbackAction"}
     RequirementAction: {$ref: "./fragments/components.stage5.yaml#/parameters/RequirementAction"}
+    SupplierId: {$ref: "./fragments/components.stage6.yaml#/parameters/SupplierId"}
+    SegmentId: {$ref: "./fragments/components.stage6.yaml#/parameters/SegmentId"}
+    SupplierAction: {$ref: "./fragments/components.stage6.yaml#/parameters/SupplierAction"}
+    SegmentAction: {$ref: "./fragments/components.stage6.yaml#/parameters/SegmentAction"}
   responses:
     Unauthorized: {$ref: "./fragments/components.yaml#/responses/Unauthorized"}
     Forbidden: {$ref: "./fragments/components.yaml#/responses/Forbidden"}
@@ -857,3 +908,24 @@ components:
     FeedbackPage: {$ref: "./fragments/schemas.stage5.yaml#/FeedbackPage"}
     RequirementPage: {$ref: "./fragments/schemas.stage5.yaml#/RequirementPage"}
     ModelOpsActionRequest: {$ref: "./fragments/schemas.stage5.yaml#/ModelOpsActionRequest"}
+    SupplierStatus: {$ref: "./fragments/schemas.stage6.yaml#/SupplierStatus"}
+    SupplierCategory: {$ref: "./fragments/schemas.stage6.yaml#/SupplierCategory"}
+    DeliveryBatchStatus: {$ref: "./fragments/schemas.stage6.yaml#/DeliveryBatchStatus"}
+    SegmentStatus: {$ref: "./fragments/schemas.stage6.yaml#/SegmentStatus"}
+    SegmentDecisionKind: {$ref: "./fragments/schemas.stage6.yaml#/SegmentDecisionKind"}
+    SupplierCreate: {$ref: "./fragments/schemas.stage6.yaml#/SupplierCreate"}
+    SupplierPatch: {$ref: "./fragments/schemas.stage6.yaml#/SupplierPatch"}
+    SupplierActionRequest: {$ref: "./fragments/schemas.stage6.yaml#/SupplierActionRequest"}
+    Supplier: {$ref: "./fragments/schemas.stage6.yaml#/Supplier"}
+    SupplierMetrics: {$ref: "./fragments/schemas.stage6.yaml#/SupplierMetrics"}
+    DeliveryBatchCreate: {$ref: "./fragments/schemas.stage6.yaml#/DeliveryBatchCreate"}
+    DeliveryBatch: {$ref: "./fragments/schemas.stage6.yaml#/DeliveryBatch"}
+    BatchActionRequest: {$ref: "./fragments/schemas.stage6.yaml#/BatchActionRequest"}
+    InboundSegmentCreate: {$ref: "./fragments/schemas.stage6.yaml#/InboundSegmentCreate"}
+    SegmentDecisionRequest: {$ref: "./fragments/schemas.stage6.yaml#/SegmentDecisionRequest"}
+    InboundSegment: {$ref: "./fragments/schemas.stage6.yaml#/InboundSegment"}
+    AcceptanceLedgerEntry: {$ref: "./fragments/schemas.stage6.yaml#/AcceptanceLedgerEntry"}
+    SupplierPage: {$ref: "./fragments/schemas.stage6.yaml#/SupplierPage"}
+    DeliveryBatchPage: {$ref: "./fragments/schemas.stage6.yaml#/DeliveryBatchPage"}
+    InboundSegmentPage: {$ref: "./fragments/schemas.stage6.yaml#/InboundSegmentPage"}
+    AcceptanceLedgerPage: {$ref: "./fragments/schemas.stage6.yaml#/AcceptanceLedgerPage"}

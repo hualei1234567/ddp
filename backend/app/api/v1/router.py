@@ -20,6 +20,7 @@ from app.api.v1 import (
     evaluation_routes,
     export_routes,
     feedback_routes,
+    inbound_routes,
     inference_routes,
     ingestion_jobs,
     lineage,
@@ -28,6 +29,7 @@ from app.api.v1 import (
     platform,
     requirement_routes,
     sensors,
+    supplier_routes,
     training_delivery_routes,
     training_request_routes,
     uploads,
@@ -57,3 +59,5 @@ api_router.include_router(inference_routes.router)
 api_router.include_router(feedback_routes.router)
 api_router.include_router(requirement_routes.router)
 api_router.include_router(model_adapter_routes.router)
+api_router.include_router(supplier_routes.router)
+api_router.include_router(inbound_routes.router)

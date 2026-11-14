@@ -48,7 +48,9 @@ from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRe
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
-NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
+# 用例时间基线必须跟随"当前时间"：领用租约与到期校验按真实时钟判断，
+# 写死过去日期会让整条链路被判为过期（2026-11-14 暴露）。
+NOW = datetime.now(UTC).replace(microsecond=0)
 SHA = "sha256:" + "a" * 64
 
 

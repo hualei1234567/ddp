@@ -72,6 +72,12 @@ from app.infrastructure.db.models.ingestion import (
     UploadSessionModel,
 )
 from app.infrastructure.db.models.jobs import IngestionJobModel
+from app.infrastructure.db.models.suppliers import (
+    AcceptanceLedgerModel,
+    DeliveryBatchModel,
+    InboundSegmentModel,
+    SupplierModel,
+)
 from app.infrastructure.db.models.training import (
     DatasetGrantModel,
     ExternalTrainingReferenceModel,
@@ -82,6 +88,7 @@ from app.infrastructure.db.models.training import (
 )
 
 __all__ = [
+    "AcceptanceLedgerModel",
     "AnnotationArbitration",
     "AnnotationAssignment",
     "AnnotationAssignmentEvent",
@@ -112,6 +119,7 @@ __all__ = [
     "DatasetQualityReportModel",
     "DatasetSplitPolicyModel",
     "DatasetVersionModel",
+    "DeliveryBatchModel",
     "Device",
     "EpisodeModel",
     "EpisodeRawAssetModel",
@@ -122,6 +130,7 @@ __all__ = [
     "GoldSet",
     "IAAReport",
     "IdempotencyRecord",
+    "InboundSegmentModel",
     "IngestionJobModel",
     "LineageNodeRefModel",
     "OutboxEvent",
@@ -132,6 +141,7 @@ __all__ = [
     "RawAssetModel",
     "Robot",
     "Sensor",
+    "SupplierModel",
     "TrainingAdapterCallbackModel",
     "TrainingDeliveryModel",
     "TrainingRequestModel",

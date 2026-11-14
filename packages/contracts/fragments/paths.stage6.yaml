@@ -1,0 +1,436 @@
+# 阶段 6 供应商与到货验收域路径片段。
+# 仅声明 backend/app/api/v1/{supplier_routes,inbound_routes}.py 实际实现的端点（17 个操作）。
+# 由 openapi.yaml 通过 $ref 解析；引用回入口文件以复用公共参数与响应。
+
+suppliers:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listSuppliers
+    tags: [suppliers]
+    summary: 供应商列表
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/SupplierStatus" }
+      - name: category
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/SupplierCategory" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 供应商分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SupplierPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createSupplier
+    tags: [suppliers]
+    summary: 登记供应商（DRAFT）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/SupplierCreate" }
+    responses:
+      "201":
+        description: 供应商已登记
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Supplier" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+supplierDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SupplierId"
+  get:
+    operationId: getSupplier
+    tags: [suppliers]
+    summary: 供应商详情
+    responses:
+      "200":
+        description: 供应商
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Supplier" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  patch:
+    operationId: updateSupplier
+    tags: [suppliers]
+    summary: 修改供应商档案（If-Match）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/SupplierPatch" }
+    responses:
+      "200":
+        description: 修改后的供应商
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Supplier" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+supplierActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SupplierId"
+    - $ref: "../openapi.yaml#/components/parameters/SupplierAction"
+  post:
+    operationId: actOnSupplier
+    tags: [suppliers]
+    summary: 供应商状态动作（activate/suspend/resume/terminate）
+    description: |
+      terminate 为不可逆动作，要求项目负责人权限；所有动作写入只追加的验收核验账本。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/SupplierActionRequest" }
+    responses:
+      "200":
+        description: 动作后的供应商
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Supplier" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+supplierMetrics:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SupplierId"
+  get:
+    operationId: getSupplierMetrics
+    tags: [suppliers]
+    summary: 供应商绩效指标
+    description: |
+      缺失数据一律返回 null，客户端必须显示「暂无」，不得以 0 代替；
+      未知不得计入分母。
+    responses:
+      "200":
+        description: 绩效指标
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SupplierMetrics" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+inboundBatches:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listInboundBatches
+    tags: [inbound-batches]
+    summary: 到货批次列表
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/DeliveryBatchStatus" }
+      - name: supplier_id
+        in: query
+        schema: { type: string, format: uuid }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 到货批次分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DeliveryBatchPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createInboundBatch
+    tags: [inbound-batches]
+    summary: 登记到货批次（ANNOUNCED）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DeliveryBatchCreate" }
+    responses:
+      "201":
+        description: 批次已登记
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DeliveryBatch" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+inboundBatchDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+  get:
+    operationId: getInboundBatch
+    tags: [inbound-batches]
+    summary: 到货批次详情
+    responses:
+      "200":
+        description: 到货批次
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DeliveryBatch" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+inboundBatchActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+    - $ref: "../openapi.yaml#/components/parameters/InboundBatchAction"
+  post:
+    operationId: actOnInboundBatch
+    tags: [inbound-batches]
+    summary: 批次状态动作（dispatch/arrive/start-screening/rework/close）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/BatchActionRequest" }
+    responses:
+      "200":
+        description: 动作后的批次
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DeliveryBatch" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+inboundBatchFinalize:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+  post:
+    operationId: finalizeInboundBatch
+    tags: [inbound-batches]
+    summary: 批次终审（结果由片段统计决定）
+    description: |
+      终审要求项目负责人权限。存在未裁决片段、待补件片段，或已通过片段缺少
+      RawAsset 引用时返回 409/422，不接受客户端指定终态。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/BatchActionRequest" }
+    responses:
+      "200":
+        description: 终审后的批次
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DeliveryBatch" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+inboundSegments:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+  get:
+    operationId: listInboundSegments
+    tags: [inbound-batches]
+    summary: 批次内片段列表
+    parameters:
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/SegmentStatus" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 片段分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/InboundSegmentPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: addInboundSegment
+    tags: [inbound-batches]
+    summary: 登记到货片段
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/InboundSegmentCreate" }
+    responses:
+      "201":
+        description: 片段已登记
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/InboundSegment" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+inboundSegmentDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+    - $ref: "../openapi.yaml#/components/parameters/SegmentId"
+  get:
+    operationId: getInboundSegment
+    tags: [inbound-batches]
+    summary: 片段详情（含诊断快照）
+    responses:
+      "200":
+        description: 片段
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/InboundSegment" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+inboundSegmentActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+    - $ref: "../openapi.yaml#/components/parameters/SegmentId"
+    - $ref: "../openapi.yaml#/components/parameters/SegmentAction"
+  post:
+    operationId: actOnInboundSegment
+    tags: [inbound-batches]
+    summary: 片段状态动作（queue-review/resubmit）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    responses:
+      "200":
+        description: 动作后的片段
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/InboundSegment" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+inboundSegmentDecision:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/BatchId"
+    - $ref: "../openapi.yaml#/components/parameters/SegmentId"
+  post:
+    operationId: decideInboundSegment
+    tags: [inbound-batches]
+    summary: 片段人工裁决（ACCEPT/REJECT/NEED_MORE）
+    description: |
+      仅 SCREENING 状态的批次可裁决；登记人不得裁决自己登记的片段；
+      REJECT/NEED_MORE 必须填写原因；结果写入只追加账本。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/SegmentDecisionRequest" }
+    responses:
+      "200":
+        description: 裁决后的片段
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/InboundSegment" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+acceptanceLedger:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listAcceptanceLedger
+    tags: [inbound-batches]
+    summary: 验收核验账本（只追加）
+    parameters:
+      - name: batch_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: supplier_id
+        in: query
+        schema: { type: string, format: uuid }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 账本分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AcceptanceLedgerPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

@@ -47,6 +47,12 @@ import ModelDetailPage from "./pages/models/ModelDetailPage";
 import ModelListPage from "./pages/models/ModelListPage";
 import RequirementDetailPage from "./pages/models/RequirementDetailPage";
 import RequirementListPage from "./pages/models/RequirementListPage";
+import BatchDetailPage from "./pages/suppliers/BatchDetailPage";
+import BatchListPage from "./pages/suppliers/BatchListPage";
+import LedgerPage from "./pages/suppliers/LedgerPage";
+import SegmentReviewPage from "./pages/suppliers/SegmentReviewPage";
+import SupplierDetailPage from "./pages/suppliers/SupplierDetailPage";
+import SupplierListPage from "./pages/suppliers/SupplierListPage";
 import ModulePage from "./pages/ModulePage";
 import NotFound from "./pages/NotFound";
 import RawAssetDetailPage from "./pages/rawAssets/RawAssetDetailPage";
@@ -209,6 +215,15 @@ export default function AppRoutes() {
           path="inference-tasks/:taskId"
           element={<InferenceTaskDetailPage />}
         />
+        <Route path="suppliers" element={<SupplierListPage />} />
+        <Route path="suppliers/:supplierId" element={<SupplierDetailPage />} />
+        <Route path="inbound-batches" element={<BatchListPage />} />
+        <Route path="inbound-batches/:batchId" element={<BatchDetailPage />} />
+        <Route
+          path="inbound-batches/:batchId/segments/:segmentId"
+          element={<SegmentReviewPage />}
+        />
+        <Route path="acceptance-ledger" element={<LedgerPage />} />
         {plannedRoutes.map((item) => (
           <Route
             key={item.path}

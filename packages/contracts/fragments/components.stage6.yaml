@@ -1,0 +1,38 @@
+# 阶段 6 新增路径参数与动作白名单。
+# 复用全局定义：ProjectId / BatchId / Cursor / Stage4Limit / If-Match / Idempotency-Key。
+parameters:
+  SupplierId:
+    name: supplier_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  SegmentId:
+    name: segment_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  SupplierAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum: [activate, suspend, resume, terminate]
+
+  InboundBatchAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum: [dispatch, arrive, start-screening, rework, close]
+
+  SegmentAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum: [queue-review, resubmit]

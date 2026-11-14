@@ -16,11 +16,13 @@
 | `1.1.0` | 在 `1.0.0` 基础上增量加入阶段 3 标注域已实现端点 | **FROZEN（DDP-323）** |
 | `1.2.0` | 在 `1.1.0` 基础上增量加入阶段 4 数据集与训练支撑已实现端点 | **FROZEN（DDP-331）** |
 | `1.3.0` | 在 `1.2.0` 基础上增量加入阶段 5 模型闭环已实现端点 | **FROZEN（DDP-341）** |
+| `1.4.0` | 在 `1.3.0` 基础上增量加入阶段 6 供应商与到货验收已实现端点 | **FROZEN（DDP-361）** |
 | `ddp.device/1.0.0` | 阶段 1 设备域冻结目标 | 已批准 |
 | `ddp.stage2/1.0.0` | 阶段 2 契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage3/1.0.0` | 阶段 3 标注契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage4/1.0.0` | 阶段 4 数据集与训练契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage5/1.0.0` | 阶段 5 模型闭环契约冻结版本 | v1.0 FROZEN |
+| `ddp.stage6/1.0.0` | 阶段 6 供应商与到货验收契约冻结版本 | v1.0 FROZEN |
 
 阶段 1 尚未关闭的实现差距不在本快照中声明为可用，清单见
 `docs/architecture/阶段1-设备域冻结字段实现差距与排期.md`。
@@ -39,6 +41,9 @@ Dataset/TrainingRequest 血缘与 DatasetVersion PATCH 未实现，不在本快�
 阶段 5 的端点矩阵（31 个操作）、错误码、状态机与草案差异见
 `docs/architecture/阶段5-模型闭环契约冻结-v1.0.md`。自动标注优化（P1）与真实评测/推理执行
 未实现，不在本快照中声明为可用。
+
+阶段 6 的端点矩阵（17 个操作）、错误码与命名冲突处理见
+`docs/architecture/阶段6-供应商与到货验收契约冻结-v1.0.md`。
 
 ## 文件
 
@@ -59,6 +64,9 @@ Dataset/TrainingRequest 血缘与 DatasetVersion PATCH 未实现，不在本快�
 | `fragments/paths.stage5.yaml` | 阶段 5 模型闭环域路径项与操作（仅已实现端点） |
 | `fragments/schemas.stage5.yaml` | 阶段 5 模型、评测、推理、反馈与数据需求 Schema |
 | `fragments/components.stage5.yaml` | 阶段 5 路径参数与动作白名单 |
+| `fragments/paths.stage6.yaml` | 阶段 6 供应商与到货验收路径项与操作 |
+| `fragments/schemas.stage6.yaml` | 阶段 6 供应商、批次、片段与账本 Schema |
+| `fragments/components.stage6.yaml` | 阶段 6 路径参数与动作白名单 |
 | `fragments/schemas.common.yaml` | 稳定错误码与错误体 |
 | `fragments/components.yaml` | 公共参数与错误响应 |
 | `redocly.yaml` | OpenAPI lint 规则（Redocly CLI） |
@@ -67,6 +75,7 @@ Dataset/TrainingRequest 血缘与 DatasetVersion PATCH 未实现，不在本快�
 | `scripts/check-stage3-freeze.sh` | 阶段 3 基线冻结、lint、SHA256 与兼容性检查 |
 | `scripts/check-stage4-freeze.sh` | 阶段 4 基线冻结、lint、SHA256 与兼容性检查 |
 | `scripts/check-stage5-freeze.sh` | 阶段 5 基线冻结、lint、SHA256 与兼容性检查 |
+| `scripts/check-stage6-freeze.sh` | 阶段 6 基线冻结、lint、SHA256 与兼容性检查 |
 | `baselines/` | 自包含冻结基线（由脚本生成，禁止手工编辑） |
 | `reports/` | 冻结/兼容性检查报告（由脚本生成） |
 | `schemas/*.json` | 可复用 JSON Schema（错误体、阶段 3/4/5 响应对象、状态机与错误码注册表） |

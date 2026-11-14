@@ -45,7 +45,7 @@ def _jwt_settings(**overrides: object) -> Settings:
 
 def test_env_defaults_to_production(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_env(monkeypatch)
-    settings = Settings()
+    settings = Settings(_env_file=None)
 
     assert settings.env == "production"
     assert settings.is_local is False
@@ -59,7 +59,7 @@ def test_local_header_auth_defaults_to_disabled(monkeypatch: pytest.MonkeyPatch)
 
 def test_non_local_startup_requires_jwt_config() -> None:
     with pytest.raises(RuntimeError, match="JWT"):
-        Settings(env="production").validate_runtime_security()
+        Settings(env="production", _env_file=None).validate_runtime_security()
 
 
 def test_non_local_startup_rejects_placeholder_secret() -> None:
@@ -117,7 +117,7 @@ def test_create_app_fails_closed_when_jwt_is_missing(
     monkeypatch.setattr(
         main_module,
         "get_settings",
-        lambda: Settings(env="production"),
+        lambda: Settings(env="production", _env_file=None),
     )
 
     with pytest.raises(RuntimeError, match="JWT"):
