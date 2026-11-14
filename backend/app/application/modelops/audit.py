@@ -1,96 +1,22 @@
-"""阶段 5 审计与 outbox 记录。"""
+"""阶段 5 审计与 outbox 记录适配层。
+
+规则本体在 :mod:`app.application.audit`（唯一权威实现）。本域历史上用了
+``AuditRecordData`` / ``OutboxEventData`` 两个别名，这里保留以免改动调用点。
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
-from uuid import UUID, uuid4
+from app.application.audit import AuditRecord, OutboxEvent, record_change
+from app.application.modelops.ports import UnitOfWork
 
-from app.application.modelops.ports import (
-    AuditRepository,
-    OutboxRepository,
-    UnitOfWork,
-)
-from app.domain.identity.models import ProjectScope
+AuditRecordData = AuditRecord
+OutboxEventData = OutboxEvent
 
-
-@dataclass(frozen=True, slots=True)
-class AuditRecordData:
-    audit_id: UUID
-    project_id: UUID
-    actor_user_id: UUID | None
-    actor_role: str | None
-    resource_type: str
-    resource_id: UUID
-    action: str
-    from_status: str | None
-    to_status: str | None
-    reason: str | None
-    request_id: str | None
-    result: str
-    details: dict[str, object]
-    occurred_at: datetime
-
-
-@dataclass(frozen=True, slots=True)
-class OutboxEventData:
-    event_id: UUID
-    project_id: UUID
-    aggregate_type: str
-    aggregate_id: UUID
-    event_type: str
-    payload: dict[str, object]
-    occurred_at: datetime
-
-
-def record_change(
-    audit: AuditRepository,
-    outbox: OutboxRepository,
-    scope: ProjectScope,
-    *,
-    resource_type: str,
-    resource_id: UUID,
-    action: str,
-    from_status: str | None,
-    to_status: str | None,
-    reason: str | None,
-    request_id: str | None,
-    details: dict[str, object],
-    event_type: str,
-    event_payload: dict[str, object],
-    occurred_at: datetime,
-) -> None:
-    audit.record(
-        scope,
-        AuditRecordData(
-            audit_id=uuid4(),
-            project_id=scope.project_id,
-            actor_user_id=scope.actor_id,
-            actor_role=getattr(scope, "actor_role", None),
-            resource_type=resource_type,
-            resource_id=resource_id,
-            action=action,
-            from_status=from_status,
-            to_status=to_status,
-            reason=reason,
-            request_id=request_id,
-            result="SUCCESS",
-            details=dict(details),
-            occurred_at=occurred_at,
-        ),
-    )
-    outbox.enqueue(
-        scope,
-        OutboxEventData(
-            event_id=uuid4(),
-            project_id=scope.project_id,
-            aggregate_type=resource_type,
-            aggregate_id=resource_id,
-            event_type=event_type,
-            payload=dict(event_payload),
-            occurred_at=occurred_at,
-        ),
-    )
-
-
-__all__ = ["AuditRecordData", "OutboxEventData", "record_change", "UnitOfWork"]
+__all__ = [
+    "AuditRecord",
+    "AuditRecordData",
+    "OutboxEvent",
+    "OutboxEventData",
+    "UnitOfWork",
+    "record_change",
+]

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import ClassVar, Self
 from uuid import UUID
 
@@ -158,6 +159,14 @@ class Device(_LifecycleActions):
     location_id: UUID | None = None
     owner_user_id: UUID | None = None
     version: int = 1
+    # 状态语义（G-09/G-10）：动作请求体的 reason/fault 信息必须落库，
+    # 否则"为什么挂起/故障"无从追溯，审计也只能看到状态迁移。
+    status_reason: str | None = None
+    fault_code: str | None = None
+    fault_detail: str | None = None
+    fault_occurred_at: datetime | None = None
+    status_changed_at: datetime | None = None
+    status_changed_by: UUID | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -235,6 +244,14 @@ class Sensor(_LifecycleActions):
     calibration_profile_id: UUID | None = None
     mount_position: str | None = None
     version: int = 1
+    # 状态语义（G-09/G-10）：动作请求体的 reason/fault 信息必须落库，
+    # 否则"为什么挂起/故障"无从追溯，审计也只能看到状态迁移。
+    status_reason: str | None = None
+    fault_code: str | None = None
+    fault_detail: str | None = None
+    fault_occurred_at: datetime | None = None
+    status_changed_at: datetime | None = None
+    status_changed_by: UUID | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(

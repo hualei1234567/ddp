@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
@@ -206,3 +206,155 @@ def test_invalid_cursor_maps_to_validation_failed(
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_failed"
+
+
+# --- G-10 / G-11 / G-17：动作语义持久化、审计与 outbox、幂等 -----------------
+
+
+def _activate(client, project_id, device):
+    return client.post(
+        _device_url(project_id, f"/{device['device_id']}/activate"),
+        headers={"If-Match": f'"{device["version"]}"'},
+        json={},
+    )
+
+
+def test_action_reason_and_fault_fields_are_persisted(api_db) -> None:
+    """G-10：动作请求体不再被丢弃，reason/fault 必须落库。"""
+    from app.infrastructure.db.models.devices import Device as DeviceModel
+    from sqlalchemy import select
+
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device = client.post(_device_url(ids.project_a), json=device_payload()).json()
+    device = _activate(client, ids.project_a, device).json()
+
+    faulted = client.post(
+        _device_url(ids.project_a, f"/{device['device_id']}/fault"),
+        headers={"If-Match": f'"{device["version"]}"'},
+        json={
+            "reason": "视觉模块无输出",
+            "fault_code": "CAM_TIMEOUT",
+            "fault_detail": "连续 30 秒未收到帧",
+            "occurred_at": "2026-11-14T10:00:00Z",
+        },
+    )
+    assert faulted.status_code == 200, faulted.text
+
+    with factory() as session:
+        row = session.scalar(select(DeviceModel).where(DeviceModel.id == UUID(device["device_id"])))
+        assert row.status == "FAULT"
+        assert row.status_reason == "视觉模块无输出"
+        assert row.fault_code == "CAM_TIMEOUT"
+        assert row.fault_detail == "连续 30 秒未收到帧"
+        assert row.fault_occurred_at is not None
+        assert row.status_changed_by == ids.editor_a
+        assert row.status_changed_at is not None
+
+
+def test_report_fault_requires_fault_code(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device = client.post(_device_url(ids.project_a), json=device_payload()).json()
+    device = _activate(client, ids.project_a, device).json()
+
+    response = client.post(
+        _device_url(ids.project_a, f"/{device['device_id']}/fault"),
+        headers={"If-Match": f'"{device["version"]}"'},
+        json={"reason": "无故障码"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_device_actions_write_audit_and_outbox(api_db) -> None:
+    """G-11：设备域此前零审计、零 outbox。"""
+    from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
+    from sqlalchemy import select
+
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device = client.post(_device_url(ids.project_a), json=device_payload()).json()
+    assert _activate(client, ids.project_a, device).status_code == 200
+
+    with factory() as session:
+        audits = list(
+            session.scalars(
+                select(AuditLog).where(
+                    AuditLog.project_id == ids.project_a,
+                    AuditLog.resource_type == "device",
+                    AuditLog.resource_id == UUID(device["device_id"]),
+                )
+            )
+        )
+        events = list(
+            session.scalars(
+                select(OutboxEvent).where(
+                    OutboxEvent.project_id == ids.project_a,
+                    OutboxEvent.aggregate_type == "device",
+                    OutboxEvent.aggregate_id == UUID(device["device_id"]),
+                )
+            )
+        )
+
+    actions = {row.action for row in audits}
+    assert {"create", "activate"} <= actions
+    activate_audit = next(row for row in audits if row.action == "activate")
+    assert activate_audit.from_status == "PROVISIONED"
+    assert activate_audit.to_status == "ACTIVE"
+    assert activate_audit.actor_user_id == ids.editor_a
+    assert {row.event_type for row in events} >= {"device.created", "device.activate"}
+
+
+def test_create_device_replays_on_same_idempotency_key(api_db) -> None:
+    """G-17：设备域写动作此前不支持 Idempotency-Key。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    headers = {"Idempotency-Key": "device-idem-0001"}
+    payload = device_payload()
+
+    first = client.post(_device_url(ids.project_a), json=payload, headers=headers)
+    second = client.post(_device_url(ids.project_a), json=payload, headers=headers)
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert second.json()["device_id"] == first.json()["device_id"]
+
+
+def test_device_action_replays_without_second_transition(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device = client.post(_device_url(ids.project_a), json=device_payload()).json()
+    headers = {"If-Match": '"1"', "Idempotency-Key": "device-idem-0002"}
+
+    first = client.post(
+        _device_url(ids.project_a, f"/{device['device_id']}/activate"),
+        headers=headers,
+        json={},
+    )
+    second = client.post(
+        _device_url(ids.project_a, f"/{device['device_id']}/activate"),
+        headers=headers,
+        json={},
+    )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert second.json()["version"] == first.json()["version"]
+
+
+def test_device_idempotency_key_reuse_with_different_body_is_rejected(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    headers = {"Idempotency-Key": "device-idem-0003"}
+
+    first = client.post(
+        _device_url(ids.project_a), json=device_payload(code="dev-a"), headers=headers
+    )
+    assert first.status_code == 201, first.text
+    conflict = client.post(
+        _device_url(ids.project_a), json=device_payload(code="dev-b"), headers=headers
+    )
+
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "idempotency_key_reused"

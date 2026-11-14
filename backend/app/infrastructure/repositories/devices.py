@@ -89,6 +89,12 @@ def _device_values(device: Device, *, actor_id: UUID) -> dict[str, object]:
         "capability_profile": dict(device.capability_profile),
         "location_id": device.location_id,
         "owner_user_id": device.owner_user_id,
+        "status_reason": device.status_reason,
+        "fault_code": device.fault_code,
+        "fault_detail": device.fault_detail,
+        "fault_occurred_at": device.fault_occurred_at,
+        "status_changed_at": device.status_changed_at,
+        "status_changed_by": device.status_changed_by,
         "updated_by": actor_id,
     }
 
@@ -116,6 +122,12 @@ def _sensor_values(sensor: Sensor, *, actor_id: UUID) -> dict[str, object]:
         "firmware_version": sensor.firmware_version,
         "calibration_profile_id": sensor.calibration_profile_id,
         "mount_position": sensor.mount_position,
+        "status_reason": sensor.status_reason,
+        "fault_code": sensor.fault_code,
+        "fault_detail": sensor.fault_detail,
+        "fault_occurred_at": sensor.fault_occurred_at,
+        "status_changed_at": sensor.status_changed_at,
+        "status_changed_by": sensor.status_changed_by,
         "updated_by": actor_id,
     }
 
@@ -159,6 +171,12 @@ def _device_from_row(row: DeviceModel) -> Device:
         capability_profile=row.capability_profile,
         location_id=row.location_id,
         owner_user_id=row.owner_user_id,
+        status_reason=row.status_reason,
+        fault_code=row.fault_code,
+        fault_detail=row.fault_detail,
+        fault_occurred_at=row.fault_occurred_at,
+        status_changed_at=row.status_changed_at,
+        status_changed_by=row.status_changed_by,
         version=row.version,
     )
 
@@ -188,6 +206,12 @@ def _sensor_from_row(row: SensorModel) -> Sensor:
         firmware_version=row.firmware_version,
         calibration_profile_id=row.calibration_profile_id,
         mount_position=row.mount_position,
+        status_reason=row.status_reason,
+        fault_code=row.fault_code,
+        fault_detail=row.fault_detail,
+        fault_occurred_at=row.fault_occurred_at,
+        status_changed_at=row.status_changed_at,
+        status_changed_by=row.status_changed_by,
         version=row.version,
     )
 

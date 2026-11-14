@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.deps import get_project_scope, get_write_scope
+from app.api.v1.dataset_dependencies import IdempotencyKey
 from app.api.v1.dependencies import SensorUseCasesDep
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.schemas import (
@@ -17,6 +18,7 @@ from app.api.v1.schemas import (
     SensorOut,
     SensorPatch,
 )
+from app.api.v1.supplier_dependencies import request_id
 from app.application.devices import NewSensor
 from app.domain.identity.models import ProjectScope
 
@@ -56,10 +58,19 @@ def list_sensors(
 @router.post("", response_model=SensorOut, status_code=201)
 def create_sensor(
     payload: SensorCreate,
+    request: Request,
     scope: WriteScope,
     use_cases: SensorUseCasesDep,
+    idempotency_key: IdempotencyKey = None,
 ) -> SensorOut:
-    sensor = use_cases.create_sensor(scope, NewSensor(**payload.model_dump()))
+    sensor = use_cases.create_sensor(
+        scope,
+        NewSensor(**payload.model_dump()),
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
+        request_id=request_id(request),
+    )
     return SensorOut.from_domain(sensor)
 
 
@@ -92,85 +103,116 @@ def update_sensor(
 @router.post("/{sensor_id}/activate", response_model=SensorOut)
 def activate_sensor(
     sensor_id: UUID,
+    request: Request,
     scope: WriteScope,
     use_cases: SensorUseCasesDep,
     expected_version: ExpectedVersion,
     payload: ActionRequest | None = None,
+    idempotency_key: IdempotencyKey = None,
 ) -> SensorOut:
-    return _action(use_cases, scope, sensor_id, "activate", expected_version, payload)
+    return _action(
+        use_cases, request, scope, sensor_id, "activate", expected_version, payload, idempotency_key
+    )
 
 
 @router.post("/{sensor_id}/maintenance", response_model=SensorOut)
 def enter_maintenance(
     sensor_id: UUID,
+    request: Request,
     scope: WriteScope,
     use_cases: SensorUseCasesDep,
     expected_version: ExpectedVersion,
     payload: ActionRequest | None = None,
+    idempotency_key: IdempotencyKey = None,
 ) -> SensorOut:
     return _action(
         use_cases,
+        request,
         scope,
         sensor_id,
         "enter-maintenance",
         expected_version,
         payload,
+        idempotency_key,
     )
 
 
 @router.post("/{sensor_id}/fault", response_model=SensorOut)
 def report_fault(
     sensor_id: UUID,
+    request: Request,
     scope: WriteScope,
     use_cases: SensorUseCasesDep,
     expected_version: ExpectedVersion,
     payload: ActionRequest | None = None,
+    idempotency_key: IdempotencyKey = None,
 ) -> SensorOut:
     return _action(
         use_cases,
+        request,
         scope,
         sensor_id,
         "report-fault",
         expected_version,
         payload,
+        idempotency_key,
     )
 
 
 @router.post("/{sensor_id}/suspend", response_model=SensorOut)
 def suspend_sensor(
     sensor_id: UUID,
+    request: Request,
     scope: WriteScope,
     use_cases: SensorUseCasesDep,
     expected_version: ExpectedVersion,
     payload: ActionRequest | None = None,
+    idempotency_key: IdempotencyKey = None,
 ) -> SensorOut:
-    return _action(use_cases, scope, sensor_id, "suspend", expected_version, payload)
+    return _action(
+        use_cases, request, scope, sensor_id, "suspend", expected_version, payload, idempotency_key
+    )
 
 
 @router.post("/{sensor_id}/retire", response_model=SensorOut)
 def retire_sensor(
     sensor_id: UUID,
+    request: Request,
     scope: WriteScope,
     use_cases: SensorUseCasesDep,
     expected_version: ExpectedVersion,
     payload: ActionRequest | None = None,
+    idempotency_key: IdempotencyKey = None,
 ) -> SensorOut:
-    return _action(use_cases, scope, sensor_id, "retire", expected_version, payload)
+    return _action(
+        use_cases, request, scope, sensor_id, "retire", expected_version, payload, idempotency_key
+    )
 
 
 def _action(
     use_cases: SensorUseCasesDep,
+    request: Request,
     scope: WriteScope,
     sensor_id: UUID,
     action: str,
     expected_version: int,
     payload: ActionRequest | None,
+    idempotency_key: str | None,
 ) -> SensorOut:
-    del payload  # 阶段 0 无 audit/status_reason 列，先保持契约形状而不伪造持久化。
+    """生命周期动作：请求体语义字段透传给用例，不再丢弃（G-10）。"""
+    body = payload or ActionRequest()
     sensor = use_cases.apply_action(
         scope,
         sensor_id,
         action,
         expected_version=expected_version,
+        reason=body.reason,
+        fault_code=body.fault_code,
+        fault_detail=body.fault_detail,
+        fault_occurred_at=body.occurred_at,
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
+        request_id=request_id(request),
     )
     return SensorOut.from_domain(sensor)

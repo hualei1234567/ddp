@@ -69,12 +69,24 @@ def _terminal_sql(states: frozenset[str]) -> str:
     return ", ".join(f"'{state}'" for state in sorted(states))
 
 
-def _insert_initial_sqlite(table: str, status: str, message: str) -> str:
+def _insert_initial_sqlite(
+    table: str,
+    status: str,
+    message: str,
+    *,
+    column: str = "status",
+) -> str:
+    """SQLite 的"初始状态必须为 X"守卫。
+
+    ``column`` 允许指定状态列名：``external_training_references`` 用的是
+    ``external_status``，早期实现硬编码 ``status``，导致该触发器引用不存在的
+    列——插入时直接报错，等于守卫失效（既有缺陷，2026-11-14 修正）。
+    """
     return f"""
     CREATE TRIGGER IF NOT EXISTS trg_{table}_initial_status
     BEFORE INSERT ON {table}
     FOR EACH ROW
-    WHEN NEW.status <> '{status}'
+    WHEN NEW.{column} <> '{status}'
     BEGIN
         SELECT RAISE(ABORT, '{message}');
     END
@@ -221,6 +233,7 @@ _SQLITE_STATEMENTS = (
         "external_training_references",
         "SUBMITTED",
         "external_training_reference_initial_status_invalid",
+        column="external_status",
     ),
     _transition_sqlite(
         "external_training_references",

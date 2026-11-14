@@ -153,3 +153,93 @@ def test_invalid_sensor_enum_maps_to_validation_failed(
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_failed"
+
+
+# --- G-10 / G-11：传感器动作语义落库与审计 ---------------------------------
+
+
+def test_sensor_fault_fields_are_persisted_and_audited(api_db) -> None:
+    from uuid import UUID
+
+    from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
+    from app.infrastructure.db.models.devices import Sensor as SensorModel
+    from sqlalchemy import select
+
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device_id = _create_device(client, ids.project_a)
+    sensor = client.post(
+        _sensor_url(ids.project_a),
+        json=sensor_payload(device_id=device_id),
+    ).json()
+
+    activated = client.post(
+        _sensor_url(ids.project_a, f"/{sensor['sensor_id']}/activate"),
+        headers={"If-Match": '"1"'},
+        json={"reason": "上线自检通过"},
+    )
+    assert activated.status_code == 200, activated.text
+
+    faulted = client.post(
+        _sensor_url(ids.project_a, f"/{sensor['sensor_id']}/fault"),
+        headers={"If-Match": '"2"'},
+        json={
+            "reason": "镜头遮挡",
+            "fault_code": "LENS_BLOCKED",
+            "fault_detail": "画面 90% 为黑色",
+        },
+    )
+    assert faulted.status_code == 200, faulted.text
+
+    with factory() as session:
+        row = session.scalar(select(SensorModel).where(SensorModel.id == UUID(sensor["sensor_id"])))
+        assert row.status == "FAULT"
+        assert row.fault_code == "LENS_BLOCKED"
+        assert row.status_reason == "镜头遮挡"
+        assert row.status_changed_by == ids.editor_a
+
+        actions = {
+            item.action
+            for item in session.scalars(
+                select(AuditLog).where(
+                    AuditLog.project_id == ids.project_a,
+                    AuditLog.resource_type == "sensor",
+                    AuditLog.resource_id == UUID(sensor["sensor_id"]),
+                )
+            )
+        }
+        events = {
+            item.event_type
+            for item in session.scalars(
+                select(OutboxEvent).where(
+                    OutboxEvent.project_id == ids.project_a,
+                    OutboxEvent.aggregate_type == "sensor",
+                    OutboxEvent.aggregate_id == UUID(sensor["sensor_id"]),
+                )
+            )
+        }
+
+    assert {"create", "activate", "report-fault"} <= actions
+    assert {"sensor.created", "sensor.activate", "sensor.report-fault"} <= events
+
+
+def test_sensor_report_fault_requires_fault_code(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device_id = _create_device(client, ids.project_a)
+    sensor = client.post(
+        _sensor_url(ids.project_a), json=sensor_payload(device_id=device_id)
+    ).json()
+    client.post(
+        _sensor_url(ids.project_a, f"/{sensor['sensor_id']}/activate"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+
+    response = client.post(
+        _sensor_url(ids.project_a, f"/{sensor['sensor_id']}/fault"),
+        headers={"If-Match": '"2"'},
+        json={"reason": "无故障码"},
+    )
+
+    assert response.status_code == 422

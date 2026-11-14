@@ -11,7 +11,6 @@ from app.api.deps import get_project_scope, get_scope, get_write_scope
 from app.api.v1.dependencies import CalibrationUseCasesDep
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.schemas import (
-    ActionRequest,
     CalibrationCreate,
     CalibrationOut,
     CalibrationPatch,
@@ -105,9 +104,7 @@ def submit_calibration(
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
-    payload: ActionRequest | None = None,
 ) -> CalibrationOut:
-    del payload
     record = use_cases.submit(
         scope,
         calibration_id,
@@ -122,9 +119,7 @@ def validate_calibration(
     scope: ValidateScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
-    payload: ActionRequest | None = None,
 ) -> CalibrationOut:
-    del payload
     record = use_cases.validate(
         scope,
         calibration_id,
@@ -139,9 +134,7 @@ def reject_calibration(
     scope: ValidateScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
-    payload: ActionRequest | None = None,
 ) -> CalibrationOut:
-    del payload
     record = use_cases.reject(
         scope,
         calibration_id,
@@ -156,9 +149,7 @@ def activate_calibration(
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
-    payload: ActionRequest | None = None,
 ) -> CalibrationOut:
-    del payload
     record = use_cases.activate(
         scope,
         calibration_id,
@@ -173,9 +164,7 @@ def revoke_calibration(
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
-    payload: ActionRequest | None = None,
 ) -> CalibrationOut:
-    del payload
     record = use_cases.revoke(
         scope,
         calibration_id,
@@ -190,9 +179,7 @@ def expire_calibration(
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
-    payload: ActionRequest | None = None,
 ) -> CalibrationOut:
-    del payload
     record = use_cases.expire(
         scope,
         calibration_id,

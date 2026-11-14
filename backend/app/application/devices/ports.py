@@ -11,6 +11,12 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.application.audit import AuditRecord as _AuditRecord
+from app.application.audit import AuditRepository as _AuditRepository
+from app.application.audit import OutboxEvent as _OutboxEvent
+from app.application.audit import OutboxRepository as _OutboxRepository
+from app.application.idempotency import IdempotencyRecord as _IdempotencyRecord
+from app.application.idempotency import IdempotencyRepository as _IdempotencyRepository
 from app.domain.devices.calibration import CalibrationProfile, CalibrationRecord
 from app.domain.devices.enums import (
     CalibrationStatus,
@@ -207,3 +213,12 @@ class CalibrationRecordRepository(Protocol):
         now: datetime | None = None,
     ) -> CalibrationRecord:
         """校验状态/版本/有效期后原子激活，并替代同目标旧 ACTIVE。"""
+
+
+# 审计、outbox 与幂等记录类型统一由 application 顶层声明，本域直接复用。
+AuditRecord = _AuditRecord
+OutboxEvent = _OutboxEvent
+AuditRepository = _AuditRepository
+OutboxRepository = _OutboxRepository
+IdempotencyRecord = _IdempotencyRecord
+IdempotencyRepository = _IdempotencyRepository

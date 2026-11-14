@@ -28,6 +28,7 @@ _STATUS_BY_CODE = {
     "resource_immutable": 409,
     "duplicate_resource": 409,
     "calibration_active_conflict": 409,
+    "idempotency_key_reused": 409,
     "resource_not_found": 404,
     "forbidden": 403,
 }
@@ -45,6 +46,7 @@ _MESSAGES = {
     "resource_immutable": "资源已冻结或包含不可变字段",
     "duplicate_resource": "项目内业务键或序列号重复",
     "calibration_active_conflict": "同一标定目标已存在激活记录",
+    "idempotency_key_reused": "同一幂等键对应了不同的请求体",
     "resource_not_found": "资源不存在或不属于当前项目",
     "forbidden": "无权执行该操作",
 }

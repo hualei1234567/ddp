@@ -51,6 +51,12 @@ class InvalidStateTransitionError(DeviceDomainError):
         super().__init__(f"{entity} 不允许状态迁移：{current} → {target}")
 
 
+class IdempotencyKeyReusedError(DomainValidationError):
+    """同一幂等键对应不同请求体。"""
+
+    code = "idempotency_key_reused"
+
+
 class DuplicateResourceError(DeviceDomainError):
     """项目内业务键或序列号重复。"""
 

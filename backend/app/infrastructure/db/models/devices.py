@@ -250,6 +250,20 @@ class Device(Base, ProjectScopedMixin):
         ForeignKey("users.id"),
         nullable=True,
     )
+    # 状态语义：契约要求能表达"为什么进入该状态"，而不只是状态本身。
+    # G-09/G-10：此前动作请求体（reason/fault_code/occurred_at）被路由层丢弃。
+    status_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    fault_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fault_detail: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    fault_occurred_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    status_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # 不加外键：SQLite 无法 ALTER 追加约束，且 actor 溯源列不需要强引用
+    # （用户离开项目后历史仍需可读）。取值由应用层从 ProjectScope 写入。
+    status_changed_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("project_id", "code", name="uq_devices_project_id"),
@@ -393,6 +407,21 @@ class Sensor(Base, ProjectScopedMixin):
     firmware_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     calibration_profile_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     mount_position: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+    # 状态语义：契约要求能表达"为什么进入该状态"，而不只是状态本身。
+    # G-09/G-10：此前动作请求体（reason/fault_code/occurred_at）被路由层丢弃。
+    status_reason: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    fault_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fault_detail: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    fault_occurred_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    status_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # 不加外键：SQLite 无法 ALTER 追加约束，且 actor 溯源列不需要强引用
+    # （用户离开项目后历史仍需可读）。取值由应用层从 ProjectScope 写入。
+    status_changed_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("project_id", "code", name="uq_sensors_project_id"),

@@ -16,11 +16,16 @@ from app.infrastructure.repositories.calibration_records import (
     SqlCalibrationProfileRepository,
     SqlCalibrationRecordRepository,
 )
+from app.infrastructure.repositories.dataset_audit import (
+    SqlDatasetAuditRepository,
+    SqlDatasetOutboxRepository,
+)
 from app.infrastructure.repositories.devices import (
     SqlDeviceRepository,
     SqlRobotRepository,
     SqlSensorRepository,
 )
+from app.infrastructure.repositories.idempotency import SqlIdempotencyRepository
 
 
 def get_device_use_cases(session: DbSession) -> DeviceUseCases:
@@ -29,6 +34,9 @@ def get_device_use_cases(session: DbSession) -> DeviceUseCases:
         robots=SqlRobotRepository(session),
         profiles=SqlCalibrationProfileRepository(session),
         uow=session,
+        audit=SqlDatasetAuditRepository(session),
+        outbox=SqlDatasetOutboxRepository(session),
+        idempotency=SqlIdempotencyRepository(session),
     )
 
 
@@ -40,6 +48,9 @@ def get_sensor_use_cases(session: DbSession) -> SensorUseCases:
         profiles=SqlCalibrationProfileRepository(session),
         calibrations=SqlCalibrationRecordRepository(session),
         uow=session,
+        audit=SqlDatasetAuditRepository(session),
+        outbox=SqlDatasetOutboxRepository(session),
+        idempotency=SqlIdempotencyRepository(session),
     )
 
 
