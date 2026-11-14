@@ -15,6 +15,7 @@ from app.application.suppliers.commands import (
     NewInboundSegment,
     SegmentDecisionCommand,
 )
+from app.application.suppliers.idempotency import IdempotencyGuard, validate_key
 from app.application.suppliers.ledger import (
     RESOURCE_BATCH,
     RESOURCE_SEGMENT,
@@ -24,6 +25,7 @@ from app.application.suppliers.ports import (
     AcceptanceLedgerRepository,
     AuditRepository,
     DeliveryBatchRepository,
+    IdempotencyRepository,
     InboundSegmentRepository,
     OutboxRepository,
     RawAssetExistence,
@@ -66,6 +68,7 @@ class InboundBatchUseCases:
         outbox: OutboxRepository,
         raw_assets: RawAssetExistence,
         uow: UnitOfWork,
+        idempotency: IdempotencyRepository,
     ) -> None:
         self._suppliers = suppliers
         self._batches = batches
@@ -74,6 +77,7 @@ class InboundBatchUseCases:
         self._audit = audit
         self._outbox = outbox
         self._raw_assets = raw_assets
+        self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
 
     # ---------- 批次 ----------
@@ -106,8 +110,29 @@ class InboundBatchUseCases:
         scope: ProjectScope,
         command: NewDeliveryBatch,
         *,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str,
         request_id: str | None = None,
     ) -> DeliveryBatch:
+        key = validate_key(idempotency_key)
+        body = {
+            "supplier_id": str(command.supplier_id),
+            "batch_code": command.batch_code,
+            "title": command.title,
+            "planned_segment_count": command.planned_segment_count,
+            "planned_arrival_date": (
+                command.planned_arrival_date.isoformat()
+                if command.planned_arrival_date is not None
+                else None
+            ),
+            "storage_prefix": command.storage_prefix,
+            "notes": command.notes,
+        }
+        now = _utcnow()
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            return self._replay_batch(scope, replay.response_ref)
         supplier = self._suppliers.get(scope, command.supplier_id)
         if supplier is None:
             raise ResourceNotFoundError("供应商不存在或不属于当前项目")
@@ -148,6 +173,16 @@ class InboundBatchUseCases:
             occurred_at=now,
             event_type="supplier.batch.registered",
         )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=201,
+            response_ref=str(created.batch_id),
+            now=now,
+        )
         self._uow.commit()
         return created
 
@@ -159,9 +194,24 @@ class InboundBatchUseCases:
         *,
         expected_version: int,
         reason: str | None = None,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str,
         request_id: str | None = None,
     ) -> DeliveryBatch:
+        key = validate_key(idempotency_key)
         action_name = validate_action_name(action, family="delivery-batch")
+        body = {
+            "batch_id": str(batch_id),
+            "action": action_name,
+            "expected_version": expected_version,
+            "reason": reason,
+        }
+        replay = self._idempotency.lookup(
+            scope, key, method=method, path=path, body=body, now=_utcnow()
+        )
+        if replay is not None:
+            return self._replay_batch(scope, replay.response_ref)
         batch = self.get(scope, batch_id)
         if batch.row_version != expected_version:
             raise VersionConflictError("到货批次")
@@ -210,6 +260,16 @@ class InboundBatchUseCases:
             occurred_at=now,
             event_type=f"supplier.batch.{action_name}",
         )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=200,
+            response_ref=str(saved.batch_id),
+            now=now,
+        )
         self._uow.commit()
         return saved
 
@@ -255,8 +315,24 @@ class InboundBatchUseCases:
         batch_id: UUID,
         command: NewInboundSegment,
         *,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str,
         request_id: str | None = None,
     ) -> InboundSegment:
+        key = validate_key(idempotency_key)
+        body = {
+            "batch_id": str(batch_id),
+            "segment_code": command.segment_code,
+            "raw_asset_id": str(command.raw_asset_id) if command.raw_asset_id else None,
+            "duration_ns": command.duration_ns,
+            "task_name": command.task_name,
+            "diagnostics": command.diagnostics,
+        }
+        now = _utcnow()
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            return self._replay_segment(scope, batch_id, replay.response_ref)
         batch = self.get(scope, batch_id)
         if batch.is_settled:
             raise BatchAlreadySettledError("批次已终审，不能新增片段")
@@ -299,6 +375,16 @@ class InboundBatchUseCases:
             occurred_at=now,
             event_type="supplier.segment.registered",
         )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=201,
+            response_ref=str(created.segment_id),
+            now=now,
+        )
         self._uow.commit()
         return created
 
@@ -310,9 +396,24 @@ class InboundBatchUseCases:
         action: str,
         *,
         expected_version: int,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str,
         request_id: str | None = None,
     ) -> InboundSegment:
+        key = validate_key(idempotency_key)
         action_name = validate_action_name(action, family="inbound-segment")
+        body = {
+            "batch_id": str(batch_id),
+            "segment_id": str(segment_id),
+            "action": action_name,
+            "expected_version": expected_version,
+        }
+        replay = self._idempotency.lookup(
+            scope, key, method=method, path=path, body=body, now=_utcnow()
+        )
+        if replay is not None:
+            return self._replay_segment(scope, batch_id, replay.response_ref)
         batch = self.get(scope, batch_id)
         segment = self.get_segment(scope, batch_id, segment_id)
         if segment.row_version != expected_version:
@@ -346,6 +447,16 @@ class InboundBatchUseCases:
             occurred_at=now,
             event_type=f"supplier.segment.{action_name}",
         )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=200,
+            response_ref=str(saved.segment_id),
+            now=now,
+        )
         self._uow.commit()
         return saved
 
@@ -357,8 +468,23 @@ class InboundBatchUseCases:
         command: SegmentDecisionCommand,
         *,
         expected_version: int,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str,
         request_id: str | None = None,
     ) -> InboundSegment:
+        key = validate_key(idempotency_key)
+        body = {
+            "batch_id": str(batch_id),
+            "segment_id": str(segment_id),
+            "decision": command.decision,
+            "reason": command.reason,
+            "expected_version": expected_version,
+        }
+        now = _utcnow()
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            return self._replay_segment(scope, batch_id, replay.response_ref)
         batch = self.get(scope, batch_id)
         batch.assert_screening()
         segment = self.get_segment(scope, batch_id, segment_id)
@@ -396,6 +522,16 @@ class InboundBatchUseCases:
             occurred_at=now,
             event_type="supplier.segment.decided",
         )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=200,
+            response_ref=str(saved.segment_id),
+            now=now,
+        )
         self._uow.commit()
         return saved
 
@@ -415,6 +551,28 @@ class InboundBatchUseCases:
             after_id=after_id,
             limit=limit,
         )
+
+    def _replay_batch(self, scope: ProjectScope, response_ref: str | None) -> DeliveryBatch:
+        """按幂等记录重放：只返回当前项目内的资源，越权与缺失同样 404。"""
+        if not response_ref:
+            raise ResourceNotFoundError("到货批次", response_ref)
+        try:
+            batch_id = UUID(response_ref)
+        except ValueError as exc:
+            raise ResourceNotFoundError("到货批次", response_ref) from exc
+        return self.get(scope, batch_id)
+
+    def _replay_segment(
+        self, scope: ProjectScope, batch_id: UUID, response_ref: str | None
+    ) -> InboundSegment:
+        self.get(scope, batch_id)  # 批次必须属于当前项目；不存在则 404
+        if not response_ref:
+            raise ResourceNotFoundError("到货片段", response_ref)
+        try:
+            segment_id = UUID(response_ref)
+        except ValueError as exc:
+            raise ResourceNotFoundError("到货片段", response_ref) from exc
+        return self.get_segment(scope, batch_id, segment_id)
 
 
 def batch_actions(status: str) -> frozenset[str]:

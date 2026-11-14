@@ -11,6 +11,12 @@ class DomainValidationError(ModelOpsDomainError):
     pass
 
 
+class IdempotencyKeyReusedError(DomainValidationError):
+    """同一幂等键对应不同请求体。"""
+
+    code = "idempotency_key_reused"
+
+
 class InvalidStateTransitionError(ModelOpsDomainError):
     code = "state_transition_invalid"
 

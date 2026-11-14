@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Protocol
 from uuid import UUID
 
+from app.application.idempotency import IdempotencyRecord as _IdempotencyRecord
+from app.application.idempotency import IdempotencyRepository as _IdempotencyRepository
 from app.domain.identity.models import ProjectScope
 from app.domain.suppliers.models import (
     AcceptanceLedgerEntry,
@@ -116,16 +118,17 @@ class OutboxRepository(Protocol):
     def enqueue(self, scope: ProjectScope, event: object) -> None: ...
 
 
-class IdempotencyRepository(Protocol):
-    def get(self, scope: ProjectScope, key: str) -> object | None: ...
-
-    def save(self, scope: ProjectScope, record: object) -> None: ...
+# 幂等记录类型与仓储协议由 application 顶层统一声明；本域直接复用，
+# 不再各写一份 ``object`` 签名（那等于没有协议约束）。
+IdempotencyRecord = _IdempotencyRecord
+IdempotencyRepository = _IdempotencyRepository
 
 
 __all__ = [
     "AcceptanceLedgerRepository",
     "AuditRepository",
     "DeliveryBatchRepository",
+    "IdempotencyRecord",
     "IdempotencyRepository",
     "InboundSegmentRepository",
     "OutboxRepository",

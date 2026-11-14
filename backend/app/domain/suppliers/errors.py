@@ -27,6 +27,12 @@ class ResourceNotFoundError(SupplierDomainError):
     code = "resource_not_found"
 
 
+class IdempotencyKeyReusedError(DomainValidationError):
+    """同一幂等键对应不同请求体。"""
+
+    code = "idempotency_key_reused"
+
+
 class VersionConflictError(SupplierDomainError):
     code = "version_conflict"
 

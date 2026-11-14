@@ -537,6 +537,7 @@ _SUPPLIER_STATUS_BY_CODE = {
     "state_transition_invalid": 409,
     "version_conflict": 409,
     "duplicate_resource": 409,
+    "idempotency_key_reused": 409,
     "supplier_not_active": 409,
     "supplier_terminal": 409,
     "batch_not_screening": 409,
@@ -550,6 +551,7 @@ _SUPPLIER_STATUS_BY_CODE = {
 }
 
 _SUPPLIER_MESSAGES = {
+    "idempotency_key_reused": "同一幂等键对应了不同的请求体",
     "supplier_not_active": "供应商未激活，不能承接新批次",
     "supplier_terminal": "供应商已终止，不能继续操作",
     "batch_not_screening": "只有 SCREENING 状态的批次可以裁决片段",

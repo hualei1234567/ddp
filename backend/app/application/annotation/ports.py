@@ -12,6 +12,12 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.application.idempotency import (
+    IdempotencyRecord as _IdempotencyRecord,
+)
+from app.application.idempotency import (
+    IdempotencyRepository as _IdempotencyRepository,
+)
 from app.domain.annotation.arbitration import AnnotationArbitration
 from app.domain.annotation.assignment import AnnotationAssignment
 from app.domain.annotation.batch import AnnotationBatch
@@ -671,20 +677,6 @@ class OutboxEvent:
     occurred_at: datetime
 
 
-@dataclass(frozen=True, slots=True)
-class IdempotencyRecord:
-    project_id: UUID
-    user_id: UUID
-    key: str
-    method: str
-    path: str
-    request_hash: str
-    response_status: int
-    response_ref: str | None
-    created_at: datetime
-    expires_at: datetime
-
-
 class AuditRepository(Protocol):
     def record(self, scope: ProjectScope, record: AuditRecord) -> None: ...
 
@@ -693,9 +685,8 @@ class OutboxRepository(Protocol):
     def enqueue(self, scope: ProjectScope, event: OutboxEvent) -> None: ...
 
 
-class IdempotencyRepository(Protocol):
-    def get(self, scope: ProjectScope, key: str) -> IdempotencyRecord | None: ...
-
-    def save(self, scope: ProjectScope, record: IdempotencyRecord) -> None: ...
-
-    def delete(self, scope: ProjectScope, key: str) -> None: ...
+# 幂等记录类型与仓储协议由 application 顶层统一声明，避免四个域各写一份。
+# 这里重新导出，保持本域既有的 ``from app.application.<domain>.ports import
+# IdempotencyRecord`` 调用点不变。
+IdempotencyRecord = _IdempotencyRecord
+IdempotencyRepository = _IdempotencyRepository

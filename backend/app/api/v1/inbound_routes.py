@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query, Request
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.supplier_dependencies import (
     ExpectedVersion,
+    IdempotencyKey,
     OwnerScope,
     ReadScope,
     SupplierServicesDep,
@@ -63,6 +64,7 @@ def create_batch(
     request: Request,
     scope: WriteScope,
     services: SupplierServicesDep,
+    idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
     batch = services.batches.create(
         scope,
@@ -75,6 +77,9 @@ def create_batch(
             storage_prefix=payload.storage_prefix,
             notes=payload.notes,
         ),
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
         request_id=request_id(request),
     )
     return batch_out(batch)
@@ -94,6 +99,7 @@ def act_on_batch(
     scope: WriteScope,
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
+    idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
     batch = services.batches.apply_action(
         scope,
@@ -101,6 +107,9 @@ def act_on_batch(
         action,
         expected_version=expected_version,
         reason=payload.reason if payload else None,
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
         request_id=request_id(request),
     )
     return batch_out(batch)
@@ -114,6 +123,7 @@ def finalize_batch(
     scope: OwnerScope,
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
+    idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
     """终审属于高风险放行：要求项目 Owner；结果由片段统计决定。"""
     batch = services.batches.apply_action(
@@ -122,6 +132,9 @@ def finalize_batch(
         "finalize",
         expected_version=expected_version,
         reason=payload.reason if payload else None,
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
         request_id=request_id(request),
     )
     return batch_out(batch)
@@ -153,6 +166,7 @@ def add_segment(
     request: Request,
     scope: WriteScope,
     services: SupplierServicesDep,
+    idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
     segment = services.batches.add_segment(
         scope,
@@ -164,6 +178,9 @@ def add_segment(
             task_name=payload.task_name,
             diagnostics=payload.diagnostics,
         ),
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
         request_id=request_id(request),
     )
     return segment_out(segment)
@@ -188,6 +205,7 @@ def act_on_segment(
     scope: WriteScope,
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
+    idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
     segment = services.batches.apply_segment_action(
         scope,
@@ -195,6 +213,9 @@ def act_on_segment(
         segment_id,
         action,
         expected_version=expected_version,
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
         request_id=request_id(request),
     )
     return segment_out(segment)
@@ -209,6 +230,7 @@ def decide_segment(
     scope: WriteScope,
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
+    idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
     segment = services.batches.decide_segment(
         scope,
@@ -216,6 +238,9 @@ def decide_segment(
         segment_id,
         SegmentDecisionCommand(decision=payload.decision, reason=payload.reason),
         expected_version=expected_version,
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
         request_id=request_id(request),
     )
     return segment_out(segment)

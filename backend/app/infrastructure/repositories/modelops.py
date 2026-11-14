@@ -10,7 +10,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.application.modelops.audit import AuditRecordData, OutboxEventData
-from app.application.modelops.idempotency import IdempotencyRecordData
 from app.application.modelops.ports import CallbackRecord
 from app.domain.identity.models import ProjectScope
 from app.domain.modelops.artifacts import ModelArtifact, ModelRuntime
@@ -25,7 +24,6 @@ from app.domain.modelops.models import (
     ModelVersion,
 )
 from app.infrastructure.db.models.collection import AuditLog
-from app.infrastructure.db.models.collection import IdempotencyRecord as IdempotencyModel
 from app.infrastructure.db.models.collection import OutboxEvent as OutboxModel
 from app.infrastructure.db.models.datasets import DatasetVersionModel
 from app.infrastructure.db.models.modelops import (
@@ -37,6 +35,9 @@ from app.infrastructure.db.models.modelops import (
     ModelFeedbackRow,
     ModelRow,
     ModelVersionRow,
+)
+from app.infrastructure.repositories.idempotency import (
+    SqlIdempotencyRepository as SqlSharedIdempotencyRepository,
 )
 
 
@@ -933,51 +934,8 @@ class SqlModelOutboxRepository:
         self._session.flush()
 
 
-class SqlModelIdempotencyRepository:
-    def __init__(self, session: Session) -> None:
-        self._session = session
-
-    def get(self, scope: ProjectScope, key: str):
-        row = self._session.scalar(
-            select(IdempotencyModel).where(
-                IdempotencyModel.project_id == scope.project_id,
-                IdempotencyModel.user_id == scope.actor_id,
-                IdempotencyModel.key == key,
-            )
-        )
-        if row is None:
-            return None
-        from app.application.modelops.idempotency import IdempotencyRecordData
-
-        return IdempotencyRecordData(
-            project_id=row.project_id,
-            user_id=row.user_id,
-            key=row.key,
-            method=row.method,
-            path=row.path,
-            request_hash=row.request_hash,
-            response_status=row.response_status,
-            response_ref=row.response_ref,
-            created_at=_aware(row.created_at),
-            expires_at=row.expires_at,
-        )
-
-    def add(self, scope: ProjectScope, record: IdempotencyRecordData) -> None:
-        self._session.add(
-            IdempotencyModel(
-                project_id=record.project_id,
-                user_id=record.user_id,
-                key=record.key,
-                method=record.method,
-                path=record.path,
-                request_hash=record.request_hash,
-                response_status=record.response_status,
-                response_ref=record.response_ref,
-                created_at=record.created_at,
-                expires_at=record.expires_at,
-            )
-        )
-        self._session.flush()
+# 幂等仓储统一在 app.infrastructure.repositories.idempotency；保留旧类名别名。
+SqlModelIdempotencyRepository = SqlSharedIdempotencyRepository
 
 
 class SqlDatasetGate:

@@ -500,3 +500,164 @@ def test_cross_project_supplier_reference_rejected(api_db) -> None:
     )
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "resource_not_found"
+
+
+# --- 阶段 6 契约要求：8 个 POST 必须支持 Idempotency-Key -------------------
+# 契约 packages/contracts/fragments/paths.stage6.yaml 在这 8 个端点声明了
+# Idempotency-Key；此前实现未接收（审计 R-2）。以下用例锁定真实行为。
+
+
+def test_create_supplier_replays_on_same_key(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.owner_a)
+    headers = {"Idempotency-Key": "sup-idem-0001"}
+    payload = {"code": f"S-{uuid4().hex[:6]}", "name": "幂等供应商"}
+
+    first = client.post(url(ids.project_a, "/suppliers"), json=payload, headers=headers)
+    second = client.post(url(ids.project_a, "/suppliers"), json=payload, headers=headers)
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    # 重放返回同一资源，不产生第二条记录。
+    assert second.json()["supplier_id"] == first.json()["supplier_id"]
+
+
+def test_same_key_different_body_is_rejected_on_supplier(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.owner_a)
+    headers = {"Idempotency-Key": "sup-idem-0002"}
+
+    client.post(
+        url(ids.project_a, "/suppliers"),
+        json={"code": f"S-{uuid4().hex[:6]}", "name": "第一次"},
+        headers=headers,
+    )
+    conflicting = client.post(
+        url(ids.project_a, "/suppliers"),
+        json={"code": f"S-{uuid4().hex[:6]}", "name": "第二次"},
+        headers=headers,
+    )
+
+    assert conflicting.status_code == 409
+    assert conflicting.json()["error"]["code"] == "idempotency_key_reused"
+
+
+def test_short_idempotency_key_is_rejected(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.owner_a)
+
+    response = client.post(
+        url(ids.project_a, "/suppliers"),
+        json={"code": f"S-{uuid4().hex[:6]}", "name": "短键"},
+        headers={"Idempotency-Key": "short"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_batch_replays_on_same_key(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.owner_a)
+    supplier = _create_supplier(client, ids.project_a)
+    headers = {"Idempotency-Key": "bat-idem-0001"}
+    payload = {
+        "supplier_id": supplier["supplier_id"],
+        "batch_code": f"B-{uuid4().hex[:6]}",
+        "planned_segment_count": 2,
+    }
+
+    first = client.post(url(ids.project_a, "/inbound-batches"), json=payload, headers=headers)
+    second = client.post(url(ids.project_a, "/inbound-batches"), json=payload, headers=headers)
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert second.json()["batch_id"] == first.json()["batch_id"]
+
+
+def test_batch_action_replays_without_second_transition(api_db) -> None:
+    """重放不能把状态再推进一步：第二次返回同一版本的同一条记录。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.owner_a)
+    supplier = _create_supplier(client, ids.project_a)
+    batch = _create_batch(client, ids.project_a, supplier["supplier_id"])
+    batch = _advance(client, ids.project_a, batch, "dispatch")
+    headers = {
+        "If-Match": f'"{batch["version"]}"',
+        "Idempotency-Key": "bat-idem-0002",
+    }
+
+    first = client.post(
+        url(ids.project_a, f"/inbound-batches/{batch['batch_id']}/actions/arrive"),
+        headers=headers,
+        json={},
+    )
+    second = client.post(
+        url(ids.project_a, f"/inbound-batches/{batch['batch_id']}/actions/arrive"),
+        headers=headers,
+        json={},
+    )
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert second.json()["status"] == first.json()["status"]
+    assert second.json()["version"] == first.json()["version"]
+
+
+def test_add_segment_replays_on_same_key(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.owner_a)
+    supplier = _create_supplier(client, ids.project_a)
+    batch = _create_batch(client, ids.project_a, supplier["supplier_id"])
+    headers = {"Idempotency-Key": "seg-idem-0001"}
+    payload = {
+        "segment_code": "seg-idem",
+        "duration_ns": 19 * 60 * 1_000_000_000,
+        "task_name": "采集青椒",
+    }
+
+    first = client.post(
+        url(ids.project_a, f"/inbound-batches/{batch['batch_id']}/segments"),
+        json=payload,
+        headers=headers,
+    )
+    second = client.post(
+        url(ids.project_a, f"/inbound-batches/{batch['batch_id']}/segments"),
+        json=payload,
+        headers=headers,
+    )
+
+    assert first.status_code == 201, first.text
+    assert second.status_code == 201, second.text
+    assert second.json()["segment_id"] == first.json()["segment_id"]
+
+
+def test_segment_decision_replays_on_same_key(api_db) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    supplier = _create_supplier(editor, ids.project_a)
+    batch = _create_batch(editor, ids.project_a, supplier["supplier_id"])
+    batch = _advance(editor, ids.project_a, batch, "dispatch")
+    batch = _advance(editor, ids.project_a, batch, "arrive")
+    batch = _advance(editor, ids.project_a, batch, "start-screening")
+    # 职责分离：片段由 editor 登记，裁决由 owner 执行。
+    segment = _add_segment(editor, ids.project_a, batch["batch_id"], "seg-idem-2")
+    segment = _queue(editor, ids.project_a, batch["batch_id"], segment)
+
+    headers = {
+        "If-Match": f'"{segment["version"]}"',
+        "Idempotency-Key": "seg-idem-0002",
+    }
+    payload = {"decision": "ACCEPT", "reason": None}
+    path = url(
+        ids.project_a,
+        f"/inbound-batches/{batch['batch_id']}/segments/{segment['segment_id']}/decision",
+    )
+
+    first = owner.post(path, headers=headers, json=payload)
+    second = owner.post(path, headers=headers, json=payload)
+
+    assert first.status_code == 200, first.text
+    assert second.status_code == 200, second.text
+    assert second.json()["decision"] == first.json()["decision"]
+    assert second.json()["version"] == first.json()["version"]

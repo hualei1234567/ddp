@@ -23,6 +23,7 @@ from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
     SqlDatasetOutboxRepository,
 )
+from app.infrastructure.repositories.idempotency import SqlIdempotencyRepository
 from app.infrastructure.repositories.supplier_batches import SqlDeliveryBatchRepository
 from app.infrastructure.repositories.supplier_raw_assets import SqlRawAssetLookup
 from app.infrastructure.repositories.suppliers import (
@@ -48,10 +49,13 @@ def get_supplier_services(session: DbSession) -> SupplierServices:
     audit = SqlDatasetAuditRepository(session)
     outbox = SqlDatasetOutboxRepository(session)
     raw_assets = SqlRawAssetLookup(session)
+    idempotency = SqlIdempotencyRepository(session)
     return SupplierServices(
-        suppliers=SupplierUseCases(suppliers, batches, segments, ledger, audit, outbox, session),
+        suppliers=SupplierUseCases(
+            suppliers, batches, segments, ledger, audit, outbox, session, idempotency
+        ),
         batches=InboundBatchUseCases(
-            suppliers, batches, segments, ledger, audit, outbox, raw_assets, session
+            suppliers, batches, segments, ledger, audit, outbox, raw_assets, session, idempotency
         ),
     )
 

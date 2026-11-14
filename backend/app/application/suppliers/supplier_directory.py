@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.application.suppliers.commands import NewSupplier, SupplierPatch
+from app.application.suppliers.idempotency import IdempotencyGuard, validate_key
 from app.application.suppliers.ledger import RESOURCE_SUPPLIER, append_ledger
 from app.application.suppliers.ports import (
     AcceptanceLedgerRepository,
     AuditRepository,
     DeliveryBatchRepository,
+    IdempotencyRepository,
     InboundSegmentRepository,
     OutboxRepository,
     SupplierRepository,
@@ -72,6 +74,7 @@ class SupplierUseCases:
         audit: AuditRepository,
         outbox: OutboxRepository,
         uow: UnitOfWork,
+        idempotency: IdempotencyRepository,
     ) -> None:
         self._suppliers = suppliers
         self._batches = batches
@@ -80,6 +83,7 @@ class SupplierUseCases:
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
+        self._idempotency = IdempotencyGuard(idempotency)
 
     def list(
         self,
@@ -105,9 +109,17 @@ class SupplierUseCases:
         scope: ProjectScope,
         command: NewSupplier,
         *,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str,
         request_id: str | None = None,
     ) -> Supplier:
+        key = validate_key(idempotency_key)
+        body = asdict(command)
         now = _utcnow()
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            return self._replay_supplier(scope, replay.response_ref)
         supplier = new_supplier(
             project_id=scope.project_id, command=command, actor_id=scope.actor_id, now=now
         )
@@ -129,6 +141,16 @@ class SupplierUseCases:
             snapshot={"code": created.code, "name": created.name},
             occurred_at=now,
             event_type="supplier.registered",
+        )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=201,
+            response_ref=str(created.supplier_id),
+            now=now,
         )
         self._uow.commit()
         return created
@@ -167,9 +189,23 @@ class SupplierUseCases:
         *,
         expected_version: int,
         reason: str | None = None,
+        idempotency_key: str | None = None,
+        method: str = "POST",
+        path: str,
         request_id: str | None = None,
     ) -> Supplier:
+        key = validate_key(idempotency_key)
         action_name = validate_action_name(action, family="supplier")
+        body = {
+            "action": action_name,
+            "expected_version": expected_version,
+            "reason": reason,
+        }
+        replay = self._idempotency.lookup(
+            scope, key, method=method, path=path, body=body, now=_utcnow()
+        )
+        if replay is not None:
+            return self._replay_supplier(scope, replay.response_ref)
         supplier = self.get(scope, supplier_id)
         if supplier.row_version != expected_version:
             raise VersionConflictError("供应商")
@@ -207,6 +243,16 @@ class SupplierUseCases:
             occurred_at=now,
             event_type=f"supplier.{action_name}",
         )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=200,
+            response_ref=str(saved.supplier_id),
+            now=now,
+        )
         self._uow.commit()
         return saved
 
@@ -226,6 +272,16 @@ class SupplierUseCases:
         ]
         accepted, decided = self._segments.count_decided(scope, supplier_id)
         return summarize(samples, accepted_segments=accepted, decided_segments=decided)
+
+    def _replay_supplier(self, scope: ProjectScope, response_ref: str | None) -> Supplier:
+        """按幂等记录重放：只返回当前项目内的资源，越权与缺失同样 404。"""
+        if not response_ref:
+            raise ResourceNotFoundError("供应商", response_ref)
+        try:
+            supplier_id = UUID(response_ref)
+        except ValueError as exc:
+            raise ResourceNotFoundError("供应商", response_ref) from exc
+        return self.get(scope, supplier_id)
 
 
 def supplier_actions(status: str) -> frozenset[str]:

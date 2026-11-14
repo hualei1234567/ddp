@@ -6,6 +6,12 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.application.idempotency import (
+    IdempotencyRecord as _IdempotencyRecord,
+)
+from app.application.idempotency import (
+    IdempotencyRepository as _IdempotencyRepository,
+)
 from app.domain.identity.models import ProjectScope
 from app.domain.modelops.models import (
     DataRequirement,
@@ -58,17 +64,11 @@ class OutboxRepository(Protocol):
     def enqueue(self, scope: ProjectScope, event: OutboxEvent) -> None: ...
 
 
-class IdempotencyRecord(Protocol):
-    key: str
-    request_hash: str
-    response_status: int
-    response_ref: str | None
-    expires_at: datetime
-
-
-class IdempotencyRepository(Protocol):
-    def get(self, scope: ProjectScope, key: str) -> IdempotencyRecord | None: ...
-    def add(self, scope: ProjectScope, record: IdempotencyRecord) -> None: ...
+# 幂等记录类型与仓储协议由 application 顶层统一声明，避免四个域各写一份。
+# 这里重新导出，保持本域既有的 ``from app.application.modelops.ports import
+# IdempotencyRecord`` 调用点不变。
+IdempotencyRecord = _IdempotencyRecord
+IdempotencyRepository = _IdempotencyRepository
 
 
 class ModelRepository(Protocol):

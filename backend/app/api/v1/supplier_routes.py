@@ -11,6 +11,7 @@ from app.api.deps import get_project_context
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.supplier_dependencies import (
     ExpectedVersion,
+    IdempotencyKey,
     ReadScope,
     SupplierServicesDep,
     WriteScope,
@@ -60,6 +61,7 @@ def create_supplier(
     request: Request,
     scope: WriteScope,
     services: SupplierServicesDep,
+    idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
     supplier = services.suppliers.create(
         scope,
@@ -72,6 +74,9 @@ def create_supplier(
             external_ref=payload.external_ref,
             notes=payload.notes,
         ),
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
         request_id=request_id(request),
     )
     return supplier_out(supplier)
@@ -111,6 +116,7 @@ def act_on_supplier(
     context: Annotated[ProjectContext, Depends(get_project_context)],
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
+    idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
     """激活/暂停/恢复为常规写动作；终止是不可逆高风险动作，要求项目 Owner。"""
     if (
@@ -125,6 +131,9 @@ def act_on_supplier(
         action,
         expected_version=expected_version,
         reason=payload.reason if payload else None,
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
         request_id=request_id(request),
     )
     return supplier_out(supplier)
