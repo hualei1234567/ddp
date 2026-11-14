@@ -1,0 +1,166 @@
+{
+  "generated_at": "2026-11-14T10:33:43.824278+00:00",
+  "database": "PostgreSQL 16.15 local (alembic 0021)",
+  "artifact": "[SYNTHETIC] local file; S3 HEAD not covered",
+  "steps": [
+    {
+      "step": "冻结数据集版本",
+      "status": 200,
+      "detail": {
+        "dataset_version_id": "ed42befd-335c-49b0-ae6b-75c2c240db20"
+      }
+    },
+    {
+      "step": "创建模型",
+      "status": 201,
+      "detail": {
+        "model_id": "f021ad08-bb41-4672-9f69-897acfd92dff",
+        "status": "DRAFT"
+      }
+    },
+    {
+      "step": "创建模型版本",
+      "status": 201,
+      "detail": {
+        "model_version_id": "e773a263-2e3b-4df2-8e70-d886a08fe954",
+        "artifact_size": 4096
+      }
+    },
+    {
+      "step": "产物校验→READY",
+      "status": 200,
+      "detail": {
+        "status": "READY"
+      }
+    },
+    {
+      "step": "发布版本→RELEASED",
+      "status": 200,
+      "detail": {
+        "released_at": "2026-11-14T10:33:43.539346+00:00"
+      }
+    },
+    {
+      "step": "重复发布被拒绝",
+      "status": 409,
+      "detail": "state_transition_invalid"
+    },
+    {
+      "step": "跨项目用户读取被拒绝",
+      "status": 403,
+      "detail": "隔离生效"
+    },
+    {
+      "step": "评测入队",
+      "status": 202,
+      "detail": {
+        "evaluation_id": "47e0bbc7-71ce-4036-bda0-40af61e8ed6d",
+        "status": "QUEUED"
+      }
+    },
+    {
+      "step": "评测回调→FAIL",
+      "status": 204,
+      "detail": {
+        "status": "SUCCEEDED",
+        "verdict": "FAIL"
+      }
+    },
+    {
+      "step": "登记模型反馈",
+      "status": 201,
+      "detail": {
+        "feedback_id": "a2cf13de-d176-486a-aa0a-c016844bee39"
+      }
+    },
+    {
+      "step": "数据缺口聚合",
+      "status": 200,
+      "detail": {
+        "suggested_episode_count": 8
+      }
+    },
+    {
+      "step": "反馈转数据需求",
+      "status": 200,
+      "detail": {
+        "requirement_id": "0f26c55b-99a8-4c31-8b1d-011faf4651fb",
+        "feedback_status": "REQUIREMENT_CREATED"
+      }
+    },
+    {
+      "step": "提交人自批被拒绝",
+      "status": 403,
+      "detail": "职责分离生效"
+    },
+    {
+      "step": "负责人批准需求",
+      "status": 200,
+      "detail": {
+        "status": "APPROVED"
+      }
+    },
+    {
+      "step": "未关联冻结版本不能满足",
+      "status": 409,
+      "detail": "data_requirement_not_satisfied"
+    },
+    {
+      "step": "关联冻结版本→SATISFIED",
+      "status": 200,
+      "detail": {
+        "status": "SATISFIED"
+      }
+    },
+    {
+      "step": "复测评测→PASS",
+      "status": 204,
+      "detail": {
+        "verdict": "PASS"
+      }
+    },
+    {
+      "step": "关联复测评测",
+      "status": 200,
+      "detail": {
+        "retest_evaluation_ids": [
+          "4bbe001d-44e9-4d52-9970-a01b3caa7865"
+        ]
+      }
+    },
+    {
+      "step": "关闭数据需求",
+      "status": 200,
+      "detail": {
+        "status": "CLOSED"
+      }
+    },
+    {
+      "step": "推理任务回调→SUCCEEDED",
+      "status": 204,
+      "detail": {
+        "metrics": {
+          "latency_ms": 12.5
+        }
+      }
+    },
+    {
+      "step": "同一 event_id 同内容回调幂等",
+      "status": 204,
+      "detail": "IDEMPOTENT"
+    },
+    {
+      "step": "同一 event_id 不同内容被拒绝",
+      "status": 409,
+      "detail": "model_callback_replayed"
+    },
+    {
+      "step": "审计与 Outbox 落库",
+      "status": 200,
+      "detail": {
+        "audit_logs": 28,
+        "outbox": 28
+      }
+    }
+  ]
+}

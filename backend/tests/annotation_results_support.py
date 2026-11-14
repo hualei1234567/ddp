@@ -60,7 +60,10 @@ from app.infrastructure.repositories.annotation_schemas import SqlAnnotationSche
 from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRepository
 from sqlalchemy.orm import Session
 
-NOW = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
+# 夹具时间必须锚定真实时钟：领用租约与到期判断用 datetime.now(UTC)，
+# 写死日期会让 lease_expires_at 在当天之后立即判为过期（CI 于 2026-11-14 暴露）。
+# 截断到整秒，避免不同调用间微秒漂移影响快照类断言。
+NOW = datetime.now(UTC).replace(microsecond=0)
 SHA = "sha256:" + "a" * 64
 EPISODE_START = 1_000
 EPISODE_END = 2_000

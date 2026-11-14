@@ -126,6 +126,24 @@ jobs:
           bash packages/contracts/scripts/check-compatibility.sh \
             packages/contracts/openapi.yaml \
             "${BASE_REF}"
+      - name: 冻结基线 SHA256 校验
+        # 冻结基线一旦被改动（含同时改 bundle 与 .sha256），CI 必须失败。
+        run: |
+          fail=0
+          for stage in 2 3 4 5 6; do
+            file="packages/contracts/baselines/openapi.stage${stage}.v1.0.0.bundle.yaml"
+            sha="packages/contracts/baselines/openapi.stage${stage}.v1.0.0.sha256"
+            [ -f "$file" ] || { echo "缺少基线 $file"; fail=1; continue; }
+            expected=$(cat "$sha")
+            actual=$(shasum -a 256 "$file" | awk '{print $1}')
+            if [ "$expected" != "$actual" ]; then
+              echo "基线 SHA256 不一致（stage${stage}）：expected=$expected actual=$actual"
+              fail=1
+            else
+              echo "stage${stage} 基线校验通过"
+            fi
+          done
+          exit $fail
 
   security:
     name: Secret / 依赖 / Agent 守卫
