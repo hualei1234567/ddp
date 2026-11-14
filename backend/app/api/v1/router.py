@@ -15,6 +15,7 @@ from app.api.v1 import (
     dataset_grant_routes,
     dataset_routes,
     dataset_version_routes,
+    datasource_routes,
     devices,
     episodes,
     evaluation_routes,
@@ -61,3 +62,4 @@ api_router.include_router(requirement_routes.router)
 api_router.include_router(model_adapter_routes.router)
 api_router.include_router(supplier_routes.router)
 api_router.include_router(inbound_routes.router)
+api_router.include_router(datasource_routes.router)

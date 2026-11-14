@@ -16,6 +16,7 @@ from app.api.errors import (
     annotation_error_to_app,
     collection_error_to_app,
     dataset_error_to_app,
+    datasource_error_to_app,
     domain_error_to_app,
     episode_error_to_app,
     ingestion_error_to_app,
@@ -32,6 +33,7 @@ from app.core.logging import configure_logging
 from app.domain.annotation.errors import AnnotationDomainError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.datasets.errors import DatasetDomainError
+from app.domain.datasources.errors import DataSourceDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.identity.errors import CrossProjectAccessError
@@ -167,6 +169,17 @@ def create_app() -> FastAPI:
         from app.api.errors import modelops_error_to_app
 
         error = modelops_error_to_app(exc)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(DataSourceDomainError)
+    async def handle_datasource_domain_error(
+        request: Request,
+        exc: DataSourceDomainError,
+    ) -> JSONResponse:
+        error = datasource_error_to_app(exc)
         return JSONResponse(
             status_code=error.status_code,
             content=_error_payload(request, error),

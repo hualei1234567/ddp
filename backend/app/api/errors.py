@@ -11,6 +11,7 @@ from app.core.errors import AppError
 from app.domain.annotation.errors import AnnotationDomainError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.datasets.errors import DatasetDomainError
+from app.domain.datasources.errors import DataSourceDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.ingestion.errors import IngestionDomainError
@@ -576,4 +577,37 @@ def supplier_error_to_app(exc: Exception) -> AppError:
         code,
         _SUPPLIER_MESSAGES.get(code) or str(exc) or _SUPPLIER_FALLBACK,
         _SUPPLIER_STATUS_BY_CODE[code],
+    )
+
+
+_DATASOURCE_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "state_transition_invalid": 409,
+    "version_conflict": 409,
+    "duplicate_resource": 409,
+    "idempotency_key_reused": 409,
+    "resource_not_found": 404,
+    "forbidden": 403,
+}
+
+_DATASOURCE_MESSAGES = {
+    "state_transition_invalid": "导入任务状态不允许该操作",
+    "version_conflict": "资源版本已变化，请重新读取后再试",
+    "duplicate_resource": "项目内数据源编码或 repo/revision 已登记",
+    "idempotency_key_reused": "同一幂等键对应了不同的请求体",
+    "resource_not_found": "资源不存在或不属于当前项目",
+}
+_DATASOURCE_FALLBACK = "数据源域规则校验失败"
+
+
+def datasource_error_to_app(exc: DataSourceDomainError) -> AppError:
+    """数据源域错误映射；未登记的 code 一律收敛到 validation_failed。"""
+    code = getattr(exc, "code", None)
+    if not isinstance(code, str) or code not in _DATASOURCE_STATUS_BY_CODE:
+        # 不把 str(exc) 回显，避免泄漏内部标识或客户端输入。
+        return AppError("validation_failed", _DATASOURCE_FALLBACK, 422)
+    return AppError(
+        code,
+        _DATASOURCE_MESSAGES.get(code, _DATASOURCE_FALLBACK),
+        _DATASOURCE_STATUS_BY_CODE[code],
     )

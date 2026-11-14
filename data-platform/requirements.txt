@@ -1,0 +1,3 @@
+# data-platform 独立依赖：只在这里，不混进 backend/requirements.txt。
+# 版本精确固定；新增需走依赖评估（CLAUDE.md §三）。
+huggingface_hub==0.27.1

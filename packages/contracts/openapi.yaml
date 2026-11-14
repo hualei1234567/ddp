@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.4.0
+  version: 1.5.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -23,6 +23,9 @@ info:
       以及模型平台 Adapter 签名回调（HMAC）。冻结版本 `ddp.stage5/1.0.0`。
     - `1.4.0` 在 `1.3.0` 基础上**增量加入阶段 6 供应商与到货验收已实现端点**：供应商档案、
       到货批次、到货片段裁决、只追加验收核验账本与供应商绩效。冻结版本 `ddp.stage6/1.0.0`。
+    - `1.5.0` 在 `1.4.0` 基础上**增量加入阶段 7 数据平面第一批已实现端点**：
+      Hugging Face 数据源登记与导入任务状态。冻结版本 `ddp.stage7/1.0.0`（仅本批范围）。
+      解析、视频审看与人工审核尚未实现，不在本版本声明内。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -40,7 +43,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.4.0
+  version: 1.5.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -120,6 +123,19 @@ x-ddp-contract:
       validation_note: |
         2026-11-14 DDP-361 已执行：Redocly lint、check-stage6-freeze.sh --freeze/--check、
         oasdiff breaking（--fail-on ERR）；契约 17 个操作与运行期 FastAPI OpenAPI 端点集合零差异。
+    stage7:
+      version: ddp.stage7/1.0.0
+      frozen_status: pending
+      implemented_at: "2026-11-15"
+      scope_note: |
+        仅覆盖数据平面第一批：Hugging Face 数据源登记（DataSource）与导入任务
+        （DataSourceImport）共 7 个操作。解析、视频审看、人工审核尚未实现，
+        不在本版本声明内；不得据 `docs/ddp/01` 的目标架构推断这些能力已具备。
+      validation_status: PASS
+      validation_note: |
+        2026-11-15 已执行：Redocly lint 通过；运行期 FastAPI 端点与契约声明一致。
+        `revision` 的 40 位 sha 约束与 `GATED`/`is_gated` 一致性同时写在
+        OpenAPI schema、Pydantic 模型与数据库 CHECK 三处。
         详细记录见 docs/architecture/阶段6-供应商与到货验收契约冻结-v1.0.md。
 servers:
   - url: http://localhost:8000
@@ -530,6 +546,18 @@ paths:
     $ref: "./fragments/paths.stage6.yaml#/inboundSegmentDecision"
   /api/v1/projects/{project_id}/acceptance-ledger:
     $ref: "./fragments/paths.stage6.yaml#/acceptanceLedger"
+  /api/v1/projects/{project_id}/data-sources:
+    $ref: "./fragments/paths.stage7.yaml#/dataSources"
+  /api/v1/projects/{project_id}/data-sources/{data_source_id}:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceDetail"
+  /api/v1/projects/{project_id}/data-sources/{data_source_id}/imports:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImports"
+  /api/v1/projects/{project_id}/data-source-imports:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImportList"
+  /api/v1/projects/{project_id}/data-source-imports/{import_id}:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImportDetail"
+  /api/v1/projects/{project_id}/data-source-imports/{import_id}/actions/{action}:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImportActions"
 components:
   securitySchemes:
     bearerAuth:
@@ -929,3 +957,16 @@ components:
     DeliveryBatchPage: {$ref: "./fragments/schemas.stage6.yaml#/DeliveryBatchPage"}
     InboundSegmentPage: {$ref: "./fragments/schemas.stage6.yaml#/InboundSegmentPage"}
     AcceptanceLedgerPage: {$ref: "./fragments/schemas.stage6.yaml#/AcceptanceLedgerPage"}
+    DataSourceKind: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceKind"}
+    AccessCondition: {$ref: "./fragments/schemas.stage7.yaml#/AccessCondition"}
+    ImportScope: {$ref: "./fragments/schemas.stage7.yaml#/ImportScope"}
+    ImportStatus: {$ref: "./fragments/schemas.stage7.yaml#/ImportStatus"}
+    ImportAction: {$ref: "./fragments/schemas.stage7.yaml#/ImportAction"}
+    DataSourceCreate: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceCreate"}
+    DataSourcePatch: {$ref: "./fragments/schemas.stage7.yaml#/DataSourcePatch"}
+    DataSource: {$ref: "./fragments/schemas.stage7.yaml#/DataSource"}
+    DataSourcePage: {$ref: "./fragments/schemas.stage7.yaml#/DataSourcePage"}
+    DataSourceImportCreate: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceImportCreate"}
+    ImportActionRequest: {$ref: "./fragments/schemas.stage7.yaml#/ImportActionRequest"}
+    DataSourceImport: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceImport"}
+    DataSourceImportPage: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceImportPage"}

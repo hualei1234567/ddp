@@ -1,0 +1,226 @@
+# 阶段 7 数据平面路径片段（第一批：HF 数据源登记与导入）。
+# 仅声明 backend/app/api/v1/datasource_routes.py 实际实现的端点（7 个操作）。
+# 由 openapi.yaml 通过 $ref 解析；引用回入口文件以复用公共参数与响应。
+
+dataSources:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listDataSources
+    tags: [datasources]
+    summary: 数据源列表
+    parameters:
+      - name: kind
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/DataSourceKind" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 数据源分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataSourcePage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createDataSource
+    tags: [datasources]
+    summary: 登记外部数据源
+    description: |
+      `revision` 必须是 40 位 commit sha：`main` 等可变引用会移动，只存分支名的
+      导入不可复现，因此契约层直接拒绝。
+      `license` 必填；`access_condition=GATED` 与 `is_gated` 必须一致——
+      访问成功不等于拥有商业使用权。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DataSourceCreate" }
+    responses:
+      "201":
+        description: 数据源已登记
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataSource" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dataSourceDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: data_source_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: getDataSource
+    tags: [datasources]
+    summary: 数据源详情
+    responses:
+      "200":
+        description: 数据源
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataSource" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  patch:
+    operationId: updateDataSource
+    tags: [datasources]
+    summary: 修改数据源治理字段
+    description: |
+      只允许改 name / license / access_condition / is_gated / config_name /
+      split / notes。`repo_id` 与 `revision` 不可改——改 revision 等于换数据，
+      必须重新登记以保证血缘可追。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DataSourcePatch" }
+    responses:
+      "200":
+        description: 已修改
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataSource" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dataSourceImports:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: data_source_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  post:
+    operationId: createDataSourceImport
+    tags: [datasources]
+    summary: 登记一次导入
+    description: |
+      只建任务并投递 `datasource.import_requested` 事件，**不在 HTTP 线程下载数据**。
+      `scope=SAMPLE` 必须给 `sample_limit`：默认只做小样本，不默认全量下载。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/DataSourceImportCreate" }
+    responses:
+      "201":
+        description: 导入任务已登记
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataSourceImport" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dataSourceImportList:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listDataSourceImports
+    tags: [datasources]
+    summary: 导入任务列表
+    description: |
+      同时支持全项目列表与按数据源过滤；`data_source_id` 为可选查询参数，
+      避免为同一份数据提供两条等价路径。
+    parameters:
+      - name: data_source_id
+        in: query
+        schema: { type: string, format: uuid }
+      - name: status
+        in: query
+        schema: { $ref: "../openapi.yaml#/components/schemas/ImportStatus" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 导入任务分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataSourceImportPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dataSourceImportDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: import_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: getDataSourceImport
+    tags: [datasources]
+    summary: 导入任务详情
+    responses:
+      "200":
+        description: 导入任务
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataSourceImport" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dataSourceImportActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: import_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    - name: action
+      in: path
+      required: true
+      schema: { $ref: "../openapi.yaml#/components/schemas/ImportAction" }
+  post:
+    operationId: actOnDataSourceImport
+    tags: [datasources]
+    summary: 推进导入任务状态
+    description: |
+      `PENDING -> RUNNING -> {SUCCEEDED, FAILED, CANCELLED}`；终态不得回退。
+      `fail` 必须带 `error_message`：失败留痕是 `docs/ddp/07` §5 的硬要求。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ImportActionRequest" }
+    responses:
+      "200":
+        description: 状态已推进
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataSourceImport" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

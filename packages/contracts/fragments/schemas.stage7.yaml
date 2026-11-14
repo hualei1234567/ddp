@@ -1,0 +1,174 @@
+# 阶段 7 数据平面 Schema（第一批：HF 数据源登记与导入）。
+
+DataSourceKind:
+  type: string
+  enum: [HUGGINGFACE]
+  description: 数据源类型。当前仅支持 Hugging Face；新增 Adapter 时在此扩展。
+
+AccessCondition:
+  type: string
+  enum: [PUBLIC, GATED, PRIVATE, UNKNOWN]
+  description: |
+    访问条件。**访问成功不等于拥有商业使用权**（`docs/ddp/07` §2）。
+    `GATED` 必须与 `is_gated=true` 同时出现。
+
+ImportScope:
+  type: string
+  enum: [SAMPLE, SPLIT, FULL]
+  description: 导入范围。默认只做小样本，不默认全量下载。
+
+ImportStatus:
+  type: string
+  enum: [PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED]
+
+ImportAction:
+  type: string
+  enum: [start, succeed, fail, cancel]
+  description: |
+    `PENDING -> RUNNING -> {SUCCEEDED, FAILED, CANCELLED}`；终态之后任何动作都返回
+    `state_transition_invalid`（409）。
+
+DataSourceCreate:
+  type: object
+  additionalProperties: false
+  required: [code, name, repo_id, revision, license, access_condition]
+  properties:
+    code: { type: string, minLength: 1, maxLength: 64 }
+    name: { type: string, minLength: 1, maxLength: 200 }
+    repo_id:
+      type: string
+      pattern: '^[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*$'
+      description: Hugging Face repo id，形如 `owner/name`；不接受 URL。
+    revision:
+      type: string
+      minLength: 40
+      maxLength: 40
+      pattern: '^[0-9a-f]{40}$'
+      description: |
+        必须是 40 位 commit sha。`main` 等分支引用会移动，只存分支名的导入不可复现，
+        因此契约层直接拒绝。
+    license: { type: string, minLength: 1, maxLength: 100 }
+    access_condition: { $ref: "../openapi.yaml#/components/schemas/AccessCondition" }
+    is_gated: { type: boolean, default: false }
+    kind:
+      allOf:
+        - $ref: "../openapi.yaml#/components/schemas/DataSourceKind"
+      default: HUGGINGFACE
+    config_name: { type: [string, "null"], maxLength: 100 }
+    split: { type: [string, "null"], maxLength: 100 }
+    dataset_card_url: { type: [string, "null"], maxLength: 2048 }
+    notes: { type: [string, "null"], maxLength: 2000 }
+    metadata: { type: [object, "null"], additionalProperties: true }
+
+DataSourcePatch:
+  type: object
+  additionalProperties: false
+  description: |
+    只允许改治理字段。`repo_id` / `revision` 不在白名单内：改 revision 等于换数据，
+    必须重新登记以保证血缘可追。
+  properties:
+    name: { type: [string, "null"], minLength: 1, maxLength: 200 }
+    license: { type: [string, "null"], minLength: 1, maxLength: 100 }
+    access_condition:
+      oneOf:
+        - { $ref: "../openapi.yaml#/components/schemas/AccessCondition" }
+        - { type: "null" }
+    is_gated: { type: [boolean, "null"] }
+    config_name: { type: [string, "null"], maxLength: 100 }
+    split: { type: [string, "null"], maxLength: 100 }
+    notes: { type: [string, "null"], maxLength: 2000 }
+
+DataSource:
+  type: object
+  required:
+    [data_source_id, project_id, code, name, kind, repo_id, revision, license,
+     access_condition, is_gated, metadata, version]
+  properties:
+    data_source_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    code: { type: string }
+    name: { type: string }
+    kind: { $ref: "../openapi.yaml#/components/schemas/DataSourceKind" }
+    repo_id: { type: string }
+    revision: { type: string }
+    license: { type: string }
+    access_condition: { $ref: "../openapi.yaml#/components/schemas/AccessCondition" }
+    is_gated: { type: boolean }
+    config_name: { type: [string, "null"] }
+    split: { type: [string, "null"] }
+    dataset_card_url: { type: [string, "null"] }
+    notes: { type: [string, "null"] }
+    metadata: { type: object, additionalProperties: true }
+    version: { type: integer, minimum: 1 }
+
+DataSourcePage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/DataSource" }
+    next_cursor: { type: [string, "null"] }
+
+DataSourceImportCreate:
+  type: object
+  additionalProperties: false
+  required: [scope, tool_name, tool_version]
+  properties:
+    scope: { $ref: "../openapi.yaml#/components/schemas/ImportScope" }
+    tool_name: { type: string, minLength: 1, maxLength: 200 }
+    tool_version: { type: string, minLength: 1, maxLength: 100 }
+    sample_limit:
+      type: [integer, "null"]
+      minimum: 1
+      description: |
+        `scope=SAMPLE` 时必填。默认只做小样本导入，不默认全量下载。
+    cache_location: { type: [string, "null"], maxLength: 1024 }
+
+ImportActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    row_count: { type: [integer, "null"], minimum: 0 }
+    file_count: { type: [integer, "null"], minimum: 0 }
+    error_message:
+      type: [string, "null"]
+      maxLength: 2000
+      description: |
+        `action=fail` 时必填：失败留痕是 `docs/ddp/07` §5 的硬要求，
+        不允许"失败了但不知道为什么"。
+
+DataSourceImport:
+  type: object
+  required:
+    [import_id, project_id, data_source_id, status, scope, tool_name, tool_version,
+     version, allowed_actions]
+  properties:
+    import_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    data_source_id: { type: string, format: uuid }
+    status: { $ref: "../openapi.yaml#/components/schemas/ImportStatus" }
+    scope: { $ref: "../openapi.yaml#/components/schemas/ImportScope" }
+    tool_name: { type: string }
+    tool_version: { type: string }
+    sample_limit: { type: [integer, "null"] }
+    cache_location: { type: [string, "null"] }
+    imported_row_count: { type: [integer, "null"] }
+    imported_file_count: { type: [integer, "null"] }
+    error_message: { type: [string, "null"] }
+    started_at: { type: [string, "null"], format: date-time }
+    finished_at: { type: [string, "null"], format: date-time }
+    version: { type: integer, minimum: 1 }
+    allowed_actions:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/ImportAction" }
+      description: 服务端计算的可执行动作；前端只按此渲染按钮。
+
+DataSourceImportPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/DataSourceImport" }
+    next_cursor: { type: [string, "null"] }

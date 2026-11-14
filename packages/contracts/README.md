@@ -17,12 +17,14 @@
 | `1.2.0` | 在 `1.1.0` 基础上增量加入阶段 4 数据集与训练支撑已实现端点 | **FROZEN（DDP-331）** |
 | `1.3.0` | 在 `1.2.0` 基础上增量加入阶段 5 模型闭环已实现端点 | **FROZEN（DDP-341）** |
 | `1.4.0` | 在 `1.3.0` 基础上增量加入阶段 6 供应商与到货验收已实现端点 | **FROZEN（DDP-361）** |
+| `1.5.0` | 在 `1.4.0` 基础上增量加入阶段 7 数据平面第一批（HF 数据源登记 + 导入任务） | **FROZEN（阶段 7 第一批）** |
 | `ddp.device/1.0.0` | 阶段 1 设备域冻结目标 | 已批准 |
 | `ddp.stage2/1.0.0` | 阶段 2 契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage3/1.0.0` | 阶段 3 标注契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage4/1.0.0` | 阶段 4 数据集与训练契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage5/1.0.0` | 阶段 5 模型闭环契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage6/1.0.0` | 阶段 6 供应商与到货验收契约冻结版本 | v1.0 FROZEN |
+| `ddp.stage7/1.0.0` | 阶段 7 数据平面第一批契约冻结版本 | v1.0 FROZEN |
 
 阶段 1 尚未关闭的实现差距不在本快照中声明为可用，清单见
 `docs/architecture/阶段1-设备域冻结字段实现差距与排期.md`。
@@ -174,3 +176,11 @@ CI 的 `contract` job 会对 PR 使用 `pull_request.base.sha`、对 push 使用
 - `ddp.stage2/1.0.0`：阶段 2 冻结版本；破坏性变更需新 ADR 并提升契约版本。
 - `ddp.stage3/1.0.0`：阶段 3 冻结版本；破坏性变更需新 ADR 并提升契约版本。
 - `/api/v1`：HTTP 主版本；移除/重命名/改语义属于破坏性变更。
+
+阶段 7 的 7 个操作（DataSource 登记/查询/改档 + DataSourceImport 登记/查询/状态推进）
+见 `fragments/paths.stage7.yaml` 与 `fragments/schemas.stage7.yaml`。
+**解析、视频审看、人工审核尚未实现，不在本版本声明内**——不得据
+`docs/ddp/01-目标业务架构蓝图.md` 的目标架构推断这些能力已具备。
+
+`revision` 必须是 40 位 commit sha：`main` 等可变引用会移动，只存分支名的导入不可复现。
+该约束同时写在 OpenAPI schema、Pydantic 模型与数据库 CHECK 三处，任一层都不放过。

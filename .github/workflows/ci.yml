@@ -130,7 +130,7 @@ jobs:
         # 冻结基线一旦被改动（含同时改 bundle 与 .sha256），CI 必须失败。
         run: |
           fail=0
-          for stage in 2 3 4 5 6; do
+          for stage in 2 3 4 5 6 7; do
             file="packages/contracts/baselines/openapi.stage${stage}.v1.0.0.bundle.yaml"
             sha="packages/contracts/baselines/openapi.stage${stage}.v1.0.0.sha256"
             [ -f "$file" ] || { echo "缺少基线 $file"; fail=1; continue; }
