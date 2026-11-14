@@ -10,6 +10,9 @@ ignore = ["S101"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106"]
 "migrations/**" = ["E501"]
+# 状态机规则表是纯数据（枚举 → 目标状态的显式迁移表）。硬折行会让
+# "一个状态一条规则"的可读性显著下降，而这类表恰恰最需要肉眼可核对。
+"app/domain/annotation/state_rules.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
