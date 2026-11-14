@@ -20,6 +20,8 @@ import AnnotationTaskDetailPage from "./pages/annotation/AnnotationTaskDetailPag
 import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
 import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
 import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPage";
+import DataSourceListPage from "./pages/datasources/DataSourceListPage";
+import ImportListPage from "./pages/datasources/ImportListPage";
 import DatasetDetailPage from "./pages/datasets/DatasetDetailPage";
 import DatasetListPage from "./pages/datasets/DatasetListPage";
 import DatasetVersionDetailPage from "./pages/datasets/DatasetVersionDetailPage";
@@ -170,6 +172,8 @@ export default function AppRoutes() {
           path="annotation/quality-samples/:qualitySampleId"
           element={<AnnotationQualityDetailPage />}
         />
+        <Route path="ingestion" element={<DataSourceListPage />} />
+        <Route path="data-source-imports" element={<ImportListPage />} />
         <Route path="datasets" element={<DatasetListPage />} />
         <Route path="datasets/:datasetId" element={<DatasetDetailPage />} />
         <Route

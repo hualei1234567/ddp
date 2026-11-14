@@ -43,7 +43,7 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const PLATFORM_STAGE_LABEL = "阶段 6 · 规模化运营";
+export const PLATFORM_STAGE_LABEL = "阶段 7 · 数据平面";
 
 /**
  * 一级导航分区，依据规范 §18.2。
@@ -91,9 +91,10 @@ export const navSections: NavSection[] = [
       {
         path: "/ingestion",
         label: "数据接入",
-        description: "接收原始数据，执行完整性校验与格式解析。",
+        description: "登记外部数据源（Hugging Face）并发起小样本导入。",
         icon: createElement(CloudUploadOutlined),
-        available: false,
+        available: true,
+        aliases: ["/data-source-imports"],
       },
       {
         path: "/processing",
