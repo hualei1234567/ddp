@@ -15,6 +15,7 @@ from app.application.idempotency import (
 )
 from app.domain.datasources.media import MediaAsset as MediaAssetT
 from app.domain.datasources.models import DataSource, DataSourceImport
+from app.domain.datasources.review import DataReview as DataReviewT
 from app.domain.identity.models import ProjectScope
 
 
@@ -81,6 +82,16 @@ class DataSourceImportRepository(Protocol):
     ) -> DataSourceImport: ...
 
 
+class DataReviewRepository(Protocol):
+    def add(self, scope: ProjectScope, review: DataReviewT) -> DataReviewT: ...
+
+    def get_by_import(self, scope: ProjectScope, import_id: UUID) -> DataReviewT | None: ...
+
+    def save(
+        self, scope: ProjectScope, review: DataReviewT, *, expected_version: int
+    ) -> DataReviewT: ...
+
+
 class ObjectReader(Protocol):
     """签发临时只读访问；实现负责签名，不把存储凭据交给前端。"""
 
@@ -111,6 +122,7 @@ IdempotencyRepository = _IdempotencyRepository
 
 __all__ = [
     "AuditRepository",
+    "DataReviewRepository",
     "MediaAssetRepository",
     "ObjectReader",
     "ObjectWriter",

@@ -22,8 +22,10 @@ from app.domain.datasources.enums import (
 from app.domain.datasources.errors import DuplicateResourceError, VersionConflictError
 from app.domain.datasources.media import MediaAsset
 from app.domain.datasources.models import DataSource, DataSourceImport
+from app.domain.datasources.review import DataReview
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.datasources import (
+    DataReviewModel,
     DataSourceImportModel,
     DataSourceModel,
     MediaAssetModel,
@@ -390,3 +392,87 @@ class SqlMediaAssetRepository:
             )
         )
         return _asset_from_row(row) if row is not None else None
+
+
+def _review_from_row(row: DataReviewModel) -> DataReview:
+    return DataReview(
+        review_id=row.id,
+        project_id=row.project_id,
+        import_id=row.import_id,
+        status=row.status,
+        decision=row.decision,
+        reason=row.reason,
+        reviewer_id=row.reviewer_id,
+        submitted_by=row.submitted_by,
+        created_at=as_utc(row.created_at),  # type: ignore[arg-type]
+        decided_at=as_utc(row.decided_at),
+        row_version=row.version,
+    )
+
+
+class SqlDataReviewRepository:
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, scope: ProjectScope, review: DataReview) -> DataReview:
+        scope.ensure(review.project_id)
+        self._session.add(
+            DataReviewModel(
+                id=review.review_id,
+                project_id=review.project_id,
+                created_by=scope.actor_id,
+                updated_by=scope.actor_id,
+                import_id=review.import_id,
+                status=review.status.value,
+                decision=review.decision.value if review.decision else None,
+                reason=review.reason,
+                reviewer_id=review.reviewer_id,
+                submitted_by=review.submitted_by,
+                decided_at=review.decided_at,
+            )
+        )
+        try:
+            self._session.flush()
+        except IntegrityError as exc:
+            raise DuplicateResourceError("该导入已存在审核记录") from exc
+        return review
+
+    def get_by_import(self, scope: ProjectScope, import_id: UUID) -> DataReview | None:
+        row = self._session.scalar(
+            select(DataReviewModel).where(
+                DataReviewModel.project_id == scope.project_id,
+                DataReviewModel.import_id == import_id,
+            )
+        )
+        return _review_from_row(row) if row is not None else None
+
+    def save(self, scope: ProjectScope, review: DataReview, *, expected_version: int) -> DataReview:
+        scope.ensure(review.project_id)
+        result = self._session.execute(
+            update(DataReviewModel)
+            .where(
+                DataReviewModel.id == review.review_id,
+                DataReviewModel.project_id == scope.project_id,
+                DataReviewModel.version == expected_version,
+            )
+            .values(
+                status=review.status.value,
+                decision=review.decision.value if review.decision else None,
+                reason=review.reason,
+                reviewer_id=review.reviewer_id,
+                decided_at=review.decided_at,
+                version=expected_version + 1,
+                updated_by=scope.actor_id,
+            )
+        )
+        if result.rowcount == 0:
+            raise_update_failure(
+                self._session,
+                DataReviewModel,
+                scope,
+                review.review_id,
+                "审核记录",
+                expected_version,
+            )
+        self._session.flush()
+        return replace(review, row_version=expected_version + 1)

@@ -27,6 +27,9 @@ from app.api.v1.datasource_schemas import (
     ImportActionRequest,
     MediaAssetOut,
     MediaAssetPlaybackOut,
+    QualityReportOut,
+    ReviewCreateOut,
+    ReviewDecisionRequest,
 )
 from app.api.v1.preconditions import require_expected_version
 from app.application.datasources import (
@@ -39,12 +42,15 @@ from app.application.datasources import (
 )
 from app.application.datasources.ports import (
     AuditRepository,
+    DataReviewRepository,
     DataSourceImportRepository,
     DataSourceRepository,
     IdempotencyRepository,
+    MediaAssetRepository,
     OutboxRepository,
     UnitOfWork,
 )
+from app.application.datasources.reviews import DataReviewUseCases
 from app.core.config import get_settings
 from app.domain.datasources.errors import ResourceNotFoundError
 from app.infrastructure.repositories.dataset_audit import (
@@ -52,6 +58,7 @@ from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetOutboxRepository,
 )
 from app.infrastructure.repositories.datasources import (
+    SqlDataReviewRepository,
     SqlDataSourceImportRepository,
     SqlDataSourceRepository,
     SqlMediaAssetRepository,
@@ -102,6 +109,28 @@ def _cast_uow(value: object) -> UnitOfWork:
 
 
 DataSourceServicesDep = Annotated[DataSourceUseCases, Depends(get_data_source_use_cases)]
+
+
+def get_review_use_cases(session: DbSession) -> DataReviewUseCases:
+    return DataReviewUseCases(
+        reviews=_as_review_repo(SqlDataReviewRepository(session)),
+        imports=_cast_import(SqlDataSourceImportRepository(session)),
+        assets=_as_asset_repo(SqlMediaAssetRepository(session)),
+        audit=_cast_audit(SqlDatasetAuditRepository(session)),
+        outbox=_cast_outbox(SqlDatasetOutboxRepository(session)),
+        uow=_cast_uow(session),
+    )
+
+
+def _as_review_repo(value: object) -> DataReviewRepository:
+    return value  # type: ignore[return-value]
+
+
+def _as_asset_repo(value: object) -> MediaAssetRepository:
+    return value  # type: ignore[return-value]
+
+
+ReviewServicesDep = Annotated[DataReviewUseCases, Depends(get_review_use_cases)]
 
 
 @router.get("/data-sources")
@@ -304,6 +333,71 @@ def act_on_import(
         request_id=request_id(request),
     )
     return DataSourceImportOut.from_domain(updated).model_dump(mode="json")
+
+
+@router.post("/data-source-imports/{import_id}/review", status_code=201)
+def ensure_review(
+    import_id: UUID,
+    request: Request,
+    scope: WriteScope,
+    use_cases: ReviewServicesDep,
+) -> dict[str, Any]:
+    """为导入创建审核记录；已存在时直接返回（幂等）。"""
+    review = use_cases.ensure_review(scope, import_id, request_id=request_id(request))
+    return ReviewCreateOut.from_domain(review).model_dump(mode="json")
+
+
+@router.get("/data-source-imports/{import_id}/review")
+def get_review(import_id: UUID, scope: ReadScope, use_cases: ReviewServicesDep) -> dict[str, Any]:
+    review = use_cases.get_review(scope, import_id)
+    if review is None:
+        raise ResourceNotFoundError("审核记录", import_id)
+    return ReviewCreateOut.from_domain(review).model_dump(mode="json")
+
+
+@router.post("/data-source-imports/{import_id}/review/decisions")
+def decide_review(
+    import_id: UUID,
+    payload: ReviewDecisionRequest,
+    request: Request,
+    scope: WriteScope,
+    use_cases: ReviewServicesDep,
+    expected_version: ExpectedVersion,
+) -> dict[str, Any]:
+    """给出审核结论。审核人不得是提交人（职责分离，数据库亦有兜底约束）。"""
+    from app.domain.datasources.review import ReviewDecision
+
+    decided = use_cases.decide(
+        scope,
+        import_id,
+        ReviewDecision(payload.decision),
+        reason=payload.reason,
+        expected_version=expected_version,
+        request_id=request_id(request),
+    )
+    return ReviewCreateOut.from_domain(decided).model_dump(mode="json")
+
+
+@router.get("/data-source-imports/{import_id}/quality-report")
+def quality_report(
+    import_id: UUID, scope: ReadScope, use_cases: ReviewServicesDep
+) -> dict[str, Any]:
+    """质量报告：规则版本、样本范围、通过率与失败原因都在响应里。"""
+    report = use_cases.quality_report(scope, import_id)
+    return QualityReportOut(
+        import_id=report.import_id,
+        rule_version=report.rule_version,
+        sample_scope=report.sample_scope,
+        total_assets=report.total_assets,
+        total_episodes=report.total_episodes,
+        passed=report.passed,
+        findings=[
+            {"rule_id": f.rule_id, "passed": f.passed, "detail": f.detail} for f in report.findings
+        ],
+        failures=[
+            {"rule_id": f.rule_id, "passed": f.passed, "detail": f.detail} for f in report.failures
+        ],
+    ).model_dump(mode="json")
 
 
 __all__ = ["router"]

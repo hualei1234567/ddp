@@ -169,3 +169,43 @@ class MediaAssetModel(Base, ProjectScopedMixin):
             "episode_key",
         ),
     )
+
+
+class DataReviewModel(Base, ProjectScopedMixin):
+    """导入结果的人工审核记录。
+
+    职责分离在数据库层也留了痕迹：``reviewer_id`` 与 ``submitted_by`` 分开存，
+    便于审计查询"是否存在自己审自己"的历史记录。
+    """
+
+    __tablename__ = "data_source_reviews"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    import_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("data_source_imports.id", ondelete="CASCADE"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    decision: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    reviewer_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    submitted_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        # 一个导入只有一个审核记录：重复创建会让"审核通过"的语义含糊。
+        UniqueConstraint("project_id", "import_id", name="uq_reviews_project_import"),
+        UniqueConstraint("project_id", "id", name="uq_reviews_project_id_id"),
+        CheckConstraint(
+            "status IN ('PENDING','APPROVED','REJECTED')", name="review_status_allowed"
+        ),
+        CheckConstraint(
+            "decision IS NULL OR decision IN ('ACCEPT','REJECT','NEEDS_FIX')",
+            name="review_decision_allowed",
+        ),
+        # 职责分离：审核人不得与提交人相同。应用层也拦，这里是兜底。
+        CheckConstraint(
+            "reviewer_id IS NULL OR reviewer_id <> submitted_by",
+            name="review_segregation_of_duties",
+        ),
+        CheckConstraint("version >= 1", name="version_positive"),
+    )

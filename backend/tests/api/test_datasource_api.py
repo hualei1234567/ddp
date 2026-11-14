@@ -364,3 +364,102 @@ def test_playback_for_unknown_asset_is_404(api_db) -> None:
     response = client.post(f"/api/v1/projects/{ids.project_a}/media-assets/{uuid4()}/playback")
 
     assert response.status_code == 404
+
+
+# --- 人工审核与质量报告 ------------------------------------------------------
+
+
+def test_review_lifecycle_with_segregation_of_duties(api_db) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    source_id, import_id = _an_import_id(factory, ids)
+
+    created = editor.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review"
+    )
+    assert created.status_code == 201, created.text
+    review = created.json()
+    assert review["status"] == "PENDING"
+    assert review["submitted_by"] == str(ids.editor_a)
+
+    # 幂等：重复创建返回同一条
+    again = editor.post(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+    assert again.json()["review_id"] == review["review_id"]
+
+    # 提交人不得自审
+    self_review = editor.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "ACCEPT"},
+    )
+    assert self_review.status_code == 422
+
+    approved = owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "ACCEPT"},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "APPROVED"
+    assert approved.json()["reviewer_id"] == str(ids.owner_a)
+
+    # 终态不可再裁决
+    second = owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"2"'},
+        json={"decision": "REJECT", "reason": "反悔"},
+    )
+    assert second.status_code == 422
+
+
+def test_reject_requires_reason(api_db) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    editor.post(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+
+    response = owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "REJECT"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_quality_report_on_real_assets(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    _seed_asset(factory, ids, source_id, import_id)
+
+    response = client.get(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/quality-report"
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["rule_version"] == "1.0.0"
+    assert body["sample_scope"] == "SAMPLE"
+    assert body["total_assets"] == 1
+    assert body["passed"] is True
+    assert body["failures"] == []
+    # 报告必须逐条给出规则结果，不能只给总分
+    assert {f["rule_id"] for f in body["findings"]} >= {
+        "assets_present",
+        "main_camera_present",
+    }
+
+
+def test_missing_review_is_404(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source_id, import_id = _an_import_id(factory, ids)
+
+    response = client.get(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review"
+    )
+
+    assert response.status_code == 404

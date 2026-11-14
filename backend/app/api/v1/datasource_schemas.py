@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.datasources.media import MediaAsset
 from app.domain.datasources.models import DataSource, DataSourceImport
+from app.domain.datasources.review import DataReview as DataReviewT
 from app.domain.datasources.state_machines import allowed_import_actions
 
 
@@ -193,3 +194,57 @@ class MediaAssetPlaybackOut(BaseModel):
     expires_in_seconds: int
     content_type: str
     size_bytes: int
+
+
+class ReviewCreateOut(BaseModel):
+    review_id: UUID
+    project_id: UUID
+    import_id: UUID
+    status: str
+    decision: str | None
+    reason: str | None
+    reviewer_id: UUID | None
+    submitted_by: UUID
+    created_at: datetime
+    decided_at: datetime | None
+    version: int
+
+    @classmethod
+    def from_domain(cls, item: DataReviewT) -> ReviewCreateOut:
+        return cls(
+            review_id=item.review_id,
+            project_id=item.project_id,
+            import_id=item.import_id,
+            status=str(item.status),
+            decision=str(item.decision) if item.decision else None,
+            reason=item.reason,
+            reviewer_id=item.reviewer_id,
+            submitted_by=item.submitted_by,
+            created_at=item.created_at,
+            decided_at=item.decided_at,
+            version=item.row_version,
+        )
+
+
+class ReviewDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    decision: str = Field(pattern="^(ACCEPT|REJECT|NEEDS_FIX)$")
+    reason: str | None = Field(default=None, max_length=2000)
+
+
+class QualityFindingOut(BaseModel):
+    rule_id: str
+    passed: bool
+    detail: str
+
+
+class QualityReportOut(BaseModel):
+    import_id: UUID
+    rule_version: str
+    sample_scope: str
+    total_assets: int
+    total_episodes: int
+    passed: bool
+    findings: list[QualityFindingOut]
+    failures: list[QualityFindingOut]

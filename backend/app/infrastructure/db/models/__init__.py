@@ -154,9 +154,15 @@ __all__ = [
 
 from app.infrastructure.db.models import modelops  # noqa: F401,E402
 from app.infrastructure.db.models.datasources import (  # noqa: E402
+    DataReviewModel,
     DataSourceImportModel,
     DataSourceModel,
     MediaAssetModel,
 )
 
-__all__ += ["DataSourceImportModel", "DataSourceModel", "MediaAssetModel"]
+__all__ += [
+    "DataReviewModel",
+    "DataSourceImportModel",
+    "DataSourceModel",
+    "MediaAssetModel",
+]
