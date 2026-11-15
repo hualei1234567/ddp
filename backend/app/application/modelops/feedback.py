@@ -38,6 +38,16 @@ from app.domain.modelops.validation import coerce_enum, optional_aware_datetime,
 
 _RESOURCE = "MODEL_FEEDBACK"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合 = ``domain/modelops/state_machines`` 的 feedback 动作并集。
+FEEDBACK_ACTION_EVENTS: dict[str, str] = {
+    "triage": "modelops.feedback.triage",
+    "dismiss": "modelops.feedback.dismiss",
+    "create-requirement": "modelops.feedback.create-requirement",
+    "resolve": "modelops.feedback.resolve",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -249,7 +259,7 @@ class FeedbackUseCases:
             reason=reason,
             request_id=request_id,
             details={},
-            event_type=f"modelops.feedback.{action_name}",
+            event_type=FEEDBACK_ACTION_EVENTS[action_name],
             event_payload={"feedback_id": str(feedback_id), "to_status": saved.status},
             occurred_at=now,
         )

@@ -47,6 +47,18 @@ from app.domain.modelops.validation import coerce_enum, optional_text, text_valu
 _SERVICE = "INFERENCE_SERVICE"
 _TASK = "INFERENCE_TASK"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合 = ``domain/modelops/state_machines`` 的 inference-service 动作并集。
+INFERENCE_SERVICE_ACTION_EVENTS: dict[str, str] = {
+    "deploy": "modelops.inference_service.deploy",
+    "activate": "modelops.inference_service.activate",
+    "system-deploy-fail": "modelops.inference_service.system-deploy-fail",
+    "reset": "modelops.inference_service.reset",
+    "stop": "modelops.inference_service.stop",
+    "retire": "modelops.inference_service.retire",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -212,7 +224,7 @@ class InferenceServiceUseCases:
             reason=reason,
             request_id=request_id,
             details={},
-            event_type=f"modelops.inference_service.{action_name}",
+            event_type=INFERENCE_SERVICE_ACTION_EVENTS[action_name],
             event_payload={"service_id": str(service_id)},
             occurred_at=now,
         )

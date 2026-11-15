@@ -52,6 +52,26 @@ from app.domain.suppliers.state_machines import (
     validate_action_name,
 )
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合 = ``domain/suppliers/state_machines`` 的 delivery-batch / inbound-segment
+# 动作并集，两者互不重叠，故可各自成表。
+DELIVERY_BATCH_ACTION_EVENTS: dict[str, str] = {
+    "dispatch": "supplier.batch.dispatch",
+    "arrive": "supplier.batch.arrive",
+    "start-screening": "supplier.batch.start-screening",
+    "finalize": "supplier.batch.finalize",
+    "rework": "supplier.batch.rework",
+    "close": "supplier.batch.close",
+}
+INBOUND_SEGMENT_ACTION_EVENTS: dict[str, str] = {
+    "queue-review": "supplier.segment.queue-review",
+    "system-accept": "supplier.segment.system-accept",
+    "system-reject": "supplier.segment.system-reject",
+    "system-need-more": "supplier.segment.system-need-more",
+    "resubmit": "supplier.segment.resubmit",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -258,7 +278,7 @@ class InboundBatchUseCases:
             request_id=request_id,
             snapshot={"batch_code": saved.batch_code},
             occurred_at=now,
-            event_type=f"supplier.batch.{action_name}",
+            event_type=DELIVERY_BATCH_ACTION_EVENTS[action_name],
         )
         self._idempotency.store(
             scope,
@@ -445,7 +465,7 @@ class InboundBatchUseCases:
             request_id=request_id,
             snapshot={"segment_code": saved.segment_code},
             occurred_at=now,
-            event_type=f"supplier.segment.{action_name}",
+            event_type=INBOUND_SEGMENT_ACTION_EVENTS[action_name],
         )
         self._idempotency.store(
             scope,

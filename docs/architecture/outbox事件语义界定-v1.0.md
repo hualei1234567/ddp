@@ -56,25 +56,161 @@
 投递类清单的唯一权威是 `scripts/check_outbox_events.py` 的 `DISPATCH_EVENTS`：
 它同时被 CI 与 `make check` 校验，声明与实现不一致会直接失败。
 
-### 3.2 留痕类（82 个）
+### 3.2 留痕类
 
-实测前缀分布（由脚本从源码提取，与附录清单一致）：
+前缀分布以 `scripts/check_outbox_events.py` 的实测输出为准（它会同时识别
+字面量与模块级常量；数量随各域新增事件变化，不作硬编码断言）。
 
-| 前缀 | 数量 |
-|---|---|
-| `annotation.*` | 24 |
-| `dataset.*` | 14 |
-| `ingestion.*` | 12 |
-| `modelops.*` | 11 |
-| `collection.*` | 6 |
-| `training.*` | 6 |
-| `supplier.*` | 4 |
-| `datasource.*` | 3 |
-| `device.*` | 1 |
-| `sensor.*` | 1 |
+设备域此前只有 `device.created` / `sensor.created` / `robot.created` 与
+`calibration_profile.created` 四个字面量事件可被提取，动作事件写成
+`f"device.{action}"` 这类 f-string，AST 抓不到（R-13）。现已改为模块级
+字面量映射表，设备域新增事件如下：
 
-`ingestion.*` 的 12 条里有 1 条是投递类（上述 validation_requested），
-其余 11 条（上传会话/分片的进度与状态留痕）为留痕类。
+| 事件 | 产生点 | 归类 |
+|---|---|---|
+| `device.created` | `application/devices/devices.py` | 留痕类 |
+| `device.activate` | `DEVICE_ACTION_EVENTS` | 留痕类 |
+| `device.enter-maintenance` | `DEVICE_ACTION_EVENTS` | 留痕类 |
+| `device.report-fault` | `DEVICE_ACTION_EVENTS` | 留痕类 |
+| `device.suspend` | `DEVICE_ACTION_EVENTS` | 留痕类 |
+| `device.retire` | `DEVICE_ACTION_EVENTS` | 留痕类 |
+| `sensor.created` | `application/devices/sensors.py` | 留痕类 |
+| `sensor.activate` | `SENSOR_ACTION_EVENTS` | 留痕类 |
+| `sensor.enter-maintenance` | `SENSOR_ACTION_EVENTS` | 留痕类 |
+| `sensor.report-fault` | `SENSOR_ACTION_EVENTS` | 留痕类 |
+| `sensor.suspend` | `SENSOR_ACTION_EVENTS` | 留痕类 |
+| `sensor.retire` | `SENSOR_ACTION_EVENTS` | 留痕类 |
+| `robot.created` | `application/devices/robots.py` | 留痕类 |
+| `robot.activate` | `ROBOT_ACTION_EVENTS` | 留痕类 |
+| `robot.enter-maintenance` | `ROBOT_ACTION_EVENTS` | 留痕类 |
+| `robot.report-fault` | `ROBOT_ACTION_EVENTS` | 留痕类 |
+| `robot.suspend` | `ROBOT_ACTION_EVENTS` | 留痕类 |
+| `robot.retire` | `ROBOT_ACTION_EVENTS` | 留痕类 |
+| `calibration_profile.created` | `application/devices/profiles.py` | 留痕类 |
+| `calibration.created` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration.updated` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration.submitted` | `_CALIBRATION_ACTION_EVENTS` | 留痕类 |
+| `calibration.validated` | `_CALIBRATION_ACTION_EVENTS` | 留痕类 |
+| `calibration.rejected` | `_CALIBRATION_ACTION_EVENTS` | 留痕类 |
+| `calibration.activated` | `_CALIBRATION_ACTION_EVENTS` | 留痕类 |
+| `calibration.revoked` | `_CALIBRATION_ACTION_EVENTS` | 留痕类 |
+| `calibration.expired` | `_CALIBRATION_ACTION_EVENTS` | 留痕类 |
+
+为什么全部是留痕类：去掉其中任何一条，系统行为不变，只是少了一条可查询的
+记录。没有任何 worker 需要据此做事——标定状态机是同步推进的，
+下游读取的是 `calibration_records` 表本身而不是事件。
+
+回归保护：`backend/tests/unit/test_device_outbox_events_registry.py` 断言
+设备域源码里没有 `event_type=f"..."`，并逐条核对这些事件名出现在本文件里。
+
+`ingestion.*` 的条目里有 1 条是投递类（上述 validation_requested），
+其余（上传会话/分片的进度与状态留痕）为留痕类。
+
+### 3.3 R-13 收尾：其余域的动作事件静态化
+
+设备域之外还有 20 处 `event_type=f"..."`（数据集 / 数据源 / 摄入 / modelops /
+供应商），同样拼出 AST 看不到的事件名。现已全部改为模块级映射表 +
+下标取值，事件名字符串与改动前**逐字一致**（可观测契约不变）：
+映射的键集合等于各域状态机的动作白名单，新增动作时两处必须同步。
+
+| 事件 | 来源映射表 | 归类 |
+|---|---|---|
+| `dataset.grant.approve` | `DATASET_GRANT_ACTION_EVENTS` | 留痕类 |
+| `dataset.grant.reject` | `DATASET_GRANT_ACTION_EVENTS` | 留痕类 |
+| `dataset.grant.revoke` | `DATASET_GRANT_ACTION_EVENTS` | 留痕类 |
+| `dataset.export.cancel` | `EXPORT_ACTION_EVENTS` | 留痕类 |
+| `dataset.export.retry` | `EXPORT_ACTION_EVENTS` | 留痕类 |
+| `training.delivery.ready` | `TRAINING_DELIVERY_ACTION_EVENTS` | 留痕类 |
+| `training.delivery.deliver` | `TRAINING_DELIVERY_ACTION_EVENTS` | 留痕类 |
+| `training.delivery.accept` | `TRAINING_DELIVERY_ACTION_EVENTS` | 留痕类 |
+| `training.delivery.reject` | `TRAINING_DELIVERY_ACTION_EVENTS` | 留痕类 |
+| `training.delivery.rework` | `TRAINING_DELIVERY_ACTION_EVENTS` | 留痕类 |
+| `training.delivery.resume-ready` | `TRAINING_DELIVERY_ACTION_EVENTS` | 留痕类 |
+| `training.delivery.cancel` | `TRAINING_DELIVERY_ACTION_EVENTS` | 留痕类 |
+| `training.external_reference.sync` | `EXTERNAL_REFERENCE_ACTION_EVENTS` | 留痕类 |
+| `training.external_reference.cancel` | `EXTERNAL_REFERENCE_ACTION_EVENTS` | 留痕类 |
+| `training.request.revision_submit` | `TRAINING_REVISION_ACTION_EVENTS` | 留痕类 |
+| `training.request.revision_approve` | `TRAINING_REVISION_ACTION_EVENTS` | 留痕类 |
+| `training.request.revision_reject` | `TRAINING_REVISION_ACTION_EVENTS` | 留痕类 |
+| `training.request.block` | `TRAINING_REQUEST_ACTION_EVENTS` | 留痕类 |
+| `training.request.unblock` | `TRAINING_REQUEST_ACTION_EVENTS` | 留痕类 |
+| `training.request.cancel` | `TRAINING_REQUEST_ACTION_EVENTS` | 留痕类 |
+| `training.request.close` | `TRAINING_REQUEST_ACTION_EVENTS` | 留痕类 |
+| `datasource.import.start` | `DATASOURCE_IMPORT_ACTION_EVENTS` | 留痕类 |
+| `datasource.import.succeed` | `DATASOURCE_IMPORT_ACTION_EVENTS` | 留痕类 |
+| `datasource.import.fail` | `DATASOURCE_IMPORT_ACTION_EVENTS` | 留痕类 |
+| `datasource.import.cancel` | `DATASOURCE_IMPORT_ACTION_EVENTS` | 留痕类 |
+| `ingestion.job.worker-start` | `INGESTION_JOB_ACTION_EVENTS` | 留痕类 |
+| `ingestion.job.worker-succeed` | `INGESTION_JOB_ACTION_EVENTS` | 留痕类 |
+| `ingestion.job.worker-fail` | `INGESTION_JOB_ACTION_EVENTS` | 留痕类 |
+| `ingestion.job.job-timeout` | `INGESTION_JOB_ACTION_EVENTS` | 留痕类 |
+| `ingestion.job.retry` | `INGESTION_JOB_ACTION_EVENTS` | 留痕类 |
+| `ingestion.job.cancel` | `INGESTION_JOB_ACTION_EVENTS` | 留痕类 |
+| `ingestion.job.worker-cancelled` | `INGESTION_JOB_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.system-start` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.system-ready` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.ready` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.system-fail` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.retry` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.quality-check` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.record-quality` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.accept` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.reject` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.complete` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.archive` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.invalidate` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `modelops.data_requirement.submit` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
+| `modelops.data_requirement.approve` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
+| `modelops.data_requirement.reject` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
+| `modelops.data_requirement.cancel` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
+| `modelops.data_requirement.plan` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
+| `modelops.data_requirement.satisfy` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
+| `modelops.data_requirement.start` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
+| `modelops.data_requirement.close` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
+| `modelops.data_requirement.link-retest` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
+| `modelops.inference_service.deploy` | `INFERENCE_SERVICE_ACTION_EVENTS` | 留痕类 |
+| `modelops.inference_service.activate` | `INFERENCE_SERVICE_ACTION_EVENTS` | 留痕类 |
+| `modelops.inference_service.system-deploy-fail` | `INFERENCE_SERVICE_ACTION_EVENTS` | 留痕类 |
+| `modelops.inference_service.reset` | `INFERENCE_SERVICE_ACTION_EVENTS` | 留痕类 |
+| `modelops.inference_service.stop` | `INFERENCE_SERVICE_ACTION_EVENTS` | 留痕类 |
+| `modelops.inference_service.retire` | `INFERENCE_SERVICE_ACTION_EVENTS` | 留痕类 |
+| `modelops.feedback.triage` | `FEEDBACK_ACTION_EVENTS` | 留痕类 |
+| `modelops.feedback.dismiss` | `FEEDBACK_ACTION_EVENTS` | 留痕类 |
+| `modelops.feedback.create-requirement` | `FEEDBACK_ACTION_EVENTS` | 留痕类 |
+| `modelops.feedback.resolve` | `FEEDBACK_ACTION_EVENTS` | 留痕类 |
+| `modelops.evaluation.cancel` | `EVALUATION_ACTION_EVENTS` | 留痕类 |
+| `modelops.evaluation.retry` | `EVALUATION_ACTION_EVENTS` | 留痕类 |
+| `modelops.model.activate` | `MODEL_ACTION_EVENTS` | 留痕类 |
+| `modelops.model.deprecate` | `MODEL_ACTION_EVENTS` | 留痕类 |
+| `modelops.model.archive` | `MODEL_ACTION_EVENTS` | 留痕类 |
+| `modelops.model.restore` | `MODEL_ACTION_EVENTS` | 留痕类 |
+| `modelops.model_version.validate` | `MODEL_VERSION_ACTION_EVENTS` | 留痕类 |
+| `modelops.model_version.system-validate-pass` | `MODEL_VERSION_ACTION_EVENTS` | 留痕类 |
+| `modelops.model_version.system-validate-fail` | `MODEL_VERSION_ACTION_EVENTS` | 留痕类 |
+| `modelops.model_version.return-draft` | `MODEL_VERSION_ACTION_EVENTS` | 留痕类 |
+| `modelops.model_version.publish` | `MODEL_VERSION_ACTION_EVENTS` | 留痕类 |
+| `modelops.model_version.deprecate` | `MODEL_VERSION_ACTION_EVENTS` | 留痕类 |
+| `modelops.model_version.archive` | `MODEL_VERSION_ACTION_EVENTS` | 留痕类 |
+| `supplier.activate` | `SUPPLIER_ACTION_EVENTS` | 留痕类 |
+| `supplier.suspend` | `SUPPLIER_ACTION_EVENTS` | 留痕类 |
+| `supplier.terminate` | `SUPPLIER_ACTION_EVENTS` | 留痕类 |
+| `supplier.resume` | `SUPPLIER_ACTION_EVENTS` | 留痕类 |
+| `supplier.batch.dispatch` | `DELIVERY_BATCH_ACTION_EVENTS` | 留痕类 |
+| `supplier.batch.arrive` | `DELIVERY_BATCH_ACTION_EVENTS` | 留痕类 |
+| `supplier.batch.start-screening` | `DELIVERY_BATCH_ACTION_EVENTS` | 留痕类 |
+| `supplier.batch.finalize` | `DELIVERY_BATCH_ACTION_EVENTS` | 留痕类 |
+| `supplier.batch.rework` | `DELIVERY_BATCH_ACTION_EVENTS` | 留痕类 |
+| `supplier.batch.close` | `DELIVERY_BATCH_ACTION_EVENTS` | 留痕类 |
+| `supplier.segment.queue-review` | `INBOUND_SEGMENT_ACTION_EVENTS` | 留痕类 |
+| `supplier.segment.system-accept` | `INBOUND_SEGMENT_ACTION_EVENTS` | 留痕类 |
+| `supplier.segment.system-reject` | `INBOUND_SEGMENT_ACTION_EVENTS` | 留痕类 |
+| `supplier.segment.system-need-more` | `INBOUND_SEGMENT_ACTION_EVENTS` | 留痕类 |
+| `supplier.segment.resubmit` | `INBOUND_SEGMENT_ACTION_EVENTS` | 留痕类 |
+
+全部为留痕类：去掉其中任何一条，系统行为不变，只是少一条可查询记录——
+这些域的状态推进是同步的事务写入，下游读表而不是读事件。
+投递类仍只有 §3.1 的 3 个。回归保护见
+`backend/tests/unit/test_outbox_event_registry_all_domains.py`。
 
 ## 4. 待办与完成情况
 
@@ -130,6 +266,46 @@ OR (dispatch = true AND status <> 'RECORDED')
 
 实测提取到 93 种事件类型（旧口径的 83 条是漏了常量形式的结果），
 其中投递类 3 种。
+
+## 4.4 「静默过滤」的 19 个事件（2026-11-15 补登记）
+
+`check_outbox_events.py` 只收首段在 `_EVENT_DOMAINS` 白名单里的事件。OC-13 收尾
+时发现 `robot` / `calibration` / `calibration_profile` / 四个 `*_policy` 首段
+**不在白名单**，导致下列 19 个事件长期被静默丢弃：既不计入总数，也不会因
+"未归类"失败——等于绕过了整道校验。
+
+事件名是可观测契约（已落库的 outbox 记录与历史消费者按名字匹配），
+因此选择补白名单而非改名。
+
+| 事件 | 产生点 | 归类 |
+|---|---|---|
+| `robot.created` | `application/devices/robots.py` | 留痕类 |
+| `robot.activate` | `application/devices/robots.py` | 留痕类 |
+| `robot.enter-maintenance` | `application/devices/robots.py` | 留痕类 |
+| `robot.report-fault` | `application/devices/robots.py` | 留痕类 |
+| `robot.suspend` | `application/devices/robots.py` | 留痕类 |
+| `robot.retire` | `application/devices/robots.py` | 留痕类 |
+| `calibration.created` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration.updated` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration.submitted` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration.validated` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration.rejected` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration.activated` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration.revoked` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration.expired` | `application/devices/calibrations.py` | 留痕类 |
+| `calibration_profile.created` | `application/devices/profiles.py` | 留痕类 |
+| `dedup_policy.created` | `application/datasets/policies.py` | 留痕类 |
+| `split_policy.created` | `application/datasets/policies.py` | 留痕类 |
+| `leakage_policy.created` | `application/datasets/policies.py` | 留痕类 |
+| `quality_policy.created` | `application/datasets/policies.py` | 留痕类 |
+
+全部为留痕类：没有执行方需要据此做事，因此不要求 worker 消费者。
+关闭后脚本扫描到 **211 种**事件类型（此前 192，再此前 104）。
+
+**防回归**：脚本新增「静默过滤守卫」——凡在 `event_type=` 位置或 `*_EVENTS`
+映射表里出现、形态像事件名、但首段不在白名单的字符串，一律报错而非丢弃。
+判据只看事件类型出现的位置，不看全量字符串，避免 `vote.decision` 这类
+普通字段路径造成假阳性。
 
 ## 5. 对阶段 7 数据平面的约束
 

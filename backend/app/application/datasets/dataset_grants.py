@@ -34,6 +34,15 @@ from app.domain.identity.models import ProjectScope
 
 _RESOURCE = "DATASET_GRANT"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合与 ``apply_action`` 的显式白名单一致；状态机另有 ``system-expire``，不在此处产生事件。
+DATASET_GRANT_ACTION_EVENTS: dict[str, str] = {
+    "approve": "dataset.grant.approve",
+    "reject": "dataset.grant.reject",
+    "revoke": "dataset.grant.revoke",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -249,7 +258,7 @@ class DatasetGrantUseCases:
                 "grantee_project_id": str(saved.grantee_project_id),
                 "expires_at": saved.expires_at.isoformat(),
             },
-            event_type=f"dataset.grant.{action_name}",
+            event_type=DATASET_GRANT_ACTION_EVENTS[action_name],
             event_payload={
                 "grant_id": str(saved.grant_id),
                 "from_status": current.status.value,

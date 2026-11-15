@@ -55,6 +55,14 @@ from app.domain.identity.models import ProjectScope
 
 _EXTERNAL_RESOURCE = "EXTERNAL_TRAINING_REFERENCE"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合与 ``apply_action`` 的显式白名单一致；``system-*`` 状态由回调落库，不在此产生事件。
+EXTERNAL_REFERENCE_ACTION_EVENTS: dict[str, str] = {
+    "sync": "training.external_reference.sync",
+    "cancel": "training.external_reference.cancel",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -283,7 +291,7 @@ class ExternalTrainingReferenceUseCases:
                 "external_run_id": saved.external_run_id,
                 "status_stale": saved.status_stale,
             },
-            event_type=f"training.external_reference.{action_name}",
+            event_type=EXTERNAL_REFERENCE_ACTION_EVENTS[action_name],
             event_payload={
                 "external_ref_id": str(saved.external_ref_id),
                 "from_status": reference.effective_status.value,

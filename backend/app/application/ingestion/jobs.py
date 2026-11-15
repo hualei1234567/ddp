@@ -35,6 +35,20 @@ from app.domain.ingestion.errors import (
 )
 from app.domain.ingestion.jobs import IngestionJob
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合与 ``apply_action`` 的显式分支一致：未知动作先抛 ``DomainValidationError``，
+# 不会走到按动作取名这一步，因此映射缺键在正常情况下不可达。
+INGESTION_JOB_ACTION_EVENTS: dict[str, str] = {
+    "worker-start": "ingestion.job.worker-start",
+    "worker-succeed": "ingestion.job.worker-succeed",
+    "worker-fail": "ingestion.job.worker-fail",
+    "job-timeout": "ingestion.job.job-timeout",
+    "retry": "ingestion.job.retry",
+    "cancel": "ingestion.job.cancel",
+    "worker-cancelled": "ingestion.job.worker-cancelled",
+}
+
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
@@ -264,7 +278,7 @@ class IngestionJobService:
                 "max_attempts": saved.max_attempts,
                 "error_code": saved.error_code,
             },
-            event_type=f"ingestion.job.{action}",
+            event_type=INGESTION_JOB_ACTION_EVENTS[action],
             event_payload={
                 "job_id": str(saved.job_id),
                 "from_status": job.status.value,

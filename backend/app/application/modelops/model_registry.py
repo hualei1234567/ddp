@@ -39,6 +39,25 @@ from app.domain.modelops.state_machines import validate_action_name
 _MODEL = "MODEL"
 _VERSION = "MODEL_VERSION"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合 = ``domain/modelops/state_machines`` 的 model / model-version 动作并集。
+MODEL_ACTION_EVENTS: dict[str, str] = {
+    "activate": "modelops.model.activate",
+    "deprecate": "modelops.model.deprecate",
+    "archive": "modelops.model.archive",
+    "restore": "modelops.model.restore",
+}
+MODEL_VERSION_ACTION_EVENTS: dict[str, str] = {
+    "validate": "modelops.model_version.validate",
+    "system-validate-pass": "modelops.model_version.system-validate-pass",
+    "system-validate-fail": "modelops.model_version.system-validate-fail",
+    "return-draft": "modelops.model_version.return-draft",
+    "publish": "modelops.model_version.publish",
+    "deprecate": "modelops.model_version.deprecate",
+    "archive": "modelops.model_version.archive",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -236,7 +255,7 @@ class ModelUseCases:
             reason=reason,
             request_id=request_id,
             details={},
-            event_type=f"modelops.model.{action_name}",
+            event_type=MODEL_ACTION_EVENTS[action_name],
             event_payload={"model_id": str(model_id), "to_status": saved.status},
             occurred_at=now,
         )
@@ -439,7 +458,7 @@ class ModelVersionUseCases:
             reason=reason,
             request_id=request_id,
             details={"model_id": str(model_id)},
-            event_type=f"modelops.model_version.{action_name}",
+            event_type=MODEL_VERSION_ACTION_EVENTS[action_name],
             event_payload={
                 "model_version_id": str(version_id),
                 "model_id": str(model_id),

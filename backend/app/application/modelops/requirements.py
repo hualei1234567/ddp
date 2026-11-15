@@ -38,6 +38,22 @@ from app.domain.modelops.validation import optional_text
 
 _RESOURCE = "DATA_REQUIREMENT"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合 = ``domain/modelops/state_machines`` 的 requirement 动作并集 + 应用层独有的
+# ``link-retest``（不在状态机里，由 ``apply_action`` 直接短路处理）。
+DATA_REQUIREMENT_ACTION_EVENTS: dict[str, str] = {
+    "submit": "modelops.data_requirement.submit",
+    "approve": "modelops.data_requirement.approve",
+    "reject": "modelops.data_requirement.reject",
+    "cancel": "modelops.data_requirement.cancel",
+    "plan": "modelops.data_requirement.plan",
+    "satisfy": "modelops.data_requirement.satisfy",
+    "start": "modelops.data_requirement.start",
+    "close": "modelops.data_requirement.close",
+    "link-retest": "modelops.data_requirement.link-retest",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -214,7 +230,7 @@ class RequirementUseCases:
                 ],
                 "retest_evaluation_ids": [str(item) for item in saved.retest_evaluation_ids],
             },
-            event_type=f"modelops.data_requirement.{action_name}",
+            event_type=DATA_REQUIREMENT_ACTION_EVENTS[action_name],
             event_payload={
                 "requirement_id": str(requirement_id),
                 "to_status": saved.status,

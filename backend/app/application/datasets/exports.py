@@ -58,6 +58,14 @@ from app.domain.identity.models import ProjectScope
 RESOURCE_TYPE = "EXPORT_JOB"
 EXPORT_REQUESTED_EVENT = "dataset.export.requested"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合与 ``apply_action`` 的显式白名单一致（worker 侧动作不走此路径）。
+EXPORT_ACTION_EVENTS: dict[str, str] = {
+    "cancel": "dataset.export.cancel",
+    "retry": "dataset.export.retry",
+}
+
 
 class ExportJobUseCases:
     def __init__(
@@ -305,7 +313,7 @@ class ExportJobUseCases:
             reason=reason,
             request_id=request_id,
             details={"attempt": saved.attempt, "max_attempts": saved.max_attempts},
-            event_type=f"dataset.export.{action_name}",
+            event_type=EXPORT_ACTION_EVENTS[action_name],
             event_payload={
                 "export_job_id": str(saved.export_job_id),
                 "from_status": job.status.value,

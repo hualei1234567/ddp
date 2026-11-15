@@ -50,6 +50,26 @@ from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.enums import RawAssetStatus
 from app.domain.ingestion.errors import AssetNotUsableError
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# ``_record_action`` 的 action 有两个来源：``apply_action`` 的分支（与
+# ``domain/episodes/state_machines`` 对齐）与内部推进调用点（``ready`` / ``system-ready``
+# / ``system-start``）；``ready`` 只经 ``mark_ready`` 出现，状态机里没有同名动作。
+INGESTION_EPISODE_ACTION_EVENTS: dict[str, str] = {
+    "system-start": "ingestion.episode.system-start",
+    "system-ready": "ingestion.episode.system-ready",
+    "ready": "ingestion.episode.ready",
+    "system-fail": "ingestion.episode.system-fail",
+    "retry": "ingestion.episode.retry",
+    "quality-check": "ingestion.episode.quality-check",
+    "record-quality": "ingestion.episode.record-quality",
+    "accept": "ingestion.episode.accept",
+    "reject": "ingestion.episode.reject",
+    "complete": "ingestion.episode.complete",
+    "archive": "ingestion.episode.archive",
+    "invalidate": "ingestion.episode.invalidate",
+}
+
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
@@ -719,7 +739,7 @@ class EpisodeService:
                 "episode_lineage_id": str(after.episode_lineage_id),
                 "episode_version": after.episode_version,
             },
-            event_type=f"ingestion.episode.{action}",
+            event_type=INGESTION_EPISODE_ACTION_EVENTS[action],
             event_payload={
                 "episode_id": str(after.episode_id),
                 "from_status": before.status.value,

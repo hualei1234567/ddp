@@ -31,6 +31,17 @@ from app.domain.datasets.policies import (
 )
 from app.domain.identity.models import ProjectScope
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键是 ``_audit_policy`` 的 ``resource_type``。取值只来自本模块四个创建用例，
+# 是封闭集合（原实现按 ``resource_type.lower()`` 动态拼接事件名）。
+POLICY_CREATED_EVENTS: dict[str, str] = {
+    "DEDUP_POLICY": "dedup_policy.created",
+    "LEAKAGE_POLICY": "leakage_policy.created",
+    "QUALITY_POLICY": "quality_policy.created",
+    "SPLIT_POLICY": "split_policy.created",
+}
+
 
 class DatasetPolicyUseCases:
     def __init__(
@@ -330,7 +341,7 @@ class DatasetPolicyUseCases:
             reason=None,
             request_id=request_id,
             details={"policy_version": policy_version},
-            event_type=f"{resource_type.lower()}.created",
+            event_type=POLICY_CREATED_EVENTS[resource_type],
             event_payload={
                 "resource_id": str(resource_id),
                 "policy_version": policy_version,

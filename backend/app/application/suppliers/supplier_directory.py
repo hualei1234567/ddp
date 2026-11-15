@@ -35,6 +35,16 @@ from app.domain.suppliers.state_machines import (
     validate_action_name,
 )
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合 = ``domain/suppliers/state_machines`` 的 supplier 动作并集。
+SUPPLIER_ACTION_EVENTS: dict[str, str] = {
+    "activate": "supplier.activate",
+    "suspend": "supplier.suspend",
+    "terminate": "supplier.terminate",
+    "resume": "supplier.resume",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -241,7 +251,7 @@ class SupplierUseCases:
             request_id=request_id,
             snapshot={"code": saved.code},
             occurred_at=now,
-            event_type=f"supplier.{action_name}",
+            event_type=SUPPLIER_ACTION_EVENTS[action_name],
         )
         self._idempotency.store(
             scope,

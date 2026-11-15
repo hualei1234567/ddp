@@ -56,6 +56,19 @@ from app.domain.identity.models import ProjectScope
 
 _RESOURCE = "TRAINING_DELIVERY"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合与 ``apply_action`` 的显式白名单一致。
+TRAINING_DELIVERY_ACTION_EVENTS: dict[str, str] = {
+    "ready": "training.delivery.ready",
+    "deliver": "training.delivery.deliver",
+    "accept": "training.delivery.accept",
+    "reject": "training.delivery.reject",
+    "rework": "training.delivery.rework",
+    "resume-ready": "training.delivery.resume-ready",
+    "cancel": "training.delivery.cancel",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -338,7 +351,7 @@ class TrainingDeliveryUseCases:
             reason=reason or opinion,
             request_id=request_id,
             details={"rework_ref": str(rework_ref) if rework_ref else None},
-            event_type=f"training.delivery.{action_name}",
+            event_type=TRAINING_DELIVERY_ACTION_EVENTS[action_name],
             event_payload={
                 "training_delivery_id": str(saved.training_delivery_id),
                 "training_request_id": str(saved.training_request_id),

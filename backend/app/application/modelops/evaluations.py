@@ -41,6 +41,14 @@ from app.domain.modelops.state_machines import validate_action_name
 
 _RESOURCE = "EVALUATION"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合与 ``apply_action`` 的显式白名单一致（cancel / retry）。
+EVALUATION_ACTION_EVENTS: dict[str, str] = {
+    "cancel": "modelops.evaluation.cancel",
+    "retry": "modelops.evaluation.retry",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -257,7 +265,7 @@ class EvaluationUseCases:
             reason=reason,
             request_id=request_id,
             details={"source_evaluation_id": str(evaluation_id)},
-            event_type=f"modelops.evaluation.{action_name}",
+            event_type=EVALUATION_ACTION_EVENTS[action_name],
             event_payload={"evaluation_id": str(saved.evaluation_id)},
             occurred_at=now,
         )

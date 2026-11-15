@@ -48,6 +48,21 @@ from app.domain.identity.models import ProjectScope
 _RESOURCE = "TRAINING_REQUEST"
 _REVISION_RESOURCE = "TRAINING_REQUEST_REVISION"
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+# 键集合与各自 ``apply_action`` 的显式白名单一致；``system-*`` 动作不在此产生事件。
+TRAINING_REVISION_ACTION_EVENTS: dict[str, str] = {
+    "submit": "training.request.revision_submit",
+    "approve": "training.request.revision_approve",
+    "reject": "training.request.revision_reject",
+}
+TRAINING_REQUEST_ACTION_EVENTS: dict[str, str] = {
+    "block": "training.request.block",
+    "unblock": "training.request.unblock",
+    "cancel": "training.request.cancel",
+    "close": "training.request.close",
+}
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -420,7 +435,7 @@ class TrainingRequestUseCases:
             reason=reason,
             request_id=request_id_text,
             details={"revision_no": saved.revision_no},
-            event_type=f"training.request.revision_{action_name}",
+            event_type=TRAINING_REVISION_ACTION_EVENTS[action_name],
             event_payload={
                 "training_request_id": str(request_id),
                 "revision_id": str(saved.revision_id),
@@ -499,7 +514,7 @@ class TrainingRequestUseCases:
             reason=reason,
             request_id=request_id_text,
             details={"restore_status": restore_status},
-            event_type=f"training.request.{action_name}",
+            event_type=TRAINING_REQUEST_ACTION_EVENTS[action_name],
             event_payload={
                 "training_request_id": str(saved.training_request_id),
                 "from_status": request.status.value,

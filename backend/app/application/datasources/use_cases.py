@@ -16,6 +16,7 @@ from app.application.datasources.commands import (
     NewDataSource,
     NewDataSourceImport,
 )
+from app.application.datasources.events import DATASOURCE_IMPORT_ACTION_EVENTS
 from app.application.datasources.idempotency import IdempotencyGuard, validate_key
 from app.application.datasources.ports import (
     AuditRepository,
@@ -384,7 +385,7 @@ class DataSourceUseCases:
                 "row_count": saved.imported_row_count,
                 "file_count": saved.imported_file_count,
             },
-            event_type=f"datasource.import.{action}",
+            event_type=DATASOURCE_IMPORT_ACTION_EVENTS[action],
             event_payload={
                 "import_id": str(saved.import_id),
                 "data_source_id": str(saved.data_source_id),
