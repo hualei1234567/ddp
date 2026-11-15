@@ -1,6 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { mergeCursorPageItems } from "./cursorPage";
+import {
+  CURSOR_PAGE_LIMIT,
+  CursorPageOverflowError,
+  fetchAllCursorPages,
+  mergeCursorPageItems,
+} from "./cursorPage";
 
 interface Row {
   id: string;
@@ -68,5 +73,86 @@ describe("游标分页合并", () => {
 
     expect(existing).toEqual([{ id: "a", value: 1 }]);
     expect(incoming).toEqual([{ id: "b", value: 2 }]);
+  });
+});
+
+describe("聚合型全量翻页", () => {
+  it("按游标逐页拉全量，顺序与主键去重都正确", async () => {
+    const pages: Record<string, Row[]> = {
+      start: [
+        { id: "a", value: 1 },
+        { id: "b", value: 2 },
+      ],
+      c2: [
+        { id: "c", value: 3 },
+        { id: "d", value: 4 },
+      ],
+    };
+    const seenCursors: Array<string | undefined> = [];
+    const fetchPage = vi.fn(
+      async (options: { cursor?: string; limit: number }) => {
+        seenCursors.push(options.cursor);
+        const key = options.cursor ?? "start";
+        return {
+          items: pages[key] ?? [],
+          next_cursor: key === "start" ? "c2" : null,
+        };
+      },
+    );
+
+    await expect(fetchAllCursorPages(fetchPage, getKey)).resolves.toEqual([
+      { id: "a", value: 1 },
+      { id: "b", value: 2 },
+      { id: "c", value: 3 },
+      { id: "d", value: 4 },
+    ]);
+    expect(seenCursors).toEqual([undefined, "c2"]);
+    expect(fetchPage.mock.calls[0]?.[0].limit).toBe(CURSOR_PAGE_LIMIT);
+  });
+
+  it("跨页重复主键只保留第一次出现", async () => {
+    const responses = [
+      { items: [{ id: "a", value: 1 }], next_cursor: "p2" },
+      {
+        items: [
+          { id: "a", value: 99 },
+          { id: "b", value: 2 },
+        ],
+        next_cursor: null,
+      },
+    ];
+    let index = 0;
+    const fetchPage = async () => responses[index++] ?? {
+      items: [],
+      next_cursor: null,
+    };
+
+    await expect(fetchAllCursorPages(fetchPage, getKey)).resolves.toEqual([
+      { id: "a", value: 1 },
+      { id: "b", value: 2 },
+    ]);
+  });
+
+  it("超过页数上限时抛错，不静默返回部分结果", async () => {
+    const fetchPage = vi.fn(async () => ({
+      items: [{ id: "a", value: 1 }],
+      next_cursor: "always-more",
+    }));
+
+    await expect(
+      fetchAllCursorPages(fetchPage, getKey, { maxPages: 3 }),
+    ).rejects.toBeInstanceOf(CursorPageOverflowError);
+    expect(fetchPage).toHaveBeenCalledTimes(3);
+  });
+
+  it("首页即末页时只发一次请求", async () => {
+    const fetchPage = vi.fn(async () => ({
+      items: [{ id: "a", value: 1 }],
+      next_cursor: null,
+    }));
+
+    await fetchAllCursorPages(fetchPage, getKey);
+
+    expect(fetchPage).toHaveBeenCalledTimes(1);
   });
 });

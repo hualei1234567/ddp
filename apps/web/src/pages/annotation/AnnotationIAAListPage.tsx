@@ -6,13 +6,15 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
 import TaskScopedPrompt from "../../components/annotation/TaskScopedPrompt";
+import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
+import { useCursorPage } from "../../hooks/useCursorPage";
+import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
-import { useRequest } from "../../hooks/useRequest";
 import { annotationApi } from "../../services/annotation";
 import {
   buildAnnotationIAADetailPath,
@@ -90,12 +92,26 @@ function IAAListContent({
   taskId: string;
 }) {
   const load = useCallback(
-    (signal: AbortSignal) =>
-      annotationApi.listIAAReports(projectId, taskId, { signal }),
+    (options: CursorPageRequestOptions) =>
+      annotationApi.listIAAReports(projectId, taskId, {
+        cursor: options.cursor,
+        signal: options.signal,
+      }),
     [projectId, taskId],
   );
-  const { data, error, loading, refreshing, stale, reload } = useRequest(load);
-  const phase = resolvePagePhase({ hasData: data !== null, loading, error });
+  const {
+    items,
+    hasMore,
+    loading,
+    refreshing,
+    loadingMore,
+    error,
+    loadMoreError,
+    stale,
+    reload,
+    loadMore,
+  } = useCursorPage(load, (item) => item.report_id);
+  const phase = resolvePagePhase({ hasData: items.length > 0, loading, error });
 
   const extra = (
     <Space wrap>
@@ -113,9 +129,9 @@ function IAAListContent({
     body = error ? <ApiErrorState error={error} onRetry={reload} /> : null;
   } else if (phase === "loading") {
     body = <PageState variant="loading" title="正在加载 IAA 报告" />;
-  } else if (phase === "error" || data === null) {
+  } else if (phase === "error") {
     body = error ? <ApiErrorState error={error} onRetry={reload} /> : null;
-  } else if (data.items.length === 0) {
+  } else if (items.length === 0) {
     body = (
       <PageState
         variant="empty"
@@ -137,9 +153,18 @@ function IAAListContent({
         <Table<IAAReport>
           rowKey="report_id"
           columns={columns(projectId)}
-          dataSource={data.items}
+          dataSource={items}
           pagination={false}
           scroll={{ x: 1200 }}
+        />
+        <LoadMoreBar
+          loadedCount={items.length}
+          unit="份 IAA 报告"
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          disabled={loading || refreshing}
+          error={loadMoreError}
+          onLoadMore={loadMore}
         />
         <Typography.Text type="secondary">
           IAA 只在同任务、同 Schema 版本、至少两名标注员独立标注的重叠样本上计算；

@@ -244,17 +244,20 @@ def list_quality_samples(
     use_cases: AnnotationUseCasesDep,
     task_id: UUID,
     status: str | None = None,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PageOut[QualitySampleOut]:
     items = use_cases.quality_samples.list_for_task(
         scope,
         task_id,
         status=status,
-        limit=limit,
+        after_id=decode_cursor(cursor),
+        limit=fetch_limit(limit),
     )
+    page = build_page(items, limit=limit, id_of=lambda item: item.quality_sample_id)
     return PageOut(
-        items=[QualitySampleOut.from_domain(item) for item in items],
-        next_cursor=None,
+        items=[QualitySampleOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
     )
 
 
@@ -396,12 +399,19 @@ def list_iaa_reports(
     scope: ReadScope,
     use_cases: AnnotationUseCasesDep,
     task_id: UUID,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PageOut[IAAReportOut]:
-    items = use_cases.iaa.list_for_task(scope, task_id, limit=limit)
+    items = use_cases.iaa.list_for_task(
+        scope,
+        task_id,
+        after_id=decode_cursor(cursor),
+        limit=fetch_limit(limit),
+    )
+    page = build_page(items, limit=limit, id_of=lambda item: item.report_id)
     return PageOut(
-        items=[IAAReportOut.from_record(item) for item in items],
-        next_cursor=None,
+        items=[IAAReportOut.from_record(item) for item in page.items],
+        next_cursor=page.next_cursor,
     )
 
 

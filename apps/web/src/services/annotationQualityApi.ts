@@ -25,6 +25,7 @@ import {
   pageQuery,
   projectPath,
   requireIdentifier,
+  type PageRequestOptions,
 } from "./projectScope";
 
 export interface AnnotationQualityApi {
@@ -45,7 +46,7 @@ export interface AnnotationQualityApi {
   listQualitySamples: (
     projectId: string,
     taskId: string,
-    options?: { status?: string; limit?: number; signal?: AbortSignal },
+    options?: PageRequestOptions & { status?: string },
   ) => Promise<CursorPage<QualitySample>>;
   getQualitySample: (
     projectId: string,
@@ -55,7 +56,7 @@ export interface AnnotationQualityApi {
   listIAAReports: (
     projectId: string,
     taskId: string,
-    options?: { limit?: number; signal?: AbortSignal },
+    options?: PageRequestOptions,
   ) => Promise<CursorPage<IAAReport>>;
   getIAAReport: (
     projectId: string,
@@ -111,6 +112,7 @@ export function createAnnotationQualityApi(
         query: {
           task_id: requireIdentifier(taskId, "task_id"),
           status: options?.status,
+          cursor: options?.cursor,
           limit: options?.limit,
         },
         validate: (value) =>
@@ -145,6 +147,7 @@ export function createAnnotationQualityApi(
         signal: options?.signal,
         query: {
           task_id: requireIdentifier(taskId, "task_id"),
+          cursor: options?.cursor,
           limit: options?.limit,
         },
         validate: (value) =>

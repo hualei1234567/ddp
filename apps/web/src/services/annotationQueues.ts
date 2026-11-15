@@ -7,6 +7,7 @@ import type {
 import type { AnnotationApi } from "./annotation";
 import { ApiError } from "./api";
 import { asApiError } from "./annotationWorkbench";
+import { fetchAllCursorPages } from "./cursorPage";
 
 export interface QueuePartialError {
   scope: string;
@@ -53,8 +54,14 @@ export async function loadReviewQueue(
   taskId: string,
   signal: AbortSignal,
 ): Promise<ReviewQueueResult> {
-  const page = await api.listSubmissions(projectId, taskId, { signal });
-  const submissions = page.items.filter((item) => item.status !== "DRAFT");
+  // 队列必须看到全部提交：服务端单页默认 20，只读第一页会让第 21 条之后的
+  // 提交永远进不了复核队列，且 UI 无从感知。
+  const allSubmissions = await fetchAllCursorPages(
+    (options) =>
+      api.listSubmissions(projectId, taskId, { ...options, signal }),
+    (item) => item.submission_id,
+  );
+  const submissions = allSubmissions.filter((item) => item.status !== "DRAFT");
   const partialErrors: QueuePartialError[] = [];
   const items = await Promise.all(
     submissions.map(async (submission): Promise<ReviewQueueItem> => {
@@ -101,8 +108,12 @@ export async function loadArbitrationQueue(
   taskId: string,
   signal: AbortSignal,
 ): Promise<ArbitrationQueueResult> {
-  const page = await api.listSubmissions(projectId, taskId, { signal });
-  const submissions = page.items.filter((item) =>
+  const allSubmissions = await fetchAllCursorPages(
+    (options) =>
+      api.listSubmissions(projectId, taskId, { ...options, signal }),
+    (item) => item.submission_id,
+  );
+  const submissions = allSubmissions.filter((item) =>
     isArbitrationStatus(item.status),
   );
   const partialErrors: QueuePartialError[] = [];

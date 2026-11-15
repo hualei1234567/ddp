@@ -58,6 +58,21 @@ _JSON_VALUE_TYPES = (str, int, float, bool, list, tuple, dict)
 _TIME_RANGE_KEYS = frozenset({"start_time_ns", "end_time_ns", "time_domain"})
 _TIME_DOMAIN_VALUES = frozenset({"UTC", "ROS", "DEVICE", "HOST", "MONOTONIC", "UNKNOWN"})
 
+# 提交可见性：草稿只在作者本人之外不可见，其余状态对项目内可见。
+# 规则只在这里定义一次；API 过滤、仓储下推查询都引用本函数/本常量，禁止各自复制。
+VISIBLE_DRAFT_STATUS = AnnotationSubmissionStatus.DRAFT.value
+
+
+def submission_visible_to(
+    status: object,
+    annotator_id: UUID,
+    actor_id: UUID,
+) -> bool:
+    """提交对 ``actor_id`` 是否可见：``DRAFT`` 仅本人可见。"""
+    if getattr(status, "value", status) != VISIBLE_DRAFT_STATUS:
+        return True
+    return annotator_id == actor_id
+
 
 def _now() -> datetime:
     return datetime.now(UTC)
@@ -646,9 +661,11 @@ __all__ = [
     "AnnotationSubmission",
     "EvidenceRef",
     "LabelValue",
+    "VISIBLE_DRAFT_STATUS",
     "compute_record_sha256",
     "compute_records_digest",
     "record_payload",
     "records_payload",
+    "submission_visible_to",
     "validate_record_labels",
 ]

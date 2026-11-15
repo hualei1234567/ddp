@@ -415,6 +415,8 @@ class AnnotationSubmissionRepository(Protocol):
         *,
         task_id: UUID,
         statuses: tuple[str, ...] | None = None,
+        after_id: UUID | None = None,
+        visible_only: bool = False,
         limit: int = 100,
     ) -> list[AnnotationSubmission]: ...
 
@@ -601,6 +603,7 @@ class QualitySampleRepository(Protocol):
         *,
         task_id: UUID,
         status: str | None = None,
+        after_id: UUID | None = None,
         limit: int = 100,
     ) -> list[QualitySample]: ...
 
@@ -627,6 +630,7 @@ class IAAReportRepository(Protocol):
         scope: ProjectScope,
         *,
         task_id: UUID,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[IAAReportRecord]: ...
 

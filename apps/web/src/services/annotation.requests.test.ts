@@ -287,6 +287,21 @@ describe("标注写动作的请求头与请求体", () => {
       body: { reason: "开工" },
     },
     {
+      // 验收未达标时服务端强制要求 waiver_reason；前端必须能透传。
+      name: "actOnTaskWithWaiver",
+      call: (api) =>
+        api.actOnTask(PROJECT, ID, "complete", {
+          version: 7,
+          reason: "验收",
+          waiverReason: "抽检覆盖率已达阈值，剩余条目不阻塞",
+        }),
+      path: `/annotation-tasks/${ID}/actions/complete`,
+      body: {
+        reason: "验收",
+        waiver_reason: "抽检覆盖率已达阈值，剩余条目不阻塞",
+      },
+    },
+    {
       name: "createSubmission",
       call: (api) =>
         api.createSubmission(PROJECT, { taskId: ID, assignmentId: OTHER_ID } as never),

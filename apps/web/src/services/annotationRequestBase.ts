@@ -16,6 +16,8 @@ export interface AnnotationWriteOptions {
   /** 服务端当前 version；写动作必须带 If-Match。 */
   version: number;
   reason?: string | null;
+  /** 任务 `complete` 在验收数量未达标时的豁免原因（服务端强制要求）。 */
+  waiverReason?: string | null;
   idempotencyKey?: string;
   signal?: AbortSignal;
 }
@@ -32,9 +34,9 @@ export interface AssignmentListOptions extends PageRequestOptions {
   status?: string;
 }
 
-export interface SubmissionListOptions {
+/** 提交列表按 task_id 过滤，并支持游标分页（服务端默认 20、上限 100）。 */
+export interface SubmissionListOptions extends PageRequestOptions {
   status?: string;
-  signal?: AbortSignal;
 }
 
 export type SubmissionCreateOptions = AnnotationCreateOptions;

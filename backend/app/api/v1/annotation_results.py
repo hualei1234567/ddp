@@ -20,6 +20,7 @@ from app.api.v1.annotation_common import (
     request_id,
 )
 from app.api.v1.annotation_dependencies import AnnotationUseCasesDep
+from app.api.v1.annotation_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.annotation_result_models import (
     AnnotationArbitrationActionRequest,
     AnnotationArbitrationCreate,
@@ -42,6 +43,7 @@ from app.application.annotation.commands import (
     NewAnnotationSubmission,
 )
 from app.core.errors import ForbiddenError, ValidationFailedError
+from app.domain.annotation.submission import submission_visible_to
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["annotation-submissions"])
 
@@ -84,22 +86,22 @@ def list_submissions(
     use_cases: AnnotationUseCasesDep,
     task_id: UUID,
     status: str | None = None,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PageOut[AnnotationSubmissionOut]:
+    # 可见性由用例/仓储下推到查询；这里不再做内存过滤，否则他人草稿会
+    # 占掉分页名额，导致页内条数不足却仍有下一页。
     items = use_cases.submissions.list_for_task(
         scope,
         task_id=task_id,
         statuses=(status,) if status is not None else None,
-        limit=limit,
+        after_id=decode_cursor(cursor),
+        limit=fetch_limit(limit),
     )
-    visible = [
-        item
-        for item in items
-        if item.status.value != "DRAFT" or item.annotator_id == scope.actor_id
-    ]
+    page = build_page(items, limit=limit, id_of=lambda item: item.submission_id)
     return PageOut(
-        items=[AnnotationSubmissionOut.from_domain(item) for item in visible],
-        next_cursor=None,
+        items=[AnnotationSubmissionOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
     )
 
 
@@ -409,5 +411,12 @@ def vote_on_arbitration(
 
 
 def _assert_not_foreign_draft(actor_id: UUID, annotator_id: UUID, status: object) -> None:
-    if getattr(status, "value", status) == "DRAFT" and actor_id != annotator_id:
+    """单条读取的可见性判定。
+
+    规则唯一来源是领域层 :func:`submission_visible_to`；这里只负责把"不可见"
+    翻译成 HTTP 403。此前本函数内联了 ``status == "DRAFT"`` 判断，与领域层
+    和仓储下推的 ``VISIBLE_DRAFT_STATUS`` 构成三份并行实现——状态词汇一旦
+    变化必然漏改一处，因此改为委托。
+    """
+    if not submission_visible_to(status, annotator_id, actor_id):
         raise ForbiddenError("无权查看他人的标注草稿")

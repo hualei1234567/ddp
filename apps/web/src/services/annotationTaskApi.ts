@@ -134,7 +134,12 @@ export function createAnnotationTaskApi(client: ApiClient): AnnotationTaskApi {
           method: "POST",
           signal: options.signal,
           headers: writeHeaders(options),
-          body: { reason: options.reason ?? null },
+          // waiver_reason 只在 complete 验收未达标时由服务端强制要求；
+          // 其它动作传 null 等同于未提供，服务端按"未豁免"处理。
+          body: {
+            reason: options.reason ?? null,
+            waiver_reason: options.waiverReason ?? null,
+          },
           validate: (value) =>
             assertProjectScope(
               parseAnnotationTask(value),

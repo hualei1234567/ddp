@@ -6,13 +6,15 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
 import TaskScopedPrompt from "../../components/annotation/TaskScopedPrompt";
+import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
+import { useCursorPage } from "../../hooks/useCursorPage";
+import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
-import { useRequest } from "../../hooks/useRequest";
 import { annotationApi } from "../../services/annotation";
 import {
   buildAnnotationQualityDetailPath,
@@ -103,12 +105,26 @@ function QualityListContent({
   taskId: string;
 }) {
   const load = useCallback(
-    (signal: AbortSignal) =>
-      annotationApi.listQualitySamples(projectId, taskId, { signal }),
+    (options: CursorPageRequestOptions) =>
+      annotationApi.listQualitySamples(projectId, taskId, {
+        cursor: options.cursor,
+        signal: options.signal,
+      }),
     [projectId, taskId],
   );
-  const { data, error, loading, refreshing, stale, reload } = useRequest(load);
-  const phase = resolvePagePhase({ hasData: data !== null, loading, error });
+  const {
+    items,
+    hasMore,
+    loading,
+    refreshing,
+    loadingMore,
+    error,
+    loadMoreError,
+    stale,
+    reload,
+    loadMore,
+  } = useCursorPage(load, (item) => item.quality_sample_id);
+  const phase = resolvePagePhase({ hasData: items.length > 0, loading, error });
 
   const extra = (
     <Space wrap>
@@ -126,9 +142,9 @@ function QualityListContent({
     body = error ? <ApiErrorState error={error} onRetry={reload} /> : null;
   } else if (phase === "loading") {
     body = <PageState variant="loading" title="正在加载质检抽检" />;
-  } else if (phase === "error" || data === null) {
+  } else if (phase === "error") {
     body = error ? <ApiErrorState error={error} onRetry={reload} /> : null;
-  } else if (data.items.length === 0) {
+  } else if (items.length === 0) {
     body = (
       <PageState
         variant="empty"
@@ -150,9 +166,18 @@ function QualityListContent({
         <Table<QualitySample>
           rowKey="quality_sample_id"
           columns={columns(projectId)}
-          dataSource={data.items}
+          dataSource={items}
           pagination={false}
           scroll={{ x: 1500 }}
+        />
+        <LoadMoreBar
+          loadedCount={items.length}
+          unit="条抽检"
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          disabled={loading || refreshing}
+          error={loadMoreError}
+          onLoadMore={loadMore}
         />
         <Typography.Text type="secondary">
           抽检只读；标注员不得自选或复核抽检样本，结论与策略版本以服务端记录为准。

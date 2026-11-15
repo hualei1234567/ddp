@@ -39,6 +39,8 @@ from app.infrastructure.repositories._annotation_sql import (
     ensure_initial_version,
     enum_value,
     flush_or_duplicate,
+    keyset_after,
+    keyset_after_created_desc,
     raise_update_failure,
     scoped_select,
 )
@@ -396,6 +398,7 @@ class SqlQualitySampleRepository:
         *,
         task_id: UUID,
         status: str | None = None,
+        after_id: UUID | None = None,
         limit: int = 100,
     ) -> list[QualitySample]:
         if limit < 1 or limit > 501:
@@ -405,6 +408,9 @@ class SqlQualitySampleRepository:
         )
         if status is not None:
             statement = statement.where(QualitySampleModel.status == status)
+        after_clause = keyset_after(QualitySampleModel.id, after_id)
+        if after_clause is not None:
+            statement = statement.where(after_clause)
         statement = statement.order_by(QualitySampleModel.id).limit(limit)
         return [self._from_row(row) for row in self._session.scalars(statement)]
 
@@ -530,15 +536,25 @@ class SqlIAAReportRepository:
         scope: ProjectScope,
         *,
         task_id: UUID,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[IAAReportRecord]:
         if limit < 1 or limit > 101:
             raise DomainValidationError("limit 必须在 1 到 101 之间")
+        statement = scoped_select(IAAReportModel, scope).where(IAAReportModel.task_id == task_id)
+        after_clause = keyset_after_created_desc(
+            IAAReportModel,
+            IAAReportModel.created_at,
+            IAAReportModel.id,
+            after_id,
+        )
+        if after_clause is not None:
+            statement = statement.where(after_clause)
         rows = self._session.scalars(
-            scoped_select(IAAReportModel, scope)
-            .where(IAAReportModel.task_id == task_id)
-            .order_by(IAAReportModel.created_at.desc())
-            .limit(limit)
+            statement.order_by(
+                IAAReportModel.created_at.desc(),
+                IAAReportModel.id.desc(),
+            ).limit(limit)
         )
         return [self._from_row(row) for row in rows]
 

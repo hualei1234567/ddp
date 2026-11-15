@@ -86,9 +86,16 @@ class QualitySampleUseCases:
         task_id: UUID,
         *,
         status: str | None = None,
+        after_id: UUID | None = None,
         limit: int = 100,
     ) -> list[QualitySample]:
-        return self._samples.list_for_task(scope, task_id=task_id, status=status, limit=limit)
+        return self._samples.list_for_task(
+            scope,
+            task_id=task_id,
+            status=status,
+            after_id=after_id,
+            limit=limit,
+        )
 
     def plan(
         self,

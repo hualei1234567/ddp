@@ -109,6 +109,8 @@ export function createAnnotationSubmissionApi(
         query: {
           task_id: requireIdentifier(taskId, "task_id"),
           status: options?.status,
+          cursor: options?.cursor,
+          limit: options?.limit,
         },
         validate: (value) =>
           assertPageScope(

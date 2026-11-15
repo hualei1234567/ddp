@@ -231,9 +231,15 @@ class IAAUseCases:
         scope: ProjectScope,
         task_id: UUID,
         *,
+        after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[IAAReportRecord]:
-        return self._reports.list_for_task(scope, task_id=task_id, limit=limit)
+        return self._reports.list_for_task(
+            scope,
+            task_id=task_id,
+            after_id=after_id,
+            limit=limit,
+        )
 
     def require_sufficient(self, report: IAAReportRecord) -> IAAReportRecord:
         if report.status == IAAReportStatus.INSUFFICIENT_DATA.value:

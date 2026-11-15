@@ -14,6 +14,7 @@ import {
   type BuiltRecords,
   type EpisodeFormValues,
 } from "./annotationValidation";
+import { fetchAllCursorPages } from "./cursorPage";
 import type { CollectionsApi } from "./collections";
 
 export interface WorkbenchPartialError {
@@ -135,10 +136,15 @@ export async function loadAnnotationWorkbench(
 
     let submissions: AnnotationSubmission[] = [];
     try {
-      const page = await api.listSubmissions(projectId, task.task_id, {
-        signal,
-      });
-      submissions = page.items.filter(
+      // 必须翻完全部页：只读第一页时，提交数超过 20 的任务可能看不到
+      // 本人既有 DRAFT，从而新建第二份重复草稿（服务端会拒绝，但用户会
+      // 得到一条莫名其妙的错误）。
+      const allSubmissions = await fetchAllCursorPages(
+        (options) =>
+          api.listSubmissions(projectId, task.task_id, { ...options, signal }),
+        (item) => item.submission_id,
+      );
+      submissions = allSubmissions.filter(
         (item) => item.assignment_id === assignment.assignment_id,
       );
     } catch (caught) {

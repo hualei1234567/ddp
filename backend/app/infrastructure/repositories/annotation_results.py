@@ -33,8 +33,10 @@ from app.infrastructure.repositories._annotation_sql import (
     ensure_initial_version,
     enum_value,
     flush_or_duplicate,
+    keyset_after,
     raise_update_failure,
     scoped_select,
+    visible_submission_clause,
 )
 
 
@@ -129,8 +131,16 @@ class SqlAnnotationSubmissionRepository:
         *,
         task_id: UUID,
         statuses: tuple[str, ...] | None = None,
+        after_id: UUID | None = None,
+        visible_only: bool = False,
         limit: int = 100,
     ) -> list[AnnotationSubmission]:
+        """按任务列出提交（键集分页）。
+
+        ``visible_only=True`` 时把「他人 DRAFT 不可见」下推到 SQL：分页必须在
+        过滤之后取 ``limit+1``，否则他人草稿会占掉名额，出现页内条数不足
+        却仍有下一页。
+        """
         if limit < 1 or limit > 501:
             raise DomainValidationError("limit 必须在 1 到 501 之间")
         statement = scoped_select(AnnotationSubmissionModel, scope).where(
@@ -138,6 +148,17 @@ class SqlAnnotationSubmissionRepository:
         )
         if statuses:
             statement = statement.where(AnnotationSubmissionModel.status.in_(statuses))
+        if visible_only:
+            statement = statement.where(
+                visible_submission_clause(
+                    AnnotationSubmissionModel.status,
+                    AnnotationSubmissionModel.annotator_id,
+                    scope.actor_id,
+                )
+            )
+        after_clause = keyset_after(AnnotationSubmissionModel.id, after_id)
+        if after_clause is not None:
+            statement = statement.where(after_clause)
         statement = statement.order_by(AnnotationSubmissionModel.id).limit(limit)
         return [self._from_row(row) for row in self._session.scalars(statement)]
 

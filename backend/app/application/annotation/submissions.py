@@ -141,12 +141,20 @@ class AnnotationSubmissionUseCases:
         *,
         task_id: UUID,
         statuses: tuple[str, ...] | None = None,
+        after_id: UUID | None = None,
         limit: int = 100,
     ) -> list[AnnotationSubmission]:
+        """按任务列出提交；``DRAFT`` 仅作者本人可见。
+
+        可见性下推到仓储查询（``visible_only=True``），保证键集分页在
+        「已过滤」的结果集上取 ``limit+1``，翻页既不重复也不遗漏。
+        """
         return self._submissions.list_for_task(
             scope,
             task_id=task_id,
             statuses=statuses,
+            after_id=after_id,
+            visible_only=True,
             limit=limit,
         )
 
