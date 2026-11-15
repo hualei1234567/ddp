@@ -78,7 +78,7 @@
         0.0,
         0.0
       ],
-      "transform_type": "eye_in_hand"
+      "transform_type": "STATIC"
     },
     "parent_frame": "robot/base_link",
     "child_frame": "camera/optical_frame",
@@ -89,7 +89,7 @@
       "dddddddd-dddd-7ddd-8ddd-dddddddddddd"
     ],
     "source": null,
-    "checksum": "sha256:4a25a8c305feb86cb9c0c47f693cceae8d246900cfe54be832f7eb5d06eb7dd7",
+    "checksum": "sha256:a8a142584ac2da9c5259f056e7c7ade22686d7f67a3debf56bc37e359428d490",
     "uncertainty": {
       "translation_m": 0.001,
       "rotation_rad": 0.0001
@@ -160,7 +160,7 @@
             0.0,
             0.0
           ],
-          "transform_type": "eye_in_hand"
+          "transform_type": "STATIC"
         },
         "parent_frame": "robot/base_link",
         "child_frame": "camera/optical_frame",
@@ -171,7 +171,7 @@
           "dddddddd-dddd-7ddd-8ddd-dddddddddddd"
         ],
         "source": null,
-        "checksum": "sha256:4a25a8c305feb86cb9c0c47f693cceae8d246900cfe54be832f7eb5d06eb7dd7",
+        "checksum": "sha256:a8a142584ac2da9c5259f056e7c7ade22686d7f67a3debf56bc37e359428d490",
         "uncertainty": {
           "translation_m": 0.001,
           "rotation_rad": 0.0001

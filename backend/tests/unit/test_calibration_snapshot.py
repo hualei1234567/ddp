@@ -15,6 +15,20 @@ from app.domain.devices.errors import DomainValidationError
 
 _NOW = datetime(2026, 11, 15, tzinfo=UTC)
 
+# G-19 之后参数形状由契约 schema 强制，测试必须给合法参数。
+_VALID_INTRINSICS = {
+    "camera_model": "PINHOLE",
+    "image_width": 1280,
+    "image_height": 720,
+    "fx": 900.0,
+    "fy": 900.0,
+    "cx": 640.0,
+    "cy": 360.0,
+    "distortion_model": "plumb_bob",
+    "distortion_coefficients": [0.0, 0.0, 0.0, 0.0, 0.0],
+    "unit": "px",
+}
+
 
 def _profile(**overrides: object) -> CalibrationProfile:
     base: dict[str, object] = {
@@ -42,7 +56,7 @@ def _record(**overrides: object) -> CalibrationRecord:
         "target_id": uuid4(),
         "calibration_type": "INTRINSICS",
         "method": "棋盘格",
-        "parameters": {},
+        "parameters": dict(_VALID_INTRINSICS),
         "valid_from": _NOW,
         "evidence_asset_ids": (),
         "checksum": "sha256:" + "a" * 64,

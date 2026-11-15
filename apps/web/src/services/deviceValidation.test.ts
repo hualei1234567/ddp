@@ -78,7 +78,7 @@ describe("设备域契约校验", () => {
     expect(parsed.parameters).toEqual({
       translation_m: [0.1, 0.2, 0.3],
       rotation_quat_wxyz: [1, 0, 0, 0],
-      transform_type: "eye_in_hand",
+      transform_type: "STATIC",
     });
     expect(parsed.uncertainty).toEqual({
       translation_m: 0.001,

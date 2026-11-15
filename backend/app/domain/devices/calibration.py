@@ -22,6 +22,7 @@ from app.domain.devices.enums import (
     CalibrationType,
 )
 from app.domain.devices.errors import DomainValidationError, FourEyesViolationError
+from app.domain.devices.parameter_schema import validate_parameters
 from app.domain.devices.state_machines import assert_calibration_transition
 from app.domain.devices.validation import (
     CHECKSUM_MAX_LENGTH,
@@ -242,6 +243,9 @@ class CalibrationRecord:
             "profile_snapshot",
             frozen_mapping(self.profile_snapshot, "profile_snapshot"),
         )
+        # G-19：参数形状由契约 schema 决定。非法单位、缺帧、未知键
+        # 必须在进入 DRAFT 前就被拦住，而不是等到下游解析时才炸。
+        validate_parameters(self.calibration_type, self.parameters)
 
     def _validate_frames(self) -> None:
         parent = optional_text(

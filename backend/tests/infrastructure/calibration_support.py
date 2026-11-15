@@ -24,6 +24,8 @@ from app.infrastructure.repositories.devices import (
 )
 from sqlalchemy.orm import Session, sessionmaker
 
+from tests.calibration_fixtures import parameters_for
+
 VALID_FROM = datetime(2026, 1, 1, tzinfo=UTC)
 VALIDATED_AT = datetime(2026, 1, 2, tzinfo=UTC)
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
@@ -70,7 +72,7 @@ def draft_record(
         target_id=target_id,
         calibration_type=calibration_type,
         method="charuco",
-        parameters={"fx": 600.0, "fy": 600.0},
+        parameters=_valid_parameters(),
         valid_from=valid_from,
         evidence_asset_ids=(uuid4(),) if evidence is None else evidence,
         checksum="sha256:abc",
@@ -184,3 +186,8 @@ def seed_active(
         )
         session.commit()
         return active
+
+
+def _valid_parameters() -> dict[str, object]:
+    """G-19 之后参数形状由契约 schema 强制；测试必须用合法参数。"""
+    return parameters_for("INTRINSICS")

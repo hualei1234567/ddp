@@ -23,6 +23,7 @@ from app.infrastructure.repositories.devices import (
 )
 from sqlalchemy.orm import Session, sessionmaker
 
+from tests.calibration_fixtures import parameters_for
 from tests.infrastructure.calibration_support import (
     NOW,
     VALIDATED_AT,
@@ -272,7 +273,7 @@ def test_draft_save_updates_content_without_writing_status(
         assert stored is not None
         updated = repository.save(
             scope_a,
-            replace(stored, parameters={"fx": 800.0}),
+            replace(stored, parameters=_changed_parameters()),
             expected_version=stored.version,
         )
         session.commit()
@@ -287,7 +288,7 @@ def test_draft_save_updates_content_without_writing_status(
         )
         assert stored is not None
         assert stored.status is CalibrationStatus.DRAFT
-        assert stored.parameters == {"fx": 800.0}
+        assert dict(stored.parameters) == _changed_parameters()
         assert stored.checksum == "sha256:abc"
 
 
@@ -343,7 +344,7 @@ def test_save_rejects_trace_tampering_after_submit(
 
     tampered = (
         replace(submitted, checksum="sha256:evil"),
-        replace(submitted, parameters={"fx": 1.0}),
+        replace(submitted, parameters=_changed_parameters()),
         replace(submitted, target_id=uuid4()),
         replace(submitted, evidence_asset_ids=(uuid4(),)),
     )
@@ -764,3 +765,15 @@ def test_activation_rejects_expired_record_without_touching_active(
         assert pending is not None
         assert old.status is CalibrationStatus.ACTIVE
         assert pending.status is CalibrationStatus.VALIDATED
+
+
+def _valid_parameters() -> dict[str, object]:
+    """G-19 之后参数形状由契约 schema 强制；测试必须用合法参数。"""
+    return parameters_for("INTRINSICS")
+
+
+def _changed_parameters() -> dict[str, object]:
+    """与 ``_valid_parameters()`` 内容确实不同，用于验证"实质变更"路径。"""
+    changed = _valid_parameters()
+    changed["fx"] = 1234.5
+    return changed

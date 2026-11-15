@@ -266,7 +266,7 @@ def build_snapshot() -> dict[str, object]:
             "parameters": {
                 "translation_m": [0.1, 0.2, 0.3],
                 "rotation_quat_wxyz": [1.0, 0.0, 0.0, 0.0],
-                "transform_type": "eye_in_hand",
+                "transform_type": "STATIC",
             },
             "valid_from": "2026-01-01T00:00:00Z",
             "parent_frame": "robot/base_link",

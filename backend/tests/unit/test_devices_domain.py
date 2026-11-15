@@ -24,6 +24,8 @@ from app.domain.devices import (
     SensorType,
 )
 
+from tests.calibration_fixtures import parameters_for
+
 
 def _robot(status: LifecycleStatus = LifecycleStatus.PROVISIONED) -> Robot:
     return Robot(
@@ -75,6 +77,7 @@ def _record(
     child_frame: str | None = None,
     valid_from: datetime | None = None,
     valid_to: datetime | None = None,
+    parameters: dict[str, object] | None = None,
 ) -> CalibrationRecord:
     return CalibrationRecord(
         calibration_id=uuid4(),
@@ -85,7 +88,7 @@ def _record(
         target_id=uuid4(),
         calibration_type=calibration_type,
         method="charuco",
-        parameters={"fx": 1.0},
+        parameters=_valid_parameters() if parameters is None else parameters,
         valid_from=valid_from or datetime(2026, 1, 1, tzinfo=UTC),
         evidence_asset_ids=evidence_asset_ids,
         checksum="sha256:abc",
@@ -372,3 +375,47 @@ def test_calibration_validity_window_must_be_positive() -> None:
 def test_calibration_requires_timezone_aware_times() -> None:
     with pytest.raises(DomainValidationError, match="时区"):
         _record(valid_from=datetime(2026, 1, 1))  # noqa: DTZ001
+
+
+def _valid_parameters() -> dict[str, object]:
+    """G-19 之后参数形状由契约 schema 强制；测试必须用合法参数。"""
+    return parameters_for("INTRINSICS")
+
+
+def test_calibration_rejects_parameters_violating_contract_schema() -> None:
+    """G-19：参数形状由契约冻结，缺字段/枚举错误必须被拒且消息可定位。"""
+    with pytest.raises(DomainValidationError, match="INTRINSICS 参数不合法"):
+        _record(parameters={"fx": 1.0})
+
+    missing = _valid_parameters()
+    del missing["image_width"]
+    with pytest.raises(DomainValidationError, match="image_width"):
+        _record(parameters=missing)
+
+    bad_enum = _valid_parameters()
+    bad_enum["camera_model"] = "FISHEYE_NOT_IN_CONTRACT"
+    with pytest.raises(DomainValidationError, match="camera_model"):
+        _record(parameters=bad_enum)
+
+
+def test_calibration_rejects_type_mismatched_parameters() -> None:
+    """校验按 calibration_type 选定义：IMU 参数放进 INTRINSICS 记录必须被拒。"""
+    with pytest.raises(DomainValidationError, match="INTRINSICS 参数不合法"):
+        _record(parameters=parameters_for("IMU"))
+
+
+def test_calibration_accepts_all_contract_calibration_types() -> None:
+    """8 种 calibration_type 的合法参数都必须能构造记录（防夹具漂移）。"""
+    for calibration_type in CalibrationType:
+        # 外参/手眼在领域层额外要求父子坐标系，这里一并给出。
+        frames = (
+            {"parent_frame": "base_link", "child_frame": "camera_link"}
+            if calibration_type in (CalibrationType.EXTRINSICS, CalibrationType.HAND_EYE)
+            else {}
+        )
+        record = _record(
+            calibration_type=calibration_type,
+            parameters=parameters_for(calibration_type.value),
+            **frames,
+        )
+        assert record.calibration_type is calibration_type
