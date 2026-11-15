@@ -69,6 +69,12 @@ def _robot_values(robot: Robot, *, actor_id: UUID) -> dict[str, object]:
         "capability_profile": dict(robot.capability_profile),
         "location_id": robot.location_id,
         "owner_user_id": robot.owner_user_id,
+        "status_reason": robot.status_reason,
+        "fault_code": robot.fault_code,
+        "fault_detail": robot.fault_detail,
+        "fault_occurred_at": robot.fault_occurred_at,
+        "status_changed_at": robot.status_changed_at,
+        "status_changed_by": robot.status_changed_by,
         "updated_by": actor_id,
     }
 
@@ -152,6 +158,12 @@ def _robot_from_row(row: RobotModel) -> Robot:
         location_id=row.location_id,
         owner_user_id=row.owner_user_id,
         version=row.version,
+        status_reason=row.status_reason,
+        fault_code=row.fault_code,
+        fault_detail=row.fault_detail,
+        fault_occurred_at=row.fault_occurred_at,
+        status_changed_at=row.status_changed_at,
+        status_changed_by=row.status_changed_by,
     )
 
 

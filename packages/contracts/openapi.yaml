@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.6.0
+  version: 1.7.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -30,6 +30,11 @@ info:
       Sensor 的 `frame_id` / `frame_convention`（ADR-0019），Calibration 的
       `calibration_version` 与 Profile 快照三字段（ADR-0020）。均为新增字段，
       不改变既有字段语义，`version` 继续保留并标 DEPRECATED。
+    - `1.7.0` 在 `1.6.0` 基础上**增量加入 G-01 已实现端点**：`/robots` 全套
+      （列表/创建/详情/修改 + 5 个生命周期动作）与 `/calibration-profiles`
+      （登记新版本/详情，无 PATCH——Profile 不可变，改配置 = 新建版本）。
+      同时补 `robots` 表的状态语义列（`status_reason`/`fault_*`/`status_changed_*`），
+      与 devices/sensors 对齐。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -213,6 +218,10 @@ tags:
     description: 数据需求闭环与满足/复测关联
   - name: model-adapters
     description: 模型平台 Adapter 回调（HMAC）
+  - name: robots
+    description: 机器人档案、生命周期动作与标定配置引用
+  - name: calibration-profiles
+    description: 标定配置版本（不可变；改配置 = 新建版本）
   - name: suppliers
     description: 供应商档案、状态机与绩效指标
   - name: inbound-batches
@@ -222,6 +231,24 @@ paths:
     $ref: "./fragments/paths.stage1.yaml#/health"
   /api/v1/platform/meta:
     $ref: "./fragments/paths.stage1.yaml#/platformMeta"
+  /api/v1/projects/{project_id}/robots:
+    $ref: "./fragments/paths.stage1.yaml#/robots"
+  /api/v1/projects/{project_id}/robots/{robot_id}:
+    $ref: "./fragments/paths.stage1.yaml#/robotDetail"
+  /api/v1/projects/{project_id}/robots/{robot_id}/activate:
+    $ref: "./fragments/paths.stage1.yaml#/robotActivate"
+  /api/v1/projects/{project_id}/robots/{robot_id}/maintenance:
+    $ref: "./fragments/paths.stage1.yaml#/robotMaintenance"
+  /api/v1/projects/{project_id}/robots/{robot_id}/fault:
+    $ref: "./fragments/paths.stage1.yaml#/robotFault"
+  /api/v1/projects/{project_id}/robots/{robot_id}/suspend:
+    $ref: "./fragments/paths.stage1.yaml#/robotSuspend"
+  /api/v1/projects/{project_id}/robots/{robot_id}/retire:
+    $ref: "./fragments/paths.stage1.yaml#/robotRetire"
+  /api/v1/projects/{project_id}/calibration-profiles:
+    $ref: "./fragments/paths.stage1.yaml#/calibrationProfiles"
+  /api/v1/projects/{project_id}/calibration-profiles/{profile_id}:
+    $ref: "./fragments/paths.stage1.yaml#/calibrationProfileDetail"
   /api/v1/projects/{project_id}/devices:
     $ref: "./fragments/paths.stage1.yaml#/devices"
   /api/v1/projects/{project_id}/devices/{device_id}:
@@ -586,6 +613,8 @@ components:
     AssetId: {$ref: "./fragments/components.yaml#/parameters/AssetId"}
     JobId: {$ref: "./fragments/components.yaml#/parameters/JobId"}
     EpisodeId: {$ref: "./fragments/components.yaml#/parameters/EpisodeId"}
+    RobotId: {$ref: "./fragments/components.yaml#/parameters/RobotId"}
+    ProfileId: {$ref: "./fragments/components.yaml#/parameters/ProfileId"}
     DeviceId: {$ref: "./fragments/components.yaml#/parameters/DeviceId"}
     SensorId: {$ref: "./fragments/components.yaml#/parameters/SensorId"}
     CalibrationId: {$ref: "./fragments/components.yaml#/parameters/CalibrationId"}
@@ -691,6 +720,12 @@ components:
     CalibrationTargetType: {$ref: "./fragments/schemas.stage1.yaml#/CalibrationTargetType"}
     CalibrationType: {$ref: "./fragments/schemas.stage1.yaml#/CalibrationType"}
     CalibrationStatus: {$ref: "./fragments/schemas.stage1.yaml#/CalibrationStatus"}
+    Robot: {$ref: "./fragments/schemas.stage1.yaml#/Robot"}
+    RobotCreate: {$ref: "./fragments/schemas.stage1.yaml#/RobotCreate"}
+    RobotPatch: {$ref: "./fragments/schemas.stage1.yaml#/RobotPatch"}
+    RobotPage: {$ref: "./fragments/schemas.stage1.yaml#/RobotPage"}
+    CalibrationProfile: {$ref: "./fragments/schemas.stage1.yaml#/CalibrationProfile"}
+    CalibrationProfileCreate: {$ref: "./fragments/schemas.stage1.yaml#/CalibrationProfileCreate"}
     Device: {$ref: "./fragments/schemas.stage1.yaml#/Device"}
     DeviceCreate: {$ref: "./fragments/schemas.stage1.yaml#/DeviceCreate"}
     DevicePatch: {$ref: "./fragments/schemas.stage1.yaml#/DevicePatch"}

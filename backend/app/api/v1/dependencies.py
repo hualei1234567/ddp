@@ -8,8 +8,10 @@ from fastapi import Depends
 
 from app.api.deps import DbSession
 from app.application.devices import (
+    CalibrationProfileUseCases,
     CalibrationUseCases,
     DeviceUseCases,
+    RobotUseCases,
     SensorUseCases,
 )
 from app.infrastructure.repositories.calibration_records import (
@@ -62,7 +64,33 @@ def get_calibration_use_cases(session: DbSession) -> CalibrationUseCases:
     )
 
 
+def get_robot_use_cases(session: DbSession) -> RobotUseCases:
+    return RobotUseCases(
+        robots=SqlRobotRepository(session),
+        profiles=SqlCalibrationProfileRepository(session),
+        uow=session,
+        audit=SqlDatasetAuditRepository(session),
+        outbox=SqlDatasetOutboxRepository(session),
+        idempotency=SqlIdempotencyRepository(session),
+    )
+
+
+def get_calibration_profile_use_cases(session: DbSession) -> CalibrationProfileUseCases:
+    return CalibrationProfileUseCases(
+        profiles=SqlCalibrationProfileRepository(session),
+        uow=session,
+        audit=SqlDatasetAuditRepository(session),
+        outbox=SqlDatasetOutboxRepository(session),
+        idempotency=SqlIdempotencyRepository(session),
+    )
+
+
 DeviceUseCasesDep = Annotated[DeviceUseCases, Depends(get_device_use_cases)]
+RobotUseCasesDep = Annotated[RobotUseCases, Depends(get_robot_use_cases)]
+CalibrationProfileUseCasesDep = Annotated[
+    CalibrationProfileUseCases,
+    Depends(get_calibration_profile_use_cases),
+]
 SensorUseCasesDep = Annotated[SensorUseCases, Depends(get_sensor_use_cases)]
 CalibrationUseCasesDep = Annotated[
     CalibrationUseCases,

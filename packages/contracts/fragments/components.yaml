@@ -57,6 +57,20 @@ parameters:
     schema:
       type: string
       format: uuid
+  RobotId:
+    name: robot_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  ProfileId:
+    name: profile_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
   DeviceId:
     name: device_id
     in: path

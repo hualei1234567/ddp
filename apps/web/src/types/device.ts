@@ -143,6 +143,49 @@ export interface Sensor {
   updated_at: string | null;
 }
 
+export interface Robot {
+  robot_id: string;
+  project_id: string;
+  code: string;
+  name: string;
+  robot_type: string;
+  status: string;
+  vendor: string | null;
+  model: string | null;
+  serial_number: string | null;
+  firmware_version: string | null;
+  hardware_version: string | null;
+  calibration_profile_id: string | null;
+  capability_profile: Record<string, unknown>;
+  location_id: string | null;
+  owner_user_id: string | null;
+  status_reason: string | null;
+  fault_code: string | null;
+  fault_detail: string | null;
+  fault_occurred_at: string | null;
+  status_changed_at: string | null;
+  status_changed_by: string | null;
+  version: number;
+}
+
+/**
+ * 标定配置的**一个不可变版本**（ADR-0020 / G-07）。
+ * 改配置 = 新建版本；前端没有"编辑 Profile"的概念。
+ */
+export interface CalibrationProfile {
+  profile_id: string;
+  project_id: string;
+  name: string;
+  scope: string;
+  target_type: string;
+  /** 业务版本号；服务端表列仍叫 version，对外统一为 profile_version。 */
+  profile_version: number;
+  schema_version: string;
+  required_types: string[];
+  selection_rule: Record<string, unknown>;
+  target_id: string | null;
+}
+
 export interface CalibrationRecord {
   calibration_id: string;
   project_id: string;

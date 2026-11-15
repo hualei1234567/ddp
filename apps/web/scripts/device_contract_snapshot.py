@@ -37,6 +37,7 @@ EVIDENCE_ID = UUID("dddddddd-dddd-7ddd-8ddd-dddddddddddd")
 DEVICE_ID = UUID("22222222-2222-7222-8222-222222222222")
 SENSOR_ID = UUID("33333333-3333-7333-8333-333333333333")
 CALIBRATION_ID = UUID("44444444-4444-7444-8444-444444444444")
+ROBOT_ID = UUID("55555555-5555-7555-8555-555555555555")
 
 
 def _reexec_with_backend_python() -> None:
@@ -65,6 +66,7 @@ def _load_backend():
     from app.api.deps import get_current_principal
     from app.application.devices import calibrations as calibrations_module
     from app.application.devices import devices as devices_module
+    from app.application.devices import robots as robots_module
     from app.application.devices import sensors as sensors_module
     from app.domain.devices import (
         CalibrationProfile,
@@ -96,6 +98,7 @@ def _load_backend():
     return {
         "get_current_principal": get_current_principal,
         "calibrations_module": calibrations_module,
+        "robots_module": robots_module,
         "devices_module": devices_module,
         "sensors_module": sensors_module,
         "CalibrationProfile": CalibrationProfile,
@@ -127,12 +130,17 @@ def _patch_deterministic_ids(backend) -> None:
     G-18 之后设备域用 UUIDv7 生成 ID（``app.domain.common.ids.new_id``），
     所以固定点也落在 ``new_id`` 上，而不是各模块里已不存在的 ``uuid4``。
     """
-    generated = iter((DEVICE_ID, SENSOR_ID, CALIBRATION_ID))
+    generated = iter((DEVICE_ID, SENSOR_ID, CALIBRATION_ID, ROBOT_ID))
 
     def fixed_new_id() -> UUID:
         return next(generated)
 
-    for key in ("devices_module", "sensors_module", "calibrations_module"):
+    for key in (
+        "devices_module",
+        "sensors_module",
+        "calibrations_module",
+        "robots_module",
+    ):
         backend[key].new_id = fixed_new_id
 
 
@@ -295,12 +303,40 @@ def build_snapshot() -> dict[str, object]:
         calibration_page_response.text
     )
 
+    # G-01：Robot 与 CalibrationProfile 路由。这里走真实 HTTP 路由，
+    # 因此快照同时证明"路由存在""响应字段与前端类型一致"两件事。
+    robot_response = client.post(
+        f"/api/v1/projects/{PROJECT_ID}/robots",
+        json={
+            "code": "ROB-001",
+            "name": "研究型双臂机器人",
+            "robot_type": "HUMANOID",
+            "vendor": "Acme",
+            "model": "R2",
+            "serial_number": "SN-R-001",
+        },
+    )
+    assert robot_response.status_code == 201, robot_response.text
+    robot = robot_response.json()
+    assert robot["robot_id"] == str(ROBOT_ID), robot["robot_id"]
+
+    robot_page_response = client.get(f"/api/v1/projects/{PROJECT_ID}/robots")
+    assert robot_page_response.status_code == 200, robot_page_response.text
+
+    profile_response = client.get(
+        f"/api/v1/projects/{PROJECT_ID}/calibration-profiles/{PROFILE_ID}"
+    )
+    assert profile_response.status_code == 200, profile_response.text
+
     snapshot = {
         "device": device,
         "sensor": sensor,
         "calibration": calibration,
+        "robot": robot,
+        "calibration_profile": profile_response.json(),
         "sensor_page": sensor_page_response.json(),
         "calibration_page": calibration_page_response.json(),
+        "robot_page": robot_page_response.json(),
     }
     engine.dispose()
     return snapshot

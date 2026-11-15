@@ -90,6 +90,15 @@ class Robot(_LifecycleActions):
     location_id: UUID | None = None
     owner_user_id: UUID | None = None
     version: int = 1
+    # 状态语义（G-09/G-10）：与 Device/Sensor 对齐——动作请求体的 reason/fault
+    # 必须落库，否则"为什么挂起/故障"无从追溯。Robot 此前缺这些字段，
+    # 导致 G-01 的补路由工作必须先补模型，否则状态动作语义无处持久化。
+    status_reason: str | None = None
+    fault_code: str | None = None
+    fault_detail: str | None = None
+    fault_occurred_at: datetime | None = None
+    status_changed_at: datetime | None = None
+    status_changed_by: UUID | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(

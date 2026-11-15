@@ -12,8 +12,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.devices.calibration import CalibrationRecord
-from app.domain.devices.models import Device, Sensor
+from app.domain.devices.calibration import CalibrationProfile, CalibrationRecord
+from app.domain.devices.models import Device, Robot, Sensor
 
 T = TypeVar("T")
 
@@ -57,6 +57,138 @@ class DevicePatch(BaseModel):
     capability_profile: dict[str, object] | None = None
     location_id: UUID | None = None
     owner_user_id: UUID | None = None
+
+
+class RobotCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=200)
+    robot_type: str = Field(min_length=1, max_length=64)
+    vendor: str | None = Field(default=None, max_length=120)
+    model: str | None = Field(default=None, max_length=120)
+    serial_number: str | None = Field(default=None, max_length=120)
+    firmware_version: str | None = Field(default=None, max_length=64)
+    hardware_version: str | None = Field(default=None, max_length=64)
+    calibration_profile_id: UUID | None = None
+    capability_profile: dict[str, object] = Field(default_factory=dict)
+    location_id: UUID | None = None
+    owner_user_id: UUID | None = None
+
+
+class RobotPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str | None = Field(default=None, min_length=1, max_length=64)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    robot_type: str | None = Field(default=None, min_length=1, max_length=64)
+    vendor: str | None = Field(default=None, max_length=120)
+    model: str | None = Field(default=None, max_length=120)
+    serial_number: str | None = Field(default=None, max_length=120)
+    firmware_version: str | None = Field(default=None, max_length=64)
+    hardware_version: str | None = Field(default=None, max_length=64)
+    calibration_profile_id: UUID | None = None
+    capability_profile: dict[str, object] | None = None
+    location_id: UUID | None = None
+    owner_user_id: UUID | None = None
+
+
+class RobotOut(BaseModel):
+    robot_id: UUID
+    project_id: UUID
+    code: str
+    name: str
+    robot_type: str
+    status: str
+    vendor: str | None
+    model: str | None
+    serial_number: str | None
+    firmware_version: str | None
+    hardware_version: str | None
+    calibration_profile_id: UUID | None
+    capability_profile: dict[str, object]
+    location_id: UUID | None
+    owner_user_id: UUID | None
+    # 阶段 2 起设备域统一补了状态语义字段（G-09）；Robot 同样返回。
+    status_reason: str | None = None
+    fault_code: str | None = None
+    fault_detail: str | None = None
+    fault_occurred_at: datetime | None = None
+    status_changed_at: datetime | None = None
+    status_changed_by: UUID | None = None
+    version: int
+
+    @classmethod
+    def from_domain(cls, robot: Robot) -> RobotOut:
+        return cls(
+            robot_id=robot.robot_id,
+            project_id=robot.project_id,
+            code=robot.code,
+            name=robot.name,
+            robot_type=robot.robot_type,
+            status=_value(robot.status),
+            vendor=robot.vendor,
+            model=robot.model,
+            serial_number=robot.serial_number,
+            firmware_version=robot.firmware_version,
+            hardware_version=robot.hardware_version,
+            calibration_profile_id=robot.calibration_profile_id,
+            capability_profile=dict(robot.capability_profile),
+            location_id=robot.location_id,
+            owner_user_id=robot.owner_user_id,
+            status_reason=robot.status_reason,
+            fault_code=robot.fault_code,
+            fault_detail=robot.fault_detail,
+            fault_occurred_at=robot.fault_occurred_at,
+            status_changed_at=robot.status_changed_at,
+            status_changed_by=robot.status_changed_by,
+            version=robot.version,
+        )
+
+
+class CalibrationProfileCreate(BaseModel):
+    """登记一个新版本；改配置 = 新建版本（ADR-0020 / G-07）。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
+    scope: str
+    target_type: str
+    schema_version: str = Field(min_length=1, max_length=64)
+    required_types: list[str] = Field(default_factory=list)
+    selection_rule: dict[str, object] = Field(default_factory=dict)
+    target_id: UUID | None = None
+    # 冻结契约的字段名是 profile_version；表列仍叫 version（G-03 才改名）。
+    profile_version: int = Field(default=1, ge=1)
+    supersedes_id: UUID | None = None
+
+
+class CalibrationProfileOut(BaseModel):
+    profile_id: UUID
+    project_id: UUID
+    name: str
+    scope: str
+    target_type: str
+    profile_version: int
+    schema_version: str
+    required_types: list[str]
+    selection_rule: dict[str, object]
+    target_id: UUID | None
+
+    @classmethod
+    def from_domain(cls, profile: CalibrationProfile) -> CalibrationProfileOut:
+        return cls(
+            profile_id=profile.profile_id,
+            project_id=profile.project_id,
+            name=profile.name,
+            scope=_value(profile.scope),
+            target_type=_value(profile.target_type),
+            profile_version=profile.version,
+            schema_version=profile.schema_version,
+            required_types=[_value(item) for item in profile.required_types],
+            selection_rule=dict(profile.selection_rule),
+            target_id=profile.target_id,
+        )
 
 
 class SensorCreate(BaseModel):

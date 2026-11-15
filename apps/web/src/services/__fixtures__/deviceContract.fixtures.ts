@@ -12,9 +12,11 @@
  * 数据等级 T2，仅用于契约测试，不是业务验收数据。
  */
 import type {
+  CalibrationProfile,
   CalibrationRecord,
   CursorPage,
   Device,
+  Robot,
   Sensor,
 } from "../../types/device";
 import snapshot from "./deviceContract.snapshot.json";
@@ -25,3 +27,7 @@ export const backendCalibrationFixture: CalibrationRecord = snapshot.calibration
 export const backendSensorPageFixture: CursorPage<Sensor> = snapshot.sensor_page;
 export const backendCalibrationPageFixture: CursorPage<CalibrationRecord> =
   snapshot.calibration_page;
+export const backendRobotFixture: Robot = snapshot.robot;
+export const backendRobotPageFixture: CursorPage<Robot> = snapshot.robot_page;
+export const backendCalibrationProfileFixture: CalibrationProfile =
+  snapshot.calibration_profile;

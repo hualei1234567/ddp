@@ -1,7 +1,9 @@
 import type {
+  CalibrationProfile,
   CalibrationRecord,
   CursorPage,
   Device,
+  Robot,
   Sensor,
 } from "../types/device";
 import {
@@ -22,6 +24,7 @@ import {
   readOptionalRecord,
   readOptionalString,
   readOptionalUuid,
+  readPositiveInteger,
   readSha256Checksum,
   readString,
   readUuid,
@@ -349,4 +352,141 @@ function readOptionalVersion(
     return null;
   }
   return readInteger(record, "profile_version", path);
+}
+
+/**
+ * Robot 响应的严格解析。
+ *
+ * `capability_profile` 允许扩展，但必须是对象——服务端保证这一点，
+ * 前端不在类型层面猜测里面的键。
+ */
+export function parseRobot(value: unknown, path = "机器人"): Robot {
+  const record = asRecord(value, path);
+  return {
+    robot_id: readUuid(record, "robot_id", `${path}.robot_id`),
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    code: readString(record, "code", `${path}.code`),
+    name: readString(record, "name", `${path}.name`),
+    robot_type: readString(record, "robot_type", `${path}.robot_type`),
+    status: readString(record, "status", `${path}.status`),
+    vendor: readOptionalString(record, "vendor", `${path}.vendor`),
+    model: readOptionalString(record, "model", `${path}.model`),
+    serial_number: readOptionalString(
+      record,
+      "serial_number",
+      `${path}.serial_number`,
+    ),
+    firmware_version: readOptionalString(
+      record,
+      "firmware_version",
+      `${path}.firmware_version`,
+    ),
+    hardware_version: readOptionalString(
+      record,
+      "hardware_version",
+      `${path}.hardware_version`,
+    ),
+    calibration_profile_id: readOptionalUuid(
+      record,
+      "calibration_profile_id",
+      `${path}.calibration_profile_id`,
+    ),
+    capability_profile:
+      readOptionalRecord(
+        record,
+        "capability_profile",
+        `${path}.capability_profile`,
+      ) ?? {},
+    location_id: readOptionalUuid(record, "location_id", `${path}.location_id`),
+    owner_user_id: readOptionalUuid(
+      record,
+      "owner_user_id",
+      `${path}.owner_user_id`,
+    ),
+    status_reason: readOptionalString(
+      record,
+      "status_reason",
+      `${path}.status_reason`,
+    ),
+    fault_code: readOptionalString(record, "fault_code", `${path}.fault_code`),
+    fault_detail: readOptionalString(
+      record,
+      "fault_detail",
+      `${path}.fault_detail`,
+    ),
+    fault_occurred_at: readOptionalString(
+      record,
+      "fault_occurred_at",
+      `${path}.fault_occurred_at`,
+    ),
+    status_changed_at: readOptionalString(
+      record,
+      "status_changed_at",
+      `${path}.status_changed_at`,
+    ),
+    status_changed_by: readOptionalUuid(
+      record,
+      "status_changed_by",
+      `${path}.status_changed_by`,
+    ),
+    version: readPositiveInteger(record, "version", `${path}.version`),
+  };
+}
+
+export function parseRobotPage(value: unknown): CursorPage<Robot> {
+  return parseCursorPage(value, "机器人列表", parseRobot);
+}
+
+export function parseCalibrationProfile(
+  value: unknown,
+  path = "标定配置",
+): CalibrationProfile {
+  const record = asRecord(value, path);
+  const requiredTypes = record.required_types;
+  if (!Array.isArray(requiredTypes)) {
+    throw new ContractValidationError(`${path}.required_types 必须是数组`);
+  }
+  return {
+    profile_id: readUuid(record, "profile_id", `${path}.profile_id`),
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    name: readString(record, "name", `${path}.name`),
+    scope: readEnum(
+      record,
+      "scope",
+      `${path}.scope`,
+      CALIBRATION_SCOPE_VALUES,
+    ),
+    target_type: readEnum(
+      record,
+      "target_type",
+      `${path}.target_type`,
+      CALIBRATION_TARGET_TYPE_VALUES,
+    ),
+    profile_version: readPositiveInteger(
+      record,
+      "profile_version",
+      `${path}.profile_version`,
+    ),
+    schema_version: readString(
+      record,
+      "schema_version",
+      `${path}.schema_version`,
+    ),
+    required_types: requiredTypes.map((item, index) => {
+      const value = String(item);
+      const matched = CALIBRATION_TYPE_VALUES.find(
+        (candidate) => candidate === value,
+      );
+      if (matched === undefined) {
+        throw new ContractValidationError(
+          `${path}.required_types[${index}] 必须是合法 CalibrationType`,
+        );
+      }
+      return matched;
+    }),
+    selection_rule:
+      readOptionalRecord(record, "selection_rule", `${path}.selection_rule`) ??
+      {},
+    target_id: readOptionalUuid(record, "target_id", `${path}.target_id`),
+  };
 }

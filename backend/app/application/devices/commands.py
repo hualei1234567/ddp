@@ -69,3 +69,34 @@ class NewCalibration:
     evidence_asset_ids: tuple[UUID, ...] = ()
     source: str | None = None
     uncertainty: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class NewRobot:
+    code: str
+    name: str
+    robot_type: str
+    vendor: str | None = None
+    model: str | None = None
+    serial_number: str | None = None
+    firmware_version: str | None = None
+    hardware_version: str | None = None
+    calibration_profile_id: UUID | None = None
+    capability_profile: Mapping[str, object] = field(default_factory=dict)
+    location_id: UUID | None = None
+    owner_user_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewCalibrationProfile:
+    """Profile 一行代表一个不可变配置版本；改配置 = 新建版本（ADR-0020 / G-07）。"""
+
+    name: str
+    scope: str
+    target_type: str
+    schema_version: str
+    required_types: tuple[str, ...] = ()
+    selection_rule: Mapping[str, object] = field(default_factory=dict)
+    target_id: UUID | None = None
+    profile_version: int = 1
+    supersedes_id: UUID | None = None

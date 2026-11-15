@@ -47,6 +47,102 @@ CalibrationType:
 CalibrationStatus:
   type: string
   enum: [DRAFT, SUBMITTED, VALIDATED, ACTIVE, REJECTED, SUPERSEDED, REVOKED, EXPIRED]
+Robot:
+  type: object
+  required: [robot_id, project_id, code, name, robot_type, status, capability_profile, version]
+  additionalProperties: false
+  properties:
+    robot_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    robot_type: {type: string, minLength: 1, maxLength: 64}
+    status: {$ref: "#/LifecycleStatus"}
+    vendor: {type: [string, "null"], maxLength: 120}
+    model: {type: [string, "null"], maxLength: 120}
+    serial_number: {type: [string, "null"], maxLength: 120}
+    firmware_version: {type: [string, "null"], maxLength: 64}
+    hardware_version: {type: [string, "null"], maxLength: 64}
+    calibration_profile_id: {type: [string, "null"], format: uuid}
+    capability_profile: {type: object, additionalProperties: true}
+    location_id: {type: [string, "null"], format: uuid}
+    owner_user_id: {type: [string, "null"], format: uuid}
+    status_reason: {type: [string, "null"], maxLength: 500}
+    fault_code: {type: [string, "null"], maxLength: 64}
+    fault_detail: {type: [string, "null"], maxLength: 2000}
+    fault_occurred_at: {type: [string, "null"], format: date-time}
+    status_changed_at: {type: [string, "null"], format: date-time}
+    status_changed_by: {type: [string, "null"], format: uuid}
+    version: {type: integer, minimum: 1}
+RobotPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/Robot"}}
+    next_cursor: {type: [string, "null"]}
+RobotCreate:
+  type: object
+  required: [code, name, robot_type]
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    robot_type: {type: string, minLength: 1, maxLength: 64}
+    vendor: {type: [string, "null"], maxLength: 120}
+    model: {type: [string, "null"], maxLength: 120}
+    serial_number: {type: [string, "null"], maxLength: 120}
+    firmware_version: {type: [string, "null"], maxLength: 64}
+    hardware_version: {type: [string, "null"], maxLength: 64}
+    calibration_profile_id: {type: [string, "null"], format: uuid}
+    capability_profile: {type: object, additionalProperties: true}
+    location_id: {type: [string, "null"], format: uuid}
+    owner_user_id: {type: [string, "null"], format: uuid}
+RobotPatch:
+  type: object
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    name: {type: string, minLength: 1, maxLength: 200}
+    robot_type: {type: string, minLength: 1, maxLength: 64}
+    vendor: {type: [string, "null"], maxLength: 120}
+    model: {type: [string, "null"], maxLength: 120}
+    serial_number: {type: [string, "null"], maxLength: 120}
+    firmware_version: {type: [string, "null"], maxLength: 64}
+    hardware_version: {type: [string, "null"], maxLength: 64}
+    calibration_profile_id: {type: [string, "null"], format: uuid}
+    capability_profile: {type: [object, "null"], additionalProperties: true}
+    location_id: {type: [string, "null"], format: uuid}
+    owner_user_id: {type: [string, "null"], format: uuid}
+CalibrationProfile:
+  type: object
+  required: [profile_id, project_id, name, scope, target_type, profile_version, schema_version, required_types, selection_rule, target_id]
+  additionalProperties: false
+  properties:
+    profile_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    name: {type: string, minLength: 1, maxLength: 200}
+    scope: {$ref: "#/CalibrationScope"}
+    target_type: {$ref: "#/CalibrationTargetType"}
+    profile_version: {type: integer, minimum: 1, description: "业务版本号（表列仍叫 version，G-03 才改名）"}
+    schema_version: {type: string, minLength: 1, maxLength: 64}
+    required_types: {type: array, items: {$ref: "#/CalibrationType"}}
+    selection_rule: {type: object, additionalProperties: true}
+    target_id: {type: [string, "null"], format: uuid}
+CalibrationProfileCreate:
+  type: object
+  required: [name, scope, target_type, schema_version]
+  additionalProperties: false
+  properties:
+    name: {type: string, minLength: 1, maxLength: 200}
+    scope: {$ref: "#/CalibrationScope"}
+    target_type: {$ref: "#/CalibrationTargetType"}
+    schema_version: {type: string, minLength: 1, maxLength: 64}
+    required_types: {type: array, items: {$ref: "#/CalibrationType"}}
+    selection_rule: {type: object, additionalProperties: true}
+    target_id: {type: [string, "null"], format: uuid}
+    profile_version: {type: integer, minimum: 1, default: 1}
+    supersedes_id: {type: [string, "null"], format: uuid}
 Device:
   type: object
   required: [device_id, project_id, robot_id, code, name, device_type, vendor, model, serial_number, firmware_version, hardware_version, calibration_profile_id, capability_profile, status, location_id, owner_user_id, version, created_at, updated_at, created_by, updated_by]

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     adapter_callback_routes,
     annotation,
+    calibration_profiles,
     calibrations,
     collection,
     dataset_grant_routes,
@@ -29,6 +30,7 @@ from app.api.v1 import (
     model_routes,
     platform,
     requirement_routes,
+    robots,
     sensors,
     supplier_routes,
     training_delivery_routes,
@@ -38,8 +40,10 @@ from app.api.v1 import (
 
 api_router = APIRouter()
 api_router.include_router(platform.router)
+api_router.include_router(robots.router)
 api_router.include_router(devices.router)
 api_router.include_router(sensors.router)
+api_router.include_router(calibration_profiles.router)
 api_router.include_router(calibrations.router)
 api_router.include_router(collection.router)
 api_router.include_router(uploads.router)

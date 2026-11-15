@@ -214,6 +214,18 @@ class Robot(Base, ProjectScopedMixin):
         ForeignKey("users.id"),
         nullable=True,
     )
+    # 状态语义（G-09）：与 devices/sensors 对齐。不加外键——actor 溯源列
+    # 不做强引用，用户离开项目后历史仍需可读。
+    status_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    fault_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fault_detail: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    fault_occurred_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    status_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    status_changed_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
     __table_args__ = (
         UniqueConstraint("project_id", "code", name="uq_robots_project_id"),

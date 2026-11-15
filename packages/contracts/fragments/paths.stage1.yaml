@@ -14,6 +14,212 @@ platformMeta:
     summary: 平台元信息
     responses:
       "200": {description: 平台元信息, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/PlatformMeta"}}}}
+robots:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listRobots
+    tags: [robots]
+    summary: 机器人列表（游标分页）
+    parameters:
+      - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/LifecycleStatus"}}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200": {description: 机器人分页结果, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/RobotPage"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createRobot
+    tags: [robots]
+    summary: 创建机器人档案
+    description: 初始状态固定为 `PROVISIONED`；客户端不得提交 status/project_id/审计字段。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/RobotCreate"}}}}
+    responses:
+      "201": {description: 机器人已创建, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Robot"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+robotDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RobotId"
+  get:
+    operationId: getRobot
+    tags: [robots]
+    summary: 机器人详情
+    responses:
+      "200": {description: 机器人详情, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Robot"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  patch:
+    operationId: updateRobot
+    tags: [robots]
+    summary: 修改机器人档案（不含状态）
+    description: 状态只能经具名动作迁移；本端点不接受 status 字段。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/RobotPatch"}}}}
+    responses:
+      "200": {description: 已更新, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Robot"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+robotActivate:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RobotId"
+  post:
+    operationId: activateRobot
+    tags: [robots]
+    summary: 激活机器人
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 已激活, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Robot"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+robotMaintenance:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RobotId"
+  post:
+    operationId: enterRobotMaintenance
+    tags: [robots]
+    summary: 机器人进入维护
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: false, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 已进入维护, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Robot"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+robotFault:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RobotId"
+  post:
+    operationId: reportRobotFault
+    tags: [robots]
+    summary: 机器人上报故障
+    description: 必须提供 `fault_code`；`fault_detail` 在 `fault_code=OTHER` 时必填。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 已上报故障, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Robot"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+robotSuspend:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RobotId"
+  post:
+    operationId: suspendRobot
+    tags: [robots]
+    summary: 挂起机器人
+    description: 必须提供 `reason`。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 已挂起, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Robot"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+robotRetire:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/RobotId"
+  post:
+    operationId: retireRobot
+    tags: [robots]
+    summary: 退役机器人
+    description: 必须提供 `reason`；退役后不可再激活。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/ActionRequest"}}}}
+    responses:
+      "200": {description: 已退役, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/Robot"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrationProfiles:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: createCalibrationProfile
+    tags: [calibration-profiles]
+    summary: 登记标定配置新版本
+    description: |
+      Profile 是不可变配置版本（ADR-0020 / G-07）：改配置 = 新建版本，没有 PATCH。
+      新版本必须满足 `profile_version = 上一版 + 1`，`supersedes_id` 指向同项目同目标上一版。
+      `target_type` 必须等于 `scope`。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody: {required: true, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CalibrationProfileCreate"}}}}
+    responses:
+      "201": {description: 已登记, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CalibrationProfile"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+calibrationProfileDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ProfileId"
+  get:
+    operationId: getCalibrationProfile
+    tags: [calibration-profiles]
+    summary: 标定配置详情
+    responses:
+      "200": {description: 标定配置, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CalibrationProfile"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
 devices:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"

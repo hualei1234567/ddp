@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   backendCalibrationPageFixture,
   backendCalibrationFixture,
+  backendCalibrationProfileFixture,
   backendDeviceFixture,
+  backendRobotFixture,
   backendSensorPageFixture,
   backendSensorFixture,
 } from "./__fixtures__/deviceContract.fixtures";
@@ -11,7 +13,9 @@ import snapshot from "./__fixtures__/deviceContract.snapshot.json";
 import { getSensorType } from "./devicePresentation";
 import {
   parseCalibrationPage,
+  parseCalibrationProfile,
   parseDevice,
+  parseRobot,
   parseSensorPage,
 } from "./deviceValidation";
 
@@ -191,5 +195,51 @@ describe("设备域后端契约对齐", () => {
     expect(parseDevice(backendDeviceFixture)).toMatchObject(
       backendDeviceFixture,
     );
+  });
+});
+
+describe("G-01 新增端点的契约对齐", () => {
+  it("机器人字段集合与后端序列化一致", () => {
+    expect(Object.keys(backendRobotFixture).sort()).toEqual(
+      [
+        "calibration_profile_id",
+        "capability_profile",
+        "code",
+        "fault_code",
+        "fault_detail",
+        "fault_occurred_at",
+        "firmware_version",
+        "hardware_version",
+        "location_id",
+        "model",
+        "name",
+        "owner_user_id",
+        "project_id",
+        "robot_id",
+        "robot_type",
+        "serial_number",
+        "status",
+        "status_changed_at",
+        "status_changed_by",
+        "status_reason",
+        "vendor",
+        "version",
+      ].sort(),
+    );
+  });
+
+  it("标定配置对外用 profile_version，不暴露表列名 version", () => {
+    const keys = Object.keys(backendCalibrationProfileFixture).sort();
+    expect(keys).toContain("profile_version");
+    expect(keys).not.toContain("version");
+  });
+
+  it("Robot 与 Profile 都能被严格解析器接受", () => {
+    expect(parseRobot(backendRobotFixture).robot_id).toBe(
+      backendRobotFixture.robot_id,
+    );
+    expect(
+      parseCalibrationProfile(backendCalibrationProfileFixture).profile_version,
+    ).toBeGreaterThan(0);
   });
 });
