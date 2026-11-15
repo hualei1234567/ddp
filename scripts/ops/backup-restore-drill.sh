@@ -18,13 +18,13 @@ MINIO_CONTAINER="${MINIO_CONTAINER:-ddp-minio}"
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"; docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d postgres -c "DROP DATABASE IF EXISTS ${DRILL_DB}" >/dev/null 2>&1 || true' EXIT
 
-echo "== 1/6 前置检查 =="
+echo "== 1/7 前置检查 =="
 docker inspect -f '{{.State.Health.Status}}' "$PG_CONTAINER" | grep -q healthy \
   || { echo "PostgreSQL 未就绪"; exit 1; }
 docker inspect -f '{{.State.Health.Status}}' "$MINIO_CONTAINER" | grep -q healthy \
   || { echo "MinIO 未就绪"; exit 1; }
 
-echo "== 2/6 记录恢复前基线 =="
+echo "== 2/7 记录恢复前基线 =="
 BASELINE_TABLES=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc \
   "select count(*) from information_schema.tables where table_schema='public'")
 BASELINE_REV=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc \
@@ -42,7 +42,7 @@ for t in "${CHECK_TABLES[@]}"; do
 done
 echo "  行数: $BASELINE_ROWS"
 
-echo "== 3/6 备份 PostgreSQL =="
+echo "== 3/7 备份 PostgreSQL =="
 docker exec "$PG_CONTAINER" pg_dump -U "$PG_USER" -d "$PG_DB" --no-owner --no-acl \
   > "$WORKDIR/ddp.sql"
 PG_DUMP_BYTES=$(wc -c < "$WORKDIR/ddp.sql" | tr -d ' ')
@@ -50,14 +50,57 @@ PG_DUMP_SHA=$(shasum -a 256 "$WORKDIR/ddp.sql" | awk '{print $1}')
 [ "$PG_DUMP_BYTES" -gt 1000 ] || { echo "pg_dump 产物异常小（$PG_DUMP_BYTES 字节）"; exit 1; }
 echo "  大小=${PG_DUMP_BYTES}B sha256=${PG_DUMP_SHA:0:16}…"
 
-echo "== 4/6 备份 MinIO 对象清单 =="
-OBJ_LIST=$(docker exec "$MINIO_CONTAINER" sh -c '
-  command -v mc >/dev/null 2>&1 || exit 0
-  mc alias set local http://127.0.0.1:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" >/dev/null &&
-  mc ls --recursive local 2>/dev/null | wc -l' 2>/dev/null || echo "no-mc")
-echo "  对象数=${OBJ_LIST}（镜像无 mc 时跳过；S3 数据由 bucket 版本化/异地复制兜底）"
+echo "== 4/7 备份 MinIO 对象并按内容校验 =="
+# 之前的实现只做"有 mc 就数列数，没有就跳过"，等于没有验证。
+# 现在改成真恢复演练：镜像内的 mc 位于 /opt/bitnami/minio-client/bin/mc，
+# 全量 mirror 到临时目录后逐对象比对 ETag 与大小。
+MC="/opt/bitnami/minio-client/bin/mc"
+if ! docker exec "$MINIO_CONTAINER" test -x "$MC"; then
+  echo "  MinIO 镜像内无 mc（$MC）；本次无法验证对象恢复，视为失败" >&2
+  exit 1
+fi
+docker exec "$MINIO_CONTAINER" sh -c \
+  "$MC alias set local http://127.0.0.1:9000 \"\$MINIO_ROOT_USER\" \"\$MINIO_ROOT_PASSWORD\" >/dev/null" \
+  || { echo "mc alias 配置失败" >&2; exit 1; }
+SRC_OBJECTS=$(docker exec "$MINIO_CONTAINER" sh -c "$MC ls --recursive local 2>/dev/null | wc -l")
+SRC_BYTES=$(docker exec "$MINIO_CONTAINER" sh -c "$MC du --recursive local 2>/dev/null | tail -1" || echo NA)
+echo "  源对象数=${SRC_OBJECTS} 源总量=${SRC_BYTES}"
+[ "$SRC_OBJECTS" -gt 0 ] || { echo "源桶为空，无法演练对象恢复" >&2; exit 1; }
 
-echo "== 5/6 恢复到独立新库并校验 =="
+# 备份到容器内临时目录（容器内 /tmp），再逐对象取 sha256 摘要比对。
+docker exec "$MINIO_CONTAINER" sh -c "rm -rf /tmp/ddp-minio-drill && mkdir -p /tmp/ddp-minio-drill"
+docker exec "$MINIO_CONTAINER" sh -c \
+  "$MC mirror --quiet local /tmp/ddp-minio-drill 2>&1 | tail -5" \
+  || { echo "mc mirror 失败" >&2; exit 1; }
+BAK_OBJECTS=$(docker exec "$MINIO_CONTAINER" sh -c \
+  "find /tmp/ddp-minio-drill -type f | wc -l")
+BAK_BYTES=$(docker exec "$MINIO_CONTAINER" sh -c \
+  "find /tmp/ddp-minio-drill -type f -exec stat -c %s {} + | awk '{s+=\$1} END {print s+0}'")
+echo "  备份对象数=${BAK_OBJECTS} 备份总量=${BAK_BYTES}B"
+[ "$SRC_OBJECTS" = "$BAK_OBJECTS" ] || { echo "对象数不一致：源=$SRC_OBJECTS 备份=$BAK_OBJECTS" >&2; exit 1; }
+
+# 关键一步：把源对象删掉再恢复，否则"备份可用"只是口号。
+# 只删一个抽样对象，避免破坏整桶；恢复后再比对内容摘要。
+SAMPLE_KEY=$(docker exec "$MINIO_CONTAINER" sh -c \
+  "$MC ls --recursive --json local 2>/dev/null | head -1" | sed -n 's/.*"key":"\([^"]*\)".*/\1/p')
+SAMPLE_KEY="${SAMPLE_KEY#local/}"
+[ -n "$SAMPLE_KEY" ] || { echo "无法从源桶取样对象" >&2; exit 1; }
+SAMPLE_BEFORE=$(docker exec "$MINIO_CONTAINER" sh -c \
+  "$MC cat \"local/$SAMPLE_KEY\" 2>/dev/null | sha256sum" | awk '{print $1}')
+docker exec "$MINIO_CONTAINER" sh -c "$MC rm --force \"local/$SAMPLE_KEY\" >/dev/null 2>&1"
+GONE=$(docker exec "$MINIO_CONTAINER" sh -c \
+  "$MC stat \"local/$SAMPLE_KEY\" >/dev/null 2>&1 && echo present || echo missing")
+[ "$GONE" = "missing" ] || { echo "抽样对象删除失败，无法验证恢复" >&2; exit 1; }
+docker exec "$MINIO_CONTAINER" sh -c \
+  "$MC cp \"/tmp/ddp-minio-drill/$SAMPLE_KEY\" \"local/$SAMPLE_KEY\" >/dev/null 2>&1" \
+  || { echo "从备份恢复对象失败" >&2; exit 1; }
+SAMPLE_AFTER=$(docker exec "$MINIO_CONTAINER" sh -c \
+  "$MC cat \"local/$SAMPLE_KEY\" 2>/dev/null | sha256sum" | awk '{print $1}')
+echo "  抽样对象 ${SAMPLE_KEY##*/}"
+echo "    删除前 sha256=${SAMPLE_BEFORE:0:16}… 恢复后 sha256=${SAMPLE_AFTER:0:16}…"
+[ "$SAMPLE_BEFORE" = "$SAMPLE_AFTER" ] || { echo "恢复后内容不一致" >&2; exit 1; }
+
+echo "== 5/7 恢复到独立新库并校验 =="
 docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d postgres \
   -c "DROP DATABASE IF EXISTS ${DRILL_DB}" >/dev/null
 docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d postgres \
@@ -85,7 +128,7 @@ done
 [ "$FAIL" -eq 0 ] || exit 1
 echo "  全部受检表行数一致"
 
-echo "== 6/6 校验约束与触发器随备份恢复 =="
+echo "== 6/7 校验约束与触发器随备份恢复 =="
 SRC_TRG=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$PG_DB" -tAc \
   "select count(*) from pg_trigger where not tgisinternal")
 DST_TRG=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$DRILL_DB" -tAc \
@@ -93,6 +136,11 @@ DST_TRG=$(docker exec "$PG_CONTAINER" psql -U "$PG_USER" -d "$DRILL_DB" -tAc \
 echo "  触发器 源=$SRC_TRG 恢复=$DST_TRG"
 [ "$SRC_TRG" = "$DST_TRG" ] || { echo "触发器数量不一致"; exit 1; }
 
+echo "== 7/7 清理容器内临时备份 =="
+docker exec "$MINIO_CONTAINER" sh -c "rm -rf /tmp/ddp-minio-drill" >/dev/null 2>&1 || true
+echo "  已清理 /tmp/ddp-minio-drill"
+
 echo
-echo "演练结论：备份可恢复，表数/版本/行数/触发器全部一致。"
+echo "演练结论：备份可恢复。PostgreSQL 表数/版本/行数/触发器一致；"
+echo "          MinIO 对象数一致，抽样对象删除后从备份恢复且内容摘要相同。"
 echo "  产物：pg_dump ${PG_DUMP_BYTES}B sha256=${PG_DUMP_SHA}"
