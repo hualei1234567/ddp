@@ -47,6 +47,9 @@ _PLACEHOLDER_S3_CREDENTIALS = frozenset(
 _DEFAULT_CSP = "default-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 # HSTS preload 要求的最短 max-age（一年）。
 _HSTS_PRELOAD_MIN_AGE_SECONDS = 31_536_000
+# 限流 Redis URL 允许的协议。``rediss`` 走 TLS。Unix socket 不在支持范围：
+# 多副本部署必然跨主机，本机 socket 无法构成全局配额，容易造成误解。
+_REDIS_URL_SCHEMES = frozenset({"redis", "rediss"})
 
 
 class Settings(BaseSettings):
@@ -198,11 +201,10 @@ class Settings(BaseSettings):
     cors_max_age_seconds: int = Field(default=600, ge=0)
 
     # 限流：按客户端 IP 的滑动窗口。认证路径使用更严格的桶。
-    # ``memory`` 为进程内实现（默认）；多副本部署需提供 Redis 实现后切换。
+    # ``memory`` 为进程内实现（默认，单实例）；``redis`` 为多副本共享的全局配额。
+    # 两种后端语义一致，切换只影响计数存放位置，见 docs/adr/0031。
     rate_limit_enabled: bool = True
-    # 仅 memory。分布式限流（Redis）尚未实现，不在依赖中预置未使用组件；
-    # 实现后在此声明 "redis" 并引入依赖，见 docs/adr/0016。
-    rate_limit_backend: Literal["memory"] = "memory"
+    rate_limit_backend: Literal["memory", "redis"] = "memory"
     rate_limit_auth_path_prefixes: list[str] = Field(default_factory=lambda: ["/api/v1/auth"])
     rate_limit_auth_requests: int = Field(default=20, ge=1)
     rate_limit_auth_window_seconds: int = Field(default=60, ge=1)
@@ -210,6 +212,14 @@ class Settings(BaseSettings):
     rate_limit_write_window_seconds: int = Field(default=60, ge=1)
     # 默认不信任 X-Forwarded-For（可伪造）。仅在可信反向代理之后显式开启。
     rate_limit_trust_forwarded_for: bool = False
+    # ``redis`` 后端必填；留空时启动自检拒绝（fail-closed），避免"以为开了全局限流"。
+    rate_limit_redis_url: str = ""
+    # 限流在 HTTP 路径上，超时必须短：宁可短时降级也不能挂住请求线程。
+    rate_limit_redis_socket_timeout_seconds: float = Field(default=0.5, gt=0, le=5)
+    rate_limit_redis_connect_timeout_seconds: float = Field(default=0.5, gt=0, le=5)
+    rate_limit_redis_max_connections: int = Field(default=32, ge=1)
+    # 键前缀，便于与其他 Redis 使用者隔离；不含项目数据，仅桶名与脱敏后的来源。
+    rate_limit_redis_key_prefix: str = "ddp:rl"
 
     @property
     def is_local(self) -> bool:
@@ -304,6 +314,40 @@ class Settings(BaseSettings):
         for prefix in self.rate_limit_auth_path_prefixes:
             if not prefix.startswith("/") or prefix != prefix.strip() or not prefix.rstrip("/"):
                 problems.append(f"限流认证路径前缀非法：{prefix!r}")
+        if not self.rate_limit_redis_key_prefix.strip():
+            problems.append("DDP_RATE_LIMIT_REDIS_KEY_PREFIX 不能为空")
+        if self.rate_limit_backend == "redis":
+            problems.extend(self._redis_rate_limit_url_problems())
+        return problems
+
+    def _redis_rate_limit_url_problems(self) -> list[str]:
+        """``redis`` 后端的 URL 校验：必须存在、可解析、且是 redis 协议。"""
+        problems: list[str] = []
+        raw = self.rate_limit_redis_url
+        if not raw.strip():
+            problems.append(
+                "启用 DDP_RATE_LIMIT_BACKEND=redis 时必须配置 DDP_RATE_LIMIT_REDIS_URL"
+            )
+            return problems
+        if raw != raw.strip():
+            problems.append("DDP_RATE_LIMIT_REDIS_URL 不得包含首尾空白")
+            return problems
+        try:
+            parsed = urlsplit(raw)
+            # 仅校验可解析性；端口非数字时 urlsplit 会在 .port 上抛 ValueError。
+            port = parsed.port
+        except ValueError:
+            problems.append("DDP_RATE_LIMIT_REDIS_URL 无法解析（端口非法或格式错误）")
+            return problems
+        if parsed.scheme not in _REDIS_URL_SCHEMES:
+            problems.append(
+                f"DDP_RATE_LIMIT_REDIS_URL 协议必须是 "
+                f"{'/'.join(sorted(_REDIS_URL_SCHEMES))}，当前为 {parsed.scheme or '(空)'!r}"
+            )
+        if not parsed.hostname:
+            problems.append("DDP_RATE_LIMIT_REDIS_URL 缺少主机名")
+        if port is not None and not (0 < port < 65_536):
+            problems.append("DDP_RATE_LIMIT_REDIS_URL 端口必须在 1–65535 之间")
         return problems
 
     def _security_headers_config_problems(self) -> list[str]:

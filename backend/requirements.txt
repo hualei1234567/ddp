@@ -10,3 +10,6 @@ PyJWT==2.10.1
 jsonschema==4.23.0
 rfc8785==0.1.4
 uuid-utils==1.2.0
+# 分布式限流后端（DDP_RATE_LIMIT_BACKEND=redis）。用途、替代方案、许可与
+# 安全公告复核见 docs/adr/0031-distributed-rate-limit-via-redis.md。
+redis==8.1.0

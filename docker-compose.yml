@@ -17,9 +17,33 @@ services:
       timeout: 3s
       retries: 20
 
-# redis 已在阶段 8 移除：requirements.txt 无 redis 依赖、代码零 import，
-# rate_limit_backend 也只有 memory 一种实现（见 app/core/config.py）。
-# 保留一个空转容器只会扩大攻击面并误导"系统用了 Redis"。
+  redis:
+    # 分布式限流后端（DDP_RATE_LIMIT_BACKEND=redis，见 docs/adr/0031）。
+    # 固定 tag + 多架构 index digest（禁止 latest，CLAUDE.md §三）：
+    # 7.4.12 是 7.x 线当前稳定维护版本，digest 为 OCI image index。
+    # 仅作限流计数使用：不挂持久卷（计数可丢，重启即清空），
+    # 不开 AOF/RDB，避免为一份可重建的短期计数写盘。
+    image: redis:7.4.12-alpine@sha256:7f7d30b7fdd09467bac58198a1f166dd69789d348d4fe859cccb20e0cf287fbe
+    container_name: ddp-redis
+    command:
+      # maxmemory-policy=allkeys-lru：限流键是唯一负载，内存吃紧时淘汰旧键，
+      # 表现为"配额提前恢复"（宽松），不会误拒；绝不用 noeviction 触发写失败。
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   minio:
     # 2026-11-14：上游 minio/minio 在 Docker Hub 已不可拉取（object not found），
@@ -58,8 +82,12 @@ services:
       # 容器内必须用服务名，而不是宿主 .env 里的 localhost。
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
       DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
+      # 限流后端：容器内必须指向 redis 服务名；宿主的 localhost 在容器里不通。
+      DDP_RATE_LIMIT_REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     ports:
       - "8000:8000"
