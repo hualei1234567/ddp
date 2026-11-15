@@ -121,22 +121,25 @@ def _load_backend():
     }
 
 
-def _patch_deterministic_uuid4(backend) -> None:
-    """按调用顺序替换应用层 uuid4，使响应中的服务端生成 ID 可复现。"""
+def _patch_deterministic_ids(backend) -> None:
+    """按调用顺序替换应用层的 ``new_id``，使响应中的服务端生成 ID 可复现。
+
+    G-18 之后设备域用 UUIDv7 生成 ID（``app.domain.common.ids.new_id``），
+    所以固定点也落在 ``new_id`` 上，而不是各模块里已不存在的 ``uuid4``。
+    """
     generated = iter((DEVICE_ID, SENSOR_ID, CALIBRATION_ID))
 
-    def fixed_uuid4() -> UUID:
+    def fixed_new_id() -> UUID:
         return next(generated)
 
-    backend["devices_module"].uuid4 = fixed_uuid4
-    backend["sensors_module"].uuid4 = fixed_uuid4
-    backend["calibrations_module"].uuid4 = fixed_uuid4
+    for key in ("devices_module", "sensors_module", "calibrations_module"):
+        backend[key].new_id = fixed_new_id
 
 
 def build_snapshot() -> dict[str, object]:
     _reexec_with_backend_python()
     backend = _load_backend()
-    _patch_deterministic_uuid4(backend)
+    _patch_deterministic_ids(backend)
 
     engine = backend["create_db_engine"](
         "sqlite+pysqlite:///:memory:",

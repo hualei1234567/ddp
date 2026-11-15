@@ -322,3 +322,38 @@ def test_submit_rejects_record_tampered_after_creation(
     still_draft = editor.get(_calibration_url(ids.project_a, f"/{calibration_id}"))
     assert still_draft.status_code == 200
     assert still_draft.json()["status"] == "DRAFT"
+
+
+def test_device_domain_ids_are_uuid_v7(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """G-18：设备/传感器/标定三类 ID 都必须由服务端生成 UUIDv7。"""
+    from uuid import UUID
+
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    profile = seed_profile(factory, ids.project_a, ids.owner_a)
+    device_id = _create_device(editor, ids.project_a)
+
+    sensor = editor.post(
+        f"/api/v1/projects/{ids.project_a}/sensors",
+        json={
+            "device_id": device_id,
+            "code": "camera-v7",
+            "sensor_type": "RGB",
+            "sample_rate_hz": 30.0,
+            "coordinate_frame": "camera_link",
+        },
+    )
+    assert sensor.status_code == 201, sensor.text
+
+    created = _create_calibration(
+        editor, ids, device_id=device_id, profile_id=str(profile.profile_id)
+    )
+
+    for label, value in (
+        ("device", device_id),
+        ("sensor", sensor.json()["sensor_id"]),
+        ("calibration", created["calibration_id"]),
+    ):
+        assert UUID(str(value)).version == 7, f"{label} 不是 UUIDv7：{value}"

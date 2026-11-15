@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from app.application.audit import record_change
 from app.application.devices.commands import NewDevice
@@ -25,6 +25,7 @@ from app.application.devices.ports import (
     RobotRepository,
     UnitOfWork,
 )
+from app.domain.common.ids import new_id
 from app.domain.devices.enums import (
     CalibrationTargetType,
     DeviceType,
@@ -147,7 +148,7 @@ class DeviceUseCases:
         self._validate_robot(scope, command.robot_id)
         self._validate_profile(scope, command.calibration_profile_id)
         device = Device(
-            device_id=uuid4(),
+            device_id=new_id(),
             project_id=scope.project_id,
             code=command.code,
             name=command.name,

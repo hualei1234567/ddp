@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from app.application.devices.commands import NewCalibration
 from app.application.devices.pagination import (
@@ -25,6 +25,7 @@ from app.application.devices.ports import (
     UnitOfWork,
 )
 from app.domain.common.canonical_json import CanonicalJSONError, canonical_json, sha256_text
+from app.domain.common.ids import new_id
 from app.domain.devices.calibration import CalibrationRecord
 from app.domain.devices.enums import (
     CalibrationScope,
@@ -134,7 +135,7 @@ class CalibrationUseCases:
             raise DomainValidationError("target_type 不能为空")
         profile = self._validate_profile(scope, command.profile_id, target_type)
         record = CalibrationRecord(
-            calibration_id=uuid4(),
+            calibration_id=new_id(),
             project_id=scope.project_id,
             profile_id=command.profile_id,
             scope=CalibrationScope(target_type.value),

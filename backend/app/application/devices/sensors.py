@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from app.application.audit import record_change
 from app.application.devices.commands import NewSensor
@@ -27,6 +27,7 @@ from app.application.devices.ports import (
     SensorRepository,
     UnitOfWork,
 )
+from app.domain.common.ids import new_id
 from app.domain.devices.enums import (
     CalibrationStatus,
     CalibrationTargetType,
@@ -164,7 +165,7 @@ class SensorUseCases:
         if replay is not None:
             return self._replay_sensor(scope, replay.response_ref)
         sensor = Sensor(
-            sensor_id=uuid4(),
+            sensor_id=new_id(),
             project_id=scope.project_id,
             code=command.code,
             sensor_type=command.sensor_type,
