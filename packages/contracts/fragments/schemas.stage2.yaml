@@ -600,3 +600,17 @@ IngestionJobPage:
   properties:
     items: {type: array, items: {$ref: "#/IngestionJob"}}
     next_cursor: {type: [string, "null"]}
+
+MaterializedEpisode:
+  type: object
+  required: [episode_id, episode_key, raw_asset_ids]
+  additionalProperties: false
+  description: 由导入产物生成的一条 Episode；`episode_key` 是源数据里的分组键。
+  properties:
+    episode_id: { type: string, format: uuid }
+    episode_key: { type: string, minLength: 1, maxLength: 1024 }
+    raw_asset_ids:
+      type: array
+      minItems: 1
+      uniqueItems: true
+      items: { type: string, format: uuid }

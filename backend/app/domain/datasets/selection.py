@@ -171,6 +171,9 @@ class EpisodeCandidate:
     submission_schema_version: int | None = None
     total_bytes: int = 0
     scene_group_id: UUID | None = None
+    # 标定快照**完全缺失**（而不是"有但无效"）。缺省 False 表示调用方未区分，
+    # 此时按"无效"处理，保持既有行为不变。
+    calibration_missing: bool = False
 
     def __post_init__(self) -> None:
         if self.end_time_ns <= self.start_time_ns:
@@ -381,9 +384,16 @@ def _check_candidate(
             f"未知时间同步状态 {candidate.time_sync_status}",
         )
     if not candidate.calibration_valid:
+        # 区分"没有标定"与"标定无效"：前者可用 ``CALIBRATION_MISSING``
+        # 单独统计（公开数据集常见），后者才是质量问题。
+        code = (
+            ExclusionCode.CALIBRATION_MISSING
+            if candidate.calibration_missing
+            else ExclusionCode.CALIBRATION_INVALID
+        )
         return ExcludedCandidate(
             candidate.episode_id,
-            ExclusionCode.CALIBRATION_INVALID,
+            code,
             candidate.calibration_issue or "标定快照无效",
         )
     return None

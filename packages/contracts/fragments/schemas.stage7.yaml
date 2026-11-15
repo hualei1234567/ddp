@@ -328,3 +328,31 @@ ImportQualityReport:
     failures:
       type: array
       items: { $ref: "../openapi.yaml#/components/schemas/ImportQualityFinding" }
+
+ImportEpisodeMaterializeRequest:
+  type: object
+  additionalProperties: false
+  description: |
+    可选场景标签；其余语义字段（任务名、指令、时间范围、机位集合）全部由
+    导入产物推导，不接受客户端覆盖——否则同一份导入能生成出不同 Episode。
+  properties:
+    scene_labels:
+      type: array
+      uniqueItems: true
+      items: { type: string, minLength: 1, maxLength: 100 }
+
+ImportEpisodeMaterializeResult:
+  type: object
+  required: [import_id, episode_count, episodes, skipped_episode_keys]
+  additionalProperties: false
+  properties:
+    import_id: { type: string, format: uuid }
+    episode_count: { type: integer, minimum: 0 }
+    episodes:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/MaterializedEpisode" }
+    skipped_episode_keys:
+      type: array
+      uniqueItems: true
+      description: 已存在而同 Episode code 被跳过的 episode_key（幂等重试时非空）。
+      items: { type: string, minLength: 1 }

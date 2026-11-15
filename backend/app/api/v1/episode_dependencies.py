@@ -33,31 +33,40 @@ class EpisodeUseCases:
     downloads: RawAssetDownloadUseCases
 
 
+def build_episode_service(
+    session: DbSession,
+    *,
+    with_idempotency: bool = True,
+) -> EpisodeService:
+    """装配 ``EpisodeService``；需要它的模块统一调用本函数。
+
+    ``episode_dependencies`` 与数据源导入的物化端点都要这个服务。抽出来
+    只装配一次，避免两处接线各自演化——那会变成"同一服务两套依赖"。
+    """
+    return EpisodeService(
+        SqlEpisodeRepository(session),
+        SqlEpisodeRawAssetRepository(session),
+        SqlLineageRepository(session),
+        SqlRawAssetRepository(session),
+        SqlIngestionJobRepository(session),
+        SqlAuditRepository(session),
+        SqlOutboxRepository(session),
+        session,
+        idempotency=SqlIdempotencyRepository(session) if with_idempotency else None,
+    )
+
+
 def get_episode_use_cases(
     session: DbSession,
     settings: SettingsDep,
     storage: ObjectStorageDep,
 ) -> EpisodeUseCases:
-    episodes = SqlEpisodeRepository(session)
-    episode_assets = SqlEpisodeRawAssetRepository(session)
     lineage = SqlLineageRepository(session)
     raw_assets = SqlRawAssetRepository(session)
-    jobs = SqlIngestionJobRepository(session)
     audit = SqlAuditRepository(session)
     outbox = SqlOutboxRepository(session)
-    idempotency = SqlIdempotencyRepository(session)
     return EpisodeUseCases(
-        episodes=EpisodeService(
-            episodes,
-            episode_assets,
-            lineage,
-            raw_assets,
-            jobs,
-            audit,
-            outbox,
-            session,
-            idempotency=idempotency,
-        ),
+        episodes=build_episode_service(session),
         lineage=LineageService(lineage, audit, outbox, session),
         assets=RawAssetUseCases(raw_assets),
         downloads=RawAssetDownloadUseCases(

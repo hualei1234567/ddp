@@ -118,6 +118,7 @@ class ImportEpisode(Protocol):
 
     episode_key: str
     task_name: str
+    instruction: str
     media_assets: tuple[ImportMediaAsset, ...]
 
 
@@ -552,4 +553,7 @@ def _import_metadata(
         "source_path": media.path,
         "camera": media.camera,
         "task_name": episode.task_name,
+        # 自然语言指令是 Canonical Episode 的必备语义字段，DataSource/MediaAsset
+        # 都没有对应的列；不在这里留一份，后续生成 Episode 时就永久丢掉了。
+        "instruction": episode.instruction,
     }

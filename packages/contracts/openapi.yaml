@@ -593,6 +593,8 @@ paths:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportAssets"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/quality-report:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportQualityReport"
+  /api/v1/projects/{project_id}/data-source-imports/{import_id}/episodes:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImportEpisodes"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/review:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportReview"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/review/decisions:
@@ -797,6 +799,7 @@ components:
     EpisodeCreate: {$ref: "./fragments/schemas.stage2.required.yaml#/EpisodeCreate"}
     EpisodeActionRequest: {$ref: "./fragments/schemas.stage2.yaml#/EpisodeActionRequest"}
     EpisodeRevisionCreate: {$ref: "./fragments/schemas.stage2.yaml#/EpisodeRevisionCreate"}
+    MaterializedEpisode: {$ref: "./fragments/schemas.stage2.yaml#/MaterializedEpisode"}
     EpisodePage: {$ref: "./fragments/schemas.stage2.yaml#/EpisodePage"}
     IngestionJobType: {$ref: "./fragments/schemas.stage2.yaml#/IngestionJobType"}
     IngestionJobStatus: {$ref: "./fragments/schemas.stage2.yaml#/IngestionJobStatus"}
@@ -1008,6 +1011,8 @@ components:
     InboundSegmentPage: {$ref: "./fragments/schemas.stage6.yaml#/InboundSegmentPage"}
     AcceptanceLedgerPage: {$ref: "./fragments/schemas.stage6.yaml#/AcceptanceLedgerPage"}
     DataSourceKind: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceKind"}
+    ImportEpisodeMaterializeRequest: {$ref: "./fragments/schemas.stage7.yaml#/ImportEpisodeMaterializeRequest"}
+    ImportEpisodeMaterializeResult: {$ref: "./fragments/schemas.stage7.yaml#/ImportEpisodeMaterializeResult"}
     AccessCondition: {$ref: "./fragments/schemas.stage7.yaml#/AccessCondition"}
     ImportScope: {$ref: "./fragments/schemas.stage7.yaml#/ImportScope"}
     ImportStatus: {$ref: "./fragments/schemas.stage7.yaml#/ImportStatus"}

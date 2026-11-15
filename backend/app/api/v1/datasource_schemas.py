@@ -254,3 +254,24 @@ class QualityReportOut(BaseModel):
     passed: bool
     findings: list[QualityFindingOut]
     failures: list[QualityFindingOut]
+
+
+class ImportEpisodeMaterializeRequest(BaseModel):
+    """可选场景标签；其余语义字段由导入产物推导，不接受客户端覆盖。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scene_labels: list[str] = Field(default_factory=list, max_length=32)
+
+
+class MaterializedEpisodeOut(BaseModel):
+    episode_id: UUID
+    episode_key: str
+    raw_asset_ids: list[UUID]
+
+
+class ImportEpisodeMaterializeResultOut(BaseModel):
+    import_id: UUID
+    episode_count: int
+    episodes: list[MaterializedEpisodeOut]
+    skipped_episode_keys: list[str]

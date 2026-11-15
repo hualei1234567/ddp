@@ -387,3 +387,49 @@ dataSourceImportQualityReport:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dataSourceImportEpisodes:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: import_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  post:
+    operationId: materializeDataSourceImportEpisodes
+    tags: [datasources]
+    summary: 把一次成功导入的媒体资产生成 Canonical Episode
+    description: |
+      导入链路产出的是「一个机位的一段视频」（MediaAsset），而 Canonical 层的
+      样本单元是 Episode（一个演示片段的全部机位）。本端点按 `episode_key`
+      聚合，为每一组生成一条 Episode，并把组内全部 RawAsset 挂上去。
+
+      **幂等**：同一 `episode_key` 生成的 Episode 使用确定性 code
+      `EP-{episode_key}`；重复调用不会造出第二份，已存在的计入
+      `skipped_episode_keys`。因此可以安全重试。
+
+      前置条件：导入状态必须是 `SUCCEEDED`——对失败或未完成的导入生成 Episode
+      等于把半截数据当成样本。无可用媒体资产时返回 422 而不是空列表，避免
+      "看着成功、实际什么也没生成"。
+
+      **时间基准如实标注**：公开数据集的元数据通常不含时钟同步声明，生成的
+      Episode 一律 `sync_status=DEGRADED` + `sync_method=NONE`，数据集准入时
+      要求显式确认降级原因。标定快照为空数组，由数据集侧的 `CALIBRATION_MISSING`
+      排除码如实反映，不在 Episode 上伪造标定信息。
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ImportEpisodeMaterializeRequest" }
+    responses:
+      "201":
+        description: Episode 已生成（可能是部分新增）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ImportEpisodeMaterializeResult" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

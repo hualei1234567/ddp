@@ -133,7 +133,7 @@ class SqlEpisodeCandidateDirectory:
             if captured_at is not None:
                 captured.append(captured_at)
             total_bytes += link.size_bytes_snapshot
-        calibration_valid, calibration_issue = _calibration_state(
+        calibration_valid, calibration_issue, calibration_missing = _calibration_state(
             episode.calibration_snapshot,
             now=now,
         )
@@ -162,6 +162,7 @@ class SqlEpisodeCandidateDirectory:
             time_sync_status=sync_status if isinstance(sync_status, str) else None,
             calibration_valid=calibration_valid,
             calibration_issue=calibration_issue,
+            calibration_missing=calibration_missing,
             annotation_submission_id=record.submission_id if record is not None else None,
             annotation_version=record.annotation_version if record is not None else None,
             annotation_record_digest=record.record_sha256 if record is not None else None,
@@ -184,15 +185,22 @@ def _calibration_state(
     snapshot: object,
     *,
     now: datetime,
-) -> tuple[bool, str | None]:
+) -> tuple[bool, str | None, bool]:
+    """返回 ``(是否有效, 问题描述, 是否缺失)``。
+
+    第三个返回值区分"**没有**标定"与"有标定但无效"：前者是数据本身的
+    属性（公开数据集常常不带标定），后者是质量问题。数据集侧据此产出
+    ``CALIBRATION_MISSING`` / ``CALIBRATION_INVALID`` 两个不同排除码，
+    否则两个码会塌缩成一个，调用方无法判断该不该去补标定。
+    """
     if not isinstance(snapshot, list) or not snapshot:
-        return False, "缺少有效标定快照"
+        return False, "缺少有效标定快照", True
     for item in snapshot:
         if not isinstance(item, dict):
-            return False, "标定快照结构非法"
+            return False, "标定快照结构非法", False
         status = item.get("status")
         if isinstance(status, str) and status.upper() in _INVALID_CALIBRATION_STATUSES:
-            return False, f"标定状态 {status} 不可用"
+            return False, f"标定状态 {status} 不可用", False
         valid_until = item.get("valid_until") or item.get("expires_at")
         if valid_until is not None:
             try:
@@ -202,9 +210,9 @@ def _calibration_state(
                     else datetime.fromisoformat(str(valid_until).replace("Z", "+00:00"))
                 )
             except ValueError:
-                return False, "标定有效期格式非法"
+                return False, "标定有效期格式非法", False
             if expiry.tzinfo is None or expiry.utcoffset() is None:
                 expiry = expiry.replace(tzinfo=UTC)
             if expiry <= now:
-                return False, "标定已过期"
-    return True, None
+                return False, "标定已过期", False
+    return True, None, False
