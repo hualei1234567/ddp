@@ -1,9 +1,28 @@
-"""设备域异常到契约错误码的统一映射。
+"""领域异常到契约错误码的统一映射。
 
 API 层是唯一把领域错误转换为 HTTP 语义的位置；领域与用例不依赖 HTTP。
+
+## 结构（R-11 收敛）
+
+8 个域各有一张 ``code → HTTP 状态`` 表、一张 ``code → 固定文案`` 表，
+映射逻辑本身逐字相同。此前写成 8 个近同构函数（共 575 行），改一处要改八处。
+现在：
+
+- 表仍按域分开（内容不同，且各自对齐自己的契约错误码）；
+- 映射逻辑由 :func:`_mapped` 生成，差异只剩两个显式开关：
+  ``fallback`` 文案与 ``with_details``（是否透传领域异常的 ``details``）。
+
+**为什么不把 8 张表也合并成一张**：各域的 code 命名空间有重叠但状态码
+可能不同（例如同一个 ``resource_not_found`` 在域间都是 404，但新增 code 时
+要独立评审）。合并成一张表会让"某个域新增 code"变成"改全局表"，
+反而增加跨域耦合。
+
+**安全要求（R-12）**：一律不回显 ``str(exc)``。领域异常原文只进日志。
 """
 
 from __future__ import annotations
+
+from collections.abc import Mapping
 
 from sqlalchemy.exc import IntegrityError
 
@@ -16,6 +35,31 @@ from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.ingestion.errors import IngestionDomainError
 from app.domain.modelops.errors import ModelOpsDomainError
+
+
+def _mapped(
+    exc: Exception,
+    *,
+    status_by_code: Mapping[str, int],
+    messages: Mapping[str, str],
+    fallback: str,
+    with_details: bool = False,
+) -> AppError:
+    """按 code 查表构造 ``AppError``；未登记 code 收敛到 ``validation_failed``。"""
+    code = getattr(exc, "code", None)
+    if not isinstance(code, str) or code not in status_by_code:
+        return AppError("validation_failed", fallback, 422)
+    details = None
+    if with_details:
+        raw = getattr(exc, "details", None)
+        details = dict(raw) if raw else None
+    return AppError(
+        code,
+        messages.get(code, fallback),
+        status_by_code[code],
+        details=details,
+    )
+
 
 _STATUS_BY_CODE = {
     "validation_failed": 422,
@@ -78,14 +122,15 @@ _COLLECTION_MESSAGES = {
 }
 
 
+_COLLECTION_FALLBACK = "采集域规则校验失败"
+
+
 def collection_error_to_app(exc: CollectionDomainError) -> AppError:
-    code = getattr(exc, "code", None)
-    if not isinstance(code, str) or code not in _COLLECTION_STATUS_BY_CODE:
-        return AppError("validation_failed", "采集域规则校验失败", 422)
-    return AppError(
-        code,
-        _COLLECTION_MESSAGES.get(code, "采集域规则校验失败"),
-        _COLLECTION_STATUS_BY_CODE[code],
+    return _mapped(
+        exc,
+        status_by_code=_COLLECTION_STATUS_BY_CODE,
+        messages=_COLLECTION_MESSAGES,
+        fallback=_COLLECTION_FALLBACK,
     )
 
 
@@ -142,16 +187,17 @@ _INGESTION_MESSAGES = {
 }
 
 
+_INGESTION_FALLBACK = "上传域规则校验失败"
+
+
 def ingestion_error_to_app(exc: IngestionDomainError) -> AppError:
-    code = getattr(exc, "code", None)
-    if not isinstance(code, str) or code not in _INGESTION_STATUS_BY_CODE:
-        return AppError("validation_failed", "上传域规则校验失败", 422)
-    details = dict(getattr(exc, "details", {}) or {})
-    return AppError(
-        code,
-        _INGESTION_MESSAGES.get(code, "上传域规则校验失败"),
-        _INGESTION_STATUS_BY_CODE[code],
-        details=details or None,
+    # 上传域把 details（如容量上限、期望值与实际值）透传给客户端用于排障。
+    return _mapped(
+        exc,
+        status_by_code=_INGESTION_STATUS_BY_CODE,
+        messages=_INGESTION_MESSAGES,
+        fallback=_INGESTION_FALLBACK,
+        with_details=True,
     )
 
 
@@ -188,16 +234,16 @@ _EPISODE_MESSAGES = {
 }
 
 
+_EPISODE_FALLBACK = "Episode 域规则校验失败"
+
+
 def episode_error_to_app(exc: EpisodeDomainError) -> AppError:
-    code = getattr(exc, "code", None)
-    if not isinstance(code, str) or code not in _EPISODE_STATUS_BY_CODE:
-        return AppError("validation_failed", "Episode 域规则校验失败", 422)
-    details = dict(getattr(exc, "details", {}) or {})
-    return AppError(
-        code,
-        _EPISODE_MESSAGES.get(code, "Episode 域规则校验失败"),
-        _EPISODE_STATUS_BY_CODE[code],
-        details=details or None,
+    return _mapped(
+        exc,
+        status_by_code=_EPISODE_STATUS_BY_CODE,
+        messages=_EPISODE_MESSAGES,
+        fallback=_EPISODE_FALLBACK,
+        with_details=True,
     )
 
 
@@ -314,25 +360,20 @@ _ANNOTATION_FALLBACK_MESSAGE = "标注域规则校验失败"
 
 
 def annotation_error_to_app(exc: AnnotationDomainError) -> AppError:
-    code = getattr(exc, "code", None)
-    if not isinstance(code, str) or code not in _ANNOTATION_STATUS_BY_CODE:
-        return AppError("validation_failed", _ANNOTATION_FALLBACK_MESSAGE, 422)
-    return AppError(
-        code,
-        _ANNOTATION_MESSAGES.get(code, _ANNOTATION_FALLBACK_MESSAGE),
-        _ANNOTATION_STATUS_BY_CODE[code],
+    return _mapped(
+        exc,
+        status_by_code=_ANNOTATION_STATUS_BY_CODE,
+        messages=_ANNOTATION_MESSAGES,
+        fallback=_ANNOTATION_FALLBACK_MESSAGE,
     )
 
 
 def domain_error_to_app(exc: DeviceDomainError) -> AppError:
-    code = getattr(exc, "code", None)
-    if not isinstance(code, str) or code not in _STATUS_BY_CODE:
-        # 不把未知异常的 str(exc) 回显给客户端，避免泄漏内部标识或输入。
-        return AppError("validation_failed", _FALLBACK_MESSAGE, 422)
-    return AppError(
-        code,
-        _MESSAGES.get(code, _FALLBACK_MESSAGE),
-        _STATUS_BY_CODE[code],
+    return _mapped(
+        exc,
+        status_by_code=_STATUS_BY_CODE,
+        messages=_MESSAGES,
+        fallback=_FALLBACK_MESSAGE,
     )
 
 
@@ -459,13 +500,11 @@ _DATASET_FALLBACK = "数据集域规则校验失败"
 
 
 def dataset_error_to_app(exc: DatasetDomainError) -> AppError:
-    code = getattr(exc, "code", None)
-    if not isinstance(code, str) or code not in _DATASET_STATUS_BY_CODE:
-        return AppError("validation_failed", _DATASET_FALLBACK, 422)
-    return AppError(
-        code,
-        _DATASET_MESSAGES.get(code, _DATASET_FALLBACK),
-        _DATASET_STATUS_BY_CODE[code],
+    return _mapped(
+        exc,
+        status_by_code=_DATASET_STATUS_BY_CODE,
+        messages=_DATASET_MESSAGES,
+        fallback=_DATASET_FALLBACK,
     )
 
 
@@ -537,14 +576,11 @@ _MODELOPS_MESSAGES = {
 
 
 def modelops_error_to_app(exc: ModelOpsDomainError) -> AppError:
-    code = getattr(exc, "code", None)
-    if not isinstance(code, str) or code not in _MODELOPS_STATUS_BY_CODE:
-        return AppError("validation_failed", _MODELOPS_FALLBACK, 422)
-    # 领域异常的 str() 只留在日志里（由中间件记录），对客户端用固定文案。
-    return AppError(
-        code,
-        _MODELOPS_MESSAGES.get(code, _MODELOPS_FALLBACK),
-        _MODELOPS_STATUS_BY_CODE[code],
+    return _mapped(
+        exc,
+        status_by_code=_MODELOPS_STATUS_BY_CODE,
+        messages=_MODELOPS_MESSAGES,
+        fallback=_MODELOPS_FALLBACK,
     )
 
 
@@ -600,14 +636,11 @@ _SUPPLIER_FALLBACK = "供应商域规则校验失败"
 
 
 def supplier_error_to_app(exc: Exception) -> AppError:
-    code = getattr(exc, "code", None)
-    if not isinstance(code, str) or code not in _SUPPLIER_STATUS_BY_CODE:
-        return AppError("validation_failed", _SUPPLIER_FALLBACK, 422)
-    # R-12：不回显 str(exc)；未登记文案的 code 用固定兜底。
-    return AppError(
-        code,
-        _SUPPLIER_MESSAGES.get(code) or _SUPPLIER_FALLBACK,
-        _SUPPLIER_STATUS_BY_CODE[code],
+    return _mapped(
+        exc,
+        status_by_code=_SUPPLIER_STATUS_BY_CODE,
+        messages=_SUPPLIER_MESSAGES,
+        fallback=_SUPPLIER_FALLBACK,
     )
 
 
@@ -632,13 +665,9 @@ _DATASOURCE_FALLBACK = "数据源域规则校验失败"
 
 
 def datasource_error_to_app(exc: DataSourceDomainError) -> AppError:
-    """数据源域错误映射；未登记的 code 一律收敛到 validation_failed。"""
-    code = getattr(exc, "code", None)
-    if not isinstance(code, str) or code not in _DATASOURCE_STATUS_BY_CODE:
-        # 不把 str(exc) 回显，避免泄漏内部标识或客户端输入。
-        return AppError("validation_failed", _DATASOURCE_FALLBACK, 422)
-    return AppError(
-        code,
-        _DATASOURCE_MESSAGES.get(code, _DATASOURCE_FALLBACK),
-        _DATASOURCE_STATUS_BY_CODE[code],
+    return _mapped(
+        exc,
+        status_by_code=_DATASOURCE_STATUS_BY_CODE,
+        messages=_DATASOURCE_MESSAGES,
+        fallback=_DATASOURCE_FALLBACK,
     )

@@ -79,3 +79,39 @@ def test_known_codes_keep_their_specific_message() -> None:
 def test_supplier_known_code_message_is_specific() -> None:
     err = supplier_error_to_app(_FakeSupplierError())
     assert "追加" in err.message
+
+
+def test_all_domain_mappers_share_the_single_factory() -> None:
+    """R-11：各域映射函数都必须走同一份 ``_mapped``，不得再各自手写查表。"""
+    import inspect
+
+    from app.api import errors as errors_module
+
+    mappers = [
+        name
+        for name, value in vars(errors_module).items()
+        if name.endswith("_error_to_app") and inspect.isfunction(value)
+    ]
+    # 9 个域映射 + integrity_error_to_app（后者判定 SQL 约束，不走 code 查表）。
+    assert len(mappers) == 10, mappers
+    for name in mappers:
+        source = inspect.getsource(getattr(errors_module, name))
+        if name == "integrity_error_to_app":
+            # 数据库完整性约束有独立的判定逻辑，不走 code 查表。
+            continue
+        assert "_mapped(" in source, name
+        # 判定本体不得再出现在函数里。
+        assert "not in _" not in source, name
+        assert "get(code" not in source, name
+
+
+def test_details_are_propagated_where_declared() -> None:
+    """上传/Episode 域透传 details（排障需要），其余域不透传。"""
+    from app.api import errors as errors_module
+    from app.domain.ingestion.errors import FileTooLargeError
+
+    app_error = errors_module.ingestion_error_to_app(
+        FileTooLargeError("文件过大", details={"limit": 100, "actual": 150})
+    )
+    assert app_error.code == "file_too_large"
+    assert app_error.details == {"limit": 100, "actual": 150}
