@@ -172,3 +172,159 @@ DataSourceImportPage:
       type: array
       items: { $ref: "../openapi.yaml#/components/schemas/DataSourceImport" }
     next_cursor: { type: [string, "null"] }
+
+# ---------------------------------------------------------------------------
+# 审看与质量报告（阶段 7 第二批：补上前一批漏登记的 6 个端点所需模型）
+#
+# 这些模型在实现侧早已存在（backend/app/api/v1/datasource_schemas.py 的
+# MediaAssetOut / MediaAssetPlaybackOut / ReviewCreateOut / QualityReportOut），
+# 只是契约没登记。字段以**实现的实际序列化结果**为准——不是反过来让实现
+# 去迁就一份凭空写的契约。
+# ---------------------------------------------------------------------------
+
+MediaAsset:
+  type: object
+  required:
+    - asset_id
+    - project_id
+    - data_source_id
+    - import_id
+    - episode_key
+    - path
+    - camera
+    - object_key
+    - size_bytes
+    - sha256
+    - content_type
+    - task_name
+    - created_at
+  additionalProperties: false
+  properties:
+    asset_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    data_source_id: { type: string, format: uuid }
+    import_id: { type: string, format: uuid }
+    episode_key:
+      type: string
+      minLength: 1
+      description: 数据集内的 episode 标识（LeRobot 的 example_id 聚合结果）。
+    path:
+      type: string
+      minLength: 1
+      description: 数据集内的相对路径，用于回溯原始文件。
+    camera:
+      type: string
+      minLength: 1
+      description: 机位标识，如 main / right / stereo / wrist_left / wrist_right。
+    object_key:
+      type: string
+      minLength: 1
+      description: 对象存储内的键；客户端不得据此自行拼接访问地址。
+    size_bytes: { type: integer, minimum: 0 }
+    sha256:
+      type: string
+      description: 形如 `sha256:<hex>`；与官方校验清单可直接比对。
+    content_type: { type: string, minLength: 1 }
+    task_name: { type: string }
+    excerpt_start_seconds: { type: [number, "null"], minimum: 0 }
+    excerpt_seconds: { type: [number, "null"], minimum: 0 }
+    source_fps: { type: [number, "null"], exclusiveMinimum: 0 }
+    created_at: { type: string, format: date-time }
+
+MediaAssetList:
+  type: object
+  required: [items]
+  additionalProperties: false
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/MediaAsset" }
+
+MediaAssetPlayback:
+  type: object
+  required: [asset_id, url, expires_in_seconds, content_type, size_bytes]
+  additionalProperties: false
+  properties:
+    asset_id: { type: string, format: uuid }
+    url:
+      type: string
+      minLength: 1
+      description: 服务端签发的短时预签名 URL；有效期见 expires_in_seconds。
+    expires_in_seconds: { type: integer, minimum: 1 }
+    content_type: { type: string, minLength: 1 }
+    size_bytes: { type: integer, minimum: 0 }
+
+DataReview:
+  type: object
+  required:
+    - review_id
+    - project_id
+    - import_id
+    - status
+    - submitted_by
+    - created_at
+    - version
+  additionalProperties: false
+  properties:
+    review_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    import_id: { type: string, format: uuid }
+    status: { type: string, minLength: 1 }
+    decision: { type: [string, "null"] }
+    reason: { type: [string, "null"], maxLength: 2000 }
+    reviewer_id: { type: [string, "null"], format: uuid }
+    submitted_by: { type: string, format: uuid }
+    created_at: { type: string, format: date-time }
+    decided_at: { type: [string, "null"], format: date-time }
+    version: { type: integer, minimum: 1 }
+
+ReviewDecisionRequest:
+  type: object
+  required: [decision]
+  additionalProperties: false
+  properties:
+    decision:
+      type: string
+      enum: [ACCEPT, REJECT, NEEDS_FIX]
+    reason: { type: [string, "null"], maxLength: 2000 }
+
+ImportQualityFinding:
+  type: object
+  required: [rule_id, passed, detail]
+  additionalProperties: false
+  properties:
+    rule_id: { type: string, minLength: 1 }
+    passed: { type: boolean }
+    detail: { type: string }
+
+# 注意与数据集域的 `QualityReport`（schemas/quality-report.v1.schema.json）
+# 区分：那个按 dataset_version 组织、含拆分与泄漏检查；本模型按导入任务组织、
+# 只有规则通过率。同名不同物会误导客户端，故加 Import 前缀。
+ImportQualityReport:
+  type: object
+  required:
+    - import_id
+    - rule_version
+    - sample_scope
+    - total_assets
+    - total_episodes
+    - passed
+    - findings
+    - failures
+  additionalProperties: false
+  properties:
+    import_id: { type: string, format: uuid }
+    rule_version: { type: string, minLength: 1 }
+    sample_scope:
+      type: string
+      minLength: 1
+      description: 质量结论覆盖的样本范围（SAMPLE / SPLIT / FULL），与导入任务一致。
+    total_assets: { type: integer, minimum: 0 }
+    total_episodes: { type: integer, minimum: 0 }
+    passed: { type: boolean }
+    findings:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/ImportQualityFinding" }
+    failures:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/ImportQualityFinding" }

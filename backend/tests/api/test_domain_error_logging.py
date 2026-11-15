@@ -16,6 +16,7 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+import pytest
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import ApiIds, make_client
@@ -134,3 +135,82 @@ def test_no_logging_for_successful_requests(
 
     assert response.status_code == 200
     assert not [m for m in _messages(captured) if "领域异常" in m]
+
+
+# --- 兜底错误码：internal_error / dependency_unavailable -------------------
+
+
+def _build_probe_app(route_handler):
+    """造一个只挂探针路由的最小 app，复用真实 create_app 的异常处理器。"""
+    from app.main import create_app
+    from fastapi.testclient import TestClient
+
+    app = create_app()
+
+    @app.get("/test/probe")
+    def probe() -> dict[str, bool]:
+        return route_handler()
+
+    return TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.mark.filterwarnings(
+    # Starlette 在 raise_server_exceptions=False 的 500 路径上会遗留一个未关闭的
+    # anyio memory stream（见 anyio/streams/memory.py 的 __del__）。
+    # 这是第三方实现的既有问题，与本用例要验证的行为无关；显式标注而不是
+    # 全局忽略，避免掩盖我们自己的资源泄漏。
+    "ignore::pytest.PytestUnraisableExceptionWarning"
+)
+def test_unexpected_error_returns_internal_error_with_request_id() -> None:
+    """未捕获异常必须走统一错误体，带 code 与 request_id。
+
+    此前没有任何 `Exception` 兜底：Starlette 直接返回裸 500，响应体不含
+    request_id、也不走统一错误体。客户端拿不到关联日志的标识，前端也无法
+    按 code 分支，只能显示"未知错误"。契约里该码叫 `internal_error`。
+    """
+
+    def boom() -> dict[str, bool]:
+        raise RuntimeError("数据库密码是 hunter2")
+
+    client = _build_probe_app(boom)
+    with _capture_app_main_logs() as captured, client:
+        response = client.get("/test/probe")
+
+    assert response.status_code == 500
+    error = response.json()["error"]
+    assert error["code"] == "internal_error"
+    assert error["request_id"], "500 响应必须带 request_id，否则无法关联日志"
+    # 绝不回显异常原文。
+    assert "hunter2" not in response.text
+    # 原文进日志。
+    assert any("hunter2" in message for message in _messages(captured))
+
+
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
+def test_database_unavailable_returns_503_not_500() -> None:
+    """数据库不可用 → 503 可重试，不是 500 内部错误。
+
+    客户端处置完全不同：503 应退避重试，500 重试无用。契约为此专设
+    `dependency_unavailable`（http 503、retryable true），实现此前从未产生它。
+    """
+    from sqlalchemy.exc import OperationalError
+
+    def db_down() -> dict[str, bool]:
+        raise OperationalError(
+            "SELECT 1",
+            {},
+            Exception("could not connect to server: Connection refused"),
+        )
+
+    client = _build_probe_app(db_down)
+    with _capture_app_main_logs() as captured, client:
+        response = client.get("/test/probe")
+
+    assert response.status_code == 503
+    error = response.json()["error"]
+    assert error["code"] == "dependency_unavailable"
+    assert response.headers.get("Retry-After") == "5"
+    # 连接串与 SQL 片段不得外传。
+    assert "Connection refused" not in response.text
+    assert "SELECT 1" not in response.text
+    assert any("Connection refused" in message for message in _messages(captured))

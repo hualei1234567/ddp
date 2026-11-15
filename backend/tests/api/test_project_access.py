@@ -456,7 +456,16 @@ def test_invalid_project_id_is_rejected() -> None:
     assert response.status_code == 422
 
 
-def test_cross_project_domain_error_maps_to_forbidden() -> None:
+def test_cross_project_domain_error_maps_to_project_scope_denied() -> None:
+    """跨项目访问必须用专用码，不能与普通权限拒绝混为一谈。
+
+    ``project_scope_denied`` 是**安全信号**：有人在访问不属于当前项目的资源，
+    通常意味着 ID 枚举或客户端 bug，应当单独告警与计数。若映射成泛化的
+    ``forbidden``，真正的越权探测会淹没在日常的权限拒绝里。
+
+    该码在契约（`packages/contracts/schemas/error-codes.v1.json` 的
+    `reused_codes`）与阶段 4 错误码注册表里早就定义，此前实现从未产生它。
+    """
     client = _build_client(
         principal=Principal(uuid4()),
         service=_service(set()),
@@ -465,4 +474,8 @@ def test_cross_project_domain_error_maps_to_forbidden() -> None:
     response = client.get("/test/cross-project")
 
     assert response.status_code == 403
-    assert response.json()["error"]["code"] == "forbidden"
+    error = response.json()["error"]
+    assert error["code"] == "project_scope_denied"
+    # 文案不得回显被访问的资源标识（存在性信息本身就不该泄漏）。
+    assert "模拟跨项目资源访问" not in error["message"]
+    assert error["request_id"]

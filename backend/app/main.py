@@ -12,7 +12,7 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from app.api.errors import (
     annotation_error_to_app,
@@ -288,15 +288,60 @@ def create_app() -> FastAPI:
         request: Request,
         exc: CrossProjectAccessError,
     ) -> JSONResponse:
+        # 走统一错误管道，而不是手拼响应体：手拼会绕过 details 白名单、
+        # 日志记录与 request_id 约定，也让新增字段时容易漏改。
+        error = AppError(
+            exc.code,
+            "跨项目访问被拒绝",
+            403,
+        )
+        _log_domain_error(request, exc, error)
         return JSONResponse(
-            status_code=403,
-            content={
-                "error": {
-                    "code": "forbidden",
-                    "message": "跨项目访问被拒绝",
-                    "request_id": getattr(request.state, "request_id", None),
-                }
-            },
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(OperationalError)
+    async def handle_dependency_unavailable(
+        request: Request,
+        exc: OperationalError,
+    ) -> JSONResponse:
+        """数据库不可用 → 503 可重试，而不是 500 内部错误。
+
+        两者的客户端处置完全不同：503 应当退避重试，500 重试也没用。
+        契约（`error-codes.v1.json` 的 `reused_codes`）为此专设
+        `dependency_unavailable`：`{"http": 503, "retryable": true}`，
+        但实现此前从未产生它——数据库连接失败会落进通用 500。
+
+        只回显固定文案：异常原文含 SQL 片段与连接串，绝不外传。
+        """
+        error = AppError("dependency_unavailable", "依赖服务暂不可用，请稍后重试", 503)
+        _log_domain_error(request, exc, error)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+            headers={"Retry-After": "5"},
+        )
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(
+        request: Request,
+        exc: Exception,
+    ) -> JSONResponse:
+        """未预期异常的兜底处理。
+
+        此前没有任何兜底：未捕获异常由 Starlette 直接返回裸 500，响应体不含
+        `request_id`、也不走统一错误体。客户端因此拿不到可用于关联日志的标识，
+        前端也无法按 code 分支——只能显示"未知错误"。
+
+        这里**绝不回显**异常原文（可能含 SQL、路径、内部标识），只给固定文案；
+        原文与堆栈进日志。契约里该码叫 `internal_error`，此前从未产生。
+        """
+        error = AppError("internal_error", "服务内部错误", 500)
+        _log_domain_error(request, exc, error)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
         )
 
     @app.get("/health", tags=["platform"])

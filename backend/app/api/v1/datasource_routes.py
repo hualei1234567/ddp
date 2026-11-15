@@ -25,6 +25,7 @@ from app.api.v1.datasource_schemas import (
     DataSourceOut,
     DataSourcePatch,
     ImportActionRequest,
+    MediaAssetListOut,
     MediaAssetOut,
     MediaAssetPlaybackOut,
     QualityReportOut,
@@ -32,6 +33,7 @@ from app.api.v1.datasource_schemas import (
     ReviewDecisionRequest,
 )
 from app.api.v1.preconditions import require_expected_version
+from app.api.v1.schemas import PageOut
 from app.application.datasources import (
     DataSourcePatch as DataSourcePatchCmd,
 )
@@ -133,7 +135,7 @@ def _as_asset_repo(value: object) -> MediaAssetRepository:
 ReviewServicesDep = Annotated[DataReviewUseCases, Depends(get_review_use_cases)]
 
 
-@router.get("/data-sources")
+@router.get("/data-sources", response_model=PageOut[DataSourceOut])
 def list_data_sources(
     scope: ReadScope,
     use_cases: DataSourceServicesDep,
@@ -151,7 +153,7 @@ def list_data_sources(
     }
 
 
-@router.post("/data-sources", status_code=201)
+@router.post("/data-sources", response_model=DataSourceOut, status_code=201)
 def create_data_source(
     payload: DataSourceCreate,
     request: Request,
@@ -184,7 +186,7 @@ def create_data_source(
     return DataSourceOut.from_domain(created).model_dump(mode="json")
 
 
-@router.get("/data-sources/{data_source_id}")
+@router.get("/data-sources/{data_source_id}", response_model=DataSourceOut)
 def get_data_source(
     data_source_id: UUID, scope: ReadScope, use_cases: DataSourceServicesDep
 ) -> dict[str, Any]:
@@ -192,7 +194,7 @@ def get_data_source(
     return DataSourceOut.from_domain(item).model_dump(mode="json")
 
 
-@router.patch("/data-sources/{data_source_id}")
+@router.patch("/data-sources/{data_source_id}", response_model=DataSourceOut)
 def update_data_source(
     data_source_id: UUID,
     payload: DataSourcePatch,
@@ -211,7 +213,7 @@ def update_data_source(
     return DataSourceOut.from_domain(updated).model_dump(mode="json")
 
 
-@router.get("/data-source-imports")
+@router.get("/data-source-imports", response_model=PageOut[DataSourceImportOut])
 def list_imports(
     scope: ReadScope,
     use_cases: DataSourceServicesDep,
@@ -234,7 +236,11 @@ def list_imports(
     }
 
 
-@router.post("/data-sources/{data_source_id}/imports", status_code=201)
+@router.post(
+    "/data-sources/{data_source_id}/imports",
+    response_model=DataSourceImportOut,
+    status_code=201,
+)
 def create_import(
     data_source_id: UUID,
     payload: DataSourceImportCreate,
@@ -265,7 +271,7 @@ def create_import(
 _PLAYBACK_TTL_SECONDS = 900
 
 
-@router.get("/data-source-imports/{import_id}/assets")
+@router.get("/data-source-imports/{import_id}/assets", response_model=MediaAssetListOut)
 def list_import_assets(
     import_id: UUID,
     scope: ReadScope,
@@ -277,7 +283,7 @@ def list_import_assets(
     return {"items": [MediaAssetOut.from_domain(item).model_dump(mode="json") for item in items]}
 
 
-@router.post("/media-assets/{asset_id}/playback")
+@router.post("/media-assets/{asset_id}/playback", response_model=MediaAssetPlaybackOut)
 def presign_asset_playback(
     asset_id: UUID,
     scope: ReadScope,
@@ -303,7 +309,7 @@ def presign_asset_playback(
     ).model_dump(mode="json")
 
 
-@router.get("/data-source-imports/{import_id}")
+@router.get("/data-source-imports/{import_id}", response_model=DataSourceImportOut)
 def get_import(
     import_id: UUID, scope: ReadScope, use_cases: DataSourceServicesDep
 ) -> dict[str, Any]:
@@ -311,7 +317,10 @@ def get_import(
     return DataSourceImportOut.from_domain(item).model_dump(mode="json")
 
 
-@router.post("/data-source-imports/{import_id}/actions/{action}")
+@router.post(
+    "/data-source-imports/{import_id}/actions/{action}",
+    response_model=DataSourceImportOut,
+)
 def act_on_import(
     import_id: UUID,
     action: str,
@@ -335,7 +344,11 @@ def act_on_import(
     return DataSourceImportOut.from_domain(updated).model_dump(mode="json")
 
 
-@router.post("/data-source-imports/{import_id}/review", status_code=201)
+@router.post(
+    "/data-source-imports/{import_id}/review",
+    response_model=ReviewCreateOut,
+    status_code=201,
+)
 def ensure_review(
     import_id: UUID,
     request: Request,
@@ -347,7 +360,7 @@ def ensure_review(
     return ReviewCreateOut.from_domain(review).model_dump(mode="json")
 
 
-@router.get("/data-source-imports/{import_id}/review")
+@router.get("/data-source-imports/{import_id}/review", response_model=ReviewCreateOut)
 def get_review(import_id: UUID, scope: ReadScope, use_cases: ReviewServicesDep) -> dict[str, Any]:
     review = use_cases.get_review(scope, import_id)
     if review is None:
@@ -355,7 +368,10 @@ def get_review(import_id: UUID, scope: ReadScope, use_cases: ReviewServicesDep) 
     return ReviewCreateOut.from_domain(review).model_dump(mode="json")
 
 
-@router.post("/data-source-imports/{import_id}/review/decisions")
+@router.post(
+    "/data-source-imports/{import_id}/review/decisions",
+    response_model=ReviewCreateOut,
+)
 def decide_review(
     import_id: UUID,
     payload: ReviewDecisionRequest,
@@ -378,7 +394,10 @@ def decide_review(
     return ReviewCreateOut.from_domain(decided).model_dump(mode="json")
 
 
-@router.get("/data-source-imports/{import_id}/quality-report")
+@router.get(
+    "/data-source-imports/{import_id}/quality-report",
+    response_model=QualityReportOut,
+)
 def quality_report(
     import_id: UUID, scope: ReadScope, use_cases: ReviewServicesDep
 ) -> dict[str, Any]:

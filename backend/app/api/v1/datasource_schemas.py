@@ -186,6 +186,12 @@ class MediaAssetOut(BaseModel):
         )
 
 
+class MediaAssetListOut(BaseModel):
+    """资产列表；契约里对应 `MediaAssetList`（无 next_cursor）。"""
+
+    items: list[MediaAssetOut]
+
+
 class MediaAssetPlaybackOut(BaseModel):
     """播放信息：预签名 URL 由服务端签发，前端不自行拼接存储路径。"""
 

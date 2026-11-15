@@ -224,3 +224,166 @@ dataSourceImportActions:
       "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
       "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# ---------------------------------------------------------------------------
+# 审看与质量报告（阶段 7 第二批）
+#
+# 这 6 个端点在后两步（提交 e6afb0c / 7c7665c）就已实现，但契约未跟进，
+# 导致客户端无法生成类型、也无法按 code 分支。补这里属于**记录既有实现**，
+# 不改任何运行时行为。
+# ---------------------------------------------------------------------------
+
+dataSourceImportAssets:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: import_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: listDataSourceImportAssets
+    tags: [datasources]
+    summary: 列出导入产出的媒体资产
+    description: |
+      按 episode + 机位排序，便于逐条审看。`limit` 默认 500、上限 1000——
+      一个导入任务通常对应几十个资产，超过上限说明任务规模异常，
+      而不是靠无界返回掩盖。
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 1000, default: 500 }
+    responses:
+      "200":
+        description: 资产列表
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MediaAssetList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+mediaAssetPlayback:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: asset_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  post:
+    operationId: presignMediaAssetPlayback
+    tags: [datasources]
+    summary: 签发媒体资产短时播放地址
+    description: |
+      用 POST 而非 GET：签发 URL 会产出一个可访问凭证，属于有副作用的行为，
+      不应被浏览器或代理缓存、预取。URL 有效期 900 秒。
+    responses:
+      "200":
+        description: 播放信息
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/MediaAssetPlayback" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dataSourceImportReview:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: import_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  post:
+    operationId: ensureDataSourceImportReview
+    tags: [datasources]
+    summary: 为导入创建审核记录（幂等）
+    description: |
+      已存在时直接返回既有记录，不新建、不报错——审核记录是"每个导入一条"，
+      重复调用是客户端的正常重试行为。
+    responses:
+      "201":
+        description: 审核记录
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataReview" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  get:
+    operationId: getDataSourceImportReview
+    tags: [datasources]
+    summary: 读取导入的审核记录
+    responses:
+      "200":
+        description: 审核记录
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataReview" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dataSourceImportReviewDecisions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: import_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  post:
+    operationId: decideDataSourceImportReview
+    tags: [datasources]
+    summary: 给出导入审核结论
+    description: |
+      审核人不得是提交人（职责分离）。数据库层亦有兜底约束，
+      绕过应用层直写同样会被拒。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ReviewDecisionRequest" }
+    responses:
+      "200":
+        description: 审核结论已记录
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataReview" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+dataSourceImportQualityReport:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: import_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: getDataSourceImportQualityReport
+    tags: [datasources]
+    summary: 读取导入的质量报告
+    description: |
+      规则版本、样本范围、通过率与失败原因都在响应里。`sample_scope` 与导入任务
+      的范围一致——质量结论只覆盖实际导入的样本，不对外声称覆盖全量。
+    responses:
+      "200":
+        description: 质量报告
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ImportQualityReport" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

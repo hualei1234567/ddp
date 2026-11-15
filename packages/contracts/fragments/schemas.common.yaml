@@ -4,6 +4,9 @@ ErrorCode:
   enum:
     - not_authenticated
     - forbidden
+    # 跨项目访问被拒。与 forbidden 分开：前者是安全信号（ID 枚举/客户端越权），
+    # 需要单独告警；后者只是"这个账号没这个权限"，是正常业务结果。
+    - project_scope_denied
     - not_found
     - resource_not_found
     - conflict

@@ -589,6 +589,16 @@ paths:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportDetail"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/actions/{action}:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportActions"
+  /api/v1/projects/{project_id}/data-source-imports/{import_id}/assets:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImportAssets"
+  /api/v1/projects/{project_id}/data-source-imports/{import_id}/quality-report:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImportQualityReport"
+  /api/v1/projects/{project_id}/data-source-imports/{import_id}/review:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImportReview"
+  /api/v1/projects/{project_id}/data-source-imports/{import_id}/review/decisions:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImportReviewDecisions"
+  /api/v1/projects/{project_id}/media-assets/{asset_id}/playback:
+    $ref: "./fragments/paths.stage7.yaml#/mediaAssetPlayback"
 components:
   securitySchemes:
     bearerAuth:
@@ -1009,3 +1019,10 @@ components:
     ImportActionRequest: {$ref: "./fragments/schemas.stage7.yaml#/ImportActionRequest"}
     DataSourceImport: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceImport"}
     DataSourceImportPage: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceImportPage"}
+    MediaAsset: {$ref: "./fragments/schemas.stage7.yaml#/MediaAsset"}
+    MediaAssetList: {$ref: "./fragments/schemas.stage7.yaml#/MediaAssetList"}
+    MediaAssetPlayback: {$ref: "./fragments/schemas.stage7.yaml#/MediaAssetPlayback"}
+    DataReview: {$ref: "./fragments/schemas.stage7.yaml#/DataReview"}
+    ReviewDecisionRequest: {$ref: "./fragments/schemas.stage7.yaml#/ReviewDecisionRequest"}
+    ImportQualityFinding: {$ref: "./fragments/schemas.stage7.yaml#/ImportQualityFinding"}
+    ImportQualityReport: {$ref: "./fragments/schemas.stage7.yaml#/ImportQualityReport"}
