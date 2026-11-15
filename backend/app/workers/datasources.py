@@ -73,6 +73,21 @@ class _HttpxFetcher:
             yield from response.iter_bytes()
 
 
+def _registry_parser(rows: list[dict[str, object]]) -> tuple[object, ...]:
+    """把已解析的 JSONL 行交给 Adapter 注册表选出解析器并执行。
+
+    ``ImportRunner`` 的 ``parse_episodes`` 契约是「已解析的行 → Episode 序列」，
+    而 Adapter 的 Parser 契约是 bytes。这里把行重新编码回 JSONL 再交给注册表，
+    让「选哪个 Adapter」由注册表按内容探测决定——探测逻辑只需要一处。
+    """
+    import json
+
+    from app.application.datasources.adapter_resolver import resolve_and_parse
+
+    payload = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows).encode()
+    return resolve_and_parse(payload).episodes
+
+
 def _parse_metadata(data: bytes) -> list[dict[str, object]]:
     """把 metadata.jsonl 字节解析为行列表；格式错误抛异常由调用方落库。
 
@@ -141,14 +156,16 @@ class DataSourceImportWorker:
                 # Worker 用事件里的 project_id 构造作用域；actor 取项目自身，
                 # 因为这是系统行为而非某个用户的请求。
                 scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
-                from ddp_data.lerobot import parse_preview_metadata
 
                 outcome = runner.execute(
                     scope,
                     import_id,
                     fetch=_HttpxFetcher(self._client),
                     parse_metadata=_parse_metadata,
-                    parse_episodes=parse_preview_metadata,
+                    # 解析器由 **Adapter 注册表** 决定，而不是在这里硬编码某个
+                    # 具体数据集的名字。此前写死 parse_preview_metadata，
+                    # 换一种数据格式就必须改 Worker，注册表等于形同虚设。
+                    parse_episodes=_registry_parser,
                     now=moment,
                 )
                 queue.mark_published(claimed.event_id, now=moment)
