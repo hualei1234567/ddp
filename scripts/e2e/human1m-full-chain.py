@@ -42,17 +42,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "data-platform"))
-os.environ.setdefault("DDP_ENV", "local")
-os.environ.setdefault(
-    "DDP_DATABASE_URL", "postgresql+psycopg://ddp:ddp@localhost:55432/ddp"
-)
-os.environ.setdefault("DDP_S3_ENDPOINT", "http://127.0.0.1:9000")
-os.environ.setdefault("DDP_S3_ACCESS_KEY", "minioadmin")
-os.environ.setdefault("DDP_S3_SECRET_KEY", "minioadmin")
-os.environ.setdefault("DDP_S3_BUCKET", "ddp-raw")
-# 验收脚本用 TestClient 直连应用；限流中间件对同一 IP 的高频写请求会误伤，
-# 与本脚本要验证的链路无关，显式关闭而不是靠"恰好没触发"。
-os.environ.setdefault("DDP_RATE_LIMIT_ENABLED", "false")
+
+
+def _apply_default_env() -> None:
+    """设置本脚本需要的默认环境变量。
+
+    **必须在 main() 里调用，不能在模块顶层做。** 顶层 ``os.environ.setdefault``
+    会污染任何导入本模块的进程——``tests/test_human1m_full_chain.py`` 在收集阶段
+    ``exec_module`` 本文件，就把 ``DDP_RATE_LIMIT_ENABLED=false`` 写进了测试进程，
+    导致其后所有限流用例静默失效（表现为「单独跑绿、全量跑红」）。
+    """
+    os.environ.setdefault("DDP_ENV", "local")
+    os.environ.setdefault(
+        "DDP_DATABASE_URL", "postgresql+psycopg://ddp:ddp@localhost:55432/ddp"
+    )
+    os.environ.setdefault("DDP_S3_ENDPOINT", "http://127.0.0.1:9000")
+    os.environ.setdefault("DDP_S3_ACCESS_KEY", "minioadmin")
+    os.environ.setdefault("DDP_S3_SECRET_KEY", "minioadmin")
+    os.environ.setdefault("DDP_S3_BUCKET", "ddp-raw")
+    # 验收脚本用 TestClient 直连应用；限流中间件对同一 IP 的高频写请求会误伤，
+    # 与本脚本要验证的链路无关，显式关闭而不是靠"恰好没触发"。
+    os.environ.setdefault("DDP_RATE_LIMIT_ENABLED", "false")
+
 
 from uuid import uuid4  # noqa: E402
 
@@ -163,6 +174,7 @@ def parse_checksum_manifest(text: str) -> dict[str, str]:
 
 
 def main() -> int:
+    _apply_default_env()
     settings = get_settings()
     engine = create_db_engine(
         settings.database_url,
