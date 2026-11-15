@@ -112,6 +112,11 @@ class CalibrationTargetRef(Base):
     ``(project_id, target_type, target_id)`` 复合外键引用本表，从而拒绝
     不存在、跨项目或类型错配的目标。
 
+    **注意与 ``CalibrationProfile.target_id`` 的口径不同**（ADR-0020 §2.3）：
+    本表说的是**标定记录**的 SYSTEM 目标，必须等于 ``project_id``（复合外键要求）；
+    Profile 的 ``scope=SYSTEM`` 时 ``target_id`` 必须为空，那是领域层校验，
+    两者不要混用。
+
     SQLite 无法给已存在的表追加外键，迁移在 SQLite 上以等价触发器实现
     同一语义；PostgreSQL 使用真实复合外键。
     """
