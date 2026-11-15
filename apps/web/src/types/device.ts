@@ -97,6 +97,16 @@ export interface Device {
   created_by: string | null;
   updated_by: string | null;
   /**
+   * 状态语义（G-09）：与 Robot 对齐，说明"为什么进入该状态"。
+   * 服务端可能返回 null（历史记录或该动作未提供原因），前端不得自行补默认值。
+   */
+  status_reason: string | null;
+  fault_code: string | null;
+  fault_detail: string | null;
+  fault_occurred_at: string | null;
+  status_changed_at: string | null;
+  status_changed_by: string | null;
+  /**
    * 以下为服务端新鲜度元数据（契约冻结前按可选字段读取）。
    * 阈值一律由服务端下发；前端只做存在性判断，不提供默认超时时间，
    * 避免把旧数据误判为实时数据或把正常数据误判为过期。
@@ -141,6 +151,13 @@ export interface Sensor {
   version: number;
   created_at: string | null;
   updated_at: string | null;
+  /** 状态语义（G-09）：与 Device / Robot 对齐；null 表示未记录，不是"无故障"。 */
+  status_reason: string | null;
+  fault_code: string | null;
+  fault_detail: string | null;
+  fault_occurred_at: string | null;
+  status_changed_at: string | null;
+  status_changed_by: string | null;
 }
 
 export interface Robot {
@@ -178,7 +195,7 @@ export interface CalibrationProfile {
   name: string;
   scope: string;
   target_type: string;
-  /** 业务版本号；服务端表列仍叫 version，对外统一为 profile_version。 */
+  /** 业务版本号；Domain / ORM / DB 列同名，见 ADR-0032（G-03）。 */
   profile_version: number;
   schema_version: string;
   required_types: string[];

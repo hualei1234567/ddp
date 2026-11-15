@@ -12,6 +12,10 @@ from app.domain.devices.enums import (
     SensorType,
 )
 from app.domain.devices.errors import (
+    CalibrationActiveConflictError,
+    CalibrationChecksumMismatchError,
+    CalibrationInvalidError,
+    CalibrationNotActiveError,
     CalibrationProfileInvalidError,
     CalibrationTargetInvalidError,
     DeviceDomainError,
@@ -26,6 +30,10 @@ from app.domain.devices.errors import (
 from app.domain.devices.models import Device, Robot, Sensor
 
 __all__ = [
+    "CalibrationActiveConflictError",
+    "CalibrationChecksumMismatchError",
+    "CalibrationInvalidError",
+    "CalibrationNotActiveError",
     "CalibrationProfile",
     "CalibrationProfileInvalidError",
     "CalibrationRecord",

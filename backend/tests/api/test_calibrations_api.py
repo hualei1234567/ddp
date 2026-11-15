@@ -317,8 +317,10 @@ def test_submit_rejects_record_tampered_after_creation(
         _calibration_url(ids.project_a, f"/{calibration_id}/submit"),
         headers={"If-Match": '"1"'},
     )
-    # 错误体按契约只回通用文案（不泄漏内部字段），因此断言状态码与"未被推进"。
+    # 契约 §8.6：篡改检测走专用码 calibration_checksum_mismatch，
+    # 不能塌成 validation_failed——否则调用方会把"数据被改过"当成"请求写错了"。
     assert submitted.status_code == 422, submitted.text
+    assert submitted.json()["error"]["code"] == "calibration_checksum_mismatch"
     still_draft = editor.get(_calibration_url(ids.project_a, f"/{calibration_id}"))
     assert still_draft.status_code == 200
     assert still_draft.json()["status"] == "DRAFT"

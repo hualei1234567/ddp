@@ -35,6 +35,8 @@ def get_device_use_cases(session: DbSession) -> DeviceUseCases:
         devices=SqlDeviceRepository(session),
         robots=SqlRobotRepository(session),
         profiles=SqlCalibrationProfileRepository(session),
+        # G-20：激活前的标定门禁需要读取 ACTIVE 标定记录。
+        calibrations=SqlCalibrationRecordRepository(session),
         uow=session,
         audit=SqlDatasetAuditRepository(session),
         outbox=SqlDatasetOutboxRepository(session),
@@ -61,6 +63,9 @@ def get_calibration_use_cases(session: DbSession) -> CalibrationUseCases:
         calibrations=SqlCalibrationRecordRepository(session),
         profiles=SqlCalibrationProfileRepository(session),
         uow=session,
+        # G-11：标定域此前没有留痕依赖，创建与状态动作在 audit_logs 里查不到。
+        audit=SqlDatasetAuditRepository(session),
+        outbox=SqlDatasetOutboxRepository(session),
     )
 
 
@@ -68,6 +73,7 @@ def get_robot_use_cases(session: DbSession) -> RobotUseCases:
     return RobotUseCases(
         robots=SqlRobotRepository(session),
         profiles=SqlCalibrationProfileRepository(session),
+        calibrations=SqlCalibrationRecordRepository(session),
         uow=session,
         audit=SqlDatasetAuditRepository(session),
         outbox=SqlDatasetOutboxRepository(session),

@@ -25,7 +25,13 @@
     "created_at": null,
     "updated_at": null,
     "created_by": null,
-    "updated_by": null
+    "updated_by": null,
+    "status_reason": null,
+    "fault_code": null,
+    "fault_detail": null,
+    "fault_occurred_at": null,
+    "status_changed_at": null,
+    "status_changed_by": null
   },
   "sensor": {
     "sensor_id": "33333333-3333-7333-8333-333333333333",
@@ -55,7 +61,13 @@
     "mount_position": "front",
     "version": 1,
     "created_at": null,
-    "updated_at": null
+    "updated_at": null,
+    "status_reason": null,
+    "fault_code": null,
+    "fault_detail": null,
+    "fault_occurred_at": null,
+    "status_changed_at": null,
+    "status_changed_by": null
   },
   "calibration": {
     "calibration_id": "44444444-4444-7444-8444-444444444444",
@@ -180,7 +192,13 @@
         "mount_position": "front",
         "version": 1,
         "created_at": null,
-        "updated_at": null
+        "updated_at": null,
+        "status_reason": null,
+        "fault_code": null,
+        "fault_detail": null,
+        "fault_occurred_at": null,
+        "status_changed_at": null,
+        "status_changed_by": null
       }
     ],
     "next_cursor": null

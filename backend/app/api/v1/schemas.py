@@ -289,7 +289,18 @@ class CalibrationPatch(BaseModel):
 
 
 class ActionRequest(BaseModel):
-    """状态动作的统一可选载荷；阶段 0 未建审计表，暂不透传持久化。"""
+    """状态动作的统一可选载荷。
+
+    字段分两类，**不要混为一谈**：
+
+    - 已被实现读取并落库：``reason`` / ``fault_code`` / ``fault_detail`` /
+      ``occurred_at``。Device / Sensor / Robot 三条路由都把前三个透传给用例，
+      ``occurred_at`` 映射为 ``fault_occurred_at``；审计与 outbox 事件同样带这些值。
+    - **契约保留但实现从不读取**：``maintenance_record_id`` / ``evidence_refs``。
+      二者只因阶段 1 冻结文档 §4.3/§6.1/§8.1 声明过而留在 schema 里；
+      后端没有任何代码读取它们，提交也不会持久化，不会报错。属于"契约声明了
+      但实现没做"，已登记在契约一致性核查报告中（`scripts/check_contract_parity.py`）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -323,6 +334,14 @@ class DeviceOut(BaseModel):
     updated_at: datetime | None = None
     created_by: UUID | None = None
     updated_by: UUID | None = None
+    # G-09：状态语义六列在 DB 里早就有（迁移 0023），但此前只有 RobotOut 对外
+    # 返回。客户端看不到"为什么进入该状态"，只能拿到一个孤立的 status。
+    status_reason: str | None = None
+    fault_code: str | None = None
+    fault_detail: str | None = None
+    fault_occurred_at: datetime | None = None
+    status_changed_at: datetime | None = None
+    status_changed_by: UUID | None = None
 
     @classmethod
     def from_domain(cls, device: Device) -> DeviceOut:
@@ -344,6 +363,12 @@ class DeviceOut(BaseModel):
             location_id=device.location_id,
             owner_user_id=device.owner_user_id,
             version=device.version,
+            status_reason=device.status_reason,
+            fault_code=device.fault_code,
+            fault_detail=device.fault_detail,
+            fault_occurred_at=device.fault_occurred_at,
+            status_changed_at=device.status_changed_at,
+            status_changed_by=device.status_changed_by,
         )
 
 
@@ -376,6 +401,13 @@ class SensorOut(BaseModel):
     version: int
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    # G-09：与 DeviceOut / RobotOut 对齐的状态语义六列。
+    status_reason: str | None = None
+    fault_code: str | None = None
+    fault_detail: str | None = None
+    fault_occurred_at: datetime | None = None
+    status_changed_at: datetime | None = None
+    status_changed_by: UUID | None = None
 
     @classmethod
     def from_domain(cls, sensor: Sensor) -> SensorOut:
@@ -406,6 +438,12 @@ class SensorOut(BaseModel):
             status=_value(sensor.status),
             mount_position=sensor.mount_position,
             version=sensor.version,
+            status_reason=sensor.status_reason,
+            fault_code=sensor.fault_code,
+            fault_detail=sensor.fault_detail,
+            fault_occurred_at=sensor.fault_occurred_at,
+            status_changed_at=sensor.status_changed_at,
+            status_changed_by=sensor.status_changed_by,
         )
 
 

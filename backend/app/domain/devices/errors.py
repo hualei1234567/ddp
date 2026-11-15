@@ -6,19 +6,79 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 
 class DeviceDomainError(ValueError):
     """设备域可预期错误的基类。
 
     ``code`` 是稳定的领域错误码，供 API 层映射为契约错误码；
     领域层不决定 HTTP 状态码。
+
+    ``details`` 是**可在安全前提下回显给客户端**的结构化排障信息
+    （例如参数校验失败的字段路径）。是否透传由 API 层按 code 白名单决定，
+    领域层只负责如实携带，不判断安全性（G-19）。
     """
 
     code = "validation_failed"
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        details: Mapping[str, object] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.details: Mapping[str, object] | None = details
+
 
 class DomainValidationError(DeviceDomainError):
     """字段或跨字段校验失败。"""
+
+
+class CalibrationChecksumMismatchError(DomainValidationError):
+    """标定内容的服务端重算结果与已存 checksum 不一致。
+
+    契约 §8.6 把它单列为 ``calibration_checksum_mismatch``：这不是"字段填错"，
+    而是**已落库内容被绕过用例层改过**。与 ``validation_failed`` 混用会让
+    调用方把篡改误判成输入格式问题，从而只想"改改请求再试"。
+    """
+
+    code = "calibration_checksum_mismatch"
+
+
+class CalibrationActiveConflictError(DeviceDomainError):
+    """同目标/同类型已有 ACTIVE，且**无法原子替代**（契约 §8.6）。
+
+    注意区分两种情形：
+    - 能原子替代（正常路径）：在 savepoint 内把旧 ACTIVE 转 SUPERSEDED，
+      再把新的转 ACTIVE。这是状态机允许的合法迁移，不报错。
+    - 无法原子替代（本异常）：并发窗口导致两条记录同时想成为 ACTIVE，
+      被 ``uq_calibration_records_active_target`` 部分唯一索引挡住。
+      此时必须让调用方知道"这是同目标激活冲突"，而不是笼统的业务键重复。
+    """
+
+    code = "calibration_active_conflict"
+
+
+class CalibrationInvalidError(DomainValidationError):
+    """标定数据本身不满足可用条件（如尚未生效/已过期时被激活）。
+
+    与 ``validation_failed`` 的区别：请求形状合法，是**标定数据的状态**不允许
+    该动作。契约把 VALIDATED→ACTIVE 的这类拒绝登记为 ``calibration_invalid``。
+    """
+
+    code = "calibration_invalid"
+
+
+class CalibrationNotActiveError(DomainValidationError):
+    """要求的标定类型在目标上没有 ACTIVE 记录，动作被拒绝。
+
+    触发点：设备激活时，其 Profile ``required_types`` 声明的标定类型必须有
+    ACTIVE 记录；缺任何一类都不得进入 ACTIVE。
+    """
+
+    code = "calibration_not_active"
 
 
 class CalibrationTargetInvalidError(DomainValidationError):

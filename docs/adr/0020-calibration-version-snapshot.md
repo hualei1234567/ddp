@@ -58,15 +58,33 @@
 | 变更 | 说明 |
 |---|---|
 | 新增 `target_id` (UUID, nullable) | 绑定到具体目标（机器人/设备/传感器）；`SYSTEM` 作用域必须为空 |
-| 新增唯一键 `(project_id, name, target_id, version)` | 同一逻辑 Profile 的版本号不可重复 |
-| `target_id` 与 `scope` 一致性 CHECK | `scope=SYSTEM` 时 `target_id` 必须为空 |
+| 新增唯一键 `(project_id, name, target_id, profile_version)` | 同一逻辑 Profile 的版本号不可重复 |
+| `target_id` 与 `scope` 一致性 | **领域层校验**（`CalibrationProfile.__post_init__`），不是 DB CHECK |
 
 **实际 scope 取值**：`ROBOT` / `DEVICE` / `SENSOR` / `SYSTEM`（见
 `domain/devices/enums.py`），不存在 `TYPE` / `TARGET`。
 
-**`SYSTEM=project_id` 的解释**：冻结契约里 `SYSTEM` 作用域的目标被写成 `project_id`。
-本 ADR 采用更直白的做法：`scope=SYSTEM` 时 `target_id` 为空，由应用层按项目隔离——
-**不引入一个看起来像外键但不是外键的特殊值**，那会让每个读取方都要知道这条约定。
+**`target_id` 与 `scope` 的一致性由领域层保证，没有数据库 CHECK**：迁移 0028 只加了
+`target_id` 列与唯一索引，`calibration_profiles` 表上的 CHECK 只有
+`profile_version >= 1`。`scope=SYSTEM` 时 `target_id` 不可为空的约束落在
+`app/domain/devices/calibration.py` 的 `__post_init__` 里（测试
+`tests/unit/test_calibration_snapshot.py::test_system_scope_cannot_bind_target`）。
+本表早先版本写的是"一致性 CHECK"，与实现不符，已按实际实现改正。
+
+**`SYSTEM` 作用域的 `target_id` 取两种不同口径，不要混用**：
+
+- **Profile（`calibration_profiles.target_id`）**：`scope=SYSTEM` 时为空，由应用层
+  按项目隔离——**不引入一个看起来像外键但不是外键的特殊值**；
+- **标定记录（`calibration_records.target_id`）**：`target_type=SYSTEM` 时
+  `target_id == project_id`。这不是我们选的约定，而是**数据库复合外键的硬要求**：
+  `calibration_records` 通过 `(project_id, target_type, target_id)` 引用投影表
+  `calibration_target_refs`，SYSTEM 行的投影由
+  `infrastructure/repositories/calibration_target_refs.py::ensure_system_target_ref`
+  按 `target_id = project_id` 维护（表上 CHECK 同名约束
+  `system_target_matches_project`）。仓储在 `calibration_records.py` 里显式校验
+  "SYSTEM 标定的 `target_id` 必须等于当前项目 ID"。
+
+两处口径不同是有意的：Profile 不需要过外键，记录需要。
 
 ## 3. 不做的部分
 
@@ -74,11 +92,12 @@
 |---|---|
 | G-07 Profile 不可变触发器 | 独立批次；本次先保证"记录侧有快照"，即使 Profile 被改也不影响历史记录 |
 | G-03 `profile_version` 更名 | 同上；本次新增的是记录侧字段，不碰 Profile 的 `version` 语义 |
-| `SYSTEM` 作用域的 `target_id` 填 `project_id` | 见 §2.3 |
+| `SYSTEM` 作用域记录的 `target_id` 填 `project_id` | 不是选择，是 `calibration_target_refs` 复合外键的硬要求；见 §2.3 |
 
 ## 4. 迁移与回滚
 
-迁移 0028：
+迁移 0028（下表按**当时**的列名记录；`calibration_profiles.version` 已在
+ADR-0032 / 迁移 0032 改名为 `profile_version`，这里同步改为新名以免误导）：
 
 ```sql
 ALTER TABLE calibration_records ADD COLUMN calibration_version INT NOT NULL DEFAULT 1;
@@ -90,7 +109,7 @@ UPDATE calibration_records r SET profile_version = p.version,
     profile_snapshot = json_object('backfilled', json('true'))
   FROM calibration_profiles p WHERE p.id = r.profile_id;
 ALTER TABLE calibration_profiles ADD COLUMN target_id UUID;
-CREATE UNIQUE INDEX uq_profiles_name_target_version ON calibration_profiles(project_id, name, target_id, version);
+CREATE UNIQUE INDEX uq_profiles_name_target_version ON calibration_profiles(project_id, name, target_id, profile_version);
 ```
 
 回滚：downgrade 删列与索引。**注意**：回滚会丢失 `calibration_version` 的增量历史
@@ -101,6 +120,6 @@ CREATE UNIQUE INDEX uq_profiles_name_target_version ON calibration_profiles(proj
 - [ ] 记录创建时 `profile_version` / `profile_schema_version` / `profile_snapshot` 全部写入
 - [ ] Profile 事后被改，记录的三个快照字段不变（有测试）
 - [ ] 同一 Profile 的版本号不可重复（真实 PG 上验证唯一键）
-- [ ] `scope=SYSTEM` 且 `target_id` 非空 → 422
+- [ ] `scope=SYSTEM` 且 `target_id` 非空 → 422（实现为领域校验，非 DB CHECK；测试 `test_system_scope_cannot_bind_target`）
 - [ ] 旧客户端仍可只读 `version`（= `lock_version`）
 - [ ] 回填记录的 `profile_snapshot` 标注 `backfilled: true`，不伪装成原始数据

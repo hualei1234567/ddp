@@ -21,7 +21,11 @@ from app.domain.devices.enums import (
     CalibrationTargetType,
     CalibrationType,
 )
-from app.domain.devices.errors import DomainValidationError, FourEyesViolationError
+from app.domain.devices.errors import (
+    CalibrationInvalidError,
+    DomainValidationError,
+    FourEyesViolationError,
+)
 from app.domain.devices.parameter_schema import validate_parameters
 from app.domain.devices.state_machines import assert_calibration_transition
 from app.domain.devices.validation import (
@@ -57,6 +61,25 @@ _FRAME_REQUIRED_TYPES = frozenset(
 )
 
 
+def _signature_value(value: object) -> object:
+    """把内容字段归一成可比较的不可变形状。
+
+    ``parameters`` / ``uncertainty`` 是只读 Mapping，``evidence_asset_ids``
+    是 tuple：直接用 ``==`` 比较本来可以，但嵌套 dict 与 list 的等价性
+    依赖插入顺序之外的细节；这里统一转成排序后的元组，让"同一内容"
+    在两次写入后一定得到同一指纹。
+    """
+    if isinstance(value, Mapping):
+        return tuple(sorted((str(key), _signature_value(item)) for key, item in value.items()))
+    if isinstance(value, list | tuple):
+        return tuple(_signature_value(item) for item in value)
+    if isinstance(value, datetime):
+        return value.astimezone(UTC).isoformat()
+    if hasattr(value, "value"):  # StrEnum
+        return value.value
+    return value
+
+
 @dataclass(frozen=True, slots=True)
 class CalibrationProfile:
     """标定配置版本：定义某类目标需要哪些标定及选择规则。"""
@@ -72,7 +95,9 @@ class CalibrationProfile:
     schema_version: str
     required_types: tuple[CalibrationType | str, ...] = ()
     selection_rule: Mapping[str, object] = field(default_factory=dict)
-    # ADR-0020（G-06）：scope=TARGET 时指向具体目标；TYPE/SYSTEM 时必须为空。
+    # ADR-0020（G-06）：仅 Profile 绑定具体目标；SYSTEM 作用域必须为空。
+    # 注意：标定**记录**的 SYSTEM 目标口径相反（``target_id == project_id``），
+    # 那是 ``calibration_target_refs`` 复合外键的要求，见 ADR-0020 §2.3。
     target_id: UUID | None = None
 
     def __post_init__(self) -> None:
@@ -288,6 +313,68 @@ class CalibrationRecord:
     def _target_status(self, target: CalibrationStatus) -> CalibrationStatus:
         return assert_calibration_transition(self.status, target)
 
+    # ADR-0020（G-04/G-05）：需要比较"哪些字段算内容"的地方只有一处权威定义。
+    # checksum 是内容的派生值，not 内容本身；version 是乐观锁；status 是状态机；
+    # calibration_version 是修订号；三个 profile_* 是快照。
+    _CONTENT_FIELDS = (
+        "profile_id",
+        "scope",
+        "target_type",
+        "target_id",
+        "calibration_type",
+        "method",
+        "parameters",
+        "parent_frame",
+        "child_frame",
+        "valid_from",
+        "valid_to",
+        "evidence_asset_ids",
+        "source",
+        "uncertainty",
+    )
+
+    _SNAPSHOT_FIELDS = (
+        "profile_version",
+        "profile_schema_version",
+        "profile_snapshot",
+    )
+
+    def with_content_changes(self, **changes: object) -> Self:
+        """应用草稿内容变更；**实质改动**时递增 ``calibration_version``。
+
+        为什么在 Domain 里判定而不是让调用方传"要不要 +1"：
+        调用方一旦可以自由决定，就会出现"两次内容 PATCH 版本不动"或
+        "状态迁移误加版本"两类漂移，版本号再次失去意义（G-04）。
+        判定规则唯一：内容字段的**值**变了才 +1；把值改成相同值不算改动。
+        """
+        candidate = replace(self, **changes)
+        if self._content_signature(candidate) != self._content_signature(self):
+            return replace(candidate, calibration_version=self.calibration_version + 1)
+        return candidate
+
+    def with_profile_snapshot(
+        self,
+        *,
+        profile_version: int,
+        profile_schema_version: str,
+        profile_snapshot: Mapping[str, object],
+    ) -> Self:
+        """整体替换 Profile 快照三字段（G-05：换 profile_id 必须换快照）。"""
+        return replace(
+            self,
+            profile_version=positive_int(profile_version, "profile_version"),
+            profile_schema_version=normalized_text(
+                profile_schema_version,
+                "profile_schema_version",
+                max_length=VERSION_MAX_LENGTH,
+            ),
+            profile_snapshot=profile_snapshot,
+        )
+
+    def _content_signature(self, record: CalibrationRecord) -> tuple[object, ...]:
+        """内容指纹：只取内容字段，用于判定"是否实质改动"。"""
+        return tuple(_signature_value(getattr(record, name)) for name in self._CONTENT_FIELDS)
+
     def submit(self) -> Self:
         # DDP-101 §3.2：DRAFT→SUBMITTED 要求证据已登记；草案本身允许暂无证据。
         if not self.evidence_asset_ids:
@@ -319,12 +406,23 @@ class CalibrationRecord:
         )
 
     def activate(self, *, now: datetime | None = None) -> Self:
-        """VALIDATED→ACTIVE；有效期不合法时拒绝，避免过期标定被激活。"""
+        """VALIDATED→ACTIVE；有效期不合法时拒绝，避免过期标定被激活。
+
+        有效期窗口不允许是 ``validation_failed``：请求形状完全合法，
+        拒绝原因是**这条标定的数据**在此时点不可用。契约把
+        VALIDATED→ACTIVE 的这类拒绝登记为 ``calibration_invalid``（G-20）。
+        """
         current = aware_datetime(now or datetime.now(UTC), "now")
         if self.valid_from > current:
-            raise DomainValidationError("标定尚未生效，不能激活")
+            raise CalibrationInvalidError(
+                "标定尚未生效，不能激活",
+                details={"reason": "not_yet_valid", "field": "valid_from"},
+            )
         if self.valid_to is not None and self.valid_to <= current:
-            raise DomainValidationError("标定已过期，不能激活")
+            raise CalibrationInvalidError(
+                "标定已过期，不能激活",
+                details={"reason": "expired", "field": "valid_to"},
+            )
         return replace(self, status=self._target_status(CalibrationStatus.ACTIVE))
 
     def supersede(self) -> Self:

@@ -110,6 +110,34 @@ export function parseDevice(value: unknown, path = "设备"): Device {
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
+    // G-09：状态语义六列。缺失或 null 都按 null 读取——后端允许历史记录为空，
+    // 但类型一旦出现就必须是字符串/UUID，绝不把非法类型静默当成 undefined。
+    status_reason: readOptionalString(
+      record,
+      "status_reason",
+      `${path}.status_reason`,
+    ),
+    fault_code: readOptionalString(record, "fault_code", `${path}.fault_code`),
+    fault_detail: readOptionalString(
+      record,
+      "fault_detail",
+      `${path}.fault_detail`,
+    ),
+    fault_occurred_at: readOptionalString(
+      record,
+      "fault_occurred_at",
+      `${path}.fault_occurred_at`,
+    ),
+    status_changed_at: readOptionalString(
+      record,
+      "status_changed_at",
+      `${path}.status_changed_at`,
+    ),
+    status_changed_by: readOptionalUuid(
+      record,
+      "status_changed_by",
+      `${path}.status_changed_by`,
+    ),
     freshness: readOptionalString(record, "freshness", `${path}.freshness`),
     last_synced_at: readOptionalString(
       record,
@@ -220,6 +248,33 @@ export function parseSensor(value: unknown, path = "传感器"): Sensor {
     version: readInteger(record, "version", `${path}.version`),
     created_at: readOptionalString(record, "created_at", `${path}.created_at`),
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
+    // G-09：与 Device 一致的状态语义六列。
+    status_reason: readOptionalString(
+      record,
+      "status_reason",
+      `${path}.status_reason`,
+    ),
+    fault_code: readOptionalString(record, "fault_code", `${path}.fault_code`),
+    fault_detail: readOptionalString(
+      record,
+      "fault_detail",
+      `${path}.fault_detail`,
+    ),
+    fault_occurred_at: readOptionalString(
+      record,
+      "fault_occurred_at",
+      `${path}.fault_occurred_at`,
+    ),
+    status_changed_at: readOptionalString(
+      record,
+      "status_changed_at",
+      `${path}.status_changed_at`,
+    ),
+    status_changed_by: readOptionalUuid(
+      record,
+      "status_changed_by",
+      `${path}.status_changed_by`,
+    ),
   };
 }
 

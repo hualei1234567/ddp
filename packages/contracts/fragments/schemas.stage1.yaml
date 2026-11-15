@@ -111,7 +111,9 @@ RobotPatch:
     firmware_version: {type: [string, "null"], maxLength: 64}
     hardware_version: {type: [string, "null"], maxLength: 64}
     calibration_profile_id: {type: [string, "null"], format: uuid}
-    capability_profile: {type: [object, "null"], additionalProperties: true}
+    # G-09 顺带修正：实现从不接受 null（frozen_mapping 只认 Mapping），
+    # 契约此前允许 null 属描述错误。与 RobotCreate / DevicePatch 保持一致。
+    capability_profile: {type: object, additionalProperties: true}
     location_id: {type: [string, "null"], format: uuid}
     owner_user_id: {type: [string, "null"], format: uuid}
 CalibrationProfile:
@@ -165,6 +167,14 @@ Device:
     location_id: {type: [string, "null"], format: uuid}
     owner_user_id: {type: [string, "null"], format: uuid}
     version: {type: integer, minimum: 1, description: "乐观锁；仅表示档案版本，不表示业务修订历史"}
+    # G-09：状态语义六列与 Robot 对齐（DB 迁移 0023/0031 已有列）。
+    # 新增字段不进入 required，避免历史响应（未写入这些值的记录）被判为不合法。
+    status_reason: {type: [string, "null"], maxLength: 1000}
+    fault_code: {type: [string, "null"], maxLength: 64}
+    fault_detail: {type: [string, "null"], maxLength: 2000}
+    fault_occurred_at: {type: [string, "null"], format: date-time}
+    status_changed_at: {type: [string, "null"], format: date-time}
+    status_changed_by: {type: [string, "null"], format: uuid}
     created_at: {type: [string, "null"], format: date-time}
     updated_at: {type: [string, "null"], format: date-time}
     created_by: {type: [string, "null"], format: uuid}
@@ -242,6 +252,13 @@ Sensor:
     status: {$ref: "#/LifecycleStatus"}
     mount_position: {type: [string, "null"], maxLength: 200}
     version: {type: integer, minimum: 1}
+    # G-09：与 Device / Robot 对齐的状态语义六列；不进 required（理由同 Device）。
+    status_reason: {type: [string, "null"], maxLength: 1000}
+    fault_code: {type: [string, "null"], maxLength: 64}
+    fault_detail: {type: [string, "null"], maxLength: 2000}
+    fault_occurred_at: {type: [string, "null"], format: date-time}
+    status_changed_at: {type: [string, "null"], format: date-time}
+    status_changed_by: {type: [string, "null"], format: uuid}
     created_at: {type: [string, "null"], format: date-time}
     updated_at: {type: [string, "null"], format: date-time}
 SensorCreate:

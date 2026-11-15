@@ -44,13 +44,21 @@ def _mapped(
     messages: Mapping[str, str],
     fallback: str,
     with_details: bool = False,
+    details_codes: frozenset[str] | None = None,
 ) -> AppError:
-    """按 code 查表构造 ``AppError``；未登记 code 收敛到 ``validation_failed``。"""
+    """按 code 查表构造 ``AppError``；未登记 code 收敛到 ``validation_failed``。
+
+    ``with_details=True`` 对该域全部 code 透传 details（上传/Episode 域的既有行为）；
+    ``details_codes`` 只对白名单 code 透传（设备域 G-19 采用这种更严的口径：
+    只有 ``validation_failed`` 这类"说得出字段路径"的码才回显结构，
+    其余码的 details 可能含内部标识，一律不回显）。
+    """
     code = getattr(exc, "code", None)
     if not isinstance(code, str) or code not in status_by_code:
         return AppError("validation_failed", fallback, 422)
     details = None
-    if with_details:
+    allow = with_details or (details_codes is not None and code in details_codes)
+    if allow:
         raw = getattr(exc, "details", None)
         details = dict(raw) if raw else None
     return AppError(
@@ -96,6 +104,17 @@ _MESSAGES = {
     "forbidden": "无权执行该操作",
 }
 _FALLBACK_MESSAGE = "设备域规则校验失败"
+
+# G-19：只有"说得出字段路径"的 code 才回显 details。
+# 其余 code 的 details 可能含内部标识（资源 ID、状态枚举），一律不回显。
+_DETAILS_SAFE_CODES = frozenset(
+    {
+        "validation_failed",
+        "calibration_invalid",
+        # 只回显"还缺哪几类标定"的类型名，不含记录 ID 或跨项目信息。
+        "calibration_not_active",
+    }
+)
 
 _COLLECTION_STATUS_BY_CODE = {
     "validation_failed": 422,
@@ -369,11 +388,15 @@ def annotation_error_to_app(exc: AnnotationDomainError) -> AppError:
 
 
 def domain_error_to_app(exc: DeviceDomainError) -> AppError:
+    # G-19：参数校验失败要说清"哪个字段不合法"，否则客户端只能看到
+    # 「请求参数或领域规则校验失败」。只对白名单 code 透传——这些 details
+    # 由领域层构造，只含字段路径、标定类型与错误计数，不含内部标识或 ID 枚举。
     return _mapped(
         exc,
         status_by_code=_STATUS_BY_CODE,
         messages=_MESSAGES,
         fallback=_FALLBACK_MESSAGE,
+        details_codes=_DETAILS_SAFE_CODES,
     )
 
 

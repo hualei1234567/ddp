@@ -62,7 +62,11 @@ def validate_parameters(
     calibration_type: CalibrationType | str,
     parameters: Mapping[str, object],
 ) -> None:
-    """按类型校验参数；失败抛 ``DomainValidationError``，消息含字段路径。"""
+    """按类型校验参数；失败抛 ``DomainValidationError``，消息含字段路径。
+
+    ``details`` 同时携带结构化的 ``field_path``：客户端要能直接高亮出错的
+    输入框，靠解析中文消息里的 ``a/b/c`` 既脆弱又不可靠（G-19）。
+    """
     type_name = (
         calibration_type.value
         if isinstance(calibration_type, CalibrationType)
@@ -76,7 +80,23 @@ def validate_parameters(
     if not errors:
         return
     first = errors[0]
-    raise DomainValidationError(_describe(first, type_name, len(errors)))
+    raise DomainValidationError(
+        _describe(first, type_name, len(errors)),
+        details={
+            "calibration_type": type_name,
+            "field_path": _field_path(first),
+            "error_count": len(errors),
+        },
+    )
+
+
+def _field_path(error: ValidationError) -> list[str]:
+    """把 jsonschema 的 ``absolute_path`` 转成纯字符串片段列表。
+
+    根级错误返回空列表——客户端据此知道"问题不在某个具体字段"，
+    而不是收到一个假字段名。
+    """
+    return [str(item) for item in error.absolute_path]
 
 
 def _describe(error: ValidationError, type_name: str, total: int) -> str:

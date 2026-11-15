@@ -95,3 +95,108 @@ def test_integrity_error_does_not_leak_sql_or_parameters() -> None:
     assert mapped.status_code == 409
     assert "INSERT" not in mapped.message
     assert marker not in mapped.message
+
+
+# --- G-19 / G-20：details 透传白名单与新错误码 -------------------------------
+
+
+def test_validation_failed_details_are_passed_through() -> None:
+    """G-19：字段路径必须到客户端，否则报错只说明"参数非法"。"""
+    exc = DomainValidationError(
+        "INTRINSICS 参数不合法：unit — 'mm' 不是 'px'",
+        details={"calibration_type": "INTRINSICS", "field_path": ["unit"], "error_count": 1},
+    )
+
+    mapped = domain_error_to_app(exc)
+
+    assert mapped.code == "validation_failed"
+    assert mapped.details == {
+        "calibration_type": "INTRINSICS",
+        "field_path": ["unit"],
+        "error_count": 1,
+    }
+
+
+def test_details_are_not_leaked_for_codes_outside_whitelist() -> None:
+    """details 只对白名单 code 透传；其余 code 的内部结构不得回显。"""
+    exc = DuplicateResourceError(
+        "项目内业务键重复",
+        details={"internal_table": "devices", "row_ids": ["secret-id"]},
+    )
+
+    mapped = domain_error_to_app(exc)
+
+    assert mapped.code == "duplicate_resource"
+    assert mapped.details is None
+
+
+def test_calibration_not_active_details_are_passed_through() -> None:
+    from app.domain.devices.errors import CalibrationNotActiveError
+
+    exc = CalibrationNotActiveError(
+        "目标缺少有效标定",
+        details={"target_type": "DEVICE", "missing_calibration_types": ["INTRINSICS"]},
+    )
+
+    mapped = domain_error_to_app(exc)
+
+    assert mapped.code == "calibration_not_active"
+    assert mapped.status_code == 422
+    assert mapped.details == {
+        "target_type": "DEVICE",
+        "missing_calibration_types": ["INTRINSICS"],
+    }
+
+
+def test_calibration_invalid_maps_to_its_own_code() -> None:
+    """G-20：calibration_invalid 必须可达，不能塌成 validation_failed。"""
+    from app.domain.devices.errors import CalibrationInvalidError
+
+    mapped = domain_error_to_app(
+        CalibrationInvalidError("标定已过期，不能激活", details={"reason": "expired"})
+    )
+
+    assert mapped.code == "calibration_invalid"
+    assert mapped.status_code == 422
+    assert mapped.details == {"reason": "expired"}
+
+
+def test_domain_error_without_details_still_maps_cleanly() -> None:
+    """details 是可选参数，不传时不得出现空 dict 污染错误体。"""
+    mapped = domain_error_to_app(DomainValidationError("普通校验失败"))
+
+    assert mapped.code == "validation_failed"
+    assert mapped.details is None
+
+
+def test_calibration_checksum_mismatch_has_its_own_code_and_hides_details() -> None:
+    """契约 §8.6：篡改检测是专用码；其 details 含记录 ID，不得回显。"""
+    from app.domain.devices.errors import CalibrationChecksumMismatchError
+
+    exc = CalibrationChecksumMismatchError(
+        "标定 checksum 与内容不一致",
+        details={"calibration_id": "secret-id", "field": "checksum"},
+    )
+
+    mapped = domain_error_to_app(exc)
+
+    assert mapped.code == "calibration_checksum_mismatch"
+    assert mapped.status_code == 422
+    assert mapped.details is None
+
+
+def test_calibration_active_conflict_is_a_409_device_error() -> None:
+    """契约 §8.6：无法原子替代时是 409，不是 422。"""
+    from app.domain.devices.errors import CalibrationActiveConflictError
+
+    exc = CalibrationActiveConflictError(
+        "同一标定目标已有 ACTIVE 记录，且无法原子替代",
+        details={"target_type": "SENSOR", "calibration_type": "INTRINSICS"},
+    )
+
+    mapped = domain_error_to_app(exc)
+
+    assert mapped.code == "calibration_active_conflict"
+    assert mapped.status_code == 409
+    # details 里只有类型名，没有记录 ID，但当前策略是"非白名单 code 一律不回显"。
+    assert mapped.details is None

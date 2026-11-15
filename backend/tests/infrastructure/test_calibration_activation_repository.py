@@ -7,13 +7,13 @@ from uuid import UUID, uuid4
 
 import pytest
 from app.domain.devices import (
+    CalibrationActiveConflictError,
     CalibrationRecord,
     CalibrationScope,
     CalibrationStatus,
     CalibrationTargetType,
     CalibrationType,
     DomainValidationError,
-    DuplicateResourceError,
     InvalidStateTransitionError,
     VersionConflictError,
 )
@@ -257,7 +257,9 @@ def test_activation_maps_unique_conflict_to_duplicate_resource(
         repository = SqlCalibrationRecordRepository(session)
         stored = repository.get(scope_a, second.calibration_id)
         assert stored is not None
-        with pytest.raises(DuplicateResourceError):
+        # 契约 §8.6：同目标已有 ACTIVE **且无法原子替代** → calibration_active_conflict。
+        # 这里 monkeypatch 掉 _activate_current 制造唯一约束冲突，正是"无法替代"。
+        with pytest.raises(CalibrationActiveConflictError):
             repository.activate(
                 scope_a,
                 stored,

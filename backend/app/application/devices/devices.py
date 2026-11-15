@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.application.audit import record_change
+from app.application.devices.calibration_gate import ensure_required_calibrations_active
 from app.application.devices.commands import NewDevice
 from app.application.devices.idempotency import IdempotencyGuard, validate_key
 from app.application.devices.pagination import (
@@ -19,6 +20,7 @@ from app.application.devices.pagination import (
 from app.application.devices.ports import (
     AuditRepository,
     CalibrationProfileRepository,
+    CalibrationRecordRepository,
     DeviceRepository,
     IdempotencyRepository,
     OutboxRepository,
@@ -66,6 +68,16 @@ _ACTIONS: dict[str, tuple[str, Callable[[Device], Device]]] = {
     "retire": ("退役", lambda item: item.retire()),
 }
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+DEVICE_ACTION_EVENTS: dict[str, str] = {
+    "activate": "device.activate",
+    "enter-maintenance": "device.enter-maintenance",
+    "report-fault": "device.report-fault",
+    "suspend": "device.suspend",
+    "retire": "device.retire",
+}
+
 
 class DeviceUseCases:
     def __init__(
@@ -73,6 +85,7 @@ class DeviceUseCases:
         devices: DeviceRepository,
         robots: RobotRepository,
         profiles: CalibrationProfileRepository,
+        calibrations: CalibrationRecordRepository,
         uow: UnitOfWork,
         audit: AuditRepository,
         outbox: OutboxRepository,
@@ -81,6 +94,7 @@ class DeviceUseCases:
         self._devices = devices
         self._robots = robots
         self._profiles = profiles
+        self._calibrations = calibrations
         self._uow = uow
         self._audit = audit
         self._outbox = outbox
@@ -266,6 +280,17 @@ class DeviceUseCases:
             raise VersionConflictError("设备", expected_version)
         if action == "report-fault" and not (fault_code or "").strip():
             raise DomainValidationError("report-fault 必须提供 fault_code")
+        if action == "activate":
+            # G-20：契约 §8.1 要求激活前标定就绪，缺标定必须以
+            # calibration_not_active 拒绝，而不是泛化的 validation_failed。
+            ensure_required_calibrations_active(
+                calibrations=self._calibrations,
+                profiles=self._profiles,
+                scope=scope,
+                profile_id=current.calibration_profile_id,
+                target_type=CalibrationTargetType.DEVICE,
+                target_id=current.device_id,
+            )
 
         target = entry[1](current)
         updated = self._devices.save(
@@ -297,7 +322,7 @@ class DeviceUseCases:
                 "fault_detail": fault_detail,
                 "fault_occurred_at": (fault_occurred_at.isoformat() if fault_occurred_at else None),
             },
-            event_type=f"device.{action}",
+            event_type=DEVICE_ACTION_EVENTS[action],
             event_payload={
                 "device_id": str(updated.device_id),
                 "from_status": _enum_value(current.status),

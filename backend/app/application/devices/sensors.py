@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.application.audit import record_change
+from app.application.devices.calibration_gate import ensure_required_calibrations_active
 from app.application.devices.commands import NewSensor
 from app.application.devices.idempotency import IdempotencyGuard, validate_key
 from app.application.devices.pagination import (
@@ -62,6 +63,10 @@ _PATCHABLE_FIELDS = frozenset(
         "intrinsic_calibration_id",
         "extrinsic_calibration_id",
         "coordinate_frame",
+        # G-08：ADR-0019 的新坐标系字段此前漏在创建与 PATCH 两处，
+        # 导致 POST 传 frame_convention 落库成 UNSPECIFIED、PATCH 直接被 422 拒掉。
+        "frame_id",
+        "frame_convention",
         "sync_mode",
         "sync_group",
         "firmware_version",
@@ -76,6 +81,16 @@ _ACTIONS: dict[str, Callable[[Sensor], Sensor]] = {
     "report-fault": lambda item: item.report_fault(),
     "suspend": lambda item: item.suspend(),
     "retire": lambda item: item.retire(),
+}
+
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+SENSOR_ACTION_EVENTS: dict[str, str] = {
+    "activate": "sensor.activate",
+    "enter-maintenance": "sensor.enter-maintenance",
+    "report-fault": "sensor.report-fault",
+    "suspend": "sensor.suspend",
+    "retire": "sensor.retire",
 }
 
 
@@ -171,6 +186,8 @@ class SensorUseCases:
             sensor_type=command.sensor_type,
             sample_rate_hz=command.sample_rate_hz,
             coordinate_frame=command.coordinate_frame,
+            frame_id=command.frame_id,
+            frame_convention=command.frame_convention,
             robot_id=command.robot_id,
             device_id=command.device_id,
             vendor=command.vendor,
@@ -286,6 +303,16 @@ class SensorUseCases:
             raise VersionConflictError("传感器", expected_version)
         if action == "report-fault" and not (fault_code or "").strip():
             raise DomainValidationError("report-fault 必须提供 fault_code")
+        if action == "activate":
+            # G-20：与 Device/Robot 共用同一门禁实现（规则只有一处）。
+            ensure_required_calibrations_active(
+                calibrations=self._calibrations,
+                profiles=self._profiles,
+                scope=scope,
+                profile_id=current.calibration_profile_id,
+                target_type=CalibrationTargetType.SENSOR,
+                target_id=current.sensor_id,
+            )
 
         updated = self._sensors.save(
             scope,
@@ -316,7 +343,7 @@ class SensorUseCases:
                 "fault_detail": fault_detail,
                 "fault_occurred_at": (fault_occurred_at.isoformat() if fault_occurred_at else None),
             },
-            event_type=f"sensor.{action}",
+            event_type=SENSOR_ACTION_EVENTS[action],
             event_payload={
                 "sensor_id": str(updated.sensor_id),
                 "from_status": _enum_value(current.status),

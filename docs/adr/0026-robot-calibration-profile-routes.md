@@ -41,6 +41,14 @@
 
 ### 3.1 端点集合
 
+`/robots` 共 **9 个操作**，`/calibration-profiles` 共 **2 个操作**，合计 **11 个**。
+实测命令（在 `backend/` 下）：
+
+```
+grep -c '^@router\.' app/api/v1/robots.py               # 9
+grep -c '^@router\.' app/api/v1/calibration_profiles.py # 2
+```
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/robots` | 游标分页，可按 status 过滤 |
@@ -70,21 +78,32 @@
 这类「实体类型 ↔ Profile 目标类型」的对应关系目前只有两处，各自内联在用例里；
 出现第三种时再提取公共校验函数——现在提取只会多一层间接。
 
-### 3.4 Profile 的 `profile_version` 与表列 `version`
+### 3.4 Profile 的 `profile_version` 与表列
 
-冻结契约的字段名是 `profile_version`，但表列仍叫 `version`（G-03 才改名）。
-对外响应统一用 `profile_version`，避免把内部列名泄漏进契约；
-前端契约测试 `标定配置对外用 profile_version，不暴露表列名 version` 锁定这一点。
+本 ADR 落地时，冻结契约的字段名是 `profile_version`，而表列仍叫 `version`
+（G-03 尚未做），对外响应由 schema 层把 `version` 读成 `profile_version`。
+
+**该落差已由 ADR-0032 / 迁移 0032 消除**：Domain 字段、ORM 列、DB 列现在统一叫
+`profile_version`，不再存在"契约名 ≠ 表列名"的映射。本节保留为历史记录，
+不要再据此认为表列还叫 `version`。
+
+前端契约测试仍保留（`apps/web/src/services/deviceContract.test.ts` 中
+`标定配置对外用 profile_version，不暴露表列名 version`），它锁定的是**对外响应
+不含 `version` 键**；即便表列已改名，这条断言依旧有意义，不要因为"表列已同名"
+就删掉它。
 
 ## 4. 兼容性
 
 | 项 | 变化 |
 |---|---|
-| 新增端点 | 8 + 2 = 10 个（纯新增，无破坏） |
+| 新增端点 | `/robots` 9 个 + `/calibration-profiles` 2 个 = **11 个**（纯新增，无破坏） |
 | 新增 schema | `Robot` / `RobotPage` / `RobotCreate` / `RobotPatch` / `CalibrationProfile` / `CalibrationProfileCreate` |
 | 新增路径参数 | `RobotId` / `ProfileId` |
 | 数据库 | 迁移 0031 给 `robots` 加 6 个可空列（可回滚，实测升降） |
 | 契约版本 | `1.6.0` → `1.7.0` |
+
+> 本表早先版本写的是「8 + 2 = 10 个」，§3.1 表格也只列了 11 行而未给出计数口径，
+> 两处都与实现不符。实现实测为 **9 + 2 = 11**（命令见 §3.1）。已按实现改正。
 
 旧端点与旧字段无一改动。
 
@@ -92,7 +111,7 @@
 
 | 项 | 结果 |
 |---|---|
-| API 测试 | 10 passed（创建/列表/详情/隔离/幂等/动作/状态语义/Profile 引用/target_type 校验/版本连续/无 PATCH） |
+| API 测试 | 10 passed（`tests/api/test_robots_api.py`，10 个用例：创建/列表/详情/隔离/幂等/动作/状态语义/Profile 引用/target_type 校验/版本连续/无 PATCH） |
 | 真实后端契约快照 | 快照脚本实跑 `POST /robots`、`GET /robots`、`GET /calibration-profiles/{id}` 均成功并纳入快照 |
 | 前端契约对齐 | 350 passed（含 Robot 字段集合、Profile 无 `version` 泄漏、严格解析器接受） |
 | 迁移升降（真实 PostgreSQL） | `0030 → 0031 → 0030 → 0031` 通过 |

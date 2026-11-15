@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.deps import get_project_scope, get_scope, get_write_scope
+from app.api.v1.dataset_dependencies import request_id
 from app.api.v1.dependencies import CalibrationUseCasesDep
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.schemas import (
@@ -60,12 +61,17 @@ def list_calibrations(
 @router.post("", response_model=CalibrationOut, status_code=201)
 def create_calibration(
     payload: CalibrationCreate,
+    request: Request,
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
 ) -> CalibrationOut:
     values = payload.model_dump()
     values["evidence_asset_ids"] = tuple(payload.evidence_asset_ids)
-    record = use_cases.create_calibration(scope, NewCalibration(**values))
+    record = use_cases.create_calibration(
+        scope,
+        NewCalibration(**values),
+        request_id=request_id(request),
+    )
     return CalibrationOut.from_domain(record)
 
 
@@ -82,6 +88,7 @@ def get_calibration(
 def update_calibration(
     calibration_id: UUID,
     payload: CalibrationPatch,
+    request: Request,
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
@@ -94,6 +101,7 @@ def update_calibration(
         calibration_id,
         expected_version=expected_version,
         changes=changes,
+        request_id=request_id(request),
     )
     return CalibrationOut.from_domain(record)
 
@@ -101,6 +109,7 @@ def update_calibration(
 @router.post("/{calibration_id}/submit", response_model=CalibrationOut)
 def submit_calibration(
     calibration_id: UUID,
+    request: Request,
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
@@ -109,6 +118,7 @@ def submit_calibration(
         scope,
         calibration_id,
         expected_version=expected_version,
+        request_id=request_id(request),
     )
     return CalibrationOut.from_domain(record)
 
@@ -116,6 +126,7 @@ def submit_calibration(
 @router.post("/{calibration_id}/validate", response_model=CalibrationOut)
 def validate_calibration(
     calibration_id: UUID,
+    request: Request,
     scope: ValidateScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
@@ -124,6 +135,7 @@ def validate_calibration(
         scope,
         calibration_id,
         expected_version=expected_version,
+        request_id=request_id(request),
     )
     return CalibrationOut.from_domain(record)
 
@@ -131,6 +143,7 @@ def validate_calibration(
 @router.post("/{calibration_id}/reject", response_model=CalibrationOut)
 def reject_calibration(
     calibration_id: UUID,
+    request: Request,
     scope: ValidateScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
@@ -139,6 +152,7 @@ def reject_calibration(
         scope,
         calibration_id,
         expected_version=expected_version,
+        request_id=request_id(request),
     )
     return CalibrationOut.from_domain(record)
 
@@ -146,6 +160,7 @@ def reject_calibration(
 @router.post("/{calibration_id}/activate", response_model=CalibrationOut)
 def activate_calibration(
     calibration_id: UUID,
+    request: Request,
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
@@ -154,6 +169,7 @@ def activate_calibration(
         scope,
         calibration_id,
         expected_version=expected_version,
+        request_id=request_id(request),
     )
     return CalibrationOut.from_domain(record)
 
@@ -161,6 +177,7 @@ def activate_calibration(
 @router.post("/{calibration_id}/revoke", response_model=CalibrationOut)
 def revoke_calibration(
     calibration_id: UUID,
+    request: Request,
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
@@ -169,6 +186,7 @@ def revoke_calibration(
         scope,
         calibration_id,
         expected_version=expected_version,
+        request_id=request_id(request),
     )
     return CalibrationOut.from_domain(record)
 
@@ -176,6 +194,7 @@ def revoke_calibration(
 @router.post("/{calibration_id}/expire", response_model=CalibrationOut)
 def expire_calibration(
     calibration_id: UUID,
+    request: Request,
     scope: WriteScope,
     use_cases: CalibrationUseCasesDep,
     expected_version: ExpectedVersion,
@@ -184,5 +203,6 @@ def expire_calibration(
         scope,
         calibration_id,
         expected_version=expected_version,
+        request_id=request_id(request),
     )
     return CalibrationOut.from_domain(record)

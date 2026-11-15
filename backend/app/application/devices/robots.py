@@ -18,12 +18,14 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.application.audit import record_change
+from app.application.devices.calibration_gate import ensure_required_calibrations_active
 from app.application.devices.commands import NewRobot
 from app.application.devices.idempotency import IdempotencyGuard, validate_key
 from app.application.devices.pagination import Page, build_page, decode_cursor, normalize_limit
 from app.application.devices.ports import (
     AuditRepository,
     CalibrationProfileRepository,
+    CalibrationRecordRepository,
     IdempotencyRepository,
     OutboxRepository,
     RobotRepository,
@@ -65,12 +67,23 @@ _ACTIONS: dict[str, tuple[str, Callable[[Robot], Robot]]] = {
     "retire": ("退役", lambda item: item.retire()),
 }
 
+# R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
+# 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
+ROBOT_ACTION_EVENTS: dict[str, str] = {
+    "activate": "robot.activate",
+    "enter-maintenance": "robot.enter-maintenance",
+    "report-fault": "robot.report-fault",
+    "suspend": "robot.suspend",
+    "retire": "robot.retire",
+}
+
 
 class RobotUseCases:
     def __init__(
         self,
         robots: RobotRepository,
         profiles: CalibrationProfileRepository,
+        calibrations: CalibrationRecordRepository,
         uow: UnitOfWork,
         audit: AuditRepository,
         outbox: OutboxRepository,
@@ -78,6 +91,7 @@ class RobotUseCases:
     ) -> None:
         self._robots = robots
         self._profiles = profiles
+        self._calibrations = calibrations
         self._uow = uow
         self._audit = audit
         self._outbox = outbox
@@ -245,6 +259,16 @@ class RobotUseCases:
             raise VersionConflictError("机器人", expected_version)
         if action == "report-fault" and not (fault_code or "").strip():
             raise DomainValidationError("report-fault 必须提供 fault_code")
+        if action == "activate":
+            # G-20：与 Device/Sensor 共用同一门禁实现（规则只有一处）。
+            ensure_required_calibrations_active(
+                calibrations=self._calibrations,
+                profiles=self._profiles,
+                scope=scope,
+                profile_id=current.calibration_profile_id,
+                target_type=CalibrationTargetType.ROBOT,
+                target_id=current.robot_id,
+            )
         target = entry[1](current)
         updated = self._robots.save(
             scope,
@@ -277,7 +301,7 @@ class RobotUseCases:
                     fault_occurred_at.isoformat() if fault_occurred_at is not None else None
                 ),
             },
-            event_type=f"robot.{action}",
+            event_type=ROBOT_ACTION_EVENTS[action],
             event_payload={
                 "robot_id": str(updated.robot_id),
                 "from_status": _enum_value(current.status),
