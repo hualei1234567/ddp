@@ -69,6 +69,8 @@ class CalibrationProfile:
     schema_version: str
     required_types: tuple[CalibrationType | str, ...] = ()
     selection_rule: Mapping[str, object] = field(default_factory=dict)
+    # ADR-0020（G-06）：scope=TARGET 时指向具体目标；TYPE/SYSTEM 时必须为空。
+    target_id: UUID | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -108,6 +110,10 @@ class CalibrationProfile:
             "selection_rule",
             frozen_mapping(self.selection_rule, "selection_rule"),
         )
+        # ADR-0020（G-06）：SYSTEM 作用域是项目级模板，不应绑定具体目标；
+        # 其余作用域可绑定，但绑定后必须与该作用域的类型相符（由应用层校验目标存在性）。
+        if self.scope is CalibrationScope.SYSTEM and self.target_id is not None:
+            raise DomainValidationError("scope=SYSTEM 是项目级模板，不能绑定 target_id")
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,7 +142,14 @@ class CalibrationRecord:
     validated_by: UUID | None = None
     validated_at: datetime | None = None
     supersedes_id: UUID | None = None
+    # ADR-0020（G-04）：version 是乐观锁；calibration_version 是业务修订号。
+    # 两者语义不同：状态迁移只动 version，内容变更才动 calibration_version。
     version: int = 1
+    calibration_version: int = 1
+    # ADR-0020（G-05）：创建时的 Profile 快照，保证事后可复现。
+    profile_version: int | None = None
+    profile_schema_version: str | None = None
+    profile_snapshot: Mapping[str, object] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -212,6 +225,23 @@ class CalibrationRecord:
                 aware_datetime(self.validated_at, "validated_at"),
             )
         object.__setattr__(self, "version", positive_int(self.version, "version"))
+        # ADR-0020（G-04/G-05）：业务修订号与 Profile 快照。
+        object.__setattr__(
+            self,
+            "calibration_version",
+            positive_int(self.calibration_version, "calibration_version"),
+        )
+        if self.profile_version is not None:
+            object.__setattr__(
+                self,
+                "profile_version",
+                positive_int(self.profile_version, "profile_version"),
+            )
+        object.__setattr__(
+            self,
+            "profile_snapshot",
+            frozen_mapping(self.profile_snapshot, "profile_snapshot"),
+        )
 
     def _validate_frames(self) -> None:
         parent = optional_text(

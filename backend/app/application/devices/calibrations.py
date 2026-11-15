@@ -131,7 +131,7 @@ class CalibrationUseCases:
         target_type = _target_type(command.target_type)
         if target_type is None:
             raise DomainValidationError("target_type 不能为空")
-        self._validate_profile(scope, command.profile_id, target_type)
+        profile = self._validate_profile(scope, command.profile_id, target_type)
         record = CalibrationRecord(
             calibration_id=uuid4(),
             project_id=scope.project_id,
@@ -152,6 +152,15 @@ class CalibrationUseCases:
             checksum="sha256:pending",
             uncertainty=command.uncertainty,
             performed_by=scope.actor_id,
+            # ADR-0020（G-05）：固化创建时的 Profile 快照。
+            # 只存版本号不够——Profile 那一行将来会被改，快照是唯一能复现的依据。
+            profile_version=profile.version,
+            profile_schema_version=profile.schema_version,
+            profile_snapshot={
+                "required_types": [str(item) for item in profile.required_types],
+                "selection_rule": dict(profile.selection_rule),
+                "target_type": str(profile.target_type),
+            },
         )
         record = replace(record, checksum=_compute_checksum(record))
         created = self._calibrations.add(scope, record)
@@ -276,12 +285,14 @@ class CalibrationUseCases:
         scope: ProjectScope,
         profile_id: UUID,
         target_type: CalibrationTargetType,
-    ) -> None:
+    ):
+        """校验并返回 Profile；调用方需要它来写快照（ADR-0020 / G-05）。"""
         profile = self._profiles.get(scope, profile_id)
         if profile is None:
             raise CalibrationProfileInvalidError("标定配置不存在或不属于当前项目")
         if profile.target_type.value != target_type.value:
             raise CalibrationProfileInvalidError("标定配置 target_type 与记录不一致")
+        return profile
 
 
 def _ensure_patchable(changes: Mapping[str, object]) -> None:

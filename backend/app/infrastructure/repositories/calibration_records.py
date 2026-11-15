@@ -117,6 +117,7 @@ def _profile_from_row(row: CalibrationProfileModel) -> CalibrationProfile:
         schema_version=row.schema_version,
         required_types=tuple(row.required_types or ()),
         selection_rule=row.selection_rule or {},
+        target_id=row.target_id,
     )
 
 
@@ -134,6 +135,7 @@ class SqlCalibrationProfileRepository:
         # 不是乐观锁版本，因此允许从任意正整数版本开始。
         row = CalibrationProfileModel(
             id=profile.profile_id,
+            target_id=profile.target_id,
             project_id=profile.project_id,
             name=profile.name,
             scope=enum_value(profile.scope),
@@ -274,6 +276,11 @@ def _record_insert_values(record: CalibrationRecord, *, actor_id: UUID) -> dict[
         "validated_by": record.validated_by,
         "validated_at": record.validated_at,
         "supersedes_id": record.supersedes_id,
+        # ADR-0020：业务修订号与 Profile 快照在创建时写入。
+        "calibration_version": record.calibration_version,
+        "profile_version": record.profile_version,
+        "profile_schema_version": record.profile_schema_version,
+        "profile_snapshot": dict(record.profile_snapshot),
         "updated_by": actor_id,
     }
 
@@ -325,6 +332,10 @@ def _record_from_row(row: CalibrationRecordModel) -> CalibrationRecord:
         validated_at=as_utc(row.validated_at),
         supersedes_id=row.supersedes_id,
         version=row.version,
+        calibration_version=row.calibration_version,
+        profile_version=row.profile_version,
+        profile_schema_version=row.profile_schema_version,
+        profile_snapshot=row.profile_snapshot or {},
     )
 
 

@@ -165,12 +165,22 @@ class CalibrationProfile(Base, ProjectScopedMixin):
         nullable=False,
         default=dict,
     )
+    # ADR-0020（G-06）：绑定到具体目标；SYSTEM 作用域必须为空。
+    target_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
             "project_id",
             "id",
             name="uq_calibration_profiles_project_id",
+        ),
+        # 同一逻辑 Profile 的版本号不可重复：否则"第 2 版"可能有两行。
+        UniqueConstraint(
+            "project_id",
+            "name",
+            "target_id",
+            "version",
+            name="uq_calibration_profiles_name_target_version",
         ),
         _enum_check("scope", CalibrationScope, "scope_allowed"),
         _enum_check("target_type", CalibrationTargetType, "target_type_allowed"),
@@ -330,6 +340,16 @@ class CalibrationRecord(Base, ProjectScopedMixin):
         nullable=True,
     )
     supersedes_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # ADR-0020（G-04）：业务修订号；version 继续作为乐观锁。
+    calibration_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    # ADR-0020（G-05）：创建时的 Profile 快照，保证事后可复现。
+    profile_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    profile_schema_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    profile_snapshot: Mapped[dict[str, object]] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
 
     __table_args__ = (
         UniqueConstraint(

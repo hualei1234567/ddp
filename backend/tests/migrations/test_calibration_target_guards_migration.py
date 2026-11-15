@@ -131,11 +131,46 @@ def _validated_record(
     )
 
 
+def _add_post_0003_columns(db_path: Path) -> None:
+    """0003 之后、后续迁移新增的列。
+
+    本测试用**当前 ORM 模型**往 0003 的 schema 插数据。ORM 会按最新表结构
+    生成 INSERT，因此需要先把后续迁移新增的列补上，否则 INSERT 会因
+    未知列失败。这里只补本测试用到的列，不是完整迁移。
+    """
+    engine = _engine(db_path)
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE calibration_profiles ADD COLUMN target_id CHAR(32)"))
+            conn.execute(
+                text(
+                    "ALTER TABLE calibration_records ADD COLUMN calibration_version INTEGER "
+                    "NOT NULL DEFAULT 1"
+                )
+            )
+            conn.execute(text("ALTER TABLE calibration_records ADD COLUMN profile_version INTEGER"))
+            conn.execute(
+                text(
+                    "ALTER TABLE calibration_records ADD COLUMN profile_schema_version "
+                    "VARCHAR(64)"
+                )
+            )
+            conn.execute(
+                text(
+                    "ALTER TABLE calibration_records ADD COLUMN profile_snapshot JSON "
+                    "NOT NULL DEFAULT '{}'"
+                )
+            )
+    finally:
+        engine.dispose()
+
+
 def test_migration_fails_loudly_on_orphan_records(tmp_path: Path) -> None:
     """0003 上已存在无法解析的目标时，0004 必须失败而不是生成幽灵投影。"""
     db_path = tmp_path / "orphan.db"
     config = _config(db_path)
     command.upgrade(config, "0003")
+    _add_post_0003_columns(db_path)
 
     project_id, performer, validator = uuid4(), uuid4(), uuid4()
     engine = _engine(db_path)
