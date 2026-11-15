@@ -19,6 +19,11 @@ from app.domain.datasets.enums import (
     QualityReportStatus,
     StratifyKey,
 )
+from app.domain.datasets.errors import (
+    AnnotationNotApprovedError,
+    AnnotationSnapshotMismatchError,
+    ItemIneligibleError,
+)
 from app.domain.datasets.leakage import (
     LeakageItem,
     LeakageReport,
@@ -37,6 +42,8 @@ from app.domain.datasets.quality import QualityReport, leakage_summary
 from app.domain.datasets.selection import (
     EpisodeCandidate,
     SelectionFilters,
+    SelectionOutcome,
+    contract_code_for_exclusion,
     evaluate_selection,
 )
 from app.domain.datasets.split import SplitOutcome, SplitStatus, assign_splits
@@ -71,8 +78,16 @@ def run_pipeline(
     source_snapshot_at: datetime,
     waivers: tuple[LeakageWaiver, ...] = (),
     sample_limit: int = 50,
+    require_explicit_candidates: bool = False,
 ) -> PipelineResult:
     selection = evaluate_selection(candidates, filters=filters, usage_policy=usage_policy)
+    if require_explicit_candidates:
+        # 显式指名条目（selection_filters.episode_ids 非空）时，"提名即承诺"：
+        # 全部被排除说明调用方引用了不合格条目，必须确定性地拒绝，而不是
+        # 静默返回一个空版本或只看统计。这是 dataset_item_ineligible /
+        # dataset_annotation_not_approved / ..._snapshot_mismatch 的对外判定点
+        # （另一处是 _ensure_annotation，用于防御手工构造的候选绕过门禁）。
+        _reject_ineligible_explicit_selection(selection, filters)
     dedup = deduplicate(selection.selected, dedup_policy)
     split = assign_splits(dedup.selected, split_policy)
     candidate_by_id = {item.episode_id: item for item in candidates}
@@ -285,15 +300,72 @@ def _build_items(
 
 def _ensure_annotation(candidate: EpisodeCandidate) -> None:
     # 选择门禁已保证；这里只做防御，避免手工构造候选绕过。
-    if (
+    # 契约要求"引用未批准标注"必须是可区分的确定性错误，不能退化为 500。
+    if candidate.annotation_status != "APPROVED" or (
         candidate.annotation_submission_id is None
         or candidate.annotation_version is None
         or candidate.annotation_record_digest is None
-        or candidate.schema_id is None
+    ):
+        raise AnnotationNotApprovedError(
+            "入选 Episode 缺少已批准标注快照",
+            details={"episode_ids": [str(candidate.episode_id)]},
+        )
+    if (
+        candidate.schema_id is None
         or candidate.schema_version is None
         or candidate.schema_sha256 is None
     ):
-        raise ValueError("入选 Episode 缺少已批准标注快照")
+        raise AnnotationSnapshotMismatchError(
+            "入选 Episode 缺少标注/Schema 版本快照",
+            details={"episode_ids": [str(candidate.episode_id)]},
+        )
+
+
+def _reject_ineligible_explicit_selection(
+    selection: SelectionOutcome,
+    filters: SelectionFilters,
+) -> None:
+    """显式指名条目全部不合格时确定性拒绝（逐码归类，不混用错误码）。
+
+    只有"调用方点名的条目没有任何一个入选"才拒绝：
+    - 部分入选 + 部分被排除是正常统计结果，不报错；
+    - 未点名条目（未传 ``episode_ids``）时"全部排除"属数据不足，
+      由既有的 ``DATASET_EMPTY`` / ``dataset_empty`` 处理，不走本分支。
+    """
+    if selection.selected or not filters.episode_ids:
+        return
+    by_code: dict[str, list[str]] = {}
+    for item in selection.excluded:
+        contract_code = contract_code_for_exclusion(item.code)
+        if contract_code is None:
+            continue
+        by_code.setdefault(contract_code, []).append(str(item.episode_id))
+    # 优先级：引用未批准标注是"前置输入错误"，先于泛化的不合格上报。
+    if "dataset_annotation_snapshot_mismatch" in by_code:
+        raise AnnotationSnapshotMismatchError(
+            "所指名 Episode 的标注 Schema 快照与提交冻结快照不一致",
+            details={
+                "episode_ids": sorted(by_code["dataset_annotation_snapshot_mismatch"]),
+                "requested_episode_ids": [str(item) for item in filters.episode_ids],
+            },
+        )
+    if "dataset_annotation_not_approved" in by_code:
+        raise AnnotationNotApprovedError(
+            "所指名的 Episode 不存在已批准标注",
+            details={
+                "episode_ids": sorted(by_code["dataset_annotation_not_approved"]),
+                "requested_episode_ids": [str(item) for item in filters.episode_ids],
+            },
+        )
+    if "dataset_item_ineligible" in by_code:
+        raise ItemIneligibleError(
+            "所指名的 Episode 均不合格",
+            details={
+                "episode_ids": sorted(by_code["dataset_item_ineligible"]),
+                "requested_episode_ids": [str(item) for item in filters.episode_ids],
+            },
+        )
+    # 只剩去重类排除（例如全部互为重复）时不是"不合格"，交由空集/划分逻辑处理。
 
 
 def _leakage_items(

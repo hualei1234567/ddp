@@ -169,6 +169,10 @@ class SqlEpisodeCandidateDirectory:
             schema_id=record.schema_id if record is not None else None,
             schema_version=record.schema_version if record is not None else None,
             schema_sha256=submission.schema_sha256 if submission is not None else None,
+            submission_schema_id=submission.schema_id if submission is not None else None,
+            submission_schema_version=(
+                submission.schema_version if submission is not None else None
+            ),
             raw_asset_ids=raw_asset_ids,
             raw_asset_hashes=tuple(hashes),
             raw_asset_statuses=tuple(statuses),

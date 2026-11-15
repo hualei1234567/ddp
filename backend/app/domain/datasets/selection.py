@@ -164,6 +164,11 @@ class EpisodeCandidate:
     raw_asset_ids: tuple[UUID, ...]
     raw_asset_hashes: tuple[str, ...]
     raw_asset_statuses: tuple[str, ...]
+    # 已批准提交自身冻结的 Schema 快照。DatasetItem 必须同时与「标注记录」
+    # 和「提交冻结快照」一致（AC-DS-29）；缺省 None 表示调用方未投影该信息，
+    # 此时不做快照一致性判定，避免手工构造候选被误拒。
+    submission_schema_id: UUID | None = None
+    submission_schema_version: int | None = None
     total_bytes: int = 0
     scene_group_id: UUID | None = None
 
@@ -296,6 +301,21 @@ def _check_candidate(
             candidate.episode_id,
             ExclusionCode.ANNOTATION_NOT_APPROVED,
             "缺少已批准标注或 Schema 快照",
+        )
+    # AC-DS-29：DatasetItem 引用的 Schema 版本必须与「已批准提交冻结的快照」
+    # 一致；否则同一份数据会混用两个 Schema 口径，Manifest 也不可复现。
+    if (
+        candidate.submission_schema_id is not None
+        and candidate.submission_schema_version is not None
+        and (
+            candidate.submission_schema_id != candidate.schema_id
+            or candidate.submission_schema_version != candidate.schema_version
+        )
+    ):
+        return ExcludedCandidate(
+            candidate.episode_id,
+            ExclusionCode.ANNOTATION_SNAPSHOT_MISMATCH,
+            "标注记录 Schema 与提交冻结快照不一致",
         )
     if candidate.manifest_sha256 is None:
         return ExcludedCandidate(
@@ -470,6 +490,61 @@ def _optional_datetime(value: object, field_name: str) -> datetime | None:
     return parsed
 
 
+_ANNOTATION_EXCLUSION_CODES = frozenset(
+    {
+        ExclusionCode.ANNOTATION_NOT_APPROVED,
+    }
+)
+
+_ANNOTATION_SNAPSHOT_CODES = frozenset(
+    {
+        ExclusionCode.ANNOTATION_SNAPSHOT_MISMATCH,
+    }
+)
+
+# 契约把"输入资格"拆成三个可区分语义（阶段 4 error-codes.v1.json）：
+# - dataset_item_ineligible          422 Episode/Manifest/标定/时间同步/用途不合格
+# - dataset_annotation_not_approved  409 引用未批准/草稿/驳回/返工中标注
+# - dataset_annotation_snapshot_mismatch 422 标注/Schema 快照与任务冻结不一致
+# 排除码是"逐项统计"口径，比契约码更细；这里只做归并，不改既有排除码语义。
+_ITEM_INELIGIBLE_CODES = frozenset(
+    {
+        ExclusionCode.EPISODE_STATUS_INELIGIBLE,
+        ExclusionCode.QUALITY_NOT_PASSED,
+        ExclusionCode.QUALITY_WARN_UNCONFIRMED,
+        ExclusionCode.MANIFEST_MISSING,
+        ExclusionCode.MANIFEST_HASH_INVALID,
+        ExclusionCode.RAW_ASSET_MISSING,
+        ExclusionCode.RAW_ASSET_HASH_INVALID,
+        ExclusionCode.RAW_ASSET_NOT_USABLE,
+        ExclusionCode.TIME_SYNC_UNKNOWN,
+        ExclusionCode.TIME_SYNC_INVALID,
+        ExclusionCode.TIME_SYNC_DEGRADED_UNCONFIRMED,
+        ExclusionCode.CALIBRATION_MISSING,
+        ExclusionCode.CALIBRATION_INVALID,
+        ExclusionCode.USAGE_POLICY_DENIED,
+        ExclusionCode.USAGE_POLICY_UNKNOWN,
+    }
+)
+
+
+def contract_code_for_exclusion(code: ExclusionCode | str) -> str | None:
+    """把内部排除码归并到契约错误码；不是资格错误的排除码返回 ``None``。
+
+    返回 ``None`` 的典型是去重类排除码——它们是正常去重结果，不是"不合格"，
+    调用方不应据此报资格错误。返回 ``None`` 而不是抛异常，是因为调用方
+    通常在遍历全部排除项，遇到正常去重项不应中断。
+    """
+    value = code if isinstance(code, ExclusionCode) else ExclusionCode(str(code))
+    if value in _ANNOTATION_EXCLUSION_CODES:
+        return "dataset_annotation_not_approved"
+    if value in _ANNOTATION_SNAPSHOT_CODES:
+        return "dataset_annotation_snapshot_mismatch"
+    if value in _ITEM_INELIGIBLE_CODES:
+        return "dataset_item_ineligible"
+    return None
+
+
 __all__ = [
     "Decision",
     "EpisodeCandidate",
@@ -477,5 +552,6 @@ __all__ = [
     "SelectionFilters",
     "SelectionOutcome",
     "Split",
+    "contract_code_for_exclusion",
     "evaluate_selection",
 ]

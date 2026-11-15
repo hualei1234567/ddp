@@ -17,6 +17,14 @@ from app.api.v1.dataset_dependencies import (
     request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.dataset_response_models import (
+    DatasetItemOut,
+    DatasetVersionOut,
+    LeakageReportOut,
+    ManifestOut,
+    QualityReportOut,
+    SelectionPreviewOut,
+)
 from app.api.v1.dataset_schemas import (
     DatasetVersionCreate,
     SelectionPreviewRequest,
@@ -28,6 +36,7 @@ from app.api.v1.dataset_schemas import (
     quality_out,
     version_out,
 )
+from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import DatasetReadScope, DatasetVersionReadScope
 from app.application.datasets.commands import (
     ActionCommand,
@@ -42,7 +51,7 @@ from app.domain.identity.models import ProjectContext
 router = APIRouter(prefix="/projects/{project_id}/datasets", tags=["dataset-versions"])
 
 
-@router.get("/{dataset_id}/versions")
+@router.get("/{dataset_id}/versions", response_model=PageOut[DatasetVersionOut])
 def list_versions(
     dataset_id: UUID,
     scope: DatasetReadScope,
@@ -72,7 +81,7 @@ def list_versions(
     }
 
 
-@router.post("/{dataset_id}/versions", status_code=201)
+@router.post("/{dataset_id}/versions", response_model=DatasetVersionOut, status_code=201)
 def create_version(
     dataset_id: UUID,
     payload: DatasetVersionCreate,
@@ -106,7 +115,7 @@ def create_version(
     return version_out(version, allowed_actions=allowed_version_actions(version.status))
 
 
-@router.get("/{dataset_id}/versions/{version_id}")
+@router.get("/{dataset_id}/versions/{version_id}", response_model=DatasetVersionOut)
 def get_version(
     dataset_id: UUID,
     version_id: UUID,
@@ -117,7 +126,10 @@ def get_version(
     return version_out(version, allowed_actions=allowed_version_actions(version.status))
 
 
-@router.post("/{dataset_id}/versions/{version_id}/actions/{action}")
+@router.post(
+    "/{dataset_id}/versions/{version_id}/actions/{action}",
+    response_model=DatasetVersionOut,
+)
 def act_on_version(
     dataset_id: UUID,
     version_id: UUID,
@@ -165,7 +177,10 @@ def act_on_version(
     return version_out(version, allowed_actions=allowed_version_actions(version.status))
 
 
-@router.post("/{dataset_id}/versions/{version_id}/selection-preview")
+@router.post(
+    "/{dataset_id}/versions/{version_id}/selection-preview",
+    response_model=SelectionPreviewOut,
+)
 def preview_selection(
     dataset_id: UUID,
     version_id: UUID,
@@ -196,7 +211,7 @@ def preview_selection(
     return preview_out(preview)
 
 
-@router.get("/{dataset_id}/versions/{version_id}/items")
+@router.get("/{dataset_id}/versions/{version_id}/items", response_model=PageOut[DatasetItemOut])
 def list_items(
     dataset_id: UUID,
     version_id: UUID,
@@ -225,7 +240,7 @@ def list_items(
     }
 
 
-@router.get("/{dataset_id}/versions/{version_id}/items/{item_id}")
+@router.get("/{dataset_id}/versions/{version_id}/items/{item_id}", response_model=DatasetItemOut)
 def get_item(
     dataset_id: UUID,
     version_id: UUID,
@@ -236,7 +251,7 @@ def get_item(
     return item_out(use_cases.versions.get_item(scope, dataset_id, version_id, item_id))
 
 
-@router.get("/{dataset_id}/versions/{version_id}/quality-report")
+@router.get("/{dataset_id}/versions/{version_id}/quality-report", response_model=QualityReportOut)
 def get_quality_report(
     dataset_id: UUID,
     version_id: UUID,
@@ -246,7 +261,7 @@ def get_quality_report(
     return quality_out(use_cases.versions.quality_report(scope, dataset_id, version_id))
 
 
-@router.get("/{dataset_id}/versions/{version_id}/leakage-report")
+@router.get("/{dataset_id}/versions/{version_id}/leakage-report", response_model=LeakageReportOut)
 def get_leakage_report(
     dataset_id: UUID,
     version_id: UUID,
@@ -256,7 +271,7 @@ def get_leakage_report(
     return leakage_out(use_cases.versions.leakage_report(scope, dataset_id, version_id))
 
 
-@router.get("/{dataset_id}/versions/{version_id}/manifest")
+@router.get("/{dataset_id}/versions/{version_id}/manifest", response_model=ManifestOut)
 def get_manifest(
     dataset_id: UUID,
     version_id: UUID,

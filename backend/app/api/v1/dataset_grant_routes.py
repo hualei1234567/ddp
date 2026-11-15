@@ -14,6 +14,8 @@ from app.api.v1.dataset_dependencies import (
     request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.dataset_response_models import DatasetGrantOut
+from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import ExpectedVersion, TrainingServicesDep
 from app.api.v1.training_schemas import (
     DatasetGrantCreate,
@@ -39,7 +41,7 @@ def _status_filter(value: str | None) -> str | None:
         raise ValidationFailedError("status 取值非法") from exc
 
 
-@router.get("")
+@router.get("", response_model=PageOut[DatasetGrantOut])
 def list_grants(
     dataset_id: UUID,
     scope: ReadScope,
@@ -64,7 +66,7 @@ def list_grants(
     }
 
 
-@router.post("", status_code=201)
+@router.post("", response_model=DatasetGrantOut, status_code=201)
 def create_grant(
     dataset_id: UUID,
     payload: DatasetGrantCreate,
@@ -92,7 +94,7 @@ def create_grant(
     return grant_out(grant)
 
 
-@router.get("/{grant_id}")
+@router.get("/{grant_id}", response_model=DatasetGrantOut)
 def get_grant(
     dataset_id: UUID,
     grant_id: UUID,
@@ -102,7 +104,7 @@ def get_grant(
     return grant_out(services.grants.get(scope, dataset_id, grant_id))
 
 
-@router.post("/{grant_id}/actions/{action}")
+@router.post("/{grant_id}/actions/{action}", response_model=DatasetGrantOut)
 def act_on_grant(
     dataset_id: UUID,
     grant_id: UUID,

@@ -35,6 +35,7 @@ from app.domain.datasets.errors import (
     ArchiveBlockedError,
     DatasetVersionNotFrozenError,
     ExportArtifactVerifyFailedError,
+    ExportOutputConflictError,
     ResourceNotFoundError,
     UpstreamInvalidatedError,
 )
@@ -131,6 +132,19 @@ class ExportExecutionService:
 
         written = 0
         total_bytes = 0
+        # 契约：「输出路径/产物冲突；不得静默覆盖成功产物」。retry 会复用同一个
+        # output_prefix（见 ExportJob.retry），因此重跑时前缀下可能已有上次成功
+        # 或部分写出的对象。这里先探测，一旦发现已存在对象就确定性失败，
+        # 绝不覆盖——覆盖会让历史产物的 Hash 与实际内容脱钩。
+        conflict = self._detect_output_conflict(job, artifacts)
+        if conflict is not None:
+            return self._fail(
+                scope,
+                job,
+                moment,
+                ExportOutputConflictError.code,
+                f"输出路径已存在产物，拒绝覆盖：{conflict}",
+            )
         for artifact in artifacts:
             job = self._load(scope, job_id)
             if job.status is ExportJobStatus.CANCELLED:
@@ -269,6 +283,22 @@ class ExportExecutionService:
             )
             return None
         return version
+
+    def _detect_output_conflict(
+        self,
+        job: ExportJob,
+        artifacts: tuple[ExportArtifactSpec, ...],
+    ) -> str | None:
+        """探测目标前缀下是否已有对象；返回首个冲突对象键，无冲突返回 None。
+
+        只探测不写入、不删除：发现冲突就交给状态机记 FAILED，由人决定是否
+        显式接管旧产物，避免"自动清理"变成隐式数据丢失。
+        """
+        for artifact in artifacts:
+            object_key = f"{job.output_prefix}{artifact.path}"
+            if self._storage.object_size(object_key) is not None:
+                return object_key
+        return None
 
     def _write_and_verify(
         self,

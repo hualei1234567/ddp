@@ -27,6 +27,7 @@ from app.api.v1.upload_dependencies import ObjectStorageDep, SettingsDep
 from app.application.datasets.dataset_grants import (
     DatasetGrantAccessService,
     DatasetGrantUseCases,
+    GrantDecision,
 )
 from app.application.datasets.training_deliveries import TrainingDeliveryUseCases
 from app.application.datasets.training_ports import TrainingAdapterGateway
@@ -37,6 +38,7 @@ from app.application.datasets.training_references import (
 from app.application.datasets.training_requests import TrainingRequestUseCases
 from app.application.identity.access import ProjectAccessService
 from app.core.errors import ForbiddenError
+from app.domain.datasets.errors import DatasetAccessDeniedError
 from app.domain.datasets.training_enums import GrantScope
 from app.domain.identity.models import Principal, ProjectAction, ProjectScope
 from app.infrastructure.repositories.dataset_audit import (
@@ -182,14 +184,25 @@ def _member_or_grant_scope(
             raise ForbiddenError("当前角色无权读取该项目")
         return ProjectScope.from_context(context)
     service = DatasetGrantAccessService(SqlDatasetGrantRepository(session))
-    if service.authorize(
+    decision = service.evaluate(
         project_id=project_id,
         dataset_id=dataset_id,
         version_id=version_id,
         user_id=principal.user_id,
         required=required,
-    ):
+    )
+    if decision is GrantDecision.GRANTED:
         return ProjectScope(project_id=project_id, actor_id=principal.user_id)
+    if decision is GrantDecision.SCOPE_MISMATCH:
+        # 该接收方对此数据集确有显式 Grant，只是不含本次所需动作。
+        # 存在性对接收方已知，因此用可按 code 分支的 403，而不是伪装成 404。
+        raise DatasetAccessDeniedError(
+            f"数据集授权不包含所需动作 {required.value}",
+            details={
+                "dataset_id": str(dataset_id),
+                "required_scope": required.value,
+            },
+        )
     if original is not None:
         raise original
     raise ForbiddenError("无权访问该项目")

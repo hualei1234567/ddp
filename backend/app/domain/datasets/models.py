@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from app.domain.datasets.canonical import plain, sha256_value
@@ -455,6 +455,12 @@ class DatasetItem:
     def to_payload(self) -> dict[str, object]:
         payload = self._payload()
         payload["item_sha256"] = self.item_sha256
+        # ``created_at`` 不参与 item_hash（时间不影响内容摘要），但契约
+        # ``dataset-item.v1.schema.json`` 把它列为 required，Manifest 内联
+        # items 必须给客户端该字段，否则响应模型会拒收。
+        payload["created_at"] = (
+            self.created_at.astimezone(UTC).isoformat() if self.created_at is not None else None
+        )
         return payload
 
 

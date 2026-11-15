@@ -18,6 +18,11 @@ from app.api.v1.dataset_dependencies import (
     request_id as get_request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.dataset_response_models import (
+    TrainingRequestOut,
+    TrainingRequestRevisionOut,
+)
+from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import ExpectedVersion, TrainingServicesDep
 from app.api.v1.training_schemas import (
     TrainingActionRequest,
@@ -66,7 +71,7 @@ def _require_owner(context: ProjectContext) -> None:
         raise ForbiddenError("该动作要求项目负责人（PM/PO）权限")
 
 
-@router.get("")
+@router.get("", response_model=PageOut[TrainingRequestOut])
 def list_training_requests(
     scope: ReadScope,
     services: TrainingServicesDep,
@@ -92,7 +97,7 @@ def list_training_requests(
     }
 
 
-@router.post("", status_code=201)
+@router.post("", response_model=TrainingRequestOut, status_code=201)
 def create_training_request(
     payload: TrainingRequestCreate,
     request: Request,
@@ -119,7 +124,7 @@ def create_training_request(
     return training_request_out(item, allowed_actions=item.allowed_actions)
 
 
-@router.get("/{request_id}")
+@router.get("/{request_id}", response_model=TrainingRequestOut)
 def get_training_request(
     request_id: UUID,
     scope: ReadScope,
@@ -129,7 +134,7 @@ def get_training_request(
     return training_request_out(item, allowed_actions=item.allowed_actions)
 
 
-@router.post("/{request_id}/actions/{action}")
+@router.post("/{request_id}/actions/{action}", response_model=TrainingRequestOut)
 def act_on_training_request(
     request_id: UUID,
     action: str,
@@ -158,7 +163,7 @@ def act_on_training_request(
     return training_request_out(item, allowed_actions=item.allowed_actions)
 
 
-@router.get("/{request_id}/revisions")
+@router.get("/{request_id}/revisions", response_model=PageOut[TrainingRequestRevisionOut])
 def list_revisions(
     request_id: UUID,
     scope: ReadScope,
@@ -181,7 +186,11 @@ def list_revisions(
     }
 
 
-@router.post("/{request_id}/revisions", status_code=201)
+@router.post(
+    "/{request_id}/revisions",
+    response_model=TrainingRequestRevisionOut,
+    status_code=201,
+)
 def create_revision(
     request_id: UUID,
     payload: TrainingRequestRevisionCreate,
@@ -205,7 +214,7 @@ def create_revision(
     return training_revision_out(revision)
 
 
-@router.get("/{request_id}/revisions/{revision_id}")
+@router.get("/{request_id}/revisions/{revision_id}", response_model=TrainingRequestRevisionOut)
 def get_revision(
     request_id: UUID,
     revision_id: UUID,
@@ -215,7 +224,7 @@ def get_revision(
     return training_revision_out(services.requests.get_revision(scope, request_id, revision_id))
 
 
-@router.patch("/{request_id}/revisions/{revision_id}")
+@router.patch("/{request_id}/revisions/{revision_id}", response_model=TrainingRequestRevisionOut)
 def patch_revision(
     request_id: UUID,
     revision_id: UUID,
@@ -237,7 +246,10 @@ def patch_revision(
     return training_revision_out(revision)
 
 
-@router.post("/{request_id}/revisions/{revision_id}/actions/{action}")
+@router.post(
+    "/{request_id}/revisions/{revision_id}/actions/{action}",
+    response_model=TrainingRequestRevisionOut,
+)
 def act_on_revision(
     request_id: UUID,
     revision_id: UUID,

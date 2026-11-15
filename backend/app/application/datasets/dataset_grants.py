@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import UTC, datetime
+from enum import StrEnum
 from uuid import UUID, uuid4
 
 from app.application.datasets.audit import record_change
@@ -296,11 +297,63 @@ class DatasetGrantUseCases:
             raise ResourceNotFoundError("数据集授权", response_ref) from exc
 
 
+class GrantDecision(StrEnum):
+    """跨项目访问判定结果。
+
+    区分 "完全没有 Grant" 与 "有 Grant 但范围不覆盖" 是必要的：前者对外
+    必须表现为不存在/非成员（不泄漏存在性），后者说明该数据集已对该接收方
+    显式授权、只是动作范围不够，可以确定性地返回 ``dataset_access_denied``。
+    """
+
+    GRANTED = "GRANTED"
+    NO_GRANT = "NO_GRANT"
+    SCOPE_MISMATCH = "SCOPE_MISMATCH"
+
+
 class DatasetGrantAccessService:
     """跨项目数据集访问检查：默认拒绝，授权到期/撤销立即失效。"""
 
     def __init__(self, grants: GrantRepository) -> None:
         self._grants = grants
+
+    def evaluate(
+        self,
+        *,
+        project_id: UUID,
+        dataset_id: UUID,
+        version_id: UUID | None,
+        user_id: UUID,
+        required: GrantScope,
+        now: datetime | None = None,
+    ) -> GrantDecision:
+        now = now or _utcnow()
+        grants = self._grants.find_for_user(
+            project_id=project_id,
+            dataset_id=dataset_id,
+            user_id=user_id,
+        )
+        expired_error: DatasetGrantExpiredError | None = None
+        revoked_error: DatasetGrantRevokedError | None = None
+        saw_applicable = False
+        for grant in grants:
+            if grant.dataset_version_id is not None and version_id is not None:
+                if grant.dataset_version_id != version_id:
+                    continue
+            # 版本范围授权也允许读取数据集级元数据；版本明细仍要求匹配版本。
+            saw_applicable = True
+            try:
+                if grant.allows(required, now):
+                    return GrantDecision.GRANTED
+            except DatasetGrantExpiredError as exc:
+                expired_error = expired_error or exc
+            except DatasetGrantRevokedError as exc:
+                revoked_error = revoked_error or exc
+        # 过期优先于撤销上报，保证同一数据集下的失效原因稳定。
+        if expired_error is not None:
+            raise expired_error
+        if revoked_error is not None:
+            raise revoked_error
+        return GrantDecision.SCOPE_MISMATCH if saw_applicable else GrantDecision.NO_GRANT
 
     def authorize(
         self,
@@ -312,32 +365,17 @@ class DatasetGrantAccessService:
         required: GrantScope,
         now: datetime | None = None,
     ) -> bool:
-        now = now or _utcnow()
-        grants = self._grants.find_for_user(
-            project_id=project_id,
-            dataset_id=dataset_id,
-            user_id=user_id,
+        return (
+            self.evaluate(
+                project_id=project_id,
+                dataset_id=dataset_id,
+                version_id=version_id,
+                user_id=user_id,
+                required=required,
+                now=now,
+            )
+            is GrantDecision.GRANTED
         )
-        expired_error: DatasetGrantExpiredError | None = None
-        revoked_error: DatasetGrantRevokedError | None = None
-        for grant in grants:
-            if grant.dataset_version_id is not None and version_id is not None:
-                if grant.dataset_version_id != version_id:
-                    continue
-            # 版本范围授权也允许读取数据集级元数据；版本明细仍要求匹配版本。
-            try:
-                if grant.allows(required, now):
-                    return True
-            except DatasetGrantExpiredError as exc:
-                expired_error = expired_error or exc
-            except DatasetGrantRevokedError as exc:
-                revoked_error = revoked_error or exc
-        # 过期优先于撤销上报，保证同一数据集下的失效原因稳定。
-        if expired_error is not None:
-            raise expired_error
-        if revoked_error is not None:
-            raise revoked_error
-        return False
 
 
-__all__ = ["DatasetGrantAccessService", "DatasetGrantUseCases"]
+__all__ = ["DatasetGrantAccessService", "DatasetGrantUseCases", "GrantDecision"]

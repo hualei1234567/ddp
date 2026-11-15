@@ -133,6 +133,8 @@ class DatasetVersionActionsMixin:
             now=now,
             source_snapshot_at=now,
             waivers=self._waivers(scope, leakage, waivers, now=now, request_id=request_id),
+            # 构建是"落地产物"的写路径：点名条目全部不合格必须确定性拒绝。
+            require_explicit_candidates=True,
         )
         if result.split_status is SplitStatus.INSUFFICIENT_DATA:
             raise InsufficientDataError("候选数据低于最小样本/时长，不能构建")

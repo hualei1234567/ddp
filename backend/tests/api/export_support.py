@@ -85,6 +85,10 @@ class FakeExportStorage:
             expires_at=datetime.now(UTC) + timedelta(seconds=expires_in_seconds),
         )
 
+    def object_size(self, object_key: str) -> int | None:
+        content = self.objects.get(object_key)
+        return None if content is None else len(content)
+
     def delete_object(self, object_key: str) -> None:
         self.objects.pop(object_key, None)
 

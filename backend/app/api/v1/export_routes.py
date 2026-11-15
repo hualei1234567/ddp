@@ -8,6 +8,11 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request, Response
 
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.dataset_response_models import (
+    ExportArtifactDownloadOut,
+    ExportArtifactManifestOut,
+    ExportJobOut,
+)
 from app.api.v1.export_dependencies import (
     ExpectedVersion,
     ExportUseCasesDep,
@@ -22,6 +27,7 @@ from app.api.v1.export_schemas import (
     ExportJobCreate,
     export_job_out,
 )
+from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import ExportDownloadScope, ExportGrantScope
 from app.application.datasets.commands import NewExportJob
 from app.domain.datasets.enums import ExportFormat, ExportJobStatus
@@ -30,7 +36,7 @@ from app.domain.datasets.errors import DomainValidationError
 router = APIRouter(prefix="/projects/{project_id}/exports", tags=["exports"])
 
 
-@router.get("")
+@router.get("", response_model=PageOut[ExportJobOut])
 def list_export_jobs(
     scope: ReadScope,
     use_cases: ExportUseCasesDep,
@@ -55,7 +61,7 @@ def list_export_jobs(
     }
 
 
-@router.post("", status_code=202)
+@router.post("", response_model=ExportJobOut, status_code=202)
 def create_export_job(
     payload: ExportJobCreate,
     request: Request,
@@ -84,7 +90,7 @@ def create_export_job(
     return export_job_out(job)
 
 
-@router.get("/{export_job_id}")
+@router.get("/{export_job_id}", response_model=ExportJobOut)
 def get_export_job(
     export_job_id: UUID,
     scope: ReadScope,
@@ -93,7 +99,7 @@ def get_export_job(
     return export_job_out(use_cases.get(scope, export_job_id))
 
 
-@router.post("/{export_job_id}/actions/{action}")
+@router.post("/{export_job_id}/actions/{action}", response_model=ExportJobOut)
 def act_on_export_job(
     export_job_id: UUID,
     action: str,
@@ -120,7 +126,7 @@ def act_on_export_job(
     return export_job_out(job)
 
 
-@router.get("/{export_job_id}/artifacts")
+@router.get("/{export_job_id}/artifacts", response_model=ExportArtifactManifestOut)
 def get_export_artifacts(
     export_job_id: UUID,
     scope: ExportDownloadScope,
@@ -129,7 +135,10 @@ def get_export_artifacts(
     return use_cases.artifact_manifest(scope, export_job_id)
 
 
-@router.get("/{export_job_id}/artifacts/{artifact_path:path}/download")
+@router.get(
+    "/{export_job_id}/artifacts/{artifact_path:path}/download",
+    response_model=ExportArtifactDownloadOut,
+)
 def download_export_artifact(
     export_job_id: UUID,
     artifact_path: str,

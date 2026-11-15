@@ -18,6 +18,13 @@ from app.api.v1.dataset_dependencies import (
     request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.dataset_response_models import (
+    DatasetOut,
+    DedupPolicyOut,
+    LeakagePolicyOut,
+    QualityPolicyOut,
+    SplitPolicyOut,
+)
 from app.api.v1.dataset_schemas import (
     DatasetActionRequest,
     DatasetCreate,
@@ -29,6 +36,7 @@ from app.api.v1.dataset_schemas import (
     dataset_out,
     policy_out,
 )
+from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import DatasetReadScope
 from app.application.datasets.commands import (
     NewDataset,
@@ -44,7 +52,7 @@ from app.domain.identity.models import ProjectContext
 router = APIRouter(prefix="/projects/{project_id}/datasets", tags=["datasets"])
 
 
-@router.get("")
+@router.get("", response_model=PageOut[DatasetOut])
 def list_datasets(
     scope: ReadScope,
     use_cases: DatasetUseCasesDep,
@@ -72,7 +80,7 @@ def list_datasets(
     }
 
 
-@router.post("", status_code=201)
+@router.post("", response_model=DatasetOut, status_code=201)
 def create_dataset(
     payload: DatasetCreate,
     request: Request,
@@ -103,7 +111,7 @@ def create_dataset(
     return dataset_out(dataset, allowed_actions=allowed_dataset_actions(dataset.status))
 
 
-@router.get("/{dataset_id}")
+@router.get("/{dataset_id}", response_model=DatasetOut)
 def get_dataset(
     dataset_id: UUID,
     scope: DatasetReadScope,
@@ -113,7 +121,7 @@ def get_dataset(
     return dataset_out(dataset, allowed_actions=allowed_dataset_actions(dataset.status))
 
 
-@router.patch("/{dataset_id}")
+@router.patch("/{dataset_id}", response_model=DatasetOut)
 def update_dataset(
     dataset_id: UUID,
     payload: DatasetPatch,
@@ -132,7 +140,7 @@ def update_dataset(
     return dataset_out(dataset, allowed_actions=allowed_dataset_actions(dataset.status))
 
 
-@router.post("/{dataset_id}/actions/{action}")
+@router.post("/{dataset_id}/actions/{action}", response_model=DatasetOut)
 def act_on_dataset(
     dataset_id: UUID,
     action: ActionName,
@@ -170,7 +178,7 @@ def _policy_page(items: list[Any], limit: int, id_attr: str) -> dict[str, Any]:
     }
 
 
-@router.get("/{dataset_id}/dedup-policies")
+@router.get("/{dataset_id}/dedup-policies", response_model=PageOut[DedupPolicyOut])
 def list_dedup_policies(
     dataset_id: UUID,
     scope: ReadScope,
@@ -181,7 +189,7 @@ def list_dedup_policies(
     return _policy_page(items, limit, "dedup_policy_id")
 
 
-@router.post("/{dataset_id}/dedup-policies", status_code=201)
+@router.post("/{dataset_id}/dedup-policies", response_model=DedupPolicyOut, status_code=201)
 def create_dedup_policy(
     dataset_id: UUID,
     payload: DedupPolicyCreate,
@@ -212,7 +220,7 @@ def create_dedup_policy(
     return policy_out(policy)
 
 
-@router.get("/{dataset_id}/dedup-policies/{policy_id}")
+@router.get("/{dataset_id}/dedup-policies/{policy_id}", response_model=DedupPolicyOut)
 def get_dedup_policy(
     dataset_id: UUID,
     policy_id: UUID,
@@ -222,7 +230,7 @@ def get_dedup_policy(
     return policy_out(use_cases.policies.get_dedup(scope, dataset_id, policy_id))
 
 
-@router.get("/{dataset_id}/split-policies")
+@router.get("/{dataset_id}/split-policies", response_model=PageOut[SplitPolicyOut])
 def list_split_policies(
     dataset_id: UUID,
     scope: ReadScope,
@@ -233,7 +241,7 @@ def list_split_policies(
     return _policy_page(items, limit, "split_policy_id")
 
 
-@router.post("/{dataset_id}/split-policies", status_code=201)
+@router.post("/{dataset_id}/split-policies", response_model=SplitPolicyOut, status_code=201)
 def create_split_policy(
     dataset_id: UUID,
     payload: SplitPolicyCreate,
@@ -270,7 +278,7 @@ def create_split_policy(
     return policy_out(policy)
 
 
-@router.get("/{dataset_id}/split-policies/{policy_id}")
+@router.get("/{dataset_id}/split-policies/{policy_id}", response_model=SplitPolicyOut)
 def get_split_policy(
     dataset_id: UUID,
     policy_id: UUID,
@@ -280,7 +288,7 @@ def get_split_policy(
     return policy_out(use_cases.policies.get_split(scope, dataset_id, policy_id))
 
 
-@router.get("/{dataset_id}/leakage-policies")
+@router.get("/{dataset_id}/leakage-policies", response_model=PageOut[LeakagePolicyOut])
 def list_leakage_policies(
     dataset_id: UUID,
     scope: ReadScope,
@@ -291,7 +299,7 @@ def list_leakage_policies(
     return _policy_page(items, limit, "leakage_policy_id")
 
 
-@router.post("/{dataset_id}/leakage-policies", status_code=201)
+@router.post("/{dataset_id}/leakage-policies", response_model=LeakagePolicyOut, status_code=201)
 def create_leakage_policy(
     dataset_id: UUID,
     payload: LeakagePolicyCreate,
@@ -321,7 +329,7 @@ def create_leakage_policy(
     return policy_out(policy)
 
 
-@router.get("/{dataset_id}/leakage-policies/{policy_id}")
+@router.get("/{dataset_id}/leakage-policies/{policy_id}", response_model=LeakagePolicyOut)
 def get_leakage_policy(
     dataset_id: UUID,
     policy_id: UUID,
@@ -331,7 +339,7 @@ def get_leakage_policy(
     return policy_out(use_cases.policies.get_leakage(scope, dataset_id, policy_id))
 
 
-@router.get("/{dataset_id}/quality-policies")
+@router.get("/{dataset_id}/quality-policies", response_model=PageOut[QualityPolicyOut])
 def list_quality_policies(
     dataset_id: UUID,
     scope: ReadScope,
@@ -342,7 +350,7 @@ def list_quality_policies(
     return _policy_page(items, limit, "quality_policy_id")
 
 
-@router.post("/{dataset_id}/quality-policies", status_code=201)
+@router.post("/{dataset_id}/quality-policies", response_model=QualityPolicyOut, status_code=201)
 def create_quality_policy(
     dataset_id: UUID,
     payload: QualityPolicyCreate,
@@ -368,7 +376,7 @@ def create_quality_policy(
     return policy_out(policy)
 
 
-@router.get("/{dataset_id}/quality-policies/{policy_id}")
+@router.get("/{dataset_id}/quality-policies/{policy_id}", response_model=QualityPolicyOut)
 def get_quality_policy(
     dataset_id: UUID,
     policy_id: UUID,

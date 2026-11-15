@@ -15,6 +15,11 @@ from app.api.v1.dataset_dependencies import (
     request_id,
 )
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.dataset_response_models import (
+    ExternalTrainingReferenceOut,
+    TrainingDeliveryOut,
+)
+from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import ExpectedVersion, TrainingServicesDep
 from app.api.v1.training_schemas import (
     ExternalTrainingReferenceCreate,
@@ -43,7 +48,7 @@ def _status_filter(value: str | None) -> str | None:
         raise ValidationFailedError("status 取值非法") from exc
 
 
-@router.get("/training-deliveries")
+@router.get("/training-deliveries", response_model=PageOut[TrainingDeliveryOut])
 def list_deliveries(
     scope: ReadScope,
     services: TrainingServicesDep,
@@ -66,7 +71,7 @@ def list_deliveries(
     }
 
 
-@router.post("/training-deliveries", status_code=201)
+@router.post("/training-deliveries", response_model=TrainingDeliveryOut, status_code=201)
 def create_delivery(
     payload: TrainingDeliveryCreate,
     request: Request,
@@ -93,7 +98,7 @@ def create_delivery(
     return training_delivery_out(delivery)
 
 
-@router.get("/training-deliveries/{delivery_id}")
+@router.get("/training-deliveries/{delivery_id}", response_model=TrainingDeliveryOut)
 def get_delivery(
     delivery_id: UUID,
     scope: ReadScope,
@@ -102,7 +107,10 @@ def get_delivery(
     return training_delivery_out(services.deliveries.get(scope, delivery_id))
 
 
-@router.post("/training-deliveries/{delivery_id}/actions/{action}")
+@router.post(
+    "/training-deliveries/{delivery_id}/actions/{action}",
+    response_model=TrainingDeliveryOut,
+)
 def act_on_delivery(
     delivery_id: UUID,
     action: str,
@@ -146,7 +154,10 @@ def act_on_delivery(
     return training_delivery_out(delivery)
 
 
-@router.get("/training-deliveries/{delivery_id}/external-references")
+@router.get(
+    "/training-deliveries/{delivery_id}/external-references",
+    response_model=PageOut[ExternalTrainingReferenceOut],
+)
 def list_external_references(
     delivery_id: UUID,
     scope: ReadScope,
@@ -167,7 +178,11 @@ def list_external_references(
     }
 
 
-@router.post("/training-deliveries/{delivery_id}/external-references", status_code=202)
+@router.post(
+    "/training-deliveries/{delivery_id}/external-references",
+    response_model=ExternalTrainingReferenceOut,
+    status_code=202,
+)
 def create_external_reference(
     delivery_id: UUID,
     payload: ExternalTrainingReferenceCreate,
@@ -195,7 +210,10 @@ def create_external_reference(
     return external_reference_out(reference)
 
 
-@router.get("/external-training-references/{external_ref_id}")
+@router.get(
+    "/external-training-references/{external_ref_id}",
+    response_model=ExternalTrainingReferenceOut,
+)
 def get_external_reference(
     external_ref_id: UUID,
     scope: ReadScope,
@@ -204,7 +222,10 @@ def get_external_reference(
     return external_reference_out(services.references.get(scope, external_ref_id))
 
 
-@router.post("/external-training-references/{external_ref_id}/actions/{action}")
+@router.post(
+    "/external-training-references/{external_ref_id}/actions/{action}",
+    response_model=ExternalTrainingReferenceOut,
+)
 def act_on_external_reference(
     external_ref_id: UUID,
     action: str,
