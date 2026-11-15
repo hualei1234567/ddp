@@ -123,9 +123,7 @@ def env(tmp_path: Path) -> tuple[sessionmaker[Session], ProjectScope, UUID, list
         raw_assets = [_raw_asset(scope, i) for i in range(3)]
         for asset in raw_assets:
             created = raw_repo.add(scope, asset)
-            raw_repo.save(
-                scope, created.mark_valid(now=NOW), expected_version=created.version
-            )
+            raw_repo.save(scope, created.mark_valid(now=NOW), expected_version=created.version)
         specs = (
             ("demo_001", "main", 0, 0.0, 12.0),
             ("demo_001", "wrist", 1, 0.5, 11.0),
@@ -221,9 +219,7 @@ def test_created_episodes_are_queryable(env) -> None:
 
     with factory() as session:
         rows = list(
-            session.scalars(
-                select(EpisodeModel).where(EpisodeModel.project_id == scope.project_id)
-            )
+            session.scalars(select(EpisodeModel).where(EpisodeModel.project_id == scope.project_id))
         )
     assert len(rows) == 2
     demo_001 = next(row for row in rows if row.code == "EP-demo_001")

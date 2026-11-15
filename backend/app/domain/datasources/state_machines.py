@@ -57,9 +57,7 @@ _SYSTEM_ACTIONS: Mapping[str, ImportStatus] = MappingProxyType(
     }
 )
 
-_ALL_ACTIONS: Mapping[str, ImportStatus] = MappingProxyType(
-    {**_IMPORT_ACTIONS, **_SYSTEM_ACTIONS}
-)
+_ALL_ACTIONS: Mapping[str, ImportStatus] = MappingProxyType({**_IMPORT_ACTIONS, **_SYSTEM_ACTIONS})
 
 
 def allowed_import_actions(status: str | ImportStatus) -> frozenset[str]:

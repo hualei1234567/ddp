@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.application.annotation.ports import EpisodeCandidate
@@ -114,6 +114,42 @@ class SqlEpisodeDirectory:
                 continue
             result[episode_id] = (int(start), int(end))
         return result
+
+    # 允许写入的投影状态：与 ``domain.episodes.enums.EpisodeAnnotationStatus``
+    # 一致。白名单而不是直接透传字符串——投影写错状态会让 Episode 永久
+    # 无法进入数据集（选择器只认 APPROVED）。
+    _PROJECTABLE_STATUSES: frozenset[str] = frozenset(
+        {"IN_PROGRESS", "SUBMITTED", "APPROVED", "REJECTED"}
+    )
+    # 已批准不再回退：同一 Episode 可能有多份标注提交，先批准的那份不该被
+    # 后来的驳回覆盖。
+    _FINAL_STATUSES: frozenset[str] = frozenset({"APPROVED"})
+
+    def apply_annotation_status(
+        self,
+        scope: ProjectScope,
+        *,
+        episode_ids: tuple[UUID, ...],
+        status: str,
+        now: datetime,
+    ) -> int:
+        """更新 Episode 标注状态投影；返回实际变更行数（详见端口文档）。"""
+        if status not in self._PROJECTABLE_STATUSES:
+            raise DomainValidationError(f"不支持的标注投影状态：{status}")
+        if not episode_ids:
+            return 0
+        statement = (
+            update(EpisodeModel)
+            .where(
+                EpisodeModel.project_id == scope.project_id,
+                EpisodeModel.id.in_(episode_ids),
+                EpisodeModel.annotation_status.not_in(self._FINAL_STATUSES),
+            )
+            .values(annotation_status=status, updated_at=now)
+        )
+        result = self._session.execute(statement)
+        self._session.flush()
+        return int(result.rowcount or 0)
 
     def list_by_ids(
         self,

@@ -84,9 +84,7 @@ def _seed(
                     code=f"RAW-{raw_id.hex[:20]}",
                     source_type=RawAssetSourceType.IMPORT,
                     original_filename=f"{key}.mp4",
-                    object_key=(
-                        f"raw/{scope.project_id}/2026/11/16/{raw_id}/content.mp4"
-                    ),
+                    object_key=(f"raw/{scope.project_id}/2026/11/16/{raw_id}/content.mp4"),
                     size_bytes=1024 + index,
                     content_type="video/mp4",
                     format=RawAssetFormat.MP4,
@@ -132,9 +130,7 @@ def test_succeeded_import_creates_episodes(api_db) -> None:
     scope = ProjectScope(ids.project_a, actor_id=ids.editor_a)
     import_id = _seed(factory, scope, episode_keys=("demo_001", "demo_002"))
 
-    response = client.post(
-        _url(ids.project_a, import_id), json={"scene_labels": ["industrial"]}
-    )
+    response = client.post(_url(ids.project_a, import_id), json={"scene_labels": ["industrial"]})
 
     assert response.status_code == 201, response.text
     body = response.json()

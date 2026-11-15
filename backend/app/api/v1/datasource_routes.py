@@ -158,9 +158,7 @@ def get_episode_materializer(session: DbSession) -> ImportEpisodeMaterializer:
     )
 
 
-MaterializerDep = Annotated[
-    ImportEpisodeMaterializer, Depends(get_episode_materializer)
-]
+MaterializerDep = Annotated[ImportEpisodeMaterializer, Depends(get_episode_materializer)]
 
 
 @router.get("/data-sources", response_model=PageOut[DataSourceOut])

@@ -349,6 +349,26 @@ class EpisodeDirectory(Protocol):
         episode_ids: tuple[UUID, ...],
     ) -> Mapping[UUID, tuple[int, int]]: ...
 
+    def apply_annotation_status(
+        self,
+        scope: ProjectScope,
+        *,
+        episode_ids: tuple[UUID, ...],
+        status: str,
+        now: datetime,
+    ) -> int:
+        """把 Episode 的 ``annotation_status`` 投影更新为给定状态。
+
+        返回实际更新的行数。**只推进、不回退**：已 ``APPROVED`` 的 Episode
+        不会被后续驳回退回（同一 Episode 可能有多个标注提交，先批准的那份
+        就不该被后来的驳回覆盖）。
+
+        为什么投影写在标注域：``annotation_status`` 的唯一权威来源是标注
+        流程，Episode 只是它的读模型。让 Episode 域自己推断"我该是什么标注
+        状态"等于把同一规则实现两遍。
+        """
+        ...
+
     def list_by_ids(
         self,
         scope: ProjectScope,

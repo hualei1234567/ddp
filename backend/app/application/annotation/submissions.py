@@ -9,6 +9,9 @@ from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
 from app.application.annotation.commands import NewAnnotationSubmission
+from app.application.annotation.episode_status_projection import (
+    project_submission_status,
+)
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
 from app.application.annotation.ports import (
     AnnotationArbitrationRepository,
@@ -338,6 +341,16 @@ class AnnotationSubmissionUseCases:
             self._return_task_and_batch_for_rework(scope, current, reason=reason, now=now)
             self._return_assignment_for_rework(scope, current, reason=reason, now=now)
             self._bump_rework_count(scope, current, now=now)
+        # 把提交状态投影到 Episode 的 annotation_status。
+        # 规则集中在 episode_status_projection，三个推进点（提交/复核/仲裁）
+        # 共用同一份映射，避免各写一份后漂移。
+        project_submission_status(
+            self._episodes,
+            scope,
+            submission_status=saved.status,
+            episode_ids=self._episode_ids_of(scope, saved.submission_id),
+            now=now,
+        )
         self._record(
             scope,
             saved,
@@ -598,6 +611,15 @@ class AnnotationSubmissionUseCases:
             updated_by=scope.actor_id,
         )
         self._assignments.save(scope, updated, expected_version=assignment.version)
+
+    def _episode_ids_of(self, scope: ProjectScope, submission_id: UUID) -> tuple[UUID, ...]:
+        """该提交涉及的全部 Episode（按记录去重）。"""
+        return tuple(
+            dict.fromkeys(
+                record.episode_id
+                for record in self._records.list_for_submission(scope, submission_id)
+            )
+        )
 
     def _mark_records(
         self,

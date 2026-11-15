@@ -164,6 +164,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             outbox,
             idempotency,
             session,
+            episodes=episodes,
         ),
         arbitrations=AnnotationArbitrationUseCases(
             arbitrations_repo,
@@ -175,6 +176,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             outbox,
             idempotency,
             session,
+            episodes=episodes,
         ),
         gold_sets=GoldSetUseCases(
             gold_sets_repo,
