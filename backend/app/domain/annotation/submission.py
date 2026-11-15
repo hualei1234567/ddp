@@ -74,6 +74,33 @@ def submission_visible_to(
     return annotator_id == actor_id
 
 
+# 已作出终态结论的提交：复核/仲裁都不能再次决定。
+# 与 ``state_transition_invalid`` 的区别：非法迁移是"这个动作在这一状态根本
+# 不存在"；本码是"动作合法但已有人做过、且结论不可覆盖"，客户端应展示结论
+# 而不是重试。契约把两者并存，因此不能只靠非法迁移代替（见 error-codes.v1.json）。
+DECIDED_SUBMISSION_STATUSES = frozenset(
+    {
+        AnnotationSubmissionStatus.APPROVED.value,
+        AnnotationSubmissionStatus.REJECTED.value,
+        AnnotationSubmissionStatus.RESOLVED_APPROVED.value,
+        AnnotationSubmissionStatus.RESOLVED_REJECTED.value,
+        AnnotationSubmissionStatus.RESOLVED_REWORK.value,
+        AnnotationSubmissionStatus.REWORK_REQUIRED.value,
+        AnnotationSubmissionStatus.SUPERSEDED.value,
+    }
+)
+
+
+def submission_already_decided(status: object) -> bool:
+    """提交是否已有终态结论（复核/仲裁不得重复决定）。"""
+    return _status_value(status) in DECIDED_SUBMISSION_STATUSES
+
+
+def _status_value(status: object) -> str:
+    value = getattr(status, "value", status)
+    return str(value)
+
+
 def _now() -> datetime:
     return datetime.now(UTC)
 
@@ -659,6 +686,7 @@ def validate_record_labels(
 __all__ = [
     "AnnotationRecord",
     "AnnotationSubmission",
+    "DECIDED_SUBMISSION_STATUSES",
     "EvidenceRef",
     "LabelValue",
     "VISIBLE_DRAFT_STATUS",
@@ -666,6 +694,7 @@ __all__ = [
     "compute_records_digest",
     "record_payload",
     "records_payload",
+    "submission_already_decided",
     "submission_visible_to",
     "validate_record_labels",
 ]

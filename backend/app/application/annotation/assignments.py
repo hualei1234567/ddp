@@ -30,8 +30,10 @@ from app.domain.annotation.enums import (
 from app.domain.annotation.errors import (
     AssignmentCapacityExceededError,
     AssignmentNotOwnedError,
+    AssignmentRevokedError,
     BatchNotCompatibleError,
     DomainValidationError,
+    ItemAlreadyAssignedError,
     ResourceNotFoundError,
     VersionConflictError,
 )
@@ -151,12 +153,22 @@ class AnnotationAssignmentUseCases:
 
         batch = self._get_batch(scope, batch_id)
         task = self._get_task(scope, batch.task_id)
+        # 契约区分"未批准"（annotation_task_not_approved）与"已批准但未就绪"
+        # （annotation_task_not_ready）；这两个前置条件在任务聚合根里判定一次。
+        # 其余状态（已在执行/已结束/已取消）属于"批次与任务不兼容"，仍按原码返回。
+        task.assert_assignable()
         if task.status not in _CREATABLE_TASK_STATUSES:
             raise BatchNotCompatibleError("任务状态不允许分配")
         if batch.status not in _CREATABLE_BATCH_STATUSES:
             raise BatchNotCompatibleError("批次状态不允许分配")
         role = AssignmentRole(command.assignment_role)
         self._assert_member(scope, command.assignee_id)
+        self._assert_not_already_assigned(
+            scope,
+            batch_id=batch_id,
+            assignee_id=command.assignee_id,
+            assignment_role=role,
+        )
         if self._assignments.has_conflicting_role(
             scope,
             batch_id=batch_id,
@@ -243,6 +255,10 @@ class AnnotationAssignmentUseCases:
         current = self.get(scope, assignment_id)
         if current.version != expected_version:
             raise VersionConflictError("标注分配")
+        # 撤销先于状态机断言：终态在状态机里同样"不允许任何动作"，若先断言
+        # 就只会得到笼统的 state_transition_invalid，客户端无法据此提示重新分配。
+        if current.status is AnnotationAssignmentStatus.REVOKED:
+            raise AssignmentRevokedError(action_name, assignment_id=current.assignment_id)
         assert_assignment_action(current.status, action_name)
         if action_name in _ASSIGNEE_ONLY_ACTIONS and current.assignee_id != scope.actor_id:
             raise AssignmentNotOwnedError("该分配不属于当前用户")
@@ -400,6 +416,38 @@ class AnnotationAssignmentUseCases:
             capacity_minutes=capacity.capacity_minutes if capacity else None,
         )
         return replace(summary, status=summary.effective_status)
+
+    def _assert_not_already_assigned(
+        self,
+        scope: ProjectScope,
+        *,
+        batch_id: UUID,
+        assignee_id: UUID,
+        assignment_role: AssignmentRole,
+    ) -> None:
+        """同批次 + 同人 + 同角色重复分配必须报 ``annotation_item_already_assigned``。
+
+        数据库唯一约束 ``uq_annotation_assignments_batch_assignee_role`` 会挡住这次
+        插入，但落到仓储层只会得到笼统的 ``duplicate_resource``（"业务键重复"），
+        调用方无法判断是"同一份活被派了两遍"。这里先把冲突翻译成契约码，并按
+        现有记录的状态说明为什么不能直接复用（例如已 REVOKED 需走别的路径）。
+        """
+        for existing in self._assignments.list_for_batch(scope, batch_id=batch_id):
+            if (
+                existing.assignee_id != assignee_id
+                or existing.assignment_role is not assignment_role
+            ):
+                continue
+            raise ItemAlreadyAssignedError(
+                "该批次已为该人员分配过同角色任务",
+                details={
+                    "assignment_id": str(existing.assignment_id),
+                    "batch_id": str(batch_id),
+                    "assignee_id": str(assignee_id),
+                    "assignment_role": assignment_role.value,
+                    "existing_status": existing.status.value,
+                },
+            )
 
     def _assert_work_state(
         self,

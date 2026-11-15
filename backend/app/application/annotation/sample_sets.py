@@ -26,11 +26,16 @@ from app.domain.annotation.enums import (
 from app.domain.annotation.errors import (
     ConflictError,
     DomainValidationError,
+    EpisodeIneligibleError,
     ResourceNotFoundError,
     VersionConflictError,
 )
 from app.domain.annotation.sample_set import AnnotationSampleSet
-from app.domain.annotation.selection import SelectionEpisode, select_episodes
+from app.domain.annotation.selection import (
+    SelectionEpisode,
+    ineligibility_reason,
+    select_episodes,
+)
 from app.domain.annotation.state_machines import (
     allowed_sample_set_actions,
     assert_sample_set_action,
@@ -208,6 +213,12 @@ class AnnotationSampleSetUseCases:
         merged_filters = dict(current.filters)
         merged_filters.update(dict(filters or {}))
         merged_strata = tuple(strata) if strata is not None else current.strata
+        self._assert_requested_episodes_eligible(
+            scope,
+            merged_filters=merged_filters,
+            dedup_key=current.dedup_key,
+            warn_confirmed=warn_confirmed,
+        )
         candidates = self._episodes.list_candidates(
             scope,
             statuses=_ELIGIBLE_STATUSES,
@@ -397,6 +408,75 @@ class AnnotationSampleSetUseCases:
             request_id=request_id,
         )
 
+    def _assert_requested_episodes_eligible(
+        self,
+        scope: ProjectScope,
+        *,
+        merged_filters: Mapping[str, object],
+        dedup_key: object,
+        warn_confirmed: bool,
+    ) -> None:
+        """显式点名的 Episode 若被门禁挡下，必须报错而不是静默排除。
+
+        默认筛选路径是"过滤 + 记录排除理由"，排除是预期语义；但
+        ``include_episode_ids`` 是用户逐条点选的清单，静默丢弃会让样本集内容
+        与请求不符。门禁规则本身仍在领域层（``ineligibility_reason``），这里
+        只负责取投影与组装 ``details``。
+        """
+        requested_ids = _uuids(merged_filters.get("include_episode_ids"))
+        if not requested_ids:
+            return
+        requested = self._episodes.list_by_ids(scope, episode_ids=requested_ids)
+        found = {item.episode_id for item in requested}
+        missing = [item for item in requested_ids if item not in found]
+        rejected = [
+            {
+                "episode_id": str(item.episode_id),
+                "reason": reason,
+                "status": item.status,
+                "quality_status": item.quality_status,
+            }
+            for item in requested
+            if (
+                reason := ineligibility_reason(
+                    SelectionEpisode(
+                        episode_id=item.episode_id,
+                        episode_lineage_id=item.episode_lineage_id,
+                        episode_version=item.episode_version,
+                        status=item.status,
+                        quality_status=item.quality_status,
+                        manifest_sha256=item.manifest_sha256,
+                        annotation_status="NOT_STARTED",
+                        scene_labels=item.scene_labels,
+                        robot_id=item.robot_id,
+                        device_ids=item.device_ids,
+                        sensor_ids=item.sensor_ids,
+                        captured_at=item.captured_at,
+                    ),
+                    warn_confirmed=warn_confirmed,
+                    include_ids=requested_ids,
+                    exclude_ids=_uuids(merged_filters.get("exclude_episode_ids")),
+                    scene_filter=_strings(merged_filters.get("scene_labels")),
+                    robot_filter=_uuids(merged_filters.get("robot_ids")),
+                    device_filter=_uuids(merged_filters.get("device_ids")),
+                    sensor_filter=_uuids(merged_filters.get("sensor_ids")),
+                    captured_from=_datetime(merged_filters.get("captured_from")),
+                    captured_to=_datetime(merged_filters.get("captured_to")),
+                    not_annotated=bool(merged_filters.get("not_annotated", False)),
+                )
+            )
+            is not None
+        ]
+        if missing or rejected:
+            raise EpisodeIneligibleError(
+                "显式指定的 Episode 不满足标注输入门禁",
+                details={
+                    "missing_episode_ids": [str(item) for item in missing],
+                    "rejected_episodes": rejected,
+                    "dedup_key": str(getattr(dedup_key, "value", dedup_key)),
+                },
+            )
+
     def _action(
         self,
         scope: ProjectScope,
@@ -500,6 +580,14 @@ def _uuids(value: object) -> tuple[UUID, ...]:
         except (TypeError, ValueError) as exc:
             raise DomainValidationError("筛选条件包含非法 UUID") from exc
     return tuple(result)
+
+
+def _strings(value: object) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list | tuple) or not all(isinstance(item, str) for item in value):
+        raise DomainValidationError("筛选条件必须是字符串列表")
+    return tuple(value)
 
 
 def _datetime(value: object) -> datetime | None:

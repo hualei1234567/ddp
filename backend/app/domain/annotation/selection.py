@@ -17,7 +17,7 @@ from app.domain.annotation.enums import (
     SampleRole,
     SampleStrategy,
 )
-from app.domain.annotation.errors import DomainValidationError
+from app.domain.annotation.errors import DomainValidationError, DuplicateSampleError
 from app.domain.annotation.sample_set import SampleEpisodeRef
 
 _ALLOWED_STATUSES = frozenset({"ACCEPTED", "COMPLETED"})
@@ -95,7 +95,23 @@ def select_episodes(
             continue
         eligible.append(episode)
 
-    deduped, duplicate_count = _deduplicate(eligible, dedup_value)
+    # ``allow_multiple_time_ranges`` 表示"同一 Episode 可以多片段入选"。
+    # 选择结果按 Episode 逐条生成引用，若仍按血缘/版本合并，这个开关就只影响
+    # 报错与否而不影响结果——那正是"契约声明了但实现从不读"的典型缺陷。
+    allow_multiple_time_ranges = bool(filters.get("allow_multiple_time_ranges", False))
+    deduped, duplicate_count = _deduplicate(
+        eligible,
+        DedupKey.NONE if allow_multiple_time_ranges else dedup_value,
+    )
+    _assert_explicit_requests_not_collapsed(
+        eligible=eligible,
+        deduped=deduped,
+        include_ids=include_ids,
+        dedup_value=dedup_value,
+        allow_multiple_time_ranges=allow_multiple_time_ranges,
+    )
+    if allow_multiple_time_ranges:
+        duplicate_count = 0
     selected, unselected_count = _apply_strata(
         deduped,
         strata=strata if strategy_value is SampleStrategy.STRATIFIED else (),
@@ -171,6 +187,70 @@ def _ineligibility_reason(
     if not_annotated and episode.annotation_status != "NOT_STARTED":
         return "already_annotated"
     return None
+
+
+def ineligibility_reason(
+    episode: SelectionEpisode,
+    *,
+    warn_confirmed: bool,
+    include_ids: tuple[UUID, ...] = (),
+    exclude_ids: tuple[UUID, ...] = (),
+    scene_filter: tuple[str, ...] = (),
+    robot_filter: tuple[UUID, ...] = (),
+    device_filter: tuple[UUID, ...] = (),
+    sensor_filter: tuple[UUID, ...] = (),
+    captured_from: datetime | None = None,
+    captured_to: datetime | None = None,
+    not_annotated: bool = False,
+) -> str | None:
+    """Episode 未通过标注输入门禁的原因；``None`` 表示合格。
+
+    门禁规则只在本模块定义一次。``select_episodes`` 用它做排除归因，
+    仓储层用它解释"显式点名的 Episode 为什么没进候选池"，
+    应用层据此抛出 ``annotation_sample_episode_ineligible``。
+    """
+    return _ineligibility_reason(
+        episode,
+        warn_confirmed=warn_confirmed,
+        include_ids=include_ids,
+        exclude_ids=exclude_ids,
+        scene_filter=scene_filter,
+        robot_filter=robot_filter,
+        device_filter=device_filter,
+        sensor_filter=sensor_filter,
+        captured_from=captured_from,
+        captured_to=captured_to,
+        not_annotated=not_annotated,
+    )
+
+
+def _assert_explicit_requests_not_collapsed(
+    *,
+    eligible: Sequence[SelectionEpisode],
+    deduped: Sequence[SelectionEpisode],
+    include_ids: tuple[UUID, ...],
+    dedup_value: DedupKey,
+    allow_multiple_time_ranges: bool,
+) -> None:
+    """显式点名（``include_episode_ids``）的 Episode 不得被静默去重合并。
+
+    不点名时按 ``dedup_key`` 去重是预期行为，汇总计数即可；点名时用户已经
+    明确要这些 Episode，去掉一个会让样本集与请求不符，因此必须显式拒绝
+    ``annotation_sample_duplicate``（契约原文："样本重复且未显式允许同一
+    Episode 多时间片段"）。显式允许走 ``allow_multiple_time_ranges``。
+    """
+    if not include_ids or dedup_value is DedupKey.NONE or allow_multiple_time_ranges:
+        return
+    kept = {episode.episode_id for episode in deduped}
+    collapsed = [episode.episode_id for episode in eligible if episode.episode_id not in kept]
+    if collapsed:
+        raise DuplicateSampleError(
+            "显式指定的 Episode 被去重合并，且未允许多时间片段",
+            details={
+                "dedup_key": dedup_value.value,
+                "dropped_episode_ids": [str(item) for item in collapsed],
+            },
+        )
 
 
 def _deduplicate(

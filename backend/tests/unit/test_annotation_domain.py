@@ -18,10 +18,16 @@ from app.domain.annotation import (
     AnnotationSchema,
     AnnotationTask,
     AssignmentExpiredError,
+    AssignmentRevokedError,
     DomainValidationError,
+    DuplicateSampleError,
     InvalidStateTransitionError,
     LabelDefinition,
     SampleEpisodeRef,
+    SampleSetCancelledError,
+    SampleSetNotSnapshottedError,
+    TaskNotApprovedError,
+    TaskNotReadyError,
     allowed_assignment_actions,
     allowed_batch_actions,
     allowed_sample_set_actions,
@@ -489,3 +495,100 @@ def test_assignment_lease_rules() -> None:
     with pytest.raises(DomainValidationError):
         active.apply_action("system-expire", now=_NOW)
     assert AnnotationDomainError.code
+
+
+def test_revoked_assignment_reports_contract_code() -> None:
+    """契约 error-codes.v1.json:90 —— 撤销终态必须给出 410 专属码。
+
+    撤销在状态机里同样是「无出边」，若只靠 ``state_transition_invalid``，
+    客户端无法据此提示「请重新分配」，因此聚合根必须单独拒绝。
+    """
+    revoked = _assignment("REVOKED")
+    assert revoked.is_terminal
+    for action in ("claim", "start", "submit", "revoke"):
+        with pytest.raises(AssignmentRevokedError) as excinfo:
+            revoked.apply_action(action, reason="测试原因", now=_NOW)
+        assert excinfo.value.code == "annotation_assignment_revoked"
+        assert excinfo.value.details["assignment_id"] == str(revoked.assignment_id)
+        assert excinfo.value.details["assignment_status"] == "REVOKED"
+
+
+def test_task_assignable_distinguishes_not_approved_from_not_ready() -> None:
+    """契约 error-codes.v1.json:82 —— 「未批准」与「未就绪」是两个码。"""
+    for status in ("DRAFT", "PENDING_REVIEW"):
+        with pytest.raises(TaskNotApprovedError) as excinfo:
+            _task(status).assert_assignable()
+        assert excinfo.value.code == "annotation_task_not_approved"
+    with pytest.raises(TaskNotReadyError) as not_ready:
+        _task("APPROVED").assert_assignable()
+    assert not_ready.value.code == "annotation_task_not_ready"
+    assert not_ready.value.details["status"] == "APPROVED"
+    for status in ("READY", "ASSIGNED", "IN_PROGRESS"):
+        _task(status).assert_assignable()
+
+
+def test_cancelled_sample_set_reports_contract_code() -> None:
+    """契约 error-codes.v1.json:77 —— 任务引用已取消样本集必须单独成码。"""
+    cancelled = _sample_set("DRAFT").apply_action("cancel", reason="作废", now=_NOW)
+    with pytest.raises(SampleSetCancelledError) as excinfo:
+        cancelled.assert_usable_for_task()
+    assert excinfo.value.code == "annotation_sample_set_cancelled"
+    assert excinfo.value.details["status"] == "CANCELLED"
+    with pytest.raises(SampleSetNotSnapshottedError):
+        _sample_set("DRAFT").assert_usable_for_task()
+    _sample_set("SNAPSHOTTED").assert_usable_for_task()
+
+
+def test_explicit_include_ids_duplicate_is_rejected() -> None:
+    """契约 error-codes.v1.json:79 —— 显式点名却被去重合并必须报 422。
+
+    不点名时去重是预期行为（``deduplicated_count`` 汇总即可）；点名时静默
+    丢掉一个会让样本集内容与请求不符，因此必须显式拒绝。
+    """
+    lineage = uuid4()
+    old = _episode(episode_lineage_id=lineage, episode_version=1)
+    new = _episode(episode_lineage_id=lineage, episode_version=2)
+    result = select_episodes(
+        [old, new],
+        project_id=uuid4(),
+        sample_set_id=uuid4(),
+        filters={},
+        strata=(),
+        strategy="FILTER",
+        dedup_key="EPISODE_LINEAGE",
+        warn_confirmed=False,
+        now=_NOW,
+    )
+    assert result.deduplicated_count == 1  # 默认（不点名）路径仍按契约去重
+
+    with pytest.raises(DuplicateSampleError) as excinfo:
+        select_episodes(
+            [old, new],
+            project_id=uuid4(),
+            sample_set_id=uuid4(),
+            filters={"include_episode_ids": [old.episode_id, new.episode_id]},
+            strata=(),
+            strategy="FILTER",
+            dedup_key="EPISODE_LINEAGE",
+            warn_confirmed=False,
+            now=_NOW,
+        )
+    assert excinfo.value.code == "annotation_sample_duplicate"
+    assert excinfo.value.details["dedup_key"] == "EPISODE_LINEAGE"
+    assert excinfo.value.details["dropped_episode_ids"] == [str(old.episode_id)]
+
+    allowed = select_episodes(
+        [old, new],
+        project_id=uuid4(),
+        sample_set_id=uuid4(),
+        filters={
+            "include_episode_ids": [old.episode_id, new.episode_id],
+            "allow_multiple_time_ranges": True,
+        },
+        strata=(),
+        strategy="FILTER",
+        dedup_key="EPISODE_LINEAGE",
+        warn_confirmed=False,
+        now=_NOW,
+    )
+    assert len(allowed.episode_refs) == 2

@@ -2,15 +2,30 @@
 
 领域层不依赖 HTTP；稳定 ``code`` 对齐阶段 3 契约草案的 error-codes。
 未知状态、非法迁移、终态回退一律显式失败，不存在默认成功分支。
+
+``details`` 是可在安全前提下回显给客户端的结构化排障信息（例如不合格的
+Episode ID、门禁原因、任务状态）。领域层只负责如实携带，是否透传由 API 层
+按 code 白名单决定，与设备域 G-19 口径一致。
 """
 
 from __future__ import annotations
+
+from collections.abc import Mapping
 
 
 class AnnotationDomainError(ValueError):
     """标注域可预期错误的基类。"""
 
     code = "validation_failed"
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        details: Mapping[str, object] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.details: Mapping[str, object] | None = details
 
 
 class DomainValidationError(AnnotationDomainError):
@@ -144,8 +159,25 @@ class AssignmentExpiredError(AnnotationDomainError):
     code = "annotation_assignment_expired"
 
 
-class AssignmentRevokedError(AnnotationDomainError):
+class AssignmentRevokedError(InvalidStateTransitionError):
+    """分配已撤销，需重新分配（契约 410）。
+
+    继承 :class:`InvalidStateTransitionError`：撤销是终态，任何后续动作在状态机
+    视角下都同时是"非法迁移"，既有调用方按非法迁移捕获的语义不变；单独成码
+    只是让客户端能区分"重新分配即可修复"与"流程/顺序搞错了"。
+
+    与 ``annotation_assignment_expired`` 并列：撤销是人工决定、不可恢复，
+    过期是租约到期、可重新领取，契约给两者不同文案与不同可重试性。
+    """
+
     code = "annotation_assignment_revoked"
+
+    def __init__(self, action: object, *, assignment_id: object | None = None) -> None:
+        super().__init__("标注分配", "REVOKED", action)
+        self.details = {
+            "assignment_id": None if assignment_id is None else str(assignment_id),
+            "assignment_status": "REVOKED",
+        }
 
 
 class ItemAlreadyAssignedError(AnnotationDomainError):

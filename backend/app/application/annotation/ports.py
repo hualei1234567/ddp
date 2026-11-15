@@ -349,6 +349,21 @@ class EpisodeDirectory(Protocol):
         episode_ids: tuple[UUID, ...],
     ) -> Mapping[UUID, tuple[int, int]]: ...
 
+    def list_by_ids(
+        self,
+        scope: ProjectScope,
+        *,
+        episode_ids: tuple[UUID, ...],
+    ) -> list[EpisodeCandidate]:
+        """按 ID 取 Episode 投影，**不套用任何门禁过滤**。
+
+        用于校验显式点名（``include_episode_ids``）的 Episode：这类 Episode 若
+        被门禁挡下，诊断不能依赖"它没出现在候选池里"这种间接证据，必须拿到
+        它的真实状态再交给 ``domain.annotation.selection.ineligibility_reason``
+        判定，避免门禁规则出现第二份实现。
+        """
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class RecordObservation:

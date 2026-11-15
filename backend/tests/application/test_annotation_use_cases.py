@@ -20,6 +20,7 @@ from app.application.annotation.sample_sets import AnnotationSampleSetUseCases
 from app.application.annotation.schemas import AnnotationSchemaUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
 from app.domain.annotation import ForbiddenOperationError, WorkloadStatus
+from app.domain.annotation.errors import EpisodeIneligibleError
 from app.domain.annotation.workload import CapacityPolicy
 from app.domain.identity.models import ProjectRole, ProjectScope
 from app.infrastructure.db.base import Base
@@ -39,6 +40,9 @@ from app.infrastructure.repositories.annotation_batches import SqlAnnotationBatc
 from app.infrastructure.repositories.annotation_directory import (
     SqlEpisodeDirectory,
     SqlMemberDirectory,
+)
+from app.infrastructure.repositories.annotation_results import (
+    SqlAnnotationSubmissionRepository,
 )
 from app.infrastructure.repositories.annotation_sample_sets import (
     SqlAnnotationSampleSetRepository,
@@ -105,6 +109,7 @@ class _Stacks:
             self.schemas_repo,
             self.batches_repo,
             self.assignments_repo,
+            SqlAnnotationSubmissionRepository(session),
             self.audit_repo,
             self.outbox_repo,
             self.idempotency_repo,
@@ -241,6 +246,126 @@ def _schema_command() -> NewAnnotationSchema:
             },
         ),
     )
+
+
+def _seed_rejected_episode(
+    factory: sessionmaker[Session],
+    project_id: UUID,
+    actor_id: UUID,
+) -> UUID:
+    """造一个被门禁拒绝的 Episode（走真实迁移到 REJECTED/FAIL）。
+
+    夹具自带的 Episode 已推进到 ACCEPTED，质量字段此后被触发器冻结，
+    因此不合格样本必须在测试内单独造。
+    """
+    episode_id = uuid4()
+    with factory() as session:
+        session.add(
+            EpisodeModel(
+                id=episode_id,
+                project_id=project_id,
+                episode_lineage_id=uuid4(),
+                episode_version=1,
+                code=f"EP-BAD-{uuid4().hex[:8]}",
+                status="PENDING",
+                quality_status="NOT_CHECKED",
+                annotation_status="NOT_STARTED",
+                scene_labels=["kitchen"],
+                start_time_ns=1_000,
+                end_time_ns=2_000,
+                duration_ns=1_000,
+                time_domain="UTC",
+                time_base={},
+                canonical_schema_version="ddp.canonical/1.0.0-draft",
+                pipeline_id="parser",
+                pipeline_version="1.0.0",
+                segmentation_rule_version="seg-v1",
+                calibration_snapshot=[],
+                manifest_key=f"canonical/{project_id}/{episode_id}/1/manifest.json",
+                manifest_sha256=SHA,
+                frame_count=10,
+                attempt=1,
+                max_attempts=3,
+                created_at=NOW,
+                updated_at=NOW,
+                created_by=actor_id,
+                updated_by=actor_id,
+            )
+        )
+        session.flush()
+        for status, quality in (
+            ("PROCESSING", "NOT_CHECKED"),
+            ("READY", "NOT_CHECKED"),
+            ("QUALITY_CHECKING", "FAIL"),
+            ("REJECTED", "FAIL"),
+        ):
+            session.execute(
+                update(EpisodeModel)
+                .where(EpisodeModel.id == episode_id)
+                .values(status=status, quality_status=quality)
+            )
+        session.commit()
+    return episode_id
+
+
+def test_preview_rejects_explicitly_requested_ineligible_episode(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+) -> None:
+    """显式点名的 Episode 不合格时，用例必须报契约码并带出门禁原因。
+
+    默认筛选路径是"过滤 + 汇总排除理由"；显式点名不同：静默排除会让样本集
+    内容与请求不符。门禁规则仍只在 ``domain.annotation.selection`` 一处。
+    """
+    factory, stacks, _episode_id = annotation_app
+    rejected_id = _seed_rejected_episode(
+        factory,
+        stacks.scope_a.project_id,
+        stacks.scope_a.actor_id,
+    )
+
+    sample_set = stacks.sample_sets.create(
+        stacks.scope_a,
+        NewAnnotationSampleSet(code="sample-explicit-bad", filters={}),
+        path="/projects/p/annotation-sample-sets",
+    )
+    with pytest.raises(EpisodeIneligibleError) as excinfo:
+        stacks.sample_sets.preview(
+            stacks.scope_a,
+            sample_set.sample_set_id,
+            expected_version=sample_set.version,
+            filters={"include_episode_ids": [str(rejected_id)]},
+            path=f"/projects/p/annotation-sample-sets/{sample_set.sample_set_id}/actions/preview",
+        )
+    assert excinfo.value.code == "annotation_sample_episode_ineligible"
+    rejected = excinfo.value.details["rejected_episodes"]
+    assert [item["episode_id"] for item in rejected] == [str(rejected_id)]
+    assert rejected[0]["reason"] == "episode_status_ineligible"
+    assert rejected[0]["status"] == "REJECTED"
+    assert rejected[0]["quality_status"] == "FAIL"
+    assert excinfo.value.details["missing_episode_ids"] == []
+
+
+def test_preview_reports_missing_explicit_episode(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+) -> None:
+    """点名的 Episode 不属于本项目或不存在时也要显式报错，而不是静默忽略。"""
+    _factory, stacks, _episode_id = annotation_app
+    sample_set = stacks.sample_sets.create(
+        stacks.scope_a,
+        NewAnnotationSampleSet(code="sample-missing", filters={}),
+        path="/projects/p/annotation-sample-sets",
+    )
+    unknown = uuid4()
+    with pytest.raises(EpisodeIneligibleError) as excinfo:
+        stacks.sample_sets.preview(
+            stacks.scope_a,
+            sample_set.sample_set_id,
+            expected_version=sample_set.version,
+            filters={"include_episode_ids": [str(unknown)]},
+            path=f"/projects/p/annotation-sample-sets/{sample_set.sample_set_id}/actions/preview",
+        )
+    assert excinfo.value.details["missing_episode_ids"] == [str(unknown)]
+    assert excinfo.value.details["rejected_episodes"] == []
 
 
 def test_full_annotation_flow_and_workload(

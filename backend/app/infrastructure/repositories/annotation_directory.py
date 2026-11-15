@@ -115,6 +115,24 @@ class SqlEpisodeDirectory:
             result[episode_id] = (int(start), int(end))
         return result
 
+    def list_by_ids(
+        self,
+        scope: ProjectScope,
+        *,
+        episode_ids: tuple[UUID, ...],
+    ) -> list[EpisodeCandidate]:
+        if not episode_ids:
+            return []
+        rows = self._session.scalars(
+            select(EpisodeModel)
+            .where(
+                EpisodeModel.project_id == scope.project_id,
+                EpisodeModel.id.in_(episode_ids),
+            )
+            .order_by(EpisodeModel.id)
+        )
+        return [self._from_row(row) for row in rows]
+
     def _from_row(self, row: EpisodeModel) -> EpisodeCandidate:
         has_lineage = bool(
             self._session.scalar(

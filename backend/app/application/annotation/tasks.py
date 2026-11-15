@@ -15,6 +15,7 @@ from app.application.annotation.ports import (
     AnnotationBatchRepository,
     AnnotationSampleSetRepository,
     AnnotationSchemaRepository,
+    AnnotationSubmissionRepository,
     AnnotationTaskRepository,
     AuditRepository,
     IdempotencyRepository,
@@ -27,6 +28,7 @@ from app.domain.annotation.enums import (
     AnnotationSampleSetAction,
     AnnotationSampleSetStatus,
     AnnotationSchemaStatus,
+    AnnotationSubmissionStatus,
     AnnotationTaskAction,
     AnnotationTaskStatus,
 )
@@ -37,6 +39,7 @@ from app.domain.annotation.errors import (
     ForbiddenOperationError,
     ResourceImmutableError,
     ResourceNotFoundError,
+    ReviewRequiredError,
     SampleSetNotSnapshottedError,
     SchemaNotPublishedError,
     SchemaSnapshotMismatchError,
@@ -52,6 +55,15 @@ from app.domain.annotation.task import AnnotationTask
 from app.domain.identity.models import ProjectScope
 
 _RESOURCE_TYPE = "ANNOTATION_TASK"
+# 尚未作出结论、会拦住任务验收的提交状态：提交已完成但复核/仲裁没走完。
+_UNDECIDED_SUBMISSION = frozenset(
+    {
+        AnnotationSubmissionStatus.SUBMITTED.value,
+        AnnotationSubmissionStatus.IN_REVIEW.value,
+        AnnotationSubmissionStatus.ESCALATED.value,
+        AnnotationSubmissionStatus.ARBITRATING.value,
+    }
+)
 _ACTIVE_BATCH_OK = {
     AnnotationBatchStatus.SUBMITTED.value,
     AnnotationBatchStatus.REVIEWING.value,
@@ -79,6 +91,7 @@ class AnnotationTaskUseCases:
         schemas: AnnotationSchemaRepository,
         batches: AnnotationBatchRepository,
         assignments: AnnotationAssignmentRepository,
+        submissions: AnnotationSubmissionRepository,
         audit: AuditRepository,
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
@@ -89,6 +102,7 @@ class AnnotationTaskUseCases:
         self._schemas = schemas
         self._batches = batches
         self._assignments = assignments
+        self._submissions = submissions
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
@@ -143,6 +157,7 @@ class AnnotationTaskUseCases:
             return self._replay(scope, replay.response_ref)
 
         sample_set = self._get_sample_set(scope, command.sample_set_id)
+        sample_set.assert_usable_for_task()
         if sample_set.status is not AnnotationSampleSetStatus.SNAPSHOTTED:
             raise SampleSetNotSnapshottedError("任务必须引用已快照且未消费的样本集")
         schema = self._get_schema(scope, command.schema_id)
@@ -390,6 +405,14 @@ class AnnotationTaskUseCases:
             AnnotationTaskAction.READY.value,
         }:
             raise SchemaNotPublishedError("Schema 已不可用于新任务")
+        # 契约把"样本集已取消"与"样本集未快照"拆成两个码；判定只在聚合根里一处，
+        # 这里只决定哪些动作需要做这项前置校验。
+        if action in {
+            AnnotationTaskAction.SUBMIT_REVIEW.value,
+            AnnotationTaskAction.APPROVE.value,
+            AnnotationTaskAction.READY.value,
+        }:
+            sample_set.assert_usable_for_task()
         if (
             action
             in {
@@ -398,11 +421,6 @@ class AnnotationTaskUseCases:
             }
             and sample_set.status is not AnnotationSampleSetStatus.SNAPSHOTTED
         ):
-            raise SampleSetNotSnapshottedError("任务引用的样本集快照已不可用")
-        if action == AnnotationTaskAction.READY.value and sample_set.status not in {
-            AnnotationSampleSetStatus.SNAPSHOTTED,
-            AnnotationSampleSetStatus.CONSUMED,
-        }:
             raise SampleSetNotSnapshottedError("任务引用的样本集快照已不可用")
         if (
             schema.schema_version != task.schema_version
@@ -435,6 +453,12 @@ class AnnotationTaskUseCases:
         if action in {
             AnnotationTaskAction.ACCEPT.value,
             AnnotationTaskAction.RESOLVE_ACCEPTED.value,
+            AnnotationTaskAction.COMPLETE.value,
+        }:
+            self._assert_reviews_finished(scope, task)
+        if action in {
+            AnnotationTaskAction.ACCEPT.value,
+            AnnotationTaskAction.RESOLVE_ACCEPTED.value,
         }:
             assignments = self._assignments.list_active_for_task(scope, task_id=task.task_id)
             if any(
@@ -454,6 +478,32 @@ class AnnotationTaskUseCases:
             waiver = _waiver(payload)
             if approved < task.target_item_count and not waiver:
                 raise DomainValidationError("验收数量未达标且未提供豁免原因")
+
+    def _assert_reviews_finished(self, scope: ProjectScope, task: AnnotationTask) -> None:
+        """验收/完成前，任务下每条已提交的提交都必须已作出结论。
+
+        契约 ``annotation_review_required``（409："提交未完成复核，不能验收/完成"）。
+        与 ``annotation_task_has_open_work`` 的区别：后者是"分配还没提交完"，
+        前者是"提交已完成但结论没出"。两者都拦验收，但责任人不同：
+        前者找标注员，后者找复核/仲裁人。
+
+        判定用白名单 ``_UNDECIDED_SUBMISSION``：DRAFT/WITHDRAWN 不是"待复核"，
+        已终结状态（APPROVED/REJECTED/RESOLVED_*/REWORK_REQUIRED/SUPERSEDED）
+        也都放行，因此不需要再用黑名单兜一遍。
+        """
+        pending = [
+            {
+                "submission_id": str(submission.submission_id),
+                "status": getattr(submission.status, "value", submission.status),
+            }
+            for submission in self._submissions.list_for_task(scope, task_id=task.task_id)
+            if getattr(submission.status, "value", submission.status) in _UNDECIDED_SUBMISSION
+        ]
+        if pending:
+            raise ReviewRequiredError(
+                "存在未完成复核或仲裁的提交，任务不能验收",
+                details={"task_id": str(task.task_id), "pending_submissions": pending},
+            )
 
     def _consume_sample_set(
         self,

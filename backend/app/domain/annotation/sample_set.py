@@ -21,7 +21,12 @@ from app.domain.annotation.enums import (
     SampleStrategy,
     SampleTimeDomain,
 )
-from app.domain.annotation.errors import DomainValidationError, SampleSetEmptyError
+from app.domain.annotation.errors import (
+    DomainValidationError,
+    SampleSetCancelledError,
+    SampleSetEmptyError,
+    SampleSetNotSnapshottedError,
+)
 from app.domain.annotation.state_machines import (
     action_requires_reason,
     sample_set_target,
@@ -294,6 +299,32 @@ class AnnotationSampleSet:
             AnnotationSampleSetStatus.SNAPSHOTTED,
             AnnotationSampleSetStatus.CONSUMED,
         }
+
+    def assert_usable_for_task(self) -> None:
+        """样本集能否被任务引用（任务创建/审批/就绪/执行的前置条件）。
+
+        契约把这条前置条件拆成两个码，客户端据此区分是"得先快照"还是
+        "这份样本集已经作废、要换一份"：
+        - CANCELLED → ``annotation_sample_set_cancelled``
+        - 其余非快照状态 → ``annotation_sample_set_not_snapshotted``
+        CONSUMED 允许：已被批准的任务继续执行是合法路径，只是不能再被新任务引用。
+        """
+        if self.status is AnnotationSampleSetStatus.CANCELLED:
+            raise SampleSetCancelledError(
+                "任务引用的样本集已取消",
+                details={
+                    "sample_set_id": str(self.sample_set_id),
+                    "status": self.status.value,
+                },
+            )
+        if not self.is_snapshotted:
+            raise SampleSetNotSnapshottedError(
+                "任务必须引用已快照且未消费的样本集",
+                details={
+                    "sample_set_id": str(self.sample_set_id),
+                    "status": self.status.value,
+                },
+            )
 
     def preview(
         self,

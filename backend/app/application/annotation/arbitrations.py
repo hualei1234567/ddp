@@ -33,6 +33,7 @@ from app.domain.annotation.errors import (
     ArbitrationRequiredError,
     DomainValidationError,
     ResourceNotFoundError,
+    SubmissionAlreadyDecidedError,
     VersionConflictError,
 )
 from app.domain.annotation.state_machines import (
@@ -40,6 +41,7 @@ from app.domain.annotation.state_machines import (
     assert_arbitration_action,
     validate_action_name,
 )
+from app.domain.annotation.submission import submission_already_decided
 from app.domain.identity.models import ProjectScope
 
 _RESOURCE_TYPE = "ANNOTATION_ARBITRATION"
@@ -114,6 +116,14 @@ class AnnotationArbitrationUseCases:
 
         submission = self._get_submission(scope, command.submission_id)
         if submission.status is not AnnotationSubmissionStatus.ESCALATED:
+            if submission_already_decided(submission.status):
+                raise SubmissionAlreadyDecidedError(
+                    "提交已作出终态结论，不能重复仲裁",
+                    details={
+                        "submission_id": str(submission.submission_id),
+                        "status": getattr(submission.status, "value", submission.status),
+                    },
+                )
             raise ArbitrationRequiredError("只有 ESCALATED 提交可以创建仲裁")
         for arbiter_id in command.arbiter_ids:
             if not self._members.user_is_member(scope, arbiter_id):

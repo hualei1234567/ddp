@@ -111,6 +111,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             schemas_repo,
             batches_repo,
             assignments_repo,
+            submissions_repo,
             audit,
             outbox,
             idempotency,

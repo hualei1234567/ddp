@@ -18,6 +18,7 @@ from app.domain.annotation.enums import (
 )
 from app.domain.annotation.errors import (
     AssignmentExpiredError,
+    AssignmentRevokedError,
     DomainValidationError,
 )
 from app.domain.annotation.state_machines import (
@@ -137,6 +138,10 @@ class AnnotationAssignment:
         lease_expires_at: datetime | None = None,
     ) -> AnnotationAssignment:
         action_name = validate_action_name(action, family="assignment")
+        # 撤销是终态：契约给它独立的 410 ``annotation_assignment_revoked``，
+        # 而不是笼统的 ``state_transition_invalid``。客户端据此提示"请重新分配"。
+        if self.status is AnnotationAssignmentStatus.REVOKED:
+            raise AssignmentRevokedError(action_name, assignment_id=self.assignment_id)
         target = assignment_target(self.status, action_name)
         occurred_at = now or _now()
         cleaned_reason = optional_text(reason, "reason", max_length=REASON_MAX_LENGTH)

@@ -17,7 +17,12 @@ from app.domain.annotation.enums import (
     AssignmentMode,
     TaskPriority,
 )
-from app.domain.annotation.errors import DomainValidationError, ResourceImmutableError
+from app.domain.annotation.errors import (
+    DomainValidationError,
+    ResourceImmutableError,
+    TaskNotApprovedError,
+    TaskNotReadyError,
+)
 from app.domain.annotation.state_machines import (
     action_requires_reason,
     task_target,
@@ -50,6 +55,13 @@ PROGRESS_FIELDS = (
 )
 MISSING_SEMANTICS = frozenset({"NONE", "N/A", "UNKNOWN", "STALE", "PARTIAL"})
 _BINDING_FIELDS = ("sample_set_id", "schema_id", "schema_version", "schema_sha256")
+# 审批通过前的状态：此时"未批准"是正确的拒绝理由。
+_PRE_APPROVAL_STATUSES = frozenset(
+    {
+        AnnotationTaskStatus.DRAFT,
+        AnnotationTaskStatus.PENDING_REVIEW,
+    }
+)
 
 
 def _now() -> datetime:
@@ -237,6 +249,25 @@ class AnnotationTask:
         ]
         if changed:
             raise ResourceImmutableError("任务绑定字段创建后不可修改")
+
+    def assert_assignable(self) -> None:
+        """任务是否允许分配/开始：必须已 READY 之后再执行。
+
+        契约 ``error-codes.v1.json`` 把这条前置条件拆成两个码：
+        ``annotation_task_not_approved``（还没审批通过）与
+        ``annotation_task_not_ready``（已批准但没点 ready）。两者混用会让 AM
+        无法判断该去找审批人还是自己点 ready，因此按状态精确区分。
+        """
+        if self.status in _PRE_APPROVAL_STATUSES:
+            raise TaskNotApprovedError(
+                "任务未批准，不能分配或开始",
+                details={"task_id": str(self.task_id), "status": self.status.value},
+            )
+        if self.status is AnnotationTaskStatus.APPROVED:
+            raise TaskNotReadyError(
+                "任务未就绪，不能分配或开始",
+                details={"task_id": str(self.task_id), "status": self.status.value},
+            )
 
     def with_progress(self, **counts: int) -> AnnotationTask:
         progress = dict(self.progress)

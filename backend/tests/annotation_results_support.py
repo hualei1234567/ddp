@@ -281,6 +281,7 @@ def build_stacks(session: Session, ids: SeedIds) -> AnnotationStacks:
         schemas_repo,
         batches_repo,
         assignments_repo,
+        submissions_repo,
         audit_repo,
         outbox_repo,
         idempotency_repo,

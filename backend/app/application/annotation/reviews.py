@@ -33,6 +33,7 @@ from app.domain.annotation.errors import (
     ResourceNotFoundError,
     ReviewNotPendingError,
     ReviewSelfForbiddenError,
+    SubmissionAlreadyDecidedError,
     SubmissionNotSubmittedError,
     VersionConflictError,
 )
@@ -42,6 +43,7 @@ from app.domain.annotation.state_machines import (
     assert_review_action,
     validate_action_name,
 )
+from app.domain.annotation.submission import submission_already_decided
 from app.domain.identity.models import ProjectScope
 
 _RESOURCE_TYPE = "ANNOTATION_REVIEW"
@@ -112,6 +114,17 @@ class AnnotationReviewUseCases:
 
         submission = self._get_submission(scope, command.submission_id)
         if submission.status is not AnnotationSubmissionStatus.SUBMITTED:
+            # 已作出终态结论 vs 还没提交：契约给了两个不同码。前者说明"结论已定、
+            # 要重开必须走新版本"，后者说明"标注人还没交"。混成一个码会让调用方
+            # 分不清该去找标注员还是复核人。
+            if submission_already_decided(submission.status):
+                raise SubmissionAlreadyDecidedError(
+                    "提交已作出终态结论，不能重复复核",
+                    details={
+                        "submission_id": str(submission.submission_id),
+                        "status": getattr(submission.status, "value", submission.status),
+                    },
+                )
             raise SubmissionNotSubmittedError("只有 SUBMITTED 提交可以创建复核")
         if command.reviewer_id == submission.annotator_id:
             raise ReviewSelfForbiddenError("复核人不得是标注人")
