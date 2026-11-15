@@ -1,23 +1,17 @@
-"""阶段 5 HTTP 请求模型与响应序列化。"""
+"""阶段 5 HTTP 请求模型。
+
+响应模型在 ``modelops_response_models.py``：请求侧统一 ``extra="forbid"``，
+响应侧必须完整输出运行时真实字段，两者语义不同，不放在同一文件。
+"""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.modelops.gaps import GapDimension, GapSummaryItem
-from app.domain.modelops.models import (
-    DataRequirement,
-    Evaluation,
-    InferenceService,
-    InferenceTask,
-    Model,
-    ModelFeedback,
-    ModelVersion,
-)
+from app.domain.modelops.gaps import GapDimension
 
 
 class ActionRequest(BaseModel):
@@ -200,177 +194,20 @@ class ModelAdapterCallbackPayload(BaseModel):
     error_summary: str | None = Field(default=None, max_length=2000)
 
 
-def _iso(value: datetime | None) -> str | None:
-    return value.isoformat() if value is not None else None
-
-
-def model_out(model: Model) -> dict[str, Any]:
-    return {
-        "model_id": model.model_id,
-        "project_id": model.project_id,
-        "code": model.code,
-        "name": model.name,
-        "description": model.description,
-        "task_type": model.task_type,
-        "framework": model.framework,
-        "owner_id": model.owner_id,
-        "status": model.status,
-        "current_version_id": model.current_version_id,
-        "tags": list(model.tags or []),
-        "allowed_actions": sorted(model.allowed_actions),
-        "version": model.row_version,
-        "created_at": _iso(model.created_at),
-        "updated_at": _iso(model.updated_at),
-    }
-
-
-def version_out(version: ModelVersion) -> dict[str, Any]:
-    return {
-        "model_version_id": version.model_version_id,
-        "model_id": version.model_id,
-        "project_id": version.project_id,
-        "version_no": version.version_no,
-        "status": version.status,
-        "artifact": version.artifact.to_payload(),
-        "runtime": version.runtime.to_payload(),
-        "training_request_id": version.training_request_id,
-        "training_delivery_id": version.training_delivery_id,
-        "external_ref_id": version.external_ref_id,
-        "dataset_version_ids": [str(item) for item in version.dataset_version_ids or []],
-        "metrics_summary": dict(version.metrics_summary or {}),
-        "release_notes": version.release_notes,
-        "validated_at": _iso(version.validated_at),
-        "released_by": version.released_by,
-        "released_at": _iso(version.released_at),
-        "deprecated_at": _iso(version.deprecated_at),
-        "deprecation_reason": version.deprecation_reason,
-        "allowed_actions": sorted(version.allowed_actions),
-        "version": version.row_version,
-        "created_at": _iso(version.created_at),
-        "updated_at": _iso(version.updated_at),
-    }
-
-
-def evaluation_out(evaluation: Evaluation) -> dict[str, Any]:
-    return {
-        "evaluation_id": evaluation.evaluation_id,
-        "project_id": evaluation.project_id,
-        "model_version_id": evaluation.model_version_id,
-        "dataset_version_id": evaluation.dataset_version_id,
-        "baseline_evaluation_id": evaluation.baseline_evaluation_id,
-        "status": evaluation.status,
-        "metrics": dict(evaluation.metrics or {}),
-        "thresholds": evaluation.thresholds,
-        "verdict": evaluation.verdict,
-        "report_ref": evaluation.report_ref,
-        "error_code": evaluation.error_code,
-        "error_summary": evaluation.error_summary,
-        "started_at": _iso(evaluation.started_at),
-        "finished_at": _iso(evaluation.finished_at),
-        "allowed_actions": sorted(evaluation.allowed_actions),
-        "version": evaluation.row_version,
-        "created_at": _iso(evaluation.created_at),
-        "updated_at": _iso(evaluation.updated_at),
-    }
-
-
-def service_out(service: InferenceService) -> dict[str, Any]:
-    return {
-        "service_id": service.service_id,
-        "project_id": service.project_id,
-        "model_version_id": service.model_version_id,
-        "environment": service.environment,
-        "endpoint_url": service.endpoint_url,
-        "resource_ref": service.resource_ref,
-        "config": dict(service.config or {}),
-        "status": service.status,
-        "health_status": service.health_status,
-        "deployed_at": _iso(service.deployed_at),
-        "stopped_at": _iso(service.stopped_at),
-        "allowed_actions": sorted(service.allowed_actions),
-        "version": service.row_version,
-        "created_at": _iso(service.created_at),
-        "updated_at": _iso(service.updated_at),
-    }
-
-
-def task_out(task: InferenceTask) -> dict[str, Any]:
-    return {
-        "task_id": task.task_id,
-        "project_id": task.project_id,
-        "model_version_id": task.model_version_id,
-        "service_id": task.service_id,
-        "dataset_version_id": task.dataset_version_id,
-        "episode_ids": [str(item) for item in task.episode_ids or []],
-        "status": task.status,
-        "result_ref": task.result_ref,
-        "metrics": dict(task.metrics or {}),
-        "log_ref": task.log_ref,
-        "error_code": task.error_code,
-        "error_summary": task.error_summary,
-        "started_at": _iso(task.started_at),
-        "finished_at": _iso(task.finished_at),
-        "allowed_actions": sorted(task.allowed_actions),
-        "version": task.row_version,
-        "created_at": _iso(task.created_at),
-        "updated_at": _iso(task.updated_at),
-    }
-
-
-def feedback_out(feedback: ModelFeedback) -> dict[str, Any]:
-    return {
-        "feedback_id": feedback.feedback_id,
-        "project_id": feedback.project_id,
-        "model_version_id": feedback.model_version_id,
-        "evaluation_id": feedback.evaluation_id,
-        "inference_task_id": feedback.inference_task_id,
-        "issue_type": feedback.issue_type,
-        "severity": feedback.severity,
-        "description": feedback.description,
-        "dimensions": [item.to_payload() for item in feedback.dimensions],
-        "evidence_refs": list(feedback.evidence_refs or []),
-        "status": feedback.status,
-        "converted_requirement_id": feedback.converted_requirement_id,
-        "resolution_note": feedback.resolution_note,
-        "allowed_actions": sorted(feedback.allowed_actions),
-        "version": feedback.row_version,
-        "created_at": _iso(feedback.created_at),
-        "updated_at": _iso(feedback.updated_at),
-    }
-
-
-def requirement_out(requirement: DataRequirement) -> dict[str, Any]:
-    return {
-        "requirement_id": requirement.requirement_id,
-        "project_id": requirement.project_id,
-        "code": requirement.code,
-        "title": requirement.title,
-        "description": requirement.description,
-        "source_type": requirement.source_type,
-        "source_feedback_ids": [str(item) for item in requirement.source_feedback_ids or []],
-        "source_evaluation_ids": [str(item) for item in requirement.source_evaluation_ids or []],
-        "dimensions": [item.to_payload() for item in requirement.dimensions],
-        "target_episode_count": requirement.target_episode_count,
-        "quality_thresholds": dict(requirement.quality_thresholds or {}),
-        "priority": requirement.priority,
-        "due_at": _iso(requirement.due_at),
-        "owner_id": requirement.owner_id,
-        "status": requirement.status,
-        "linked_dataset_version_ids": [
-            str(item) for item in requirement.linked_dataset_version_ids or []
-        ],
-        "retest_evaluation_ids": [str(item) for item in requirement.retest_evaluation_ids or []],
-        "satisfied_at": _iso(requirement.satisfied_at),
-        "satisfaction_evidence_ref": requirement.satisfaction_evidence_ref,
-        "allowed_actions": sorted(requirement.allowed_actions),
-        "version": requirement.row_version,
-        "created_at": _iso(requirement.created_at),
-        "updated_at": _iso(requirement.updated_at),
-    }
-
-
-def gap_summary_out(items: list[GapSummaryItem]) -> dict[str, Any]:
-    return {
-        "items": [item.to_payload() for item in items],
-        "freshness": "FRESH",
-    }
+__all__ = [
+    "ActionRequest",
+    "ArtifactInput",
+    "EvaluationCreate",
+    "FeedbackActionRequest",
+    "FeedbackCreate",
+    "GapDimensionInput",
+    "InferenceServiceCreate",
+    "InferenceTaskCreate",
+    "ModelAdapterCallbackPayload",
+    "ModelCreate",
+    "ModelPatch",
+    "ModelVersionCreate",
+    "RequirementActionRequest",
+    "RequirementCreate",
+    "RuntimeInput",
+]

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -17,11 +17,12 @@ from app.api.v1.modelops_dependencies import (
     WriteScope,
     request_id,
 )
+from app.api.v1.modelops_response_models import DataRequirementOut
 from app.api.v1.modelops_schemas import (
     RequirementActionRequest,
     RequirementCreate,
-    requirement_out,
 )
+from app.api.v1.schemas import PageOut
 from app.application.modelops.commands import NewRequirement
 from app.core.errors import ForbiddenError
 from app.domain.identity.models import ProjectContext, ProjectRole
@@ -29,7 +30,7 @@ from app.domain.identity.models import ProjectContext, ProjectRole
 router = APIRouter(prefix="/projects/{project_id}/data-requirements", tags=["data-requirements"])
 
 
-@router.get("")
+@router.get("", response_model=PageOut[DataRequirementOut])
 def list_requirements(
     scope: ReadScope,
     services: ModelOpsServicesDep,
@@ -37,7 +38,7 @@ def list_requirements(
     priority: str | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[DataRequirementOut]:
     items = services.requirements.list(
         scope,
         status=status,
@@ -46,20 +47,20 @@ def list_requirements(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.requirement_id)
-    return {
-        "items": [requirement_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[DataRequirementOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("", status_code=201)
+@router.post("", response_model=DataRequirementOut, status_code=201)
 def create_requirement(
     payload: RequirementCreate,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> DataRequirementOut:
     requirement = services.requirements.create(
         scope,
         NewRequirement(
@@ -81,17 +82,17 @@ def create_requirement(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return requirement_out(requirement)
+    return DataRequirementOut.from_domain(requirement)
 
 
-@router.get("/{requirement_id}")
+@router.get("/{requirement_id}", response_model=DataRequirementOut)
 def get_requirement(
     requirement_id: UUID, scope: ReadScope, services: ModelOpsServicesDep
-) -> dict[str, Any]:
-    return requirement_out(services.requirements.get(scope, requirement_id))
+) -> DataRequirementOut:
+    return DataRequirementOut.from_domain(services.requirements.get(scope, requirement_id))
 
 
-@router.post("/{requirement_id}/actions/{action}")
+@router.post("/{requirement_id}/actions/{action}", response_model=DataRequirementOut)
 def act_on_requirement(
     requirement_id: UUID,
     action: str,
@@ -102,7 +103,7 @@ def act_on_requirement(
     expected_version: ExpectedVersion,
     context: Annotated[ProjectContext, Depends(get_project_context)],
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> DataRequirementOut:
     if (
         action in {"approve", "close"}
         and not context.is_platform_admin
@@ -120,7 +121,7 @@ def act_on_requirement(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return requirement_out(requirement)
+    return DataRequirementOut.from_domain(requirement)
 
 
 __all__ = ["router"]

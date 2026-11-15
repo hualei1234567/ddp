@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -17,14 +17,14 @@ from app.api.v1.modelops_dependencies import (
     WriteScope,
     request_id,
 )
+from app.api.v1.modelops_response_models import ModelOut, ModelVersionOut
 from app.api.v1.modelops_schemas import (
     ActionRequest,
     ModelCreate,
     ModelPatch,
     ModelVersionCreate,
-    model_out,
-    version_out,
 )
+from app.api.v1.schemas import PageOut
 from app.application.modelops.commands import NewModel, NewModelVersion
 from app.core.errors import ForbiddenError, ValidationFailedError
 from app.domain.identity.models import ProjectContext, ProjectRole
@@ -38,7 +38,7 @@ def _require_owner(context: ProjectContext) -> None:
         raise ForbiddenError("该动作要求项目负责人权限")
 
 
-@router.get("")
+@router.get("", response_model=PageOut[ModelOut])
 def list_models(
     scope: ReadScope,
     services: ModelOpsServicesDep,
@@ -46,7 +46,7 @@ def list_models(
     task_type: str | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[ModelOut]:
     items = services.models.list(
         scope,
         status=status,
@@ -55,17 +55,20 @@ def list_models(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.model_id)
-    return {"items": [model_out(item) for item in page.items], "next_cursor": page.next_cursor}
+    return PageOut(
+        items=[ModelOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("", status_code=201)
+@router.post("", response_model=ModelOut, status_code=201)
 def create_model(
     payload: ModelCreate,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> ModelOut:
     model = services.models.create(
         scope,
         NewModel(
@@ -82,15 +85,15 @@ def create_model(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return model_out(model)
+    return ModelOut.from_domain(model)
 
 
-@router.get("/{model_id}")
-def get_model(model_id: UUID, scope: ReadScope, services: ModelOpsServicesDep) -> dict[str, Any]:
-    return model_out(services.models.get(scope, model_id))
+@router.get("/{model_id}", response_model=ModelOut)
+def get_model(model_id: UUID, scope: ReadScope, services: ModelOpsServicesDep) -> ModelOut:
+    return ModelOut.from_domain(services.models.get(scope, model_id))
 
 
-@router.patch("/{model_id}")
+@router.patch("/{model_id}", response_model=ModelOut)
 def update_model(
     model_id: UUID,
     payload: ModelPatch,
@@ -98,7 +101,7 @@ def update_model(
     scope: WriteScope,
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
-) -> dict[str, Any]:
+) -> ModelOut:
     model = services.models.update(
         scope,
         model_id,
@@ -106,10 +109,10 @@ def update_model(
         expected_version=expected_version,
         request_id=request_id(request),
     )
-    return model_out(model)
+    return ModelOut.from_domain(model)
 
 
-@router.post("/{model_id}/actions/{action}")
+@router.post("/{model_id}/actions/{action}", response_model=ModelOut)
 def act_on_model(
     model_id: UUID,
     action: str,
@@ -119,7 +122,7 @@ def act_on_model(
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> ModelOut:
     model = services.models.apply_action(
         scope,
         model_id,
@@ -131,10 +134,10 @@ def act_on_model(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return model_out(model)
+    return ModelOut.from_domain(model)
 
 
-@router.get("/{model_id}/versions")
+@router.get("/{model_id}/versions", response_model=PageOut[ModelVersionOut])
 def list_versions(
     model_id: UUID,
     scope: ReadScope,
@@ -142,18 +145,18 @@ def list_versions(
     status: str | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[ModelVersionOut]:
     items = services.versions.list(
         scope, model_id, status=status, after_id=decode_cursor(cursor), limit=fetch_limit(limit)
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.model_version_id)
-    return {
-        "items": [version_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[ModelVersionOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("/{model_id}/versions", status_code=201)
+@router.post("/{model_id}/versions", response_model=ModelVersionOut, status_code=201)
 def create_version(
     model_id: UUID,
     payload: ModelVersionCreate,
@@ -161,7 +164,7 @@ def create_version(
     scope: WriteScope,
     services: ModelOpsServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> ModelVersionOut:
     version = services.versions.create(
         scope,
         model_id,
@@ -191,17 +194,20 @@ def create_version(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return version_out(version)
+    return ModelVersionOut.from_domain(version)
 
 
-@router.get("/{model_id}/versions/{version_id}")
+@router.get("/{model_id}/versions/{version_id}", response_model=ModelVersionOut)
 def get_version(
     model_id: UUID, version_id: UUID, scope: ReadScope, services: ModelOpsServicesDep
-) -> dict[str, Any]:
-    return version_out(services.versions.get(scope, model_id, version_id))
+) -> ModelVersionOut:
+    return ModelVersionOut.from_domain(services.versions.get(scope, model_id, version_id))
 
 
-@router.post("/{model_id}/versions/{version_id}/actions/{action}")
+@router.post(
+    "/{model_id}/versions/{version_id}/actions/{action}",
+    response_model=ModelVersionOut,
+)
 def act_on_version(
     model_id: UUID,
     version_id: UUID,
@@ -213,7 +219,7 @@ def act_on_version(
     expected_version: ExpectedVersion,
     context: Annotated[ProjectContext, Depends(get_project_context)],
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> ModelVersionOut:
     if action == "publish":
         _require_owner(context)
     version = services.versions.apply_action(
@@ -228,7 +234,7 @@ def act_on_version(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return version_out(version)
+    return ModelVersionOut.from_domain(version)
 
 
 __all__ = ["router", "ValidationFailedError"]

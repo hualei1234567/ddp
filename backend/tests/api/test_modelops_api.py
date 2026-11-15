@@ -106,8 +106,8 @@ def _settings() -> Settings:
     return Settings(env="local", model_adapter_shared_secrets={"mock": SECRET})
 
 
-def _client(factory, user_id, inspector: FakeInspector):
-    client = make_client(factory, user_id, settings_override=_settings())
+def _client(factory, user_id, inspector: FakeInspector, *, settings_override=None):
+    client = make_client(factory, user_id, settings_override=settings_override or _settings())
     client.app.dependency_overrides[get_artifact_inspector] = lambda: inspector
     return client
 
@@ -741,3 +741,157 @@ def test_idempotency_key_reuse_with_different_body(api_db) -> None:
     )
     assert different.status_code == 409
     assert different.json()["error"]["code"] == "idempotency_key_reused"
+
+
+def test_inference_success_without_result_ref_is_rejected(api_db) -> None:
+    """AC-IN-02：结果未知不得记为成功。成功回调缺结果引用 → 422 且任务不变。"""
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    task = editor.post(
+        url(ids.project_a, "/inference-tasks"),
+        json={"model_version_id": version["model_version_id"], "episode_ids": [str(uuid4())]},
+    )
+    assert task.status_code == 202, task.text
+    task_id = task.json()["task_id"]
+
+    rejected = _callback(
+        editor,
+        {
+            "event_id": f"evt-{uuid4().hex[:8]}",
+            "adapter_version": "1.0.0",
+            "event_type": "inference.completed",
+            "project_id": str(ids.project_a),
+            "task_id": task_id,
+            "metrics": {"latency_ms": 12.0},
+        },
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "inference_task_result_invalid"
+    stored = editor.get(url(ids.project_a, f"/inference-tasks/{task_id}")).json()
+    assert stored["status"] == "QUEUED"
+    assert stored["result_ref"] is None
+
+
+def test_inference_result_ref_with_bad_hash_is_rejected(api_db) -> None:
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    task = editor.post(
+        url(ids.project_a, "/inference-tasks"),
+        json={"model_version_id": version["model_version_id"], "episode_ids": [str(uuid4())]},
+    )
+    assert task.status_code == 202, task.text
+
+    rejected = _callback(
+        editor,
+        {
+            "event_id": f"evt-{uuid4().hex[:8]}",
+            "adapter_version": "1.0.0",
+            "event_type": "inference.completed",
+            "project_id": str(ids.project_a),
+            "task_id": task.json()["task_id"],
+            "result_ref": {"object_key": "inference/result.json", "sha256": "sha256:zz"},
+        },
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "inference_task_result_invalid"
+
+
+def test_adapter_without_declared_capability_is_rejected(api_db) -> None:
+    """Adapter 已登记但未声明 evaluate 能力 → 422 model_adapter_unsupported。"""
+    factory, ids = api_db
+    editor = _client(
+        factory,
+        ids.editor_a,
+        FakeInspector(128),
+        settings_override=Settings(
+            env="local",
+            model_adapter_shared_secrets={"mock": SECRET},
+            model_adapter_capabilities={"mock": ["inference"]},
+        ),
+    )
+    context = build_frozen_version(factory, ids)
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    response = editor.post(
+        url(ids.project_a, "/evaluations"),
+        json={
+            "model_version_id": version["model_version_id"],
+            "dataset_version_id": str(context["version_id"]),
+            "thresholds": {"success_rate": {"min": 0.9}},
+            "adapter_id": "mock",
+        },
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "model_adapter_unsupported"
+
+
+def test_adapter_with_declared_capability_still_hits_unavailable(api_db) -> None:
+    """能力已声明但真实客户端未配置 → 仍需 503，两个码语义不可混用。"""
+    factory, ids = api_db
+    editor = _client(
+        factory,
+        ids.editor_a,
+        FakeInspector(128),
+        settings_override=Settings(
+            env="local",
+            model_adapter_shared_secrets={"mock": SECRET},
+            model_adapter_capabilities={"mock": ["evaluate"]},
+        ),
+    )
+    context = build_frozen_version(factory, ids)
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    response = editor.post(
+        url(ids.project_a, "/evaluations"),
+        json={
+            "model_version_id": version["model_version_id"],
+            "dataset_version_id": str(context["version_id"]),
+            "thresholds": {"success_rate": {"min": 0.9}},
+            "adapter_id": "mock",
+        },
+    )
+    assert response.status_code == 503, response.text
+    assert response.json()["error"]["code"] == "model_adapter_unavailable"
+
+
+def test_training_source_must_exist_in_project(api_db) -> None:
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    response = editor.post(
+        url(ids.project_a, f"/models/{model['model_id']}/versions"),
+        json={**_version_payload(), "training_request_id": str(uuid4())},
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "model_training_source_invalid"
+
+
+def test_archived_model_rejects_new_version(api_db) -> None:
+    """Model 的 ARCHIVED 是终态（state-machines.v1.json），归档后不得新增版本。"""
+    factory, ids = api_db
+    owner = _client(factory, ids.owner_a, FakeInspector(128))
+    model = _create_model(owner, ids.project_a, ids.owner_a)
+    activated = owner.post(
+        url(ids.project_a, f"/models/{model['model_id']}/actions/activate"),
+        headers={"If-Match": f'"{model["version"]}"'},
+        json={},
+    )
+    assert activated.status_code == 200, activated.text
+    archived = owner.post(
+        url(ids.project_a, f"/models/{model['model_id']}/actions/archive"),
+        headers={"If-Match": f'"{activated.json()["version"]}"'},
+        json={"reason": "模型下线"},
+    )
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["status"] == "ARCHIVED"
+
+    rejected = owner.post(
+        url(ids.project_a, f"/models/{model['model_id']}/versions"),
+        json=_version_payload(),
+    )
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["error"]["code"] == "model_not_active"

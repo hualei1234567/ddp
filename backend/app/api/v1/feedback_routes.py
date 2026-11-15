@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
@@ -16,18 +16,21 @@ from app.api.v1.modelops_dependencies import (
     WriteScope,
     request_id,
 )
+from app.api.v1.modelops_response_models import (
+    DataGapSummaryOut,
+    FeedbackOut,
+)
 from app.api.v1.modelops_schemas import (
     FeedbackActionRequest,
     FeedbackCreate,
-    feedback_out,
-    gap_summary_out,
 )
+from app.api.v1.schemas import PageOut
 from app.application.modelops.commands import NewFeedback
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["model-feedback"])
 
 
-@router.get("/model-feedback")
+@router.get("/model-feedback", response_model=PageOut[FeedbackOut])
 def list_feedback(
     scope: ReadScope,
     services: ModelOpsServicesDep,
@@ -36,7 +39,7 @@ def list_feedback(
     model_version_id: UUID | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[FeedbackOut]:
     items = services.feedback.list(
         scope,
         status=status,
@@ -46,20 +49,20 @@ def list_feedback(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.feedback_id)
-    return {
-        "items": [feedback_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[FeedbackOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("/model-feedback", status_code=201)
+@router.post("/model-feedback", response_model=FeedbackOut, status_code=201)
 def create_feedback(
     payload: FeedbackCreate,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> FeedbackOut:
     item = services.feedback.create(
         scope,
         NewFeedback(
@@ -77,17 +80,15 @@ def create_feedback(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return feedback_out(item)
+    return FeedbackOut.from_domain(item)
 
 
-@router.get("/model-feedback/{feedback_id}")
-def get_feedback(
-    feedback_id: UUID, scope: ReadScope, services: ModelOpsServicesDep
-) -> dict[str, Any]:
-    return feedback_out(services.feedback.get(scope, feedback_id))
+@router.get("/model-feedback/{feedback_id}", response_model=FeedbackOut)
+def get_feedback(feedback_id: UUID, scope: ReadScope, services: ModelOpsServicesDep) -> FeedbackOut:
+    return FeedbackOut.from_domain(services.feedback.get(scope, feedback_id))
 
 
-@router.post("/model-feedback/{feedback_id}/actions/{action}")
+@router.post("/model-feedback/{feedback_id}/actions/{action}", response_model=FeedbackOut)
 def act_on_feedback(
     feedback_id: UUID,
     action: str,
@@ -97,7 +98,7 @@ def act_on_feedback(
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> FeedbackOut:
     item = services.feedback.apply_action(
         scope,
         feedback_id,
@@ -109,16 +110,18 @@ def act_on_feedback(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return feedback_out(item)
+    return FeedbackOut.from_domain(item)
 
 
-@router.get("/data-gaps")
+@router.get("/data-gaps", response_model=DataGapSummaryOut)
 def get_gaps(
     scope: ReadScope,
     services: ModelOpsServicesDep,
     dimension_type: str | None = None,
-) -> dict[str, Any]:
-    return gap_summary_out(services.feedback.gap_summary(scope, dimension_type=dimension_type))
+) -> DataGapSummaryOut:
+    return DataGapSummaryOut.from_domain(
+        services.feedback.gap_summary(scope, dimension_type=dimension_type)
+    )
 
 
 __all__ = ["router"]

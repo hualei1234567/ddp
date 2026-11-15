@@ -21,6 +21,7 @@ from app.application.modelops.ports import (
     UnitOfWork,
 )
 from app.domain.identity.models import ProjectScope
+from app.domain.modelops.adapters import ensure_capability
 from app.domain.modelops.enums import (
     EvaluationStatus,
     EvaluationVerdict,
@@ -158,6 +159,7 @@ class EvaluationUseCases:
         )
         created = self._evaluations.add(scope, evaluation)
         if command.adapter_id:
+            ensure_capability(self._gateway.capabilities(command.adapter_id), "submit_evaluation")
             self._gateway.submit_evaluation(
                 adapter_id=command.adapter_id,
                 adapter_version="1.0.0",

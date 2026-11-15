@@ -22,6 +22,7 @@ from app.domain.modelops.models import (
     ModelFeedback,
     ModelVersion,
 )
+from app.domain.modelops.training_source import TrainingSourceFacts
 
 
 class UnitOfWork(Protocol):
@@ -206,6 +207,23 @@ class DatasetGate(Protocol):
     def item_count(self, project_id: UUID, version_id: UUID) -> int: ...
 
 
+class TrainingSourceGate(Protocol):
+    """阶段 4 训练来源门禁：解析同项目的训练需求/交付/外部引用。
+
+    三个引用各自查不到或跨项目时返回 ``None``；应用层据此抛
+    ``model_training_source_invalid``（不区分「不存在」与「跨项目」，不泄漏存在性）。
+    """
+
+    def resolve(
+        self,
+        project_id: UUID,
+        *,
+        request_id: UUID | None = None,
+        delivery_id: UUID | None = None,
+        external_ref_id: UUID | None = None,
+    ) -> TrainingSourceFacts | None: ...
+
+
 class ArtifactInspector(Protocol):
     def object_size(self, object_key: str) -> int | None: ...
 
@@ -277,5 +295,7 @@ __all__ = [
     "OutboxEvent",
     "OutboxRepository",
     "RequirementRepository",
+    "TrainingSourceFacts",
+    "TrainingSourceGate",
     "UnitOfWork",
 ]

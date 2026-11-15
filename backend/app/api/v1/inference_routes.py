@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
@@ -16,44 +16,44 @@ from app.api.v1.modelops_dependencies import (
     WriteScope,
     request_id,
 )
+from app.api.v1.modelops_response_models import InferenceServiceOut, InferenceTaskOut
 from app.api.v1.modelops_schemas import (
     ActionRequest,
     InferenceServiceCreate,
     InferenceTaskCreate,
-    service_out,
-    task_out,
 )
+from app.api.v1.schemas import PageOut
 from app.application.modelops.commands import NewInferenceService, NewInferenceTask
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["inference"])
 
 
-@router.get("/inference-services")
+@router.get("/inference-services", response_model=PageOut[InferenceServiceOut])
 def list_services(
     scope: ReadScope,
     services: ModelOpsServicesDep,
     status: str | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[InferenceServiceOut]:
     items = services.services.list(
         scope, status=status, after_id=decode_cursor(cursor), limit=fetch_limit(limit)
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.service_id)
-    return {
-        "items": [service_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[InferenceServiceOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("/inference-services", status_code=201)
+@router.post("/inference-services", response_model=InferenceServiceOut, status_code=201)
 def create_service(
     payload: InferenceServiceCreate,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> InferenceServiceOut:
     service = services.services.create(
         scope,
         NewInferenceService(
@@ -68,17 +68,20 @@ def create_service(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return service_out(service)
+    return InferenceServiceOut.from_domain(service)
 
 
-@router.get("/inference-services/{service_id}")
+@router.get("/inference-services/{service_id}", response_model=InferenceServiceOut)
 def get_service(
     service_id: UUID, scope: ReadScope, services: ModelOpsServicesDep
-) -> dict[str, Any]:
-    return service_out(services.services.get(scope, service_id))
+) -> InferenceServiceOut:
+    return InferenceServiceOut.from_domain(services.services.get(scope, service_id))
 
 
-@router.post("/inference-services/{service_id}/actions/{action}")
+@router.post(
+    "/inference-services/{service_id}/actions/{action}",
+    response_model=InferenceServiceOut,
+)
 def act_on_service(
     service_id: UUID,
     action: str,
@@ -88,7 +91,7 @@ def act_on_service(
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> InferenceServiceOut:
     service = services.services.apply_action(
         scope,
         service_id,
@@ -100,10 +103,10 @@ def act_on_service(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return service_out(service)
+    return InferenceServiceOut.from_domain(service)
 
 
-@router.get("/inference-tasks")
+@router.get("/inference-tasks", response_model=PageOut[InferenceTaskOut])
 def list_tasks(
     scope: ReadScope,
     services: ModelOpsServicesDep,
@@ -111,7 +114,7 @@ def list_tasks(
     model_version_id: UUID | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[InferenceTaskOut]:
     items = services.tasks.list(
         scope,
         status=status,
@@ -120,20 +123,20 @@ def list_tasks(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.task_id)
-    return {
-        "items": [task_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[InferenceTaskOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("/inference-tasks", status_code=202)
+@router.post("/inference-tasks", response_model=InferenceTaskOut, status_code=202)
 def create_task(
     payload: InferenceTaskCreate,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> InferenceTaskOut:
     task = services.tasks.create(
         scope,
         NewInferenceTask(
@@ -149,15 +152,18 @@ def create_task(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return task_out(task)
+    return InferenceTaskOut.from_domain(task)
 
 
-@router.get("/inference-tasks/{task_id}")
-def get_task(task_id: UUID, scope: ReadScope, services: ModelOpsServicesDep) -> dict[str, Any]:
-    return task_out(services.tasks.get(scope, task_id))
+@router.get("/inference-tasks/{task_id}", response_model=InferenceTaskOut)
+def get_task(task_id: UUID, scope: ReadScope, services: ModelOpsServicesDep) -> InferenceTaskOut:
+    return InferenceTaskOut.from_domain(services.tasks.get(scope, task_id))
 
 
-@router.post("/inference-tasks/{task_id}/actions/{action}")
+@router.post(
+    "/inference-tasks/{task_id}/actions/{action}",
+    response_model=InferenceTaskOut,
+)
 def act_on_task(
     task_id: UUID,
     action: str,
@@ -167,7 +173,7 @@ def act_on_task(
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> InferenceTaskOut:
     task = services.tasks.apply_action(
         scope,
         task_id,
@@ -179,7 +185,7 @@ def act_on_task(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return task_out(task)
+    return InferenceTaskOut.from_domain(task)
 
 
 __all__ = ["router"]

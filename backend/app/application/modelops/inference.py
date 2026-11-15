@@ -21,6 +21,7 @@ from app.application.modelops.ports import (
     UnitOfWork,
 )
 from app.domain.identity.models import ProjectScope
+from app.domain.modelops.adapters import ensure_capability
 from app.domain.modelops.enums import (
     HealthStatus,
     InferenceEnvironment,
@@ -41,6 +42,7 @@ from app.domain.modelops.models import (
     InferenceTask,
     new_inference_task,
 )
+from app.domain.modelops.references import validate_result_reference
 from app.domain.modelops.state_machines import target_status, validate_action_name
 from app.domain.modelops.validation import coerce_enum, optional_text, text_value
 
@@ -356,6 +358,7 @@ class InferenceTaskUseCases:
         )
         created = self._tasks.add(scope, task)
         if command.adapter_id:
+            ensure_capability(self._gateway.capabilities(command.adapter_id), "submit_inference")
             self._gateway.submit_inference(
                 adapter_id=command.adapter_id,
                 adapter_version="1.0.0",
@@ -498,7 +501,7 @@ class InferenceTaskUseCases:
             updated = replace(
                 task,
                 status=InferenceTaskStatus.SUCCEEDED.value,
-                result_ref=result_ref,
+                result_ref=validate_result_reference(result_ref),
                 metrics=metrics or {},
                 log_ref=log_ref,
                 started_at=task.started_at or now,

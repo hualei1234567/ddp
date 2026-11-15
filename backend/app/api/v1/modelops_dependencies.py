@@ -48,6 +48,7 @@ from app.infrastructure.repositories.modelops import (
     SqlModelVersionRepository,
     SqlRequirementRepository,
 )
+from app.infrastructure.repositories.modelops_training_source import SqlTrainingSourceGate
 from app.infrastructure.storage.s3 import S3MultipartStorage
 
 
@@ -88,6 +89,7 @@ def build_modelops_services(
     outbox = SqlModelOutboxRepository(session)
     idempotency = SqlModelIdempotencyRepository(session)
     datasets = SqlDatasetGate(session)
+    training_sources = SqlTrainingSourceGate(session)
     gateway = gateway or ConfiguredModelPlatformGateway(settings)
     artifacts = artifacts or S3ArtifactInspector(S3MultipartStorage(settings))
     models = ModelUseCases(
@@ -104,6 +106,7 @@ def build_modelops_services(
         services=services_repo,
         datasets=datasets,
         artifacts=artifacts,
+        training_sources=training_sources,
         audit=audit,
         outbox=outbox,
         idempotency=idempotency,

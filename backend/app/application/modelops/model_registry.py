@@ -17,17 +17,19 @@ from app.application.modelops.ports import (
     ModelRepository,
     ModelVersionRepository,
     OutboxRepository,
+    TrainingSourceGate,
     UnitOfWork,
 )
 from app.domain.identity.models import ProjectScope
 from app.domain.modelops.artifacts import ModelArtifact, ModelRuntime
-from app.domain.modelops.enums import ModelVersionStatus
+from app.domain.modelops.enums import ModelStatus, ModelVersionStatus
 from app.domain.modelops.errors import (
     DomainValidationError,
     DuplicateResourceError,
     InvalidStateTransitionError,
     ModelArtifactChecksumMismatchError,
     ModelArtifactInvalidError,
+    ModelNotActiveError,
     ModelReleaseApprovalForbiddenError,
     ModelVersionInUseError,
     ResourceNotFoundError,
@@ -35,6 +37,7 @@ from app.domain.modelops.errors import (
 )
 from app.domain.modelops.models import Model, ModelVersion, new_model, new_model_version
 from app.domain.modelops.state_machines import validate_action_name
+from app.domain.modelops.training_source import TrainingSourceRef, ensure_training_source
 
 _MODEL = "MODEL"
 _VERSION = "MODEL_VERSION"
@@ -290,6 +293,7 @@ class ModelVersionUseCases:
         services,
         datasets: DatasetGate,
         artifacts: ArtifactInspector,
+        training_sources: TrainingSourceGate,
         audit: AuditRepository,
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
@@ -300,6 +304,7 @@ class ModelVersionUseCases:
         self._services = services
         self._datasets = datasets
         self._artifacts = artifacts
+        self._training_sources = training_sources
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
@@ -338,6 +343,10 @@ class ModelVersionUseCases:
         model = self._models.get(scope, model_id)
         if model is None:
             raise ResourceNotFoundError("模型", model_id)
+        # 契约 `model_not_active`(409)「模型未激活或已归档」：ARCHIVED 是 Model 状态机
+        # 的终态（state-machines.v1.json `Model.terminal`），归档后不得再新增版本。
+        if model.status == ModelStatus.ARCHIVED.value:
+            raise ModelNotActiveError("模型已归档，不能新增版本")
         key = validate_key(idempotency_key)
         body = {
             "model_id": str(model_id),
@@ -352,6 +361,19 @@ class ModelVersionUseCases:
             state = self._datasets.version_state(scope.project_id, dataset_version_id)
             if state is None:
                 raise DomainValidationError("dataset_version_ids 含不存在或跨项目版本")
+        ensure_training_source(
+            TrainingSourceRef(
+                request_id=command.training_request_id,
+                delivery_id=command.training_delivery_id,
+                external_ref_id=command.external_ref_id,
+            ),
+            self._training_sources.resolve(
+                scope.project_id,
+                request_id=command.training_request_id,
+                delivery_id=command.training_delivery_id,
+                external_ref_id=command.external_ref_id,
+            ),
+        )
         version_no = self._versions.next_version_no(scope, model_id)
         version = new_model_version(
             model_version_id=uuid4(),

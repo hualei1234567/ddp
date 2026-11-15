@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
@@ -16,17 +16,18 @@ from app.api.v1.modelops_dependencies import (
     WriteScope,
     request_id,
 )
+from app.api.v1.modelops_response_models import EvaluationOut
 from app.api.v1.modelops_schemas import (
     ActionRequest,
     EvaluationCreate,
-    evaluation_out,
 )
+from app.api.v1.schemas import PageOut
 from app.application.modelops.commands import NewEvaluation
 
 router = APIRouter(prefix="/projects/{project_id}/evaluations", tags=["evaluations"])
 
 
-@router.get("")
+@router.get("", response_model=PageOut[EvaluationOut])
 def list_evaluations(
     scope: ReadScope,
     services: ModelOpsServicesDep,
@@ -36,7 +37,7 @@ def list_evaluations(
     verdict: str | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[EvaluationOut]:
     items = services.evaluations.list(
         scope,
         model_version_id=model_version_id,
@@ -47,20 +48,20 @@ def list_evaluations(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.evaluation_id)
-    return {
-        "items": [evaluation_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[EvaluationOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("", status_code=202)
+@router.post("", response_model=EvaluationOut, status_code=202)
 def create_evaluation(
     payload: EvaluationCreate,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> EvaluationOut:
     evaluation = services.evaluations.create(
         scope,
         NewEvaluation(
@@ -76,17 +77,17 @@ def create_evaluation(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return evaluation_out(evaluation)
+    return EvaluationOut.from_domain(evaluation)
 
 
-@router.get("/{evaluation_id}")
+@router.get("/{evaluation_id}", response_model=EvaluationOut)
 def get_evaluation(
     evaluation_id: UUID, scope: ReadScope, services: ModelOpsServicesDep
-) -> dict[str, Any]:
-    return evaluation_out(services.evaluations.get(scope, evaluation_id))
+) -> EvaluationOut:
+    return EvaluationOut.from_domain(services.evaluations.get(scope, evaluation_id))
 
 
-@router.post("/{evaluation_id}/actions/{action}")
+@router.post("/{evaluation_id}/actions/{action}", response_model=EvaluationOut)
 def act_on_evaluation(
     evaluation_id: UUID,
     action: str,
@@ -96,7 +97,7 @@ def act_on_evaluation(
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> EvaluationOut:
     evaluation = services.evaluations.apply_action(
         scope,
         evaluation_id,
@@ -108,7 +109,7 @@ def act_on_evaluation(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return evaluation_out(evaluation)
+    return EvaluationOut.from_domain(evaluation)
 
 
 __all__ = ["router"]
