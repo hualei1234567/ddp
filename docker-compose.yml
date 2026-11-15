@@ -114,6 +114,32 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  datasource-worker:
+    # 数据源导入 Worker：消费 datasource.import_requested 事件，真实下载 HF 文件、
+    # 校验内容签名与 sha256、存对象存储，并登记 RawAsset + MediaAsset。
+    #
+    # 此前 compose 里**没有这个服务**：导入任务建好后事件一直躺在 outbox 里，
+    # 只能靠手工 `python -m app.workers.datasources --once` 驱动，等于线上主链断开。
+    # 同时修掉两处让它起不来的依赖问题（本批一并处理）：
+    # - api.Dockerfile 原先不复制 data-platform/，镜像内 `import ddp_data` 失败；
+    # - httpx 原先只在 requirements-dev.txt，生产镜像装不到。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-datasource-worker
+    command: ["python", "-m", "app.workers.datasources"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+      DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
   export-worker:
     # 导出 Job 常驻 Worker：消费 dataset.export.requested 事件并写入对象存储。
     profiles: ["app"]
