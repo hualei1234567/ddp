@@ -13,11 +13,19 @@
     "all_stage4_codes_implemented": false
   },
   "envelope": {
-    "required": ["error"],
+    "required": [
+      "error"
+    ],
     "properties": {
       "error": {
-        "required": ["code", "message"],
-        "optional": ["request_id", "details"],
+        "required": [
+          "code",
+          "message"
+        ],
+        "optional": [
+          "request_id",
+          "details"
+        ],
         "details_rule": "可选字段级错误、item_refs、episode_ids、expected/actual、counts、violation_refs；不得包含对象存储凭据、Token、Secret、跨项目对象名称或存在性信息"
       }
     }
@@ -40,60 +48,590 @@
     "dependency_unavailable"
   ],
   "codes": [
-    {"code": "dataset_access_denied", "http": 403, "retryable": false, "surface": "api", "implemented": false, "category": "grant", "description": "无数据集访问/下载/导出权限"},
-    {"code": "dataset_freeze_approval_forbidden", "http": 403, "retryable": false, "surface": "api", "implemented": false, "category": "separation_of_duties", "description": "构建人自批或审批人无权限"},
-    {"code": "dataset_grant_forbidden", "http": 403, "retryable": false, "surface": "api", "implemented": false, "category": "grant", "description": "非 PO 创建/审批授权，或授权范围越权"},
-    {"code": "dataset_grant_expired", "http": 410, "retryable": false, "surface": "api", "implemented": false, "category": "grant", "description": "跨项目授权已过期；立即拒绝"},
-    {"code": "dataset_grant_revoked", "http": 410, "retryable": false, "surface": "api", "implemented": false, "category": "grant", "description": "跨项目授权已撤销；立即拒绝"},
-    {"code": "dataset_leakage_waiver_forbidden", "http": 403, "retryable": false, "surface": "api", "implemented": false, "category": "leakage", "description": "尝试豁免硬规则，或豁免人不是 PO/缺少原因与审计"},
-    {"code": "dataset_not_ready", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "state", "description": "版本未到 READY/FROZEN 即冻结/导出"},
-    {"code": "dataset_version_immutable", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "immutability", "description": "冻结后原地修改样本、划分、Manifest、质量报告或 Hash；应创建新版本"},
-    {"code": "dataset_version_not_frozen", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "state", "description": "未冻结即导出或交付"},
-    {"code": "dataset_version_validation_failed", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "validation", "description": "校验失败仍尝试冻结；或版本状态为 VALIDATION_FAILED 却执行冻结/导出"},
-    {"code": "dataset_empty", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "data_sufficiency", "description": "入选样本为空，不得创建空版本"},
-    {"code": "dataset_insufficient_data", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "data_sufficiency", "description": "低于最小样本/时长，或训练/验证划分为空"},
-    {"code": "dataset_split_invalid", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "split", "description": "比例/固定数量/分组/舍入/空测试集策略非法"},
-    {"code": "dataset_leakage_check_failed", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "leakage", "description": "硬规则泄漏；禁止冻结与导出，不提供普通豁免"},
-    {"code": "dataset_leakage_check_unknown", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "leakage", "description": "泄漏检查无法完成（数据缺失/策略缺失/超时）；按失败关闭阻断"},
-    {"code": "dataset_quality_gate_failed", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "validation", "description": "质量门禁未通过或质量报告存在阻断项"},
-    {"code": "dataset_item_ineligible", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "eligibility", "description": "Episode/标注/Manifest/标定/时间同步/用途不合格"},
-    {"code": "dataset_annotation_not_approved", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "eligibility", "description": "引用未批准标注、草稿、驳回或返工中标注"},
-    {"code": "dataset_annotation_snapshot_mismatch", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "eligibility", "description": "标注/Schema 版本快照与任务冻结不一致"},
-    {"code": "dataset_manifest_mismatch", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "integrity", "description": "Manifest Hash/内容不一致或无法校验"},
-    {"code": "dataset_upstream_invalidated", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "validity", "description": "上游 Episode/标注失效导致版本 STALE/INVALIDATED；新导出默认阻断"},
-    {"code": "dataset_freeze_requires_approval", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "approval", "description": "缺少独立审批或 QA 独立核验"},
-    {"code": "dataset_archive_blocked", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "state", "description": "归档/恢复条件不满足（未审批、仍有进行中导出/交付）"},
-    {"code": "dataset_build_failed", "http": null, "retryable": true, "surface": "job", "implemented": false, "category": "job", "description": "异步构建候选清单/统计失败；记录 attempt 与错误"},
-    {"code": "dataset_validation_failed", "http": null, "retryable": false, "surface": "job", "implemented": false, "category": "job", "description": "异步质量/泄漏/Manifest 校验失败；版本置 VALIDATION_FAILED"},
-    {"code": "quality_report_failed", "http": null, "retryable": true, "surface": "job", "implemented": false, "category": "job", "description": "质量报告生成失败"},
-    {"code": "leakage_check_failed", "http": null, "retryable": false, "surface": "job", "implemented": false, "category": "job", "description": "泄漏检查硬规则失败；报告 FAIL"},
-    {"code": "manifest_generate_failed", "http": null, "retryable": true, "surface": "job", "implemented": false, "category": "job", "description": "Manifest 规范化/生成/Hash 计算失败"},
-    {"code": "export_job_failed", "http": null, "retryable": true, "surface": "job", "implemented": false, "category": "export", "description": "导出失败（映射/读取/写入/超时）；可重试时 attempt+1"},
-    {"code": "export_partial", "http": null, "retryable": true, "surface": "job", "implemented": false, "category": "export", "description": "部分产物写入但完整性校验未通过；PARTIAL 不得当作成功或交付"},
-    {"code": "export_artifact_verify_failed", "http": null, "retryable": true, "surface": "job", "implemented": false, "category": "export", "description": "导出产物回读校验失败（文件缺失/大小不符/Hash 不符/额外文件）"},
-    {"code": "export_format_unsupported", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "format", "description": "不支持的导出格式；不得降级为其他格式"},
-    {"code": "export_format_version_unsupported", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "format", "description": "不支持的格式版本（P0 仅 ddp.lerobot/1.0.0）"},
-    {"code": "export_config_invalid", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "format", "description": "映射/配置非法或缺少必要字段映射"},
-    {"code": "export_job_not_retryable", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "export", "description": "不可重试错误触发重试，或 attempt 已达上限"},
-    {"code": "export_job_cancelled", "http": 410, "retryable": false, "surface": "api", "implemented": false, "category": "export", "description": "已取消 Job 继续操作"},
-    {"code": "export_incomplete", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "export", "description": "产物不完整仍尝试交付"},
-    {"code": "export_checksum_mismatch", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "export", "description": "逐文件/汇总 Hash 不一致"},
-    {"code": "export_output_conflict", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "export", "description": "输出路径/产物冲突；不得静默覆盖成功产物"},
-    {"code": "training_request_incomplete", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "training_request", "description": "需求必填字段/格式/阈值不完整"},
-    {"code": "training_request_immutable", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "immutability", "description": "批准后原地修改 revision；应变更新 revision"},
-    {"code": "training_request_approval_forbidden", "http": 403, "retryable": false, "surface": "api", "implemented": false, "category": "separation_of_duties", "description": "提交人自批或审批人无权限"},
-    {"code": "training_request_revision_conflict", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "version", "description": "revision 冲突/重复创建/并发变更"},
-    {"code": "training_request_not_approved", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "training_request", "description": "未批准需求进入交付"},
-    {"code": "training_delivery_not_ready", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "delivery", "description": "交付内容/校验和/导出/版本状态未就绪"},
-    {"code": "training_delivery_acceptance_forbidden", "http": 403, "retryable": false, "surface": "api", "implemented": false, "category": "separation_of_duties", "description": "非接收方验收，或唯一交付创建人自验"},
-    {"code": "training_delivery_already_accepted", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "delivery", "description": "已验收交付被重复修改"},
-    {"code": "training_delivery_mismatch", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "delivery", "description": "交付与需求 revision/数据集版本/导出 Job 不匹配"},
-    {"code": "training_adapter_unavailable", "http": 503, "retryable": true, "surface": "api", "implemented": false, "category": "adapter", "description": "外部训练平台不可达；状态显示 UNAVAILABLE/UNKNOWN，不显示成功"},
-    {"code": "training_adapter_unsupported", "http": 422, "retryable": false, "surface": "api", "implemented": false, "category": "adapter", "description": "Adapter 不支持该能力（取消/模型引用等）；必须显式 Unsupported"},
-    {"code": "training_external_run_conflict", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "adapter", "description": "外部 run 重复/冲突；同一幂等键必须返回同一引用"},
-    {"code": "training_callback_invalid", "http": 401, "retryable": false, "surface": "api", "implemented": false, "category": "adapter", "description": "回调签名/HMAC 时间窗/nonce 非法；拒绝并审计"},
-    {"code": "training_callback_replayed", "http": 409, "retryable": false, "surface": "api", "implemented": false, "category": "adapter", "description": "回调重放（相同 event_id 或 nonce 在窗口内重复）"},
-    {"code": "asset_index_unavailable", "http": 503, "retryable": true, "surface": "api", "implemented": false, "category": "infrastructure", "description": "资产索引不可用/部分来源不可达；页面必须显示 Stale/Partial/Unknown"},
-    {"code": "outbox_publish_failed", "http": null, "retryable": true, "surface": "job", "implemented": false, "category": "infrastructure", "description": "outbox 事件发布失败；业务事务回滚或重试/死信，不得静默丢弃（沿用阶段 3 语义）"}
+    {
+      "code": "dataset_access_denied",
+      "http": 403,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "grant",
+      "description": "无数据集访问/下载/导出权限"
+    },
+    {
+      "code": "dataset_freeze_approval_forbidden",
+      "http": 403,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "separation_of_duties",
+      "description": "构建人自批或审批人无权限"
+    },
+    {
+      "code": "dataset_grant_forbidden",
+      "http": 403,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "grant",
+      "description": "非 PO 创建/审批授权，或授权范围越权"
+    },
+    {
+      "code": "dataset_grant_expired",
+      "http": 410,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "grant",
+      "description": "跨项目授权已过期；立即拒绝"
+    },
+    {
+      "code": "dataset_grant_revoked",
+      "http": 410,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "grant",
+      "description": "跨项目授权已撤销；立即拒绝"
+    },
+    {
+      "code": "dataset_leakage_waiver_forbidden",
+      "http": 403,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "leakage",
+      "description": "尝试豁免硬规则，或豁免人不是 PO/缺少原因与审计"
+    },
+    {
+      "code": "dataset_not_ready",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "state",
+      "description": "版本未到 READY/FROZEN 即冻结/导出"
+    },
+    {
+      "code": "dataset_version_immutable",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "immutability",
+      "description": "冻结后原地修改样本、划分、Manifest、质量报告或 Hash；应创建新版本"
+    },
+    {
+      "code": "dataset_version_not_frozen",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "state",
+      "description": "未冻结即导出或交付"
+    },
+    {
+      "code": "dataset_version_validation_failed",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "validation",
+      "description": "校验失败仍尝试冻结；或版本状态为 VALIDATION_FAILED 却执行冻结/导出"
+    },
+    {
+      "code": "dataset_empty",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "data_sufficiency",
+      "description": "入选样本为空，不得创建空版本"
+    },
+    {
+      "code": "dataset_insufficient_data",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "data_sufficiency",
+      "description": "低于最小样本/时长，或训练/验证划分为空"
+    },
+    {
+      "code": "dataset_split_invalid",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "split",
+      "description": "比例/固定数量/分组/舍入/空测试集策略非法"
+    },
+    {
+      "code": "dataset_leakage_check_failed",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "leakage",
+      "description": "硬规则泄漏；禁止冻结与导出，不提供普通豁免"
+    },
+    {
+      "code": "dataset_leakage_check_unknown",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "leakage",
+      "description": "泄漏检查无法完成（数据缺失/策略缺失/超时）；按失败关闭阻断"
+    },
+    {
+      "code": "dataset_quality_gate_failed",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "validation",
+      "description": "质量门禁未通过或质量报告存在阻断项"
+    },
+    {
+      "code": "dataset_item_ineligible",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "eligibility",
+      "description": "Episode/标注/Manifest/标定/时间同步/用途不合格"
+    },
+    {
+      "code": "dataset_annotation_not_approved",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "eligibility",
+      "description": "引用未批准标注、草稿、驳回或返工中标注"
+    },
+    {
+      "code": "dataset_annotation_snapshot_mismatch",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "eligibility",
+      "description": "标注/Schema 版本快照与任务冻结不一致"
+    },
+    {
+      "code": "dataset_manifest_mismatch",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "integrity",
+      "description": "Manifest Hash/内容不一致或无法校验"
+    },
+    {
+      "code": "dataset_upstream_invalidated",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "validity",
+      "description": "上游 Episode/标注失效导致版本 STALE/INVALIDATED；新导出默认阻断"
+    },
+    {
+      "code": "dataset_freeze_requires_approval",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "approval",
+      "description": "缺少独立审批或 QA 独立核验"
+    },
+    {
+      "code": "dataset_archive_blocked",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "state",
+      "description": "归档/恢复条件不满足（未审批、仍有进行中导出/交付）"
+    },
+    {
+      "code": "dataset_build_failed",
+      "http": null,
+      "retryable": true,
+      "surface": "job",
+      "implemented": false,
+      "category": "job",
+      "description": "异步构建候选清单/统计失败；记录 attempt 与错误"
+    },
+    {
+      "code": "dataset_validation_failed",
+      "http": null,
+      "retryable": false,
+      "surface": "job",
+      "implemented": false,
+      "category": "job",
+      "description": "异步质量/泄漏/Manifest 校验失败；版本置 VALIDATION_FAILED"
+    },
+    {
+      "code": "quality_report_failed",
+      "http": null,
+      "retryable": true,
+      "surface": "job",
+      "implemented": false,
+      "category": "job",
+      "description": "质量报告生成失败"
+    },
+    {
+      "code": "leakage_check_failed",
+      "http": null,
+      "retryable": false,
+      "surface": "job",
+      "implemented": false,
+      "category": "job",
+      "description": "泄漏检查硬规则失败；报告 FAIL"
+    },
+    {
+      "code": "manifest_generate_failed",
+      "http": null,
+      "retryable": true,
+      "surface": "job",
+      "implemented": false,
+      "category": "job",
+      "description": "Manifest 规范化/生成/Hash 计算失败"
+    },
+    {
+      "code": "export_job_failed",
+      "http": null,
+      "retryable": true,
+      "surface": "job",
+      "implemented": false,
+      "category": "export",
+      "description": "导出失败（映射/读取/写入/超时）；可重试时 attempt+1"
+    },
+    {
+      "code": "export_partial",
+      "http": null,
+      "retryable": true,
+      "surface": "job",
+      "implemented": false,
+      "category": "export",
+      "description": "部分产物写入但完整性校验未通过；PARTIAL 不得当作成功或交付"
+    },
+    {
+      "code": "export_artifact_verify_failed",
+      "http": null,
+      "retryable": true,
+      "surface": "job",
+      "implemented": false,
+      "category": "export",
+      "description": "导出产物回读校验失败（文件缺失/大小不符/Hash 不符/额外文件）"
+    },
+    {
+      "code": "export_format_unsupported",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "format",
+      "description": "不支持的导出格式；不得降级为其他格式"
+    },
+    {
+      "code": "export_format_version_unsupported",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "format",
+      "description": "不支持的格式版本（P0 仅 ddp.lerobot/1.0.0）"
+    },
+    {
+      "code": "export_config_invalid",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "format",
+      "description": "映射/配置非法或缺少必要字段映射"
+    },
+    {
+      "code": "export_job_not_retryable",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "export",
+      "description": "不可重试错误触发重试，或 attempt 已达上限"
+    },
+    {
+      "code": "export_job_cancelled",
+      "http": 410,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "export",
+      "description": "已取消 Job 继续操作"
+    },
+    {
+      "code": "export_incomplete",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "export",
+      "description": "产物不完整仍尝试交付"
+    },
+    {
+      "code": "export_checksum_mismatch",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "export",
+      "description": "逐文件/汇总 Hash 不一致"
+    },
+    {
+      "code": "export_output_conflict",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "export",
+      "description": "输出路径/产物冲突；不得静默覆盖成功产物"
+    },
+    {
+      "code": "training_request_incomplete",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "training_request",
+      "description": "需求必填字段/格式/阈值不完整"
+    },
+    {
+      "code": "training_request_immutable",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "immutability",
+      "description": "批准后原地修改 revision；应变更新 revision"
+    },
+    {
+      "code": "training_request_approval_forbidden",
+      "http": 403,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "separation_of_duties",
+      "description": "提交人自批或审批人无权限"
+    },
+    {
+      "code": "training_request_revision_conflict",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "version",
+      "description": "revision 冲突/重复创建/并发变更"
+    },
+    {
+      "code": "training_request_not_approved",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "training_request",
+      "description": "未批准需求进入交付"
+    },
+    {
+      "code": "training_delivery_not_ready",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "delivery",
+      "description": "交付内容/校验和/导出/版本状态未就绪"
+    },
+    {
+      "code": "training_delivery_acceptance_forbidden",
+      "http": 403,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "separation_of_duties",
+      "description": "非接收方验收，或唯一交付创建人自验"
+    },
+    {
+      "code": "training_delivery_already_accepted",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "delivery",
+      "description": "已验收交付被重复修改"
+    },
+    {
+      "code": "training_delivery_mismatch",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "delivery",
+      "description": "交付与需求 revision/数据集版本/导出 Job 不匹配"
+    },
+    {
+      "code": "training_adapter_unavailable",
+      "http": 503,
+      "retryable": true,
+      "surface": "api",
+      "implemented": false,
+      "category": "adapter",
+      "description": "外部训练平台不可达；状态显示 UNAVAILABLE/UNKNOWN，不显示成功"
+    },
+    {
+      "code": "training_adapter_unsupported",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "adapter",
+      "description": "Adapter 不支持该能力（取消/模型引用等）；必须显式 Unsupported"
+    },
+    {
+      "code": "training_external_run_conflict",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "adapter",
+      "description": "外部 run 重复/冲突；同一幂等键必须返回同一引用"
+    },
+    {
+      "code": "training_callback_invalid",
+      "http": 401,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "adapter",
+      "description": "回调签名/HMAC 时间窗/nonce 非法；拒绝并审计"
+    },
+    {
+      "code": "training_callback_replayed",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": false,
+      "category": "adapter",
+      "description": "回调重放（相同 event_id 或 nonce 在窗口内重复）"
+    },
+    {
+      "code": "asset_index_unavailable",
+      "http": 503,
+      "retryable": true,
+      "surface": "api",
+      "implemented": false,
+      "category": "infrastructure",
+      "description": "资产索引不可用/部分来源不可达；页面必须显示 Stale/Partial/Unknown"
+    },
+    {
+      "code": "outbox_publish_failed",
+      "http": null,
+      "retryable": true,
+      "surface": "job",
+      "implemented": false,
+      "category": "infrastructure",
+      "description": "outbox 事件发布失败；业务事务回滚或重试/死信，不得静默丢弃（沿用阶段 3 语义）"
+    },
+    {
+      "code": "supplier_not_active",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "supplier",
+      "description": "供应商未激活/已停用，不能执行该动作"
+    },
+    {
+      "code": "supplier_terminal",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "supplier",
+      "description": "供应商处于终态（TERMINATED），不可再变更"
+    },
+    {
+      "code": "batch_not_screening",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "inbound",
+      "description": "到货批次不在筛选中状态，不能提交筛选结论"
+    },
+    {
+      "code": "batch_review_incomplete",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "inbound",
+      "description": "仍有片段未裁决，批次不能结算"
+    },
+    {
+      "code": "batch_already_settled",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "inbound",
+      "description": "批次已结算，不可重复结算"
+    },
+    {
+      "code": "segment_terminal",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "inbound",
+      "description": "片段处于终态，不可再裁决"
+    },
+    {
+      "code": "segment_decision_forbidden",
+      "http": 403,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "inbound",
+      "description": "非受理人/越权裁决片段"
+    },
+    {
+      "code": "decision_reason_required",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "inbound",
+      "description": "驳回或需补充材料时必须给出原因"
+    },
+    {
+      "code": "segment_raw_asset_missing",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "inbound",
+      "description": "片段引用的原始资产不存在"
+    },
+    {
+      "code": "export_job_timeout",
+      "http": null,
+      "retryable": true,
+      "surface": "job",
+      "implemented": true,
+      "category": "export",
+      "description": "导出任务超时；记录 attempt 与已写入字节数"
+    }
   ]
 }
