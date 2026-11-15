@@ -356,3 +356,32 @@ def test_selection_exclusion_and_duplicate_statistics(
         "ANNOTATION_NOT_APPROVED",
         "DUPLICATE",
     } <= codes
+
+
+def test_create_version_with_build_now_does_not_crash(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """``build_now=true`` 必须真的能建并构建，而不是 500。
+
+    这是一个真实存在过的缺陷：``DatasetVersionUseCases.create`` 在
+    ``build_now`` 分支调用 ``apply_action`` 时漏传必填关键字参数 ``path``，
+    于是「建版本并立即构建」这条最常用的路径**在任何情况下都会 TypeError**。
+    既有测试从未传 ``build_now``，因此一直没被发现。
+    """
+    factory, ids = api_db
+    # 8:1:1 划分下 6 条会让 test 为空（业务校验会拒绝，这是正确行为）；
+    # 本用例要验的是"不 500"，故用 20 条确保划分成立。
+    seed_dataset_episodes(factory, ids.project_a, ids.editor_a, count=20)
+    editor = make_client(factory, ids.editor_a)
+    dataset = create_dataset(editor, ids.project_a, ids.owner_a, f"ds-{uuid4().hex[:8]}")
+    policies = create_policies(editor, ids.project_a, dataset["dataset_id"])
+
+    response = editor.post(
+        url(ids.project_a, f"/datasets/{dataset['dataset_id']}/versions"),
+        json={**version_payload(policies), "build_now": True},
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    # build 由 create 内部触发，返回的是推进后的版本：状态不再是 DRAFT。
+    assert body["status"] in {"BUILDING", "READY", "VALIDATING"}
