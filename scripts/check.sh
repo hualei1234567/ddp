@@ -14,22 +14,25 @@ if [[ ! -d apps/web/node_modules ]]; then
   exit 1
 fi
 
-echo "[1/6] 后端 ruff check + format"
+echo "[1/7] 后端 ruff check + format"
 (cd backend && .venv/bin/ruff check app tests migrations && .venv/bin/ruff format --check app tests migrations)
 
-echo "[2/6] 后端 pytest"
+echo "[2/7] 后端 pytest"
 (cd backend && .venv/bin/python -m pytest -q)
 
-echo "[3/6] 前端类型检查 / ESLint / 单元测试"
+echo "[3/7] 前端类型检查 / ESLint / 单元测试"
 (cd apps/web && npm run typecheck && npm run lint && npm test)
 
-echo "[4/6] 前端构建"
+echo "[4/7] 前端构建"
 (cd apps/web && npm run build)
 
-echo "[5/6] Secret 扫描"
+echo "[5/7] Secret 扫描"
 python3 scripts/check_secrets.py
 
-echo "[6/6] Agent Bash 守卫测试"
+echo "[6/7] Agent Bash 守卫测试"
 backend/.venv/bin/python -m pytest scripts/tests -q
+
+echo "[7/7] outbox 事件归类自检（投递类必须有消费者与测试）"
+python3 scripts/check_outbox_events.py
 
 echo "全部检查通过"

@@ -42,7 +42,17 @@ class AuditRecord:
 
 @dataclass(frozen=True, slots=True)
 class OutboxEvent:
-    """一条待投递的领域事件；与业务同事务落库。"""
+    """一条领域事件；与业务同事务落库。
+
+    ``dispatch`` 区分两类语义（R-13 / T-1）：
+    - ``True``（投递类）：有执行方需要据此做事。写入为 ``PENDING``，
+      由 worker 抢占、重试、必要时进死信；没有消费者就是缺陷。
+    - ``False``（留痕类）：只记录"发生了什么"。写入即 ``RECORDED``，
+      不进重试队列，也不会被 worker 误捞。
+
+    每个事件类型归入哪一类，以 ``docs/architecture/outbox事件语义界定-v1.0.md``
+    的归类表为准；新增事件必须在 PR 中同步登记。
+    """
 
     event_id: UUID
     project_id: UUID
@@ -51,6 +61,7 @@ class OutboxEvent:
     event_type: str
     payload: Mapping[str, object]
     occurred_at: datetime
+    dispatch: bool = False
 
 
 class AuditRepository(Protocol):
@@ -79,8 +90,14 @@ def record_change(
     occurred_at: datetime,
     result: str = "SUCCESS",
     actor_role: str | None = None,
+    dispatch: bool = False,
 ) -> None:
-    """同事务写审计与 outbox；任一失败都向上抛，由事务边界回滚。"""
+    """同事务写审计与 outbox；任一失败都向上抛，由事务边界回滚。
+
+    ``dispatch`` 默认 ``False``：绝大多数事件是留痕类。投递类必须显式传
+    ``True``——默认值刻意选"不需要消费者"的那一侧，避免新增事件时
+    无意间留下一条永远不会被消费的待投递消息。
+    """
     audit.record(
         scope,
         AuditRecord(
@@ -110,5 +127,6 @@ def record_change(
             event_type=event_type,
             payload=event_payload,
             occurred_at=occurred_at,
+            dispatch=dispatch,
         ),
     )

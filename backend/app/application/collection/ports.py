@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.application.audit import OutboxEvent
 from app.application.idempotency import (
     IdempotencyRecord as _IdempotencyRecord,
 )
@@ -117,17 +118,6 @@ class AuditRecord:
     request_id: str | None
     result: str
     details: Mapping[str, object]
-    occurred_at: datetime
-
-
-@dataclass(frozen=True, slots=True)
-class OutboxEvent:
-    event_id: UUID
-    project_id: UUID
-    aggregate_type: str
-    aggregate_id: UUID
-    event_type: str
-    payload: Mapping[str, object]
     occurred_at: datetime
 
 

@@ -220,6 +220,8 @@ class ExportJobUseCases:
                 event_type=EXPORT_REQUESTED_EVENT,
                 payload={"export_job_id": str(created.export_job_id)},
                 occurred_at=now,
+                # 投递类：worker 要据此真的执行导出（R-13 / T-1）。
+                dispatch=True,
             ),
         )
         self._uow.commit()
@@ -323,6 +325,7 @@ class ExportJobUseCases:
                     event_type=EXPORT_REQUESTED_EVENT,
                     payload={"export_job_id": str(saved.export_job_id)},
                     occurred_at=now,
+                    dispatch=True,
                 ),
             )
         self._idempotency.store(

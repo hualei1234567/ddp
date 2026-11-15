@@ -337,6 +337,8 @@ class UploadCompletionService:
                 },
                 now=utcnow(),
                 aggregate_type="RAW_ASSET",
+                # 投递类：worker 要据此真的去校验资产（R-13 / T-1）。
+                dispatch=True,
             ),
         )
         self._idempotency.store(

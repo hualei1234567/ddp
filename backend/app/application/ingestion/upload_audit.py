@@ -39,6 +39,7 @@ def make_outbox_event(
     payload: Mapping[str, object],
     now: datetime,
     aggregate_type: str = RESOURCE_TYPE,
+    dispatch: bool = False,
 ) -> OutboxEvent:
     return OutboxEvent(
         event_id=uuid4(),
@@ -48,6 +49,7 @@ def make_outbox_event(
         event_type=event_type,
         payload=payload,
         occurred_at=now,
+        dispatch=dispatch,
     )
 
 

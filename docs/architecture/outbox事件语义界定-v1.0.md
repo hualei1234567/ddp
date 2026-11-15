@@ -45,16 +45,16 @@
 
 ## 3. 当前归类
 
-### 3.1 投递类（1 个，已有消费者）
+### 3.1 投递类（3 个，均有消费者与测试）
 
 | 事件 | 消费者 | 状态 |
 |---|---|---|
 | `ingestion.raw_asset.validation_requested` | `workers/outbox.py` | ✅ 已实现 |
+| `dataset.export.requested` | `workers/exports.py` | ✅ 已实现 |
+| `datasource.import_requested` | `workers/datasources.py` | ✅ 已实现 |
 
-> 注：`dataset.export.requested` 由 `workers/exports.py` 消费，但该常量在
-> `application/datasets/exports.py` 中定义、拼写与源码提取不完全一致，
-> 未出现在本次脚本提取的 83 条里。实际是第 2 个投递类事件，归类不变，
-> 清单提取脚本需修正（已登记为 T-5）。
+投递类清单的唯一权威是 `scripts/check_outbox_events.py` 的 `DISPATCH_EVENTS`：
+它同时被 CI 与 `make check` 校验，声明与实现不一致会直接失败。
 
 ### 3.2 留痕类（82 个）
 
@@ -76,19 +76,60 @@
 `ingestion.*` 的 12 条里有 1 条是投递类（上述 validation_requested），
 其余 11 条（上传会话/分片的进度与状态留痕）为留痕类。
 
-## 4. 待办（本文件定规则，代码改造排期）
+## 4. 待办与完成情况
 
-| 项 | 内容 | 优先级 | 说明 |
+| 项 | 内容 | 优先级 | 状态 |
 |---|---|---|---|
-| **T-1** | `record_change` 增加 `dispatch: bool` 参数 | P2 | 投递类传 `True`（走 PENDING + 重试语义），留痕类传 `False`（写 `RECORDED`，不进重试） |
-| **T-2** | `claim_next` 只捞 `PENDING` 且 `dispatch=true` 的行 | P2 | 当前按 `event_type` 白名单捞，新增投递类事件需改代码 |
-| **T-3** | 投递类事件的保留/归档任务 | P2 | 与 R-14 幂等表清扫合并成一个维护 worker |
-| **T-4** | CI 增加"投递类事件必须有消费者测试"检查 | P2 | 防止将来新增投递类事件却忘了消费者 |
-| **T-5** | 事件清单提取脚本修正 | P3 | 当前按 `event_type="..."` 字面提取，漏掉常量形式（如 `dataset.export.requested`）；改为同时扫描常量定义 |
+| **T-1** | `record_change` 增加 `dispatch: bool` 参数 | P2 | ✅ 已实现 |
+| **T-2** | `claim_next` 只捞 `PENDING` 且 `dispatch=true` 的行 | P2 | ✅ 已实现 |
+| **T-3** | 投递类事件的保留/归档任务 | P2 | ❌ 未做（与阶段 8 维护 worker 一起） |
+| **T-4** | CI 增加"投递类事件必须有消费者测试"检查 | P2 | ✅ 已实现 |
+| **T-5** | 事件清单提取脚本 | P3 | ✅ 已实现（原脚本并不存在，本次新建） |
 
-**为什么现在不改代码**：T-1/T-2 会动 `record_change` 签名（影响 6 个域、数十处调用）
-与 outbox 表的语义，属于横切改造。按增量迭代原则，先定规则与归类，
-让后续新增事件不再扩大混乱；改造与阶段 8 的维护 worker 一起做。
+### 4.1 T-1 / T-2 的实现
+
+`record_change(..., dispatch: bool = False)`，默认 `False`——默认值刻意选
+"不需要消费者"那一侧，避免新增事件时无意间留下一条永远不会被消费的待投递消息。
+投递类必须显式传 `True`，并在本文件的归类表与
+`scripts/check_outbox_events.py` 的白名单里同时登记。
+
+写入语义：
+
+| dispatch | status | 说明 |
+|---|---|---|
+| `False`（留痕类） | `RECORDED` | 写入即终态，不进重试队列 |
+| `True`（投递类） | `PENDING` | 由 worker 抢占、重试、必要时进死信 |
+
+数据库约束 `dispatch_status_consistent` 把这条对应关系写进表：
+
+```sql
+(dispatch = false AND status = 'RECORDED')
+OR (dispatch = true AND status <> 'RECORDED')
+```
+
+没有这条约束时，"投递消息被误标成已记录"只会表现为"消费者一直收不到"，
+很难排查。现在它是一插入就失败的硬错误。
+
+`claim_next` 同时按 `dispatch = true` 与 `status = 'PENDING'` 过滤。
+两个条件看起来冗余（约束已保证一致性），但保留 `dispatch` 判断是刻意防御：
+万一将来有人放宽约束，抢占端仍然不会捞错。
+
+存量数据在迁移 `0030` 里全部回填为 `dispatch = true`——它们此前都是 `PENDING`
+等消费者；若改成留痕类，等于把可能待投递的消息静默丢掉。
+
+### 4.2 T-4 / T-5 的实现
+
+`scripts/check_outbox_events.py` 做三件事，`make check` 第 7 步与 CI 都以阻断方式执行：
+
+1. **提取**：用 AST 扫描所有事件类型字符串，**同时**识别字面量与模块级常量。
+   T-5 记的"漏掉常量形式"就是因为旧做法只按 `event_type="..."` 字面匹配。
+2. **校验**：每个投递类事件必须有消费者文件，且该文件里确实出现该事件类型；
+   并且在测试里被引用——没有测试的消费者等于没验证过。
+3. **防回归**：源码里 `dispatch=True` 的写入点必须与白名单完全一致，
+   双向都查（白名单有但源码没有 → 声明过期；源码有但白名单没有 → 漏登记）。
+
+实测提取到 93 种事件类型（旧口径的 83 条是漏了常量形式的结果），
+其中投递类 3 种。
 
 ## 5. 对阶段 7 数据平面的约束
 

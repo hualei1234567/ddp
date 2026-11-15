@@ -12,6 +12,7 @@ from uuid import UUID
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -35,7 +36,7 @@ from app.infrastructure.db.base import Base
 _TASK_STATUS_VALUES = ", ".join(repr(item.value) for item in CollectionTaskStatus)
 _BATCH_STATUS_VALUES = ", ".join(repr(item.value) for item in CollectionBatchStatus)
 _PRIORITY_VALUES = ", ".join(repr(item.value) for item in TaskPriority)
-_OUTBOX_STATUS_VALUES = "'PENDING', 'PUBLISHED', 'FAILED'"
+_OUTBOX_STATUS_VALUES = "'PENDING', 'PUBLISHED', 'FAILED', 'RECORDED'"
 
 
 def _enum_check(column: str, values: str, name: str) -> CheckConstraint:
@@ -363,6 +364,14 @@ class OutboxEvent(Base):
         server_default=text("'{}'"),
     )
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # R-13 / T-1：区分"投递类"（需要消费者）与"留痕类"（写入即完成）。
+    # 投递类进 PENDING + 重试；留痕类直接 RECORDED，永远不会被 worker 捞起来。
+    dispatch: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     available_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -383,7 +392,20 @@ class OutboxEvent(Base):
     __table_args__ = (
         _enum_check("status", _OUTBOX_STATUS_VALUES, "status_allowed"),
         CheckConstraint("attempts >= 0", name="attempts_non_negative"),
+        # 留痕类永远是终态 RECORDED，投递类不得直接写 RECORDED——否则投递消息
+        # 会被静默标成"已处理"。这条约束把语义写进数据库，不靠约定。
+        CheckConstraint(
+            "(dispatch = false AND status = 'RECORDED') "
+            "OR (dispatch = true AND status <> 'RECORDED')",
+            name="dispatch_status_consistent",
+        ),
         Index("ix_outbox_events_status_available_at", "status", "available_at"),
+        Index(
+            "ix_outbox_events_dispatch_status",
+            "dispatch",
+            "status",
+            "available_at",
+        ),
         Index(
             "ix_outbox_events_project_aggregate",
             "project_id",

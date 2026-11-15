@@ -316,6 +316,8 @@ class DataSourceUseCases:
                 "sample_limit": created.sample_limit,
             },
             occurred_at=now,
+            # 投递类：worker 据此事真的去下载并解析（R-13 / T-1）。
+            dispatch=True,
         )
         self._idempotency.store(
             scope,

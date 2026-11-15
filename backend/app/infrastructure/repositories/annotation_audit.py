@@ -58,7 +58,9 @@ class SqlAnnotationOutboxRepository:
                 aggregate_id=event.aggregate_id,
                 event_type=event.event_type,
                 payload=dict(event.payload),
-                status="PENDING",
+                # 投递类进 PENDING 等待消费者；留痕类写入即终态 RECORDED。
+                status="PENDING" if event.dispatch else "RECORDED",
+                dispatch=event.dispatch,
                 attempts=0,
                 available_at=event.occurred_at,
                 created_at=event.occurred_at,

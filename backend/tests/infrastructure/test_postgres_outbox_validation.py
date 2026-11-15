@@ -76,6 +76,7 @@ def _seed_event(engine: Engine) -> UUID:
                 event_type=VALIDATION_EVENT_TYPE,
                 payload={"asset_id": str(uuid4()), "actor_user_id": str(user_id)},
                 status="PENDING",
+                dispatch=True,
                 attempts=0,
                 available_at=NOW,
                 created_at=NOW,

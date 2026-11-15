@@ -35,6 +35,9 @@ class SqlOutboxValidationQueue:
         statement = (
             select(OutboxEventModel)
             .where(
+                # 只捞投递类：留痕类是 RECORDED 终态，永远不会到这里；
+                # 显式再判 dispatch 是为了防止将来有人把留痕类写成 PENDING。
+                OutboxEventModel.dispatch.is_(True),
                 OutboxEventModel.status == _PENDING,
                 OutboxEventModel.event_type == event_type,
                 OutboxEventModel.available_at <= now,

@@ -159,6 +159,9 @@ jobs:
         run: python scripts/check_secrets.py
       - name: Agent Bash 守卫测试（阻断）
         run: python -m pytest scripts/tests -q
+      - name: outbox 事件归类自检（阻断）
+        # 投递类事件必须有消费者与测试（R-13 / T-4）。
+        run: python scripts/check_outbox_events.py
       - name: 依赖漏洞扫描（阶段 0 仅告警）
         continue-on-error: true
         run: pip-audit -r backend/requirements.txt

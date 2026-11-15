@@ -187,6 +187,8 @@ def _enqueue_validation(
                     "validation_job_id": str(validation_job_id or uuid4()),
                 },
                 occurred_at=NOW,
+                # 这条事件是要被 worker 消费的，必须标为投递类（R-13 / T-1）。
+                dispatch=True,
             ),
         )
         session.commit()
@@ -495,6 +497,8 @@ def test_malformed_event_goes_straight_to_dead_letter(
                 event_type=VALIDATION_EVENT_TYPE,
                 payload={"asset_id": "not-a-uuid"},
                 occurred_at=NOW,
+                # 这条事件是要被 worker 消费的，必须标为投递类（R-13 / T-1）。
+                dispatch=True,
             ),
         )
         session.commit()
