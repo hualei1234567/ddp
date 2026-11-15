@@ -15,6 +15,9 @@
     "request.contract_only": "契约有该字段、实现模型没有。已逐个核实这些字段在契约里是可选或已废弃（如 Sensor.coordinate_frame 已 DEPRECATED）。",
     "response.contract_only": "同 request.contract_only，方向无害。"
   },
+  "_known_defects": {
+    "POST /api/v1/projects/{project_id}/data-requirements | request.required_runtime_only | owner_id": "缺陷方向的已知项，不是无害差异。实现三层（Pydantic owner_id: UUID 无默认、领域 required_uuid、DB nullable=False + ondelete=RESTRICT）都要求非空，契约却是可选——客户端照契约省略会 422。\n\n不直接补契约 required 的原因：把既有可选字段改成必填对客户端是破坏性变更（oasdiff request-property-became-required），会让现有集成突然 422。\n\n处置：先登记，后续二选一——放宽实现（需 DDL 迁移 + 明确谁审批谁对账），或走契约版本升级给客户端迁移窗口。"
+  },
   "accepted": [
     "GET /api/v1/projects/{project_id}/calibrations | response.required_runtime_only | items.[].calibration_version,items.[].profile_schema_version,items.[].profile_snapshot,items.[].profile_version",
     "GET /api/v1/projects/{project_id}/calibrations/{calibration_id} | response.required_runtime_only | calibration_version,profile_schema_version,profile_snapshot,profile_version",
@@ -45,6 +48,7 @@
     "POST /api/v1/projects/{project_id}/calibrations/{calibration_id}/revoke | response.required_runtime_only | calibration_version,profile_schema_version,profile_snapshot,profile_version",
     "POST /api/v1/projects/{project_id}/calibrations/{calibration_id}/submit | response.required_runtime_only | calibration_version,profile_schema_version,profile_snapshot,profile_version",
     "POST /api/v1/projects/{project_id}/calibrations/{calibration_id}/validate | response.required_runtime_only | calibration_version,profile_schema_version,profile_snapshot,profile_version",
+    "POST /api/v1/projects/{project_id}/data-requirements | request.required_runtime_only | owner_id",
     "POST /api/v1/projects/{project_id}/data-source-imports/{import_id}/actions/{action} | response.required_runtime_only | cache_location,error_message,finished_at,imported_file_count,imported_row_count,sample_limit,started_at",
     "POST /api/v1/projects/{project_id}/data-source-imports/{import_id}/review | response.required_runtime_only | decided_at,decision,reason,reviewer_id",
     "POST /api/v1/projects/{project_id}/data-source-imports/{import_id}/review/decisions | response.required_runtime_only | decided_at,decision,reason,reviewer_id",

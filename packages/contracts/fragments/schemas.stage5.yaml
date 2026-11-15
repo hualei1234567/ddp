@@ -986,11 +986,17 @@ RequirementCreate:
   - title
   - source_type
   - dimensions
-  # owner_id 必填：数据需求必须有责任人，否则无人对账。领域层
-  # （domain/modelops/models.py:550 `owner_id: UUID`）与 Pydantic 模型
-  # （api/v1/modelops_schemas.py:173）都是必填，此前契约漏标——客户端照契约
-  # 省略会 422。这里补齐契约，不改实现。
-  - owner_id
+  # owner_id **刻意不在此列**，尽管实现三层（Pydantic `owner_id: UUID` 无默认、
+  # 领域 `required_uuid`、DB `nullable=False` + `ondelete=RESTRICT`）都要求非空。
+  #
+  # 原因：把已有的可选字段改成 required 对客户端是**破坏性变更**
+  # （oasdiff request-property-became-required），会让现有集成突然 422。
+  # 契约收紧不是"补文档"，是改协议。
+  #
+  # 现状是一处**已知且已登记**的不一致：契约允许省略、实现会拒。
+  # 由 `scripts/check_contract_parity.py --strict` 持续跟踪。后续二选一：
+  #   - 若要真允许无主需求 → 放宽实现（需 DDL 迁移 + 回答"谁审批/谁对账"）；
+  #   - 若要强制有主 → 走契约版本升级，给客户端迁移窗口。
   additionalProperties: false
   properties:
     code:
