@@ -204,6 +204,7 @@ def _action(
         fault_code=body.fault_code,
         fault_detail=body.fault_detail,
         fault_occurred_at=body.occurred_at,
+        maintenance_record_id=body.maintenance_record_id,
         idempotency_key=idempotency_key,
         method=request.method,
         path=request.url.path,

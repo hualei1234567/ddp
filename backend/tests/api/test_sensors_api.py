@@ -243,3 +243,60 @@ def test_sensor_report_fault_requires_fault_code(api_db) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_enter_maintenance_requires_reason_and_record(api_db) -> None:
+    """契约 §8.1：进入维护必须给出原因与维修工单号。
+
+    两字段此前被静默丢弃——``ActionRequest`` 声明了它们、用例层不读，
+    客户端传了也没用，审计与 outbox 里看不到。现在要求必填并落库。
+    """
+    from uuid import UUID, uuid4
+
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device_id = _create_device(client, ids.project_a)
+    sensor = client.post(
+        _sensor_url(ids.project_a),
+        json=sensor_payload(device_id=device_id),
+    ).json()
+    activated = client.post(
+        _sensor_url(ids.project_a, f"/{sensor['sensor_id']}/activate"),
+        headers={"If-Match": '"1"'},
+    )
+    assert activated.status_code == 200, activated.text
+
+    # 缺 maintenance_record_id -> 422，且 details 点名字段（不是泛化文案）。
+    missing = client.post(
+        _sensor_url(ids.project_a, f"/{sensor['sensor_id']}/maintenance"),
+        headers={"If-Match": '"2"'},
+        json={"reason": "例行保养"},
+    )
+    assert missing.status_code == 422, missing.text
+    error = missing.json()["error"]
+    assert error["code"] == "validation_failed"
+    assert "maintenance_record_id" in error["details"]["missing_fields"]
+
+    record_id = uuid4()
+    ok = client.post(
+        _sensor_url(ids.project_a, f"/{sensor['sensor_id']}/maintenance"),
+        headers={"If-Match": '"2"'},
+        json={"reason": "例行保养", "maintenance_record_id": str(record_id)},
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["status"] == "IN_MAINTENANCE"
+
+    from app.infrastructure.db.models.collection import AuditLog
+    from sqlalchemy import select
+
+    with factory() as session:
+        row = session.execute(
+            select(AuditLog).where(
+                AuditLog.resource_id == UUID(sensor["sensor_id"]),
+                AuditLog.action == "enter-maintenance",
+            )
+        ).scalar_one()
+        details = row.details or {}
+    assert details.get("maintenance_record_id") == str(
+        record_id
+    ), "维修工单号必须进审计载荷，否则事后无法对应到工单系统"

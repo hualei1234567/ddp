@@ -8,6 +8,9 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.application.audit import record_change
+from app.application.devices.action_preconditions import (
+    assert_action_payload_complete,
+)
 from app.application.devices.calibration_gate import ensure_required_calibrations_active
 from app.application.devices.commands import NewDevice
 from app.application.devices.idempotency import IdempotencyGuard, validate_key
@@ -250,6 +253,7 @@ class DeviceUseCases:
         fault_code: str | None = None,
         fault_detail: str | None = None,
         fault_occurred_at: datetime | None = None,
+        maintenance_record_id: UUID | None = None,
         idempotency_key: str | None = None,
         method: str = "POST",
         path: str,
@@ -266,6 +270,9 @@ class DeviceUseCases:
             "expected_version": expected_version,
             "reason": reason,
             "fault_code": fault_code,
+            "maintenance_record_id": (
+                str(maintenance_record_id) if maintenance_record_id is not None else None
+            ),
             "fault_occurred_at": (
                 fault_occurred_at.isoformat() if fault_occurred_at is not None else None
             ),
@@ -278,8 +285,19 @@ class DeviceUseCases:
         current = self.get_device(scope, device_id)
         if current.version != expected_version:
             raise VersionConflictError("设备", expected_version)
-        if action == "report-fault" and not (fault_code or "").strip():
-            raise DomainValidationError("report-fault 必须提供 fault_code")
+        # 契约 §8.1：动作的必填字段（reason / fault_code / occurred_at /
+        # maintenance_record_id）由 action_preconditions 统一校验，规则只一处。
+        assert_action_payload_complete(
+            action,
+            reason=reason,
+            fault_code=fault_code,
+            occurred_at=fault_occurred_at,
+            maintenance_record_id=maintenance_record_id,
+        )
+        if action == "report-fault" and fault_occurred_at is None:
+            # 客户端未给上报时刻时用服务端当前时间：跳过这个字段不该让
+            # fault_occurred_at 落成 NULL——那样故障时间线就断了。
+            fault_occurred_at = now
         if action == "activate":
             # G-20：契约 §8.1 要求激活前标定就绪，缺标定必须以
             # calibration_not_active 拒绝，而不是泛化的 validation_failed。
@@ -321,6 +339,10 @@ class DeviceUseCases:
                 "fault_code": fault_code,
                 "fault_detail": fault_detail,
                 "fault_occurred_at": (fault_occurred_at.isoformat() if fault_occurred_at else None),
+                # 契约 §8.1 把维修工单号列为必填留痕项：事后要能对应到工单系统。
+                "maintenance_record_id": (
+                    str(maintenance_record_id) if maintenance_record_id is not None else None
+                ),
             },
             event_type=DEVICE_ACTION_EVENTS[action],
             event_payload={
