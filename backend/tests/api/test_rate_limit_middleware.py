@@ -218,12 +218,14 @@ def test_rate_limit_hit_is_logged_without_raw_ip(
     )
     forwarded_ip = "203.0.113.77"
 
-    assert client.get(
-        "/api/v1/auth/ping", headers={"X-Forwarded-For": forwarded_ip}
-    ).status_code == 200
-    assert client.get(
-        "/api/v1/auth/ping", headers={"X-Forwarded-For": forwarded_ip}
-    ).status_code == 429
+    assert (
+        client.get("/api/v1/auth/ping", headers={"X-Forwarded-For": forwarded_ip}).status_code
+        == 200
+    )
+    assert (
+        client.get("/api/v1/auth/ping", headers={"X-Forwarded-For": forwarded_ip}).status_code
+        == 429
+    )
 
     hits = [message for message in rate_limit_logs.messages() if "限流命中" in message]
     assert len(hits) == 1

@@ -325,9 +325,7 @@ class Settings(BaseSettings):
         problems: list[str] = []
         raw = self.rate_limit_redis_url
         if not raw.strip():
-            problems.append(
-                "启用 DDP_RATE_LIMIT_BACKEND=redis 时必须配置 DDP_RATE_LIMIT_REDIS_URL"
-            )
+            problems.append("启用 DDP_RATE_LIMIT_BACKEND=redis 时必须配置 DDP_RATE_LIMIT_REDIS_URL")
             return problems
         if raw != raw.strip():
             problems.append("DDP_RATE_LIMIT_REDIS_URL 不得包含首尾空白")
