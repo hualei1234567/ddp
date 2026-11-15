@@ -240,3 +240,85 @@ def test_invalid_state_and_stale_version_are_stable_codes(
     assert invalid.json()["error"]["code"] == "state_transition_invalid"
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "version_conflict"
+
+
+def test_checksum_matches_rfc8785_jcs_of_fixed_fields(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """G-15：checksum 必须能由固定字段按 JCS 独立重算出来。
+
+    这里不复用服务端函数，而是按"外部审计方"的方式重建载荷——如果实现退回
+    ``json.dumps(sort_keys=True)``，本用例立刻失败。
+    """
+    from app.domain.common.canonical_json import canonical_json, sha256_text
+
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    profile = seed_profile(factory, ids.project_a, ids.owner_a)
+    device_id = _create_device(editor, ids.project_a)
+    created = _create_calibration(
+        editor, ids, device_id=device_id, profile_id=str(profile.profile_id)
+    )
+
+    payload = {
+        "profile_id": created["profile_id"],
+        "scope": created["scope"],
+        "target_type": created["target_type"],
+        "target_id": created["target_id"],
+        "calibration_type": created["calibration_type"],
+        "method": created["method"],
+        "parameters": created["parameters"],
+        "parent_frame": created.get("parent_frame"),
+        "child_frame": created.get("child_frame"),
+        "valid_from": created["valid_from"].replace("+00:00", "Z"),
+        "valid_to": created.get("valid_to"),
+        "evidence_asset_ids": created["evidence_asset_ids"],
+        "uncertainty": created["uncertainty"],
+        "performed_by": created["performed_by"],
+        "supersedes_id": created.get("supersedes_id"),
+    }
+    assert created["checksum"] == sha256_text(canonical_json(payload))
+
+
+def test_submit_rejects_record_tampered_after_creation(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """G-15：绕过用例层直写参数后，submit 必须因 checksum 不符而失败。
+
+    这是"DRAFT 写入后被人改过"的真实场景——只在写入路径重算 checksum
+    发现不了它，必须在状态命令前重算比对。
+    """
+    from uuid import UUID
+
+    from app.infrastructure.db.models.devices import CalibrationRecord as CalibrationRecordModel
+    from sqlalchemy import select
+
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    profile = seed_profile(factory, ids.project_a, ids.owner_a)
+    device_id = _create_device(editor, ids.project_a)
+    created = _create_calibration(
+        editor, ids, device_id=device_id, profile_id=str(profile.profile_id)
+    )
+    calibration_id = created["calibration_id"]
+
+    with factory() as session:
+        row = session.execute(
+            select(CalibrationRecordModel).where(CalibrationRecordModel.id == UUID(calibration_id))
+        ).scalar_one()
+        tampered = dict(created["parameters"])
+        # 改成**仍然合法**但不同的值：G-19 的 schema 会放行，
+        # 只有 checksum 比对能发现——这正是本用例要锁定的那层防线。
+        tampered["translation_m"] = [0.9, 0.9, 0.9]
+        row.parameters = tampered
+        session.commit()
+
+    submitted = editor.post(
+        _calibration_url(ids.project_a, f"/{calibration_id}/submit"),
+        headers={"If-Match": '"1"'},
+    )
+    # 错误体按契约只回通用文案（不泄漏内部字段），因此断言状态码与"未被推进"。
+    assert submitted.status_code == 422, submitted.text
+    still_draft = editor.get(_calibration_url(ids.project_a, f"/{calibration_id}"))
+    assert still_draft.status_code == 200
+    assert still_draft.json()["status"] == "DRAFT"

@@ -7,11 +7,10 @@ Manifest 由 Worker 生成、服务端计算 Hash；客户端提交的 Hash 一�
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Mapping
 from uuid import UUID
 
+from app.domain.common.canonical_json import CanonicalJSONError, canonical_json, sha256_text
 from app.domain.episodes.errors import (
     ManifestHashMismatchError,
     ManifestSchemaInvalidError,
@@ -52,25 +51,18 @@ MANIFEST_IDENTITY_KEYS = (
 
 
 def canonical_manifest_json(manifest: Mapping[str, object]) -> str:
+    """RFC 8785 JCS 规范化（G-15）；算法实现只有一份。"""
     if "manifest_sha256" in manifest:
         raise ManifestSchemaInvalidError("Manifest 不得包含自身 manifest_sha256")
     _reject_non_canonical(manifest, depth=0)
     try:
-        return json.dumps(
-            manifest,
-            ensure_ascii=False,
-            allow_nan=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-    except (TypeError, ValueError) as exc:
-        raise ManifestSchemaInvalidError("Manifest 必须是合法 JSON 对象") from exc
+        return canonical_json(manifest)
+    except CanonicalJSONError as exc:
+        raise ManifestSchemaInvalidError(f"Manifest 必须是合法 JSON 对象：{exc}") from exc
 
 
 def compute_manifest_sha256(manifest: Mapping[str, object]) -> str:
-    canonical = canonical_manifest_json(manifest)
-    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-    return f"sha256:{digest}"
+    return sha256_text(canonical_manifest_json(manifest))
 
 
 def validate_manifest_identity(

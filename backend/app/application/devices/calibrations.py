@@ -1,12 +1,12 @@
 """标定记录用例：项目作用域查询、草稿写入与状态动作。
 
-校验和由服务端根据固定字段重新计算，客户端提交的 checksum 不接受。
+校验和由服务端按 RFC 8785 JCS 对固定字段重算（G-15），客户端提交的 checksum
+一律忽略；``submit`` / ``validate`` / ``activate`` 三个状态命令前都会重算比对，
+任何绕过用例层的直写篡改都会在这里暴露。
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -24,6 +24,7 @@ from app.application.devices.ports import (
     CalibrationRecordRepository,
     UnitOfWork,
 )
+from app.domain.common.canonical_json import CanonicalJSONError, canonical_json, sha256_text
 from app.domain.devices.calibration import CalibrationRecord
 from app.domain.devices.enums import (
     CalibrationScope,
@@ -205,6 +206,7 @@ class CalibrationUseCases:
             lambda current, version: self._calibrations.submit(
                 scope, current, expected_version=version
             ),
+            verify_checksum=True,
         )
 
     def validate(self, scope: ProjectScope, calibration_id: UUID, *, expected_version: int):
@@ -220,6 +222,7 @@ class CalibrationUseCases:
                 now,
                 expected_version=version,
             ),
+            verify_checksum=True,
         )
 
     def reject(self, scope: ProjectScope, calibration_id: UUID, *, expected_version: int):
@@ -244,6 +247,7 @@ class CalibrationUseCases:
                 expected_version=version,
                 now=now,
             ),
+            verify_checksum=True,
         )
 
     def revoke(self, scope: ProjectScope, calibration_id: UUID, *, expected_version: int):
@@ -272,10 +276,14 @@ class CalibrationUseCases:
         calibration_id: UUID,
         expected_version: int,
         handler: Callable[[CalibrationRecord, int], CalibrationRecord],
+        *,
+        verify_checksum: bool = False,
     ) -> CalibrationRecord:
         current = self.get_calibration(scope, calibration_id)
         if current.version != expected_version:
             raise VersionConflictError("标定", expected_version)
+        if verify_checksum:
+            _assert_checksum_matches(current)
         updated = handler(current, expected_version)
         self._uow.commit()
         return updated
@@ -318,15 +326,26 @@ def _calibration_status(value: str | None) -> CalibrationStatus | None:
         raise DomainValidationError("status 取值非法") from exc
 
 
+CHECKSUM_ALGORITHM = "RFC8785_JCS"
+
+
 def _compute_checksum(record: CalibrationRecord) -> str:
+    """按 RFC 8785 JCS 对固定字段计算 checksum（G-15）。"""
     payload = {name: _json_value(getattr(record, name)) for name in _CHECKSUM_FIELDS}
-    encoded = json.dumps(
-        payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
-    return f"sha256:{hashlib.sha256(encoded.encode('utf-8')).hexdigest()}"
+    try:
+        return sha256_text(canonical_json(payload))
+    except CanonicalJSONError as exc:
+        raise DomainValidationError(f"标定字段无法规范化：{exc}") from exc
+
+
+def _assert_checksum_matches(record: CalibrationRecord) -> None:
+    """状态命令前的篡改检测：写库后被人改过就必须拒绝推进。
+
+    这比"只在 DRAFT 更新时重算"更强——后者无法发现绕过用例层的直写。
+    """
+    expected = _compute_checksum(record)
+    if record.checksum != expected:
+        raise DomainValidationError("标定 checksum 与内容不一致，记录可能在提交后被篡改")
 
 
 def _json_value(value: object) -> object:
