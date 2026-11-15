@@ -956,6 +956,7 @@ components:
     GapDimensionType: {$ref: "./fragments/schemas.stage5.yaml#/GapDimensionType"}
     RequirementStatus: {$ref: "./fragments/schemas.stage5.yaml#/RequirementStatus"}
     ModelArtifact: {$ref: "./fragments/schemas.stage5.yaml#/ModelArtifact"}
+    ArtifactInput: {$ref: "./fragments/schemas.stage5.yaml#/ArtifactInput"}
     ModelRuntime: {$ref: "./fragments/schemas.stage5.yaml#/ModelRuntime"}
     ModelCreate: {$ref: "./fragments/schemas.stage5.yaml#/ModelCreate"}
     ModelPatch: {$ref: "./fragments/schemas.stage5.yaml#/ModelPatch"}

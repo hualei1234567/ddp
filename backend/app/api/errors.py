@@ -377,6 +377,23 @@ _ANNOTATION_MESSAGES = {
 }
 _ANNOTATION_FALLBACK_MESSAGE = "标注域规则校验失败"
 
+# 只有"说得出是哪个对象、哪个状态"的 code 才回显 details；这些 details 由领域层
+# 构造，只含本项目内的资源 ID、状态枚举与门禁原因，不含黄金集期望答案、
+# 对象存储凭据或跨项目信息（契约 details_rule）。
+_ANNOTATION_DETAILS_SAFE_CODES = frozenset(
+    {
+        "annotation_sample_set_cancelled",
+        "annotation_sample_episode_ineligible",
+        "annotation_sample_duplicate",
+        "annotation_task_not_approved",
+        "annotation_task_not_ready",
+        "annotation_assignment_revoked",
+        "annotation_item_already_assigned",
+        "annotation_submission_already_decided",
+        "annotation_review_required",
+    }
+)
+
 
 def annotation_error_to_app(exc: AnnotationDomainError) -> AppError:
     return _mapped(
@@ -384,6 +401,7 @@ def annotation_error_to_app(exc: AnnotationDomainError) -> AppError:
         status_by_code=_ANNOTATION_STATUS_BY_CODE,
         messages=_ANNOTATION_MESSAGES,
         fallback=_ANNOTATION_FALLBACK_MESSAGE,
+        details_codes=_ANNOTATION_DETAILS_SAFE_CODES,
     )
 
 
@@ -521,13 +539,29 @@ _DATASET_MESSAGES = {
 }
 _DATASET_FALLBACK = "数据集域规则校验失败"
 
+# 只对"说得出对象与字段"的 code 透传 details。其余码的 details 可能带内部
+# 标识（策略 ID、上游地址），一律不回显——与设备域 G-19 的口径一致。
+_DATASET_DETAILS_SAFE_CODES = frozenset(
+    {
+        "validation_failed",
+        "dataset_item_ineligible",
+        "dataset_annotation_not_approved",
+        "dataset_annotation_snapshot_mismatch",
+        "dataset_access_denied",
+    }
+)
+
 
 def dataset_error_to_app(exc: DatasetDomainError) -> AppError:
+    # 资格类错误（逐项不合格、引用未批准标注、快照不一致）必须让客户端知道
+    # "是哪些条目、哪个动作"被拒，否则只能按 code 猜。这些 details 只含
+    # 条目/数据集 ID 与动作名，均为请求方已知对象，不含跨项目存在性信息。
     return _mapped(
         exc,
         status_by_code=_DATASET_STATUS_BY_CODE,
         messages=_DATASET_MESSAGES,
         fallback=_DATASET_FALLBACK,
+        details_codes=_DATASET_DETAILS_SAFE_CODES,
     )
 
 
@@ -578,18 +612,11 @@ _MODELOPS_FALLBACK = "模型闭环规则校验失败"
 # 状态枚举值）原样发给客户端，与其他域的策略不一致。
 _MODELOPS_MESSAGES = {
     "idempotency_key_reused": "同一幂等键对应了不同的请求体",
-    "model_not_found": "模型不存在或不属于当前项目",
-    "model_version_not_found": "模型版本不存在",
+    "model_not_active": "模型未激活或已归档",
     "model_version_immutable": "模型版本发布后不可原地修改",
-    "artifact_invalid": "模型产物校验失败",
-    "artifact_hash_mismatch": "模型产物 Hash 与登记值不一致",
-    "evaluation_not_found": "评测记录不存在",
-    "evaluation_invalid": "评测数据不满足要求",
-    "inference_not_found": "推理任务不存在",
-    "inference_unavailable": "推理服务当前不可用",
-    "feedback_not_found": "反馈记录不存在",
-    "requirement_not_found": "数据需求不存在",
-    "requirement_terminal": "数据需求已关闭，不能继续操作",
+    "model_training_source_invalid": "训练来源引用不存在、跨项目或不匹配",
+    "inference_service_unavailable": "推理服务未配置或不可达",
+    "inference_task_result_invalid": "推理结果引用非法或 Hash 不匹配",
     "data_requirement_terminal": "数据需求已关闭，不能继续操作",
     "model_adapter_unavailable": "模型平台适配器当前不可用",
     "model_adapter_unsupported": "模型平台适配器不支持该能力",

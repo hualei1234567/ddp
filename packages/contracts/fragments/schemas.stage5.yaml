@@ -119,6 +119,7 @@ ModelArtifact:
   - sha256
   - size_bytes
   - format
+  - verification_status
   additionalProperties: false
   properties:
     object_key:
@@ -304,6 +305,37 @@ Model:
     updated_at:
       type: string
       format: date-time
+# 请求侧的产物声明。**不要复用 `ModelArtifact`**：那个是响应模型，
+# 含 `verification_status`——该字段由服务端验证流程写入，不是客户端能声明的。
+# 两者复用同一 schema 会让"客户端传 verification_status"看似合法，
+# 而实现（`ArtifactInput`，extra=forbid）会 422 拒绝。
+ArtifactInput:
+  type: object
+  required:
+  - object_key
+  - sha256
+  - size_bytes
+  - format
+  additionalProperties: false
+  properties:
+    object_key:
+      type: string
+      minLength: 1
+      maxLength: 1024
+    sha256:
+      type: string
+      pattern: ^sha256:[0-9a-f]{64}$
+    size_bytes:
+      type: integer
+      minimum: 1
+    format:
+      type: string
+      enum:
+      - ONNX
+      - TORCHSCRIPT
+      - SAFETENSORS
+      - TENSORRT
+      - OTHER
 ModelVersionCreate:
   type: object
   required:
@@ -312,7 +344,7 @@ ModelVersionCreate:
   additionalProperties: false
   properties:
     artifact:
-      $ref: ../openapi.yaml#/components/schemas/ModelArtifact
+      $ref: ../openapi.yaml#/components/schemas/ArtifactInput
     runtime:
       $ref: ../openapi.yaml#/components/schemas/ModelRuntime
     training_request_id:
