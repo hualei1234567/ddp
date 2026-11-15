@@ -540,3 +540,80 @@ def test_selection_filters_accept_json_string_uuids() -> None:
 def test_selection_filters_reject_invalid_uuid_strings() -> None:
     with pytest.raises(DomainValidationError):
         SelectionFilters.from_mapping({"episode_ids": ["not-a-uuid"]})
+
+
+def test_calibration_missing_is_distinguishable_from_invalid() -> None:
+    """「没有标定」与「标定无效」必须是两个不同的排除码。
+
+    此前 ``CALIBRATION_MISSING`` 是不可达死码：Episode 创建阶段就禁止空
+    标定快照，空快照走不到选择阶段，两个码实际只可能出 ``CALIBRATION_INVALID``。
+    调用方因此无法判断"该不该去补标定"，只能一律当成质量问题。
+    """
+    from dataclasses import replace as _replace
+
+    missing = _replace(
+        candidate(0, calibration_valid=False),
+        calibration_missing=True,
+        calibration_issue="缺少有效标定快照",
+    )
+    invalid = candidate(1, calibration_valid=False)
+
+    outcome = evaluate_selection(
+        (missing, invalid),
+        filters=SelectionFilters(),
+        usage_policy="TRAINING_ALLOWED",
+    )
+    by_id = {item["code"]: item for item in outcome.exclusion_summary}
+    assert "CALIBRATION_MISSING" in by_id
+    assert "CALIBRATION_INVALID" in by_id
+    assert outcome.selected == ()
+
+
+def test_missing_calibration_can_be_waived_with_reason() -> None:
+    """缺少标定可带原因显式豁免；标定无效则不可豁免。
+
+    公开第一人称数据集（HF Human-1M 等）的元数据里不含任何标定信息，
+    这是数据固有属性。没有豁免时这类数据永远进不了数据集；但**有标定却
+    无效/过期**是质量问题，风险完全不同，必须继续阻断。
+    """
+    from dataclasses import replace as _replace
+
+    missing = _replace(
+        candidate(0, calibration_valid=False),
+        calibration_missing=True,
+        calibration_issue="缺少有效标定快照",
+    )
+    waived = evaluate_selection(
+        (missing,),
+        filters=SelectionFilters.from_mapping(
+            {
+                "allow_missing_calibration": True,
+                "missing_calibration_reason": "HF 公开数据集不含标定信息，人工确认接受",
+            }
+        ),
+        usage_policy="TRAINING_ALLOWED",
+    )
+    assert len(waived.selected) == 1
+    assert any(item.startswith("CALIBRATION_MISSING_WAIVED") for item in waived.warnings)
+
+
+def test_waiver_does_not_cover_invalid_calibration() -> None:
+    """豁免只覆盖 MISSING，不覆盖 INVALID。"""
+    invalid = candidate(0, calibration_valid=False)
+    outcome = evaluate_selection(
+        (invalid,),
+        filters=SelectionFilters.from_mapping(
+            {
+                "allow_missing_calibration": True,
+                "missing_calibration_reason": "确认接受无标定",
+            }
+        ),
+        usage_policy="TRAINING_ALLOWED",
+    )
+    assert outcome.selected == ()
+    assert any(item["code"] == "CALIBRATION_INVALID" for item in outcome.exclusion_summary)
+
+
+def test_waiver_requires_reason() -> None:
+    with pytest.raises(DomainValidationError):
+        SelectionFilters.from_mapping({"allow_missing_calibration": True})
