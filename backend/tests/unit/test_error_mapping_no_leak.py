@@ -115,3 +115,48 @@ def test_details_are_propagated_where_declared() -> None:
     )
     assert app_error.code == "file_too_large"
     assert app_error.details == {"limit": 100, "actual": 150}
+
+
+# --- 账本只追加守卫 -> ledger_immutable ------------------------------------
+
+
+def test_ledger_append_only_violation_maps_to_ledger_immutable() -> None:
+    """数据库守卫拒绝账本改删时，客户端必须收到 `ledger_immutable`。
+
+    契约（阶段 6 §8）明列该码。守卫在数据库层（`suppliers_guards.py` 的
+    `trg_acceptance_ledger_entries_update/delete`），但此前异常落进
+    `integrity_error_to_app` 的兜底分支，客户端收到泛化的 `conflict`——
+    无法区分"账本不可改"（重试无用）与其他完整性冲突。
+    """
+    from app.api.errors import integrity_error_to_app
+    from sqlalchemy.exc import IntegrityError
+
+    exc = IntegrityError(
+        "UPDATE acceptance_ledger_entries SET reason='x'",
+        {},
+        Exception("acceptance ledger is append-only"),
+    )
+    error = integrity_error_to_app(exc)
+
+    assert error.code == "ledger_immutable"
+    assert error.status_code == 409
+
+
+def test_other_integrity_violation_does_not_become_ledger_immutable() -> None:
+    """反向保护：普通 CHECK 违反不能被误判成账本冲突。
+
+    判据只认固定短语 `append-only`，不做模糊匹配——否则所有 CHECK 违反
+    都会显示"账本只允许追加"，误导客户端。
+    """
+    from app.api.errors import integrity_error_to_app
+    from sqlalchemy.exc import IntegrityError
+
+    exc = IntegrityError(
+        "INSERT INTO suppliers ...",
+        {},
+        Exception("CHECK constraint failed: ck_suppliers_status_allowed"),
+    )
+    error = integrity_error_to_app(exc)
+
+    assert error.code != "ledger_immutable"
+    assert error.code == "conflict"

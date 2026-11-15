@@ -632,6 +632,15 @@
       "implemented": true,
       "category": "export",
       "description": "导出任务超时；记录 attempt 与已写入字节数"
+    },
+    {
+      "code": "ledger_immutable",
+      "http": 409,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "inbound",
+      "description": "验收账本只允许追加，不能修改或删除"
     }
   ]
 }

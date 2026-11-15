@@ -638,7 +638,24 @@ def integrity_error_to_app(exc: IntegrityError) -> AppError:
     """不把驱动 SQL、表名或参数回显给客户端。"""
     if _is_unique_violation(exc):
         return AppError("duplicate_resource", _MESSAGES["duplicate_resource"], 409)
+    if _is_ledger_append_only_violation(exc):
+        # 契约 §8 明列 `ledger_immutable`(409)：验收账本只允许追加。
+        # 守卫在数据库层（`suppliers_guards.py`），不动它——但客户端要能区分
+        # "账本不可改"与"其他完整性冲突"，否则只会以为可以重试。
+        # 文案与供应商域的 `_SUPPLIER_MESSAGES` 保持一致，但这里是跨域的
+        # 完整性兜底，不引用域内私表（避免"改一处漏一处"）。
+        return AppError("ledger_immutable", "验收账本只允许追加，不能修改或删除", 409)
     return AppError("conflict", "数据完整性约束冲突", 409)
+
+
+def _is_ledger_append_only_violation(exc: IntegrityError) -> bool:
+    """识别账本只追加守卫的拒绝。
+
+    守卫的原文是 ``acceptance ledger is append-only``（SQLite RAISE）
+    或 PostgreSQL 的等价异常消息。只认这个固定短语，不做模糊匹配——
+    否则普通 CHECK 违反也会被误判成账本冲突。
+    """
+    return "append-only" in str(exc.orig).lower()
 
 
 def _is_unique_violation(exc: IntegrityError) -> bool:
