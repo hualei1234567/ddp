@@ -2,17 +2,21 @@
 
 import type { CursorPage } from "../types/api";
 import type {
+  DataReview,
   DataSource,
   DataSourceImport,
   MediaAsset,
   MediaPlayback,
+  QualityReport,
 } from "../types/datasource";
-import { apiClient, type ApiClient } from "./api";
+import { ApiError, apiClient, type ApiClient } from "./api";
 import {
+  parseDataReview,
   parseDataSource,
   parseDataSourceImport,
   parseMediaAsset,
   parseMediaPlayback,
+  parseQualityReport,
 } from "./datasourceParsers";
 import { createIdempotencyKey, formatIfMatch } from "./idempotency";
 import {
@@ -67,6 +71,11 @@ export interface ImportCreateInput {
   tool_version: string;
   sample_limit?: number | null;
   cache_location?: string | null;
+}
+
+export interface ReviewDecisionInput {
+  decision: string;
+  reason?: string | null;
 }
 
 export interface ImportActionOptions extends WriteOptions {
@@ -149,6 +158,27 @@ export interface DataSourceApi {
     assetId: string,
     options?: { signal?: AbortSignal },
   ): Promise<MediaPlayback>;
+  ensureReview(
+    projectId: string,
+    importId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<DataReview>;
+  getReview(
+    projectId: string,
+    importId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<DataReview | null>;
+  decideReview(
+    projectId: string,
+    importId: string,
+    input: ReviewDecisionInput,
+    options: WriteOptions,
+  ): Promise<DataReview>;
+  qualityReport(
+    projectId: string,
+    importId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<QualityReport>;
 }
 
 export function createDataSourceApi(client: ApiClient): DataSourceApi {
@@ -270,6 +300,55 @@ export function createDataSourceApi(client: ApiClient): DataSourceApi {
           validate: (value) => parseMediaPlayback(value),
         },
       );
+    },
+    async ensureReview(projectId, importId, options) {
+      return client.request(importOf(projectId, importId, "/review"), {
+        method: "POST",
+        signal: options?.signal,
+        body: {},
+        validate: (value) =>
+          assertProjectScope(parseDataReview(value), projectId, "审核记录"),
+      });
+    },
+    async getReview(projectId, importId, options) {
+      // 尚未创建审核记录时服务端返回 404；这不是错误状态，调用方按 null 处理。
+      try {
+        return await client.get(importOf(projectId, importId, "/review"), {
+          signal: options?.signal,
+          validate: (value) =>
+            assertProjectScope(parseDataReview(value), projectId, "审核记录"),
+        });
+      } catch (error) {
+        if (error instanceof ApiError && error.isNotFound) {
+          return null;
+        }
+        throw error;
+      }
+    },
+    async decideReview(projectId, importId, input, options) {
+      return client.request(importOf(projectId, importId, "/review/decisions"), {
+        method: "POST",
+        signal: options.signal,
+        headers: {
+          "If-Match": formatIfMatch(options.version),
+          "Idempotency-Key": options.idempotencyKey ?? createIdempotencyKey(),
+        },
+        body: { decision: input.decision, reason: input.reason ?? null },
+        validate: (value) =>
+          assertProjectScope(parseDataReview(value), projectId, "审核记录"),
+      });
+    },
+    async qualityReport(projectId, importId, options) {
+      return client.get(importOf(projectId, importId, "/quality-report"), {
+        signal: options?.signal,
+        validate: (value) => {
+          const report = parseQualityReport(value);
+          if (report.import_id !== importId) {
+            throw new Error("质量报告的 import_id 与请求不一致");
+          }
+          return report;
+        },
+      });
     },
     async actImport(projectId, importId, action, options) {
       return client.request(

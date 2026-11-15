@@ -79,3 +79,48 @@ export interface MediaPlayback {
   content_type: string;
   size_bytes: number;
 }
+
+export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ReviewDecision = "ACCEPT" | "REJECT" | "NEEDS_FIX";
+
+/**
+ * 导入结果的人工审核记录。
+ *
+ * `reviewer_id` 与 `submitted_by` 分开返回，是为了让前端能显示"谁提交、谁审核"——
+ * 职责分离由服务端与数据库约束强制，前端只负责如实呈现。
+ */
+export interface DataReview {
+  review_id: string;
+  project_id: string;
+  import_id: string;
+  status: ReviewStatus;
+  decision: ReviewDecision | null;
+  reason: string | null;
+  reviewer_id: string | null;
+  submitted_by: string;
+  created_at: string;
+  decided_at: string | null;
+  version: number;
+}
+
+/** 单条质量规则的结果；`passed=false` 时 `detail` 说明原因。 */
+export interface QualityFinding {
+  rule_id: string;
+  passed: boolean;
+  detail: string;
+}
+
+/**
+ * 质量报告：规则版本随报告返回，便于解释"为什么当时通过"。
+ * 服务端已按规则版本重算，前端不重新判定。
+ */
+export interface QualityReport {
+  import_id: string;
+  rule_version: string;
+  sample_scope: string;
+  total_assets: number;
+  total_episodes: number;
+  passed: boolean;
+  findings: QualityFinding[];
+  failures: QualityFinding[];
+}

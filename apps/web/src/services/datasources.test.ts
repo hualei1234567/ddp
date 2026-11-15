@@ -301,3 +301,124 @@ describe("媒体资产", () => {
     );
   });
 });
+
+const reviewBody = {
+  review_id: "44444444-4444-4444-4444-444444444444",
+  project_id: PROJECT,
+  import_id: IMPORT_ID,
+  status: "PENDING",
+  decision: null,
+  reason: null,
+  reviewer_id: null,
+  submitted_by: "55555555-5555-5555-5555-555555555555",
+  created_at: "2026-11-15T00:00:00Z",
+  decided_at: null,
+  version: 1,
+};
+
+const reportBody = {
+  import_id: IMPORT_ID,
+  rule_version: "1.0.0",
+  sample_scope: "IMPORT",
+  total_assets: 39,
+  total_episodes: 15,
+  passed: true,
+  findings: [
+    { rule_id: "asset_present", passed: true, detail: "39 个资产均有对象键" },
+  ],
+  failures: [],
+};
+
+describe("导入审核与质量报告", () => {
+  it("创建审核记录使用 POST", async () => {
+    const { api, fetchImpl } = client(() => jsonResponse(reviewBody, 201));
+
+    const review = await api.ensureReview(PROJECT, IMPORT_ID);
+
+    expect(review.import_id).toBe(IMPORT_ID);
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(`/data-source-imports/${IMPORT_ID}/review`);
+    expect(init.method).toBe("POST");
+  });
+
+  it("审核记录不存在时返回 null 而不是抛错", async () => {
+    const { api } = client(
+      () =>
+        new Response(
+          JSON.stringify({
+            error: { code: "not_found", message: "审核记录不存在", request_id: "r" },
+          }),
+          { status: 404, headers: { "Content-Type": "application/json" } },
+        ),
+    );
+
+    await expect(api.getReview(PROJECT, IMPORT_ID)).resolves.toBeNull();
+  });
+
+  it("提交审核结论使用 POST + If-Match", async () => {
+    const decided = {
+      ...reviewBody,
+      status: "APPROVED",
+      decision: "ACCEPT",
+      reviewer_id: "66666666-6666-6666-6666-666666666666",
+      decided_at: "2026-11-15T01:00:00Z",
+      version: 2,
+    };
+    const { api, fetchImpl } = client(() => jsonResponse(decided));
+
+    const review = await api.decideReview(
+      PROJECT,
+      IMPORT_ID,
+      { decision: "ACCEPT", reason: "抽查 3 条片段画面正常" },
+      { version: 1 },
+    );
+
+    expect(review.status).toBe("APPROVED");
+    const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(`/data-source-imports/${IMPORT_ID}/review/decisions`);
+    expect(init.method).toBe("POST");
+    const headers = init.headers as Record<string, string>;
+    expect(headers["If-Match"]).toBe('"1"');
+    const body = JSON.parse(String(init.body));
+    expect(body.decision).toBe("ACCEPT");
+    expect(body.reason).toBe("抽查 3 条片段画面正常");
+  });
+
+  it("质量报告的 import_id 必须与请求一致", async () => {
+    const { api } = client(() =>
+      jsonResponse({
+        ...reportBody,
+        import_id: "77777777-7777-7777-7777-777777777777",
+      }),
+    );
+
+    // client 把校验失败统一包装成 invalid_response；具体原因在 cause 里，
+    // 这样页面能显示统一文案，排障时仍能拿到根因。
+    await expect(api.qualityReport(PROJECT, IMPORT_ID)).rejects.toMatchObject({
+      kind: "invalid_response",
+      cause: { message: expect.stringMatching(/import_id 与请求不一致/) },
+    });
+  });
+
+  it("质量报告保留规则版本与失败明细", async () => {
+    const failing = {
+      ...reportBody,
+      passed: false,
+      failures: [
+        {
+          rule_id: "excerpt_within_duration",
+          passed: false,
+          detail: "片段 3 的摘录区间超出视频时长",
+        },
+      ],
+    };
+    const { api } = client(() => jsonResponse(failing));
+
+    const report = await api.qualityReport(PROJECT, IMPORT_ID);
+
+    expect(report.rule_version).toBe("1.0.0");
+    expect(report.failures).toHaveLength(1);
+    expect(report.failures[0]?.rule_id).toBe("excerpt_within_duration");
+    expect(report.failures[0]?.passed).toBe(false);
+  });
+});

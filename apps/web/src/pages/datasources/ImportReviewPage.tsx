@@ -1,0 +1,427 @@
+import { ReloadOutlined } from "@ant-design/icons";
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Empty,
+  Form,
+  Input,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+  message,
+} from "antd";
+import { useCallback, useEffect, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+
+import PageContainer from "../../components/ui/PageContainer";
+import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
+import { useProjectId } from "../../hooks/useProjectId";
+import { ApiError } from "../../services/api";
+import { dataSourceApi } from "../../services/datasources";
+import { formatDateTime } from "../../services/format";
+import type {
+  DataReview,
+  QualityReport,
+  ReviewDecision,
+} from "../../types/datasource";
+
+/**
+ * 导入结果的质量报告与人工审核页。
+ *
+ * 分工是刻意的：
+ * - 质量报告由**服务端规则**判定（`rule_version` 随报告返回），前端只呈现结论；
+ * - 审核结论由**人**给出，且审核人不得是导入提交人——职责分离由服务端与数据库
+ *   双重约束，前端在这里只负责把"能不能审"如实显示出来，不做权限推断。
+ */
+
+const DECISION_LABELS: Record<ReviewDecision, string> = {
+  ACCEPT: "通过",
+  REJECT: "拒绝",
+  NEEDS_FIX: "需修正",
+};
+
+const REVIEW_STATUS_LABELS: Record<DataReview["status"], string> = {
+  PENDING: "待审核",
+  APPROVED: "已通过",
+  REJECTED: "已拒绝",
+};
+
+const REVIEW_STATUS_COLORS: Record<DataReview["status"], string> = {
+  PENDING: "gold",
+  APPROVED: "green",
+  REJECTED: "red",
+};
+
+export function QualitySection({
+  report,
+  loading,
+  error,
+  onReload,
+}: {
+  report: QualityReport | null;
+  loading: boolean;
+  error: string | null;
+  onReload: () => void;
+}) {
+  if (loading) {
+    return <Spin />;
+  }
+  if (error) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="质量报告加载失败"
+        description={error}
+        action={
+          <Button size="small" icon={<ReloadOutlined />} onClick={onReload}>
+            重试
+          </Button>
+        }
+      />
+    );
+  }
+  if (!report) {
+    return <Empty description="尚无质量报告" />;
+  }
+  return (
+    <Space direction="vertical" style={{ width: "100%" }} size="middle">
+      <Alert
+        type={report.passed ? "success" : "warning"}
+        showIcon
+        message={
+          report.passed
+            ? `质量校验通过（规则版本 ${report.rule_version}）`
+            : `质量校验未通过（规则版本 ${report.rule_version}）`
+        }
+        description={
+          report.passed
+            ? undefined
+            : "未通过的规则如下；这些是服务端判定结果，不是前端推断。"
+        }
+      />
+      <Descriptions size="small" column={3} bordered>
+        <Descriptions.Item label="样本范围">
+          {report.sample_scope}
+        </Descriptions.Item>
+        <Descriptions.Item label="片段数">
+          {report.total_episodes}
+        </Descriptions.Item>
+        <Descriptions.Item label="资产数">
+          {report.total_assets}
+        </Descriptions.Item>
+      </Descriptions>
+      {report.failures.length > 0 ? (
+        <Space direction="vertical" style={{ width: "100%" }} size={4}>
+          <Typography.Text strong>未通过的规则</Typography.Text>
+          {report.failures.map((finding) => (
+            <Alert
+              key={finding.rule_id}
+              type="error"
+              showIcon
+              message={finding.rule_id}
+              description={finding.detail}
+            />
+          ))}
+        </Space>
+      ) : null}
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        共 {report.findings.length} 条规则，全部结果随报告返回，便于解释当时为何通过。
+      </Typography.Text>
+    </Space>
+  );
+}
+
+export function ReviewSection({
+  projectId,
+  importId,
+  review,
+  loading,
+  error,
+  forbidden,
+  onReload,
+}: {
+  projectId: string;
+  importId: string;
+  review: DataReview | null;
+  loading: boolean;
+  error: string | null;
+  forbidden: boolean;
+  onReload: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [form] = Form.useForm<{ decision: ReviewDecision; reason?: string }>();
+
+  const submit = useCallback(
+    async (decision: ReviewDecision) => {
+      if (!review) {
+        return;
+      }
+      const reason = form.getFieldValue("reason") as string | undefined;
+      setSubmitting(true);
+      try {
+        await dataSourceApi.decideReview(
+          projectId,
+          importId,
+          { decision, reason: reason ?? null },
+          { version: review.version },
+        );
+        message.success(`已提交审核结论：${DECISION_LABELS[decision]}`);
+        onReload();
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.isConflict) {
+          message.warning("审核记录已被他人更新，请刷新后重试");
+          onReload();
+        } else {
+          message.error(caught instanceof Error ? caught.message : "提交失败");
+        }
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [form, importId, onReload, projectId, review],
+  );
+
+  if (loading) {
+    return <Spin />;
+  }
+  if (error) {
+    return (
+      <Alert
+        type="error"
+        showIcon
+        message="审核记录加载失败"
+        description={error}
+        action={
+          <Button size="small" icon={<ReloadOutlined />} onClick={onReload}>
+            重试
+          </Button>
+        }
+      />
+    );
+  }
+  if (!review) {
+    return <Empty description="尚未创建审核记录" />;
+  }
+
+  const decided = review.status !== "PENDING";
+
+  return (
+    <Space direction="vertical" style={{ width: "100%" }} size="middle">
+      <Space wrap>
+        <Tag color={REVIEW_STATUS_COLORS[review.status]}>
+          {REVIEW_STATUS_LABELS[review.status]}
+        </Tag>
+        {review.decision ? (
+          <Tag>{DECISION_LABELS[review.decision]}</Tag>
+        ) : null}
+        <Typography.Text type="secondary">
+          提交人 {review.submitted_by.slice(0, 8)}…
+        </Typography.Text>
+        {review.reviewer_id ? (
+          <Typography.Text type="secondary">
+            审核人 {review.reviewer_id.slice(0, 8)}…
+          </Typography.Text>
+        ) : null}
+        {review.decided_at ? (
+          <Typography.Text type="secondary">
+            结论时间 {formatDateTime(review.decided_at)}
+          </Typography.Text>
+        ) : null}
+      </Space>
+      {review.reason ? (
+        <Alert type="info" showIcon message="审核说明" description={review.reason} />
+      ) : null}
+      {decided ? (
+        <Typography.Text type="secondary">
+          该审核已有结论；如需重新审核，需由服务端开启新的审核轮次。
+        </Typography.Text>
+      ) : forbidden ? (
+        <Alert
+          type="warning"
+          showIcon
+          message="无审核权限"
+          description="当前账号在该项目内没有审核权限，或本次导入由你提交（职责分离要求审核人不同于提交人）。"
+        />
+      ) : (
+        <Form form={form} layout="vertical" disabled={submitting}>
+          <Form.Item
+            name="reason"
+            label="审核说明（可选）"
+            rules={[{ max: 2000, message: "说明不得超过 2000 字" }]}
+          >
+            <Input.TextArea rows={3} placeholder="记录判断依据，便于事后追溯" />
+          </Form.Item>
+          <Space wrap>
+            <Button
+              type="primary"
+              loading={submitting}
+              onClick={() => void submit("ACCEPT")}
+            >
+              通过
+            </Button>
+            <Button
+              loading={submitting}
+              onClick={() => void submit("NEEDS_FIX")}
+            >
+              需修正
+            </Button>
+            <Button danger loading={submitting} onClick={() => void submit("REJECT")}>
+              拒绝
+            </Button>
+          </Space>
+        </Form>
+      )}
+    </Space>
+  );
+}
+
+function ReviewContent({
+  projectId,
+  importId,
+}: {
+  projectId: string;
+  importId: string;
+}) {
+  const [report, setReport] = useState<QualityReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(true);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [review, setReview] = useState<DataReview | null>(null);
+  const [reviewLoading, setReviewLoading] = useState(true);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewForbidden, setReviewForbidden] = useState(false);
+
+  const loadReport = useCallback(
+    async (signal?: AbortSignal) => {
+      setReportLoading(true);
+      setReportError(null);
+      try {
+        setReport(await dataSourceApi.qualityReport(projectId, importId, { signal }));
+      } catch (caught) {
+        setReportError(caught instanceof Error ? caught.message : "加载失败");
+      } finally {
+        setReportLoading(false);
+      }
+    },
+    [importId, projectId],
+  );
+
+  const loadReview = useCallback(
+    async (signal?: AbortSignal) => {
+      setReviewLoading(true);
+      setReviewError(null);
+      setReviewForbidden(false);
+      try {
+        // 先确保审核记录存在（服务端幂等），再读取当前状态。
+        await dataSourceApi.ensureReview(projectId, importId, { signal });
+        setReview(await dataSourceApi.getReview(projectId, importId, { signal }));
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.isForbidden) {
+          // 无审核/提交权限时，仍然要把现有审核状态显示出来，而不是整页报错。
+          setReviewForbidden(true);
+          setReview(
+            await dataSourceApi
+              .getReview(projectId, importId, { signal })
+              .catch(() => null),
+          );
+        } else {
+          setReviewError(caught instanceof Error ? caught.message : "加载失败");
+        }
+      } finally {
+        setReviewLoading(false);
+      }
+    },
+    [importId, projectId],
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadReport(controller.signal);
+    void loadReview(controller.signal);
+    return () => controller.abort();
+  }, [loadReport, loadReview]);
+
+  return (
+    <Space direction="vertical" style={{ width: "100%" }} size="large">
+      <Card
+          title="质量报告"
+          extra={
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => void loadReport()}
+            >
+              刷新
+            </Button>
+          }
+        >
+          <QualitySection
+            report={report}
+            loading={reportLoading}
+            error={reportError}
+            onReload={() => void loadReport()}
+          />
+        </Card>
+        <Card
+          title="人工审核"
+          extra={
+            <Button
+              size="small"
+              icon={<ReloadOutlined />}
+              onClick={() => void loadReview()}
+            >
+              刷新
+            </Button>
+          }
+        >
+          <ReviewSection
+            projectId={projectId}
+            importId={importId}
+            review={review}
+            loading={reviewLoading}
+            error={reviewError}
+            forbidden={reviewForbidden}
+            onReload={() => void loadReview()}
+          />
+      </Card>
+    </Space>
+  );
+}
+
+export default function ImportReviewPage() {
+  const projectId = useProjectId();
+  const { importId } = useParams<{ importId: string }>();
+  const [searchParams] = useSearchParams();
+  const resolvedImportId = importId ?? searchParams.get("import_id") ?? "";
+
+  if (!projectId) {
+    return (
+      <PageContainer title="质量报告与审核" description="导入结果必须按项目隔离展示。">
+        <ProjectScopeRequired scope="导入审核" />
+      </PageContainer>
+    );
+  }
+  if (!resolvedImportId) {
+    return (
+      <PageContainer title="质量报告与审核">
+        <Empty description="缺少导入任务 ID；请从导入任务列表进入" />
+      </PageContainer>
+    );
+  }
+  return (
+    <PageContainer
+      title="质量报告与审核"
+      description="质量结论由服务端规则给出，审核结论由人给出；审核人不得是提交人。"
+      extra={
+        <Link to={`/data-source-imports/${resolvedImportId}/assets`}>
+          <Button>查看视频</Button>
+        </Link>
+      }
+    >
+      <ReviewContent projectId={projectId} importId={resolvedImportId} />
+    </PageContainer>
+  );
+}

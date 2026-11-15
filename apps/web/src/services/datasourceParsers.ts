@@ -2,6 +2,7 @@
 
 import type {
   AccessCondition,
+  DataReview,
   DataSource,
   DataSourceImport,
   DataSourceKind,
@@ -9,6 +10,10 @@ import type {
   ImportStatus,
   MediaAsset,
   MediaPlayback,
+  QualityFinding,
+  QualityReport,
+  ReviewDecision,
+  ReviewStatus,
 } from "../types/datasource";
 import {
   asRecord,
@@ -18,6 +23,7 @@ import {
   readInteger,
   readOptionalNumber,
   readOptionalString,
+  readOptionalUuid,
   readPositiveInteger,
   readString,
   readUuid,
@@ -56,6 +62,16 @@ function readOptionalCount(
 }
 
 const ACTIONS = ["start", "succeed", "fail", "cancel"] as const;
+const REVIEW_STATUSES: readonly ReviewStatus[] = [
+  "PENDING",
+  "APPROVED",
+  "REJECTED",
+];
+const REVIEW_DECISIONS: readonly ReviewDecision[] = [
+  "ACCEPT",
+  "REJECT",
+  "NEEDS_FIX",
+];
 
 export function parseDataSource(value: unknown): DataSource {
   const record = asRecord(value, "数据源");
@@ -235,4 +251,78 @@ export function presentCamera(camera: string): string {
     wrist_right: "右腕",
   };
   return labels[camera] ?? camera;
+}
+
+/** 服务端保证职责分离：审核人不会等于提交人，前端只如实呈现。 */
+export function parseDataReview(value: unknown): DataReview {
+  const record = asRecord(value, "审核记录");
+  return {
+    review_id: readUuid(record, "review_id", "审核记录.review_id"),
+    project_id: readUuid(record, "project_id", "审核记录.project_id"),
+    import_id: readUuid(record, "import_id", "审核记录.import_id"),
+    status: readEnum(
+      record,
+      "status",
+      "审核记录.status",
+      REVIEW_STATUSES,
+    ),
+    decision:
+      record.decision === null || record.decision === undefined
+        ? null
+        : readEnum(record, "decision", "审核记录.decision", REVIEW_DECISIONS),
+    reason: readOptionalString(record, "reason", "审核记录.reason"),
+    reviewer_id: readOptionalUuid(
+      record,
+      "reviewer_id",
+      "审核记录.reviewer_id",
+    ),
+    submitted_by: readUuid(record, "submitted_by", "审核记录.submitted_by"),
+    created_at: readString(record, "created_at", "审核记录.created_at"),
+    decided_at: readOptionalString(
+      record,
+      "decided_at",
+      "审核记录.decided_at",
+    ),
+    version: readPositiveInteger(record, "version", "审核记录.version"),
+  };
+}
+
+function parseFinding(value: unknown, path: string): QualityFinding {
+  const record = asRecord(value, path);
+  return {
+    rule_id: readString(record, "rule_id", `${path}.rule_id`),
+    passed: readBoolean(record, "passed", `${path}.passed`),
+    detail: readString(record, "detail", `${path}.detail`),
+  };
+}
+
+function parseFindings(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): QualityFinding[] {
+  const raw = record[key];
+  if (!Array.isArray(raw)) {
+    throw new Error(`${path} 必须是数组`);
+  }
+  return raw.map((item, index) => parseFinding(item, `${path}[${index}]`));
+}
+
+/** 质量报告按规则版本返回；`passed` 是服务端结论，前端不再自行判定。 */
+export function parseQualityReport(value: unknown): QualityReport {
+  const record = asRecord(value, "质量报告");
+  return {
+    import_id: readUuid(record, "import_id", "质量报告.import_id"),
+    rule_version: readString(record, "rule_version", "质量报告.rule_version"),
+    sample_scope: readString(record, "sample_scope", "质量报告.sample_scope"),
+    total_assets: readInteger(record, "total_assets", "质量报告.total_assets"),
+    total_episodes: readInteger(
+      record,
+      "total_episodes",
+      "质量报告.total_episodes",
+    ),
+    passed: readBoolean(record, "passed", "质量报告.passed"),
+    findings: parseFindings(record, "findings", "质量报告.findings"),
+    failures: parseFindings(record, "failures", "质量报告.failures"),
+  };
 }

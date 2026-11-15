@@ -292,13 +292,16 @@ function ImportListContent({
       render: (value: string | null) => (value ? formatDateTime(value) : "—"),
     },
     {
-      title: "审看",
+      title: "审看与审核",
       key: "review",
-      width: 90,
-      // 只有成功导入才有媒体资产可看；失败/进行中不显示入口，避免点进去空页面。
+      width: 150,
+      // 只有成功导入才有媒体资产与质量报告；失败/进行中不显示入口，避免点进去空页面。
       render: (_, item) =>
         item.status === "SUCCEEDED" ? (
-          <Link to={`/data-source-imports/${item.import_id}/assets`}>审看</Link>
+          <Space size={8}>
+            <Link to={`/data-source-imports/${item.import_id}/assets`}>审看</Link>
+            <Link to={`/data-source-imports/${item.import_id}/review`}>审核</Link>
+          </Space>
         ) : (
           <Typography.Text type="secondary">—</Typography.Text>
         ),

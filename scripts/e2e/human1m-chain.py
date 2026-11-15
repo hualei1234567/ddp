@@ -27,11 +27,9 @@ os.environ.setdefault("DDP_S3_ACCESS_KEY", "minioadmin")
 os.environ.setdefault("DDP_S3_SECRET_KEY", "minioadmin")
 os.environ.setdefault("DDP_S3_BUCKET", "ddp-raw")
 
-from datetime import UTC, datetime  # noqa: E402
 from uuid import uuid4  # noqa: E402
 
 import httpx  # noqa: E402
-
 from app.application.datasources import (  # noqa: E402
     DataSourceUseCases,
     NewDataSource,
@@ -92,7 +90,6 @@ def main() -> int:
         connect_timeout_seconds=10,
     )
     factory = create_session_factory(engine)
-    now = datetime.now(UTC)
     submitter_id, reviewer_id = uuid4(), uuid4()
     project_id = uuid4()
 
@@ -223,7 +220,47 @@ def main() -> int:
     print(f"    预签名 URL 含签名参数 = {'X-Amz-Signature=' in url}")
     print(f"    → 可用 curl -r 0-1023 '{url[:48]}…' 验证 HTTP 206")
 
-    step(7, "汇总")
+    step(7, "走真实 HTTP 路由复核前端用的两个端点")
+    # 前端页面（ImportReviewPage）走的是 HTTP 路由而非用例层，
+    # 这里用 TestClient 复跑一遍，确保"前端能拿到的字段"与"用例层结论"一致。
+    from app.infrastructure.db.session import get_session  # noqa: E402
+    from app.main import create_app  # noqa: E402
+    from fastapi.testclient import TestClient  # noqa: E402
+
+    # 本地 Header 认证默认关闭；这里显式打开，且 TestClient 来源是 loopback。
+    os.environ["DDP_LOCAL_HEADER_AUTH"] = "true"
+    get_settings.cache_clear()
+    app = create_app()
+    app.dependency_overrides[get_session] = _override_session(factory)
+    with TestClient(app) as client:
+        headers = {"X-User-Id": str(submitter_id)}
+        report_resp = client.get(
+            f"/api/v1/projects/{project_id}/data-source-imports/{import_id}/quality-report",
+            headers=headers,
+        )
+        review_resp = client.get(
+            f"/api/v1/projects/{project_id}/data-source-imports/{import_id}/review",
+            headers=headers,
+        )
+    report_json = report_resp.json()
+    review_json = review_resp.json()
+    print(f"    质量报告 HTTP={report_resp.status_code} "
+          f"rule_version={report_json.get('rule_version')} passed={report_json.get('passed')} "
+          f"findings={len(report_json.get('findings', []))}")
+    print(f"    审核记录 HTTP={review_resp.status_code} "
+          f"status={review_json.get('status')} decision={review_json.get('decision')} "
+          f"version={review_json.get('version')}")
+    if report_resp.status_code != 200 or review_resp.status_code != 200:
+        print("    HTTP 复核失败")
+        return 1
+    if report_json.get("rule_version") != report.rule_version:
+        print("    规则版本与用例层不一致")
+        return 1
+    if review_json.get("status") != str(decided.status):
+        print("    审核状态与用例层不一致")
+        return 1
+
+    step(8, "汇总")
     with factory() as s:
         final = SqlDataSourceImportRepository(s).get(submitter, import_id)
     print(f"    导入状态 = {final.status}")
@@ -232,6 +269,19 @@ def main() -> int:
     print(f"    审核结论 = {decided.status}")
     print("\n全链路验证完成。")
     return 0
+
+
+def _override_session(factory):
+    """给 TestClient 注入与脚本相同的 session factory。"""
+
+    def _dependency():
+        session = factory()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    return _dependency
 
 
 if __name__ == "__main__":

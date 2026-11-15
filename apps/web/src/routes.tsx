@@ -23,6 +23,7 @@ import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPag
 import AssetReviewPage from "./pages/datasources/AssetReviewPage";
 import DataSourceListPage from "./pages/datasources/DataSourceListPage";
 import ImportListPage from "./pages/datasources/ImportListPage";
+import ImportReviewPage from "./pages/datasources/ImportReviewPage";
 import DatasetDetailPage from "./pages/datasets/DatasetDetailPage";
 import DatasetListPage from "./pages/datasets/DatasetListPage";
 import DatasetVersionDetailPage from "./pages/datasets/DatasetVersionDetailPage";
@@ -178,6 +179,10 @@ export default function AppRoutes() {
         <Route
           path="data-source-imports/:importId/assets"
           element={<AssetReviewPage />}
+        />
+        <Route
+          path="data-source-imports/:importId/review"
+          element={<ImportReviewPage />}
         />
         <Route path="datasets" element={<DatasetListPage />} />
         <Route path="datasets/:datasetId" element={<DatasetDetailPage />} />
