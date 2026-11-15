@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 _FROZEN_STATES = "'VALIDATED', 'ACTIVE', 'SUPERSEDED', 'REVOKED', 'EXPIRED'"
@@ -157,6 +157,113 @@ def _postgres_function_sql() -> str:
     END;
     $$;
     """
+
+
+# --- ADR-0020 / G-07：标定 Profile 行不可变 -----------------------------------
+# Profile 是"配置的某一版本"，一旦写入就不该被改：改配置的正确做法是插入
+# 新版本行。没有这条约束时，直接 SQL/ORM 改一行就能让历史记录的
+# profile_version 指向一段已经不同的配置，谱系不可信。
+_SQLITE_PROFILE_IMMUTABLE = """
+    CREATE TRIGGER IF NOT EXISTS trg_calibration_profiles_immutable_update
+    BEFORE UPDATE ON calibration_profiles
+    FOR EACH ROW
+    BEGIN
+        SELECT RAISE(ABORT, 'calibration_profile_immutable');
+    END
+"""
+
+_PG_PROFILE_FUNCTION = """
+    CREATE OR REPLACE FUNCTION ddp_calibration_profiles_immutable_guard()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+        RAISE EXCEPTION 'calibration_profile_immutable' USING ERRCODE = '23514';
+    END;
+    $$;
+"""
+
+
+_PG_PROFILE_DELETE_FUNCTION = """
+    CREATE OR REPLACE FUNCTION ddp_calibration_profiles_delete_guard()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+        RAISE EXCEPTION 'calibration_profile_delete_forbidden' USING ERRCODE = '23514';
+    END;
+    $$;
+"""
+
+
+def install_calibration_profile_guards(connection: Connection) -> None:
+    """禁止 UPDATE/DELETE ``calibration_profiles``。
+
+    改配置的正确做法是插入新版本行；删除会让历史记录的 ``profile_id`` 悬空。
+    两个动作都必须在数据库层拦——应用层仓储已经只做 insert，
+    但直接 SQL 或其它服务不会遵守这个约定。
+    """
+    if not _has_table(connection, "calibration_profiles"):
+        return
+    dialect = connection.dialect.name
+    if dialect == "sqlite":
+        connection.execute(text(_SQLITE_PROFILE_IMMUTABLE))
+        connection.execute(
+            text(
+                """
+                CREATE TRIGGER IF NOT EXISTS trg_calibration_profiles_no_delete
+                BEFORE DELETE ON calibration_profiles
+                FOR EACH ROW
+                BEGIN
+                    SELECT RAISE(ABORT, 'calibration_profile_delete_forbidden');
+                END
+                """
+            )
+        )
+    elif dialect == "postgresql":
+        connection.execute(text(_PG_PROFILE_FUNCTION))
+        connection.execute(
+            text(
+                "CREATE TRIGGER trg_calibration_profiles_immutable_update "
+                "BEFORE UPDATE ON calibration_profiles "
+                "FOR EACH ROW EXECUTE FUNCTION ddp_calibration_profiles_immutable_guard()"
+            )
+        )
+        connection.execute(text(_PG_PROFILE_DELETE_FUNCTION))
+        connection.execute(
+            text(
+                "CREATE TRIGGER trg_calibration_profiles_no_delete "
+                "BEFORE DELETE ON calibration_profiles "
+                "FOR EACH ROW EXECUTE FUNCTION ddp_calibration_profiles_delete_guard()"
+            )
+        )
+
+
+def drop_calibration_profile_guards(connection: Connection) -> None:
+    dialect = connection.dialect.name
+    if dialect == "sqlite":
+        for name in (
+            "trg_calibration_profiles_immutable_update",
+            "trg_calibration_profiles_no_delete",
+        ):
+            connection.execute(text(f"DROP TRIGGER IF EXISTS {name}"))
+    elif dialect == "postgresql":
+        connection.execute(
+            text(
+                "DROP TRIGGER IF EXISTS trg_calibration_profiles_immutable_update "
+                "ON calibration_profiles"
+            )
+        )
+        connection.execute(
+            text(
+                "DROP TRIGGER IF EXISTS trg_calibration_profiles_no_delete "
+                "ON calibration_profiles"
+            )
+        )
+        connection.execute(
+            text("DROP FUNCTION IF EXISTS ddp_calibration_profiles_immutable_guard()")
+        )
+        connection.execute(text("DROP FUNCTION IF EXISTS ddp_calibration_profiles_delete_guard()"))
 
 
 def _has_table(connection: Connection, table_name: str) -> bool:

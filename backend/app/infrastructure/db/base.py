@@ -18,6 +18,7 @@ from app.infrastructure.db.dataset_guards import install_dataset_guards
 from app.infrastructure.db.episode_guards import install_episode_state_guards
 from app.infrastructure.db.export_guards import install_export_guards
 from app.infrastructure.db.guards import (
+    install_calibration_profile_guards,
     install_calibration_record_guards,
     install_calibration_target_guards,
 )
@@ -48,6 +49,7 @@ def _install_ddp_guards(
     """让测试/工具用 ``create_all`` 建库时与 Alembic 迁移后的约束一致。"""
     install_calibration_target_guards(connection)
     install_calibration_record_guards(connection)
+    install_calibration_profile_guards(connection)
     install_audit_guards(connection)
     install_collection_state_guards(connection)
     install_ingestion_state_guards(connection)

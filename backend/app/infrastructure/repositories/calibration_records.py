@@ -122,6 +122,12 @@ def _profile_from_row(row: CalibrationProfileModel) -> CalibrationProfile:
 
 
 class SqlCalibrationProfileRepository:
+    """配置仓储：只允许插入新版本行，不提供 UPDATE（ADR-0020 / G-07）。
+
+    数据库层也有触发器兜底；这里不提供方法是为了让"改配置=插新版本"
+    在代码层面也是唯一路径。
+    """
+
     def __init__(self, session: Session) -> None:
         self._session = session
 
