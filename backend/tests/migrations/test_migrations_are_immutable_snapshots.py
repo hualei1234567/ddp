@@ -42,7 +42,6 @@ _KNOWN_LIVE_MODEL_MIGRATIONS: Final[dict[str, str]] = {
     "0018_stage4_export_jobs.py": "ExportJob 单表；加列前必须改写",
     "0019_stage4_training.py": "6 张训练/授权表；加列前必须改写",
     "0022_supplier_inbound.py": "4 张供应商表；加列前必须改写",
-    "0024_datasource_huggingface.py": "2 张数据源表；加列前必须改写",
     "0026_datasource_reviews.py": "DataReview 单表；加列前必须改写",
 }
 

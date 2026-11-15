@@ -105,6 +105,15 @@ class DataSourceImportModel(Base, ProjectScopedMixin, LockVersionMixin):
     error_message: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 尝试次数与上限：与 ingestion_jobs 的 attempt/max_attempts 同语义。
+    # 导入任务失败进 FAILED 后按契约不得再接受客户端动作，所以 Worker 的可重试
+    # 失败必须走系统动作 retry 退回 PENDING；这两列决定还能退几次。
+    attempt: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    max_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=3, server_default=text("3")
+    )
 
     __table_args__ = (
         UniqueConstraint("project_id", "id", name="uq_data_source_imports_project_id_id"),
@@ -118,6 +127,9 @@ class DataSourceImportModel(Base, ProjectScopedMixin, LockVersionMixin):
             name="sample_scope_requires_limit",
         ),
         CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint("attempt >= 1", name="import_attempt_positive"),
+        CheckConstraint("max_attempts >= 1", name="import_max_attempts_positive"),
+        CheckConstraint("attempt <= max_attempts", name="import_attempt_within_max"),
         Index(
             "ix_data_source_imports_source_status",
             "project_id",

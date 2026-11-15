@@ -308,6 +308,67 @@ class ImportRunner:
                 self._fail(scope, latest, str(exc)[:2000], moment)
             raise
 
+    def release_for_retry(
+        self,
+        scope: ProjectScope,
+        import_id: UUID,
+        *,
+        moment: datetime | None = None,
+    ) -> bool:
+        """把一次**可重试**失败退回 ``PENDING``，让下一轮事件重新领取。
+
+        为什么不能直接留在 ``FAILED``：契约把 ``FAILED`` 定为终态（终态之后
+        任何客户端动作返回 409），而 Worker 在失败时已把 outbox 事件
+        ``mark_retry`` 排到下一轮。下一轮 ``execute`` 要求状态为 ``PENDING``，
+        若停在 ``FAILED``，这条导入就永久卡死、事件空转到死信——没有任何
+        客户端 API 能救。
+
+        返回 ``True`` 表示已退回可重试；``False`` 表示已达 ``max_attempts``，
+        保持 ``FAILED`` 终态（此时确实该人工介入，不该无限重试）。
+        """
+        now = moment or _utcnow()
+        latest = self._imports.get(scope, import_id)
+        if latest is None or latest.status is not ImportStatus.FAILED:
+            return False
+        if not latest.can_retry:
+            return False
+        target = import_target_status(latest.status, "retry")
+        saved = self._imports.save(
+            scope,
+            replace(
+                latest,
+                status=target,
+                attempt=latest.attempt + 1,
+                started_at=None,
+                finished_at=None,
+                error_message=None,
+                row_version=latest.row_version + 1,
+            ),
+            expected_version=latest.row_version,
+        )
+        record_change(
+            self._audit,
+            self._outbox,
+            scope,
+            resource_type="data_source_import",
+            resource_id=saved.import_id,
+            action="retry",
+            from_status=latest.status.value,
+            to_status=saved.status.value,
+            reason="系统重试：可恢复失败，退回待领取",
+            request_id=None,
+            details={"attempt": saved.attempt, "max_attempts": saved.max_attempts},
+            event_type="datasource.import.retry",
+            event_payload={
+                "import_id": str(saved.import_id),
+                "attempt": saved.attempt,
+                "max_attempts": saved.max_attempts,
+            },
+            occurred_at=now,
+        )
+        self._uow.commit()
+        return True
+
     def _register_raw_asset(
         self,
         scope: ProjectScope,

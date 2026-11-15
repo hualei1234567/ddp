@@ -165,6 +165,20 @@ class DataSourceImportWorker:
                 }
             except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
                 session.rollback()
+                # 先把**可重试**的失败从 FAILED 退回 PENDING，再决定事件怎么办。
+                #
+                # 不这么做的话：本次已把任务写成 FAILED（终态），而下面又会
+                # mark_retry 让事件下一轮再来；下一轮 execute 要求 PENDING，
+                # 状态机也拒绝 FAILED->RUNNING，于是每次重试都必然再失败，
+                # 直到死信——一次网络抖动就永久丢掉这条导入。
+                released = False
+                try:
+                    runner = build_runner(session, self._settings)
+                    scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
+                    released = runner.release_for_retry(scope, import_id, moment=moment)
+                except Exception:  # noqa: BLE001 - 退回失败不得掩盖原始异常
+                    session.rollback()
+                    logger.exception("导入任务退回重试失败", extra={"import_id": str(import_id)})
                 attempts = claimed.attempts + 1
                 if attempts >= self._settings.validation_max_attempts:
                     queue.mark_dead_letter(
@@ -177,6 +191,7 @@ class DataSourceImportWorker:
                         "status": ImportProcessingStatus.DEAD_LETTER.value,
                         "import_id": str(import_id),
                         "attempts": attempts,
+                        "released_for_retry": released,
                         "error": str(exc)[:500],
                     }
                 delay = min(
@@ -194,6 +209,7 @@ class DataSourceImportWorker:
                     "status": ImportProcessingStatus.RETRIED.value,
                     "import_id": str(import_id),
                     "attempts": attempts,
+                    "released_for_retry": released,
                     "error": str(exc)[:500],
                 }
 

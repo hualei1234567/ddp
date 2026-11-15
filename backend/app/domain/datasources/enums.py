@@ -41,6 +41,12 @@ class ImportStatus(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+# 客户端视角的终态：这三种状态下不再接受任何**客户端**动作。
+#
+# 注意 FAILED 在这里，但**不是**系统层面的绝对终态：``attempt < max_attempts``
+# 时 Worker 可以走内部 ``retry`` 把它退回 PENDING 重新领取。契约
+# ``ImportAction`` 描述的是客户端动作，所以「终态之后任何动作返回 409」
+# 对客户端依然成立；系统重试不在客户端的动作集合里。
 IMPORT_TERMINAL: frozenset[ImportStatus] = frozenset(
     {ImportStatus.SUCCEEDED, ImportStatus.FAILED, ImportStatus.CANCELLED}
 )

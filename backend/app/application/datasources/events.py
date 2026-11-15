@@ -11,11 +11,16 @@ R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本
 
 from __future__ import annotations
 
-# 键集合与 ``domain/datasources/state_machines`` 的动作白名单完全一致（封闭集合）：
-# 「``validate_import_action`` 接受什么，这里就必须有什么」，新增动作时两处同步。
+# 键集合覆盖 ``domain/datasources/state_machines`` 的**全部**动作（客户端 + 系统）：
+# 「``import_target_status`` 接受什么，这里就必须有什么」，新增动作时两处同步。
+# 客户端动作受 ``validate_import_action`` 约束（须与契约 ImportAction 一致）；
+# 系统动作（``retry``）不经该函数，只由 Worker 触发。
 DATASOURCE_IMPORT_ACTION_EVENTS: dict[str, str] = {
     "start": "datasource.import.start",
     "succeed": "datasource.import.succeed",
     "fail": "datasource.import.fail",
     "cancel": "datasource.import.cancel",
+    # 系统动作：Worker 发现可恢复失败时把任务从 FAILED 退回 PENDING。
+    # 它不在契约 ImportAction 枚举里（客户端触发不了），但事件照样要归类留痕。
+    "retry": "datasource.import.retry",
 }

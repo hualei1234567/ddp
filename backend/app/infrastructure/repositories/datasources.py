@@ -91,6 +91,8 @@ def _import_values(item: DataSourceImport) -> dict[str, object]:
         "error_message": item.error_message,
         "started_at": item.started_at,
         "finished_at": item.finished_at,
+        "attempt": item.attempt,
+        "max_attempts": item.max_attempts,
     }
 
 
@@ -110,6 +112,8 @@ def _import_from_row(row: DataSourceImportModel) -> DataSourceImport:
         error_message=row.error_message,
         started_at=as_utc(row.started_at),
         finished_at=as_utc(row.finished_at),
+        attempt=row.attempt,
+        max_attempts=row.max_attempts,
         row_version=row.version,
     )
 
