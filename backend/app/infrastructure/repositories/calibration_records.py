@@ -113,7 +113,8 @@ def _profile_from_row(row: CalibrationProfileModel) -> CalibrationProfile:
         name=row.name,
         scope=row.scope,
         target_type=row.target_type,
-        version=row.version,
+        # ADR-0032（G-03）：行内业务版本列已改名 profile_version。
+        profile_version=row.profile_version,
         schema_version=row.schema_version,
         required_types=tuple(row.required_types or ()),
         selection_rule=row.selection_rule or {},
@@ -137,7 +138,7 @@ class SqlCalibrationProfileRepository:
         profile: CalibrationProfile,
     ) -> CalibrationProfile:
         scope.ensure(profile.project_id)
-        # 注意：CalibrationProfile.version 是配置版本号（DDP-101 §2.2），
+        # 注意：CalibrationProfile.profile_version 是配置版本号（DDP-101 §2.2），
         # 不是乐观锁版本，因此允许从任意正整数版本开始。
         row = CalibrationProfileModel(
             id=profile.profile_id,
@@ -146,7 +147,7 @@ class SqlCalibrationProfileRepository:
             name=profile.name,
             scope=enum_value(profile.scope),
             target_type=enum_value(profile.target_type),
-            version=profile.version,
+            profile_version=profile.profile_version,
             schema_version=profile.schema_version,
             required_types=[enum_value(item) for item in profile.required_types],
             selection_rule=dict(profile.selection_rule),

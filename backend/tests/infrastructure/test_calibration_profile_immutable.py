@@ -68,7 +68,7 @@ def _seed(engine) -> tuple[str, str]:
             text(
                 "insert into calibration_profiles "
                 "(id, project_id, name, scope, target_type, schema_version, "
-                " required_types, selection_rule, version, created_at, updated_at, "
+                " required_types, selection_rule, profile_version, created_at, updated_at, "
                 " created_by, updated_by) "
                 "values (:id, :pid, 'p1', 'SYSTEM', 'SENSOR', 'v1', '[]', '{}', 1, "
                 " :now, :now, :uid, :uid)"
@@ -113,7 +113,7 @@ def test_inserting_new_version_is_allowed(postgres_engine) -> None:
             text(
                 "insert into calibration_profiles "
                 "(id, project_id, name, scope, target_type, schema_version, "
-                " required_types, selection_rule, version, created_at, updated_at, "
+                " required_types, selection_rule, profile_version, created_at, updated_at, "
                 " created_by, updated_by) "
                 "values (:id, :pid, 'p1', 'SYSTEM', 'SENSOR', 'v1', '[]', '{}', 2, "
                 " :now, :now, :uid, :uid)"

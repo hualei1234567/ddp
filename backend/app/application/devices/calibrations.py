@@ -156,7 +156,7 @@ class CalibrationUseCases:
             performed_by=scope.actor_id,
             # ADR-0020（G-05）：固化创建时的 Profile 快照。
             # 只存版本号不够——Profile 那一行将来会被改，快照是唯一能复现的依据。
-            profile_version=profile.version,
+            profile_version=profile.profile_version,
             profile_schema_version=profile.schema_version,
             profile_snapshot={
                 "required_types": [str(item) for item in profile.required_types],

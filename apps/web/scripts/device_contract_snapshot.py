@@ -215,7 +215,7 @@ def build_snapshot() -> dict[str, object]:
         name="DEVICE 默认标定配置",
         scope=backend["CalibrationScope"].DEVICE,
         target_type=backend["CalibrationTargetType"].DEVICE,
-        version=1,
+        profile_version=1,
         schema_version="ddp.device.calibration-parameters/1.0.0",
         required_types=(backend["CalibrationType"].INTRINSICS,),
     )

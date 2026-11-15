@@ -55,18 +55,19 @@ def _enum_check(column: str, enum_type: type, name: str) -> CheckConstraint:
 
 
 class ProjectScopedMixin:
-    """项目隔离与审计公共字段；所有设备域表共用。"""
+    """项目隔离与审计公共字段；所有设备域表共用。
+
+    注意：乐观锁列 ``version`` 不在这里，而在 :class:`LockVersionMixin`。
+    ADR-0032（G-03）把 ``calibration_profiles`` 的业务版本列改名为
+    ``profile_version`` 后，该表不再有乐观锁列——它本身不可变（ADR-0020 /
+    G-07），没有"并发写入同一行"的场景。若把 ``version`` 留在本 Mixin 里，
+    ``CalibrationProfile`` 会凭空多出一列，与迁移后的库结构不一致。
+    """
 
     project_id: Mapped[UUID] = mapped_column(
         Uuid,
         ForeignKey("projects.id", ondelete="CASCADE"),
         nullable=False,
-    )
-    version: Mapped[int] = mapped_column(
-        Integer,
-        nullable=False,
-        default=1,
-        server_default=text("1"),
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -88,6 +89,17 @@ class ProjectScopedMixin:
         Uuid,
         ForeignKey("users.id"),
         nullable=False,
+    )
+
+
+class LockVersionMixin:
+    """乐观锁列；可变业务表按需混入（``ProjectScopedMixin`` 已不再包含它）。"""
+
+    version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
     )
 
 
@@ -150,7 +162,12 @@ class CalibrationTargetRef(Base):
 
 
 class CalibrationProfile(Base, ProjectScopedMixin):
-    """标定配置版本；``version`` 同时是配置版本号。"""
+    """标定配置的一个不可变版本（ADR-0020 / G-07）。
+
+    ADR-0032（G-03）：业务版本列叫 ``profile_version``，与 ``CalibrationRecord.version``
+    （乐观锁）区分。本表不混入 :class:`LockVersionMixin`——行不可变，没有并发写同一行
+    的场景，多一列只会让"哪个 version 是业务版本"再次含混。
+    """
 
     __tablename__ = "calibration_profiles"
 
@@ -158,6 +175,13 @@ class CalibrationProfile(Base, ProjectScopedMixin):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     scope: Mapped[str] = mapped_column(String(32), nullable=False)
     target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    # ADR-0032（G-03）：配置版本号；改名后与记录的乐观锁 version 不再同名。
+    profile_version: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default=text("1"),
+    )
     schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
     required_types: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     selection_rule: Mapped[dict[str, object]] = mapped_column(
@@ -179,17 +203,17 @@ class CalibrationProfile(Base, ProjectScopedMixin):
             "project_id",
             "name",
             "target_id",
-            "version",
+            "profile_version",
             name="uq_calibration_profiles_name_target_version",
         ),
         _enum_check("scope", CalibrationScope, "scope_allowed"),
         _enum_check("target_type", CalibrationTargetType, "target_type_allowed"),
-        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint("profile_version >= 1", name="profile_version_positive"),
         Index("ix_calibration_profiles_project_scope", "project_id", "scope"),
     )
 
 
-class Robot(Base, ProjectScopedMixin):
+class Robot(Base, ProjectScopedMixin, LockVersionMixin):
     __tablename__ = "robots"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -246,7 +270,7 @@ class Robot(Base, ProjectScopedMixin):
     )
 
 
-class Device(Base, ProjectScopedMixin):
+class Device(Base, ProjectScopedMixin, LockVersionMixin):
     __tablename__ = "devices"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -313,7 +337,7 @@ class Device(Base, ProjectScopedMixin):
     )
 
 
-class CalibrationRecord(Base, ProjectScopedMixin):
+class CalibrationRecord(Base, ProjectScopedMixin, LockVersionMixin):
     __tablename__ = "calibration_records"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -414,7 +438,7 @@ class CalibrationRecord(Base, ProjectScopedMixin):
     )
 
 
-class Sensor(Base, ProjectScopedMixin):
+class Sensor(Base, ProjectScopedMixin, LockVersionMixin):
     __tablename__ = "sensors"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)

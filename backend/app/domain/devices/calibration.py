@@ -66,7 +66,9 @@ class CalibrationProfile:
     name: str
     scope: CalibrationScope | str
     target_type: CalibrationTargetType | str
-    version: int
+    # ADR-0032（G-03）：业务版本号，**不是**乐观锁。与 CalibrationRecord.version
+    # 的同名字段语义不同，故显式命名为 profile_version，避免读写时张冠李戴。
+    profile_version: int
     schema_version: str
     required_types: tuple[CalibrationType | str, ...] = ()
     selection_rule: Mapping[str, object] = field(default_factory=dict)
@@ -98,7 +100,11 @@ class CalibrationProfile:
                 max_length=VERSION_MAX_LENGTH,
             ),
         )
-        object.__setattr__(self, "version", positive_int(self.version, "version"))
+        object.__setattr__(
+            self,
+            "profile_version",
+            positive_int(self.profile_version, "profile_version"),
+        )
         object.__setattr__(
             self,
             "required_types",

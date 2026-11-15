@@ -52,14 +52,14 @@ def _sensor(**overrides: object) -> Sensor:
     return Sensor(**values)  # type: ignore[arg-type]
 
 
-def _profile(*, version: int = 1) -> CalibrationProfile:
+def _profile(*, profile_version: int = 1) -> CalibrationProfile:
     return CalibrationProfile(
         profile_id=uuid4(),
         project_id=uuid4(),
         name="默认标定配置",
         scope=CalibrationScope.SENSOR,
         target_type=CalibrationTargetType.SENSOR,
-        version=version,
+        profile_version=profile_version,
         schema_version="ddp.calibration/1.0.0",
         required_types=(CalibrationType.INTRINSICS, CalibrationType.EXTRINSICS),
     )
@@ -225,8 +225,8 @@ def test_device_type_is_validated() -> None:
 
 
 def test_calibration_profile_accepts_config_version() -> None:
-    profile = _profile(version=2)
-    assert profile.version == 2
+    profile = _profile(profile_version=2)
+    assert profile.profile_version == 2
     assert profile.required_types == (
         CalibrationType.INTRINSICS,
         CalibrationType.EXTRINSICS,

@@ -158,7 +158,7 @@ class CalibrationProfileCreate(BaseModel):
     required_types: list[str] = Field(default_factory=list)
     selection_rule: dict[str, object] = Field(default_factory=dict)
     target_id: UUID | None = None
-    # 冻结契约的字段名是 profile_version；表列仍叫 version（G-03 才改名）。
+    # ADR-0032（G-03）：字段名、ORM 列、领域字段统一为 profile_version。
     profile_version: int = Field(default=1, ge=1)
     supersedes_id: UUID | None = None
 
@@ -183,7 +183,7 @@ class CalibrationProfileOut(BaseModel):
             name=profile.name,
             scope=_value(profile.scope),
             target_type=_value(profile.target_type),
-            profile_version=profile.version,
+            profile_version=profile.profile_version,
             schema_version=profile.schema_version,
             required_types=[_value(item) for item in profile.required_types],
             selection_rule=dict(profile.selection_rule),

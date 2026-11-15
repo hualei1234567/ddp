@@ -34,7 +34,7 @@ NOW = datetime(2026, 6, 1, tzinfo=UTC)
 def profile(
     project_id: UUID,
     *,
-    version: int = 1,
+    profile_version: int = 1,
     scope: CalibrationScope = CalibrationScope.SENSOR,
     target_type: CalibrationTargetType = CalibrationTargetType.SENSOR,
 ) -> CalibrationProfile:
@@ -44,7 +44,7 @@ def profile(
         name="默认标定配置",
         scope=scope,
         target_type=target_type,
-        version=version,
+        profile_version=profile_version,
         schema_version="ddp.calibration/1.0.0",
         required_types=(CalibrationType.INTRINSICS,),
     )

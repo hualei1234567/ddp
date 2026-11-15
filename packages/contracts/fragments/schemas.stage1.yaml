@@ -124,7 +124,7 @@ CalibrationProfile:
     name: {type: string, minLength: 1, maxLength: 200}
     scope: {$ref: "#/CalibrationScope"}
     target_type: {$ref: "#/CalibrationTargetType"}
-    profile_version: {type: integer, minimum: 1, description: "业务版本号（表列仍叫 version，G-03 才改名）"}
+    profile_version: {type: integer, minimum: 1, description: "业务版本号；Domain / ORM / DB 列同名（ADR-0032）"}
     schema_version: {type: string, minLength: 1, maxLength: 64}
     required_types: {type: array, items: {$ref: "#/CalibrationType"}}
     selection_rule: {type: object, additionalProperties: true}

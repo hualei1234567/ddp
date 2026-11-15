@@ -175,7 +175,7 @@ def seed_profile(
         name=f"{target_type} 默认标定配置",
         scope=CalibrationScope(target.value),
         target_type=target,
-        version=1,
+        profile_version=1,
         schema_version="ddp.device.calibration-parameters/1.0.0",
         required_types=(CalibrationType.INTRINSICS,),
     )

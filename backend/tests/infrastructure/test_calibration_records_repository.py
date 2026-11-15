@@ -45,14 +45,14 @@ def test_calibration_profile_accepts_config_version_and_is_project_scoped(
     factory, ids = device_db
     scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
     scope_b = ProjectScope(ids.project_b, actor_id=ids.user_b)
-    profile = make_profile(ids.project_a, version=2)
+    profile = make_profile(ids.project_a, profile_version=2)
     add_profile(factory, scope_a, profile)
 
     with factory() as session:
         repository = SqlCalibrationProfileRepository(session)
         stored = repository.get(scope_a, profile.profile_id)
         assert stored is not None
-        assert stored.version == 2
+        assert stored.profile_version == 2
         assert repository.get(scope_b, profile.profile_id) is None
 
 

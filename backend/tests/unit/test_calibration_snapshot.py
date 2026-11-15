@@ -37,7 +37,7 @@ def _profile(**overrides: object) -> CalibrationProfile:
         "name": "出厂标定模板",
         "scope": "SYSTEM",
         "target_type": "SENSOR",
-        "version": 3,
+        "profile_version": 3,
         "schema_version": "ddp.calibration/1.0.0",
         "required_types": ("INTRINSICS", "EXTRINSICS"),
         "selection_rule": {"prefer": "latest_validated"},
@@ -105,7 +105,7 @@ def test_profile_mutation_does_not_affect_recorded_snapshot() -> None:
     """这是 ADR-0020 的核心保证：事后改 Profile 不影响历史记录的复现依据。"""
     profile = _profile(required_types=("INTRINSICS",))
     record = _record(
-        profile_version=profile.version,
+        profile_version=profile.profile_version,
         profile_schema_version=profile.schema_version,
         profile_snapshot={
             "required_types": [str(item) for item in profile.required_types],
@@ -113,13 +113,13 @@ def test_profile_mutation_does_not_affect_recorded_snapshot() -> None:
         },
     )
 
-    updated = replace(profile, version=4, required_types=("INTRINSICS", "EXTRINSICS"))
+    updated = replace(profile, profile_version=4, required_types=("INTRINSICS", "EXTRINSICS"))
 
     # 记录侧完全没有被影响。
     assert record.profile_version == 3
     assert record.profile_snapshot["required_types"] == ["INTRINSICS"]
     # Profile 自己变了。
-    assert updated.version == 4
+    assert updated.profile_version == 4
     assert len(updated.required_types) == 2
 
 

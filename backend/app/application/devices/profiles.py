@@ -88,7 +88,7 @@ class CalibrationProfileUseCases:
             name=command.name,
             scope=command.scope,
             target_type=command.target_type,
-            version=command.profile_version,
+            profile_version=command.profile_version,
             schema_version=command.schema_version,
             required_types=command.required_types,
             selection_rule=command.selection_rule,
@@ -108,7 +108,7 @@ class CalibrationProfileUseCases:
             request_id=request_id,
             details={
                 "name": created.name,
-                "profile_version": created.version,
+                "profile_version": created.profile_version,
                 "target_type": str(created.target_type),
                 "target_id": str(created.target_id) if created.target_id else None,
             },
@@ -116,7 +116,7 @@ class CalibrationProfileUseCases:
             event_payload={
                 "profile_id": str(created.profile_id),
                 "name": created.name,
-                "profile_version": created.version,
+                "profile_version": created.profile_version,
             },
             occurred_at=now,
         )
@@ -159,10 +159,9 @@ class CalibrationProfileUseCases:
         )
         if not same_target:
             raise DomainValidationError("supersedes_id 必须指向同作用域、同目标类型的上一版配置")
-        if command.profile_version != previous.version + 1:
-            raise DomainValidationError(
-                f"profile_version 必须为上一版 +1（期望 {previous.version + 1}）"
-            )
+        expected = previous.profile_version + 1
+        if command.profile_version != expected:
+            raise DomainValidationError(f"profile_version 必须为上一版 +1（期望 {expected}）")
 
 
 def _ensure_target_type_matches_scope(scope: str, target_type: str) -> None:
