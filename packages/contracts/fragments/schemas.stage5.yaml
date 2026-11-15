@@ -945,6 +945,11 @@ RequirementCreate:
   - title
   - source_type
   - dimensions
+  # owner_id 必填：数据需求必须有责任人，否则无人对账。领域层
+  # （domain/modelops/models.py:550 `owner_id: UUID`）与 Pydantic 模型
+  # （api/v1/modelops_schemas.py:173）都是必填，此前契约漏标——客户端照契约
+  # 省略会 422。这里补齐契约，不改实现。
+  - owner_id
   additionalProperties: false
   properties:
     code:

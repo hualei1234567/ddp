@@ -64,6 +64,16 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = REPO_ROOT / "backend"
 CONTRACT_FILE = REPO_ROOT / "packages" / "contracts" / "openapi.yaml"
+# 契约与实现之间已确认无害的字段级差异基线。
+#
+# 为什么需要基线：`--strict` 若对**所有**字段差异失败，会被长期红着——
+# 而当前差异里绝大多数是"实现必填 vs 契约非必填"这类风格差异，客户端无感。
+# 一个长期红的门禁等于没有门禁（人们会习惯性忽略它）。
+#
+# 基线只承载**已逐个核实无害**的项，且必须写明理由。新增差异一律红灯，
+# 迫使修改者显式判断：是新缺陷，还是又一个可接受的风格差异。
+PARITY_BASELINE_FILE = REPO_ROOT / "packages" / "contracts" / "parity-baseline.json"
+
 
 HTTP_METHODS = ("get", "post", "put", "patch", "delete", "head", "options")
 # 框架自带的文档端点，不属于业务契约，比对时忽略。
@@ -148,6 +158,10 @@ class FieldSet:
 
     properties: dict[str, str] = field(default_factory=dict)
     required: set[str] = field(default_factory=set)
+    # 类型里含 "null" 的字段路径。契约写 `required` 但类型可空时，语义是
+    # "字段必定出现、值可以是 null"；实现侧给 `= None` 默认值（导出为
+    # "非必填但可空"）与之等价，不该判为差异。
+    nullable: set[str] = field(default_factory=set)
     typed: bool = False
 
     def only_in(self, other: FieldSet) -> list[str]:
@@ -168,6 +182,26 @@ def _normalize_type(schema: dict[str, object]) -> str:
     if "items" in schema:
         return "array"
     return "any"
+
+
+def _accepts_null(schema: dict[str, object]) -> bool:
+    """判断 schema 是否允许 null 值。
+
+    两种写法都要认：`type: [string, "null"]`（契约惯用）与
+    `anyOf: [{type: string}, {type: "null"}]`（FastAPI 导出的形态）。
+    """
+    kind = schema.get("type")
+    if isinstance(kind, list) and "null" in kind:
+        return True
+    if kind == "null":
+        return True
+    for combinator in ("anyOf", "oneOf"):
+        options = schema.get(combinator)
+        if not isinstance(options, list):
+            continue
+        if any(isinstance(opt, dict) and opt.get("type") == "null" for opt in options):
+            return True
+    return False
 
 
 def flatten_schema(
@@ -234,6 +268,10 @@ def flatten_schema(
             result.properties[key] = kind
             if name in required:
                 result.required.add(key)
+            # 记录该字段类型是否可空（`type: [X, "null"]` 或 anyOf 含 null）。
+            sub_deref, _ = deref(sub, base, seen)
+            if isinstance(sub_deref, dict) and _accepts_null(sub_deref):
+                result.nullable.add(key)
             flatten_schema(sub, base, key + ".", depth + 1, result, seen)
     elif not prefix and schema.get("additionalProperties") is True and kind == "object":
         # 根节点是无 properties 的开放对象（FastAPI 缺 response_model 的典型导出）：
@@ -329,7 +367,15 @@ def _diff_fields(
         }
     contract_only = contract_fields.only_in(runtime_fields)
     runtime_only = runtime_fields.only_in(contract_fields)
-    contract_required_only = sorted(contract_fields.required - runtime_fields.required)
+    # 契约必填但声明可空、实现给了 `= None` 默认值：语义等价
+    # （"字段必定出现、值可为 null" vs "字段可省略、值可为 null"）。
+    # 响应侧尤其如此——Pydantic 序列化总会输出该键，客户端无感。
+    # 不计为差异，否则 38 项这类误判会淹没真正的问题。
+    contract_req_raw = contract_fields.required - runtime_fields.required
+    contract_required_only = sorted(
+        contract_req_raw
+        - {name for name in contract_req_raw if name in contract_fields.nullable}
+    )
     runtime_required_only = sorted(runtime_fields.required - contract_fields.required)
     if not (contract_only or runtime_only or contract_required_only or runtime_required_only):
         return None
@@ -413,6 +459,47 @@ def build_report(
                     {"operation": f"{method.upper()} {path}", **diff}
                 )
     return report
+
+
+def _diff_key(op: str, kind: str, detail: str) -> str:
+    """把一条差异压成稳定字符串键，用于与基线比对。
+
+    只取「操作 + 差异类型 + 完整字段列表」，不含顺序：字段顺序变化不构成新差异。
+    """
+    return f"{op} | {kind} | {detail}"
+
+
+def load_baseline() -> set[str]:
+    """读取已确认无害的差异基线；文件不存在时返回空集（首次运行即全红灯）。"""
+    if not PARITY_BASELINE_FILE.is_file():
+        return set()
+    try:
+        data = json.loads(PARITY_BASELINE_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"基线文件无法解析：{PARITY_BASELINE_FILE}：{exc}") from exc
+    return set(data.get("accepted", []))
+
+
+def report_diff_keys(report: ParityReport) -> set[str]:
+    """把报告里的字段级差异摊平成键集合。"""
+    keys: set[str] = set()
+    for op in report.runtime_only_operations:
+        keys.add(_diff_key(op, "runtime-only", ""))
+    for op in report.contract_only_operations:
+        keys.add(_diff_key(op, "contract-only", ""))
+    # 键名与 _diff_fields 的返回结构保持一致（见该函数）。
+    kinds = ("contract_only", "runtime_only", "required_contract_only", "required_runtime_only")
+    for label, items in (
+        ("request", report.request_field_diffs),
+        ("response", report.response_field_diffs),
+    ):
+        for item in items:
+            op = str(item.get("operation", ""))
+            for kind in kinds:
+                values = item.get(kind) or []
+                if values:
+                    keys.add(_diff_key(op, f"{label}.{kind}", ",".join(sorted(values))))
+    return keys
 
 
 def _print_report(report: ParityReport) -> None:
@@ -854,7 +941,46 @@ def main(argv: list[str] | None = None) -> int:
         print()
         print_error_report(scan, registries)
 
-    return 1 if (args.strict and report.has_diff) else 0
+    if not args.strict:
+        return 0
+
+    # `--strict` 只对**基线之外**的差异失败。
+    # 基线承载已逐个核实无害的项（大多是实现必填 vs 契约非必填的风格差异）。
+    # 一个因为"永远有差异"而长期红着的门禁等于没有门禁——人们会习惯性忽略它，
+    # 真正的回归反而没人看。
+    current = report_diff_keys(report)
+    baseline = load_baseline()
+    new_diffs = current - baseline
+    fixed = baseline - current
+
+    if fixed:
+        print(
+            f"\n提示：基线里有 {len(fixed)} 项差异已不存在，可从 "
+            f"{PARITY_BASELINE_FILE.name} 移除（不影响通过）：",
+            file=sys.stderr,
+        )
+        for item in sorted(fixed)[:10]:
+            print(f"  - {item}", file=sys.stderr)
+
+    if new_diffs:
+        print(
+            f"\n契约一致性检查未通过：{len(new_diffs)} 项**新增**差异不在基线里。",
+            file=sys.stderr,
+        )
+        for item in sorted(new_diffs):
+            print(f"  + {item}", file=sys.stderr)
+        print(
+            f"\n若确认无害，请把上述键加入 {PARITY_BASELINE_FILE} 的 accepted 列表；"
+            "若是缺陷，修实现或契约。",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(
+        f"\n契约一致性检查通过：无新增差异"
+        f"（基线内已接受 {len(baseline)} 项）。"
+    )
+    return 0
 
 
 if __name__ == "__main__":
