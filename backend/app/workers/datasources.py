@@ -39,6 +39,7 @@ from app.infrastructure.repositories.datasources import (
     SqlMediaAssetRepository,
 )
 from app.infrastructure.repositories.outbox_validation import SqlOutboxValidationQueue
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from app.infrastructure.storage.data_source_objects import DataSourceObjectWriter
 from app.infrastructure.storage.s3 import S3MultipartStorage
 
@@ -96,6 +97,7 @@ def build_runner(session: Session, settings: Settings) -> ImportRunner:
         sources=SqlDataSourceRepository(session),
         imports=SqlDataSourceImportRepository(session),
         assets=SqlMediaAssetRepository(session),
+        raw_assets=SqlRawAssetRepository(session),
         audit=SqlDatasetAuditRepository(session),
         outbox=SqlOutboxRepository(session),
         storage=DataSourceObjectWriter(S3MultipartStorage(settings)),

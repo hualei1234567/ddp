@@ -139,6 +139,16 @@ class MediaAssetModel(Base, ProjectScopedMixin, LockVersionMixin):
     import_id: Mapped[UUID] = mapped_column(
         Uuid, ForeignKey("data_source_imports.id", ondelete="CASCADE"), nullable=False
     )
+    # 指向 Canonical 层的原始资产。导入的每个媒体文件同时是一条 RawAsset，
+    # 这样它才受 RawAsset 的不可变/禁删/去重保护，也才能被 Episode 引用
+    # （Episode 创建强制要求 raw_asset_ids）。
+    #
+    # nullable=True 只为兼容本迁移之前导入的 384 条历史资产——它们当时没有
+    # RawAsset。**新导入必须填**（import_runner 内部断言），历史数据不回填
+    # （对象已存在但无 RawAsset 记录，回填需重新下载并重算，另行处理）。
+    raw_asset_id: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("raw_assets.id", ondelete="RESTRICT"), nullable=True
+    )
     episode_key: Mapped[str] = mapped_column(String(1024), nullable=False)
     path: Mapped[str] = mapped_column(String(1024), nullable=False)
     camera: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -168,6 +178,7 @@ class MediaAssetModel(Base, ProjectScopedMixin, LockVersionMixin):
             "data_source_id",
             "episode_key",
         ),
+        Index("ix_media_assets_raw_asset", "raw_asset_id"),
     )
 
 

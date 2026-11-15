@@ -287,6 +287,21 @@ class RawAssetModel(Base):
     sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     captured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 以下五列在**领域模型与契约里早已存在，但 ORM 一直没有列**——
+    # 契约 schemas.stage2.yaml 把 raw_metadata 列为 required，领域
+    # RawAsset.raw_metadata 也有，API 出参也声明了，唯独落不了库，
+    # 实际永远是空。这是既有契约违约，在此补齐（N2 ADP-004 的实质缺口）。
+    device_ids: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
+    sensor_ids: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
+    sensor_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    device_time_raw: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    raw_metadata: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict, server_default=text("'{}'")
+    )
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     storage_class: Mapped[str] = mapped_column(String(16), nullable=False)
     retention_policy_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)

@@ -17,6 +17,27 @@
 （确定性、按元数据出现顺序，不做随机抽样，保证可复现）；``SPLIT`` / ``FULL``
 不截断。截断只作用于 Episode 条数，每个被选中 Episode 的**全部机位**都被完整导入，
 不会只取部分机位。
+
+同时产出 Canonical 层
+--------------------
+历史实现只写 ``data_source_media_assets``，**从不创建 ``raw_assets``**，导致导入
+产物既不受 RawAsset 的不可变/禁删/去重保护，也无法被 Episode 引用
+（``CreateEpisode`` 强制要求 ``raw_asset_ids`` 至少 1 条且资产状态为 VALID）。
+主链因此断在「导入 → RawAsset → Episode」这一段。
+
+现在每个被导入的媒体文件同时登记为一条 ``RawAsset``：
+
+- ``source_type=IMPORT``（该枚举值设计预留但此前从未使用）；
+- 对象键改用 Canonical 规范 ``raw/{project_id}/{yyyy}/{mm}/{dd}/{asset_id}/content.{ext}``，
+  不再使用 ``data-sources/...`` 私有前缀；
+- 生命周期按域规则走 ``VALIDATING -> mark_valid -> VALID``（``mark_valid`` 记录
+  ``verified_at``）——内容签名与 sha256 已在 ``Fetcher`` 内部校验通过，这里的
+  ``VALID`` 是有据可依的结论，不是默认成功；
+- 同项目内相同内容（sha256 + size_bytes 相同）复用既有可用资产，不重复写对象，
+  与上传链路的去重语义一致；
+- 来源信息（数据源、导入任务、revision、原始路径、机位、任务名）写入
+  ``RawAsset.raw_metadata``，这是当前 DataSource → RawAsset 唯一可追溯的载体。
+  ``raw_assets`` 表没有 ``data_source_id`` 列，加列属于跨阶段契约变更，不在本次范围。
 """
 
 from __future__ import annotations
@@ -38,16 +59,42 @@ from app.application.datasources.ports import (
     OutboxRepository,
     UnitOfWork,
 )
+from app.application.ingestion.ports import RawAssetRepository
 from app.domain.datasources.enums import ImportScope, ImportStatus
 from app.domain.datasources.errors import DomainValidationError
 from app.domain.datasources.media import MediaAsset
 from app.domain.datasources.models import DataSourceImport
 from app.domain.datasources.state_machines import import_target_status
 from app.domain.identity.models import ProjectScope
+from app.domain.ingestion.enums import (
+    RawAssetFormat,
+    RawAssetSourceType,
+    RawAssetStatus,
+    StorageClass,
+)
+from app.domain.ingestion.errors import ConflictError
+from app.domain.ingestion.models import RawAsset
+from app.domain.ingestion.validation import (
+    build_raw_object_key,
+    canonical_content_type,
+    detect_format,
+)
 
 # Human-1M preview 的固定入口。不遍历目录：HF 没有廉价列目录能力，
 # 且遍历会带来"下多少算多少"的不确定行为。
 PREVIEW_METADATA_PATH = "preview/metadata.jsonl"
+
+# 声明的内容类型 → RawAsset 格式兜底。只覆盖导入链路会遇到的类型；
+# 未登记的类型一律落到 UNKNOWN，不猜。
+_FORMAT_BY_CONTENT_TYPE: dict[str, RawAssetFormat] = {
+    "video/mp4": RawAssetFormat.MP4,
+    "video/quicktime": RawAssetFormat.MP4,
+    "application/vnd.apache.parquet": RawAssetFormat.PARQUET,
+    "application/json": RawAssetFormat.JSON,
+    "application/x-ndjson": RawAssetFormat.JSON,
+    "text/csv": RawAssetFormat.CSV,
+    "application/zip": RawAssetFormat.ZIP,
+}
 
 
 class FetchedFileT(Protocol):
@@ -63,7 +110,33 @@ class Fetcher(Protocol):
     def __call__(self, *, repo_id: str, revision: str, path: str) -> FetchedFileT: ...
 
 
-MetadataParser = Callable[[list[dict[str, object]]], tuple[object, ...]]
+MetadataParser = Callable[[list[dict[str, object]]], tuple["ImportEpisode", ...]]
+
+
+class ImportEpisode(Protocol):
+    """解析器产出的 Episode 形状；只声明本模块实际读取的字段。"""
+
+    episode_key: str
+    task_name: str
+    media_assets: tuple[ImportMediaAsset, ...]
+
+
+class ImportMediaAsset(Protocol):
+    """解析器产出的机位形状；只声明本模块实际读取的字段。"""
+
+    path: str
+    camera: str
+    excerpt_start_seconds: float | None
+    excerpt_seconds: float | None
+    source_fps: float | None
+
+
+class ImportSource(Protocol):
+    """数据源在本模块用到的字段。"""
+
+    data_source_id: UUID
+    repo_id: str
+    revision: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,11 +152,11 @@ def _utcnow() -> datetime:
 
 
 def select_episodes(
-    episodes: tuple[object, ...],
+    episodes: tuple[ImportEpisode, ...],
     *,
     scope: ImportScope | str,
     sample_limit: int | None,
-) -> tuple[object, ...]:
+) -> tuple[ImportEpisode, ...]:
     """按导入范围选取要真正下载的 Episode。
 
     - ``SAMPLE``：取前 ``sample_limit`` 个（元数据顺序，确定性，可复现）。
@@ -113,6 +186,7 @@ class ImportRunner:
         sources: DataSourceRepository,
         imports: DataSourceImportRepository,
         assets: MediaAssetRepository,
+        raw_assets: RawAssetRepository,
         audit: AuditRepository,
         outbox: OutboxRepository,
         storage: ObjectWriter,
@@ -121,6 +195,7 @@ class ImportRunner:
         self._sources = sources
         self._imports = imports
         self._assets = assets
+        self._raw_assets = raw_assets
         self._audit = audit
         self._outbox = outbox
         self._storage = storage
@@ -169,19 +244,23 @@ class ImportRunner:
 
             asset_count = 0
             for episode in episodes:
-                for asset in episode.media_assets:  # type: ignore[attr-defined]
+                for asset in episode.media_assets:
                     fetched = fetch(
                         repo_id=source.repo_id,
                         revision=source.revision,
-                        path=f"preview/{asset.path}",  # type: ignore[attr-defined]
+                        path=f"preview/{asset.path}",
                     )
-                    object_key = _object_key(
+                    raw_asset, written = self._register_raw_asset(
                         scope,
-                        source.data_source_id,
-                        source.revision,
-                        asset.path,  # type: ignore[attr-defined]
+                        source,
+                        running,
+                        episode,
+                        asset,
+                        fetched,
+                        moment=moment,
                     )
-                    self._storage.put(object_key, fetched.data, content_type=fetched.content_type)
+                    if written:
+                        total_bytes += fetched.size_bytes
                     self._assets.add(
                         scope,
                         MediaAsset(
@@ -189,21 +268,22 @@ class ImportRunner:
                             project_id=scope.project_id,
                             data_source_id=source.data_source_id,
                             import_id=running.import_id,
-                            episode_key=episode.episode_key,  # type: ignore[attr-defined]
-                            path=asset.path,  # type: ignore[attr-defined]
-                            camera=asset.camera,  # type: ignore[attr-defined]
-                            object_key=object_key,
+                            episode_key=episode.episode_key,
+                            path=asset.path,
+                            camera=asset.camera,
+                            # 内容复用时指向既有对象的键，否则播放会指向不存在的对象。
+                            object_key=raw_asset.object_key,
                             size_bytes=fetched.size_bytes,
                             sha256=fetched.sha256,
                             content_type=fetched.content_type,
-                            task_name=episode.task_name,  # type: ignore[attr-defined]
-                            excerpt_start_seconds=asset.excerpt_start_seconds,  # type: ignore[attr-defined]
-                            excerpt_seconds=asset.excerpt_seconds,  # type: ignore[attr-defined]
-                            source_fps=asset.source_fps,  # type: ignore[attr-defined]
+                            task_name=episode.task_name,
+                            raw_asset_id=raw_asset.asset_id,
+                            excerpt_start_seconds=asset.excerpt_start_seconds,
+                            excerpt_seconds=asset.excerpt_seconds,
+                            source_fps=asset.source_fps,
                             created_at=moment,
                         ),
                     )
-                    total_bytes += fetched.size_bytes
                     asset_count += 1
 
             # row_count 记录**实际导入**的 episode 数（抽样后），
@@ -227,6 +307,71 @@ class ImportRunner:
             if latest is not None and latest.status is ImportStatus.RUNNING:
                 self._fail(scope, latest, str(exc)[:2000], moment)
             raise
+
+    def _register_raw_asset(
+        self,
+        scope: ProjectScope,
+        source: ImportSource,
+        job: DataSourceImport,
+        episode: ImportEpisode,
+        media: ImportMediaAsset,
+        fetched: FetchedFileT,
+        *,
+        moment: datetime,
+    ) -> tuple[RawAsset, bool]:
+        """把已下载的媒体文件登记为 Canonical 层 RawAsset。
+
+        返回 ``(资产, 是否新写入了对象)``。同项目内相同内容已存在时复用既有
+        资产且**不重复写对象**——与上传链路 ``find_active_by_content`` 的去重
+        语义一致，避免同一份视频在对象存储里存两遍。
+        """
+        sha256 = fetched.sha256
+        size_bytes = fetched.size_bytes
+        existing = self._raw_assets.find_active_by_content(
+            scope, sha256=sha256, size_bytes=size_bytes
+        )
+        if existing is not None:
+            return existing, False
+
+        asset_id = uuid4()
+        raw_format = _detect_raw_format(data=fetched.data, content_type=fetched.content_type)
+        object_key = build_raw_object_key(scope.project_id, asset_id, moment, raw_format)
+        self._storage.put(object_key, fetched.data, content_type=fetched.content_type)
+        asset = RawAsset(
+            asset_id=asset_id,
+            project_id=scope.project_id,
+            code=f"RAW-{asset_id.hex[:20]}",
+            source_type=RawAssetSourceType.IMPORT,
+            original_filename=_safe_filename(media.path),
+            object_key=object_key,
+            size_bytes=size_bytes,
+            content_type=canonical_content_type(raw_format),
+            format=raw_format,
+            sha256=sha256,
+            status=RawAssetStatus.VALIDATING,
+            ingested_at=moment,
+            storage_class=StorageClass.STANDARD,
+            uploaded_by=scope.actor_id,
+            raw_metadata=_import_metadata(source, job, episode, media),
+            created_at=moment,
+            updated_at=moment,
+            created_by=scope.actor_id,
+            updated_by=scope.actor_id,
+        )
+        try:
+            created = self._raw_assets.add(scope, asset)
+        except ConflictError:
+            # 并发导入同一份内容：以先写入者为准，本次不再重复写对象。
+            winner = self._raw_assets.find_active_by_content(
+                scope, sha256=sha256, size_bytes=size_bytes
+            )
+            if winner is None:
+                raise
+            return winner, True
+        # 内容签名与 sha256 已由 Fetcher 校验通过，VALID 有据可依。
+        verified = created.mark_valid(now=moment)
+        saved = self._raw_assets.save(scope, verified, expected_version=created.version)
+        return saved, True
 
     def _advance(
         self,
@@ -306,6 +451,44 @@ class ImportRunner:
         self._uow.commit()
 
 
-def _object_key(scope: ProjectScope, data_source_id: UUID, revision: str, path: str) -> str:
-    """对象键包含 revision：同一数据源换版本不会覆盖旧对象。"""
-    return f"data-sources/{scope.project_id}/{data_source_id}/{revision}/{path}"
+def _detect_raw_format(*, data: bytes, content_type: str) -> RawAssetFormat:
+    """按内容签名判定 RawAsset 格式；探测不出时按声明的内容类型兜底。
+
+    ``Fetcher`` 已校验「内容签名与扩展名一致」，所以这里的兜底不会把
+    改名的文件放行。真正的兜底链是：内容签名 → 声明类型 → UNKNOWN。
+    """
+    detected = detect_format(data[:64], data[-4:])
+    if detected is not None:
+        return detected
+    declared = _FORMAT_BY_CONTENT_TYPE.get(content_type.split(";")[0].strip().lower())
+    return declared if declared is not None else RawAssetFormat.UNKNOWN
+
+
+def _safe_filename(path: str) -> str:
+    """从导入路径取展示文件名；路径本身不可信，只取最后一段。"""
+    return path.rsplit("/", 1)[-1] or "asset"
+
+
+def _import_metadata(
+    source: ImportSource,
+    job: DataSourceImport,
+    episode: ImportEpisode,
+    media: ImportMediaAsset,
+) -> dict[str, object]:
+    """DataSource → RawAsset 的来源留痕。
+
+    ``raw_assets`` 表没有 ``data_source_id`` 列（加列属跨阶段契约变更），
+    因此来源链只能靠 ``raw_metadata`` 承载：拿到一条 RawAsset，就能回溯到
+    哪个数据源、哪次导入、哪个 revision、原始路径与机位。
+    """
+    return {
+        "origin": "data_source_import",
+        "data_source_id": str(source.data_source_id),
+        "repo_id": source.repo_id,
+        "revision": source.revision,
+        "import_id": str(job.import_id),
+        "episode_key": episode.episode_key,
+        "source_path": media.path,
+        "camera": media.camera,
+        "task_name": episode.task_name,
+    }
