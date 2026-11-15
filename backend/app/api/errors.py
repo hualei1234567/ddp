@@ -510,12 +510,42 @@ _MODELOPS_STATUS_BY_CODE = {
 }
 
 
+_MODELOPS_FALLBACK = "模型闭环规则校验失败"
+
+# R-12：固定文案表。此前缺表项时回显 str(exc)，会把内部标识（实体名、字段名、
+# 状态枚举值）原样发给客户端，与其他域的策略不一致。
+_MODELOPS_MESSAGES = {
+    "idempotency_key_reused": "同一幂等键对应了不同的请求体",
+    "model_not_found": "模型不存在或不属于当前项目",
+    "model_version_not_found": "模型版本不存在",
+    "model_version_immutable": "模型版本发布后不可原地修改",
+    "artifact_invalid": "模型产物校验失败",
+    "artifact_hash_mismatch": "模型产物 Hash 与登记值不一致",
+    "evaluation_not_found": "评测记录不存在",
+    "evaluation_invalid": "评测数据不满足要求",
+    "inference_not_found": "推理任务不存在",
+    "inference_unavailable": "推理服务当前不可用",
+    "feedback_not_found": "反馈记录不存在",
+    "requirement_not_found": "数据需求不存在",
+    "requirement_terminal": "数据需求已关闭，不能继续操作",
+    "data_requirement_terminal": "数据需求已关闭，不能继续操作",
+    "model_adapter_unavailable": "模型平台适配器当前不可用",
+    "model_adapter_unsupported": "模型平台适配器不支持该能力",
+    "model_callback_invalid": "模型平台回调签名校验失败",
+    "model_callback_replayed": "模型平台回调已被处理过",
+}
+
+
 def modelops_error_to_app(exc: ModelOpsDomainError) -> AppError:
     code = getattr(exc, "code", None)
     if not isinstance(code, str) or code not in _MODELOPS_STATUS_BY_CODE:
-        return AppError("validation_failed", "模型闭环规则校验失败", 422)
-    message = str(exc) or "模型闭环规则校验失败"
-    return AppError(code, message, _MODELOPS_STATUS_BY_CODE[code])
+        return AppError("validation_failed", _MODELOPS_FALLBACK, 422)
+    # 领域异常的 str() 只留在日志里（由中间件记录），对客户端用固定文案。
+    return AppError(
+        code,
+        _MODELOPS_MESSAGES.get(code, _MODELOPS_FALLBACK),
+        _MODELOPS_STATUS_BY_CODE[code],
+    )
 
 
 def integrity_error_to_app(exc: IntegrityError) -> AppError:
@@ -573,9 +603,10 @@ def supplier_error_to_app(exc: Exception) -> AppError:
     code = getattr(exc, "code", None)
     if not isinstance(code, str) or code not in _SUPPLIER_STATUS_BY_CODE:
         return AppError("validation_failed", _SUPPLIER_FALLBACK, 422)
+    # R-12：不回显 str(exc)；未登记文案的 code 用固定兜底。
     return AppError(
         code,
-        _SUPPLIER_MESSAGES.get(code) or str(exc) or _SUPPLIER_FALLBACK,
+        _SUPPLIER_MESSAGES.get(code) or _SUPPLIER_FALLBACK,
         _SUPPLIER_STATUS_BY_CODE[code],
     )
 

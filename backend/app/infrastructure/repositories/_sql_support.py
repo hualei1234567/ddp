@@ -22,6 +22,9 @@ from app.domain.devices.errors import (
     VersionConflictError,
 )
 from app.domain.identity.models import ProjectScope
+from app.infrastructure.repositories._optimistic_lock import (
+    ensure_expected_version as _ensure_expected_version,
+)
 
 _T = TypeVar("_T")
 
@@ -72,10 +75,16 @@ def ensure_initial_version(version: int) -> None:
 
 
 def ensure_expected_version(entity_version: int, expected_version: int) -> None:
-    if expected_version < 1:
-        raise DomainValidationError("expected_version 必须大于等于 1")
-    if entity_version != expected_version:
-        raise VersionConflictError("资源", expected_version)
+    """前置乐观锁判定；实现只有一份，见 ``_optimistic_lock``。
+
+    设备域的 ``VersionConflictError`` 需要 ``expected`` 参数，因此用它构造工厂。
+    """
+    _ensure_expected_version(
+        entity_version,
+        expected_version,
+        invalid=DomainValidationError,
+        conflict=lambda: VersionConflictError("资源", expected_version),
+    )
 
 
 def scoped_select(model: type[_T], scope: ProjectScope) -> Select[tuple[_T]]:

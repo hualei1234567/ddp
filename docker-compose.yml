@@ -17,18 +17,9 @@ services:
       timeout: 3s
       retries: 20
 
-  redis:
-    image: redis:7-alpine
-    container_name: ddp-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - ddp-redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
+# redis 已在阶段 8 移除：requirements.txt 无 redis 依赖、代码零 import，
+# rate_limit_backend 也只有 memory 一种实现（见 app/core/config.py）。
+# 保留一个空转容器只会扩大攻击面并误导"系统用了 Redis"。
 
   minio:
     # 2026-11-14：上游 minio/minio 在 Docker Hub 已不可拉取（object not found），
@@ -66,12 +57,9 @@ services:
     environment:
       # 容器内必须用服务名，而不是宿主 .env 里的 localhost。
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
-      DDP_REDIS_URL: redis://redis:6379/0
       DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -92,12 +80,9 @@ services:
     environment:
       # 与 API 相同：容器内使用服务名访问数据库、缓存与对象存储。
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
-      DDP_REDIS_URL: redis://redis:6379/0
       DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -112,12 +97,9 @@ services:
     env_file: .env
     environment:
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
-      DDP_REDIS_URL: redis://redis:6379/0
       DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -156,6 +138,5 @@ services:
 
 volumes:
   ddp-pgdata:
-  ddp-redisdata:
   ddp-miniodata:
   ddp-backups:

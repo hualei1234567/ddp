@@ -17,6 +17,9 @@ from app.domain.datasets.errors import (
     VersionConflictError,
 )
 from app.domain.identity.models import ProjectScope
+from app.infrastructure.repositories._optimistic_lock import (
+    ensure_expected_version as _ensure_expected_version,
+)
 
 
 def bounded_limit(limit: int, *, maximum: int = 200) -> int:
@@ -60,10 +63,25 @@ def ensure_initial_version(version: int) -> None:
 
 
 def ensure_expected_version(entity_version: int, expected_version: int) -> None:
-    if expected_version < 1:
-        raise DomainValidationError("expected_version 必须大于等于 1")
-    if entity_version not in {expected_version, expected_version + 1}:
-        raise VersionConflictError("资源")
+    """前置乐观锁判定；实现只有一份，见 ``_optimistic_lock``。
+
+    R-8：本模块此前允许 ``expected 或 expected+1``，因为数据集域的调用方传的是
+    **已自增的候选版本**。那个入参约定已在调用侧统一为"当前版本"
+    （``save()`` 里传 ``row_version - 1``），因此这里改为严格相等。
+    并发安全不受影响：SQL 条件与 ``raise_update_failure`` 本来就是严格相等。
+    """
+    _ensure_expected_version(
+        entity_version,
+        expected_version,
+        invalid=DomainValidationError,
+        conflict=_conflict,
+        # 数据集域的 save() 接收的是已自增的候选版本（见 _optimistic_lock 说明）。
+        accept_candidate=True,
+    )
+
+
+def _conflict() -> VersionConflictError:
+    return VersionConflictError("资源")
 
 
 def scoped_select(model: type, scope: ProjectScope) -> Select[tuple[Any]]:

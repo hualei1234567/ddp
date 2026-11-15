@@ -16,6 +16,9 @@ from app.domain.annotation.errors import (
     VersionConflictError,
 )
 from app.domain.identity.models import ProjectScope
+from app.infrastructure.repositories._optimistic_lock import (
+    ensure_expected_version as _ensure_expected_version,
+)
 
 
 def enum_value(value: object) -> str:
@@ -36,10 +39,19 @@ def ensure_initial_version(version: int) -> None:
 
 
 def ensure_expected_version(entity_version: int, expected_version: int) -> None:
-    if expected_version < 1:
-        raise DomainValidationError("expected_version 必须大于等于 1")
-    if entity_version != expected_version:
-        raise VersionConflictError("资源")
+    """前置乐观锁判定；实现只有一份，见 ``_optimistic_lock``。
+
+    入参约定：``entity_version`` 与 ``expected_version`` 都是**当前版本**
+    （不是自增后的候选版本）。判定严格相等——SQL 的
+    ``WHERE version = expected_version`` 与 ``raise_update_failure`` 也是严格相等，
+    前置判定与真正生效的条件保持一致，避免"预检查放过、写库才失败"的困惑。
+    """
+    _ensure_expected_version(
+        entity_version,
+        expected_version,
+        invalid=DomainValidationError,
+        conflict=lambda: VersionConflictError("资源"),
+    )
 
 
 def flush_or_duplicate(session: Session) -> None:
