@@ -111,9 +111,11 @@ RobotPatch:
     firmware_version: {type: [string, "null"], maxLength: 64}
     hardware_version: {type: [string, "null"], maxLength: 64}
     calibration_profile_id: {type: [string, "null"], format: uuid}
-    # G-09 顺带修正：实现从不接受 null（frozen_mapping 只认 Mapping），
-    # 契约此前允许 null 属描述错误。与 RobotCreate / DevicePatch 保持一致。
-    capability_profile: {type: object, additionalProperties: true}
+    # 允许 null：语义是"本次不改该字段"（由 use case 剔除），不是"置为空对象"。
+    # 先前的实现直接把它传给领域层，frozen_mapping 只认 Mapping 因而 422——
+    # 那是实现与契约不符，修实现而不是收紧契约：收紧会让原本合法的 null
+    # 变成 422，对客户端是破坏性变更（CI 的 oasdiff 会拦）。
+    capability_profile: {type: [object, "null"], additionalProperties: true}
     location_id: {type: [string, "null"], format: uuid}
     owner_user_id: {type: [string, "null"], format: uuid}
 CalibrationProfile:

@@ -205,6 +205,14 @@ class RobotUseCases:
     ) -> Robot:
         if set(changes) - _PATCHABLE_FIELDS:
             raise DomainValidationError("请求包含不允许修改的字段")
+        # 契约允许 capability_profile 为 null，语义是"本次不改"。
+        # 不能把 None 传给领域层：frozen_mapping 只接受 Mapping，会 422。
+        # 也不能把它当空对象：那会静默清空已有的能力声明。
+        changes = {
+            key: value
+            for key, value in changes.items()
+            if not (key == "capability_profile" and value is None)
+        }
         current = self.get_robot(scope, robot_id)
         if current.version != expected_version:
             raise VersionConflictError("机器人", expected_version)

@@ -5,6 +5,11 @@
 验收结论失真（例如清单解析错位 → 静默比对到空集合），因此单独锁住。
 
 只测纯函数，不触发 :func:`main`。
+
+**位置说明**：本文件放在 `backend/tests/` 而不是 `scripts/tests/`，因为
+脚本顶层 `import httpx` 以及 `app.*` 一整套后端依赖。CI 的
+「Secret / 依赖 / Agent 守卫」job 只装 `pytest pip-audit`，在那里导入会
+`ModuleNotFoundError`。放在 backend/tests 后可复用后端完整的依赖环境。
 """
 
 from __future__ import annotations
@@ -14,7 +19,8 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT_PATH = Path(__file__).resolve().parents[1] / "e2e" / "human1m-full-chain.py"
+# 从 backend/tests/ 回到仓库根，再进 scripts/e2e/。
+SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "e2e" / "human1m-full-chain.py"
 spec = importlib.util.spec_from_file_location("human1m_full_chain", SCRIPT_PATH)
 assert spec and spec.loader
 chain = importlib.util.module_from_spec(spec)
@@ -63,9 +69,7 @@ def test_expected_cameras_covers_acceptance_size() -> None:
     """人工期望值必须与验收口径 10 条 / 30 个资产自洽。"""
     assert len(chain.EXPECTED_CAMERAS) == chain.ACCEPTANCE_EPISODES
     assert chain.EXPECTED_ASSETS == 30
-    assert chain.EXPECTED_ASSETS == sum(
-        len(cameras) for cameras in chain.EXPECTED_CAMERAS.values()
-    )
+    assert chain.EXPECTED_ASSETS == sum(len(cameras) for cameras in chain.EXPECTED_CAMERAS.values())
 
 
 def test_every_expected_episode_has_main_camera() -> None:

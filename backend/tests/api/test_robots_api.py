@@ -274,3 +274,38 @@ def test_profile_has_no_update_route(
         json={"name": "改名"},
     )
     assert patched.status_code == 405
+
+
+def test_patch_capability_profile_null_means_leave_unchanged(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """契约允许 ``capability_profile: null``，语义是「本次不改该字段」。
+
+    此前实现把 None 直接传给领域层，``frozen_mapping`` 只认 Mapping 因而 422——
+    契约允许的值被实现拒绝。收紧契约（去掉 null）不是正确修法：那会让原本
+    合法的 null 变成 422，对客户端是破坏性变更（CI 的 oasdiff 会拦
+    request-property-became-not-nullable）。
+
+    正确语义是剔除该键：既不报错，也不把它当空对象（那会静默清空已有声明）。
+    """
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+
+    created = client.post(
+        f"/api/v1/projects/{ids.project_a}/robots",
+        json={**_robot_payload("robot-cp"), "capability_profile": {"gripper": "two_finger"}},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["capability_profile"] == {"gripper": "two_finger"}
+
+    patched = client.patch(
+        f"/api/v1/projects/{ids.project_a}/robots/{created.json()['robot_id']}",
+        headers={"If-Match": f'"{created.json()["version"]}"'},
+        json={"capability_profile": None, "name": "改名但不动能力"},
+    )
+
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["name"] == "改名但不动能力"
+    assert patched.json()["capability_profile"] == {
+        "gripper": "two_finger"
+    }, "null 不应清空已有能力声明"
