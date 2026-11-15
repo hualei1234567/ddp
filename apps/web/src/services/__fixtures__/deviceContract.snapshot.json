@@ -98,6 +98,16 @@
     "validated_by": null,
     "validated_at": null,
     "supersedes_id": null,
+    "calibration_version": 1,
+    "profile_version": 1,
+    "profile_schema_version": "ddp.device.calibration-parameters/1.0.0",
+    "profile_snapshot": {
+      "required_types": [
+        "INTRINSICS"
+      ],
+      "selection_rule": {},
+      "target_type": "DEVICE"
+    },
     "version": 1,
     "created_at": null,
     "updated_at": null
@@ -180,6 +190,16 @@
         "validated_by": null,
         "validated_at": null,
         "supersedes_id": null,
+        "calibration_version": 1,
+        "profile_version": 1,
+        "profile_schema_version": "ddp.device.calibration-parameters/1.0.0",
+        "profile_snapshot": {
+          "required_types": [
+            "INTRINSICS"
+          ],
+          "selection_rule": {},
+          "target_type": "DEVICE"
+        },
         "version": 1,
         "created_at": null,
         "updated_at": null

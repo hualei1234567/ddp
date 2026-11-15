@@ -171,6 +171,20 @@ export interface CalibrationRecord {
   validated_by: string | null;
   validated_at: string | null;
   supersedes_id: string | null;
+  /**
+   * 业务修订号（ADR-0020）：只有内容变更才递增，状态迁移不动它。
+   * 与 `version`（乐观锁）语义不同，不能互相替代。
+   */
+  calibration_version: number;
+  /** 创建时 Profile 版本快照（ADR-0020 / G-05）。 */
+  profile_version: number | null;
+  profile_schema_version: string | null;
+  /**
+   * 创建时 Profile 内容副本，保证 Profile 事后被改也能复现本次标定。
+   * 具体键由服务端写入，前端只展示不解释。
+   */
+  profile_snapshot: Record<string, unknown>;
+  /** DEPRECATED（ADR-0020）：乐观锁版本，用于 If-Match；阶段 2 改名 lock_version。 */
   version: number;
   created_at: string | null;
   updated_at: string | null;

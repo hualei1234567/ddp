@@ -102,6 +102,8 @@ describe("设备域后端契约对齐", () => {
       [
         "calibration_id",
         "calibration_type",
+        // ADR-0020：业务修订号与乐观锁版本分离；Profile 快照保证可复现。
+        "calibration_version",
         "checksum",
         "child_frame",
         "created_at",
@@ -111,6 +113,9 @@ describe("设备域后端契约对齐", () => {
         "parameters",
         "performed_by",
         "profile_id",
+        "profile_schema_version",
+        "profile_snapshot",
+        "profile_version",
         "project_id",
         "scope",
         "source",

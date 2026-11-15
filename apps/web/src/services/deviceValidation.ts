@@ -310,6 +310,20 @@ export function parseCalibrationRecord(
       "supersedes_id",
       `${path}.supersedes_id`,
     ),
+    calibration_version: readInteger(
+      record,
+      "calibration_version",
+      `${path}.calibration_version`,
+    ),
+    profile_version: readOptionalVersion(record, `${path}.profile_version`),
+    profile_schema_version: readOptionalString(
+      record,
+      "profile_schema_version",
+      `${path}.profile_schema_version`,
+    ),
+    profile_snapshot:
+      readOptionalRecord(record, "profile_snapshot", `${path}.profile_snapshot`) ??
+      {},
     version: readInteger(record, "version", `${path}.version`),
     created_at: readOptionalString(record, "created_at", `${path}.created_at`),
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
@@ -320,4 +334,19 @@ export function parseCalibrationPage(
   value: unknown,
 ): CursorPage<CalibrationRecord> {
   return parseCursorPage(value, "标定记录列表", parseCalibrationRecord);
+}
+
+/**
+ * profile_version 是 `integer | null`：null 表示历史记录未固化版本（ADR-0020）。
+ * 这里对 null 与缺失都返回 null，对非整数抛错。
+ */
+function readOptionalVersion(
+  record: Record<string, unknown>,
+  path: string,
+): number | null {
+  const value = record.profile_version;
+  if (value === undefined || value === null) {
+    return null;
+  }
+  return readInteger(record, "profile_version", path);
 }

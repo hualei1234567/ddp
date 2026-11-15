@@ -300,6 +300,11 @@ class CalibrationOut(BaseModel):
     validated_by: UUID | None
     validated_at: datetime | None
     supersedes_id: UUID | None
+    # ADR-0020：业务修订号与乐观锁版本分离，两者语义不同，必须都返回。
+    calibration_version: int
+    profile_version: int | None
+    profile_schema_version: str | None
+    profile_snapshot: dict[str, object]
     version: int
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -329,6 +334,10 @@ class CalibrationOut(BaseModel):
             validated_by=record.validated_by,
             validated_at=record.validated_at,
             supersedes_id=record.supersedes_id,
+            calibration_version=record.calibration_version,
+            profile_version=record.profile_version,
+            profile_schema_version=record.profile_schema_version,
+            profile_snapshot=dict(record.profile_snapshot),
             version=record.version,
         )
 

@@ -29,6 +29,12 @@ SensorType:
 SensorSyncMode:
   type: string
   enum: [PTP, NTP, HARDWARE_TRIGGER, SOFTWARE_ESTIMATE, MANUAL, NONE]
+FrameConvention:
+  type: string
+  description: |
+    坐标系约定（ADR-0019）。UNSPECIFIED 是显式的"不知道"，
+    不是默认猜一个：把非 ROS 数据错标成 ROS 约定比标注未知更危险。
+  enum: [ROS_REP_103, OPENCV, UNITY_LHS, UNSPECIFIED]
 CalibrationScope:
   type: string
   enum: [ROBOT, DEVICE, SENSOR, SYSTEM]
@@ -130,7 +136,9 @@ Sensor:
     channels: {type: [integer, "null"], minimum: 1, description: "整数通道数；不是字符串数组"}
     intrinsic_calibration_id: {type: [string, "null"], format: uuid}
     extrinsic_calibration_id: {type: [string, "null"], format: uuid}
-    coordinate_frame: {type: string, minLength: 1, maxLength: 200, deprecated: true, description: "当前实现字段；冻结目标更名 frame_id（差距 G-08）"}
+    coordinate_frame: {type: string, minLength: 1, maxLength: 200, deprecated: true, description: "DEPRECATED（ADR-0019）：读 frame_id；本字段保留至阶段 2 移除"}
+    frame_id: {type: string, minLength: 1, maxLength: 200, description: "坐标系标识，如 camera_link、base_link（ADR-0019）"}
+    frame_convention: {$ref: '#/FrameConvention'}
     sync_mode: {$ref: "#/SensorSyncMode"}
     sync_group: {type: [string, "null"], maxLength: 64}
     firmware_version: {type: [string, "null"], maxLength: 64}
@@ -151,7 +159,9 @@ SensorCreate:
     code: {type: string, minLength: 1, maxLength: 64}
     sensor_type: {$ref: "#/SensorType"}
     sample_rate_hz: {type: number, exclusiveMinimum: 0}
-    coordinate_frame: {type: string, minLength: 1, maxLength: 200}
+    coordinate_frame: {type: string, minLength: 1, maxLength: 200, description: "DEPRECATED（ADR-0019）：新客户端应填 frame_id"}
+    frame_id: {type: [string, "null"], minLength: 1, maxLength: 200, description: "坐标系标识；缺省时服务端回落到 coordinate_frame"}
+    frame_convention: {$ref: "#/FrameConvention"}
     robot_id: {type: [string, "null"], format: uuid}
     device_id: {type: [string, "null"], format: uuid}
     vendor: {type: [string, "null"], maxLength: 120}
@@ -187,6 +197,8 @@ SensorPatch:
     intrinsic_calibration_id: {type: [string, "null"], format: uuid}
     extrinsic_calibration_id: {type: [string, "null"], format: uuid}
     coordinate_frame: {type: string, minLength: 1, maxLength: 200, deprecated: true}
+    frame_id: {type: [string, "null"], minLength: 1, maxLength: 200}
+    frame_convention: {$ref: "#/FrameConvention"}
     sync_mode: {$ref: "#/SensorSyncMode"}
     sync_group: {type: [string, "null"], maxLength: 64}
     firmware_version: {type: [string, "null"], maxLength: 64}
@@ -226,7 +238,11 @@ Calibration:
     validated_by: {type: [string, "null"], format: uuid}
     validated_at: {type: [string, "null"], format: date-time}
     supersedes_id: {type: [string, "null"], format: uuid}
-    version: {type: integer, minimum: 1, deprecated: true}
+    calibration_version: {type: integer, minimum: 1, description: "业务修订号（ADR-0020）；只有内容变更才递增"}
+    profile_version: {type: [integer, "null"], minimum: 1, description: "创建时 Profile 版本（ADR-0020 / G-05）"}
+    profile_schema_version: {type: [string, "null"], maxLength: 64, description: "创建时 Profile 的 schema 版本（ADR-0020 / G-05）"}
+    profile_snapshot: {type: object, additionalProperties: true, description: "创建时 Profile 内容副本，保证事后可复现（ADR-0020 / G-05）"}
+    version: {type: integer, minimum: 1, deprecated: true, description: "DEPRECATED（ADR-0020）：乐观锁版本，改名 lock_version 见阶段 2"}
     created_at: {type: [string, "null"], format: date-time}
     updated_at: {type: [string, "null"], format: date-time}
 CalibrationCreate:
@@ -239,7 +255,11 @@ CalibrationCreate:
     target_id: {type: string, format: uuid}
     calibration_type: {$ref: "#/CalibrationType"}
     method: {type: string, minLength: 1, maxLength: 200}
-    parameters: {type: object, additionalProperties: true}
+    parameters:
+      type: object
+      description: |
+        形状由 docs/architecture/contract-draft/device/calibration-parameters.v1.schema.json
+        按 calibration_type 冻结（ADR-0021 / G-19）；服务端不符即 422。
     valid_from: {type: string, format: date-time}
     valid_to: {type: [string, "null"], format: date-time}
     parent_frame: {type: [string, "null"], maxLength: 200}

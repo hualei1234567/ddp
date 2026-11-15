@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.5.0
+  version: 1.6.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -26,6 +26,10 @@ info:
     - `1.5.0` 在 `1.4.0` 基础上**增量加入阶段 7 数据平面第一批已实现端点**：
       Hugging Face 数据源登记与导入任务状态。冻结版本 `ddp.stage7/1.0.0`（仅本批范围）。
       解析、视频审看与人工审核尚未实现，不在本版本声明内。
+    - `1.6.0` 在 `1.5.0` 基础上**补齐设备域已实现但契约缺漏的字段**（G-20）：
+      Sensor 的 `frame_id` / `frame_convention`（ADR-0019），Calibration 的
+      `calibration_version` 与 Profile 快照三字段（ADR-0020）。均为新增字段，
+      不改变既有字段语义，`version` 继续保留并标 DEPRECATED。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -43,7 +47,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.5.0
+  version: 1.6.0
   stages:
     device:
       version: ddp.device/1.0.0
