@@ -34,6 +34,8 @@ _ALLOWED_FILTER_KEYS = frozenset(
         "warn_confirmation_reason",
         "allow_degraded_time_sync",
         "degraded_confirmation_reason",
+        "allow_missing_calibration",
+        "missing_calibration_reason",
         "usage_policy_waiver_reason",
     }
 )
@@ -63,6 +65,16 @@ class SelectionFilters:
     warn_confirmation_reason: str | None = None
     allow_degraded_time_sync: bool = False
     degraded_confirmation_reason: str | None = None
+    # 允许「完全没有标定快照」的 Episode 进入数据集。
+    #
+    # 公开第一人称数据集（如 HF Human-1M）的元数据里不含任何相机/机械臂标定，
+    # 这是数据固有属性而不是质量问题。没有这个开关时这类数据永远进不了数据集，
+    # N5 的「真实数据资产化」对公开数据集就是空话。
+    #
+    # 只豁免 **CALIBRATION_MISSING**（没有标定）；有标定但无效/过期的仍按
+    # CALIBRATION_INVALID 阻断——两者的风险完全不同，不能一并放过。
+    allow_missing_calibration: bool = False
+    missing_calibration_reason: str | None = None
     usage_policy_waiver_reason: str | None = None
     raw: dict[str, object] = field(default_factory=dict)
 
@@ -85,6 +97,14 @@ class SelectionFilters:
         )
         if allow_degraded and degraded_reason is None:
             raise DomainValidationError("允许 DEGRADED 时间同步必须提供确认原因")
+        allow_missing_calibration = bool(raw.get("allow_missing_calibration", False))
+        missing_calibration_reason = _optional_text(
+            raw.get("missing_calibration_reason"),
+            "missing_calibration_reason",
+            max_length=2000,
+        )
+        if allow_missing_calibration and missing_calibration_reason is None:
+            raise DomainValidationError("允许缺少标定必须提供确认原因")
         captured_from = _optional_datetime(raw.get("captured_from"), "captured_from")
         captured_to = _optional_datetime(raw.get("captured_to"), "captured_to")
         if captured_from is not None and captured_to is not None and captured_to < captured_from:
@@ -102,6 +122,8 @@ class SelectionFilters:
             warn_confirmation_reason=warn_reason,
             allow_degraded_time_sync=allow_degraded,
             degraded_confirmation_reason=degraded_reason,
+            allow_missing_calibration=allow_missing_calibration,
+            missing_calibration_reason=missing_calibration_reason,
             usage_policy_waiver_reason=_optional_text(
                 raw.get("usage_policy_waiver_reason"),
                 "usage_policy_waiver_reason",
@@ -384,18 +406,22 @@ def _check_candidate(
             f"未知时间同步状态 {candidate.time_sync_status}",
         )
     if not candidate.calibration_valid:
-        # 区分"没有标定"与"标定无效"：前者可用 ``CALIBRATION_MISSING``
-        # 单独统计（公开数据集常见），后者才是质量问题。
-        code = (
-            ExclusionCode.CALIBRATION_MISSING
-            if candidate.calibration_missing
-            else ExclusionCode.CALIBRATION_INVALID
-        )
-        return ExcludedCandidate(
-            candidate.episode_id,
-            code,
-            candidate.calibration_issue or "标定快照无效",
-        )
+        # 区分"没有标定"与"标定无效"：前者可带原因显式豁免（公开数据集
+        # 常见，数据本身就没有标定），后者一律阻断——有标定却无效/过期是
+        # 质量问题，风险与"没有"完全不同。
+        if candidate.calibration_missing and filters.allow_missing_calibration:
+            warnings.append(f"CALIBRATION_MISSING_WAIVED:{candidate.episode_id}")
+        else:
+            code = (
+                ExclusionCode.CALIBRATION_MISSING
+                if candidate.calibration_missing
+                else ExclusionCode.CALIBRATION_INVALID
+            )
+            return ExcludedCandidate(
+                candidate.episode_id,
+                code,
+                candidate.calibration_issue or "标定快照无效",
+            )
     return None
 
 
