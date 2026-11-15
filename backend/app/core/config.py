@@ -133,6 +133,19 @@ class Settings(BaseSettings):
     export_worker_retry_base_seconds: float = Field(default=5.0, gt=0)
     export_worker_retry_max_seconds: float = Field(default=300.0, gt=0)
 
+    # 维护 worker（阶段 8）：定时备份 + 保留/清扫。
+    # 默认全部关闭——运维能力不应在未显式启用时自动改动机器上的数据。
+    maintenance_enabled: bool = False
+    maintenance_poll_interval_seconds: float = Field(default=60.0, gt=0)
+    maintenance_backup_interval_seconds: int = Field(default=86400, ge=60)
+    # 备份输出目录；为空时用 DDP_BACKUP_DIR，仍未设置则拒绝启动维护 worker。
+    backup_dir: str = ""
+    backup_retention_days: int = Field(default=7, ge=1, le=365)
+    # 已发布/已记录事件的保留天数；投递类死信不在此列（需人工处理）。
+    outbox_retention_days: int = Field(default=30, ge=1, le=3650)
+    # 幂等记录由自身 expires_at 控制，这里只做"过期即删"的批量清扫阈值。
+    idempotency_sweep_batch: int = Field(default=1000, ge=1, le=100000)
+
     # 训练平台 Adapter：回调密钥与能力声明只来自配置/Secret 管理，不硬编码。
     # DDP_TRAINING_ADAPTER_SHARED_SECRETS 形如 {"mock": "<32+ 字符密钥>"}。
     training_adapter_shared_secrets: dict[str, str] = Field(default_factory=dict)
@@ -218,6 +231,7 @@ class Settings(BaseSettings):
         problems.extend(self._security_headers_config_problems())
         problems.extend(self._validation_worker_config_problems())
         problems.extend(self._export_worker_config_problems())
+        problems.extend(self._maintenance_worker_config_problems())
         problems.extend(self._training_adapter_config_problems())
         problems.extend(self._model_adapter_config_problems())
         if not self.is_local:
@@ -326,6 +340,22 @@ class Settings(BaseSettings):
             problems.append(
                 "DDP_EXPORT_WORKER_RETRY_MAX_SECONDS 不得小于 "
                 "DDP_EXPORT_WORKER_RETRY_BASE_SECONDS"
+            )
+        return problems
+
+    def _maintenance_worker_config_problems(self) -> list[str]:
+        """维护 worker 只有在启用时才校验配置，避免影响其他进程启动。"""
+        problems: list[str] = []
+        if not self.maintenance_enabled:
+            return problems
+        if not self.backup_dir.strip():
+            problems.append(
+                "启用 DDP_MAINTENANCE_ENABLED 时必须设置 DDP_BACKUP_DIR（备份输出目录）"
+            )
+        if self.maintenance_backup_interval_seconds < self.maintenance_poll_interval_seconds:
+            problems.append(
+                "DDP_MAINTENANCE_BACKUP_INTERVAL_SECONDS 不得小于 "
+                "DDP_MAINTENANCE_POLL_INTERVAL_SECONDS"
             )
         return problems
 

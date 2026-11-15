@@ -216,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging()
     factory = create_session_factory(get_engine())
     stop_event = threading.Event()
     _install_signal_handlers(stop_event)

@@ -121,6 +121,27 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  maintenance-worker:
+    # 阶段 8：定时备份 + outbox 归档 + 幂等表清扫。
+    # 默认不开（maintenance_enabled 由 .env 控制）；开启前必须先设 DDP_BACKUP_DIR
+    # 并把该目录挂载为持久卷，否则备份会落在容器内临时层。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-maintenance-worker
+    command: ["python", "-m", "app.workers.maintenance"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+      DDP_BACKUP_DIR: /var/backups/ddp
+    volumes:
+      - ddp-backups:/var/backups/ddp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   web:
     profiles: ["app"]
     build:
@@ -137,3 +158,4 @@ volumes:
   ddp-pgdata:
   ddp-redisdata:
   ddp-miniodata:
+  ddp-backups:
