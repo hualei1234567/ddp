@@ -137,6 +137,7 @@ def _sync_drift_finding(assets: list[MediaAsset]) -> QualityFinding:
         by_episode.setdefault(asset.episode_key, []).append(asset)
 
     problems: list[str] = []
+    single_stream: list[str] = []
     checked = 0
     for episode_key in sorted(by_episode):
         windows = [
@@ -157,7 +158,13 @@ def _sync_drift_finding(assets: list[MediaAsset]) -> QualityFinding:
             unique.setdefault(window.stream_id, window)
         report = detect_sync_drift(list(unique.values()))
         checked += 1
-        if report.status is not SyncDriftStatus.ALIGNED:
+        if report.status is SyncDriftStatus.SINGLE_STREAM:
+            # 单机位片段没有"同步"可谈——这不是同步问题，而是"该片段只有一路
+            # 视频"。真实数据集里很常见（Human-1M 的 demo_009/011/012 就是单
+            # 机位），把它算作"同步未通过"会让整批报告失真。
+            # 记入 detail 让人看得见，但不判失败。
+            single_stream.append(episode_key)
+        elif report.status is not SyncDriftStatus.ALIGNED:
             problems.append(f"{episode_key}:{report.status.value}")
 
     if not checked:
@@ -166,12 +173,21 @@ def _sync_drift_finding(assets: list[MediaAsset]) -> QualityFinding:
             passed=False,
             detail="没有可检测的 Episode",
         )
+    multi = checked - len(single_stream)
+    if problems:
+        detail = f"{len(problems)} 个片段同步未通过：{problems[:5]}"
+    elif multi == 0:
+        # 全部是单机位：没有可比较对象，如实说明而不是伪装成"已通过"。
+        detail = f"{checked} 个片段均为单机位，无可比较的多路同步"
+    else:
+        detail = f"{multi} 个多机位片段的同步均在容忍范围内"
+    if single_stream and multi > 0:
+        detail += (
+            f"（另有 {len(single_stream)} 个单机位片段不参与同步判定：" f"{single_stream[:5]}）"
+        )
     return QualityFinding(
         rule_id="stream_sync_aligned",
+        # 只有"存在多机位片段且其中有超偏"才判失败；单流不是失败。
         passed=not problems,
-        detail=(
-            f"{checked} 个片段的机位时间同步均在容忍范围内"
-            if not problems
-            else f"{len(problems)} 个片段同步未通过：{problems[:5]}"
-        ),
+        detail=detail,
     )

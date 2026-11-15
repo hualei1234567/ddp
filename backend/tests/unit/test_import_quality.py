@@ -123,11 +123,45 @@ def test_offset_beyond_tolerance_fails_sync_rule() -> None:
     assert "demo_001" in rule.detail
 
 
-def test_single_camera_does_not_count_as_aligned() -> None:
-    """单机位谈不上"同步"，不能报通过——否则质量报告把"没检查"说成"通过"。"""
+def test_single_camera_is_not_a_sync_failure() -> None:
+    """单机位片段不是同步问题——它是"这个片段只有一路视频"。
+
+    真实数据集里很常见（Human-1M 的 demo_009/011/012 就是单机位）。把它
+    算作"同步未通过"会让整批报告失真。但文案必须如实说明"无可比较的多路
+    同步"，不能伪装成"已通过检查"。
+    """
     rule = _sync_rule(_report([_asset(camera="main")]))
+    assert rule.passed is True
+    assert "单机位" in rule.detail
+    assert "无可比较" in rule.detail
+
+
+def test_mixed_single_and_multi_stream_reports_both() -> None:
+    """多机位对齐 + 单机位混合时，通过且文案点明单机位数量。"""
+    report = _report(
+        [
+            _asset(camera="main", path="a.mp4"),
+            _asset(camera="wrist_left", path="b.mp4"),
+            _asset(episode_key="demo_002", camera="main", path="c.mp4"),
+        ]
+    )
+    rule = _sync_rule(report)
+    assert rule.passed is True
+    assert "单机位" in rule.detail
+
+
+def test_multi_stream_misaligned_still_fails_when_others_single() -> None:
+    """单机位不判失败，但多机位超偏仍必须判失败。"""
+    report = _report(
+        [
+            _asset(camera="main", path="a.mp4", excerpt_start_seconds=1.0),
+            _asset(camera="wrist_left", path="b.mp4", excerpt_start_seconds=2.0),
+            _asset(episode_key="demo_002", camera="main", path="c.mp4"),
+        ]
+    )
+    rule = _sync_rule(report)
     assert rule.passed is False
-    assert "SINGLE_STREAM" in rule.detail
+    assert "demo_001" in rule.detail
 
 
 def test_empty_assets_fails_sync_rule() -> None:
