@@ -14,8 +14,13 @@ from __future__ import annotations
 
 from app.domain.datasources.media import MediaAsset
 from app.domain.datasources.review import QualityFinding, QualityReport
+from app.domain.episodes.sync_drift import (
+    StreamWindow,
+    SyncDriftStatus,
+    detect_sync_drift,
+)
 
-RULE_VERSION = "1.0.0"
+RULE_VERSION = "1.1.0"
 _REQUIRED_CAMERA = "main"
 
 
@@ -102,6 +107,8 @@ def evaluate_import_quality(
         )
     )
 
+    findings.append(_sync_drift_finding(assets))
+
     return QualityReport(
         import_id=import_id,
         project_id=project_id,
@@ -110,4 +117,61 @@ def evaluate_import_quality(
         total_assets=len(assets),
         total_episodes=len(episodes),
         findings=tuple(findings),
+    )
+
+
+def _sync_drift_finding(assets: list[MediaAsset]) -> QualityFinding:
+    """多路机位的时间同步偏差（N3）。
+
+    逐 Episode 检测；**只有全部 Episode 都明确 ALIGNED 才算通过**。
+    以下情况一律不算通过（失败关闭）：
+
+    - ``UNKNOWN``：该 Episode 没有可比较的机位区间；
+    - ``SINGLE_STREAM``：只有一路，谈不上"同步"；
+    - ``EXCEEDED``：偏差超阈值。
+
+    把"没检查到"当成"检查通过"会让质量报告说谎——这正是本规则存在的意义。
+    """
+    by_episode: dict[str, list[MediaAsset]] = {}
+    for asset in assets:
+        by_episode.setdefault(asset.episode_key, []).append(asset)
+
+    problems: list[str] = []
+    checked = 0
+    for episode_key in sorted(by_episode):
+        windows = [
+            StreamWindow(
+                stream_id=asset.camera,
+                start_time_ns=int((asset.excerpt_start_seconds or 0.0) * 1_000_000_000),
+                end_time_ns=int(
+                    ((asset.excerpt_start_seconds or 0.0) + (asset.excerpt_seconds or 1.0))
+                    * 1_000_000_000
+                ),
+            )
+            for asset in by_episode[episode_key]
+        ]
+        # 同 Episode 内机位重复会让 StreamWindow 校验失败；按机位去重，
+        # 保留第一条（导入链路本身已保证同一导入内 path 唯一）。
+        unique: dict[str, StreamWindow] = {}
+        for window in windows:
+            unique.setdefault(window.stream_id, window)
+        report = detect_sync_drift(list(unique.values()))
+        checked += 1
+        if report.status is not SyncDriftStatus.ALIGNED:
+            problems.append(f"{episode_key}:{report.status.value}")
+
+    if not checked:
+        return QualityFinding(
+            rule_id="stream_sync_aligned",
+            passed=False,
+            detail="没有可检测的 Episode",
+        )
+    return QualityFinding(
+        rule_id="stream_sync_aligned",
+        passed=not problems,
+        detail=(
+            f"{checked} 个片段的机位时间同步均在容忍范围内"
+            if not problems
+            else f"{len(problems)} 个片段同步未通过：{problems[:5]}"
+        ),
     )

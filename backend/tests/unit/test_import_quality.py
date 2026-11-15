@@ -76,8 +76,12 @@ def test_missing_main_camera_is_reported() -> None:
 
 
 def test_rule_version_is_always_present() -> None:
-    """docs/ddp/07 §7：报告必须说明规则版本，否则无法复现判定。"""
-    assert _report([_asset()]).rule_version == "1.0.0"
+    """docs/ddp/07 §7：报告必须说明规则版本，否则无法复现判定。
+
+    1.1.0 起新增 stream_sync_aligned（多路同步偏差）规则；规则集变化必须
+    升版本，否则「同一批数据在旧规则下通过、新规则下不通过」无从追溯。
+    """
+    assert _report([_asset()]).rule_version == "1.1.0"
 
 
 def test_payload_includes_failures_not_empty_array() -> None:
@@ -86,3 +90,51 @@ def test_payload_includes_failures_not_empty_array() -> None:
     assert payload["passed"] is False
     assert payload["failures"] != []
     assert payload["rule_version"] == RULE_VERSION
+
+
+# --------------------------------------------------------------------------
+# N3：多路同步偏差规则 stream_sync_aligned
+# --------------------------------------------------------------------------
+
+
+def _sync_rule(report):
+    return next(f for f in report.findings if f.rule_id == "stream_sync_aligned")
+
+
+def test_aligned_cameras_pass_sync_rule() -> None:
+    report = _report(
+        [
+            _asset(camera="main", path="a.mp4"),
+            _asset(camera="wrist", path="b.mp4"),
+        ]
+    )
+    assert _sync_rule(report).passed is True
+
+
+def test_offset_beyond_tolerance_fails_sync_rule() -> None:
+    report = _report(
+        [
+            _asset(camera="main", path="a.mp4", excerpt_start_seconds=1.0),
+            _asset(camera="wrist", path="b.mp4", excerpt_start_seconds=1.5),
+        ]
+    )
+    rule = _sync_rule(report)
+    assert rule.passed is False
+    assert "demo_001" in rule.detail
+
+
+def test_single_camera_does_not_count_as_aligned() -> None:
+    """单机位谈不上"同步"，不能报通过——否则质量报告把"没检查"说成"通过"。"""
+    rule = _sync_rule(_report([_asset(camera="main")]))
+    assert rule.passed is False
+    assert "SINGLE_STREAM" in rule.detail
+
+
+def test_empty_assets_fails_sync_rule() -> None:
+    rule = _sync_rule(_report([]))
+    assert rule.passed is False
+
+
+def test_sync_rule_is_versioned_with_other_rules() -> None:
+    """新增规则必须随之升 RULE_VERSION，否则历史判定不可追溯。"""
+    assert RULE_VERSION == "1.1.0"

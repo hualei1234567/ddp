@@ -230,13 +230,15 @@ def test_import_writes_audit_and_outbox(api_db) -> None:
 # --- 媒体资产与播放 URL ------------------------------------------------------
 
 
-def _seed_asset(factory, ids, source_id, import_id):
+def _seed_asset(factory, ids, source_id, import_id, **overrides):
     """直接插一条媒体资产：播放 URL 的测试不需要真的下载文件。"""
     from uuid import UUID, uuid4
 
     from app.infrastructure.db.models.datasources import MediaAssetModel
 
     asset_id = uuid4()
+    path = overrides.get("path", "videos/demo_001_main.mp4")
+    camera = overrides.get("camera", "main")
     with factory() as session:
         session.add(
             MediaAssetModel(
@@ -245,8 +247,8 @@ def _seed_asset(factory, ids, source_id, import_id):
                 data_source_id=UUID(str(source_id)),
                 import_id=UUID(str(import_id)),
                 episode_key="demo_001",
-                path="videos/demo_001_main.mp4",
-                camera="main",
+                path=path,
+                camera=camera,
                 object_key=f"data-sources/{ids.project_a}/{asset_id}/v.mp4",
                 size_bytes=754668,
                 sha256="sha256:" + "a" * 64,
@@ -434,6 +436,16 @@ def test_quality_report_on_real_assets(api_db) -> None:
     client = make_client(factory, ids.editor_a)
     source_id, import_id = _an_import_id(factory, ids)
     _seed_asset(factory, ids, source_id, import_id)
+    # 再补一个对齐的机位：1.1.0 的 stream_sync_aligned 规则要求至少两路
+    # 才能判定"同步"，单路会如实报 SINGLE_STREAM 不通过。
+    _seed_asset(
+        factory,
+        ids,
+        source_id,
+        import_id,
+        path="videos/demo_001_wrist.mp4",
+        camera="wrist_left",
+    )
 
     response = client.get(
         f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/quality-report"
@@ -441,15 +453,18 @@ def test_quality_report_on_real_assets(api_db) -> None:
 
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["rule_version"] == "1.0.0"
+    # 1.1.0 起新增 stream_sync_aligned 规则；规则集变化必须升版本。
+    assert body["rule_version"] == "1.1.0"
     assert body["sample_scope"] == "SAMPLE"
-    assert body["total_assets"] == 1
+    assert body["total_assets"] == 2
     assert body["passed"] is True
     assert body["failures"] == []
     # 报告必须逐条给出规则结果，不能只给总分
     assert {f["rule_id"] for f in body["findings"]} >= {
         "assets_present",
         "main_camera_present",
+        # N3 新增：多路同步偏差
+        "stream_sync_aligned",
     }
 
 
