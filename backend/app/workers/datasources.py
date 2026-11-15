@@ -14,7 +14,6 @@ Worker 与 HTTP API 使用同一镜像但独立进程；**HTTP 线程不下载�
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import signal
 import threading
@@ -75,21 +74,19 @@ class _HttpxFetcher:
 
 
 def _parse_metadata(data: bytes) -> list[dict[str, object]]:
-    """把 metadata.jsonl 字节解析为行列表；格式错误抛异常由调用方落库。"""
-    rows: list[dict[str, object]] = []
-    for lineno, line in enumerate(data.decode("utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"metadata 第 {lineno} 行不是合法 JSON：{exc}") from exc
-        if not isinstance(value, dict):
-            raise ValueError(f"metadata 第 {lineno} 行不是对象")
-        rows.append(value)
-    if not rows:
-        raise ValueError("metadata 为空")
-    return rows
+    """把 metadata.jsonl 字节解析为行列表；格式错误抛异常由调用方落库。
+
+    实现已下沉到 ``ddp_data.adapters.builtin.parse_jsonl_rows``：Adapter 的
+    Parser 契约是 bytes，解码逻辑必须有单一归属，否则换个入口就得再写一份。
+    这里仅保留薄委托，避免既有调用点与测试大改。
+    """
+    from ddp_data.adapters.builtin import GenericJsonlParseError, parse_jsonl_rows
+
+    try:
+        return parse_jsonl_rows(data)
+    except GenericJsonlParseError as exc:
+        # 调用方按 ValueError 处理（导入失败留痕），保持既有错误契约不变。
+        raise ValueError(f"metadata 解析失败：{exc}") from exc
 
 
 def build_runner(session: Session, settings: Settings) -> ImportRunner:
