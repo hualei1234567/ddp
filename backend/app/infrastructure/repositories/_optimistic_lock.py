@@ -10,10 +10,12 @@
 |---|---|---|
 | collection / annotation / devices | 实体是**加载时的版本**（未自增） |
   `entity_version == expected` |
-| datasets | 实体是**已自增的候选版本**（`update_dataset`
-  与 `version_actions` 都自增） | `entity_version in {expected, expected+1}` |
+| datasets | 两种都有：仓储 `save()` 收到**已自增的候选版本**（`update_dataset` /
+  `version_actions` 都自增）；`training_*` 反过来传 `expected_version=row_version-1`
+  —— 换算后同样是 `expected+1`；`version_actions` 里也有传当前版本的调用 |
+  `entity_version in {expected, expected+1}` |
 
-所以不能简单合并成一种判定：改成严格相等会让数据集域全部 409；
+所以不能简单合并成一种判定：改成严格相等会让数据集域的全部自增调用 409；
 改成差一容忍会让其余三域放过"版本未刷新"的调用。
 
 ## 真正的收敛点

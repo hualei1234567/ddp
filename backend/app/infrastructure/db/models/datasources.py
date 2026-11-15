@@ -28,10 +28,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.db.base import Base
-from app.infrastructure.db.models.devices import ProjectScopedMixin
+from app.infrastructure.db.models.devices import LockVersionMixin, ProjectScopedMixin
 
 
-class DataSourceModel(Base, ProjectScopedMixin):
+class DataSourceModel(Base, ProjectScopedMixin, LockVersionMixin):
     __tablename__ = "data_sources"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -85,7 +85,7 @@ class DataSourceModel(Base, ProjectScopedMixin):
     )
 
 
-class DataSourceImportModel(Base, ProjectScopedMixin):
+class DataSourceImportModel(Base, ProjectScopedMixin, LockVersionMixin):
     __tablename__ = "data_source_imports"
 
     id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -127,7 +127,7 @@ class DataSourceImportModel(Base, ProjectScopedMixin):
     )
 
 
-class MediaAssetModel(Base, ProjectScopedMixin):
+class MediaAssetModel(Base, ProjectScopedMixin, LockVersionMixin):
     """导入产出的媒体资产：对象存储引用 + Hash + 审看所需时序提示。"""
 
     __tablename__ = "data_source_media_assets"
@@ -171,7 +171,7 @@ class MediaAssetModel(Base, ProjectScopedMixin):
     )
 
 
-class DataReviewModel(Base, ProjectScopedMixin):
+class DataReviewModel(Base, ProjectScopedMixin, LockVersionMixin):
     """导入结果的人工审核记录。
 
     职责分离在数据库层也留了痕迹：``reviewer_id`` 与 ``submitted_by`` 分开存，

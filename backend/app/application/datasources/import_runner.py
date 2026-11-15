@@ -6,6 +6,17 @@
 - 下载与解析委托给 ``data-platform/``（纯数据能力）；
 - 本层负责事务、状态机推进、审计与 outbox；
 - 失败必须落 ``error_message``，不允许"失败了但不知道为什么"。
+
+抽样契约（``scope=SAMPLE``）
+---------------------------
+``sample_limit`` 此前只写入任务行与事件负载，**执行时从未被读取**，导致
+``sample_limit=10`` 的导入实际仍拉全量（Human-1M preview 恒为 15 条）。
+规模因此不可控，与 ``docs/ddp/07`` §2「默认只做小样本」的语义相悖。
+
+现在按域模型既有语义执行：``SAMPLE`` 取解析后 Episode 序列的**前 N 个**
+（确定性、按元数据出现顺序，不做随机抽样，保证可复现）；``SPLIT`` / ``FULL``
+不截断。截断只作用于 Episode 条数，每个被选中 Episode 的**全部机位**都被完整导入，
+不会只取部分机位。
 """
 
 from __future__ import annotations
@@ -17,6 +28,7 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from app.application.audit import record_change
+from app.application.datasources.events import DATASOURCE_IMPORT_ACTION_EVENTS
 from app.application.datasources.ports import (
     AuditRepository,
     DataSourceImportRepository,
@@ -26,7 +38,7 @@ from app.application.datasources.ports import (
     OutboxRepository,
     UnitOfWork,
 )
-from app.domain.datasources.enums import ImportStatus
+from app.domain.datasources.enums import ImportScope, ImportStatus
 from app.domain.datasources.errors import DomainValidationError
 from app.domain.datasources.media import MediaAsset
 from app.domain.datasources.models import DataSourceImport
@@ -64,6 +76,33 @@ class ImportOutcome:
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def select_episodes(
+    episodes: tuple[object, ...],
+    *,
+    scope: ImportScope | str,
+    sample_limit: int | None,
+) -> tuple[object, ...]:
+    """按导入范围选取要真正下载的 Episode。
+
+    - ``SAMPLE``：取前 ``sample_limit`` 个（元数据顺序，确定性，可复现）。
+      ``sample_limit`` 超出实际条数时取全部，不报错——数据量本身可能少于预期，
+      这不是错误；真正的"空数据"由解析器先行拒绝。
+    - ``SPLIT`` / ``FULL``：不截断。
+
+    抽样单位是 **Episode**，不是视频文件：调用方随后会遍历每个 Episode 的
+    全部机位，因此不会出现"某条 episode 只导了一半机位"的残缺数据。
+    """
+    kind = ImportScope(scope)
+    if kind is not ImportScope.SAMPLE:
+        return episodes
+    if sample_limit is None:
+        # 域模型已保证 SAMPLE 必须有 limit；这里兜底失败而不是静默全量。
+        raise DomainValidationError("scope=SAMPLE 时必须给出 sample_limit")
+    if sample_limit < 1:
+        raise DomainValidationError("sample_limit 必须大于 0")
+    return episodes[:sample_limit]
 
 
 class ImportRunner:
@@ -121,7 +160,12 @@ class ImportRunner:
                 revision=source.revision,
                 path=PREVIEW_METADATA_PATH,
             )
-            episodes = parse_episodes(parse_metadata(meta.data))
+            parsed = parse_episodes(parse_metadata(meta.data))
+            episodes = select_episodes(
+                parsed,
+                scope=running.scope,
+                sample_limit=running.sample_limit,
+            )
 
             asset_count = 0
             for episode in episodes:
@@ -162,6 +206,8 @@ class ImportRunner:
                     total_bytes += fetched.size_bytes
                     asset_count += 1
 
+            # row_count 记录**实际导入**的 episode 数（抽样后），
+            # 与 imported_file_count（资产数）口径一致，避免"报告 15 实际 10"。
             self._advance(
                 scope,
                 running,
@@ -215,7 +261,7 @@ class ImportRunner:
             reason=None,
             request_id=None,
             details={"row_count": row_count, "file_count": file_count},
-            event_type=f"datasource.import.{action}",
+            event_type=DATASOURCE_IMPORT_ACTION_EVENTS[action],
             event_payload={
                 "import_id": str(saved.import_id),
                 "data_source_id": str(saved.data_source_id),

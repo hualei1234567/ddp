@@ -25,8 +25,8 @@ from app.domain.devices.enums import (
     CalibrationTargetType,
 )
 from app.domain.devices.errors import (
+    CalibrationActiveConflictError,
     DomainValidationError,
-    DuplicateResourceError,
     InvalidStateTransitionError,
     ResourceImmutableError,
     ResourceNotFoundError,
@@ -293,7 +293,12 @@ def _record_insert_values(record: CalibrationRecord, *, actor_id: UUID) -> dict[
 
 
 def _draft_editable_values(record: CalibrationRecord, *, actor_id: UUID) -> dict[str, object]:
-    """DRAFT 的编辑白名单；绝不包含 status、校验审计与 supersedes_id。"""
+    """DRAFT 的编辑白名单；绝不包含 status、校验审计与 supersedes_id。
+
+    ``calibration_version`` 与 Profile 快照三字段**必须**在这里：缺了它们，
+    ``update_calibration`` 无论把业务修订号算成多少，落库都写不进去，
+    版本号会永远停在 1（G-04），换 profile 后快照也会与 ``profile_id`` 脱节（G-05）。
+    """
     return {
         "profile_id": record.profile_id,
         "scope": enum_value(record.scope),
@@ -310,6 +315,10 @@ def _draft_editable_values(record: CalibrationRecord, *, actor_id: UUID) -> dict
         "source": record.source,
         "checksum": record.checksum,
         "uncertainty": dict(record.uncertainty),
+        "calibration_version": record.calibration_version,
+        "profile_version": record.profile_version,
+        "profile_schema_version": record.profile_schema_version,
+        "profile_snapshot": dict(record.profile_snapshot),
         "updated_by": actor_id,
     }
 
@@ -775,8 +784,18 @@ class SqlCalibrationRecordRepository:
                     self._supersede_active(scope, old_active_id, expected_version)
                 self._activate_current(scope, activated, old_active_id, expected_version)
         except IntegrityError as exc:
+            # 契约 §8.6：同目标已有 ACTIVE **且无法原子替代** 才是
+            # ``calibration_active_conflict``。能替代的情形在上面 savepoint 内
+            # 正常完成，走不到这里；到这里说明并发让我们没能把旧 ACTIVE
+            # 转成 SUPERSEDED，被部分唯一索引挡住——这是冲突，不是业务键重复。
             if is_unique_violation(exc):
-                raise DuplicateResourceError("同一标定目标已存在 ACTIVE 记录") from exc
+                raise CalibrationActiveConflictError(
+                    "同一标定目标已有 ACTIVE 记录，且无法原子替代",
+                    details={
+                        "target_type": enum_value(current.target_type),
+                        "calibration_type": enum_value(current.calibration_type),
+                    },
+                ) from exc
             raise
 
         return replace(

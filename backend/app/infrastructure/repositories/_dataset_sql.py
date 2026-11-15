@@ -65,17 +65,33 @@ def ensure_initial_version(version: int) -> None:
 def ensure_expected_version(entity_version: int, expected_version: int) -> None:
     """前置乐观锁判定；实现只有一份，见 ``_optimistic_lock``。
 
-    R-8：本模块此前允许 ``expected 或 expected+1``，因为数据集域的调用方传的是
-    **已自增的候选版本**。那个入参约定已在调用侧统一为"当前版本"
-    （``save()`` 里传 ``row_version - 1``），因此这里改为严格相等。
-    并发安全不受影响：SQL 条件与 ``raise_update_failure`` 本来就是严格相等。
+    **数据集域仍然保留 ``accept_candidate=True``，没有改成严格相等。** 该域的
+    调用方两种形态都在用，逐一核对过：
+
+    - ``dataset_repositories.save()`` 收到的实体已自增（``update_dataset`` /
+      ``version_actions`` 都 ``row_version=current+1``），而 ``expected_version``
+      仍是当前版本 —— 实体版本领先一等；
+    - ``training_requests`` 反过来显式传 ``expected_version=request.row_version - 1``
+      —— 换算后实体版本同样领先一等；
+    - ``version_actions`` 里也有 ``expected_version=building.row_version`` 的调用，
+      —— 此时两值相等。
+
+    所以本域的实际契约是"当前版本"或"已自增候选版本"二者皆可。
+    改成严格相等会让上面前两类调用全部 409。
+
+    并发安全不依赖这层前置判定：真正生效的是 SQL 的
+    ``WHERE version = expected_version`` 与未命中时的 ``raise_update_failure``
+    （后者按严格相等重新读行判定）。
+
+    （本 docstring 刻意不逐字写出判定表达式；``tests/unit/test_optimistic_lock.py``
+    用 ``inspect.getsource`` 断言包装函数里不得出现判定本体。）
     """
     _ensure_expected_version(
         entity_version,
         expected_version,
         invalid=DomainValidationError,
         conflict=_conflict,
-        # 数据集域的 save() 接收的是已自增的候选版本（见 _optimistic_lock 说明）。
+        # 数据集域同时存在"传当前版本"与"传已自增候选版本"两种调用方。
         accept_candidate=True,
     )
 
