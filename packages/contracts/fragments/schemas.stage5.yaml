@@ -139,6 +139,15 @@ ModelArtifact:
       - SAFETENSORS
       - TENSORRT
       - OTHER
+    # 运行时真实返回该字段（前端 apps/web/src/types/modelops.ts 也读取），
+    # 此前契约漏列。additionalProperties: false 下必须显式声明，
+    # 否则严格客户端会因未知字段拒绝整个响应。
+    # 取值见 domain/modelops/enums.py::ArtifactVerification。
+    verification_status:
+      type: string
+      enum:
+      - UNVERIFIED
+      - VERIFIED
 ModelRuntime:
   type: object
   required:
