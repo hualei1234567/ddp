@@ -89,6 +89,23 @@ describe("质量管理导航", () => {
   });
 });
 
+describe("经营分析导航", () => {
+  // 历史缺陷同类回归：N9 配额与用量端点早已就绪，导航却写成 available:false，
+  // 「经营分析」在菜单里是永远点不动的禁用项。这里钉住可用性与路由声明。
+  it("经营分析可用，并归属平台治理分区", () => {
+    const match = findNavItem("/analytics");
+    expect(match?.item.path).toBe("/analytics");
+    expect(match?.item.available).toBe(true);
+    expect(match?.section.key).toBe("governance");
+  });
+
+  it("经营分析路由在路由表里声明", async () => {
+    const { default: source } = await import("../routes.tsx?raw");
+    expect(source).toContain(`path="analytics"`);
+    expect(source).toContain("AnalyticsPage");
+  });
+});
+
 describe("导航路径可达性", () => {
   // 真实缺陷回归守卫：此前有一个完整实现的页面（数据需求，370 行、接
   // modelOpsApi）在菜单里被写成 available:false 且路径指向根本不存在的

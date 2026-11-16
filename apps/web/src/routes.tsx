@@ -20,6 +20,7 @@ import AnnotationTaskCreatePage from "./pages/annotation/AnnotationTaskCreatePag
 import AnnotationTaskDetailPage from "./pages/annotation/AnnotationTaskDetailPage";
 import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
 import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
+import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import AuditLogListPage from "./pages/audit/AuditLogListPage";
 import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPage";
 import CollectionAssetDetailPage from "./pages/collectionAssets/AssetDetailPage";
@@ -323,6 +324,11 @@ export default function AppRoutes() {
         />
         <Route path="acceptance-ledger" element={<LedgerPage />} />
         <Route path="audit-logs" element={<AuditLogListPage />} />
+        {/*
+          经营分析（N9 配额与用量）：单一页面，无子路由。
+          用量报表与配额共用 /analytics，避免菜单里出现两个近义入口。
+        */}
+        <Route path="analytics" element={<AnalyticsPage />} />
         {plannedRoutes.map((item) => (
           <Route
             key={item.path}
