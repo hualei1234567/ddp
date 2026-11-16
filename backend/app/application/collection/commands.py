@@ -1,4 +1,4 @@
-"""采集任务/批次应用层命令。"""
+"""采集任务/批次与素材应用层命令。"""
 
 from __future__ import annotations
 
@@ -34,3 +34,43 @@ class NewCollectionBatch:
     assigned_to: UUID | None = None
     scheduled_start: datetime | None = None
     scheduled_end: datetime | None = None
+
+
+# --- COL-002 素材命令 -------------------------------------------------------
+# 四类素材的创建命令字段刻意保持"扁平 + 可选"，与既有 ``NewCollectionTask`` 一致；
+# 状态由用例填 ``DRAFT``，不接受客户端传 status（服务端权威字段）。
+
+
+@dataclass(frozen=True, slots=True)
+class NewCollectionPlan:
+    code: str
+    name: str
+    plan_version: int = 1
+    description: str | None = None
+    owner_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewCollectionSop:
+    code: str
+    name: str
+    sop_version: str
+    steps: tuple[dict[str, object], ...] = ()
+    description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewScenario:
+    code: str
+    name: str
+    scene_labels: tuple[str, ...] = ()
+    description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NewActionSpec:
+    code: str
+    name: str
+    spec_version: str
+    actions: tuple[dict[str, object], ...] = ()
+    description: str | None = None

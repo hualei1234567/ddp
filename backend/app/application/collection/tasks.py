@@ -7,6 +7,7 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from app.application.collection.asset_references import assert_task_asset_references
 from app.application.collection.audit import record_change
 from app.application.collection.commands import NewCollectionTask
 from app.application.collection.idempotency import IdempotencyGuard, validate_key
@@ -19,6 +20,7 @@ from app.application.collection.pagination import (
 from app.application.collection.ports import (
     AssignmentDirectory,
     AuditRepository,
+    CollectionAssetDirectory,
     CollectionBatchRepository,
     CollectionTaskRepository,
     IdempotencyRepository,
@@ -82,10 +84,13 @@ class CollectionTaskUseCases:
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        *,
+        asset_directory: CollectionAssetDirectory,
     ) -> None:
         self._tasks = tasks
         self._batches = batches
         self._directory = directory
+        self._asset_directory = asset_directory
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
@@ -139,6 +144,19 @@ class CollectionTaskUseCases:
         )
         if replay is not None:
             return self._replay(scope, replay.response_ref)
+
+        # COL-002：四个素材引用必须同项目存在且版本一致。放在构造实体之前，
+        # 让 404/422 先于"外键 IntegrityError"出现，客户端能按 code 分支。
+        assert_task_asset_references(
+            self._asset_directory,
+            scope,
+            plan_id=command.plan_id,
+            sop_id=command.sop_id,
+            sop_version=command.sop_version,
+            scenario_id=command.scenario_id,
+            action_spec_id=command.action_spec_id,
+            action_spec_version=command.action_spec_version,
+        )
 
         task = CollectionTask(
             task_id=uuid4(),
@@ -216,6 +234,21 @@ class CollectionTaskUseCases:
             raise VersionConflictError("采集任务")
         if current.status is not CollectionTaskStatus.DRAFT:
             raise ResourceImmutableError("仅 DRAFT 任务允许修改核心字段")
+
+        # ``sop_version`` 是可改字段，但改完仍必须是"所引用素材那一行的版本"。
+        # 复用创建时的同一份校验，避免 PATCH 成为绕过版本一致性的后门
+        # （否则可以把 v1 改成不存在的 v9）。其余三个引用不可经 PATCH 修改。
+        if "sop_version" in changes:
+            assert_task_asset_references(
+                self._asset_directory,
+                scope,
+                plan_id=current.plan_id,
+                sop_id=current.sop_id,
+                sop_version=changes["sop_version"],  # type: ignore[arg-type]
+                scenario_id=current.scenario_id,
+                action_spec_id=current.action_spec_id,
+                action_spec_version=current.action_spec_version,
+            )
 
         now = _utcnow()
         updated = replace(
