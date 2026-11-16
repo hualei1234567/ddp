@@ -33,6 +33,7 @@ from app.application.episodes.ports import (
     LineageRepository,
     UnitOfWork,
 )
+from app.application.episodes.segmentation import validate_segmentation_rule
 from app.application.ingestion.ports import IngestionJobRepository, RawAssetRepository
 from app.domain.collection.errors import DomainValidationError as PaginationValidationError
 from app.domain.episodes.enums import EpisodeStatus, LineageNodeType, LineageRelation
@@ -45,6 +46,10 @@ from app.domain.episodes.errors import (
 )
 from app.domain.episodes.lineage import LineageEdge, validate_supersedes_linear
 from app.domain.episodes.models import Episode, EpisodeRawAsset
+from app.domain.episodes.segmentation_rules import (
+    SegmentationRuleRegistry,
+    build_segmentation_rule_registry,
+)
 from app.domain.episodes.validation import build_manifest_key
 from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.enums import RawAssetStatus
@@ -88,6 +93,7 @@ class EpisodeService:
         uow: UnitOfWork,
         *,
         idempotency: IdempotencyRepository | None = None,
+        segmentation_rules: SegmentationRuleRegistry | None = None,
     ) -> None:
         self._episodes = episodes
         self._episode_assets = episode_assets
@@ -98,6 +104,13 @@ class EpisodeService:
         self._outbox = outbox
         self._uow = uow
         self._guard = IdempotencyGuard(idempotency) if idempotency is not None else None
+        # 切片规则注册表：只校验 ``method=RULE`` 的版本与参数（见
+        # ``application/episodes/segmentation.py`` 的说明）。默认装配内置规则；
+        # 传 ``None`` 才回退到内置集合——显式传入的空注册表必须原样使用
+        # （用 ``or`` 会把空表悄悄换成内置表，掩盖装配错误）。
+        self._segmentation_rules = (
+            build_segmentation_rule_registry() if segmentation_rules is None else segmentation_rules
+        )
         # 幂等重放标记供 API 设置响应头；服务实例按请求装配，不跨请求共享。
         self.last_replayed = False
 
@@ -119,6 +132,11 @@ class EpisodeService:
         if replay is not None:
             self.last_replayed = True
             return self._load(scope, _uuid_ref(replay.response_ref, "Episode"))
+
+        # N3：仅规则切片要求已注册版本 + 参数合规（人工切片不要求，见
+        # application/episodes/segmentation.py）。放在幂等重放之后：重放的结果
+        # 不该因为规则集合变化而失败。
+        validate_segmentation_rule(command.segmentation, self._segmentation_rules)
 
         raw_asset_ids = _unique_uuids(command.raw_asset_ids)
         if not 1 <= len(raw_asset_ids) <= 64:
@@ -209,6 +227,10 @@ class EpisodeService:
             details={
                 "raw_asset_ids": [str(item) for item in raw_asset_ids],
                 "segmentation_rule_version": command.segmentation.rule_version,
+                # N3：审计里只记规则标识与参数，便于"这个 rule_version 当时是什么
+                # 规则、用什么参数跑的"回溯；规则体本身由注册表版本化。
+                "segmentation_method": command.segmentation.method.value,
+                "segmentation_rule_parameters": dict(command.segmentation.rule_parameters),
             },
             event_type="ingestion.episode.created",
             event_payload={
