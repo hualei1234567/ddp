@@ -32,6 +32,7 @@
 | [operations/备份与恢复演练记录-2026-11-14.md](operations/备份与恢复演练记录-2026-11-14.md) | 真实 PG 16 备份恢复演练：71 表 / 177 触发器一致；对象存储缺口如实登记 | 已执行 |
 | [operations/main-分支保护与评审纪律.md](operations/main-分支保护与评审纪律.md) | 私有仓无平台强制力时的替代方案与重新决策触发条件 | 现行 |
 | [operations/docker-compose-minio变更说明.md](operations/docker-compose-minio变更说明.md) | MinIO 镜像固定与卷路径变更的数据影响说明 | 现行 |
+| [operations/Prometheus指标抓取与metrics访问控制.md](operations/Prometheus指标抓取与metrics访问控制.md) | `/metrics` 静态 Bearer 令牌 + 来源网段白名单、未配置时的失败关闭口径、抓取配置示例与排查表 | 现行 |
 
 > ⚠️ 本文件下方「阶段 0 交付」一节为 2026-11-08 的历史记录，其中「当前工程为空」
 > 等表述已过期；**当前事实以 `05-现状审计报告-2026-11-14.md` 为准**。
