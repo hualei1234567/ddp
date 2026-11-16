@@ -1,8 +1,8 @@
 """经营治理 API DTO（N9 规模化运营）。
 
-响应字段是本轮**新增端点**的对外形状；契约文件
-``packages/contracts/openapi.yaml`` 尚未声明这些路径（按任务要求不改契约），
-精确清单见交付报告，待 System Architect 走契约变更流程。
+响应字段是本轮**新增端点**的对外形状；契约已在
+``packages/contracts/openapi.yaml`` 声明（`/quotas`、`/quotas/{resource_kind}`、
+`/usage-report`，以及 `fragments/schemas.governance.yaml` 里的 7 个 schema）。
 
 `used` / `limit` / `remaining` / `exceeded` 一律允许 ``null``：
 ``used=null`` 表示"未测量"，不是 0；``limit=null`` 表示"未配置上限"。

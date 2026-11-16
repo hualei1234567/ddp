@@ -193,8 +193,15 @@
 
 ## 当前阶段
 
-阶段 0–5 已完成实现与本地真实 PostgreSQL 验收（staging 部署 `BLOCKED`）；
-阶段 6 供应商与到货验收已实现并本地验收通过。
+阶段 0–6（V1.0）与 N0–N9（V2.0）均已实现并本地验收（staging 部署 `BLOCKED`）。
+逐阶段状态、真实缺口与验收证据见
+`docs/roadmap/next-stage-v2/audit/N0-N9-项目最终报告-2026-11-17.md`。
+
+已知缺口（不得当作已具备）：
+- N8 真实机器人设备格式端到端验证 —— `BLOCKED`（无硬件）；
+- 血缘图缺 `DATA_SOURCE` 节点、Episode 级自动质检、经营成本核算 —— `MISSING`；
+- 导航里 `/processing`、`/assets`、`/operations`、`/settings` —— `PLANNED`
+  （后端无对应能力，占位页如实标注「服务端能力尚未实现」）。
 
 阶段边界：
 - 当前以个人开发、测试与技术验证为主；优先验证真实数据接入、解析、样本审看、

@@ -46,7 +46,14 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const PLATFORM_STAGE_LABEL = "阶段 7 · 数据平面";
+/**
+ * 顶部阶段标签的**静态兜底**。
+ *
+ * 真实阶段以服务端 `/platform/meta` 的 `phase` 为准（工作台展示的是它）。
+ * 这里只在下拉菜单这类拿不到异步数据的静态位置使用，因此必须与当前
+ * 服务端默认值保持一致；服务端改阶段时这里要同步。
+ */
+export const PLATFORM_STAGE_LABEL = "阶段 8 · 规模化运营";
 
 /**
  * 一级导航分区，依据规范 §18.2。
@@ -238,11 +245,15 @@ export const navSections: NavSection[] = [
     label: "平台治理",
     items: [
       {
+        // N9 配额与用量报表：后端 `GET /usage-report`、`GET /quotas`、
+        // `PUT /quotas/{kind}` 已就绪且契约已收录；此前菜单是禁用项，
+        // 用户永远到不了「用多少、剩多少、超没超」。
         path: "/analytics",
         label: "经营分析",
-        description: "查看运营指标、产能与成本分析。",
+        description:
+          "项目级资源用量与配额对照：已用 / 上限 / 剩余 / 状态 / 统计截止时间；未测量与 0 严格区分。",
         icon: createElement(BarChartOutlined),
-        available: false,
+        available: true,
       },
       {
         // 平台一直在写 audit_logs，这里补上唯一的读入口：谁在什么时候
