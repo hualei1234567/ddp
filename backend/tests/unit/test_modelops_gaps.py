@@ -167,6 +167,43 @@ def test_unknown_when_neither_measured_nor_manual() -> None:
     assert item.suggested_episode_count == 0
 
 
+def test_measured_dimension_without_feedback_still_appears() -> None:
+    """实测到但零反馈：必须出现在结果里，而不是被丢成空数组。"""
+    items = aggregate_gaps(
+        [],
+        {},
+        measured_coverage=[
+            MeasuredCoverage("SCENE", "industrial_workspace", count=3, measured_at=NOW),
+            MeasuredCoverage("ROBOT", "r-01", count=2, measured_at=NOW),
+        ],
+    )
+    by_value = _by_value(items)
+    assert set(by_value) == {"industrial_workspace", "r-01"}
+    scene = by_value["industrial_workspace"]
+    assert scene.open_feedback_count == 0
+    assert scene.current_count == 3
+    assert scene.target_count is None
+    # 目标未知时建议补采为 0：不臆测缺口。
+    assert scene.suggested_episode_count == 0
+    assert scene.coverage_source == CoverageSource.MEASURED.value
+    assert scene.requirement_ids == ()
+
+
+def test_port_only_axis_never_becomes_gap_item() -> None:
+    """QUALITY_STATUS 只服务统计端口，不得凭空造出缺口条目。"""
+    items = aggregate_gaps(
+        [],
+        {},
+        measured_coverage=[MeasuredCoverage("QUALITY_STATUS", "PASS", count=3, measured_at=NOW)],
+    )
+    assert items == []
+
+
+def test_nothing_measured_and_no_feedback_yields_no_items() -> None:
+    """测不到又没有反馈：不出现（不凭空造维度）。"""
+    assert aggregate_gaps([], {}, measured_coverage=[]) == []
+
+
 def test_coverage_dimension_accepts_quality_status() -> None:
     """覆盖维度比反馈维度多一个 QUALITY_STATUS，且不能被误当成非法值。"""
     entry = MeasuredCoverage(
@@ -244,8 +281,8 @@ def test_freshness_uses_oldest_measured_dimension() -> None:
     assert summary.freshness == GapFreshness.STALE.value
 
 
-def test_freshness_ignores_unrelated_dimensions() -> None:
-    """未参与本次聚合的维度再陈旧，也不影响结果。"""
+def test_freshness_includes_measured_only_dimensions() -> None:
+    """实测到但零反馈的维度也会展示，其陈旧必须让整体新鲜度降级。"""
     measured = [
         MeasuredCoverage("SCENE", "kitchen", 1, NOW - timedelta(minutes=5)),
         MeasuredCoverage("ROBOT", "r-99", 1, NOW - timedelta(days=30)),
@@ -255,8 +292,9 @@ def test_freshness_ignores_unrelated_dimensions() -> None:
         {},
         measured_coverage=measured,
     )
+    assert {item.dimension_value for item in items} == {"kitchen", "r-99"}
     summary = build_gap_summary(items, measured_coverage=measured, now=NOW, stale_after=STALE_AFTER)
-    assert summary.freshness == GapFreshness.FRESH.value
+    assert summary.freshness == GapFreshness.STALE.value
 
 
 @pytest.mark.parametrize(
@@ -318,8 +356,8 @@ def test_freshness_unknown_when_any_participating_dimension_lacks_timestamp() ->
     assert {item.coverage_source for item in summary.items} == {CoverageSource.MEASURED.value}
 
 
-def test_freshness_ignores_missing_timestamp_on_unrelated_dimension() -> None:
-    """未参与本次聚合的维度缺时间戳，不影响本次结论。"""
+def test_freshness_unknown_when_measured_only_dimension_lacks_timestamp() -> None:
+    """实测到但零反馈的维度缺时间戳时，同样不得报 FRESH。"""
     measured = [
         MeasuredCoverage("SCENE", "kitchen", 1, NOW - timedelta(minutes=5)),
         MeasuredCoverage("ROBOT", "r-99", 1, None),
@@ -329,5 +367,21 @@ def test_freshness_ignores_missing_timestamp_on_unrelated_dimension() -> None:
         {},
         measured_coverage=measured,
     )
+    summary = build_gap_summary(items, measured_coverage=measured, now=NOW, stale_after=STALE_AFTER)
+    assert summary.freshness == GapFreshness.UNKNOWN.value
+
+
+def test_freshness_ignores_port_only_dimensions() -> None:
+    """QUALITY_STATUS 不进缺口条目，因此也不参与新鲜度判断。"""
+    measured = [
+        MeasuredCoverage("SCENE", "kitchen", 1, NOW - timedelta(minutes=5)),
+        MeasuredCoverage("QUALITY_STATUS", "PASS", 1, NOW - timedelta(days=30)),
+    ]
+    items = aggregate_gaps(
+        [_feedback(GapDimension("SCENE", "kitchen", None, 5))],
+        {},
+        measured_coverage=measured,
+    )
+    assert {item.dimension_type for item in items} == {"SCENE"}
     summary = build_gap_summary(items, measured_coverage=measured, now=NOW, stale_after=STALE_AFTER)
     assert summary.freshness == GapFreshness.FRESH.value

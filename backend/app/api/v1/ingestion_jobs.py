@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response
 
 from app.api.deps import get_project_scope, get_write_scope
+from app.api.v1.governance_dependencies import EnforceIngestionJobCreateQuota
 from app.api.v1.ingestion_job_dependencies import IngestionJobUseCasesDep
 from app.api.v1.ingestion_job_schemas import (
     IngestionJobActionRequest,
@@ -42,6 +43,7 @@ def create_ingestion_job(
     response: Response,
     scope: WriteScope,
     use_cases: IngestionJobUseCasesDep,
+    _quota_guard: EnforceIngestionJobCreateQuota,
     idempotency_key: IdempotencyKey,
 ) -> IngestionJobOut:
     job = use_cases.create(

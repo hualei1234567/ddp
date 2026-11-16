@@ -8,6 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query, Request
 
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.governance_dependencies import EnforceInferenceTaskCreateQuota
 from app.api.v1.modelops_dependencies import (
     ExpectedVersion,
     IdempotencyKey,
@@ -135,6 +136,7 @@ def create_task(
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
+    _quota_guard: EnforceInferenceTaskCreateQuota,
     idempotency_key: IdempotencyKey = None,
 ) -> InferenceTaskOut:
     task = services.tasks.create(

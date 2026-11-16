@@ -121,6 +121,7 @@ _EVENT_DOMAINS = frozenset(
         "datasource",
         "dedup_policy",
         "device",
+        "governance",
         "ingestion",
         "leakage_policy",
         "location",

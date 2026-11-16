@@ -461,8 +461,10 @@ submissionQualityChecks:
       每次都产生一个新的 run（结论只追加、不改写）。`passed` 是三态：
       `true` 合规、`false` 违规、`null` 表示该规则对这条记录**没有结论**
       （缺 Episode 边界、任务未配阈值）。客户端不得把 `null` 渲染成"通过"。
-    parameters:
-      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+
+      **刻意不支持 `Idempotency-Key`**：每次执行都会新增一条 run 记录，
+      这是审计事实，重放一条已存在的 run 反而会掩盖"又跑了一次"。
+      需要「已检查过」的判断请查 `GET .../quality-checks` 历史，而不是靠幂等键。
     responses:
       "201":
         description: 本次检查结果

@@ -1,5 +1,7 @@
 import {
+  ApartmentOutlined,
   AppstoreOutlined,
+  AuditOutlined,
   BarChartOutlined,
   CloudUploadOutlined,
   ClusterOutlined,
@@ -11,6 +13,7 @@ import {
   FolderOpenOutlined,
   HomeOutlined,
   PartitionOutlined,
+  ReadOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
@@ -92,6 +95,16 @@ export const navSections: NavSection[] = [
         available: true,
       },
       {
+        // 阶段 8 的四类素材（方案 / SOP / 场景 / 动作库）此前后端已就绪、
+        // 前端零页面。入口独立于「数据采集」任务，避免把素材管理与现场作业
+        // 混在同一个列表里。
+        path: "/collection-assets",
+        label: "采集素材",
+        description: "管理采集方案、SOP、场景与动作库；状态动作以服务端返回为准。",
+        icon: createElement(ReadOutlined),
+        available: true,
+      },
+      {
         path: "/ingestion",
         label: "数据接入",
         description: "登记外部数据源（Hugging Face）并发起小样本导入。",
@@ -122,11 +135,14 @@ export const navSections: NavSection[] = [
         aliases: ["/annotation"],
       },
       {
+        // 后端 N4 质量能力（黄金集 / 抽检 / IAA / 提交质量检查）早已就绪，
+        // 此前导航写成 available:false，用户永远进不到这些页面。
         path: "/quality",
         label: "质量管理",
-        description: "执行质检规则、抽检与质量门禁。",
+        description:
+          "金标准集（黄金集）、质检抽检、IAA 报告与提交质量检查；无结论不等于通过。",
         icon: createElement(SafetyCertificateOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/assets",
@@ -185,10 +201,19 @@ export const navSections: NavSection[] = [
         available: true,
       },
       {
+        // 阶段 9 的场地实体（基地 / 房间 / 实验室）已实现，单独成为可到达
+        // 的菜单项；「基地运营」里的排期与现场运营仍是规划能力，保持占位。
+        path: "/locations",
+        label: "场地管理",
+        description: "管理基地、房间与实验室场地实体；被设备与采集任务引用。",
+        icon: createElement(EnvironmentOutlined),
+        available: true,
+      },
+      {
         path: "/operations",
         label: "基地运营",
-        description: "管理场地、排期、现场运营与任务执行情况。",
-        icon: createElement(EnvironmentOutlined),
+        description: "管理采集排期、现场运营与任务执行情况。",
+        icon: createElement(ApartmentOutlined),
         available: false,
       },
       {
@@ -218,6 +243,15 @@ export const navSections: NavSection[] = [
         description: "查看运营指标、产能与成本分析。",
         icon: createElement(BarChartOutlined),
         available: false,
+      },
+      {
+        // 平台一直在写 audit_logs，这里补上唯一的读入口：谁在什么时候
+        // 对什么资源做了什么。只读且仅项目负责人/平台管理员可看。
+        path: "/audit-logs",
+        label: "审计日志",
+        description: "按资源、动作、时间与结果追溯全项目的操作留痕。",
+        icon: createElement(AuditOutlined),
+        available: true,
       },
       {
         path: "/settings",

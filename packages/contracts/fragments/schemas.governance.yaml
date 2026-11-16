@@ -1,0 +1,103 @@
+# N9 规模化运营：配额与用量报表 schema。
+# 长度/取值上限取自 backend/app/domain/governance/（唯一权威实现）。
+
+ResourceKind:
+  type: string
+  enum:
+    - OBJECT_STORAGE_BYTES
+    - EPISODES
+    - DATASET_VERSIONS
+    - INGESTION_JOBS
+    - INFERENCE_TASKS
+  description: |
+    可计量的项目级核心资源。`OBJECT_STORAGE_BYTES` 的来源是
+    `raw_assets.size_bytes` 的权威落库值（不是 MinIO 实际对象列目录）；
+    其余四项是真实表计数。
+
+QuotaStatus:
+  type: string
+  enum: [UNMEASURED, UNLIMITED, OK, AT_LIMIT, OVER_LIMIT]
+  description: |
+    - `UNMEASURED`：尚无可用统计。**不是 `OK`**，客户端不得渲染为「正常」；
+    - `UNLIMITED`：未配置上限；
+    - `OK` / `AT_LIMIT` / `OVER_LIMIT`：已测量且已配置上限时的三档。
+
+Quota:
+  type: object
+  required: [quota_id, project_id, resource_kind, limit, version, created_at, updated_at, created_by, updated_by]
+  properties:
+    quota_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    resource_kind: { $ref: "../openapi.yaml#/components/schemas/ResourceKind" }
+    limit:
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9223372036854775807
+    version: { type: integer, minimum: 1 }
+    created_at: { type: [string, "null"], format: date-time }
+    updated_at: { type: [string, "null"], format: date-time }
+    created_by: { type: [string, "null"], format: uuid }
+    updated_by: { type: [string, "null"], format: uuid }
+
+QuotaList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/Quota" }
+
+QuotaSet:
+  type: object
+  additionalProperties: false
+  required: [limit]
+  properties:
+    limit:
+      type: integer
+      format: int64
+      minimum: 0
+      maximum: 9223372036854775807
+      description: 新的上限。`0` 是合法值（禁止任何新增），与「未配置」不同。
+
+UsageEntry:
+  type: object
+  required: [resource_kind, used, limit, remaining, exceeded, status, measurement_source, measured_at]
+  properties:
+    resource_kind: { $ref: "../openapi.yaml#/components/schemas/ResourceKind" }
+    used:
+      type: [integer, "null"]
+      format: int64
+      description: |
+        已用量。`null` 表示**尚无可用统计**，不是 0。
+        真实测到 0 才返回 0——两者在界面上必须区分。
+    limit:
+      type: [integer, "null"]
+      format: int64
+      description: 上限。`null` 表示未配置上限（`status=UNLIMITED`）。
+    remaining:
+      type: [integer, "null"]
+      format: int64
+      description: 剩余量；超限时截断为 0。`null` 表示无法计算。
+    exceeded:
+      type: [boolean, "null"]
+      description: 是否已超限。`null` 表示无法判断（未测量或未配置上限）。
+    status: { $ref: "../openapi.yaml#/components/schemas/QuotaStatus" }
+    measurement_source:
+      type: [string, "null"]
+      description: 权威来源标识（例如所取的表名或聚合口径）。
+    measured_at:
+      type: [string, "null"]
+      format: date-time
+      description: 统计截止时间（UTC）。`null` 表示该条目无测量时间。
+
+UsageReport:
+  type: object
+  required: [project_id, generated_at, entries]
+  properties:
+    project_id: { type: string, format: uuid }
+    generated_at: { type: string, format: date-time }
+    entries:
+      type: array
+      description: 固定 5 条，顺序为 `ResourceKind` 声明顺序。
+      items: { $ref: "../openapi.yaml#/components/schemas/UsageEntry" }

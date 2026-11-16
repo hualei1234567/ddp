@@ -47,18 +47,13 @@ class ApiIds:
     outsider: UUID
 
 
-@pytest.fixture()
-def api_db() -> Iterator[tuple[sessionmaker[Session], ApiIds]]:
-    engine = create_db_engine(
-        "sqlite+pysqlite:///:memory:",
-        pool_size=1,
-        max_overflow=0,
-        pool_timeout_seconds=5,
-        connect_timeout_seconds=5,
-    )
-    Base.metadata.create_all(engine)
-    factory = create_session_factory(engine)
+def seed_identity(factory: sessionmaker[Session]) -> ApiIds:
+    """写入两个项目、四个用户与成员关系；返回固定 ID 集合。
 
+    抽成公开函数是为了让 ``tests/e2e`` 复用同一套身份基线：端到端链路如果
+    自己再拼一份"项目 + 成员"，两边一旦分叉（角色或成员资格不同），隔离与
+    权限结论就不可比。
+    """
     project_a, project_b = uuid4(), uuid4()
     editor_a, owner_a, viewer_a, outsider = uuid4(), uuid4(), uuid4(), uuid4()
     ids = ApiIds(project_a, project_b, editor_a, owner_a, viewer_a, outsider)
@@ -100,6 +95,21 @@ def api_db() -> Iterator[tuple[sessionmaker[Session], ApiIds]]:
             ]
         )
         session.commit()
+    return ids
+
+
+@pytest.fixture()
+def api_db() -> Iterator[tuple[sessionmaker[Session], ApiIds]]:
+    engine = create_db_engine(
+        "sqlite+pysqlite:///:memory:",
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout_seconds=5,
+        connect_timeout_seconds=5,
+    )
+    Base.metadata.create_all(engine)
+    factory = create_session_factory(engine)
+    ids = seed_identity(factory)
 
     try:
         yield factory, ids

@@ -36,6 +36,7 @@ from app.api.v1.dataset_schemas import (
     quality_out,
     version_out,
 )
+from app.api.v1.governance_dependencies import EnforceDatasetVersionCreateQuota
 from app.api.v1.lineage_schemas import LineageEdgeOut, LineageResponse
 from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import DatasetReadScope, DatasetVersionReadScope
@@ -98,6 +99,7 @@ def create_version(
     request: Request,
     scope: WriteScope,
     use_cases: DatasetUseCasesDep,
+    _quota_guard: EnforceDatasetVersionCreateQuota,
     idempotency_key: IdempotencyKey = None,
 ) -> dict[str, Any]:
     version = use_cases.versions.create(

@@ -1,11 +1,12 @@
-import { ReloadOutlined } from "@ant-design/icons";
+import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Grid, Select, Space, Table, Tag, Typography } from "antd";
 import type { TableColumnsType } from "antd";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
+import GoldSetCreateModal from "../../components/quality/GoldSetCreateModal";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
@@ -97,6 +98,7 @@ function GoldSetListContent({
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const [searchParams] = useSearchParams();
+  const [createOpen, setCreateOpen] = useState(false);
   const load = useCallback(
     (options: CursorPageRequestOptions) =>
       annotationApi.listGoldSets(projectId, {
@@ -128,9 +130,11 @@ function GoldSetListContent({
       params.delete("status");
     }
     const query = params.toString();
+    // 本页即列表页自身，筛选只改查询串；其余跳转（详情 / 返回列表）统一走
+    // `services/annotationUrl` 的 builder，路径不会在多处各写一份。
     navigate(
       {
-        pathname: "/annotation/gold-sets",
+        pathname: "/quality/gold-sets",
         search: query ? `?${query}` : "",
       },
       { replace: true },
@@ -158,9 +162,18 @@ function GoldSetListContent({
         </Space>
       }
       extra={
-        <Button icon={<ReloadOutlined />} loading={refreshing} onClick={reload}>
-          刷新
-        </Button>
+        <Space wrap>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateOpen(true)}
+          >
+            新建黄金集
+          </Button>
+          <Button icon={<ReloadOutlined />} loading={refreshing} onClick={reload}>
+            刷新
+          </Button>
+        </Space>
       }
     >
       {phase === "forbidden" && error ? (
@@ -173,7 +186,7 @@ function GoldSetListContent({
         <PageState
           variant="empty"
           title="暂无黄金集"
-          description="当前项目或筛选条件下没有黄金集。"
+          description="当前项目或筛选条件下没有黄金集。黄金集需要期望答案，创建后初始状态为 DRAFT，启用前不会注入给标注员。"
         />
       ) : (
         <Space direction="vertical" size={12} className="ddp-stack">
@@ -204,6 +217,12 @@ function GoldSetListContent({
           />
         </Space>
       )}
+      <GoldSetCreateModal
+        projectId={projectId}
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={reload}
+      />
     </PageContainer>
   );
 }

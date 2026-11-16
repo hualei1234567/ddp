@@ -25,7 +25,7 @@ QualityFinding:
 
 QualityCheckRun:
   type: object
-  required: [run_id, project_id, submission_id, rule_set_version, status, error_count, warn_count, created_at, created_by, updated_at, updated_by, findings, finished_at, started_at]
+  required: [run_id, project_id, submission_id, rule_set_version, status, error_count, warn_count, created_at, created_by, findings, finished_at, started_at]
   properties:
     run_id: { type: string, format: uuid }
     project_id: { type: string, format: uuid }

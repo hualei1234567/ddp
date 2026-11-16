@@ -92,29 +92,39 @@ export const buildAnnotationSampleSetDetailPath = (
     projectId,
   );
 
+/*
+ * 质量资源的页面挂在 `/quality/*`（导航「质量管理」）：
+ * 黄金集、质检抽检、IAA 报告与提交质量检查同属质量模块，与标注作业
+ * （任务 / 工作台 / 复核 / 仲裁）分开。旧的 `/annotation/*` 路径在
+ * `routes.tsx` 里保留重定向，历史书签不会 404。
+ */
+
+export const buildQualityOverviewPath = (projectId: string) =>
+  withProject("/quality", projectId);
+
 export const buildAnnotationGoldSetListPath = (projectId: string) =>
-  withProject("/annotation/gold-sets", projectId);
+  withProject("/quality/gold-sets", projectId);
 
 export const buildAnnotationGoldSetDetailPath = (
   projectId: string,
   goldSetId: string,
 ) =>
   withProject(
-    `/annotation/gold-sets/${encodeURIComponent(goldSetId)}`,
+    `/quality/gold-sets/${encodeURIComponent(goldSetId)}`,
     projectId,
   );
 
 export const buildAnnotationIAAListPath = (
   projectId: string,
   taskId?: string,
-) => withProject("/annotation/iaa-reports", projectId, { task_id: taskId });
+) => withProject("/quality/iaa-reports", projectId, { task_id: taskId });
 
 export const buildAnnotationIAADetailPath = (
   projectId: string,
   reportId: string,
 ) =>
   withProject(
-    `/annotation/iaa-reports/${encodeURIComponent(reportId)}`,
+    `/quality/iaa-reports/${encodeURIComponent(reportId)}`,
     projectId,
   );
 
@@ -122,7 +132,7 @@ export const buildAnnotationQualityListPath = (
   projectId: string,
   taskId?: string,
 ) =>
-  withProject("/annotation/quality-samples", projectId, {
+  withProject("/quality/quality-samples", projectId, {
     task_id: taskId,
   });
 
@@ -131,14 +141,31 @@ export const buildAnnotationQualityDetailPath = (
   qualitySampleId: string,
 ) =>
   withProject(
-    `/annotation/quality-samples/${encodeURIComponent(qualitySampleId)}`,
+    `/quality/quality-samples/${encodeURIComponent(qualitySampleId)}`,
     projectId,
   );
+
+/** 提交质量检查页：需要 submission_id 才能查历史与重跑。 */
+export const buildQualityCheckPath = (
+  projectId: string,
+  submissionId?: string,
+) =>
+  withProject("/quality/quality-checks", projectId, {
+    submission_id: submissionId,
+  });
+
+/** 从路由查询参数读取任意 ID；空字符串视为未选择。 */
+export function readIdQuery(
+  searchParams: URLSearchParams,
+  key: string,
+): string | null {
+  const value = searchParams.get(key)?.trim() ?? "";
+  return value === "" ? null : value;
+}
 
 /** 从路由查询参数读取任务 ID；空字符串视为未选择。 */
 export function readTaskIdQuery(
   searchParams: URLSearchParams,
 ): string | null {
-  const value = searchParams.get("task_id")?.trim() ?? "";
-  return value === "" ? null : value;
+  return readIdQuery(searchParams, "task_id");
 }

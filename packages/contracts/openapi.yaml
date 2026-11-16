@@ -672,6 +672,18 @@ paths:
     $ref: "./fragments/paths.stage9.yaml#/locations"
   /api/v1/projects/{project_id}/locations/{location_id}:
     $ref: "./fragments/paths.stage9.yaml#/locationDetail"
+  # --- N9 规模化运营：资源配额与用量 ---
+  /api/v1/projects/{project_id}/quotas:
+    $ref: "./fragments/paths.governance.yaml#/quotas"
+  /api/v1/projects/{project_id}/quotas/{resource_kind}:
+    $ref: "./fragments/paths.governance.yaml#/quotaDetail"
+  /api/v1/projects/{project_id}/usage-report:
+    $ref: "./fragments/paths.governance.yaml#/usageReport"
+  # --- 审计日志只读查询（owner / 平台管理员）---
+  /api/v1/projects/{project_id}/audit-logs:
+    $ref: "./fragments/paths.audit.yaml#/auditLogs"
+  /api/v1/projects/{project_id}/audit-logs/{resource_type}/{resource_id}:
+    $ref: "./fragments/paths.audit.yaml#/auditLogResourceTimeline"
 components:
   securitySchemes:
     bearerAuth:
@@ -789,6 +801,11 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    ResourceKind:
+      name: resource_kind
+      in: path
+      required: true
+      schema: { $ref: "./fragments/schemas.governance.yaml#/ResourceKind" }
   responses:
     Unauthorized: {$ref: "./fragments/components.yaml#/responses/Unauthorized"}
     Forbidden: {$ref: "./fragments/components.yaml#/responses/Forbidden"}
@@ -1137,6 +1154,16 @@ components:
     LocationCreate: {$ref: "./fragments/schemas.locations.yaml#/LocationCreate"}
     LocationPatch: {$ref: "./fragments/schemas.locations.yaml#/LocationPatch"}
     LocationPage: {$ref: "./fragments/schemas.locations.yaml#/LocationPage"}
+    ResourceKind: {$ref: "./fragments/schemas.governance.yaml#/ResourceKind"}
+    QuotaStatus: {$ref: "./fragments/schemas.governance.yaml#/QuotaStatus"}
+    Quota: {$ref: "./fragments/schemas.governance.yaml#/Quota"}
+    QuotaList: {$ref: "./fragments/schemas.governance.yaml#/QuotaList"}
+    QuotaSet: {$ref: "./fragments/schemas.governance.yaml#/QuotaSet"}
+    UsageEntry: {$ref: "./fragments/schemas.governance.yaml#/UsageEntry"}
+    UsageReport: {$ref: "./fragments/schemas.governance.yaml#/UsageReport"}
+    AuditResult: {$ref: "./fragments/schemas.audit.yaml#/AuditResult"}
+    AuditLog: {$ref: "./fragments/schemas.audit.yaml#/AuditLog"}
+    AuditLogPage: {$ref: "./fragments/schemas.audit.yaml#/AuditLogPage"}
     QualityFinding: {$ref: "./fragments/schemas.stage9.yaml#/QualityFinding"}
     QualityCheckRun: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRun"}
     QualityCheckRunPage: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRunPage"}
