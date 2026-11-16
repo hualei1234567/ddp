@@ -19,6 +19,7 @@ from app.application.idempotency import (
 from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
+from app.domain.annotation.ai_suggestion import AiSuggestion
 from app.domain.annotation.arbitration import AnnotationArbitration
 from app.domain.annotation.assignment import AnnotationAssignment
 from app.domain.annotation.batch import AnnotationBatch
@@ -488,6 +489,8 @@ class AnnotationRecordRepository(Protocol):
         records: tuple[AnnotationRecord, ...],
     ) -> None: ...
 
+    def get(self, scope: ProjectScope, annotation_id: UUID) -> AnnotationRecord | None: ...
+
     def list_for_submission(
         self,
         scope: ProjectScope,
@@ -509,6 +512,38 @@ class AnnotationRecordRepository(Protocol):
         *,
         expected_version: int,
     ) -> AnnotationRecord: ...
+
+
+class AnnotationAiSuggestionRepository(Protocol):
+    """AI 预标注建议仓储；与标注记录物理分离，项目隔离由 ``ProjectScope`` 强制。"""
+
+    def add_many(
+        self,
+        scope: ProjectScope,
+        suggestions: tuple[AiSuggestion, ...],
+    ) -> None: ...
+
+    def get(self, scope: ProjectScope, suggestion_id: UUID) -> AiSuggestion | None: ...
+
+    def list_for_annotation(
+        self,
+        scope: ProjectScope,
+        annotation_id: UUID,
+    ) -> list[AiSuggestion]: ...
+
+    def list_for_submission(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+    ) -> list[AiSuggestion]: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        suggestion: AiSuggestion,
+        *,
+        expected_version: int,
+    ) -> AiSuggestion: ...
 
 
 class AnnotationReviewRepository(Protocol):

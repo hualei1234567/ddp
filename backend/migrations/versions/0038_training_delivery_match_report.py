@@ -61,7 +61,7 @@ from app.infrastructure.db.training_guards import (
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "0038"
-down_revision = "0035"
+down_revision = "0036"
 branch_labels = None
 depends_on = None
 

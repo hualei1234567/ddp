@@ -79,6 +79,19 @@ class NewAnnotationSubmission:
 
 
 @dataclass(frozen=True, slots=True)
+class NewAiSuggestions:
+    """一批 AI 预标注建议。
+
+    ``suggestions`` 保持通用映射：每个元素由应用层统一转成
+    :class:`app.domain.annotation.ai_suggestion.AiSuggestion`，校验规则不在这
+    一层重复。``generated_at`` 缺省由用例补当前时刻（模型侧时间可选：
+    批量回放历史模型输出时常拿不到原始时间）。
+    """
+
+    suggestions: tuple[Mapping[str, object], ...]
+
+
+@dataclass(frozen=True, slots=True)
 class NewAnnotationReview:
     submission_id: UUID
     reviewer_id: UUID
