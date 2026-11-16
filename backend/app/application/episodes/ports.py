@@ -7,6 +7,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.domain.episodes.enums import EpisodeStatus, LineageNodeType
+from app.domain.episodes.filters import EpisodeListFilters
 from app.domain.episodes.lineage import LineageEdge, LineageNodeRef
 from app.domain.episodes.models import Episode, EpisodeRawAsset
 from app.domain.identity.models import ProjectScope
@@ -38,6 +39,7 @@ class EpisodeRepository(Protocol):
         status: EpisodeStatus | None = None,
         task_id: UUID | None = None,
         batch_id: UUID | None = None,
+        filters: EpisodeListFilters | None = None,
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Episode]: ...

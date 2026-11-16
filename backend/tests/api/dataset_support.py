@@ -346,8 +346,8 @@ def seed_dataset_episodes(
                     time_domain="UTC",
                     time_base={
                         "time_domain": "UTC",
-                        "clock_source": "host",
-                        "sync_method": "ptp",
+                        "clock_source": "HOST_CLOCK",
+                        "sync_method": "PTP",
                         "sync_status": "VERIFIED",
                     },
                     canonical_schema_version="ddp.canonical/1.0.0-draft",
@@ -355,7 +355,18 @@ def seed_dataset_episodes(
                     pipeline_version="1.0.0",
                     segmentation_rule_version="seg-v1",
                     frame_count=10,
-                    calibration_snapshot=[{"calibration_id": str(uuid4()), "status": "ACTIVE"}],
+                    # 字段必须与 ``validate_calibration_snapshot`` 的契约一致：
+                    # 直接落库也按合法形态构造，避免测试数据本身不合规。
+                    calibration_snapshot=[
+                        {
+                            "calibration_id": str(uuid4()),
+                            "calibration_version": 1,
+                            "checksum": SCHEMA_SHA,
+                            "target_type": "ROBOT",
+                            "target_id": str(uuid4()),
+                            "schema_version": "ddp.calibration/1.0.0",
+                        }
+                    ],
                     manifest_key=f"canonical/{project_id}/{episode_id}/1/manifest.json",
                     manifest_sha256=manifest_sha,
                     preview_refs=[],

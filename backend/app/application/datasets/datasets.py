@@ -65,14 +65,17 @@ class DatasetUseCases:
         status: str | None = None,
         purpose: str | None = None,
         usage_policy: str | None = None,
+        tags: tuple[str, ...] = (),
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Dataset]:
+        """列出数据集；``tags`` 语义为"任一命中"，由仓储在 SQL 层下推。"""
         return self._datasets.list(
             scope,
             status=status,
             purpose=purpose,
             usage_policy=usage_policy,
+            tags=tags,
             after_id=after_id,
             limit=limit,
         )

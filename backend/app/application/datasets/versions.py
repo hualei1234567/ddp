@@ -13,6 +13,7 @@ from app.application.datasets.commands import (
     PreviewSelection,
 )
 from app.application.datasets.idempotency import IdempotencyGuard, validate_key
+from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.ports import (
     AuditRepository,
     DatasetItemRepository,
@@ -63,6 +64,7 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        lineage: DatasetVersionLineageRecorder | None = None,
     ) -> None:
         self._datasets = datasets
         self._versions = versions
@@ -74,6 +76,10 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        # 版本转 READY 时写 Episode → DatasetVersion 的 INCLUDED_IN 边。
+        # 允许为 None 是为了保持既有纯读/纯策略用例的构造签名兼容；
+        # 生产装配一定注入，见 ``api/v1/dataset_dependencies.py``。
+        self._lineage = lineage
 
     # ---- 读取 ----
     def get_dataset(self, scope: ProjectScope, dataset_id: UUID) -> Dataset:

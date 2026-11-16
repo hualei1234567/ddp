@@ -59,14 +59,21 @@ def list_datasets(
     status: str | None = None,
     purpose: str | None = None,
     usage_policy: str | None = None,
+    tag: Annotated[list[str] | None, Query(max_length=20)] = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> dict[str, Any]:
+    """数据集分页列表。
+
+    ``tag`` 可重复传参（``?tag=manipulation&tag=indoor``），语义为"任一命中"，
+    条件由仓储下推为 SQL；``datasets.tags`` 此前只写不查，这里补齐检索入口。
+    """
     items = use_cases.datasets.list(
         scope,
         status=status,
         purpose=purpose,
         usage_policy=usage_policy,
+        tags=tuple(tag) if tag else (),
         after_id=decode_cursor(cursor),
         limit=fetch_limit(limit),
     )

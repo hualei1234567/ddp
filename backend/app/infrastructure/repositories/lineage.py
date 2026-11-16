@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
@@ -11,7 +12,11 @@ from sqlalchemy.orm import Session
 
 from app.domain.episodes.enums import LineageNodeType, LineageRelation
 from app.domain.episodes.errors import ConflictError, DomainValidationError, LineageConflictError
-from app.domain.episodes.lineage import LineageEdge, LineageNodeRef
+from app.domain.episodes.lineage import (
+    LineageEdge,
+    LineageNodeRef,
+    validate_supersedes_linear,
+)
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.episodes import DataLineageEdgeModel, LineageNodeRefModel
 from app.infrastructure.repositories._collection_sql import as_utc
@@ -175,6 +180,72 @@ class SqlLineageRepository:
             )
         )
         return row is not None
+
+    def ensure_edge(
+        self,
+        scope: ProjectScope,
+        *,
+        from_node_type: LineageNodeType | str,
+        from_node_id: UUID,
+        to_node_type: LineageNodeType | str,
+        to_node_id: UUID,
+        relation: LineageRelation | str,
+        metadata: Mapping[str, object],
+        now: datetime,
+    ) -> bool:
+        """幂等追加一条边：已存在返回 ``False``，本次新建返回 ``True``。
+
+        与 :meth:`ensure_node` 同构——先查后写，写冲突时回读确认：
+        并发登记同一条边由唯一约束兜底，冲突后若边确实存在即视为幂等成功；
+        不存在说明是跨项目/成环等真冲突，按原异常上抛，不吞。
+        """
+        try:
+            types = (
+                LineageNodeType(from_node_type),
+                LineageNodeType(to_node_type),
+                LineageRelation(relation),
+            )
+        except (TypeError, ValueError) as exc:
+            raise DomainValidationError("血缘边端点或关系取值非法") from exc
+        from_type, to_type, relation_value = types
+        if self.exists_edge(
+            scope,
+            from_node_type=from_type,
+            from_node_id=from_node_id,
+            to_node_type=to_type,
+            to_node_id=to_node_id,
+            relation=relation_value,
+        ):
+            return False
+        edge = LineageEdge(
+            edge_id=uuid4(),
+            project_id=scope.project_id,
+            from_node_type=from_type,
+            from_node_id=from_node_id,
+            to_node_type=to_type,
+            to_node_id=to_node_id,
+            relation=relation_value,
+            metadata=dict(metadata),
+            created_by=scope.actor_id,
+            created_at=now,
+        )
+        if relation_value is LineageRelation.SUPERSEDES:
+            validate_supersedes_linear(self.list_supersedes_edges(scope), edge)
+        try:
+            self.add_edge(scope, edge)
+        except LineageConflictError:
+            # 并发写入同一条边：唯一约束命中。回读确认后才算幂等成功。
+            if self.exists_edge(
+                scope,
+                from_node_type=from_type,
+                from_node_id=from_node_id,
+                to_node_type=to_type,
+                to_node_id=to_node_id,
+                relation=relation_value,
+            ):
+                return False
+            raise
+        return True
 
     def list_supersedes_edges(self, scope: ProjectScope) -> list[LineageEdge]:
         rows = self._session.scalars(
