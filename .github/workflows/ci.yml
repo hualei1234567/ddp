@@ -106,18 +106,30 @@ jobs:
       - name: 真实后端设备契约快照
         run: npm --prefix apps/web run contract:check
       - name: OpenAPI lint（Redocly）
+        env:
+          # DDP-214：锁定到具体版本。`@redocly/cli@1` 是主版本范围，1.x 每次
+          # 发布都会漂移——lint 规则集随之变化，同一份契约可能今天绿、明天红。
+          REDOCLY_VERSION: "1.34.24"
         run: |
-          npx --yes @redocly/cli@1 lint \
+          npx --yes "@redocly/cli@${REDOCLY_VERSION}" lint \
             packages/contracts/openapi.yaml \
             --config packages/contracts/redocly.yaml
       - name: 安装 Go
         uses: actions/setup-go@v5
         with:
-          # TODO(DDP-214 后续)：锁定 Go 与 oasdiff 版本，避免 @latest 供应链漂移。
-          go-version: "stable"
+          # DDP-214：锁定版本，不用 "stable"（会随上游漂移，同一提交在不同
+          # 时间跑可能行为不同）。go1.27.4 是最新稳定版，满足 oasdiff
+          # v1.38.0 声明的 go 1.26.0 / toolchain go1.27.2 要求。
+          go-version: "1.27.4"
       - name: 安装 oasdiff
+        env:
+          # DDP-214：锁定版本。此前用 @latest——2026-11-16 的 main CI 就因此
+          # 在"安装 oasdiff"这一步偶发失败（同一份代码 PR 上却是绿的），
+          # 破坏性兼容性 diff 与冻结基线校验随之全部被跳过。
+          # 升级时必须显式改这里，并确认 changelog 无破坏性变更。
+          OASDIFF_VERSION: "v1.38.0"
         run: |
-          go install github.com/oasdiff/oasdiff@latest
+          go install "github.com/oasdiff/oasdiff@${OASDIFF_VERSION}"
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: 破坏性兼容性 diff
         env:
