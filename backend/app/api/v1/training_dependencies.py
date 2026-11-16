@@ -39,6 +39,7 @@ from app.application.datasets.training_requests import TrainingRequestUseCases
 from app.application.identity.access import ProjectAccessService
 from app.core.errors import ForbiddenError
 from app.domain.datasets.errors import DatasetAccessDeniedError
+from app.domain.datasets.requirement_match import MatchPolicy
 from app.domain.datasets.training_enums import GrantScope
 from app.domain.identity.models import Principal, ProjectAction, ProjectScope
 from app.infrastructure.repositories.dataset_audit import (
@@ -63,6 +64,9 @@ from app.infrastructure.repositories.training_grant_repositories import (
 from app.infrastructure.repositories.training_request_repositories import (
     SqlTrainingRequestRepository,
     SqlTrainingRequestRevisionRepository,
+)
+from app.infrastructure.repositories.version_fact_directory import (
+    SqlVersionFactDirectory,
 )
 from app.infrastructure.training_adapters import ConfiguredTrainingAdapterGateway
 
@@ -124,6 +128,12 @@ def get_training_services(
             idempotency=idempotency,
             uow=session,
             chunk_size_bytes=settings.export_artifact_chunk_size_bytes,
+            fact_directory=SqlVersionFactDirectory(session),
+            match_policy=MatchPolicy(
+                on_failed=settings.training_delivery_match_on_failed,
+                on_unverifiable=settings.training_delivery_match_on_unverifiable,
+                split_ratio_tolerance=(settings.training_delivery_match_split_ratio_tolerance),
+            ),
         ),
         references=ExternalTrainingReferenceUseCases(
             deliveries=deliveries_repo,

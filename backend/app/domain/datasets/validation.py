@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from uuid import UUID
 
-from app.domain.datasets.canonical import validate_sha256
+from app.domain.datasets.canonical import canonical_json, plain, validate_sha256
 from app.domain.datasets.errors import DomainValidationError
+
+# JSON 载荷上限：防止把不受控大对象写进 JSON 列。报告类载荷远小于此值。
+JSON_PAYLOAD_MAX_BYTES = 64 * 1024
 
 
 def text_value(value: object, field_name: str, *, max_length: int) -> str:
@@ -110,3 +114,25 @@ def coerce_enum(value: object, enum_type: type, field_name: str):
         return value if isinstance(value, enum_type) else enum_type(value)
     except ValueError as exc:
         raise DomainValidationError(f"{field_name} 取值非法") from exc
+
+
+def optional_payload(value: object, field_name: str) -> dict[str, object] | None:
+    """校验可选 JSON 对象载荷：必须是 Mapping、可规范化且不超过上限。
+
+    ``None`` 保留"未记录"语义，不得被折叠成 ``{}``——两者的含义不同
+    （未核对 vs 核对无内容）。
+    """
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise DomainValidationError(f"{field_name} 必须是对象")
+    normalized = plain(dict(value))
+    if not isinstance(normalized, dict):
+        raise DomainValidationError(f"{field_name} 必须是对象")
+    try:
+        encoded = canonical_json(normalized)
+    except TypeError as exc:
+        raise DomainValidationError(f"{field_name} 必须是可规范化 JSON") from exc
+    if len(encoded.encode("utf-8")) > JSON_PAYLOAD_MAX_BYTES:
+        raise DomainValidationError(f"{field_name} 超过最大长度 {JSON_PAYLOAD_MAX_BYTES} 字节")
+    return normalized

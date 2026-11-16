@@ -24,6 +24,7 @@ from app.application.datasets.training_ports import (
     TrainingRequestRepository,
     TrainingRequestRevisionRepository,
 )
+from app.application.datasets.version_facts import VersionFactDirectory
 from app.domain.datasets.canonical import sha256_text
 from app.domain.datasets.enums import (
     DatasetStatus,
@@ -41,11 +42,18 @@ from app.domain.datasets.errors import (
     VersionConflictError,
 )
 from app.domain.datasets.models import DatasetVersion
+from app.domain.datasets.requirement_match import (
+    MatchPolicy,
+    MatchReport,
+    VersionFacts,
+    evaluate_requirement_match,
+)
 from app.domain.datasets.training_deliveries import TrainingDelivery, new_training_delivery
 from app.domain.datasets.training_enums import RevisionStatus, TrainingRequestStatus
 from app.domain.datasets.training_errors import (
     TrainingDeliveryMismatchError,
     TrainingDeliveryNotReadyError,
+    TrainingDeliveryRequirementUnmetError,
     TrainingRequestNotApprovedError,
 )
 from app.domain.datasets.training_state_machines import (
@@ -74,6 +82,12 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _enum_text(value: object) -> str | None:
+    if value is None:
+        return None
+    return value.value if hasattr(value, "value") else str(value)
+
+
 class TrainingDeliveryUseCases:
     def __init__(
         self,
@@ -90,6 +104,8 @@ class TrainingDeliveryUseCases:
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
         chunk_size_bytes: int,
+        fact_directory: VersionFactDirectory,
+        match_policy: MatchPolicy,
     ) -> None:
         self._requests = requests
         self._revisions = revisions
@@ -103,6 +119,8 @@ class TrainingDeliveryUseCases:
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
         self._chunk_size = chunk_size_bytes
+        self._facts = fact_directory
+        self._match_policy = match_policy
 
     def get(self, scope: ProjectScope, delivery_id: UUID) -> TrainingDelivery:
         delivery = self._deliveries.get(scope, delivery_id)
@@ -178,6 +196,8 @@ class TrainingDeliveryUseCases:
             TrainingRequestStatus.IN_DELIVERY,
         }:
             raise InvalidStateTransitionError("训练需求", request.status.value, "start-delivery")
+        match_report = self._evaluate_match(scope, version, job, revision.snapshot)
+        self._assert_match_allows_delivery(match_report)
         delivery = new_training_delivery(
             training_delivery_id=uuid4(),
             project_id=scope.project_id,
@@ -194,6 +214,7 @@ class TrainingDeliveryUseCases:
             item_count=item_count,
             split_counts=split_counts,
             quality_report_ref=version.quality_report_sha256,
+            requirement_match=match_report.to_payload(),
             actor_id=scope.actor_id,
             now=now,
         )
@@ -220,6 +241,14 @@ class TrainingDeliveryUseCases:
                 "dataset_version_id": str(created.dataset_version_id),
                 "export_job_id": str(created.export_job_id),
                 "delivery_note_no": created.delivery_note_no,
+                "requirement_match_status": match_report.status.value,
+                "requirement_match_blocked": match_report.blocked,
+                "requirement_match_failed_dimensions": [
+                    item.dimension.value for item in match_report.failed
+                ],
+                "requirement_match_unverifiable_dimensions": [
+                    item.dimension.value for item in match_report.unverifiable
+                ],
             },
             event_type="training.delivery.created",
             event_payload={
@@ -298,6 +327,7 @@ class TrainingDeliveryUseCases:
             if job is None:
                 raise ResourceNotFoundError("导出任务", delivery.export_job_id)
             self._verify_export(scope, version, job)
+            self._assert_recorded_match_still_valid(scope, delivery, version, job)
             updated = delivery.ready(now=now, actor_id=scope.actor_id)
         elif action_name == "deliver":
             updated = delivery.deliver(now=now, actor_id=scope.actor_id)
@@ -374,6 +404,109 @@ class TrainingDeliveryUseCases:
         return saved
 
     # ---- 校验 ----
+    def _evaluate_match(
+        self,
+        scope: ProjectScope,
+        version: DatasetVersion,
+        job: object,
+        snapshot: dict[str, object],
+    ) -> MatchReport:
+        """按需求快照与版本事实生成核对报告（确定性、无副作用）。"""
+        projection = self._facts.project(scope, version.dataset_version_id)
+        facts = VersionFacts(
+            selected_count=version.selected_count,
+            total_duration_ns=version.total_duration_ns,
+            split_counts={
+                "train": version.train_count,
+                "validation": version.validation_count,
+                "test": version.test_count,
+            },
+            scene_labels=projection.scene_labels,
+            annotation_labels=projection.annotation_labels,
+            annotation_schema_versions=frozenset(
+                (str(item.get("schema_id")), int(item.get("schema_version", 0)))
+                for item in version.annotation_schema_versions
+                if isinstance(item, dict) and isinstance(item.get("schema_version"), int)
+            ),
+            # 版本/产物尚未声明数据模态：显式传 None（UNVERIFIABLE），
+            # 不构造一个"看起来有值"的空集合。
+            quality_metrics=self._quality_metrics(scope, version),
+            format=_enum_text(getattr(job, "format", None)),
+            format_version=getattr(job, "format_version", None),
+        )
+        return evaluate_requirement_match(snapshot, facts, self._match_policy)
+
+    def _quality_metrics(
+        self,
+        scope: ProjectScope,
+        version: DatasetVersion,
+    ) -> dict[str, object] | None:
+        """质量事实不可得时返回 ``None``，让阈值维度判 UNVERIFIABLE。
+
+        当前版本上没有质量报告仓储可注入，因此只用版本自身已持久化的汇总
+        字段拼一份最小事实；拿不到的键保持缺省，由领域层逐键判 UNVERIFIABLE。
+        """
+        metrics: dict[str, object] = {"selected_count": version.selected_count}
+        if version.total_duration_ns is not None:
+            metrics["total_duration_ns"] = version.total_duration_ns
+        return metrics
+
+    def _assert_match_allows_delivery(self, report: MatchReport) -> None:
+        """按配置决定阻断还是仅告警；阻断时抛带逐维度详情的领域异常。"""
+        if not report.blocked:
+            return
+        raise TrainingDeliveryRequirementUnmetError(
+            "数据集版本未满足已批准需求",
+            details={
+                "status": report.status.value,
+                "on_failed": report.policy.on_failed.value,
+                "on_unverifiable": report.policy.on_unverifiable.value,
+                "blocking_dimensions": [
+                    {
+                        "dimension": item.dimension.value,
+                        "status": item.status.value,
+                        "expected": item.to_payload()["expected"],
+                        "actual": item.to_payload()["actual"],
+                        "detail": item.detail,
+                    }
+                    for item in report.blocking_dimensions
+                ],
+            },
+        )
+
+    def _assert_recorded_match_still_valid(
+        self,
+        scope: ProjectScope,
+        delivery: TrainingDelivery,
+        version: DatasetVersion,
+        job: object,
+    ) -> None:
+        """``ready`` 时按当前事实复核一次，并确认与创建时落库的报告一致。
+
+        版本或导出产物可能在创建交付后被归档/替换；用创建时冻结的快照重算，
+        若结论变化说明事实已漂移，直接拒绝而不是沿用旧结论。
+        """
+        recorded = delivery.requirement_match
+        if recorded is None:
+            # 该交付建立于核对能力上线之前：没有留证就无法断言"通过"。
+            raise TrainingDeliveryRequirementUnmetError(
+                "该交付没有需求核对记录，不能进入 READY",
+                details={"delivery_id": str(delivery.training_delivery_id), "recorded": False},
+            )
+        revision = self._revisions.get(scope, delivery.training_request_revision_id)
+        if revision is None:
+            raise ResourceNotFoundError("需求 revision", delivery.training_request_revision_id)
+        current = self._evaluate_match(scope, version, job, revision.snapshot)
+        if current.to_payload() != recorded:
+            raise TrainingDeliveryRequirementUnmetError(
+                "需求核对结论与创建交付时不一致，版本事实已漂移",
+                details={
+                    "recorded_status": recorded.get("status"),
+                    "current_status": current.status.value,
+                },
+            )
+        self._assert_match_allows_delivery(current)
+
     def _verify_export(
         self,
         scope: ProjectScope,

@@ -45,6 +45,16 @@ class TrainingDeliveryMismatchError(DatasetDomainError):
     code = "training_delivery_mismatch"
 
 
+class TrainingDeliveryRequirementUnmetError(DatasetDomainError):
+    """需求快照与数据集版本核对不通过（TRN-002）。
+
+    ``details`` 携带逐维度结论，便于交付方直接看出"差在哪个维度"；只含维度名、
+    期望值与版本实际值，均为请求方本已可见的对象属性。
+    """
+
+    code = "training_delivery_requirement_unmet"
+
+
 class TrainingAdapterUnavailableError(DatasetDomainError):
     code = "training_adapter_unavailable"
 

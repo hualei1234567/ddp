@@ -29,7 +29,7 @@ from app.domain.datasets.training_state_machines import (
     revision_transition_pairs,
 )
 
-_JSON_COLUMNS = frozenset({"snapshot", "split_counts", "scope"})
+_JSON_COLUMNS = frozenset({"snapshot", "split_counts", "scope", "requirement_match"})
 
 
 def _pairs_sql(

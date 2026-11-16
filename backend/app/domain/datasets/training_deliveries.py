@@ -26,6 +26,7 @@ from app.domain.datasets.validation import (
     coerce_enum,
     non_negative_int,
     optional_aware_datetime,
+    optional_payload,
     optional_sha256,
     optional_text,
     optional_uuid,
@@ -69,6 +70,10 @@ class TrainingDelivery:
     format: str = ExportFormat.LE_ROBOT.value
     format_version: str = "ddp.lerobot/1.0.0"
     quality_report_ref: str | None = None
+    # 需求匹配报告（TRN-002）：创建交付时按需求快照与版本事实生成，写入后不可变。
+    # 这里存的是 ``MatchReport.to_payload()`` 的稳定载荷；``is None`` 表示该交付
+    # 建立于核对能力上线之前，**不等于**核对通过。
+    requirement_match: dict[str, object] | None = None
     delivered_at: datetime | None = None
     accepted_by: UUID | None = None
     accepted_at: datetime | None = None
@@ -124,6 +129,11 @@ class TrainingDelivery:
             self,
             "quality_report_ref",
             optional_sha256(self.quality_report_ref, "quality_report_ref"),
+        )
+        object.__setattr__(
+            self,
+            "requirement_match",
+            optional_payload(self.requirement_match, "requirement_match"),
         )
         object.__setattr__(self, "item_count", non_negative_int(self.item_count, "item_count"))
         counts = _split_counts(self.split_counts)
@@ -306,6 +316,7 @@ class TrainingDelivery:
             and self.aggregate_sha256 == candidate.aggregate_sha256
             and self.item_count == candidate.item_count
             and self.split_counts == candidate.split_counts
+            and self.requirement_match == candidate.requirement_match
         )
 
 
@@ -326,6 +337,7 @@ def new_training_delivery(
     item_count: int,
     split_counts: dict[str, int],
     quality_report_ref: str | None,
+    requirement_match: dict[str, object] | None,
     actor_id: UUID,
     now: datetime,
 ) -> TrainingDelivery:
@@ -347,6 +359,7 @@ def new_training_delivery(
         item_count=item_count,
         split_counts=split_counts,
         quality_report_ref=quality_report_ref,
+        requirement_match=requirement_match,
         created_at=now,
         updated_at=now,
         created_by=actor_id,
