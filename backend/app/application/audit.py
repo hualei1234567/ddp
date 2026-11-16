@@ -1,4 +1,4 @@
-"""审计与事务性 outbox 编排的单一权威实现。
+"""审计与事务性 outbox 编排的单一权威实现（写入 + 只读查询）。
 
 审计与 outbox 必须与业务写入同事务：审计写入失败要让业务事务回滚
 （fail-closed），提交后再由投递器发送事件。
@@ -7,6 +7,11 @@
 annotation / modelops 各写了一份（R-10），第五个域（devices）再写就变成 5 份。
 各域文件 ``application/<domain>/audit.py`` 保留薄适配，``AuditRecord`` /
 ``OutboxEvent`` 类型由各域端口重新导出，调用点不变。
+
+只读侧（``AuditLogEntry`` / ``list_audit_logs``）也放在这里：平台此前一直在写
+``audit_logs``，却没有读入口，导致「数据可追溯」只有一半。读模型与写模型共用
+同一个领域过滤值对象 :class:`AuditQuery`，避免 API 层再拼一套过滤语义。
+查询本身只读、不写审计，也不提供任何修改或删除路径。
 """
 
 from __future__ import annotations
@@ -17,7 +22,14 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID, uuid4
 
+from app.domain.audit.errors import DomainValidationError
+from app.domain.audit.models import AuditQuery
 from app.domain.identity.models import ProjectScope
+
+#: 单页上限与既有各域列表一致（契约 §4.1）。
+MAX_QUERY_LIMIT = 100
+#: 仓储多取一条用于判断是否还有下一页。
+MAX_FETCH_LIMIT = MAX_QUERY_LIMIT + 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,4 +141,71 @@ def record_change(
             occurred_at=occurred_at,
             dispatch=dispatch,
         ),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class AuditLogEntry:
+    """一条已落库的审计留痕（只读投影）。
+
+    字段与 ``audit_logs`` 一一对应，但不含 ORM 行对象：API 层不持有 Session，
+    序列化也不会触发延迟加载。
+    """
+
+    audit_id: UUID
+    project_id: UUID
+    actor_user_id: UUID
+    actor_role: str | None
+    resource_type: str
+    resource_id: UUID
+    action: str
+    from_status: str | None
+    to_status: str | None
+    reason: str | None
+    request_id: str | None
+    result: str
+    correlation_id: str | None
+    details: Mapping[str, object]
+    occurred_at: datetime
+
+
+class AuditLogQueryRepository(Protocol):
+    """审计日志只读仓储。
+
+    实现必须把 ``project_id`` 与全部过滤条件下推为 SQL，并在
+    ``(occurred_at DESC, id DESC)`` 上做键集分页；``after_id`` 只承载
+    游标记录的 ID，排序值由仓储用子查询取出。
+    """
+
+    def list(
+        self,
+        scope: ProjectScope,
+        query: AuditQuery,
+        *,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[AuditLogEntry]: ...
+
+
+def list_audit_logs(
+    repository: AuditLogQueryRepository,
+    scope: ProjectScope,
+    query: AuditQuery,
+    *,
+    after_id: UUID | None = None,
+    limit: int = 20,
+) -> list[AuditLogEntry]:
+    """按项目作用域查询审计日志，按发生时间倒序返回一页。
+
+    ``limit`` 的边界规则只在这里校验一次；仓储只负责下推 SQL。
+    跨项目 ID 不需要特殊分支：作用域已硬绑 ``project_id``，别家项目的
+    记录根本不会被选中，调用方拿到的就是空结果（不泄露存在性）。
+    """
+    if limit < 1 or limit > MAX_FETCH_LIMIT:
+        raise DomainValidationError(f"limit 必须在 1 到 {MAX_FETCH_LIMIT} 之间")
+    return repository.list(
+        scope,
+        query,
+        after_id=after_id,
+        limit=limit,
     )

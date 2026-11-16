@@ -1,0 +1,58 @@
+# 审计日志 schema。
+# 对应 backend/app/api/v1/audit_log_schemas.py 与 audit_logs 表。
+
+AuditResult:
+  type: string
+  enum: [SUCCESS, FAILURE]
+  description: 与 `audit_logs.ck_audit_logs_result_allowed` 同源。
+
+AuditLog:
+  type: object
+  required:
+    - audit_id
+    - project_id
+    - actor_user_id
+    - actor_role
+    - resource_type
+    - resource_id
+    - action
+    - from_status
+    - to_status
+    - reason
+    - request_id
+    - result
+    - correlation_id
+    - details
+    - occurred_at
+  properties:
+    audit_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    actor_user_id: { type: string, format: uuid }
+    actor_role: { type: [string, "null"] }
+    resource_type: { type: string, minLength: 1, maxLength: 64 }
+    resource_id: { type: string, format: uuid }
+    action: { type: string, minLength: 1, maxLength: 64 }
+    from_status: { type: [string, "null"] }
+    to_status: { type: [string, "null"] }
+    reason: { type: [string, "null"], maxLength: 1000 }
+    request_id:
+      type: [string, "null"]
+      description: 与响应头 `X-Request-Id` 同值，可据此串起一次请求的全部记录。
+    result: { $ref: "../openapi.yaml#/components/schemas/AuditResult" }
+    correlation_id:
+      type: [string, "null"]
+      description: 跨资源的业务关联标识（例如一次导入产生的多条审计）。
+    details:
+      type: object
+      additionalProperties: true
+      description: 动作相关的事实快照；原样返回，不在契约层做字段约束。
+    occurred_at: { type: string, format: date-time }
+
+AuditLogPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/AuditLog" }
+    next_cursor: { type: [string, "null"] }

@@ -28,6 +28,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import AppError
 from app.domain.annotation.errors import AnnotationDomainError
+from app.domain.audit.errors import AuditDomainError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.datasets.errors import DatasetDomainError
 from app.domain.datasources.errors import DataSourceDomainError
@@ -169,6 +170,23 @@ def location_error_to_app(exc: LocationDomainError) -> AppError:
         status_by_code=_LOCATION_STATUS_BY_CODE,
         messages=_LOCATION_MESSAGES,
         fallback=_LOCATION_FALLBACK,
+    )
+
+
+# 审计查询域只有读路径，唯一错误码是分页/过滤参数非法。
+_AUDIT_STATUS_BY_CODE = {"validation_failed": 422}
+
+_AUDIT_MESSAGES = {"validation_failed": "审计查询参数或分页条件不合法"}
+
+_AUDIT_FALLBACK = "审计查询参数或分页条件不合法"
+
+
+def audit_error_to_app(exc: AuditDomainError) -> AppError:
+    return _mapped(
+        exc,
+        status_by_code=_AUDIT_STATUS_BY_CODE,
+        messages=_AUDIT_MESSAGES,
+        fallback=_AUDIT_FALLBACK,
     )
 
 

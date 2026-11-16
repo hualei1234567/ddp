@@ -22,6 +22,7 @@ from app.domain.identity.models import (
     Principal,
     ProjectAction,
     ProjectContext,
+    ProjectRole,
     ProjectScope,
 )
 from app.infrastructure.auth.jwt import TokenValidationError, decode_hs256_token
@@ -183,6 +184,20 @@ def get_delete_scope(
 ) -> ProjectScope:
     """删除作用域：仅 owner/平台管理员可通过。"""
     return _checked_scope(context, ProjectAction.DELETE)
+
+
+def get_owner_scope(
+    context: Annotated[ProjectContext, Depends(get_project_context)],
+) -> ProjectScope:
+    """项目负责人作用域：仅 owner 或平台管理员。
+
+    用于治理类读取（审计日志）与高风险动作（数据集归档/恢复、授权）。
+    动作粒度不够用：``DELETE`` 在语义上是删除，``MANAGE_MEMBERS`` 是成员管理，
+    都不能准确表达"可以读治理数据"，因此这里按项目角色显式判定，默认拒绝。
+    """
+    if not context.is_platform_admin and context.role is not ProjectRole.OWNER:
+        raise ForbiddenError("该动作要求项目负责人权限")
+    return ProjectScope.from_context(context)
 
 
 def get_scope(action: ProjectAction) -> Callable[..., ProjectScope]:
