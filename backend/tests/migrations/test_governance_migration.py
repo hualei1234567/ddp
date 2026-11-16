@@ -1,4 +1,4 @@
-"""迁移测试：0043 建立 ``resource_quotas`` 与 ``usage_snapshots``。
+"""迁移测试：0048 建立 ``resource_quotas`` 与 ``usage_snapshots``。
 
 覆盖：
 
@@ -27,7 +27,7 @@ from sqlalchemy.exc import IntegrityError
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 MIGRATION_FILE = (
-    BACKEND_DIR / "migrations" / "versions" / "0043_resource_quotas_and_usage_snapshots.py"
+    BACKEND_DIR / "migrations" / "versions" / "0048_resource_quotas_and_usage_snapshots.py"
 )
 _POSTGRES_URL = os.environ.get("DDP_TEST_POSTGRES_URL", "")
 
@@ -260,7 +260,7 @@ def test_downgrade_removes_tables_and_reupgrade_succeeds(tmp_path: Path) -> None
     config = _config(db_path)
     command.upgrade(config, "head")
 
-    command.downgrade(config, "0042")
+    command.downgrade(config, "0043")
     engine = _raw_engine(db_path)
     try:
         tables = set(inspect(engine).get_table_names())
@@ -340,7 +340,7 @@ def test_migration_roundtrip_on_postgresql() -> None:
                         {"id": uuid4(), "project": project_id, "user": user_id},
                     )
 
-            command.downgrade(config, "0042")
+            command.downgrade(config, "0043")
             assert "resource_quotas" not in set(inspect(engine).get_table_names())
             command.upgrade(config, "head")
             assert "resource_quotas" in set(inspect(engine).get_table_names())

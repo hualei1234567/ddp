@@ -1,7 +1,7 @@
 """N9 规模化运营：建立项目资源配额与用量快照两张表
 
-Revision ID: 0043
-Revises: 0042
+Revision ID: 0048
+Revises: 0043
 Create Date: 2026-11-17
 
 问题（审计结论）
@@ -50,8 +50,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0043"
-down_revision = "0042"
+revision = "0048"
+down_revision = "0043"
 branch_labels = None
 depends_on = None
 
