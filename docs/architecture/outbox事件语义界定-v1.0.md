@@ -52,6 +52,7 @@
 | `ingestion.raw_asset.validation_requested` | `workers/outbox.py` | ✅ 已实现 |
 | `dataset.export.requested` | `workers/exports.py` | ✅ 已实现 |
 | `datasource.import_requested` | `workers/datasources.py` | ✅ 已实现 |
+| `ingestion.job.created` | `workers/ingestion_jobs.py` | ✅ 已实现（2026-11-16 由留痕类改为投递类） |
 
 投递类清单的唯一权威是 `scripts/check_outbox_events.py` 的 `DISPATCH_EVENTS`：
 它同时被 CI 与 `make check` 校验，声明与实现不一致会直接失败。

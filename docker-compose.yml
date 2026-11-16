@@ -140,6 +140,26 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  ingestion-job-worker:
+    # 接入任务执行 Worker：消费 ingestion.job.created（投递类）。
+    #
+    # 此前该类事件是**留痕类**，于是 IngestionJob 有完整的状态机、重试与超时
+    # 字段、7 个 API 动作，却没有任何进程去执行——任务建完永远停在 QUEUED。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-ingestion-job-worker
+    command: ["python", "-m", "app.workers.ingestion_jobs"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+      DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   export-worker:
     # 导出 Job 常驻 Worker：消费 dataset.export.requested 事件并写入对象存储。
     profiles: ["app"]
