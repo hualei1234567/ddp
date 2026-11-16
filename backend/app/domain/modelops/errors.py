@@ -2,9 +2,28 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 
 class ModelOpsDomainError(ValueError):
+    """阶段 5 领域异常基类。
+
+    ``details`` 是**可在安全前提下回显给客户端**的结构化排障信息（例如跨数据集
+    对比里两个数据集版本的标识与不可比原因）。是否透传由 API 层按 code 白名单
+    决定（见 ``app/api/errors.py`` 的 ``details_codes``），领域层只负责如实携带，
+    不判断安全性——与数据集域、设备域的口径一致。
+    """
+
     code = "validation_failed"
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        details: Mapping[str, object] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.details: Mapping[str, object] | None = details
 
 
 class DomainValidationError(ModelOpsDomainError):
@@ -90,6 +109,26 @@ class EvaluationMetricsInvalidError(ModelOpsDomainError):
 
 class EvaluationBaselineInvalidError(ModelOpsDomainError):
     code = "evaluation_baseline_invalid"
+
+
+class EvaluationCrossDatasetNotDeclaredError(ModelOpsDomainError):
+    """跨数据集版本对比未显式声明。
+
+    独立 code 而不是复用 ``evaluation_baseline_invalid``：客户端需要区分
+    "基线引用了非法对象"（换基线）与"跨数据集要显式声明"（补一个字段重试），
+    两者的修复动作完全不同。
+    """
+
+    code = "evaluation_cross_dataset_not_declared"
+
+
+class EvaluationNotComparableError(ModelOpsDomainError):
+    """已声明跨数据集，但两次评测的任务语义不一致或无法判定。
+
+    不把"无法判定"并进"可比"，否则等于用"没检查"冒充"检查通过"。
+    """
+
+    code = "evaluation_not_comparable"
 
 
 class InferenceServiceUnavailableError(ModelOpsDomainError):

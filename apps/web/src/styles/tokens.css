@@ -315,6 +315,17 @@ body {
   box-shadow: var(--ddp-shadow-card);
 }
 
+/* ---------- 表格 ---------- */
+
+/*
+ * 质量检查历史里被选中查看的那次 run。
+ * antd Table 没有「单选行」形态，用类名补一层背景，让"下方详情对应哪一行"
+ * 可被看见；颜色取自设计令牌，不引入新色值。
+ */
+.ddp-row-selected > td {
+  background: var(--ddp-color-bg) !important;
+}
+
 /* ---------- 页面状态 ---------- */
 
 .ddp-state {

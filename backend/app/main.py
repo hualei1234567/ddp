@@ -21,6 +21,7 @@ from app.api.errors import (
     datasource_error_to_app,
     domain_error_to_app,
     episode_error_to_app,
+    governance_error_to_app,
     ingestion_error_to_app,
     integrity_error_to_app,
     location_error_to_app,
@@ -43,6 +44,7 @@ from app.domain.datasets.errors import DatasetDomainError
 from app.domain.datasources.errors import DataSourceDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
+from app.domain.governance.errors import GovernanceDomainError
 from app.domain.identity.errors import CrossProjectAccessError
 from app.domain.ingestion.errors import IngestionDomainError
 from app.domain.locations.errors import LocationDomainError
@@ -266,6 +268,18 @@ def create_app() -> FastAPI:
         exc: LocationDomainError,
     ) -> JSONResponse:
         error = location_error_to_app(exc)
+        _log_domain_error(request, exc, error)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(GovernanceDomainError)
+    async def handle_governance_domain_error(
+        request: Request,
+        exc: GovernanceDomainError,
+    ) -> JSONResponse:
+        error = governance_error_to_app(exc)
         _log_domain_error(request, exc, error)
         return JSONResponse(
             status_code=error.status_code,

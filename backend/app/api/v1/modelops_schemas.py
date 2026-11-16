@@ -84,6 +84,9 @@ class EvaluationCreate(BaseModel):
     metrics: dict[str, float] = Field(default_factory=dict)
     thresholds: dict[str, dict[str, float | None]]
     baseline_evaluation_id: UUID | None = None
+    # 跨数据集版本对比必须显式声明。默认 False：既有同数据集基线行为不变，
+    # 跨数据集而未声明则明确拒绝（错误码 evaluation_cross_dataset_not_declared）。
+    cross_dataset_comparison: bool = False
     adapter_id: str | None = Field(default=None, min_length=1, max_length=100)
 
 

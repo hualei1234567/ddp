@@ -144,6 +144,10 @@ class EvaluationRow(Base):
     )
     dataset_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     baseline_evaluation_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # 基线评测所用数据集版本的快照（迁移 0043）。跨数据集对比放开后，
+    # 只看 ``baseline_evaluation_id`` 无法回答"基线是哪个数据集版本"——
+    # 同数据集版本时该值等于 ``dataset_version_id``。
+    baseline_dataset_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False)
     metrics: Mapped[dict] = mapped_column(_JSON_TYPE, nullable=False, default=dict)
     thresholds: Mapped[dict] = mapped_column(_JSON_TYPE, nullable=False)
@@ -163,6 +167,16 @@ class EvaluationRow(Base):
     __table_args__ = (
         _enum_check("status", EvaluationStatus, "ck_evaluations_status"),
         _enum_check("verdict", EvaluationVerdict, "ck_evaluations_verdict"),
+        # 与领域实体 ``Evaluation.__post_init__`` 同一语义：基线与基线数据集版本
+        # 必须成对出现。应用层被绕过时也不允许留下半截引用。
+        # 名称只写 ``baseline_pair``：命名约定 ``ck_%(table_name)s_%(constraint_name)s``
+        # 会补上 ``ck_evaluations_`` 前缀，最终是 ``ck_evaluations_baseline_pair``；
+        # 写成含前缀的全名会得到 ``ck_evaluations_ck_evaluations_baseline_pair``
+        # （本表既有 CHECK 就是这种双前缀的存量形状，不在本次范围内改名）。
+        CheckConstraint(
+            "(baseline_evaluation_id IS NULL) = (baseline_dataset_version_id IS NULL)",
+            name="baseline_pair",
+        ),
         Index("ix_evaluations_project_status", "project_id", "status"),
         Index("ix_evaluations_dataset", "project_id", "dataset_version_id"),
     )

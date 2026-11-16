@@ -111,6 +111,7 @@ def _evaluation(row: EvaluationRow) -> Evaluation:
         model_version_id=row.model_version_id,
         dataset_version_id=row.dataset_version_id,
         baseline_evaluation_id=row.baseline_evaluation_id,
+        baseline_dataset_version_id=row.baseline_dataset_version_id,
         status=row.status,
         metrics=dict(row.metrics or {}),
         thresholds=dict(row.thresholds or {}),

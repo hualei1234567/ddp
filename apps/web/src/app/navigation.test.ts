@@ -56,6 +56,39 @@ describe("导航分区配置", () => {
   });
 });
 
+describe("质量管理导航", () => {
+  // 历史缺陷：后端质量能力（黄金集 / 抽检 / IAA / 质量检查）早已实现，
+  // 导航却写成 available:false，菜单里永远点不动。这里钉住"质量管理可用"
+  // 以及子路径都归属同一菜单项。
+  it("质量管理可用，且子路径高亮同一菜单项", () => {
+    expect(findNavItem("/quality")?.item.path).toBe("/quality");
+    expect(findNavItem("/quality")?.item.available).toBe(true);
+    for (const path of [
+      "/quality/gold-sets",
+      "/quality/gold-sets/abc",
+      "/quality/iaa-reports",
+      "/quality/quality-samples",
+      "/quality/quality-checks",
+    ]) {
+      expect(findNavItem(path)?.item.path).toBe("/quality");
+    }
+  });
+
+  it("质量子路由都在路由表里声明", async () => {
+    const { default: source } = await import("../routes.tsx?raw");
+
+    for (const path of [
+      `path="quality"`,
+      `path="quality/gold-sets"`,
+      `path="quality/iaa-reports"`,
+      `path="quality/quality-samples"`,
+      `path="quality/quality-checks"`,
+    ]) {
+      expect(source).toContain(path);
+    }
+  });
+});
+
 describe("导航路径可达性", () => {
   // 真实缺陷回归守卫：此前有一个完整实现的页面（数据需求，370 行、接
   // modelOpsApi）在菜单里被写成 available:false 且路径指向根本不存在的
