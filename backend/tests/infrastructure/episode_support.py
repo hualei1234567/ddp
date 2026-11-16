@@ -159,6 +159,17 @@ def build_services(
     return episode_service, job_service, lineage_service
 
 
+def build_readiness_service(session: Session):
+    """装配自动就绪用例。
+
+    刻意走**生产装配函数**而不是在测试里再抄一遍六个协作者：接线一旦漂移，
+    测试就测不到真实链路了。
+    """
+    from app.api.v1.episode_dependencies import build_readiness_service as build
+
+    return build(session)
+
+
 def make_ready(
     service: EpisodeService,
     scope: ProjectScope,
@@ -183,6 +194,7 @@ def make_ready(
 
 __all__ = [
     "SHA_A",
+    "build_readiness_service",
     "build_services",
     "calibration_snapshot",
     "create_command",
