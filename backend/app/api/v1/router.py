@@ -31,6 +31,7 @@ from app.api.v1 import (
     model_adapter_routes,
     model_routes,
     platform,
+    project_routes,
     requirement_routes,
     robots,
     sensors,
@@ -42,6 +43,10 @@ from app.api.v1 import (
 
 api_router = APIRouter()
 api_router.include_router(platform.router)
+# 项目管理是平台级入口：``/projects`` 与 ``/projects/{project_id}`` 和
+# ``/projects/{project_id}/<resource>`` 不冲突（路径参数只会匹配单段），
+# 放在业务路由之前是为了保持"平台 → 业务"的阅读顺序。
+api_router.include_router(project_routes.router)
 api_router.include_router(robots.router)
 api_router.include_router(devices.router)
 api_router.include_router(sensors.router)

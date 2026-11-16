@@ -72,7 +72,7 @@ export const navSections: NavSection[] = [
         label: "项目管理",
         description: "管理项目、采集方案与项目范围内的数据资产。",
         icon: createElement(AppstoreOutlined),
-        available: false,
+        available: true,
       },
       {
         // 真实页面挂在 /data-requirements（routes.tsx）；此前导航写成
@@ -196,7 +196,7 @@ export const navSections: NavSection[] = [
         label: "人员与团队",
         description: "管理采集、标注、质检等角色与团队。",
         icon: createElement(TeamOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/suppliers",
