@@ -67,6 +67,8 @@ import ModulePage from "./pages/ModulePage";
 import QualityCheckPage from "./pages/quality/QualityCheckPage";
 import QualityOverviewPage from "./pages/quality/QualityOverviewPage";
 import NotFound from "./pages/NotFound";
+import PeoplePage from "./pages/people/PeoplePage";
+import ProjectListPage from "./pages/projects/ProjectListPage";
 import RawAssetDetailPage from "./pages/rawAssets/RawAssetDetailPage";
 import Workbench from "./pages/Workbench";
 
@@ -136,6 +138,8 @@ export default function AppRoutes() {
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<Workbench />} />
+        <Route path="projects" element={<ProjectListPage />} />
+        <Route path="people" element={<PeoplePage />} />
         <Route path="devices" element={<DeviceListPage />} />
         <Route path="devices/:deviceId" element={<DeviceDetailPage />} />
         <Route path="collection" element={<CollectionIndexRedirect />} />

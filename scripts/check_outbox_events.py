@@ -126,6 +126,9 @@ _EVENT_DOMAINS = frozenset(
         "leakage_policy",
         "location",
         "modelops",
+        # 阶段 8 项目管理（project.created / updated / member_*）：
+        # 首段不在此表中时归类校验会静默跳过，等于五个新事件不受守卫。
+        "project",
         "quality_policy",
         "robot",
         "sensor",

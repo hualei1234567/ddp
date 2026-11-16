@@ -19,7 +19,7 @@ from app.domain.devices import (
 from app.infrastructure.db.models.devices import CalibrationProfile, CalibrationTargetRef
 from app.infrastructure.db.models.devices import CalibrationRecord as CalibrationRecordModel
 from app.infrastructure.db.models.identity import Project, User
-from sqlalchemy import create_engine, inspect, text, update
+from sqlalchemy import create_engine, insert, inspect, text, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -60,7 +60,17 @@ def _seed_project(
     project_id: UUID,
     user_id: UUID,
 ) -> CalibrationProfile:
-    session.add(Project(id=project_id, code=f"p-{project_id.hex[:8]}", name="项目"))
+    # 用 Core INSERT 只写 0003 已存在的列：本用例在 0003 上造数，
+    # 若走 ORM ``session.add(Project(...))``，模型后续新增的列（0046 的
+    # description/status/version）会被带进 INSERT，在旧库上直接
+    # "no column named description"。迁移测试必须与**当前** ORM 形态解耦。
+    session.execute(
+        insert(Project.__table__).values(
+            id=project_id,
+            code=f"p-{project_id.hex[:8]}",
+            name="项目",
+        )
+    )
     session.add(User(id=user_id, display_name="用户"))
     session.flush()
     profile = CalibrationProfile(
