@@ -34,6 +34,7 @@ from app.domain.datasources.errors import DataSourceDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.ingestion.errors import IngestionDomainError
+from app.domain.locations.errors import LocationDomainError
 from app.domain.modelops.errors import ModelOpsDomainError
 
 
@@ -142,6 +143,32 @@ _COLLECTION_MESSAGES = {
 
 
 _COLLECTION_FALLBACK = "采集域规则校验失败"
+_LOCATION_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "version_conflict": 409,
+    "duplicate_resource": 409,
+    "idempotency_key_reused": 409,
+    "resource_not_found": 404,
+}
+
+_LOCATION_MESSAGES = {
+    "validation_failed": "请求参数或场地规则校验失败",
+    "version_conflict": "场地版本已变化，请重新读取后再试",
+    "duplicate_resource": "项目内场地 code 重复",
+    "idempotency_key_reused": "同一幂等键对应了不同请求体",
+    "resource_not_found": "场地不存在或不属于当前项目",
+}
+
+_LOCATION_FALLBACK = "场地域规则校验失败"
+
+
+def location_error_to_app(exc: LocationDomainError) -> AppError:
+    return _mapped(
+        exc,
+        status_by_code=_LOCATION_STATUS_BY_CODE,
+        messages=_LOCATION_MESSAGES,
+        fallback=_LOCATION_FALLBACK,
+    )
 
 
 def collection_error_to_app(exc: CollectionDomainError) -> AppError:

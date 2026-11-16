@@ -83,6 +83,7 @@ from app.infrastructure.db.models.ingestion import (
     UploadSessionModel,
 )
 from app.infrastructure.db.models.jobs import IngestionJobModel
+from app.infrastructure.db.models.locations import LocationModel
 from app.infrastructure.db.models.suppliers import (
     AcceptanceLedgerModel,
     DeliveryBatchModel,
@@ -151,6 +152,7 @@ __all__ = [
     "InboundSegmentModel",
     "IngestionJobModel",
     "LineageNodeRefModel",
+    "LocationModel",
     "OutboxEvent",
     "Project",
     "ProjectMember",

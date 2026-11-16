@@ -35,3 +35,16 @@ parameters:
     in: path
     required: true
     schema: { type: string, format: uuid }
+
+  # N8 素材状态动作：`{action}` 只接受这两值。写进契约可以挡住「未知动作
+  # 默认成功」的解析，也让前端不必猜字面量。
+  CollectionAssetAction:
+    name: action
+    in: path
+    required: true
+    schema:
+      type: string
+      enum: [activate, archive]
+    description: |
+      `activate`：`DRAFT → ACTIVE`；`archive`：`ACTIVE → ARCHIVED`。
+      其余取值由 FastAPI 路径匹配先行 404，已匹配但状态不允许的返回 409。

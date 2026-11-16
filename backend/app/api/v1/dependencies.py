@@ -28,6 +28,7 @@ from app.infrastructure.repositories.devices import (
     SqlSensorRepository,
 )
 from app.infrastructure.repositories.idempotency import SqlIdempotencyRepository
+from app.infrastructure.repositories.locations import SqlLocationDirectory
 
 
 def get_device_use_cases(session: DbSession) -> DeviceUseCases:
@@ -41,6 +42,7 @@ def get_device_use_cases(session: DbSession) -> DeviceUseCases:
         audit=SqlDatasetAuditRepository(session),
         outbox=SqlDatasetOutboxRepository(session),
         idempotency=SqlIdempotencyRepository(session),
+        locations=SqlLocationDirectory(session),
     )
 
 
@@ -78,6 +80,7 @@ def get_robot_use_cases(session: DbSession) -> RobotUseCases:
         audit=SqlDatasetAuditRepository(session),
         outbox=SqlDatasetOutboxRepository(session),
         idempotency=SqlIdempotencyRepository(session),
+        locations=SqlLocationDirectory(session),
     )
 
 

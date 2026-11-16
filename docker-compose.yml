@@ -71,6 +71,29 @@ services:
       timeout: 3s
       retries: 30
 
+  migrate:
+    # 数据库迁移。单独成一个服务而不是塞进 api 启动脚本，原因有二：
+    # 1. api 可能起多个副本，启动脚本各自跑迁移会并发执行同一个 DDL；
+    # 2. 迁移失败必须让 api 起不来，而不是 api 起来了但 schema 是旧的。
+    #
+    # 为什么必须有它：此前整条部署链路里**没有任何一处执行 alembic upgrade**。
+    # 实测后果——v0.2.0 的镜像起来后数据库仍停在 0034，而代码要求 0040，
+    # 于是新端点全部 500。这类缺陷在"本地一直用手动 alembic upgrade 的开发机"
+    # 上完全看不出来，只有全新环境或自动化部署才会暴露。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-migrate
+    command: ["alembic", "upgrade", "head"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
     profiles: ["app"]
     build:
@@ -87,6 +110,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     ports:
@@ -112,6 +137,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   datasource-worker:
@@ -136,6 +163,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       minio:
         condition: service_healthy
     restart: unless-stopped
@@ -158,6 +187,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   export-worker:
@@ -175,13 +206,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   maintenance-worker:
     # 阶段 8：定时备份 + outbox 归档 + 幂等表清扫。
     # 默认不开（maintenance_enabled 由 .env 控制）；开启前必须先设 DDP_BACKUP_DIR
     # 并把该目录挂载为持久卷，否则备份会落在容器内临时层。
-    profiles: ["app"]
+    #
+    # 为什么是独立 profile 而不是 "app"：该 worker 在 maintenance_enabled=False
+    # 时会立即退出，restart: unless-stopped 于是把它变成无限重启循环——
+    # 日志每几秒刷一条 ERROR，容器状态永远在 Restarting，看起来像故障但其实是
+    # 配置期望的行为。把它从默认里摘出去：需要备份时显式
+    # `docker compose --profile maintenance up -d maintenance-worker`，
+    # 并先在 .env 里设 DDP_MAINTENANCE_ENABLED=true。
+    profiles: ["maintenance"]
     build:
       context: .
       dockerfile: infra/docker/api.Dockerfile

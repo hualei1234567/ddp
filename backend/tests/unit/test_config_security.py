@@ -240,3 +240,81 @@ def test_create_app_fails_closed_with_default_minio_credentials(
 
     with pytest.raises(RuntimeError, match="S3"):
         create_app()
+
+
+# ---------------------------------------------------------------------------
+# /metrics 访问控制配置自检
+#
+# 未配置令牌是**允许**的（请求级 503 兜底，见 app/core/metrics_access.py）；
+# 一旦配置，就必须是像样的随机值，且来源网段必须可解析——否则运维会以为
+# 已经加固，实际却是一个可穷举的短口令或一条永不生效的白名单。
+# ---------------------------------------------------------------------------
+
+_METRICS_TOKEN = "metrics-config-test-token-0123456789"  # noqa: S105 - 测试占位值
+
+
+def _metrics_settings(**overrides: object) -> Settings:
+    values: dict[str, object] = {
+        "env": "staging",
+        "jwt_secret": JWT_SECRET,
+        "jwt_issuer": JWT_ISSUER,
+        "jwt_audience": JWT_AUDIENCE,
+        "s3_access_key": S3_ACCESS_KEY,
+        "s3_secret_key": S3_SECRET_KEY,
+        "metrics_access_token": _METRICS_TOKEN,
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
+def test_metrics_token_is_optional_and_does_not_block_startup() -> None:
+    """未配置令牌不得让 API 起不来：一次安全加固变成部署事故是不可接受的。"""
+    settings = _metrics_settings(metrics_access_token="")
+
+    settings.validate_runtime_security()
+
+    assert settings.metrics_access_token == ""
+
+
+def test_metrics_token_is_rejected_when_too_short() -> None:
+    settings = _metrics_settings(metrics_access_token="short-token")  # noqa: S106 - 弱令牌用例
+
+    with pytest.raises(RuntimeError, match="DDP_METRICS_ACCESS_TOKEN"):
+        settings.validate_runtime_security()
+
+
+def test_metrics_token_is_rejected_when_placeholder() -> None:
+    settings = _metrics_settings(
+        metrics_access_token="replace-me-in-production"  # noqa: S106 - 占位符用例
+    )
+
+    with pytest.raises(RuntimeError, match="占位符"):
+        settings.validate_runtime_security()
+
+
+def test_metrics_token_is_rejected_with_surrounding_whitespace() -> None:
+    settings = _metrics_settings(
+        metrics_access_token=f" {_METRICS_TOKEN} "  # noqa: S106 - 空白配置用例
+    )
+
+    with pytest.raises(RuntimeError, match="首尾空白"):
+        settings.validate_runtime_security()
+
+
+@pytest.mark.parametrize(
+    "network",
+    ["10.0.0.1/8", "not-a-network", "", " 10.0.0.0/8", "10.0.0.0/33"],
+)
+def test_metrics_source_network_is_validated(network: str) -> None:
+    settings = _metrics_settings(metrics_allowed_source_networks=[network])
+
+    with pytest.raises(RuntimeError, match="DDP_METRICS_ALLOWED_SOURCE_NETWORKS"):
+        settings.validate_runtime_security()
+
+
+def test_metrics_source_network_accepts_cidr_and_single_address() -> None:
+    settings = _metrics_settings(
+        metrics_allowed_source_networks=["10.0.0.0/8", "203.0.113.9", "::1/128"]
+    )
+
+    settings.validate_runtime_security()

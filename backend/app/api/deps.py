@@ -45,11 +45,14 @@ def _is_loopback(request: Request) -> bool:
     return client is not None and client.host in _LOOPBACK_HOSTS
 
 
-def _bearer_token(request: Request) -> str | None:
+def extract_bearer_token(request: Request) -> str | None:
     """提取 Bearer token；存在 Authorization 但格式错误时直接拒绝。
 
     一旦客户端声明了 ``Authorization``，就不得再回退到 X-User-Id，
     避免本地 Header 后门被用来掩盖错误的令牌。
+
+    公开为模块级函数是为了让 ``/metrics`` 的静态令牌校验复用**同一套**头部
+    解析语义（大小写、分隔符、空白），而不是在运维端点上再写一份。
     """
     authorization = request.headers.get("Authorization")
     if authorization is None:
@@ -88,7 +91,7 @@ def get_current_principal(
     - 平台角色只能来自经过签名的 ``platform_role`` 声明，请求头不能提升权限；
     - 非本地环境缺失令牌一律 401，不存在隐式放行。
     """
-    token = _bearer_token(request)
+    token = extract_bearer_token(request)
     if token is not None:
         return _principal_from_token(token, settings)
 

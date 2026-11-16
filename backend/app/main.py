@@ -23,6 +23,7 @@ from app.api.errors import (
     episode_error_to_app,
     ingestion_error_to_app,
     integrity_error_to_app,
+    location_error_to_app,
     supplier_error_to_app,
 )
 from app.api.middleware.metrics import MetricsMiddleware
@@ -44,6 +45,7 @@ from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.identity.errors import CrossProjectAccessError
 from app.domain.ingestion.errors import IngestionDomainError
+from app.domain.locations.errors import LocationDomainError
 from app.domain.modelops.errors import ModelOpsDomainError
 from app.domain.suppliers.errors import SupplierDomainError
 from app.infrastructure.db.session import get_session_factory
@@ -252,6 +254,18 @@ def create_app() -> FastAPI:
         exc: SupplierDomainError,
     ) -> JSONResponse:
         error = supplier_error_to_app(exc)
+        _log_domain_error(request, exc, error)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(LocationDomainError)
+    async def handle_location_domain_error(
+        request: Request,
+        exc: LocationDomainError,
+    ) -> JSONResponse:
+        error = location_error_to_app(exc)
         _log_domain_error(request, exc, error)
         return JSONResponse(
             status_code=error.status_code,

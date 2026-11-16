@@ -1,7 +1,12 @@
 """采集域数据库兜底：合法状态迁移、不可删除与审计只追加。
 
-迁移 0006/0007 与 ``Base.metadata.create_all`` 安装同一份 DDL，避免测试库与
+迁移 0006/0007/0041 与 ``Base.metadata.create_all`` 安装同一份 DDL，避免测试库与
 迁移后的库行为漂移。SQLite 仅用于测试；PostgreSQL 为验收目标。
+
+N8 追加素材表（方案 / SOP / 场景 / 动作库）的合法迁移与初始状态兜底。
+素材表**没有**禁删触发器：``DRAFT`` 素材允许硬删除（未被任务引用时），
+数据库侧由 ``ON DELETE RESTRICT`` 复合外键保证"被引用就删不掉"。
+再加一条"一律禁删"的触发器会把合法的删除路径也堵死。
 """
 
 # ruff: noqa: S608 - SQL 只由固定枚举/常量拼接，不接收用户输入。
@@ -11,6 +16,7 @@ from __future__ import annotations
 from sqlalchemy import inspect
 from sqlalchemy.engine import Connection
 
+from app.domain.collection.asset_state_machines import asset_transition_pairs
 from app.domain.collection.state_machines import (
     batch_transition_pairs,
     task_transition_pairs,
@@ -26,6 +32,64 @@ def _pairs_sql(pairs: frozenset[tuple[str, str]]) -> str:
 
 _TASK_PAIRS = _pairs_sql(task_transition_pairs())
 _BATCH_PAIRS = _pairs_sql(batch_transition_pairs())
+_ASSET_PAIRS = _pairs_sql(asset_transition_pairs())
+
+# 素材四表：表名 -> 触发器名。顺序稳定，便于 downgrade 逆序卸载。
+_ASSET_TABLES: tuple[str, ...] = (
+    "collection_plans",
+    "collection_sops",
+    "scenarios",
+    "action_specs",
+)
+
+
+# 素材表兜底：初始状态必须 DRAFT，状态变更必须落在白名单内。
+# 用 ``CREATE TRIGGER IF NOT EXISTS`` 而不是先 DROP：``create_all`` 会被
+# 重复调用（测试夹具每次建库），重复安装必须幂等。
+def _sqlite_asset_statements(table: str) -> tuple[str, str]:
+    """单个素材表的两条 SQLite 触发器（表格名只来自本模块常量）。"""
+    return (
+        f"""
+    CREATE TRIGGER IF NOT EXISTS trg_{table}_initial_status
+    BEFORE INSERT ON {table}
+    FOR EACH ROW
+    WHEN NEW.status <> 'DRAFT'
+    BEGIN
+        SELECT RAISE(ABORT, 'collection_asset_initial_status_invalid');
+    END
+    """,
+        f"""
+    CREATE TRIGGER IF NOT EXISTS trg_{table}_transition
+    BEFORE UPDATE ON {table}
+    FOR EACH ROW
+    WHEN OLD.status <> NEW.status AND NOT ({_ASSET_PAIRS})
+    BEGIN
+        SELECT RAISE(ABORT, 'collection_asset_state_transition_invalid');
+    END
+    """,
+    )
+
+
+_ASSET_FUNCTION_SQL = f"""
+CREATE OR REPLACE FUNCTION ddp_collection_asset_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.status <> 'DRAFT' THEN
+            RAISE EXCEPTION 'collection_asset_initial_status_invalid'
+                USING ERRCODE = '23514';
+        END IF;
+    ELSIF OLD.status IS DISTINCT FROM NEW.status
+          AND NOT ({_ASSET_PAIRS}) THEN
+        RAISE EXCEPTION 'collection_asset_state_transition_invalid'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+"""
 
 _SQLITE_AUDIT_STATEMENTS = (
     """
@@ -281,6 +345,53 @@ def drop_audit_guards(connection: Connection) -> None:
         connection.exec_driver_sql("DROP TRIGGER IF EXISTS trg_audit_logs_no_update ON audit_logs")
         connection.exec_driver_sql("DROP TRIGGER IF EXISTS trg_audit_logs_no_delete ON audit_logs")
         connection.exec_driver_sql("DROP FUNCTION IF EXISTS ddp_audit_logs_append_only_guard()")
+        return
+    raise RuntimeError(f"未支持的数据库方言：{dialect}")
+
+
+def install_asset_state_guards(connection: Connection) -> None:
+    """安装素材表（方案 / SOP / 场景 / 动作库）的初始状态与迁移兜底。"""
+    present = [table for table in _ASSET_TABLES if _has_table(connection, table)]
+    if not present:
+        return
+    dialect = connection.dialect.name
+    if dialect == "sqlite":
+        for table in present:
+            for statement in _sqlite_asset_statements(table):
+                connection.exec_driver_sql(statement)
+        return
+    if dialect == "postgresql":
+        connection.exec_driver_sql(_ASSET_FUNCTION_SQL)
+        for table in present:
+            for trigger, event in (
+                (f"trg_{table}_initial_status", "INSERT"),
+                (f"trg_{table}_transition", "UPDATE"),
+            ):
+                connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS {trigger} ON {table}")
+                connection.exec_driver_sql(
+                    f"CREATE TRIGGER {trigger} BEFORE {event} ON {table} "
+                    "FOR EACH ROW EXECUTE FUNCTION ddp_collection_asset_guard()"
+                )
+        return
+    raise RuntimeError(f"未支持的数据库方言：{dialect}")
+
+
+def drop_asset_state_guards(connection: Connection) -> None:
+    dialect = connection.dialect.name
+    if dialect == "sqlite":
+        for table in _ASSET_TABLES:
+            connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS trg_{table}_initial_status")
+            connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS trg_{table}_transition")
+        return
+    if dialect == "postgresql":
+        for table in _ASSET_TABLES:
+            if not _has_table(connection, table):
+                continue
+            connection.exec_driver_sql(
+                f"DROP TRIGGER IF EXISTS trg_{table}_initial_status ON {table}"
+            )
+            connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS trg_{table}_transition ON {table}")
+        connection.exec_driver_sql("DROP FUNCTION IF EXISTS ddp_collection_asset_guard()")
         return
     raise RuntimeError(f"未支持的数据库方言：{dialect}")
 

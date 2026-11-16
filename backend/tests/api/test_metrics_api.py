@@ -9,18 +9,18 @@
 4. ``/metrics`` 与 ``/health`` 自身不计入（否则抓取频率会污染数据）；
 5. ``trace_id`` 贯通：响应头 ``X-Request-Id``、错误体 ``error.request_id``
    与（经真实 ``JsonFormatter`` 输出的）日志 ``trace_id`` 三者同值。
+
+``/metrics`` 的**访问控制**（静态 Bearer 令牌、来源网段白名单、未配置令牌时的
+失败关闭口径）在 ``tests/api/test_metrics_access.py``：两者关注点不同，且合在
+一个文件里会超过 500 行评审线。夹具见 ``conftest.py`` 的 ``metrics_app``。
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator
 from uuid import uuid4
 
-import pytest
-from app import main as main_module
-from app.api.deps import get_current_principal
 from app.core.logging import JsonFormatter
 from app.core.metrics import (
     EPISODES_GAUGE,
@@ -31,68 +31,15 @@ from app.core.metrics import (
     Metrics,
     build_metrics,
 )
-from app.domain.identity.models import PlatformRole, Principal
-from app.infrastructure.db.session import get_session
 from app.main import create_app
 from fastapi.testclient import TestClient
 from prometheus_client import generate_latest
-from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import ApiIds
+from tests.api.metrics_support import CollectingHandler as _CollectingHandler
 
 _DEVICES_TEMPLATE = "/api/v1/projects/{project_id}/devices"
 _MISSING_ID = "00000000-0000-7000-8000-000000000000"
-
-
-class _CollectingHandler(logging.Handler):
-    """挂到具名 logger 上的采集器（``create_app()`` 会清空 root handlers）。
-
-    **必须在 emit 时就格式化**：``trace_id`` 来自 contextvar，``RequestIdMiddleware``
-    在请求结束时复位它，事后再格式化只能读到 ``None``。
-    """
-
-    def __init__(self) -> None:
-        super().__init__(level=logging.DEBUG)
-        self.setFormatter(JsonFormatter())
-        self.payloads: list[dict[str, object]] = []
-
-    def emit(self, record: logging.LogRecord) -> None:
-        self.payloads.append(json.loads(self.format(record)))
-
-
-@pytest.fixture()
-def metrics_app(
-    monkeypatch: pytest.MonkeyPatch,
-    api_db: tuple[sessionmaker[Session], ApiIds],
-) -> Iterator[tuple[TestClient, ApiIds]]:
-    """真实应用 + 真实 SQLite：业务指标采集走测试库，不打真实 PostgreSQL。
-
-    认证主体替换为项目 A 的编辑者：这样路由能真正走到用例层，才能验证
-    「同一路由模板 + 不同 UUID → 一条时间序列」而不是被认证层挡住。
-    """
-    factory, ids = api_db
-    # ``create_app`` 里业务采集器在调用时才解析该名字，替换即生效。
-    monkeypatch.setattr(main_module, "get_session_factory", lambda: factory)
-    app = create_app()
-
-    def override_session() -> Iterator[Session]:
-        session = factory()
-        try:
-            yield session
-        finally:
-            session.close()
-
-    app.dependency_overrides[get_session] = override_session
-    app.dependency_overrides[get_current_principal] = lambda: Principal(
-        user_id=ids.editor_a,
-        platform_role=PlatformRole.MEMBER,
-    )
-    yield TestClient(app), ids
-
-
-@pytest.fixture()
-def metrics_client(metrics_app: tuple[TestClient, ApiIds]) -> TestClient:
-    return metrics_app[0]
 
 
 def _metric_value(body: str, line_prefix: str) -> float:

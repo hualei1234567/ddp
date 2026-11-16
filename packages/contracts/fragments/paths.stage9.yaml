@@ -1,0 +1,116 @@
+# 阶段 9（N9 规模化运营）路径片段：多基地 / 场地。
+# 只声明 backend/app/api/v1/location_routes.py 实际实现的端点（4 个操作）。
+#
+# 范围说明：场地是组织维度（基地 / 房间 / 实验室），被 robots / devices /
+# collection_tasks 三处引用。本批只做「创建 / 列表 / 详情 / 修改」。
+#
+# **没有 DELETE**：三处复合外键引用本表，删除被引用的场地会被数据库拒绝；
+# 而当前没有删除场地的业务方——场地随 project_id 的 ON DELETE CASCADE 级联
+# 删除即可。等出现真实需求时再按「未引用才可删 + 引用方清单」补。
+#
+# **没有状态位**：无法表达「这个基地暂停使用」。刻意不加——没有读取方；
+# 若采集排期需要「只允许派到启用场地」，那是一次需要连同过滤与状态动作一起
+# 设计的独立迭代，而不是先塞一个没人读的 status 列。
+
+locations:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listLocations
+    tags: [locations]
+    summary: 场地列表
+    description: 按项目隔离；可按 `kind` 过滤。cursor 分页。
+    parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [SITE, ROOM, LAB]
+        description: 非法取值返回 422，不静默忽略。
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 场地分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/LocationPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createLocation
+    tags: [locations]
+    summary: 创建场地
+    description: |
+      `kind` 缺省为 `SITE`。`code` 在项目内唯一，重复返回 409 `duplicate_resource`。
+      客户端不能提交 `project_id` / `version` / 审计字段。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/LocationCreate" }
+    responses:
+      "201":
+        description: 已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Location" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+locationDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/LocationId"
+  get:
+    operationId: getLocation
+    tags: [locations]
+    summary: 场地详情
+    responses:
+      "200":
+        description: 场地
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Location" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  patch:
+    operationId: updateLocation
+    tags: [locations]
+    summary: 更新场地
+    description: |
+      `code` 不可改：它是被设备与任务引用的业务标识。
+
+      只有显式提交的字段会被修改；显式 `null` **仅**对 `address` / `notes`
+      生效（清空）。`name` / `kind` 传 `null` 返回 422——它们没有「空」这个
+      合法取值，静默忽略会让调用方以为改名成功。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/LocationPatch" }
+    responses:
+      "200":
+        description: 更新后的场地
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Location" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

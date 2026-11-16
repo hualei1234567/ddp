@@ -26,6 +26,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.application.collection.ports import CollectionAssetDirectory
+from app.application.locations.ports import LocationDirectory
 from app.domain.collection.errors import DomainValidationError, ResourceNotFoundError
 from app.domain.identity.models import ProjectScope
 
@@ -34,6 +35,7 @@ _PLAN_LABEL = "采集方案"
 _SOP_LABEL = "SOP"
 _SCENARIO_LABEL = "采集场景"
 _ACTION_SPEC_LABEL = "动作库"
+_LOCATION_LABEL = "采集场地"
 
 
 def assert_task_asset_references(
@@ -115,4 +117,29 @@ def _assert_versioned_reference(
         raise DomainValidationError(f"{field}_version 与所引用的{label}不一致")
 
 
-__all__: list[str] = ["assert_task_asset_references"]
+def assert_task_location_reference(
+    directory: LocationDirectory,
+    scope: ProjectScope,
+    *,
+    location_id: UUID | None,
+) -> None:
+    """任务场地引用必须同项目存在；``None`` 表示"尚未指定场地"，合法放行。
+
+    为什么单独一条规则而不是塞进 :func:`assert_task_asset_references`：那里的
+    四个引用是**带版本快照的素材**（还要求"给了 ID 必须给版本"），场地没有
+    版本语义——它是被设备与任务共同引用的组织维度。混在一起会让两种语义
+    （版本快照 / 纯引用）共用一段代码，后续任一方调整都会互相牵连。
+
+    数据库的复合外键 ``(project_id, location_id)`` 是最后一道兜底；这里提前
+    校验是为了让客户端拿到可读的 404 而不是方言原文的 ``IntegrityError``。
+    """
+    if location_id is None:
+        return
+    if not directory.location_exists(scope, location_id):
+        raise ResourceNotFoundError(_LOCATION_LABEL, location_id)
+
+
+__all__: list[str] = [
+    "assert_task_asset_references",
+    "assert_task_location_reference",
+]
