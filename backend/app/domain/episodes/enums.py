@@ -44,6 +44,18 @@ class SegmentationMethod(StrEnum):
 
 
 class LineageNodeType(StrEnum):
+    """血缘图节点类型。
+
+    ``DATA_SOURCE`` / ``DATA_SOURCE_IMPORT`` 是**只读投影节点**：数据源与导入
+    任务的权威事实在 ``data_sources`` / ``data_source_imports`` 表里，血缘图
+    不另存一份（否则两处会漂移）。遍历时由
+    :class:`app.application.episodes.provenance.SourceProvenanceResolver`
+    按 ``data_source_media_assets`` 的既有外键即时展开成边，因此这两个取值
+    **不会**出现在 ``lineage_node_refs`` / ``data_lineage_edges`` 里。
+    """
+
+    DATA_SOURCE = "DATA_SOURCE"
+    DATA_SOURCE_IMPORT = "DATA_SOURCE_IMPORT"
     RAW_ASSET = "RAW_ASSET"
     UPLOAD_SESSION = "UPLOAD_SESSION"
     COLLECTION_TASK = "COLLECTION_TASK"

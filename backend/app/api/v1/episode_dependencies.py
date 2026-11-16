@@ -10,12 +10,16 @@ from fastapi import Depends
 from app.api.deps import DbSession
 from app.api.v1.upload_dependencies import ObjectStorageDep, SettingsDep
 from app.application.episodes import EpisodeService, LineageService
+from app.application.episodes.provenance import SourceProvenanceResolver
 from app.application.episodes.readiness import EpisodeReadinessService
 from app.application.ingestion import RawAssetDownloadUseCases, RawAssetUseCases
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
     SqlIdempotencyRepository,
     SqlOutboxRepository,
+)
+from app.infrastructure.repositories.datasource_provenance import (
+    SqlSourceProvenanceRepository,
 )
 from app.infrastructure.repositories.episodes import (
     SqlEpisodeRawAssetRepository,
@@ -73,18 +77,36 @@ def build_readiness_service(session: DbSession) -> EpisodeReadinessService:
     )
 
 
+def build_lineage_service(session: DbSession) -> LineageService:
+    """装配血缘用例（含数据源链只读投影）。
+
+    血缘端点与数据源血缘端点共用本函数，避免两处接线各自演化。
+    投影依赖两个只读适配器：数据源链
+    （``SqlSourceProvenanceRepository``）与资产来源类型
+    （``SqlRawAssetRepository``），都不落库。
+    """
+    return LineageService(
+        SqlLineageRepository(session),
+        SqlAuditRepository(session),
+        SqlOutboxRepository(session),
+        session,
+        SourceProvenanceResolver(
+            SqlSourceProvenanceRepository(session),
+            SqlRawAssetRepository(session),
+        ),
+    )
+
+
 def get_episode_use_cases(
     session: DbSession,
     settings: SettingsDep,
     storage: ObjectStorageDep,
 ) -> EpisodeUseCases:
-    lineage = SqlLineageRepository(session)
     raw_assets = SqlRawAssetRepository(session)
     audit = SqlAuditRepository(session)
-    outbox = SqlOutboxRepository(session)
     return EpisodeUseCases(
         episodes=build_episode_service(session),
-        lineage=LineageService(lineage, audit, outbox, session),
+        lineage=build_lineage_service(session),
         assets=RawAssetUseCases(raw_assets),
         downloads=RawAssetDownloadUseCases(
             raw_assets,

@@ -321,7 +321,8 @@ def test_version_without_lineage_node_returns_empty_not_404(
 
     empty = editor.get(base)
     assert empty.status_code == 200, empty.text
-    assert empty.json() == {"items": [], "direction": "reverse"}
+    # 版本血缘不涉及 RawAsset，来源结论列表按契约恒为空数组（字段存在但无内容）。
+    assert empty.json() == {"items": [], "direction": "reverse", "raw_asset_sources": []}
 
     # 版本不存在仍是 404：空图不能掩盖资源不存在。
     missing = editor.get(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
@@ -164,6 +165,23 @@ class SqlRawAssetRepository:
             statement = statement.where(RawAssetModel.id > after_id)
         statement = statement.order_by(RawAssetModel.id).limit(limit)
         return [self._from_row(row) for row in self._session.scalars(statement)]
+
+    def list_source_types(
+        self,
+        scope: ProjectScope,
+        asset_ids: Sequence[UUID],
+    ) -> dict[UUID, str]:
+        """批量读来源类型；只为血缘投影服务，不构造完整领域对象。"""
+        ids = tuple(dict.fromkeys(asset_ids))
+        if not ids:
+            return {}
+        rows = self._session.execute(
+            select(RawAssetModel.id, RawAssetModel.source_type).where(
+                RawAssetModel.project_id == scope.project_id,
+                RawAssetModel.id.in_(ids),
+            )
+        )
+        return {row.id: row.source_type for row in rows}
 
     def save(
         self,
