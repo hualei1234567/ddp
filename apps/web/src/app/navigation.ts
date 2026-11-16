@@ -1,6 +1,7 @@
 import {
   ApartmentOutlined,
   AppstoreOutlined,
+  AuditOutlined,
   BarChartOutlined,
   CloudUploadOutlined,
   ClusterOutlined,
@@ -74,7 +75,7 @@ export const navSections: NavSection[] = [
         label: "项目管理",
         description: "管理项目、采集方案与项目范围内的数据资产。",
         icon: createElement(AppstoreOutlined),
-        available: false,
+        available: true,
       },
       {
         // 真实页面挂在 /data-requirements（routes.tsx）；此前导航写成
@@ -134,11 +135,14 @@ export const navSections: NavSection[] = [
         aliases: ["/annotation"],
       },
       {
+        // 后端 N4 质量能力（黄金集 / 抽检 / IAA / 提交质量检查）早已就绪，
+        // 此前导航写成 available:false，用户永远进不到这些页面。
         path: "/quality",
         label: "质量管理",
-        description: "执行质检规则、抽检与质量门禁。",
+        description:
+          "金标准集（黄金集）、质检抽检、IAA 报告与提交质量检查；无结论不等于通过。",
         icon: createElement(SafetyCertificateOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/assets",
@@ -217,7 +221,7 @@ export const navSections: NavSection[] = [
         label: "人员与团队",
         description: "管理采集、标注、质检等角色与团队。",
         icon: createElement(TeamOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/suppliers",
@@ -239,6 +243,15 @@ export const navSections: NavSection[] = [
         description: "查看运营指标、产能与成本分析。",
         icon: createElement(BarChartOutlined),
         available: false,
+      },
+      {
+        // 平台一直在写 audit_logs，这里补上唯一的读入口：谁在什么时候
+        // 对什么资源做了什么。只读且仅项目负责人/平台管理员可看。
+        path: "/audit-logs",
+        label: "审计日志",
+        description: "按资源、动作、时间与结果追溯全项目的操作留痕。",
+        icon: createElement(AuditOutlined),
+        available: true,
       },
       {
         path: "/settings",

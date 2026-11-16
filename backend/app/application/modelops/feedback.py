@@ -398,7 +398,11 @@ class FeedbackUseCases:
             for dimension in requirement.dimensions:
                 key = (dimension.dimension_type, dimension.dimension_value)
                 links.setdefault(key, []).append(str(requirement.requirement_id))
-        measured = self._measured_coverage(scope, dimension_type=dimension_type)
+        measured = self._measured_coverage(
+            scope,
+            dimension_type=dimension_type,
+            feedback_items=feedback_items,
+        )
         items = aggregate_gaps(
             [item.dimensions for item in feedback_items],
             links,
@@ -416,18 +420,35 @@ class FeedbackUseCases:
         scope: ProjectScope,
         *,
         dimension_type: str | None,
+        feedback_items: list[ModelFeedback],
     ) -> list[MeasuredCoverage]:
-        """取真实覆盖；未装配覆盖端口时返回空列表（等价于只有人工值）。"""
+        """取真实覆盖；未装配覆盖端口时返回空列表（等价于只有人工值）。
+
+        ``wanted_keys`` 把反馈里出现的维度键交给覆盖端口：封闭轴
+        （ACTION/LABEL/MODALITY）在数据总体完整时可以据此给出 ``count=0`` 的
+        实测结论；开放轴忽略该参数，保持"缺值不报 0"的既有口径。
+        """
         if self._coverage is None:
             return []
+        wanted_keys = frozenset(
+            (dimension.dimension_type, dimension.dimension_value)
+            for item in feedback_items
+            for dimension in item.dimensions
+        )
         if dimension_type is not None:
             try:
                 wanted = frozenset({CoverageDimension(dimension_type).value})
             except ValueError:
-                # 该维度不可实测（ACTION/LABEL/MODALITY）：不查询，回退人工值。
+                # 契约外的维度值（拼写错误等）：不查询，回退人工值路径。
                 return []
-            return list(self._coverage.coverage_by_dimension(scope, dimension_types=wanted))
-        return list(self._coverage.coverage_by_dimension(scope))
+            return list(
+                self._coverage.coverage_by_dimension(
+                    scope,
+                    dimension_types=wanted,
+                    wanted_keys=wanted_keys,
+                )
+            )
+        return list(self._coverage.coverage_by_dimension(scope, wanted_keys=wanted_keys))
 
     def _replay(self, scope: ProjectScope, response_ref: str | None) -> ModelFeedback:
         if not response_ref:

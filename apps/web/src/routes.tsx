@@ -1,5 +1,6 @@
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 
+import LegacyRedirect from "./app/LegacyRedirect";
 import { navSections } from "./app/navigation";
 import AppLayout from "./components/AppLayout";
 import AnnotationArbitrationQueuePage from "./pages/annotation/AnnotationArbitrationQueuePage";
@@ -19,6 +20,7 @@ import AnnotationTaskCreatePage from "./pages/annotation/AnnotationTaskCreatePag
 import AnnotationTaskDetailPage from "./pages/annotation/AnnotationTaskDetailPage";
 import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
 import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
+import AuditLogListPage from "./pages/audit/AuditLogListPage";
 import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPage";
 import CollectionAssetDetailPage from "./pages/collectionAssets/AssetDetailPage";
 import CollectionAssetListPage from "./pages/collectionAssets/AssetListPage";
@@ -62,7 +64,11 @@ import SegmentReviewPage from "./pages/suppliers/SegmentReviewPage";
 import SupplierDetailPage from "./pages/suppliers/SupplierDetailPage";
 import SupplierListPage from "./pages/suppliers/SupplierListPage";
 import ModulePage from "./pages/ModulePage";
+import QualityCheckPage from "./pages/quality/QualityCheckPage";
+import QualityOverviewPage from "./pages/quality/QualityOverviewPage";
 import NotFound from "./pages/NotFound";
+import PeoplePage from "./pages/people/PeoplePage";
+import ProjectListPage from "./pages/projects/ProjectListPage";
 import RawAssetDetailPage from "./pages/rawAssets/RawAssetDetailPage";
 import Workbench from "./pages/Workbench";
 
@@ -114,11 +120,26 @@ function AnnotationIndexRedirect() {
   );
 }
 
+/** 带路径参数的旧地址重定向：保留查询串，只替换路径前缀。 */
+function LegacyParamRedirect({
+  prefix,
+  param,
+}: {
+  prefix: string;
+  param: string;
+}) {
+  const params = useParams();
+  const value = params[param] ?? "";
+  return <LegacyRedirect to={`${prefix}/${encodeURIComponent(value)}`} />;
+}
+
 export default function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<Workbench />} />
+        <Route path="projects" element={<ProjectListPage />} />
+        <Route path="people" element={<PeoplePage />} />
         <Route path="devices" element={<DeviceListPage />} />
         <Route path="devices/:deviceId" element={<DeviceDetailPage />} />
         <Route path="collection" element={<CollectionIndexRedirect />} />
@@ -181,23 +202,61 @@ export default function AppRoutes() {
           path="annotation/sample-sets/:sampleSetId"
           element={<AnnotationSampleSetDetailPage />}
         />
-        <Route path="annotation/gold-sets" element={<AnnotationGoldSetListPage />} />
+        {/*
+          质量管理（导航「质量管理」）：黄金集 / 抽检 / IAA / 提交质量检查。
+          页面组件沿用标注域实现的同一批组件，不在 /quality 下重写一份。
+        */}
+        <Route path="quality" element={<QualityOverviewPage />} />
+        <Route path="quality/gold-sets" element={<AnnotationGoldSetListPage />} />
         <Route
-          path="annotation/gold-sets/:goldSetId"
+          path="quality/gold-sets/:goldSetId"
           element={<AnnotationGoldSetDetailPage />}
         />
-        <Route path="annotation/iaa-reports" element={<AnnotationIAAListPage />} />
+        <Route path="quality/iaa-reports" element={<AnnotationIAAListPage />} />
         <Route
-          path="annotation/iaa-reports/:reportId"
+          path="quality/iaa-reports/:reportId"
           element={<AnnotationIAADetailPage />}
         />
         <Route
-          path="annotation/quality-samples"
+          path="quality/quality-samples"
           element={<AnnotationQualityListPage />}
         />
         <Route
-          path="annotation/quality-samples/:qualitySampleId"
+          path="quality/quality-samples/:qualitySampleId"
           element={<AnnotationQualityDetailPage />}
+        />
+        <Route path="quality/quality-checks" element={<QualityCheckPage />} />
+        {/*
+          旧地址保留重定向（历史书签不 404）：质量资源此前挂在 /annotation 下。
+        */}
+        <Route
+          path="annotation/gold-sets"
+          element={<LegacyRedirect to="/quality/gold-sets" />}
+        />
+        <Route
+          path="annotation/gold-sets/:goldSetId"
+          element={<LegacyParamRedirect prefix="/quality/gold-sets" param="goldSetId" />}
+        />
+        <Route
+          path="annotation/iaa-reports"
+          element={<LegacyRedirect to="/quality/iaa-reports" />}
+        />
+        <Route
+          path="annotation/iaa-reports/:reportId"
+          element={<LegacyParamRedirect prefix="/quality/iaa-reports" param="reportId" />}
+        />
+        <Route
+          path="annotation/quality-samples"
+          element={<LegacyRedirect to="/quality/quality-samples" />}
+        />
+        <Route
+          path="annotation/quality-samples/:qualitySampleId"
+          element={
+            <LegacyParamRedirect
+              prefix="/quality/quality-samples"
+              param="qualitySampleId"
+            />
+          }
         />
         <Route path="ingestion" element={<DataSourceListPage />} />
         <Route path="data-source-imports" element={<ImportListPage />} />
@@ -263,6 +322,7 @@ export default function AppRoutes() {
           element={<SegmentReviewPage />}
         />
         <Route path="acceptance-ledger" element={<LedgerPage />} />
+        <Route path="audit-logs" element={<AuditLogListPage />} />
         {plannedRoutes.map((item) => (
           <Route
             key={item.path}

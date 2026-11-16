@@ -1,0 +1,203 @@
+# 项目与成员管理（8 个操作）。
+# 对应 backend/app/api/v1/project_routes.py。
+#
+# 为什么这块重要：`project_id` 是全平台的隔离基石（所有业务表带 `project_id`，
+# 所有端点由服务端强制项目隔离），但此前**没有任何 `/projects` 端点**——
+# 项目只能靠 seed 脚本写入，平台最核心的组织维度没有管理入口。
+#
+# 刻意不提供 `DELETE /projects/{id}`：项目被全部业务表以 `ON DELETE CASCADE`
+# 引用，删除会一次性销毁该项目的采集、Episode、标注、数据集与审计记录且不可
+# 恢复。下线用 `status=ARCHIVED`（可恢复）。
+
+projects:
+  get:
+    operationId: listProjects
+    tags: [projects]
+    summary: 当前用户可见的项目
+    description: |
+      平台管理员可见全部；普通成员只看到自己成员关系内的项目。
+      默认只返回 `ACTIVE`，`status=ARCHIVED` 可查已归档项目。
+    parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [ACTIVE, ARCHIVED]
+          default: ACTIVE
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 项目分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProjectPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createProject
+    tags: [projects]
+    summary: 创建项目
+    description: |
+      **仅平台管理员**。创建发生在任何项目上下文之外，普通成员的权限完全来自
+      成员关系——系统里没有「可创建项目」的项目级信号，因此只能由平台管理员做。
+
+      创建者自动写入该项目的 `owner` 成员：否则会留下一个只能由管理员接手的
+      孤儿项目。若创建者不在用户目录（外键要求），返回 403 而不是静默建用户。
+
+      `code` 在平台内唯一，重复返回 409。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ProjectCreate" }
+    responses:
+      "201":
+        description: 已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Project" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+projectDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: getProject
+    tags: [projects]
+    summary: 项目详情
+    description: 非成员返回 403（不暴露项目是否存在）；平台管理员访问不存在的项目返回 404。
+    responses:
+      "200":
+        description: 项目
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Project" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  patch:
+    operationId: updateProject
+    tags: [projects]
+    summary: 修改项目
+    description: |
+      `code` 不可改：它是项目业务键，改名请用 `name`。
+      `description` 显式传 `null` 表示清空；`name` / `status` 显式传 `null`
+      返回 422——它们没有「空」这个合法取值，静默忽略会让调用方以为改成功。
+
+      要求 `MANAGE_MEMBERS`（项目治理动作，不是普通写入）。
+
+      **`ARCHIVED` 当前只是状态位**：它让项目从默认列表消失，但**不阻断**
+      该项目的业务写入。把这个区别说清楚，避免误以为归档 = 只读。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ProjectPatch" }
+    responses:
+      "200":
+        description: 修改后的项目
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Project" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+projectMembers:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listProjectMembers
+    tags: [project-members]
+    summary: 项目成员列表
+    responses:
+      "200":
+        description: 成员分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProjectMemberPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: addProjectMember
+    tags: [project-members]
+    summary: 添加项目成员
+    description: |
+      本阶段**没有邀请能力**：用户目录由运维登记，客户端必须提供已存在的
+      `user_id`。用户不存在返回 404，不静默创建用户。
+
+      已是成员返回 409。要求 `MANAGE_MEMBERS`。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ProjectMemberAdd" }
+    responses:
+      "201":
+        description: 已添加
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProjectMember" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+projectMemberDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ProjectMemberUserId"
+  patch:
+    operationId: updateProjectMemberRole
+    tags: [project-members]
+    summary: 修改成员角色
+    description: |
+      「项目至少保留一名 owner」由领域规则 + 项目行锁保证：把最后一名 owner
+      降级返回 409。允许修改自己的角色，但同样受这条约束。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ProjectMemberRolePatch" }
+    responses:
+      "200":
+        description: 修改后的成员
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProjectMember" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  delete:
+    operationId: removeProjectMember
+    tags: [project-members]
+    summary: 移除项目成员
+    description: 移除最后一名 owner 返回 409。允许移除自己，但同样受这条约束。
+    responses:
+      "204": { description: 已移除（无响应体） }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

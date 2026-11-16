@@ -28,11 +28,13 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.errors import AppError
 from app.domain.annotation.errors import AnnotationDomainError
+from app.domain.audit.errors import AuditDomainError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.datasets.errors import DatasetDomainError
 from app.domain.datasources.errors import DataSourceDomainError
 from app.domain.devices.errors import DeviceDomainError
 from app.domain.episodes.errors import EpisodeDomainError
+from app.domain.governance.errors import GovernanceDomainError
 from app.domain.ingestion.errors import IngestionDomainError
 from app.domain.locations.errors import LocationDomainError
 from app.domain.modelops.errors import ModelOpsDomainError
@@ -168,6 +170,23 @@ def location_error_to_app(exc: LocationDomainError) -> AppError:
         status_by_code=_LOCATION_STATUS_BY_CODE,
         messages=_LOCATION_MESSAGES,
         fallback=_LOCATION_FALLBACK,
+    )
+
+
+# 审计查询域只有读路径，唯一错误码是分页/过滤参数非法。
+_AUDIT_STATUS_BY_CODE = {"validation_failed": 422}
+
+_AUDIT_MESSAGES = {"validation_failed": "审计查询参数或分页条件不合法"}
+
+_AUDIT_FALLBACK = "审计查询参数或分页条件不合法"
+
+
+def audit_error_to_app(exc: AuditDomainError) -> AppError:
+    return _mapped(
+        exc,
+        status_by_code=_AUDIT_STATUS_BY_CODE,
+        messages=_AUDIT_MESSAGES,
+        fallback=_AUDIT_FALLBACK,
     )
 
 
@@ -790,4 +809,42 @@ def datasource_error_to_app(exc: DataSourceDomainError) -> AppError:
         status_by_code=_DATASOURCE_STATUS_BY_CODE,
         messages=_DATASOURCE_MESSAGES,
         fallback=_DATASOURCE_FALLBACK,
+    )
+
+
+_GOVERNANCE_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "precondition_required": 428,
+    "version_conflict": 409,
+    "duplicate_resource": 409,
+    "resource_not_found": 404,
+    # 配额已满：请求本身合法，但当前项目状态不允许写入 → 409，不是 429。
+    "quota_exceeded": 409,
+    # 配额已配置却无法取得权威用量：fail-closed，客户端可退避重试。
+    "quota_measurement_unavailable": 503,
+}
+
+_GOVERNANCE_MESSAGES = {
+    "validation_failed": "请求参数或治理域规则校验失败",
+    "precondition_required": "修改既有配额必须携带 If-Match",
+    "version_conflict": "配额版本已变化，请重新读取后再试",
+    "duplicate_resource": "项目内该资源类型已存在配额",
+    "resource_not_found": "资源配额不存在或不属于当前项目",
+    "quota_exceeded": "项目配额已满，该写操作已被拒绝",
+    "quota_measurement_unavailable": "无法统计项目当前用量，写操作已拒绝",
+}
+_GOVERNANCE_FALLBACK = "治理域规则校验失败"
+
+# ``quota_exceeded`` 的 details 只含资源类型、上限、已用量与请求量，
+# 均为本项目内的可解释信息，允许回显用于展示"还差多少"。
+_GOVERNANCE_DETAILS_SAFE_CODES = frozenset({"quota_exceeded"})
+
+
+def governance_error_to_app(exc: GovernanceDomainError) -> AppError:
+    return _mapped(
+        exc,
+        status_by_code=_GOVERNANCE_STATUS_BY_CODE,
+        messages=_GOVERNANCE_MESSAGES,
+        fallback=_GOVERNANCE_FALLBACK,
+        details_codes=_GOVERNANCE_DETAILS_SAFE_CODES,
     )

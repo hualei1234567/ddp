@@ -323,6 +323,13 @@ def main(argv: list[str] | None = None) -> int:
             result = worker.process_once()
             logger.info("单次处理完成", extra={"result": result})
             return 0
+        # 启动日志不是装饰：容器 Up 但「进程到底在不在消费」是运维最先要确认
+        # 的事。此前这个 Worker 与 ingestion-job-worker 都没有任何启动输出，
+        # 只能靠 `docker top` 猜。
+        logger.info(
+            "数据源导入 Worker 已启动",
+            extra={"poll_interval": settings.validation_worker_poll_interval_seconds},
+        )
         worker.run(stop_event=stop_event)
     return 0
 

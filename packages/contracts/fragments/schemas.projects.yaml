@@ -1,0 +1,115 @@
+# 项目与成员 schema。对应 backend/app/api/v1/project_schemas.py。
+# 长度上限取自 app/domain/identity/projects.py（唯一权威实现）。
+
+ProjectStatus:
+  type: string
+  enum: [ACTIVE, ARCHIVED]
+  description: |
+    只有两个取值。没有 `DELETED`——删除不在本阶段能力范围内。
+
+    `ARCHIVED` 让项目从默认列表消失、可随时恢复，但**当前不阻断**该项目的
+    业务写入。不要把它读成「只读」。
+
+ProjectRole:
+  type: string
+  enum: [viewer, editor, owner]
+
+Project:
+  type: object
+  required:
+    - project_id
+    - code
+    - name
+    - description
+    - status
+    - version
+    - created_at
+    - updated_at
+    - membership_role
+    - allowed_actions
+  properties:
+    project_id: { type: string, format: uuid }
+    code: { type: string, minLength: 1, maxLength: 64 }
+    name: { type: string, minLength: 1, maxLength: 200 }
+    description: { type: [string, "null"], maxLength: 1000 }
+    status: { $ref: "../openapi.yaml#/components/schemas/ProjectStatus" }
+    version: { type: integer, minimum: 1 }
+    created_at: { type: [string, "null"], format: date-time }
+    updated_at: { type: [string, "null"], format: date-time }
+    membership_role:
+      oneOf:
+        - { $ref: "../openapi.yaml#/components/schemas/ProjectRole" }
+        - { type: "null" }
+      description: |
+        仅对当前认证主体有意义。平台管理员为 `null`——其权限不依赖成员关系。
+    allowed_actions:
+      type: array
+      items:
+        type: string
+        enum: [read, write, delete, validate, manage_members]
+      description: |
+        前端按钮渲染提示。**服务端授权仍由路由依赖强制**，前端不得当权限依据。
+
+ProjectCreate:
+  type: object
+  additionalProperties: false
+  required: [code, name]
+  properties:
+    code: { type: string, minLength: 1, maxLength: 64 }
+    name: { type: string, minLength: 1, maxLength: 200 }
+    description: { type: [string, "null"], maxLength: 1000 }
+
+ProjectPatch:
+  type: object
+  additionalProperties: false
+  description: |
+    `code` 不可改。`description` 显式 `null` 表示清空；`name` / `status`
+    显式 `null` 返回 422。
+  properties:
+    name: { type: string, minLength: 1, maxLength: 200 }
+    description: { type: [string, "null"], maxLength: 1000 }
+    status: { $ref: "../openapi.yaml#/components/schemas/ProjectStatus" }
+
+ProjectPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/Project" }
+    next_cursor: { type: [string, "null"] }
+
+ProjectMember:
+  type: object
+  required: [project_id, user_id, display_name, role, created_at, updated_at]
+  properties:
+    project_id: { type: string, format: uuid }
+    user_id: { type: string, format: uuid }
+    display_name: { type: string }
+    role: { $ref: "../openapi.yaml#/components/schemas/ProjectRole" }
+    created_at: { type: [string, "null"], format: date-time }
+    updated_at: { type: [string, "null"], format: date-time }
+
+ProjectMemberPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/ProjectMember" }
+    next_cursor: { type: [string, "null"] }
+
+ProjectMemberAdd:
+  type: object
+  additionalProperties: false
+  required: [user_id, role]
+  properties:
+    user_id: { type: string, format: uuid }
+    role: { $ref: "../openapi.yaml#/components/schemas/ProjectRole" }
+
+ProjectMemberRolePatch:
+  type: object
+  additionalProperties: false
+  required: [role]
+  properties:
+    role: { $ref: "../openapi.yaml#/components/schemas/ProjectRole" }

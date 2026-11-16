@@ -10,9 +10,10 @@ from datetime import UTC, datetime
 from typing import Any, TypeVar
 from uuid import UUID
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.domain.devices.errors import (
     DomainValidationError,
@@ -89,6 +90,37 @@ def ensure_expected_version(entity_version: int, expected_version: int) -> None:
 
 def scoped_select(model: type[_T], scope: ProjectScope) -> Select[tuple[_T]]:
     return select(model).where(model.project_id == scope.project_id)  # type: ignore[attr-defined]
+
+
+def keyset_after_desc(
+    model: type[Any],
+    order_column: Any,
+    id_column: Any,
+    after_id: UUID | None,
+    *,
+    project_id: UUID | None = None,
+) -> ColumnElement[bool] | None:
+    """``(order_column, id)`` 倒序键集条件；``after_id`` 为空时返回 ``None``。
+
+    对外游标只承载"最后一条记录的 ID"，同一排序值（例如同一毫秒）的并列
+    无法用单列游标表达，因此这里用子查询取出游标行的排序值组成复合键集。
+    与 ``annotation_quality_checks.keyset_after_created_desc`` /
+    ``modelops_rows._after_clause`` 同构——那两处是既有域内私有副本，
+    按增量迭代原则本次不迁移，收敛登记为技术债。
+
+    ``project_id`` 必须传入：游标锚点子查询若不限定项目，别家项目的记录 ID
+    会通过返回结果集间接泄露"该 ID 存在且时间是多少"。
+    """
+    if after_id is None:
+        return None
+    anchor = select(order_column).where(model.id == after_id)
+    if project_id is not None:
+        anchor = anchor.where(model.project_id == project_id)
+    anchor_value = anchor.scalar_subquery()
+    return or_(
+        order_column < anchor_value,
+        and_(order_column == anchor_value, id_column < after_id),
+    )
 
 
 def raise_update_failure(

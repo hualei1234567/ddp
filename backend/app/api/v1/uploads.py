@@ -12,6 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
 from app.api.deps import get_project_scope, get_write_scope
+from app.api.v1.governance_dependencies import EnforceObjectStorageUploadQuota
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.schemas import PageOut
 from app.api.v1.upload_dependencies import UploadUseCasesDep
@@ -62,6 +63,7 @@ def create_upload_session(
     response: Response,
     scope: WriteScope,
     use_cases: UploadUseCasesDep,
+    _quota_guard: EnforceObjectStorageUploadQuota,
     idempotency_key: IdempotencyKey = None,
 ) -> UploadSessionOut:
     created = use_cases.uploads.create_session(
