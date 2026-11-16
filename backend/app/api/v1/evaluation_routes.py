@@ -70,6 +70,7 @@ def create_evaluation(
             metrics=payload.metrics,
             thresholds=payload.thresholds,
             baseline_evaluation_id=payload.baseline_evaluation_id,
+            cross_dataset_comparison=payload.cross_dataset_comparison,
             adapter_id=payload.adapter_id,
         ),
         idempotency_key=idempotency_key,
