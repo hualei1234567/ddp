@@ -64,12 +64,12 @@ class Settings(BaseSettings):
 
     env: str = "production"
     app_name: str = "DDP"
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
     log_level: str = "INFO"
 
     # 对外元信息（GET /api/v1/platform/meta）。当前实现进度只在配置声明一处，
     # 阶段推进时改这里（或部署期 DDP_PLATFORM_PHASE），不在路由里硬编码。
-    platform_phase: str = "7"
+    platform_phase: str = "8"
     platform_modules: list[str] = Field(
         default_factory=lambda: [
             "platform",
