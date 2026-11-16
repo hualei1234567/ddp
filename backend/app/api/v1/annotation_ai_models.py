@@ -88,3 +88,37 @@ class AiSuggestionOut(BaseModel):
             created_by=suggestion.created_by,
             updated_by=suggestion.updated_by,
         )
+
+
+class AgreementItemOut(BaseModel):
+    """单个模型版本的采纳统计。
+
+    `acceptance_rate` 为 `None` 表示没有任何已决定条目——**不是 0**。
+    前端不得把它渲染成 0%。
+    """
+
+    model_id: str
+    model_version: str
+    total: int
+    accepted: int
+    revised: int
+    pending: int
+    decided: int
+    acceptance_rate: float | None
+
+    @classmethod
+    def from_stats(cls, stats: object) -> AgreementItemOut:
+        return cls(
+            model_id=stats.model_id,  # type: ignore[attr-defined]
+            model_version=stats.model_version,  # type: ignore[attr-defined]
+            total=stats.total,  # type: ignore[attr-defined]
+            accepted=stats.accepted,  # type: ignore[attr-defined]
+            revised=stats.revised,  # type: ignore[attr-defined]
+            pending=stats.pending,  # type: ignore[attr-defined]
+            decided=stats.decided,  # type: ignore[attr-defined]
+            acceptance_rate=stats.acceptance_rate,  # type: ignore[attr-defined]
+        )
+
+
+class AgreementOut(BaseModel):
+    items: list[AgreementItemOut]

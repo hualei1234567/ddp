@@ -411,3 +411,35 @@ datasetVersionLineage:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiSuggestionAgreement:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubmissionId"
+  get:
+    operationId: getAnnotationAiSuggestionAgreement
+    tags: [annotation-ai]
+    summary: 按模型版本聚合 AI 建议的人工处置
+    description: |
+      回答"模型给的标签，人接受了多少、改了多少、还没看多少"——
+      这是模型反馈闭环的输入：缺口分析知道**缺什么数据**，
+      但"模型靠不靠得住"必须先有采纳率。
+
+      三种处置互斥：`ACCEPTED`（规范化后人工值等于建议值）、
+      `REVISED`（不等）、`PENDING`（尚未确认）。
+
+      **`acceptance_rate` 的分母是已决定条数（accepted + revised），
+      不是总条数**：把待处理算进分母会让"还没人看"拉低采纳率，
+      读起来像"模型不行"。无任何已决定条目时为 `null` 而非 `0`
+      ——"没有样本"与"采纳率 0"是两件事。没有登记任何建议时
+      `items` 为空数组，不是一行全 0。
+    responses:
+      "200":
+        description: 各模型版本的采纳统计（按 model_id + model_version 排序）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AgreementSummary" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

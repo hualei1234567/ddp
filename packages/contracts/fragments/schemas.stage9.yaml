@@ -143,3 +143,30 @@ AiSuggestionPage:
       type: array
       items: { $ref: "../openapi.yaml#/components/schemas/AiSuggestion" }
     next_cursor: { type: [string, "null"] }
+
+AgreementItem:
+  type: object
+  required: [model_id, model_version, total, accepted, revised, pending, decided, acceptance_rate]
+  properties:
+    model_id: { type: string }
+    model_version: { type: string }
+    total: { type: integer, minimum: 0 }
+    accepted: { type: integer, minimum: 0 }
+    revised: { type: integer, minimum: 0 }
+    pending: { type: integer, minimum: 0 }
+    decided: { type: integer, minimum: 0 }
+    acceptance_rate:
+      type: [number, "null"]
+      minimum: 0
+      maximum: 1
+      description: |
+        分母是 `decided`（accepted + revised），不是 `total`。
+        `null` 表示没有任何已决定条目——**不是 0**，前端不得渲染成 0%。
+
+AgreementSummary:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/AgreementItem" }

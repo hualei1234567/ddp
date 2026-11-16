@@ -100,6 +100,20 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
     episodes = SqlEpisodeDirectory(session)
     members = SqlMemberDirectory(session)
 
+    # 先构造质量检查用例：提交用例要在提交成功后立刻跑一次检查，因此需要
+    # 持有它。两者不互相持有（检查用例不依赖提交用例），先建无顺序问题。
+    quality_checks = QualityCheckUseCases(
+        quality_check_repo,
+        submissions_repo,
+        records_repo,
+        tasks_repo,
+        schemas_repo,
+        episodes,
+        audit,
+        outbox,
+        session,
+    )
+
     return AnnotationUseCases(
         schemas=AnnotationSchemaUseCases(
             schemas_repo,
@@ -165,6 +179,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             outbox,
             idempotency,
             session,
+            quality_checks,
         ),
         reviews=AnnotationReviewUseCases(
             reviews_repo,
@@ -214,17 +229,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             idempotency,
             session,
         ),
-        quality_checks=QualityCheckUseCases(
-            quality_check_repo,
-            submissions_repo,
-            records_repo,
-            tasks_repo,
-            schemas_repo,
-            episodes,
-            audit,
-            outbox,
-            session,
-        ),
+        quality_checks=quality_checks,
         iaa=IAAUseCases(
             iaa_repo,
             records_repo,

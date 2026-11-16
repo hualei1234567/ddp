@@ -484,3 +484,136 @@ def test_foreign_draft_suggestions_are_invisible(
     )
     assert hidden.status_code == 403, hidden.text
     assert hidden.json()["error"]["code"] == "forbidden"
+
+
+# ---------------------------------------------------------------------------
+# 采纳统计（N7 反馈闭环的输入）
+# ---------------------------------------------------------------------------
+
+_AGREEMENT_PATH = "/annotation-submissions/{submission_id}/ai-suggestions/agreement"
+
+
+def test_agreement_counts_accepted_revised_and_pending(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """采纳 / 修订 / 待处理三态分别计数，采纳率的分母是**已决定**条数。
+
+    这是 N7「模型反馈闭环」缺的那块输入：缺口分析知道缺什么数据，但
+    "模型给的标签靠不靠得住"必须先有采纳率。
+    """
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-agree")
+    editor = make_client(factory, ids.editor_a)
+    submission_id = submission["submission_id"]
+    suggestion_url = url(ids.project_a, _AI_SUGGESTION_PATH.format(submission_id=submission_id))
+    agreement_url = url(ids.project_a, _AGREEMENT_PATH.format(submission_id=submission_id))
+
+    annotation_id = _annotation_id(factory, submission_id)
+    # 三条建议：分别会被采纳、被修订、保持待处理
+    payloads = []
+    for key, value in (("action", "PLACE"), ("action2", "PICK"), ("action3", "OPEN")):
+        item = _suggestion_payload(annotation_id)
+        item["label_key"] = key
+        item["suggested_value"] = value
+        payloads.append(item)
+    recorded = editor.post(suggestion_url, json={"suggestions": payloads})
+    assert recorded.status_code == 201, recorded.text
+    ids_by_key = {item["label_key"]: item["suggestion_id"] for item in recorded.json()["items"]}
+
+    def _confirm(suggestion_id: str, value: object) -> None:
+        current = next(
+            item
+            for item in editor.get(suggestion_url).json()["items"]
+            if item["suggestion_id"] == suggestion_id
+        )
+        response = editor.post(
+            url(ids.project_a, _CONFIRM_PATH.format(suggestion_id=suggestion_id)),
+            json={"human_value": value},
+            headers={"If-Match": f'"{current["version"]}"'},
+        )
+        assert response.status_code == 200, response.text
+
+    _confirm(ids_by_key["action"], "PLACE")  # 原样采纳
+    _confirm(ids_by_key["action2"], "PICKED")  # 修订
+    # action3 保持待处理
+
+    response = editor.get(agreement_url)
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert len(items) == 1, "三条建议同一个模型版本，应聚合为一行"
+    stats = items[0]
+    assert stats["model_id"] == "ddp-action-vlm"
+    assert stats["model_version"] == "1.2.0"
+    assert stats["total"] == 3
+    assert stats["accepted"] == 1
+    assert stats["revised"] == 1
+    assert stats["pending"] == 1
+    assert stats["decided"] == 2
+    # 分母是已决定条数（2），不是总数（3）：待处理不该拉低采纳率。
+    assert abs(stats["acceptance_rate"] - 0.5) < 1e-9
+
+
+def test_agreement_rate_is_null_when_nothing_decided(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """全部待处理时采纳率必须是 null，不是 0。
+
+    0% 读起来是"模型一条都没对上"，null 才是"还没人看"。把两者合并
+    等于用「没检查」冒充「检查结果是差」。
+    """
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-agree-null")
+    editor = make_client(factory, ids.editor_a)
+    submission_id = submission["submission_id"]
+    annotation_id = _annotation_id(factory, submission_id)
+
+    editor.post(
+        url(ids.project_a, _AI_SUGGESTION_PATH.format(submission_id=submission_id)),
+        json={"suggestions": [_suggestion_payload(annotation_id)]},
+    )
+    response = editor.get(url(ids.project_a, _AGREEMENT_PATH.format(submission_id=submission_id)))
+    assert response.status_code == 200, response.text
+    stats = response.json()["items"][0]
+    assert stats["pending"] == 1
+    assert stats["decided"] == 0
+    assert stats["acceptance_rate"] is None
+
+
+def test_agreement_is_empty_when_no_suggestions(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """没有登记任何建议时返回空列表，不是一行 0。
+
+    "没有建议"与"有建议但都待处理"必须可区分，否则前端会渲染出
+    一个凭空捏造的模型版本。
+    """
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-agree-empty")
+    editor = make_client(factory, ids.editor_a)
+
+    response = editor.get(
+        url(
+            ids.project_a,
+            _AGREEMENT_PATH.format(submission_id=submission["submission_id"]),
+        )
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == []
+
+
+def test_agreement_isolated_across_projects(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """跨项目读取采纳统计 → 404，不泄露建议是否存在。"""
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-agree-iso")
+    foreign = make_client(factory, ids.owner_a)  # 同时是项目 B 的 owner
+
+    response = foreign.get(
+        url(
+            ids.project_b,
+            _AGREEMENT_PATH.format(submission_id=submission["submission_id"]),
+        )
+    )
+    assert response.status_code == 404, response.text
+    assert response.json()["error"]["code"] == "resource_not_found"

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from typing import Protocol
 from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
@@ -68,6 +70,27 @@ from app.domain.annotation.submission import (
 )
 from app.domain.identity.models import ProjectScope
 
+logger = logging.getLogger(__name__)
+
+
+class QualityCheckRunner(Protocol):
+    """提交后自动跑一次质量检查所需的最小能力。
+
+    不直接依赖 ``QualityCheckUseCases``：两者互相 import 会形成循环
+    （检查用例要用提交仓储，提交用例要触发检查），而这里只需要一个
+    ``run`` 签名。
+    """
+
+    def run(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+        *,
+        request_id: str | None = None,
+        now: datetime | None = None,
+    ) -> object: ...
+
+
 _RESOURCE_TYPE = "ANNOTATION_SUBMISSION"
 _RECORD_TYPE = "ANNOTATION_RECORD"
 _CREATABLE_TASK_STATUSES = {
@@ -106,6 +129,7 @@ class AnnotationSubmissionUseCases:
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        quality_checks: QualityCheckRunner | None = None,
     ) -> None:
         self._submissions = submissions
         self._records = records
@@ -122,6 +146,10 @@ class AnnotationSubmissionUseCases:
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        # 质量检查在提交时自动执行。用 Protocol 而不是直接 import
+        # QualityCheckUseCases：两者互相依赖会形成循环导入，而这里只需要
+        # "跑一次检查"这一个能力。
+        self._quality_checks = quality_checks
 
     def get(self, scope: ProjectScope, submission_id: UUID) -> AnnotationSubmission:
         submission = self._submissions.get(scope, submission_id)
@@ -331,6 +359,7 @@ class AnnotationSubmissionUseCases:
         if action_name == AnnotationSubmissionAction.SUBMIT.value:
             self._mark_records(scope, current, AnnotationRecordStatus.SUBMITTED, now=now)
             self._submit_assignment(scope, current, now=now)
+            self._run_quality_checks(scope, saved, request_id=request_id, now=now)
         elif action_name == AnnotationSubmissionAction.REQUIRE_REWORK.value:
             self._mark_records(
                 scope,
@@ -393,6 +422,56 @@ class AnnotationSubmissionUseCases:
             path=f"/annotation-submissions/{submission_id}/actions/require-rework",
             request_id=request_id,
         )
+
+    def _run_quality_checks(
+        self,
+        scope: ProjectScope,
+        submission: AnnotationSubmission,
+        *,
+        request_id: str | None,
+        now: datetime,
+    ) -> None:
+        """提交成功后立刻跑一次质量检查。
+
+        为什么同步在提交事务里跑：结论必须与"提交冻结"同时可见。若留给调用方
+        或后台任务补跑，就存在"提交已冻结但质检结论尚未产生"的窗口，复核人
+        此时看到的是空结论——而空结论读起来像"没问题"，正好是最危险的误读。
+
+        ## 检查失败不得否决提交
+
+        质检抛错时**不让提交回滚**，只记录告警。理由：
+
+        - 提交是标注人已经完成的劳动（记录已按 Schema 校验通过、digest 已核验），
+          质检是质量门禁的一环，两者不是同一件事；
+        - 已实测的失败场景是 `quality_policy.ai_confidence_threshold` 配成非法值
+          ——那是**任务管理者**的配置错误，让标注人无法提交等于把别人的错误
+          转嫁给他，且他没有任何自助修复手段；
+        - 一旦吞掉，必须留下可发现的痕迹：日志带 request_id 与提交 ID，
+          运维/管理员能据此定位到"某个任务的策略配置有问题"。
+
+        这与"提交成功但永远没有质检记录"的沉默缺口并不矛盾：后者若由数据问题
+        （缺边界、缺 Schema）造成，会在**每次**提交重复出现并被日志聚合发现，
+        而不是悄悄过去。
+        """
+        if self._quality_checks is None:
+            return
+        try:
+            self._quality_checks.run(
+                scope,
+                submission.submission_id,
+                request_id=request_id,
+                now=now,
+            )
+        except Exception:  # noqa: BLE001 - 质量门禁失败不得否决已完成的标注提交
+            logger.warning(
+                "提交后自动质量检查失败；提交本身已保留",
+                extra={
+                    "submission_id": str(submission.submission_id),
+                    "project_id": str(scope.project_id),
+                    "request_id": request_id,
+                },
+                exc_info=True,
+            )
 
     def _assert_can_require_rework(
         self,

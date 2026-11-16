@@ -51,6 +51,10 @@ from app.domain.annotation.submission import (
     AnnotationSubmission,
     submission_visible_to,
 )
+from app.domain.annotation.suggestion_agreement import (
+    AgreementStats,
+    aggregate_agreement,
+)
 from app.domain.identity.models import ProjectScope
 
 _RESOURCE_TYPE = "ANNOTATION_AI_SUGGESTION"
@@ -112,6 +116,22 @@ class AnnotationAiSuggestionUseCases:
         ):
             raise ForbiddenOperationError("无权查看他人标注草稿的 AI 建议")
         return self._suggestions.list_for_submission(scope, submission_id)
+
+    def agreement(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+    ) -> tuple[AgreementStats, ...]:
+        """按模型版本聚合"AI 建议被采纳 / 被修订 / 待处理"。
+
+        这是 N7 模型反馈闭环缺的输入：缺口分析知道**缺什么数据**，但
+        "模型给的标签靠不靠得住"必须先有采纳率才谈得上。
+
+        可见性复用 :meth:`list_for_submission`（他人草稿对其不可见），
+        不另写一份判据——两处一旦分叉就会出现"看不到建议却能看统计"的漏洞。
+        """
+        suggestions = self.list_for_submission(scope, submission_id)
+        return aggregate_agreement(suggestions)
 
     # ------------------------------------------------------------------ 登记
     def record_suggestions(

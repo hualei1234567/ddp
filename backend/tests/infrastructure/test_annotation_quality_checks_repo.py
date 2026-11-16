@@ -30,7 +30,7 @@ from app.infrastructure.db.models.annotation_quality_rules import (
 from app.infrastructure.db.models.identity import Project, ProjectMember, User
 from app.infrastructure.db.session import create_db_engine, create_session_factory
 from app.infrastructure.repositories.annotation_quality_checks import SqlQualityCheckRepository
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.annotation_support import (
@@ -156,6 +156,15 @@ def world() -> Iterator[tuple[sessionmaker[Session], _World]]:
         record_a=UUID(str(submission_a["records"][0]["annotation_id"])),
         record_b=UUID(str(submission_b["records"][0]["annotation_id"])),
     )
+    # 提交动作会在应用层自动触发一次质量检查，留下基线记录。
+    # 本文件测的是**仓储层**行为（分页、跨项目隔离、拒绝非法写入），
+    # 需要从干净状态起算——否则断言里的绝对条数会被应用层副作用带偏。
+    # 显式清空而不是绕过检查：让"这个文件不依赖应用层"成为事实。
+    with factory() as session:
+        session.execute(delete(AnnotationQualityFinding))
+        session.execute(delete(AnnotationQualityRun))
+        session.commit()
+
     try:
         yield factory, ids
     finally:

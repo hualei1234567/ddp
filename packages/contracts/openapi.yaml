@@ -46,6 +46,11 @@ info:
       `data-gaps[].items[].coverage_source`（MEASURED / MANUAL / UNKNOWN，
       测不到不等于覆盖率为 0）。以及错误码 `training_delivery_requirement_unmet`。
       全部为增量：无路径删除、无字段删除、无必填性收紧。
+    - `1.8.0` 同时收录标注质量检查的**提交即自动执行**语义：
+      `POST .../quality-checks` 是手动重跑（每次新增一条 run），不是首次触发；
+      且自动检查失败不得否决提交。以及 AI 建议采纳统计
+      `GET .../ai-suggestions/agreement`（按模型版本聚合采纳/修订/待处理，
+      采纳率分母为已决定条数，无样本时为 null 而非 0）。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -636,6 +641,8 @@ paths:
     $ref: "./fragments/paths.stage8.yaml#/submissionAiSuggestions"
   /api/v1/projects/{project_id}/annotation-ai-suggestions/{suggestion_id}/confirm:
     $ref: "./fragments/paths.stage8.yaml#/aiSuggestionConfirm"
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/ai-suggestions/agreement:
+    $ref: "./fragments/paths.stage8.yaml#/aiSuggestionAgreement"
   # --- N5 DatasetVersion 血缘 ---
   /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/lineage:
     $ref: "./fragments/paths.stage8.yaml#/datasetVersionLineage"
@@ -1096,3 +1103,5 @@ components:
     AiSuggestionConfirm: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionConfirm"}
     AiSuggestion: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestion"}
     AiSuggestionPage: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionPage"}
+    AgreementItem: {$ref: "./fragments/schemas.stage9.yaml#/AgreementItem"}
+    AgreementSummary: {$ref: "./fragments/schemas.stage9.yaml#/AgreementSummary"}
