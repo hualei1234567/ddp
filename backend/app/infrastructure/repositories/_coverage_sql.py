@@ -21,6 +21,7 @@ from __future__ import annotations
 from typing import Any
 
 from sqlalchemy import String, case, func
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.domain.episodes.state_machines import EPISODE_COVERAGE_STATUSES
 from app.domain.identity.models import ProjectScope
@@ -37,11 +38,25 @@ def coverage_scope_conditions(scope: ProjectScope) -> tuple[Any, ...]:
     )
 
 
+def _as_jsonb(column: Any) -> Any:
+    """把 JSON 列显式 cast 成 jsonb。
+
+    为什么必须 cast：本仓库的 JSON 列类型**不统一**——`episodes.scene_labels`
+    是 `jsonb`，而 `action_specs.actions`、`annotation_records.labels` 是 `json`。
+    `jsonb_array_elements*` 只接受 jsonb，直接传 `json` 列的 Postgres 报
+    `function jsonb_array_elements(json) does not exist`。
+
+    这不是风格问题：SQLite 上 `json_each` 对两种列都能用，所以只有真实
+    PostgreSQL + 真实 json 列才暴露——测试若只用 jsonb 列造数据就发现不了。
+    """
+    return func.cast(column, JSONB)
+
+
 def expand_text_array(column: Any, *, dialect: str) -> Any:
     """把 JSON 字符串数组展开成单列 ``value``（每元素一行）。"""
     if dialect == "postgresql":
         return (
-            func.jsonb_array_elements_text(column)
+            func.jsonb_array_elements_text(_as_jsonb(column))
             .table_valued("value", joins_implicitly=True)
             .alias("coverage_value")
         )
@@ -57,7 +72,7 @@ def expand_object_array(column: Any, *, dialect: str) -> Any:
     """
     if dialect == "postgresql":
         return (
-            func.jsonb_array_elements(column)
+            func.jsonb_array_elements(_as_jsonb(column))
             .table_valued("value", joins_implicitly=True)
             .alias("coverage_element")
         )
@@ -101,7 +116,7 @@ def json_string_field(value: Any, key: str, *, dialect: str) -> Any:
 
 def json_array_length(column: Any, *, dialect: str) -> Any:
     if dialect == "postgresql":
-        return func.jsonb_array_length(column)
+        return func.jsonb_array_length(_as_jsonb(column))
     return func.json_array_length(column)
 
 

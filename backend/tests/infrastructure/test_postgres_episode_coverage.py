@@ -19,7 +19,7 @@ from app.infrastructure.db.models.episodes import EpisodeModel
 from app.infrastructure.db.models.identity import Project, ProjectMember, User
 from app.infrastructure.db.session import create_session_factory
 from app.infrastructure.repositories.episode_coverage import SqlEpisodeCoverageDirectory
-from sqlalchemy import create_engine, event, update
+from sqlalchemy import create_engine, event, text, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.schema import CreateSchema, DropSchema
@@ -327,3 +327,57 @@ def test_postgres_closed_axis_sql_uses_jsonb_object_functions(postgres_engine: E
     joined = "\n".join(captured)
     assert "jsonb_array_elements(" in joined
     assert "jsonb_typeof" in joined
+
+
+def test_postgres_action_axis_works_when_column_is_json_not_jsonb(
+    postgres_engine: Engine,
+) -> None:
+    """迁移建表时 ``action_specs.actions`` 是 ``json``，不是 ``jsonb``。
+
+    这里把列改成与**迁移产物**一致的类型再查一次。
+
+    为什么必须有这条用例：其余 PG 测试都走 ``Base.metadata.create_all``，
+    而 ORM 用的是 ``JSON().with_variant(JSONB, "postgresql")``——建出来是
+    ``jsonb``。于是「直接对 json 列调 ``jsonb_array_elements``」这种错误在
+    测试里永远不会出现，只在真实迁移库上 500。
+
+    实测过一次：真实库 `GET /data-gaps` 返回
+    ``function jsonb_array_elements(json) does not exist``。
+    修复是在 SQL 里显式 ``cast(... as jsonb)``；本用例锁住它。
+    """
+    factory, project_id, user_id = _seed_closed(postgres_engine)
+    with postgres_engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE action_specs "
+                "ALTER COLUMN actions TYPE json USING actions::json"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE annotation_records "
+                "ALTER COLUMN labels TYPE json USING labels::json"
+            )
+        )
+
+    with factory() as session:
+        spec = add_action_spec(
+            session, project_id, user_id, actions=[{"code": "pick"}, {"code": "place"}]
+        )
+        task = add_collection_task(session, project_id, user_id, action_spec_id=spec)
+        session.commit()
+    episode = episode_row(project_id, user_id, task_id=task)
+    insert_episodes(factory, [episode])
+    with factory() as session:
+        approve_episodes(
+            session,
+            project_id,
+            user_id,
+            labels_by_episode={episode.id: [{"label_key": "grasp"}]},
+        )
+        session.commit()
+
+    action_entries = _coverage(factory, project_id, user_id, frozenset({"ACTION"}))
+    assert {e.dimension_value: e.count for e in action_entries} == {"pick": 1, "place": 1}
+    label_entries = _coverage(factory, project_id, user_id, frozenset({"LABEL"}))
+    assert {e.dimension_value: e.count for e in label_entries} == {"grasp": 1}
