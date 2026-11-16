@@ -23,6 +23,7 @@ from app.api.v1 import (
     evaluation_routes,
     export_routes,
     feedback_routes,
+    governance_routes,
     inbound_routes,
     inference_routes,
     ingestion_jobs,
@@ -71,3 +72,5 @@ api_router.include_router(model_adapter_routes.router)
 api_router.include_router(supplier_routes.router)
 api_router.include_router(inbound_routes.router)
 api_router.include_router(datasource_routes.router)
+# 经营治理（N9）：项目配额、用量报表；写操作前置判定由各写路由显式声明依赖。
+api_router.include_router(governance_routes.router)
