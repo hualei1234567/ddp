@@ -11,6 +11,7 @@ from app.application.episodes.commands import (
 )
 from app.application.episodes.episodes import EpisodeService
 from app.application.episodes.lineage import LineageService
+from app.application.episodes.provenance import SourceProvenanceResolver
 from app.application.ingestion.commands import CreateIngestionJobCommand
 from app.application.ingestion.jobs import IngestionJobService
 from app.domain.episodes.models import Episode, Segmentation
@@ -19,6 +20,9 @@ from app.domain.identity.models import ProjectScope
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
     SqlOutboxRepository,
+)
+from app.infrastructure.repositories.datasource_provenance import (
+    SqlSourceProvenanceRepository,
 )
 from app.infrastructure.repositories.episodes import (
     SqlEpisodeRawAssetRepository,
@@ -155,7 +159,16 @@ def build_services(
         session,
     )
     job_service = IngestionJobService(jobs, raw_assets, audit, outbox, session)
-    lineage_service = LineageService(lineage, audit, outbox, session)
+    lineage_service = LineageService(
+        lineage,
+        audit,
+        outbox,
+        session,
+        SourceProvenanceResolver(
+            SqlSourceProvenanceRepository(session),
+            raw_assets,
+        ),
+    )
     return episode_service, job_service, lineage_service
 
 

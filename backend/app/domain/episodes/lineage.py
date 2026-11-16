@@ -67,6 +67,29 @@ RELATION_ENDPOINTS: Mapping[
     }
 )
 
+# 数据源链的**精确**端点组合。
+#
+# 为什么不用上面的粗粒度白名单：``PRODUCED`` 的 from/to 集合是分别列举的，
+# 再往里加 ``DATA_SOURCE`` / ``DATA_SOURCE_IMPORT`` 会顺带放行
+# ``INGESTION_JOB --PRODUCED--> RAW_ASSET``、``DATA_SOURCE --PRODUCED-->
+# RAW_ASSET`` 这类没有语义的组合。数据源链只有固定两跳，按组合精确列举既
+# 表达真实规则，也不放宽任何既有组合。
+IMPORT_CHAIN_ENDPOINTS: Mapping[
+    LineageRelation,
+    frozenset[tuple[LineageNodeType, LineageNodeType]],
+] = MappingProxyType(
+    {
+        # 方向与既有一致：上游产出下游。这样 forward 能从数据源查到它产出了
+        # 哪些资产，reverse 能从资产一路回溯到数据源，不必额外造逆向边。
+        LineageRelation.PRODUCED: frozenset(
+            {
+                (LineageNodeType.DATA_SOURCE, LineageNodeType.DATA_SOURCE_IMPORT),
+                (LineageNodeType.DATA_SOURCE_IMPORT, LineageNodeType.RAW_ASSET),
+            }
+        ),
+    }
+)
+
 
 def _enum(value: object, enum_type: type, field_name: str) -> object:
     try:
@@ -151,6 +174,9 @@ class LineageEdge:
 def validate_edge_endpoints(edge: LineageEdge) -> None:
     if edge.from_node_type is edge.to_node_type and edge.from_node_id == edge.to_node_id:
         raise LineageConflictError("血缘边不允许指向自身")
+    pair = (edge.from_node_type, edge.to_node_type)
+    if pair in IMPORT_CHAIN_ENDPOINTS.get(edge.relation, frozenset()):
+        return
     allowed_from, allowed_to = RELATION_ENDPOINTS[edge.relation]
     if edge.from_node_type not in allowed_from or edge.to_node_type not in allowed_to:
         raise LineageConflictError("血缘关系两端节点类型不匹配")

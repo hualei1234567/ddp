@@ -368,7 +368,7 @@ DownloadUrlResponse:
     expires_at: {type: string, format: date-time}
 LineageNodeType:
   type: string
-  enum: [RAW_ASSET, UPLOAD_SESSION, COLLECTION_TASK, COLLECTION_BATCH, INGESTION_JOB, EPISODE, QUALITY_RUN, ANNOTATION, DATASET_VERSION, TRAINING_RUN]
+  enum: [RAW_ASSET, UPLOAD_SESSION, COLLECTION_TASK, COLLECTION_BATCH, INGESTION_JOB, EPISODE, QUALITY_RUN, ANNOTATION, DATASET_VERSION, TRAINING_RUN, DATA_SOURCE, DATA_SOURCE_IMPORT]
 LineageRelation:
   type: string
   enum: [UPLOADED_BY, PRODUCED_BY, USED_AS_INPUT, PRODUCED, SEGMENTED_INTO, SUPERSEDES, INVALIDATES, EVALUATED_BY, ANNOTATED_BY, INCLUDED_IN]
@@ -394,6 +394,58 @@ LineageResponse:
   properties:
     items: {type: array, items: {$ref: "#/LineageEdge"}}
     direction: {type: string, enum: [forward, reverse]}
+    raw_asset_sources:
+      type: array
+      default: []
+      description: |
+        图上出现的 RawAsset 各自的**来源结论**。这是「这个资产的字节最初从
+        哪里来」的直接答案，避免调用方自己从 edge.metadata 里推测。
+
+        `status` 是四态，**不要合并**：
+        - `RESOLVED`：能追到数据源与导入任务；
+        - `NO_EXTERNAL_SOURCE`：手工上传或设备采集，**这是正常状态**，
+          不是缺失；
+        - `SOURCE_LINK_MISSING`：声称来自导入但查不到对应媒体行——数据不一致，
+          应排查；
+        - `UNKNOWN_ASSET`：图上引用了不存在的资产。
+      items: {$ref: "#/RawAssetSource"}
+
+RawAssetSource:
+  type: object
+  required: [raw_asset_id, status, data_sources, imports]
+  additionalProperties: false
+  properties:
+    raw_asset_id: {type: string, format: uuid}
+    status:
+      type: string
+      enum: [RESOLVED, NO_EXTERNAL_SOURCE, SOURCE_LINK_MISSING, UNKNOWN_ASSET]
+    data_sources: {type: array, items: {$ref: "#/DataSourceNode"}}
+    imports: {type: array, items: {$ref: "#/DataSourceImportNode"}}
+
+DataSourceNode:
+  type: object
+  required: [data_source_id, code, name, kind, repo_id, revision]
+  additionalProperties: false
+  description: 数据源节点属性（只读投影，不落血缘表）。
+  properties:
+    data_source_id: {type: string, format: uuid}
+    code: {type: string, minLength: 1}
+    name: {type: string}
+    kind: {type: string, description: 当前仅 HUGGINGFACE}
+    repo_id: {type: string}
+    revision: {type: string, description: 40 位 commit sha}
+
+DataSourceImportNode:
+  type: object
+  required: [import_id, status, scope, started_at, finished_at, imported_file_count]
+  additionalProperties: false
+  properties:
+    import_id: {type: string, format: uuid}
+    status: {type: string, enum: [PENDING, RUNNING, SUCCEEDED, FAILED, CANCELLED]}
+    scope: {type: string, enum: [SAMPLE, SPLIT, FULL]}
+    started_at: {type: [string, "null"], format: date-time}
+    finished_at: {type: [string, "null"], format: date-time}
+    imported_file_count: {type: [integer, "null"]}
 EpisodeStatus:
   type: string
   enum: [PENDING, PROCESSING, READY, QUALITY_CHECKING, ACCEPTED, COMPLETED, ARCHIVED, FAILED, REJECTED, INVALIDATED]

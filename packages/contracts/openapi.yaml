@@ -633,6 +633,8 @@ paths:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportQualityReport"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/episodes:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportEpisodes"
+  /api/v1/projects/{project_id}/data-sources/{data_source_id}/lineage:
+    $ref: "./fragments/paths.stage2.yaml#/dataSourceLineage"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/review:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportReview"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/review/decisions:
@@ -902,6 +904,9 @@ components:
     LineageRelation: {$ref: "./fragments/schemas.stage2.yaml#/LineageRelation"}
     LineageEdge: {$ref: "./fragments/schemas.stage2.yaml#/LineageEdge"}
     LineageResponse: {$ref: "./fragments/schemas.stage2.yaml#/LineageResponse"}
+    RawAssetSource: {$ref: "./fragments/schemas.stage2.yaml#/RawAssetSource"}
+    DataSourceNode: {$ref: "./fragments/schemas.stage2.yaml#/DataSourceNode"}
+    DataSourceImportNode: {$ref: "./fragments/schemas.stage2.yaml#/DataSourceImportNode"}
     EpisodeStatus: {$ref: "./fragments/schemas.stage2.yaml#/EpisodeStatus"}
     EpisodeQualityStatus: {$ref: "./fragments/schemas.stage2.yaml#/EpisodeQualityStatus"}
     EpisodeAnnotationStatus: {$ref: "./fragments/schemas.stage2.yaml#/EpisodeAnnotationStatus"}

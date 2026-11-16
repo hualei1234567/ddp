@@ -20,6 +20,8 @@ export const LINEAGE_NODE_LABELS: Record<LineageNodeType, string> = {
   ANNOTATION: "标注",
   DATASET_VERSION: "数据集版本",
   TRAINING_RUN: "训练运行",
+  DATA_SOURCE: "数据源",
+  DATA_SOURCE_IMPORT: "数据源导入任务",
 };
 
 export const LINEAGE_RELATION_LABELS: Record<LineageRelation, string> = {

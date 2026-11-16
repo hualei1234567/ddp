@@ -19,6 +19,7 @@ from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.policies import DatasetPolicyUseCases
 from app.application.datasets.versions import DatasetVersionUseCases
 from app.application.episodes.lineage import LineageService
+from app.application.episodes.provenance import SourceProvenanceResolver
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
@@ -35,7 +36,11 @@ from app.infrastructure.repositories.dataset_repositories import (
     SqlDatasetRepository,
     SqlDatasetVersionRepository,
 )
+from app.infrastructure.repositories.datasource_provenance import (
+    SqlSourceProvenanceRepository,
+)
 from app.infrastructure.repositories.lineage import SqlLineageRepository
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 
 ReadScope = Annotated[ProjectScope, Depends(get_project_scope)]
 WriteScope = Annotated[ProjectScope, Depends(get_write_scope)]
@@ -105,6 +110,12 @@ def get_dataset_use_cases(session: DbSession) -> DatasetServices:
             audit,
             outbox,
             session,
+            # 版本血缘只用到持久化边，但仍需装配投影协作方：少了它，任何
+            # 走到 RAW_ASSET 的遍历都会拿不到数据源链。
+            SourceProvenanceResolver(
+                SqlSourceProvenanceRepository(session),
+                SqlRawAssetRepository(session),
+            ),
         ),
     )
 

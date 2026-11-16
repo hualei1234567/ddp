@@ -469,6 +469,34 @@ episodeLineage:
       "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
       "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+dataSourceLineage:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: data_source_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    - $ref: "../openapi.yaml#/components/parameters/LineageDirection"
+    - $ref: "../openapi.yaml#/components/parameters/LineageDepth"
+    - $ref: "../openapi.yaml#/components/parameters/LineageLimit"
+  get:
+    operationId: getDataSourceLineage
+    tags: [lineage]
+    summary: 数据源的下游血缘（发起的导入任务与产出的资产）
+    description: |
+      数据源节点是**只读投影**——事实在 `data_sources` / `data_source_imports` /
+      `data_source_media_assets` 三张表，不在血缘节点表里。因此本次查询不写任何
+      血缘记录，对历史数据与新增数据一视同仁。
+
+      先用数据源仓储确认归属：**跨项目一律 404**，不泄露存在性。
+      节点在血缘图里未登记是正常状态，返回空图而不是 404。
+    responses:
+      "200": {description: 血缘遍历结果, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/LineageResponse"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
 ingestionJobs:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"
