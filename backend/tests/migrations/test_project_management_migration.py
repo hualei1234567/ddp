@@ -1,10 +1,10 @@
-"""迁移测试：0046 项目描述/状态/版本列可升级、可回滚，且不丢存量项目。
+"""迁移测试：0049 项目描述/状态/版本列可升级、可回滚，且不丢存量项目。
 
 关键断言（踩过的坑都在这里）：
 
 - SQLite 加 CHECK 必须重建表，``uq_projects_code`` 唯一约束不能丢；
 - 存量行升级后 ``status='ACTIVE'`` / ``version=1`` / ``description IS NULL``；
-- downgrade 必须能回到 0043 并保留项目行，再 upgrade 仍成功。
+- downgrade 必须能回到 0048 并保留项目行，再 upgrade 仍成功。
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
-PREVIOUS_REVISION = "0043"
+PREVIOUS_REVISION = "0048"
 
 
 def _config(db_path: Path) -> Config:

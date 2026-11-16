@@ -1,15 +1,14 @@
 """阶段 8 项目管理：为 ``projects`` 补描述、状态与乐观锁版本
 
-Revision ID: 0046
-Revises: 0043
+Revision ID: 0049
+Revises: 0048
 Create Date: 2026-11-17
 
-⚠️ 合并时需重排 ``down_revision``
---------------------------------
-本迁移按任务分配占用编号 0046，但当前分支上 0044/0045 由并行任务开发，
-因此这里暂时接在 **0043** 之后，保证本分支可独立升级、可独立跑迁移往返。
-合并 0044/0045 后必须把 ``down_revision`` 改为 ``"0045"``，
-否则 alembic 会出现两个 head（0045 与 0046 同时以 0043 为父）。
+编号说明
+--------
+本迁移在开发期占用 0046，合并时主线已推进到 0048，故重排为 **0049**，
+接在 0048（治理：配额与用量快照）之后。迁移链保持单头：
+0040 → 0041 → 0042 → 0043 → 0048 → 0049。
 
 问题（审计结论，不是推测）
 --------------------------
@@ -57,9 +56,9 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0046"
+revision = "0049"
 # 合并 0044/0045 后改成 "0045"（见模块文档顶部的警告）。
-down_revision = "0043"
+down_revision = "0048"
 branch_labels = None
 depends_on = None
 
