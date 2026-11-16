@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.7.0
+  version: 1.8.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -35,6 +35,17 @@ info:
       （登记新版本/详情，无 PATCH——Profile 不可变，改配置 = 新建版本）。
       同时补 `robots` 表的状态语义列（`status_reason`/`fault_*`/`status_changed_*`），
       与 devices/sensors 对齐。
+    - `1.8.0` 在 `1.7.0` 基础上**增量加入 N3–N9 阶段已实现端点**：
+      采集素材四实体（collection-plans / collection-sops / scenarios / action-specs，
+      各「创建 / 列表 / 详情」——本批无更新与删除路径，状态恒为 DRAFT）；
+      标注质量检查（`annotation-submissions/{id}/quality-checks`）与 AI 预标注建议
+      （`annotation-submissions/{id}/ai-suggestions`、`annotation-ai-suggestions/{id}/confirm`）；
+      DatasetVersion 血缘（复用既有 `LineageResponse` 形状）。
+      同时补齐两个已实现但契约缺失的响应字段：`training-deliveries[].requirement_match`
+      （N6 需求核对报告，NULL 表示未核对、不等于通过）与
+      `data-gaps[].items[].coverage_source`（MEASURED / MANUAL / UNKNOWN，
+      测不到不等于覆盖率为 0）。以及错误码 `training_delivery_requirement_unmet`。
+      全部为增量：无路径删除、无字段删除、无必填性收紧。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -52,7 +63,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.6.0
+  version: 1.8.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -601,6 +612,33 @@ paths:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportReviewDecisions"
   /api/v1/projects/{project_id}/media-assets/{asset_id}/playback:
     $ref: "./fragments/paths.stage7.yaml#/mediaAssetPlayback"
+  # --- N8 采集素材（四类实体，本批只有创建/列表/详情）---
+  /api/v1/projects/{project_id}/collection-plans:
+    $ref: "./fragments/paths.stage8.yaml#/collectionPlans"
+  /api/v1/projects/{project_id}/collection-plans/{plan_id}:
+    $ref: "./fragments/paths.stage8.yaml#/collectionPlanDetail"
+  /api/v1/projects/{project_id}/collection-sops:
+    $ref: "./fragments/paths.stage8.yaml#/collectionSops"
+  /api/v1/projects/{project_id}/collection-sops/{sop_id}:
+    $ref: "./fragments/paths.stage8.yaml#/collectionSopDetail"
+  /api/v1/projects/{project_id}/scenarios:
+    $ref: "./fragments/paths.stage8.yaml#/scenarios"
+  /api/v1/projects/{project_id}/scenarios/{scenario_id}:
+    $ref: "./fragments/paths.stage8.yaml#/scenarioDetail"
+  /api/v1/projects/{project_id}/action-specs:
+    $ref: "./fragments/paths.stage8.yaml#/actionSpecs"
+  /api/v1/projects/{project_id}/action-specs/{spec_id}:
+    $ref: "./fragments/paths.stage8.yaml#/actionSpecDetail"
+  # --- N4 标注质量检查与 AI 预标注建议 ---
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/quality-checks:
+    $ref: "./fragments/paths.stage8.yaml#/submissionQualityChecks"
+  /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/ai-suggestions:
+    $ref: "./fragments/paths.stage8.yaml#/submissionAiSuggestions"
+  /api/v1/projects/{project_id}/annotation-ai-suggestions/{suggestion_id}/confirm:
+    $ref: "./fragments/paths.stage8.yaml#/aiSuggestionConfirm"
+  # --- N5 DatasetVersion 血缘 ---
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/lineage:
+    $ref: "./fragments/paths.stage8.yaml#/datasetVersionLineage"
 components:
   securitySchemes:
     bearerAuth:
@@ -707,6 +745,11 @@ components:
     SegmentId: {$ref: "./fragments/components.stage6.yaml#/parameters/SegmentId"}
     SupplierAction: {$ref: "./fragments/components.stage6.yaml#/parameters/SupplierAction"}
     SegmentAction: {$ref: "./fragments/components.stage6.yaml#/parameters/SegmentAction"}
+    CollectionPlanId: {$ref: "./fragments/components.stage8.yaml#/parameters/CollectionPlanId"}
+    CollectionSopId: {$ref: "./fragments/components.stage8.yaml#/parameters/CollectionSopId"}
+    ScenarioId: {$ref: "./fragments/components.stage8.yaml#/parameters/ScenarioId"}
+    ActionSpecId: {$ref: "./fragments/components.stage8.yaml#/parameters/ActionSpecId"}
+    AiSuggestionId: {$ref: "./fragments/components.stage8.yaml#/parameters/AiSuggestionId"}
   responses:
     Unauthorized: {$ref: "./fragments/components.yaml#/responses/Unauthorized"}
     Forbidden: {$ref: "./fragments/components.yaml#/responses/Forbidden"}
@@ -1032,3 +1075,24 @@ components:
     ReviewDecisionRequest: {$ref: "./fragments/schemas.stage7.yaml#/ReviewDecisionRequest"}
     ImportQualityFinding: {$ref: "./fragments/schemas.stage7.yaml#/ImportQualityFinding"}
     ImportQualityReport: {$ref: "./fragments/schemas.stage7.yaml#/ImportQualityReport"}
+    CollectionAssetStatus: {$ref: "./fragments/schemas.stage8.yaml#/CollectionAssetStatus"}
+    CollectionPlan: {$ref: "./fragments/schemas.stage8.yaml#/CollectionPlan"}
+    CollectionPlanCreate: {$ref: "./fragments/schemas.stage8.yaml#/CollectionPlanCreate"}
+    CollectionPlanPage: {$ref: "./fragments/schemas.stage8.yaml#/CollectionPlanPage"}
+    CollectionSop: {$ref: "./fragments/schemas.stage8.yaml#/CollectionSop"}
+    CollectionSopCreate: {$ref: "./fragments/schemas.stage8.yaml#/CollectionSopCreate"}
+    CollectionSopPage: {$ref: "./fragments/schemas.stage8.yaml#/CollectionSopPage"}
+    Scenario: {$ref: "./fragments/schemas.stage8.yaml#/Scenario"}
+    ScenarioCreate: {$ref: "./fragments/schemas.stage8.yaml#/ScenarioCreate"}
+    ScenarioPage: {$ref: "./fragments/schemas.stage8.yaml#/ScenarioPage"}
+    ActionSpec: {$ref: "./fragments/schemas.stage8.yaml#/ActionSpec"}
+    ActionSpecCreate: {$ref: "./fragments/schemas.stage8.yaml#/ActionSpecCreate"}
+    ActionSpecPage: {$ref: "./fragments/schemas.stage8.yaml#/ActionSpecPage"}
+    QualityFinding: {$ref: "./fragments/schemas.stage9.yaml#/QualityFinding"}
+    QualityCheckRun: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRun"}
+    QualityCheckRunPage: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRunPage"}
+    AiSuggestionItemInput: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionItemInput"}
+    AiSuggestionsCreate: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionsCreate"}
+    AiSuggestionConfirm: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionConfirm"}
+    AiSuggestion: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestion"}
+    AiSuggestionPage: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionPage"}

@@ -1,0 +1,37 @@
+# 阶段 8（N8）路径参数组件。
+parameters:
+  CollectionPlanId:
+    name: plan_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  CollectionSopId:
+    name: sop_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  ScenarioId:
+    name: scenario_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  ActionSpecId:
+    name: spec_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  QualityCheckId:
+    name: check_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }
+
+  AiSuggestionId:
+    name: suggestion_id
+    in: path
+    required: true
+    schema: { type: string, format: uuid }

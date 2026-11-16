@@ -21,52 +21,218 @@
     "status",
     "version",
     "created_at",
-    "created_by"
+    "created_by",
+    "requirement_match"
   ],
   "additionalProperties": false,
   "properties": {
-    "training_delivery_id": {"$ref": "#/$defs/uuid"},
-    "project_id": {"$ref": "#/$defs/uuid"},
-    "training_request_id": {"$ref": "#/$defs/uuid"},
-    "training_request_revision_id": {"$ref": "#/$defs/uuid"},
-    "dataset_version_id": {"$ref": "#/$defs/uuid"},
-    "export_job_id": {"$ref": "#/$defs/uuid"},
-    "delivery_note_no": {"type": "string", "minLength": 1, "maxLength": 64},
-    "recipient_id": {"$ref": "#/$defs/uuid"},
-    "recipient_team": {"type": ["string", "null"], "maxLength": 200},
-    "artifact_manifest_key": {"type": ["string", "null"], "maxLength": 1024},
-    "artifact_manifest_sha256": {"$ref": "#/$defs/sha256"},
-    "aggregate_sha256": {"$ref": "#/$defs/sha256"},
-    "item_count": {"type": "integer", "minimum": 0},
-    "split_counts": {"$ref": "#/$defs/split_counts"},
-    "format": {"type": "string", "enum": ["LE_ROBOT"]},
-    "format_version": {"type": "string", "const": "ddp.lerobot/1.0.0"},
-    "quality_report_ref": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
-    "status": {"type": "string", "enum": ["DRAFT", "READY", "DELIVERED", "ACCEPTED", "REJECTED", "REWORK", "CANCELLED"]},
-    "delivered_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
-    "accepted_by": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
-    "accepted_at": {"oneOf": [{"$ref": "#/$defs/date_time"}, {"type": "null"}]},
-    "acceptance_opinion": {"type": ["string", "null"], "maxLength": 2000},
-    "rejection_reason": {"type": ["string", "null"], "maxLength": 2000},
-    "rework_ref": {"oneOf": [{"$ref": "#/$defs/uuid"}, {"type": "null"}]},
-    "allowed_actions": {"type": "array", "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
-    "version": {"type": "integer", "minimum": 1},
-    "created_at": {"$ref": "#/$defs/date_time"},
-    "updated_at": {"$ref": "#/$defs/date_time"},
-    "created_by": {"$ref": "#/$defs/uuid"}
+    "training_delivery_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "project_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "training_request_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "training_request_revision_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "dataset_version_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "export_job_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "delivery_note_no": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "recipient_id": {
+      "$ref": "#/$defs/uuid"
+    },
+    "recipient_team": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 200
+    },
+    "artifact_manifest_key": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 1024
+    },
+    "artifact_manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "aggregate_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "item_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "split_counts": {
+      "$ref": "#/$defs/split_counts"
+    },
+    "format": {
+      "type": "string",
+      "enum": [
+        "LE_ROBOT"
+      ]
+    },
+    "format_version": {
+      "type": "string",
+      "const": "ddp.lerobot/1.0.0"
+    },
+    "quality_report_ref": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/sha256"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "DRAFT",
+        "READY",
+        "DELIVERED",
+        "ACCEPTED",
+        "REJECTED",
+        "REWORK",
+        "CANCELLED"
+      ]
+    },
+    "delivered_at": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/date_time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "accepted_by": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "accepted_at": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/date_time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "acceptance_opinion": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 2000
+    },
+    "rejection_reason": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 2000
+    },
+    "rework_ref": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "allowed_actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "maxLength": 64
+      },
+      "uniqueItems": true
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "updated_at": {
+      "$ref": "#/$defs/date_time"
+    },
+    "created_by": {
+      "$ref": "#/$defs/uuid"
+    },
+    "requirement_match": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": true
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "需求核对报告（TRN-002）：交付的数据集版本是否满足已批准的需求快照。存 MatchReport 的稳定载荷（逐维度 expected/actual/status）。**NULL 表示「未核对」，不等于通过**；读取方不得把 NULL 折叠成 PASSED。落库后不可变（DELIVERY_IMMUTABLE_COLUMNS）。"
+    }
   },
   "$defs": {
-    "uuid": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
-    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-    "date_time": {"type": "string", "format": "date-time"},
+    "uuid": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "date_time": {
+      "type": "string",
+      "format": "date-time"
+    },
     "split_counts": {
       "type": "object",
-      "required": ["train", "validation", "test"],
+      "required": [
+        "train",
+        "validation",
+        "test"
+      ],
       "additionalProperties": false,
       "properties": {
-        "train": {"type": "integer", "minimum": 0},
-        "validation": {"type": "integer", "minimum": 0},
-        "test": {"type": "integer", "minimum": 0}
+        "train": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "validation": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "test": {
+          "type": "integer",
+          "minimum": 0
+        }
       }
     }
   }

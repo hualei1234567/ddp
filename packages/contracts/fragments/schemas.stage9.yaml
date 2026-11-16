@@ -1,0 +1,145 @@
+# N4 标注质量检查与 AI 预标注建议的 Schema。
+# 对应 backend/app/api/v1/annotation_quality_check_models.py 与
+# backend/app/api/v1/annotation_ai_models.py。
+#
+# 两者的共同要点：三态与不丢失。
+# - 质量检查的 `passed` 是 `true` / `false` / `null` 三态，`null` 表示该规则
+#   对这条记录**没有结论**，客户端不得渲染成"通过"。
+# - AI 建议与人工结果**分表存储**，同名字段被人工填写后原始建议仍在，
+#   因此可以算人工修订幅度。
+
+QualityFinding:
+  type: object
+  required: [annotation_id, rule_id, rule_version, severity, passed, message]
+  properties:
+    annotation_id: { type: string, format: uuid }
+    rule_id: { type: string }
+    rule_version: { type: integer, minimum: 1 }
+    severity: { type: string, enum: [ERROR, WARN] }
+    passed:
+      type: [boolean, "null"]
+      description: |
+        `true` 判定合规、`false` 判定违规、`null` 表示该规则对这条记录没有结论
+        （缺 Episode 边界、任务未配阈值）。**不得把 `null` 当成通过。**
+    message: { type: string }
+
+QualityCheckRun:
+  type: object
+  required: [run_id, project_id, submission_id, rule_set_version, status, error_count, warn_count, created_at, created_by, updated_at, updated_by, findings, finished_at, started_at]
+  properties:
+    run_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    submission_id: { type: string, format: uuid }
+    rule_set_version:
+      type: string
+      description: 规则集内容摘要（`sha256:` 前缀），可回答"当时用的是哪一版规则"
+    status: { type: string }
+    error_count: { type: integer, minimum: 0 }
+    warn_count: { type: integer, minimum: 0 }
+    started_at: { type: string, format: date-time }
+    finished_at: { type: string, format: date-time }
+    findings:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/QualityFinding" }
+    created_at: { type: [string, "null"], format: date-time }
+    created_by: { type: [string, "null"], format: uuid }
+
+QualityCheckRunPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/QualityCheckRun" }
+    next_cursor: { type: [string, "null"] }
+
+AiSuggestionItemInput:
+  type: object
+  additionalProperties: false
+  required:
+    - annotation_id
+    - label_key
+    - suggested_value
+    - model_id
+    - model_version
+    - prompt_version
+    - confidence
+  properties:
+    annotation_id: { type: string, format: uuid }
+    label_key: { type: string, minLength: 1, maxLength: 100 }
+    suggested_value: {}
+    model_id: { type: string, minLength: 1, maxLength: 200 }
+    model_version: { type: string, minLength: 1, maxLength: 100 }
+    prompt_version: { type: string, minLength: 1, maxLength: 100 }
+    confidence: { type: number, minimum: 0, maximum: 1 }
+    generated_at: { type: [string, "null"], format: date-time }
+
+AiSuggestionsCreate:
+  type: object
+  additionalProperties: false
+  required: [suggestions]
+  properties:
+    suggestions:
+      type: array
+      minItems: 1
+      items: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionItemInput" }
+
+AiSuggestionConfirm:
+  type: object
+  additionalProperties: false
+  required: [human_value]
+  properties:
+    human_value: {}
+
+AiSuggestion:
+  type: object
+  required:
+    - suggestion_id
+    - project_id
+    - annotation_id
+    - label_key
+    - suggested_value
+    - model_id
+    - model_version
+    - prompt_version
+    - confidence
+    - human_confirmed
+    - version
+    - generated_at
+    - human_value
+    - decided_by
+    - decided_at
+    - created_at
+    - updated_at
+    - created_by
+    - updated_by
+  properties:
+    suggestion_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    annotation_id: { type: string, format: uuid }
+    label_key: { type: string }
+    suggested_value: {}
+    model_id: { type: string }
+    model_version: { type: string }
+    prompt_version: { type: string }
+    confidence: { type: number, minimum: 0, maximum: 1 }
+    generated_at: { type: string, format: date-time }
+    human_confirmed: { type: boolean }
+    human_value:
+      description: 人工确认或修订后的取值；`null` 表示尚未确认，与"确认为空"不同
+    decided_by: { type: [string, "null"], format: uuid }
+    decided_at: { type: [string, "null"], format: date-time }
+    version: { type: integer, minimum: 1 }
+    created_at: { type: [string, "null"], format: date-time }
+    updated_at: { type: [string, "null"], format: date-time }
+    created_by: { type: [string, "null"], format: uuid }
+    updated_by: { type: [string, "null"], format: uuid }
+
+AiSuggestionPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/AiSuggestion" }
+    next_cursor: { type: [string, "null"] }
