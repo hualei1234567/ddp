@@ -83,3 +83,27 @@ class LineageConflictError(EpisodeDomainError):
 
 class ConflictError(EpisodeDomainError):
     code = "conflict"
+
+
+class SegmentationRuleNotRegisteredError(DomainValidationError):
+    """切片规则版本未注册。
+
+    有意**不**新增 ``code``：沿用父类的 ``validation_failed``（HTTP 422）。
+    新增独立码要先改 ``packages/contracts`` 的 ``ErrorCode`` 枚举，属于契约变更；
+    在客户端能按新 code 分支之前先发码，会让"未知 code 一律当失败"的客户端
+    拿到契约外取值。客户端可据 ``details.rule_version`` 精确定位问题。
+    """
+
+    def __init__(self, rule_version: object, *, registered: tuple[str, ...]) -> None:
+        self.rule_version = rule_version
+        self.registered = registered
+        # details 里的版本号必须是字符串：客户端可能拿它做展示，``repr(None)``
+        # 之类的值会泄漏 Python 表示法。
+        echoed = rule_version if isinstance(rule_version, str) else repr(rule_version)
+        super().__init__(
+            f"切片规则版本 {rule_version!r} 未注册；已注册版本：{list(registered)}",
+            details={
+                "rule_version": echoed,
+                "registered_rule_versions": list(registered),
+            },
+        )

@@ -19,6 +19,7 @@ from app.domain.episodes.errors import (
     ManifestSchemaInvalidError,
     ResourceImmutableError,
     ResourceNotFoundError,
+    SegmentationRuleNotRegisteredError,
     TimeBaseInvalidError,
     VersionConflictError,
 )
@@ -34,6 +35,17 @@ from app.domain.episodes.manifest import (
     validate_manifest_identity,
 )
 from app.domain.episodes.models import Episode, EpisodeRawAsset, Segmentation
+from app.domain.episodes.segmentation_rules import (
+    EPISODE_BOUNDARY_RULE,
+    EPISODE_BOUNDARY_RULE_VERSION,
+    FIXED_WINDOW_RULE,
+    FIXED_WINDOW_RULE_VERSION,
+    SegmentationInput,
+    SegmentationRule,
+    SegmentationRuleRegistry,
+    SegmentationWindow,
+    build_segmentation_rule_registry,
+)
 from app.domain.episodes.state_machines import (
     EPISODE_DATA_FROZEN_FIELDS,
     EPISODE_DATA_FROZEN_STATUSES,
@@ -47,10 +59,14 @@ from app.domain.episodes.state_machines import (
 __all__ = [
     "CalibrationNotActiveError",
     "DomainValidationError",
+    "EPISODE_BOUNDARY_RULE",
+    "EPISODE_BOUNDARY_RULE_VERSION",
     "EPISODE_DATA_FROZEN_FIELDS",
     "EPISODE_DATA_FROZEN_STATUSES",
     "EPISODE_QUALITY_FROZEN_STATUSES",
     "EPISODE_TERMINAL",
+    "FIXED_WINDOW_RULE",
+    "FIXED_WINDOW_RULE_VERSION",
     "Episode",
     "EpisodeAnnotationStatus",
     "EpisodeDomainError",
@@ -69,11 +85,17 @@ __all__ = [
     "ResourceImmutableError",
     "ResourceNotFoundError",
     "Segmentation",
+    "SegmentationInput",
     "SegmentationMethod",
+    "SegmentationRule",
+    "SegmentationRuleNotRegisteredError",
+    "SegmentationRuleRegistry",
+    "SegmentationWindow",
     "TimeBaseInvalidError",
     "VersionConflictError",
     "allowed_episode_actions",
     "assert_manifest_hash",
+    "build_segmentation_rule_registry",
     "compute_manifest_sha256",
     "episode_target_status",
     "episode_transition_pairs",
