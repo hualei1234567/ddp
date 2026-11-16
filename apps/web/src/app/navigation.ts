@@ -46,7 +46,14 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const PLATFORM_STAGE_LABEL = "阶段 7 · 数据平面";
+/**
+ * 顶部阶段标签的**静态兜底**。
+ *
+ * 真实阶段以服务端 `/platform/meta` 的 `phase` 为准（工作台展示的是它）。
+ * 这里只在下拉菜单这类拿不到异步数据的静态位置使用，因此必须与当前
+ * 服务端默认值保持一致；服务端改阶段时这里要同步。
+ */
+export const PLATFORM_STAGE_LABEL = "阶段 8 · 规模化运营";
 
 /**
  * 一级导航分区，依据规范 §18.2。
