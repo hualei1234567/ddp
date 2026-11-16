@@ -47,6 +47,8 @@ from app.domain.episodes.segmentation_rules import (
     build_segmentation_rule_registry,
 )
 from app.domain.episodes.state_machines import (
+    EPISODE_COVERABLE_STATUSES,
+    EPISODE_COVERAGE_STATUSES,
     EPISODE_DATA_FROZEN_FIELDS,
     EPISODE_DATA_FROZEN_STATUSES,
     EPISODE_QUALITY_FROZEN_STATUSES,
@@ -61,6 +63,8 @@ __all__ = [
     "DomainValidationError",
     "EPISODE_BOUNDARY_RULE",
     "EPISODE_BOUNDARY_RULE_VERSION",
+    "EPISODE_COVERABLE_STATUSES",
+    "EPISODE_COVERAGE_STATUSES",
     "EPISODE_DATA_FROZEN_FIELDS",
     "EPISODE_DATA_FROZEN_STATUSES",
     "EPISODE_QUALITY_FROZEN_STATUSES",

@@ -232,7 +232,11 @@ def test_evaluation_feedback_requirement_closed_loop(api_db) -> None:
     gaps = editor.get(url(ids.project_a, "/data-gaps")).json()
     kitchen = next(item for item in gaps["items"] if item["dimension_value"] == "kitchen")
     assert kitchen["open_feedback_count"] == 1
-    assert kitchen["suggested_episode_count"] == 8
+    # 反馈里人工填的 current_count=2 已被真实覆盖取代：本项目有 10 个
+    # ACCEPTED/PASS 的 kitchen Episode，目标 10 已满足，建议补采为 0。
+    assert kitchen["coverage_source"] == "MEASURED"
+    assert kitchen["current_count"] == 10
+    assert kitchen["suggested_episode_count"] == 0
 
     converted = editor.post(
         url(
@@ -895,3 +899,100 @@ def test_archived_model_rejects_new_version(api_db) -> None:
     )
     assert rejected.status_code == 409, rejected.text
     assert rejected.json()["error"]["code"] == "model_not_active"
+
+
+# --------------------------------------------------------------------------- #
+# 数据缺口：真实覆盖联动（FBK-002）
+# --------------------------------------------------------------------------- #
+def _feedback_with_dimension(client, project_id, model_version_id, **dimension) -> dict:
+    response = client.post(
+        url(project_id, "/model-feedback"),
+        json={
+            "model_version_id": model_version_id,
+            "issue_type": "SCENE_COVERAGE",
+            "severity": "MAJOR",
+            "description": "覆盖不足",
+            "dimensions": [dimension],
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_data_gaps_uses_measured_episode_coverage(api_db) -> None:
+    """缺口摘要的 current_count / coverage_source 来自真实 Episode 统计。"""
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    context = build_frozen_version(factory, ids)
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    assert context["version_id"]
+
+    # 反馈里故意把人工值填错（2），真实覆盖是 10 —— 必须以实测为准。
+    _feedback_with_dimension(
+        editor,
+        ids.project_a,
+        version["model_version_id"],
+        dimension_type="SCENE",
+        dimension_value="kitchen",
+        current_count=2,
+        target_count=25,
+    )
+    gaps = editor.get(url(ids.project_a, "/data-gaps")).json()
+    kitchen = next(item for item in gaps["items"] if item["dimension_value"] == "kitchen")
+    assert kitchen["coverage_source"] == "MEASURED"
+    assert kitchen["current_count"] == 10
+    assert kitchen["suggested_episode_count"] == 15
+    # 有实测时间戳且在阈值内 → FRESH，而不是此前的硬编码常量。
+    assert gaps["freshness"] == "FRESH"
+
+
+def test_data_gaps_falls_back_to_manual_source_for_unmeasurable_dimension(api_db) -> None:
+    """LABEL 在 Episode 上没有权威落点：保留人工值并标记 MANUAL。"""
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    context = build_frozen_version(factory, ids)
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    assert context["version_id"]
+
+    _feedback_with_dimension(
+        editor,
+        ids.project_a,
+        version["model_version_id"],
+        dimension_type="LABEL",
+        dimension_value="grasp-cup",
+        current_count=3,
+        target_count=12,
+    )
+    gaps = editor.get(url(ids.project_a, "/data-gaps"), params={"dimension_type": "LABEL"}).json()
+    label = next(item for item in gaps["items"] if item["dimension_value"] == "grasp-cup")
+    assert label["coverage_source"] == "MANUAL"
+    assert label["current_count"] == 3
+    assert label["suggested_episode_count"] == 9
+    # 没有实测时间戳 → 新鲜度不得报 FRESH。
+    assert gaps["freshness"] == "UNKNOWN"
+
+
+def test_data_gaps_unknown_when_no_manual_value_and_no_coverage(api_db) -> None:
+    """既不填人工值、又测不到时必须是 UNKNOWN + 建议补采 0（不臆测）。"""
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    context = build_frozen_version(factory, ids)
+    model = _create_model(editor, ids.project_a, ids.owner_a)
+    version = _ready_version(editor, ids.project_a, model["model_id"])
+    assert context["version_id"]
+
+    _feedback_with_dimension(
+        editor,
+        ids.project_a,
+        version["model_version_id"],
+        dimension_type="SCENE",
+        dimension_value="moon-base",
+        target_count=40,
+    )
+    gaps = editor.get(url(ids.project_a, "/data-gaps")).json()
+    unknown = next(item for item in gaps["items"] if item["dimension_value"] == "moon-base")
+    assert unknown["coverage_source"] == "UNKNOWN"
+    assert unknown["current_count"] is None
+    assert unknown["suggested_episode_count"] == 0
