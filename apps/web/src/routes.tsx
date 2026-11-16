@@ -19,6 +19,7 @@ import AnnotationTaskCreatePage from "./pages/annotation/AnnotationTaskCreatePag
 import AnnotationTaskDetailPage from "./pages/annotation/AnnotationTaskDetailPage";
 import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
 import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
+import AuditLogListPage from "./pages/audit/AuditLogListPage";
 import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPage";
 import CollectionAssetDetailPage from "./pages/collectionAssets/AssetDetailPage";
 import CollectionAssetListPage from "./pages/collectionAssets/AssetListPage";
@@ -263,6 +264,7 @@ export default function AppRoutes() {
           element={<SegmentReviewPage />}
         />
         <Route path="acceptance-ledger" element={<LedgerPage />} />
+        <Route path="audit-logs" element={<AuditLogListPage />} />
         {plannedRoutes.map((item) => (
           <Route
             key={item.path}

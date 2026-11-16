@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     adapter_callback_routes,
     annotation,
+    audit_log_routes,
     calibration_profiles,
     calibrations,
     collection,
@@ -71,3 +72,4 @@ api_router.include_router(model_adapter_routes.router)
 api_router.include_router(supplier_routes.router)
 api_router.include_router(inbound_routes.router)
 api_router.include_router(datasource_routes.router)
+api_router.include_router(audit_log_routes.router)

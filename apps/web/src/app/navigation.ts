@@ -1,6 +1,7 @@
 import {
   ApartmentOutlined,
   AppstoreOutlined,
+  AuditOutlined,
   BarChartOutlined,
   CloudUploadOutlined,
   ClusterOutlined,
@@ -239,6 +240,15 @@ export const navSections: NavSection[] = [
         description: "查看运营指标、产能与成本分析。",
         icon: createElement(BarChartOutlined),
         available: false,
+      },
+      {
+        // 平台一直在写 audit_logs，这里补上唯一的读入口：谁在什么时候
+        // 对什么资源做了什么。只读且仅项目负责人/平台管理员可看。
+        path: "/audit-logs",
+        label: "审计日志",
+        description: "按资源、动作、时间与结果追溯全项目的操作留痕。",
+        icon: createElement(AuditOutlined),
+        available: true,
       },
       {
         path: "/settings",
