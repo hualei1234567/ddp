@@ -204,6 +204,27 @@ def _accepts_null(schema: dict[str, object]) -> bool:
     return False
 
 
+def _describes_structure(
+    schema: object,
+    base: Base,
+    depth: int = 0,
+    seen: tuple[str, ...] = (),
+) -> bool:
+    """判断 schema 是否确定地描述了一个结构（而非"任意值"）。
+
+    用于根响应为数组时判定 ``typed``：``items`` 是带 ``properties`` 的对象
+    （含多层数组）才算有类型；``items`` 是空 schema 或开放对象则仍是未知内容。
+    """
+    if depth > MAX_SCHEMA_DEPTH:
+        return False
+    node, node_base = deref(schema, base, seen)
+    if not isinstance(node, dict) or not node:
+        return False
+    if _normalize_type(node) == "array" and isinstance(node.get("items"), dict):
+        return _describes_structure(node["items"], node_base, depth + 1, seen)
+    return isinstance(node.get("properties"), dict)
+
+
 def flatten_schema(
     schema: object,
     base: Base,
@@ -254,7 +275,16 @@ def flatten_schema(
 
     kind = _normalize_type(schema)
     if kind == "array" and isinstance(schema.get("items"), dict):
+        # 根响应是数组的端点（如批量 plan 返回 ``list[XxxOut]``）同样是有类型声明：
+        # 只要 ``items`` 能确定地描述结构，就不该被归成"任意对象"。
+        # 此前 ``typed`` 只在根节点有 ``properties`` 时置真，根数组恒为 False，
+        # 把已声明 ``response_model=list[...]`` 的端点误报成缺模型。
+        items_structured = (not prefix) and _describes_structure(
+            schema["items"], base, depth + 1, seen
+        )
         flatten_schema(schema["items"], base, prefix + "[].", depth + 1, result, seen)
+        if items_structured:
+            result.typed = True
         return result
 
     properties = schema.get("properties")

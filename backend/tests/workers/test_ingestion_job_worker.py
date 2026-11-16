@@ -238,3 +238,80 @@ def test_job_created_event_is_dispatch_class() -> None:
     assert spec.loader is not None
     spec.loader.exec_module(module)
     assert JOB_CREATED_EVENT in module.DISPATCH_EVENTS
+
+
+# --------------------------------------------------------------------------
+# 导入 Worker 的重复事件幂等（真实库曾积压 38 条）
+# --------------------------------------------------------------------------
+
+
+def test_terminal_import_event_is_published_not_retried(env, tmp_path) -> None:
+    """任务已在终态时，重复投递的事件必须直接 PUBLISHED。
+
+    真实库里曾积压 38 条这样的历史事件：任务早已 SUCCEEDED，事件仍是 PENDING。
+    Worker 每次都领取、执行、抛"状态不允许执行"，然后 mark_retry —— 白烧
+    attempts 直到死信，把「已完成的导入」记成「反复失败」。
+    """
+    import httpx
+    from app.domain.datasources.models import DataSource, DataSourceImport
+    from app.domain.identity.models import ProjectScope
+    from app.infrastructure.db.models.collection import OutboxEvent
+    from app.infrastructure.repositories.datasources import (
+        SqlDataSourceImportRepository,
+        SqlDataSourceRepository,
+    )
+    from app.workers.datasources import IMPORT_REQUESTED_EVENT, DataSourceImportWorker
+
+    factory, project_id, actor_id = env
+    scope = ProjectScope(project_id, actor_id=actor_id)
+    with factory() as session:
+        source = SqlDataSourceRepository(session).add(
+            scope,
+            DataSource(
+                data_source_id=uuid4(),
+                project_id=project_id,
+                code=f"hf-{uuid4().hex[:8]}",
+                name="源",
+                kind="HUGGINGFACE",
+                repo_id="lerobot/aloha_sim_insertion_human",
+                revision="a" * 40,
+                license="Apache-2.0",
+                access_condition="PUBLIC",
+                is_gated=False,
+            ),
+        )
+        job = SqlDataSourceImportRepository(session).add(
+            scope,
+            DataSourceImport(
+                import_id=uuid4(),
+                project_id=project_id,
+                data_source_id=source.data_source_id,
+                status="SUCCEEDED",
+                scope="SAMPLE",
+                tool_name="huggingface_hub",
+                tool_version="0.27.1",
+                sample_limit=3,
+            ),
+        )
+        session.add(
+            OutboxEvent(
+                id=uuid4(),
+                project_id=project_id,
+                aggregate_type="DATA_SOURCE_IMPORT",
+                aggregate_id=job.import_id,
+                event_type=IMPORT_REQUESTED_EVENT,
+                payload={"import_id": str(job.import_id)},
+                status="PENDING",
+                dispatch=True,
+                attempts=0,
+            )
+        )
+        session.commit()
+
+    settings = _settings()
+    with httpx.Client(timeout=5) as client:
+        worker = DataSourceImportWorker(factory, settings, client)
+        result = worker.process_once(now=_now())
+
+    assert result["status"] == "PUBLISHED"
+    assert "skipped" in result

@@ -179,6 +179,19 @@ class DataSourceImportWorker:
                 }
             except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
                 session.rollback()
+                # 幂等优先：任务已在终态（SUCCEEDED/CANCELLED）说明这条导入
+                # 早就被处理过，事件是重复投递。此时**必须直接 PUBLISHED**，
+                # 不能走重试——重试永远只会得到同一句「状态不允许执行」，
+                # 白烧 attempts 直到死信，把"已完成的导入"记成"反复失败"。
+                # 真实库里 38 条历史事件正是这个形态。
+                if _import_already_terminal(session, import_id):
+                    queue.mark_published(claimed.event_id, now=moment)
+                    session.commit()
+                    return {
+                        "status": ImportProcessingStatus.PUBLISHED.value,
+                        "import_id": str(import_id),
+                        "skipped": "导入任务已在终态，事件为重复投递",
+                    }
                 # 先把**可重试**的失败从 FAILED 退回 PENDING，再决定事件怎么办。
                 #
                 # 不这么做的话：本次已把任务写成 FAILED（终态），而下面又会
@@ -232,6 +245,18 @@ class DataSourceImportWorker:
             result = self.process_once()
             if result["status"] == ImportProcessingStatus.IDLE.value:
                 stop_event.wait(self._settings.validation_worker_poll_interval_seconds)
+
+
+def _import_already_terminal(session: Session, import_id: UUID) -> bool:
+    """任务是否已在终态（不再接受执行）。项目范围由事件本身保证。"""
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models.datasources import DataSourceImportModel
+
+    status = session.scalar(
+        select(DataSourceImportModel.status).where(DataSourceImportModel.id == import_id)
+    )
+    return status in {"SUCCEEDED", "FAILED", "CANCELLED"}
 
 
 def _install_signal_handlers(stop_event: threading.Event) -> None:

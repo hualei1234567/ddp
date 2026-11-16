@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 
 from app.api.deps import get_project_context
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.schemas import PageOut
 from app.api.v1.supplier_dependencies import (
     ExpectedVersion,
     IdempotencyKey,
@@ -17,12 +18,11 @@ from app.api.v1.supplier_dependencies import (
     WriteScope,
     request_id,
 )
+from app.api.v1.supplier_response_models import SupplierMetricsOut, SupplierOut
 from app.api.v1.supplier_schemas import (
     SupplierActionRequest,
     SupplierCreate,
     SupplierPatch,
-    metrics_out,
-    supplier_out,
 )
 from app.application.suppliers.commands import NewSupplier
 from app.application.suppliers.commands import SupplierPatch as SupplierPatchCmd
@@ -32,7 +32,7 @@ from app.domain.identity.models import ProjectContext, ProjectRole
 router = APIRouter(prefix="/projects/{project_id}/suppliers", tags=["suppliers"])
 
 
-@router.get("")
+@router.get("", response_model=PageOut[SupplierOut])
 def list_suppliers(
     scope: ReadScope,
     services: SupplierServicesDep,
@@ -40,7 +40,7 @@ def list_suppliers(
     category: str | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[SupplierOut]:
     items = services.suppliers.list(
         scope,
         status=status,
@@ -49,20 +49,20 @@ def list_suppliers(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.supplier_id)
-    return {
-        "items": [supplier_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[SupplierOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("", status_code=201)
+@router.post("", response_model=SupplierOut, status_code=201)
 def create_supplier(
     payload: SupplierCreate,
     request: Request,
     scope: WriteScope,
     services: SupplierServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> SupplierOut:
     supplier = services.suppliers.create(
         scope,
         NewSupplier(
@@ -79,34 +79,32 @@ def create_supplier(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return supplier_out(supplier)
+    return SupplierOut.from_domain(supplier)
 
 
-@router.get("/{supplier_id}")
-def get_supplier(
-    supplier_id: UUID, scope: ReadScope, services: SupplierServicesDep
-) -> dict[str, Any]:
-    return supplier_out(services.suppliers.get(scope, supplier_id))
+@router.get("/{supplier_id}", response_model=SupplierOut)
+def get_supplier(supplier_id: UUID, scope: ReadScope, services: SupplierServicesDep) -> SupplierOut:
+    return SupplierOut.from_domain(services.suppliers.get(scope, supplier_id))
 
 
-@router.patch("/{supplier_id}")
+@router.patch("/{supplier_id}", response_model=SupplierOut)
 def update_supplier(
     supplier_id: UUID,
     payload: SupplierPatch,
     scope: WriteScope,
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
-) -> dict[str, Any]:
+) -> SupplierOut:
     supplier = services.suppliers.update(
         scope,
         supplier_id,
         SupplierPatchCmd(**payload.model_dump(exclude_unset=True)),
         expected_version=expected_version,
     )
-    return supplier_out(supplier)
+    return SupplierOut.from_domain(supplier)
 
 
-@router.post("/{supplier_id}/actions/{action}")
+@router.post("/{supplier_id}/actions/{action}", response_model=SupplierOut)
 def act_on_supplier(
     supplier_id: UUID,
     action: str,
@@ -117,7 +115,7 @@ def act_on_supplier(
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> SupplierOut:
     """激活/暂停/恢复为常规写动作；终止是不可逆高风险动作，要求项目 Owner。"""
     if (
         action == "terminate"
@@ -136,14 +134,14 @@ def act_on_supplier(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return supplier_out(supplier)
+    return SupplierOut.from_domain(supplier)
 
 
-@router.get("/{supplier_id}/metrics")
+@router.get("/{supplier_id}/metrics", response_model=SupplierMetricsOut)
 def get_supplier_metrics(
     supplier_id: UUID, scope: ReadScope, services: SupplierServicesDep
-) -> dict[str, Any]:
-    return metrics_out(services.suppliers.metrics(scope, supplier_id))
+) -> SupplierMetricsOut:
+    return SupplierMetricsOut.from_domain(services.suppliers.metrics(scope, supplier_id))
 
 
 __all__ = ["router"]

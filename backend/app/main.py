@@ -28,6 +28,7 @@ from app.api.errors import (
 from app.api.middleware.rate_limit import RateLimitMiddleware
 from app.api.middleware.request_id import RequestIdMiddleware
 from app.api.middleware.security_headers import SecurityHeadersMiddleware
+from app.api.v1.platform_response_models import HealthResponse
 from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ValidationFailedError
@@ -344,14 +345,14 @@ def create_app() -> FastAPI:
             content=_error_payload(request, error),
         )
 
-    @app.get("/health", tags=["platform"])
-    def health() -> dict[str, str]:
-        return {
-            "status": "ok",
-            "service": settings.app_name,
-            "version": settings.app_version,
-            "env": settings.env,
-        }
+    @app.get("/health", tags=["platform"], response_model=HealthResponse)
+    def health() -> HealthResponse:
+        return HealthResponse(
+            status="ok",
+            service=settings.app_name,
+            version=settings.app_version,
+            env=settings.env,
+        )
 
     app.include_router(api_router, prefix="/api/v1")
     return app
