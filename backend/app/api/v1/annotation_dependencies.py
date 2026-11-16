@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.api.deps import DbSession
+from app.application.annotation.ai_suggestions import AnnotationAiSuggestionUseCases
 from app.application.annotation.arbitrations import AnnotationArbitrationUseCases
 from app.application.annotation.assignments import AnnotationAssignmentUseCases
 from app.application.annotation.batches import AnnotationBatchUseCases
@@ -22,6 +23,9 @@ from app.application.annotation.sample_sets import AnnotationSampleSetUseCases
 from app.application.annotation.schemas import AnnotationSchemaUseCases
 from app.application.annotation.submissions import AnnotationSubmissionUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
+from app.infrastructure.repositories.annotation_ai_suggestions import (
+    SqlAnnotationAiSuggestionRepository,
+)
 from app.infrastructure.repositories.annotation_assignments import (
     SqlAnnotationAssignmentRepository,
 )
@@ -67,6 +71,7 @@ class AnnotationUseCases:
     gold_sets: GoldSetUseCases
     quality_samples: QualitySampleUseCases
     iaa: IAAUseCases
+    ai_suggestions: AnnotationAiSuggestionUseCases
 
 
 def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
@@ -82,6 +87,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
     gold_sets_repo = SqlGoldSetRepository(session)
     quality_repo = SqlQualitySampleRepository(session)
     iaa_repo = SqlIAAReportRepository(session)
+    ai_suggestions_repo = SqlAnnotationAiSuggestionRepository(session)
     audit = SqlAnnotationAuditRepository(session)
     outbox = SqlAnnotationOutboxRepository(session)
     idempotency = SqlAnnotationIdempotencyRepository(session)
@@ -210,6 +216,18 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             outbox,
             session,
             idempotency,
+        ),
+        ai_suggestions=AnnotationAiSuggestionUseCases(
+            ai_suggestions_repo,
+            submissions_repo,
+            records_repo,
+            reviews_repo,
+            arbitrations_repo,
+            members,
+            audit,
+            outbox,
+            idempotency,
+            session,
         ),
     )
 

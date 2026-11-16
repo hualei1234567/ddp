@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
+from app.application.annotation.authority import resolve_review_authority
 from app.application.annotation.commands import NewAnnotationSubmission
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
 from app.application.annotation.ports import (
@@ -62,7 +63,7 @@ from app.domain.annotation.submission import (
     compute_records_digest,
     validate_record_labels,
 )
-from app.domain.identity.models import ProjectRole, ProjectScope
+from app.domain.identity.models import ProjectScope
 
 _RESOURCE_TYPE = "ANNOTATION_SUBMISSION"
 _RECORD_TYPE = "ANNOTATION_RECORD"
@@ -385,20 +386,22 @@ class AnnotationSubmissionUseCases:
         scope: ProjectScope,
         submission: AnnotationSubmission,
     ) -> None:
-        """返工要求只能由项目负责人、驳回的复核人或仲裁人发起。"""
-        if submission.annotator_id == scope.actor_id:
+        """返工要求只能由项目负责人、驳回的复核人或仲裁人发起。
+
+        判定规则唯一来源是 :mod:`app.application.annotation.authority`；
+        本方法只负责把"是标注人本人"与"无审阅权限"翻译成两条不同的错误文案
+        （前者是职责分离，后者是权限缺失，客户端提示语不同）。
+        """
+        authority = resolve_review_authority(
+            scope,
+            submission,
+            reviews=self._reviews,
+            arbitrations=self._arbitrations,
+            members=self._members,
+        )
+        if authority.is_submission_owner:
             raise ForbiddenOperationError("标注人不得自行发起返工要求")
-        if self._members.user_role(scope, scope.actor_id) == ProjectRole.OWNER.value:
-            return
-        reviews = self._reviews.list_for_submission(scope, submission.submission_id)
-        if any(
-            review.reviewer_id == scope.actor_id
-            and getattr(review.decision, "value", review.decision) == "REJECT"
-            for review in reviews
-        ):
-            return
-        arbitrations = self._arbitrations.list_for_submission(scope, submission.submission_id)
-        if any(scope.actor_id in arbitration.arbiter_ids for arbitration in arbitrations):
+        if authority.has_review_authority:
             return
         raise ForbiddenOperationError("只有复核人、仲裁人或项目负责人可以发起返工")
 
