@@ -20,6 +20,7 @@ from app.api.v1.episode_schemas import (
     EpisodeOut,
     EpisodeRevisionCreate,
 )
+from app.api.v1.governance_dependencies import EnforceEpisodeCreateQuota
 from app.api.v1.preconditions import require_expected_version, require_idempotency_key
 from app.api.v1.schemas import PageOut
 from app.application.episodes import (
@@ -65,6 +66,7 @@ def create_episode(
     response: Response,
     scope: WriteScope,
     use_cases: EpisodeUseCasesDep,
+    _quota_guard: EnforceEpisodeCreateQuota,
     idempotency_key: IdempotencyKey,
 ) -> EpisodeOut:
     episode = use_cases.episodes.create(

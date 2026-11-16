@@ -11,6 +11,8 @@ ErrorCode:
     - version_conflict
     - evaluation_cross_dataset_not_declared
     - evaluation_not_comparable
+    - quota_exceeded
+    - quota_measurement_unavailable
     - resource_immutable
     - duplicate_resource
     - calibration_active_conflict

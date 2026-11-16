@@ -144,22 +144,52 @@ class CoverageDimension(StrEnum):
 
     取值刻意与契约 ``GapDimensionType`` 同名同值，聚合时才能与反馈维度直接对上。
 
-    只收录 Episode 上有权威落点的轴：
+    每个轴只有一个权威落点，全部来自 Episode 及其**数据库级外键**可解析的关联行：
 
     - ``SCENE`` ← ``episodes.scene_labels``（JSON 数组）
     - ``ROBOT`` ← ``episodes.robot_id``
     - ``DEVICE`` ← ``episodes.device_ids``（JSON 数组）
     - ``QUALITY_STATUS`` ← ``episodes.quality_status``
+    - ``MODALITY`` ← ``episodes.sensor_ids`` → ``sensors.sensor_type``
+      （传感器类型就是模态声明：RGB / DEPTH / IMU / AUDIO …）
+    - ``ACTION`` ← ``episodes.task_id`` → ``collection_tasks.action_spec_id`` →
+      ``action_specs.actions[].code``（回退 ``name``）。按**被引用的那一行**统计，
+      不按 ``code`` 的版本谱系展开——任务冻结的是版本行，不是"同 code 的所有版本"。
+    - ``LABEL`` ← ``episodes.annotation_status`` + ``annotation_records``（仅 APPROVED）
+      → ``annotation_records.labels[].label_key``
 
-    ``ACTION`` / ``LABEL`` / ``MODALITY`` 在 Episode 上没有权威字段（``task_id`` 是
-    采集任务而非动作规格，强行映射会把"任务"当成"动作"），因此**不可实测**：
-    它们只会走人工值路径，见交付报告中的契约缺口登记。
+    这两类轴的口径不同，见 :data:`CLOSED_COVERAGE_DIMENSIONS`。
     """
 
     SCENE = "SCENE"
     ROBOT = "ROBOT"
     DEVICE = "DEVICE"
     QUALITY_STATUS = "QUALITY_STATUS"
+    ACTION = "ACTION"
+    LABEL = "LABEL"
+    MODALITY = "MODALITY"
+
+
+CLOSED_COVERAGE_DIMENSIONS: frozenset[CoverageDimension] = frozenset(
+    {
+        CoverageDimension.ACTION,
+        CoverageDimension.LABEL,
+        CoverageDimension.MODALITY,
+    }
+)
+"""「封闭轴」：总体完整时才允许把"缺失"解释成"0 覆盖"。
+
+- ``ACTION``：覆盖范围内**每个** Episode 都能经 ``task_id → action_spec_id`` 解析出
+  可识别的动作定义；
+- ``LABEL``：**每个** Episode 都已完成标注（``annotation_status='APPROVED'`` 且存在
+  ``APPROVED`` 记录）——未标注的 Episode 只是"还不知道有没有这个标签"；
+- ``MODALITY``：**每个** Episode 都声明了可解析的 ``sensor_ids``。
+
+任一 Episode 不具备权威来源时，它的取值是"未知"而不是"没有"，此时**整轴不返回
+实测值**，由上游回退人工值或 ``UNKNOWN``。总体完整时，某个维度值缺席才是真实的
+0（``MEASURED`` + 0）。这条区分是「没数据 ≠ 覆盖率为 0」的具体落地：宁可报
+``UNKNOWN``，也不能用只覆盖一部分 Episode 的数字冒充权威结论。
+"""
 
 
 class RequirementSourceType(StrEnum):

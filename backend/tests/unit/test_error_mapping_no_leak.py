@@ -93,10 +93,10 @@ def test_all_domain_mappers_share_the_single_factory() -> None:
         if name.endswith("_error_to_app") and inspect.isfunction(value)
     ]
     # 11 个域映射（设备/采集/上传/Episode/标注/数据集/数据源/供应商/modelops/
-    # 场地/审计查询）+ integrity_error_to_app（后者判定 SQL 约束，不走 code 查表）。
+    # 场地/治理/审计查询）+ integrity_error_to_app（后者判定 SQL 约束，不走 code 查表）。
     # 新增域时这个数字必须同步加一：它防的是"某个域又手写了一份查表"，
     # 而不是限制域的数量。
-    assert len(mappers) == 12, mappers
+    assert len(mappers) == 13, mappers
     for name in mappers:
         source = inspect.getsource(getattr(errors_module, name))
         if name == "integrity_error_to_app":

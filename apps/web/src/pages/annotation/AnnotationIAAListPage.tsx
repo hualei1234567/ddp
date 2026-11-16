@@ -1,12 +1,13 @@
-import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Space, Table, Tag, Typography } from "antd";
 import type { TableColumnsType } from "antd";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
 import TaskScopedPrompt from "../../components/annotation/TaskScopedPrompt";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
+import IAAReportCreateModal from "../../components/quality/IAAReportCreateModal";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
@@ -91,6 +92,7 @@ function IAAListContent({
   projectId: string;
   taskId: string;
 }) {
+  const [createOpen, setCreateOpen] = useState(false);
   const load = useCallback(
     (options: CursorPageRequestOptions) =>
       annotationApi.listIAAReports(projectId, taskId, {
@@ -118,6 +120,9 @@ function IAAListContent({
       <Link to={buildAnnotationTaskDetailPath(projectId, taskId)}>
         <Button icon={<ArrowLeftOutlined />}>返回任务</Button>
       </Link>
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+        计算 IAA 报告
+      </Button>
       <Button icon={<ReloadOutlined />} loading={refreshing} onClick={reload}>
         刷新
       </Button>
@@ -137,6 +142,11 @@ function IAAListContent({
         variant="empty"
         title="暂无 IAA 报告"
         description="任务尚未计算 IAA。样本不足时服务端返回 INSUFFICIENT_DATA，而不是 0。"
+        action={
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            计算 IAA 报告
+          </Button>
+        }
       />
     );
   } else {
@@ -177,10 +187,20 @@ function IAAListContent({
   return (
     <PageContainer
       title="IAA 报告"
-      description={`任务 ${taskId} · 标注者间一致性只读报告。`}
+      description={`任务 ${taskId} · 标注者间一致性报告；样本不足时指标为 N/A，不是 0。`}
       extra={extra}
     >
       {body}
+      <IAAReportCreateModal
+        projectId={projectId}
+        taskId={taskId}
+        defaultMetricDefinitionsVersion={
+          items[0]?.metric_definitions_version ?? null
+        }
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={reload}
+      />
     </PageContainer>
   );
 }

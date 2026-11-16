@@ -150,6 +150,11 @@ describe("标注列表与详情请求", () => {
       path: `/iaa-reports`,
       query: { task_id: ID },
     },
+    {
+      name: "listQualityChecks",
+      call: (api) => api.listQualityChecks(PROJECT, ID),
+      path: `/annotation-submissions/${ID}/quality-checks`,
+    },
   ];
 
   for (const item of cases) {
@@ -381,6 +386,56 @@ describe("标注写动作的请求头与请求体", () => {
       call: (api) =>
         api.actOnArbitration(PROJECT, ID, "finalize", { version: 6 }),
       path: `/annotation-arbitrations/${ID}/actions/finalize`,
+    },
+    {
+      // N4：手动重跑质量检查；每次调用都是新 run，没有请求体。
+      name: "runQualityCheck",
+      call: (api) => api.runQualityCheck(PROJECT, ID),
+      path: `/annotation-submissions/${ID}/quality-checks`,
+    },
+    {
+      name: "createGoldSet",
+      call: (api) =>
+        api.createGoldSet(PROJECT, {
+          code: "GOLD-001",
+          schema_id: OTHER_ID,
+          items: [{ episode_id: ID }],
+          exposure_policy: "HIDDEN",
+          max_exposure_per_annotator: 1,
+          rotation_policy: "NONE",
+          usage_policy: {},
+        }),
+      path: `/gold-sets`,
+      body: {
+        code: "GOLD-001",
+        schema_id: OTHER_ID,
+        items: [{ episode_id: ID }],
+      },
+    },
+    {
+      name: "actOnGoldSet",
+      call: (api) =>
+        api.actOnGoldSet(PROJECT, ID, "submit-review", {
+          version: 2,
+          reason: "内容已核对",
+        }),
+      path: `/gold-sets/${ID}/actions/submit-review`,
+      body: { reason: "内容已核对" },
+    },
+    {
+      name: "createIAAReport",
+      call: (api) =>
+        api.createIAAReport(PROJECT, {
+          task_id: ID,
+          metric_definitions_version: "ddp.stage3.iaa/1",
+          iou_threshold: 0.5,
+        }),
+      path: `/iaa-reports`,
+      body: {
+        task_id: ID,
+        metric_definitions_version: "ddp.stage3.iaa/1",
+        iou_threshold: 0.5,
+      },
     },
   ];
 

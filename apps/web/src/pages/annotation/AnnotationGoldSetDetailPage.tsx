@@ -13,6 +13,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
 import GoldAnswerSection from "../../components/annotation/GoldAnswerSection";
+import GoldSetActionBar from "../../components/quality/GoldSetActionBar";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
@@ -24,6 +25,7 @@ import { ApiError } from "../../services/api";
 import { annotationApi } from "../../services/annotation";
 import { buildAnnotationGoldSetListPath } from "../../services/annotationUrl";
 import { resolvePagePhase } from "../../services/pagePhase";
+import { GOLD_SET_ACTIONS } from "../../services/qualityPresentation";
 import type { GoldSet, GoldSetItem } from "../../types/annotation";
 
 function itemColumns(): TableColumnsType<GoldSetItem> {
@@ -75,6 +77,8 @@ function GoldSetDetailContent({
     [projectId, goldSetId],
   );
   const { data, error, loading, refreshing, stale, reload } = useRequest(load);
+  const [busyAction, setBusyAction] = useState(false);
+  const [actionError, setActionError] = useState<ApiError | null>(null);
   const [answers, setAnswers] = useState<GoldSet | null>(null);
   const [answerError, setAnswerError] = useState<ApiError | null>(null);
   const [answerLoading, setAnswerLoading] = useState(false);
@@ -100,6 +104,38 @@ function GoldSetDetailContent({
       setAnswerLoading(false);
     }
   }, [goldSetId, projectId]);
+
+  const handleAction = useCallback(
+    async (action: string, reason: string | null) => {
+      setBusyAction(true);
+      setActionError(null);
+      try {
+        const version = data?.version;
+        if (version === undefined) {
+          throw new Error("缺少黄金集版本号，无法执行动作，请刷新后重试。");
+        }
+        await annotationApi.actOnGoldSet(projectId, goldSetId, action, {
+          version,
+          reason,
+        });
+        reload();
+      } catch (caught) {
+        const apiError =
+          caught instanceof ApiError
+            ? caught
+            : new ApiError({
+                kind: "network",
+                message: "动作请求失败，请稍后重试。",
+                cause: caught,
+              });
+        setActionError(apiError);
+        throw apiError;
+      } finally {
+        setBusyAction(false);
+      }
+    },
+    [data?.version, goldSetId, projectId, reload],
+  );
 
   const extra = (
     <Space wrap>
@@ -133,6 +169,20 @@ function GoldSetDetailContent({
             onRetry={reload}
           />
         ) : null}
+        <Space direction="vertical" size={8} className="ddp-stack">
+          <Typography.Text strong>状态动作</Typography.Text>
+          <GoldSetActionBar
+            actions={GOLD_SET_ACTIONS}
+            busy={busyAction}
+            onAction={handleAction}
+          />
+          <Typography.Text type="secondary">
+            动作集合与状态迁移以服务端为准：非法迁移返回 409/422，页面不会提前隐藏按钮。
+          </Typography.Text>
+          {actionError ? (
+            <ApiErrorState error={actionError} compact />
+          ) : null}
+        </Space>
         <Descriptions column={{ xs: 1, sm: 2, lg: 3 }} size="small" bordered>
           <Descriptions.Item label="黄金集 ID">
             <IdentifierValue value={data.gold_set_id} label="黄金集 ID" />

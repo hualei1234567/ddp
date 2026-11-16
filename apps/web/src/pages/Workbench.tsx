@@ -4,7 +4,6 @@ import {
   Card,
   Col,
   Descriptions,
-  List,
   Row,
   Space,
   Tag,
@@ -25,16 +24,6 @@ import {
   type WorkbenchSnapshot,
 } from "../services/workbench";
 import type { HealthResponse, PlatformMeta } from "../types/platform";
-
-const phaseZeroItems = [
-  "仓库、分支保护与 PR 流程",
-  "后端骨架与统一错误/日志",
-  "前端骨架与设计令牌",
-  "本地 PostgreSQL / Redis / MinIO",
-  "OpenAPI 契约与前端类型",
-  "CI 基线（lint/type/test/build/security）",
-  "Agent 1+6 团队与平台纳管",
-];
 
 async function loadWorkbench(signal: AbortSignal): Promise<WorkbenchSnapshot> {
   const [health, meta] = await Promise.allSettled([
@@ -178,19 +167,30 @@ function WorkbenchContent({
         </Col>
       </Row>
 
-      <Card title="阶段 0 基建范围">
-        <List
-          size="small"
-          dataSource={phaseZeroItems}
-          renderItem={(item) => (
-            <List.Item>
-              <Space>
-                <Tag color="blue">规划</Tag>
-                <span>{item}</span>
+      <Card title="已启用模块">
+        <EndpointContent
+          snapshot={snapshot.meta}
+          emptyDescription="平台元信息未返回数据，无法得知已启用模块。"
+          onRetry={onRetry}
+        >
+          {(meta) =>
+            meta.modules.length === 0 ? (
+              <PageState
+                variant="empty"
+                compact
+                description="平台未声明任何已启用模块。"
+              />
+            ) : (
+              <Space size={[8, 8]} wrap>
+                {meta.modules.map((module) => (
+                  <Tag key={module} color="blue">
+                    {module}
+                  </Tag>
+                ))}
               </Space>
-            </List.Item>
-          )}
-        />
+            )
+          }
+        </EndpointContent>
       </Card>
     </Space>
   );
@@ -238,7 +238,7 @@ export default function Workbench() {
   return (
     <PageContainer
       title="DDP 工作台"
-      description="具身智能数据闭环平台 · 阶段 0 基建。当前只提供服务骨架，业务模块按 机器纳管 → 采集 → 上传 → 标注 → 训练 逐阶段开放。"
+      description="具身智能数据闭环平台 · 数据接入 → 切片 → 标注 → 数据集 → 训练交付 → 模型闭环。模块开放状态与阶段以服务端 /platform/meta 为准，本页不另做判断。"
       extra={extra}
     >
       {content}

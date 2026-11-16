@@ -120,6 +120,24 @@
 "形态像领域事件但首段不在白名单"报警——这条守卫正是为了让新域必须显式登记。
 
 
+### 3.2.2 经营治理（N9 规模化运营）
+
+| 事件 | 产生点 | 归类 |
+|---|---|---|
+| `governance.quota.created` | `GOVERNANCE_QUOTA_CREATED_EVENT`（`application/governance/use_cases.py`） | 留痕类 |
+| `governance.quota.updated` | `GOVERNANCE_QUOTA_UPDATED_EVENT`（同上） | 留痕类 |
+| `governance.quota.exceeded` | `GOVERNANCE_QUOTA_EXCEEDED_EVENT`（同上） | 留痕类 |
+
+三者都是留痕类：配额变更与超限拒绝不需要任何 worker 响应，审计查询直接读
+`audit_logs` / `outbox_events`。`quota.exceeded` 的 `result` 固定为
+`FAILURE`（`audit_logs.result` 的既有 CHECK 只允许 `SUCCESS` / `FAILURE`），
+且**独立提交**——被拒绝的业务写入不会发生，若与随后抛出的异常共处一个
+最终回滚的事务里，这条拒绝记录就永远查不到。
+
+前缀 `governance` 已登记在 `scripts/check_outbox_events.py` 的
+`_EVENT_DOMAINS`；用量快照刷新是系统测量，不产生领域事件。
+
+
 ### 3.3 R-13 收尾：其余域的动作事件静态化
 
 设备域之外还有 20 处 `event_type=f"..."`（数据集 / 数据源 / 摄入 / modelops /
