@@ -24,7 +24,10 @@ import {
   type AnnotationFeedback,
 } from "../../services/annotationPresentation";
 import { loadSubmissionBundle } from "../../services/annotationQueues";
-import { buildAnnotationTaskDetailPath } from "../../services/annotationUrl";
+import {
+  buildAnnotationTaskDetailPath,
+  buildQualityCheckPath,
+} from "../../services/annotationUrl";
 import { formatTimestamp } from "../../services/format";
 import { resolvePagePhase } from "../../services/pagePhase";
 import type {
@@ -194,6 +197,13 @@ function SubmissionContent({
       </Button>
       <Button icon={<ReloadOutlined />} loading={refreshing} onClick={reload}>
         刷新
+      </Button>
+      <Button
+        onClick={() =>
+          navigate(buildQualityCheckPath(projectId, submissionId))
+        }
+      >
+        质量检查
       </Button>
     </Space>
   );

@@ -134,11 +134,14 @@ export const navSections: NavSection[] = [
         aliases: ["/annotation"],
       },
       {
+        // 后端 N4 质量能力（黄金集 / 抽检 / IAA / 提交质量检查）早已就绪，
+        // 此前导航写成 available:false，用户永远进不到这些页面。
         path: "/quality",
         label: "质量管理",
-        description: "执行质检规则、抽检与质量门禁。",
+        description:
+          "金标准集（黄金集）、质检抽检、IAA 报告与提交质量检查；无结论不等于通过。",
         icon: createElement(SafetyCertificateOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/assets",
