@@ -348,15 +348,11 @@ def test_postgres_action_axis_works_when_column_is_json_not_jsonb(
     factory, project_id, user_id = _seed_closed(postgres_engine)
     with postgres_engine.begin() as conn:
         conn.execute(
-            text(
-                "ALTER TABLE action_specs "
-                "ALTER COLUMN actions TYPE json USING actions::json"
-            )
+            text("ALTER TABLE action_specs " "ALTER COLUMN actions TYPE json USING actions::json")
         )
         conn.execute(
             text(
-                "ALTER TABLE annotation_records "
-                "ALTER COLUMN labels TYPE json USING labels::json"
+                "ALTER TABLE annotation_records " "ALTER COLUMN labels TYPE json USING labels::json"
             )
         )
 
