@@ -9,6 +9,8 @@ ErrorCode:
     - conflict
     - state_transition_invalid
     - version_conflict
+    - evaluation_cross_dataset_not_declared
+    - evaluation_not_comparable
     - resource_immutable
     - duplicate_resource
     - calibration_active_conflict

@@ -622,6 +622,8 @@ _MODELOPS_STATUS_BY_CODE = {
     "evaluation_immutable": 409,
     "evaluation_metrics_invalid": 422,
     "evaluation_baseline_invalid": 422,
+    "evaluation_cross_dataset_not_declared": 422,
+    "evaluation_not_comparable": 422,
     "inference_service_unavailable": 503,
     "inference_service_not_active": 409,
     "inference_task_input_invalid": 422,
@@ -658,7 +660,22 @@ _MODELOPS_MESSAGES = {
     "model_adapter_unsupported": "模型平台适配器不支持该能力",
     "model_callback_invalid": "模型平台回调签名校验失败",
     "model_callback_replayed": "模型平台回调已被处理过",
+    "evaluation_cross_dataset_not_declared": (
+        "跨数据集版本对比需显式声明（cross_dataset_comparison=true）"
+    ),
+    "evaluation_not_comparable": "两次评测的任务语义不一致或无法判定，不能直接对比",
 }
+
+# 允许回显 details 的 modelops code 白名单。
+# 只登记那些 details **只含同项目对象标识与机器可读原因**的码：跨数据集对比
+# 拒绝时客户端必须知道是哪两个数据集版本、差在哪里，否则只能按 code 猜。
+# 其余码的 details 可能含内部标识，一律不回显（与设备域 G-19 同口径）。
+_MODELOPS_DETAILS_SAFE_CODES = frozenset(
+    {
+        "evaluation_cross_dataset_not_declared",
+        "evaluation_not_comparable",
+    }
+)
 
 
 def modelops_error_to_app(exc: ModelOpsDomainError) -> AppError:
@@ -667,6 +684,7 @@ def modelops_error_to_app(exc: ModelOpsDomainError) -> AppError:
         status_by_code=_MODELOPS_STATUS_BY_CODE,
         messages=_MODELOPS_MESSAGES,
         fallback=_MODELOPS_FALLBACK,
+        details_codes=_MODELOPS_DETAILS_SAFE_CODES,
     )
 
 

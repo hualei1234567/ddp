@@ -250,6 +250,7 @@ class SqlEvaluationRepository:
                 model_version_id=evaluation.model_version_id,
                 dataset_version_id=evaluation.dataset_version_id,
                 baseline_evaluation_id=evaluation.baseline_evaluation_id,
+                baseline_dataset_version_id=evaluation.baseline_dataset_version_id,
                 status=evaluation.status,
                 metrics=dict(evaluation.metrics or {}),
                 thresholds=dict(evaluation.thresholds),

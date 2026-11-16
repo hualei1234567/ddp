@@ -248,6 +248,16 @@ class Evaluation:
     thresholds: dict[str, dict[str, float | None]]
     status: str = EvaluationStatus.QUEUED
     baseline_evaluation_id: UUID | None = None
+    # 基线评测**当时**所用数据集版本的快照。跨数据集对比放开后，结论必须能
+    # 回答"基线是哪个数据集版本、当前是哪个"；本字段让客户端与用例层不必
+    # 每次都回查基线行就能判断"这次对比跨不跨数据集"。
+    #
+    # 这是**刻意的冗余**（基线行的 ``dataset_version_id`` 已受不可变守卫保护，
+    # 理论上可回查）：冗余换来字段自足与契约可直接表达。代价是可能不一致，
+    # 因此用下面的成对校验排除"只有一半"的写入；而"两值不同"是合法的
+    # ——跨数据集对比正是本字段存在的意义。详见迁移 0043 的模块文档。
+    # 同数据集版本时与 ``dataset_version_id`` 相等，不引入第二套语义。
+    baseline_dataset_version_id: UUID | None = None
     metrics: dict[str, float] | None = None
     verdict: str = EvaluationVerdict.UNKNOWN
     report_ref: dict[str, object] | None = None
@@ -272,6 +282,16 @@ class Evaluation:
             "baseline_evaluation_id",
             optional_uuid(self.baseline_evaluation_id, "baseline_evaluation_id"),
         )
+        baseline_dataset_version_id = optional_uuid(
+            self.baseline_dataset_version_id, "baseline_dataset_version_id"
+        )
+        # 没有基线就不该有"基线数据集版本"；有基线却不知道对方数据集版本，
+        # 等于留下一个半截引用（与 0040 对 sop_version 的口径一致）。
+        if (self.baseline_evaluation_id is None) != (baseline_dataset_version_id is None):
+            raise DomainValidationError(
+                "baseline_dataset_version_id 必须与 baseline_evaluation_id 成对出现"
+            )
+        object.__setattr__(self, "baseline_dataset_version_id", baseline_dataset_version_id)
         object.__setattr__(self, "metrics", parse_metrics(self.metrics))
         object.__setattr__(
             self, "verdict", coerce_enum(self.verdict, EvaluationVerdict, "verdict").value
@@ -315,6 +335,7 @@ def new_evaluation(
     baseline_evaluation_id: UUID | None,
     actor_id: UUID,
     now: datetime,
+    baseline_dataset_version_id: UUID | None = None,
 ) -> Evaluation:
     return Evaluation(
         evaluation_id=evaluation_id,
@@ -323,6 +344,7 @@ def new_evaluation(
         dataset_version_id=dataset_version_id,
         thresholds=thresholds,
         baseline_evaluation_id=baseline_evaluation_id,
+        baseline_dataset_version_id=baseline_dataset_version_id,
         created_at=now,
         updated_at=now,
         created_by=actor_id,

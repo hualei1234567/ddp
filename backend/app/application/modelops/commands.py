@@ -42,6 +42,9 @@ class NewEvaluation:
     baseline_evaluation_id: UUID | None = None
     adapter_id: str | None = None
     config: dict[str, object] | None = None
+    # 跨数据集版本对比必须显式声明；未声明时跨数据集直接拒绝。
+    # 默认 False 保证既有调用方行为不变（同数据集基线照旧允许）。
+    cross_dataset_comparison: bool = False
 
 
 @dataclass(frozen=True, slots=True)
