@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -39,6 +40,7 @@ def _episode_annotation_status(factory: sessionmaker[Session], episode_id: UUID)
         )
 
 
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 def test_approval_projects_approved_to_episode(api_db) -> None:
     factory, ids = api_db
     episode_id = seed_episode(factory, ids.project_a, ids.editor_a, "EP-PROJ-1")

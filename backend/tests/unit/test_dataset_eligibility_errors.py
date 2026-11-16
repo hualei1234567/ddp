@@ -277,3 +277,62 @@ def test_unlisted_selection_stays_statistical() -> None:
 
     assert result.preview.selected_count == 0
     assert "DATASET_EMPTY" in result.blocking_issues or result.split_status.value != "OK"
+
+
+# --------------------------------------------------------------------------
+# 近重复检测接入 pipeline
+# --------------------------------------------------------------------------
+
+
+def _near_duplicate_kwargs(enforcement: str = "WARN_ONLY", enabled: bool = True):
+    """构造一组时间区间完全重合、场景一致的候选，触发近重复检测。"""
+    from dataclasses import replace as _replace
+
+    # 同场景 + 完全重合的时间区间 = 元数据层面就是疑似重复。
+    base = _candidate(0)
+    twin = _replace(
+        _candidate(1),
+        start_time_ns=base.start_time_ns,
+        end_time_ns=base.end_time_ns,
+        duration_ns=base.duration_ns,
+        scene_labels=base.scene_labels,
+    )
+    candidates = (base, twin)
+    kwargs = _pipeline_kwargs(candidates, SelectionFilters())
+    policy = kwargs["dedup_policy"]
+    kwargs["dedup_policy"] = DedupPolicy(
+        dedup_policy_id=policy.dedup_policy_id,
+        project_id=policy.project_id,
+        dataset_id=policy.dataset_id,
+        version=policy.version,
+        exact_keys=policy.exact_keys,
+        retain_rule=policy.retain_rule,
+        near_duplicate_enabled=enabled,
+        near_duplicate_enforcement=enforcement,
+        similarity_threshold=0.8,
+        similarity_min_cluster_size=2,
+    )
+    return kwargs
+
+
+def test_near_duplicate_warn_mode_records_finding_not_block() -> None:
+    """WARN_ONLY 下近重复要留痕但不阻断构建。"""
+    result = run_pipeline(**_near_duplicate_kwargs("WARN_ONLY"))
+    assert any(item.startswith("NEAR_DUPLICATE_SUSPECTED") for item in result.warnings)
+    assert not any("NEAR_DUPLICATE" in issue for issue in result.blocking_issues)
+    summary = result.version_updates["exclusion_summary"]
+    assert isinstance(summary, dict)
+    assert "near_duplicate" in summary
+
+
+def test_near_duplicate_block_mode_blocks() -> None:
+    """BLOCK 下必须真的阻断——此前该模式只会产出"不支持"的阻断项。"""
+    result = run_pipeline(**_near_duplicate_kwargs("BLOCK"))
+    assert any(issue.startswith("NEAR_DUPLICATE_SUSPECTED") for issue in result.blocking_issues)
+    assert not any("UNSUPPORTED" in issue for issue in result.blocking_issues)
+
+
+def test_near_duplicate_disabled_leaves_no_summary() -> None:
+    result = run_pipeline(**_near_duplicate_kwargs(enabled=False))
+    summary = result.version_updates["exclusion_summary"]
+    assert "near_duplicate" not in summary

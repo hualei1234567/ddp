@@ -62,6 +62,36 @@ class PipelineResult:
     split_status: SplitStatus
 
 
+def _detect_near_duplicates(
+    selected: tuple[EpisodeCandidate, ...],
+    dedup_policy: DedupPolicy,
+):
+    """按策略参数跑近重复检测；策略未给参数时用领域默认值。"""
+    from app.domain.datasets.near_duplicate import (
+        DEFAULT_DURATION_TOLERANCE,
+        DEFAULT_OVERLAP_RATIO,
+        NearDuplicateMethod,
+        detect_near_duplicates,
+    )
+
+    method = dedup_policy.similarity_method or NearDuplicateMethod.TEMPORAL_OVERLAP
+    # 策略里的 similarity_threshold 是"相似度阈值"，与我们的"重叠率阈值"
+    # 语义对齐：阈值越高越严格。直接复用，不另立字段。
+    overlap = (
+        dedup_policy.similarity_threshold
+        if dedup_policy.similarity_threshold is not None
+        else DEFAULT_OVERLAP_RATIO
+    )
+    min_cluster = dedup_policy.similarity_min_cluster_size or 2
+    return detect_near_duplicates(
+        selected,
+        method=method,
+        overlap_ratio=overlap,
+        duration_tolerance=DEFAULT_DURATION_TOLERANCE,
+        min_cluster_size=min_cluster,
+    )
+
+
 def run_pipeline(
     *,
     base_version: DatasetVersion,
@@ -106,11 +136,18 @@ def run_pipeline(
         blocking.append("DATASET_EMPTY")
     if split.status is not SplitStatus.OK:
         blocking.append(f"SPLIT_{split.status.value}")
+    near_duplicate_summary: dict[str, object] | None = None
     if dedup_policy.near_duplicate_enabled:
-        if dedup_policy.near_duplicate_enforcement.value == "BLOCK":
-            blocking.append("NEAR_DUPLICATE_ENFORCEMENT_BLOCK_UNSUPPORTED")
+        near = _detect_near_duplicates(dedup.selected, dedup_policy)
+        near_duplicate_summary = near.summary()
+        if near.found:
+            message = f"NEAR_DUPLICATE_SUSPECTED:{near.cluster_count} 簇 / {len(near.pairs)} 对"
+            if dedup_policy.near_duplicate_enforcement.value == "BLOCK":
+                blocking.append(message)
+            else:
+                warnings.append(message)
         else:
-            warnings.append("NEAR_DUPLICATE_NOT_IMPLEMENTED")
+            warnings.append("NEAR_DUPLICATE_NONE")
 
     leakage_items = _leakage_items(dedup.selected, split, candidate_by_id)
     leakage_report = check_leakage(
@@ -207,7 +244,9 @@ def run_pipeline(
         "source_snapshot_at": source_snapshot_at,
         "warnings": tuple(dict.fromkeys(warnings)),
         "blocking_issues": tuple(dict.fromkeys(blocking)),
-        "exclusion_summary": _exclusion_summary(selection.exclusion_summary, dedup),
+        "exclusion_summary": _exclusion_summary(
+            selection.exclusion_summary, dedup, near_duplicate_summary
+        ),
         "updated_at": now,
     }
     manifest: Manifest | None = None
@@ -454,6 +493,7 @@ def _coverage(
 def _exclusion_summary(
     selection_summary: tuple[dict[str, object], ...],
     dedup: DedupOutcome,
+    near_duplicate_summary: dict[str, object] | None = None,
 ) -> dict[str, object]:
     summary = [dict(item) for item in selection_summary]
     if dedup.duplicated_count:
@@ -464,7 +504,12 @@ def _exclusion_summary(
                 "sample_episode_ids": [str(item.episode_id) for item in dedup.excluded[:5]],
             }
         )
-    return {"items": summary}
+    result: dict[str, object] = {"items": summary}
+    if near_duplicate_summary is not None:
+        # 近重复结论冻结进版本的 exclusion_summary：事后能回答"这版数据在
+        # 构建时有没有疑似近重复、用的是哪套阈值"，而不是只剩一句警告。
+        result["near_duplicate"] = near_duplicate_summary
+    return result
 
 
 def _preview_samples(

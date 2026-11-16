@@ -45,3 +45,6 @@ secrets/
 
 # Playwright MCP artifacts
 .playwright-mcp/
+
+# 并行开发用的临时 worktree（Claude Code 隔离工作区）
+.claude/worktrees/
