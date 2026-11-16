@@ -40,6 +40,7 @@ DISPATCH_EVENTS = {
     "ingestion.raw_asset.validation_requested": "backend/app/workers/outbox.py",
     "dataset.export.requested": "backend/app/workers/exports.py",
     "datasource.import_requested": "backend/app/workers/datasources.py",
+    "ingestion.job.created": "backend/app/workers/ingestion_jobs.py",
 }
 
 # 事件名允许段内连字符：设备域生命周期动作名沿用 API 路径写法

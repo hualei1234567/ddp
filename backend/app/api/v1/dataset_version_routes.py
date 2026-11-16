@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -36,6 +36,7 @@ from app.api.v1.dataset_schemas import (
     quality_out,
     version_out,
 )
+from app.api.v1.lineage_schemas import LineageEdgeOut, LineageResponse
 from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import DatasetReadScope, DatasetVersionReadScope
 from app.application.datasets.commands import (
@@ -44,11 +45,20 @@ from app.application.datasets.commands import (
     NewDatasetVersion,
     PreviewSelection,
 )
+from app.application.episodes.lineage import MAX_DEPTH
 from app.core.errors import ForbiddenError
 from app.domain.datasets.state_machines import allowed_version_actions
+from app.domain.episodes.enums import LineageNodeType
 from app.domain.identity.models import ProjectContext
 
 router = APIRouter(prefix="/projects/{project_id}/datasets", tags=["dataset-versions"])
+
+# 对外契约沿用 forward/reverse，应用层沿用 forward/backward。
+Direction = Literal["forward", "reverse"]
+
+
+def _internal_direction(direction: str) -> str:
+    return "forward" if direction == "forward" else "backward"
 
 
 @router.get("/{dataset_id}/versions", response_model=PageOut[DatasetVersionOut])
@@ -124,6 +134,51 @@ def get_version(
 ) -> dict[str, Any]:
     version = use_cases.versions.get(scope, dataset_id, version_id)
     return version_out(version, allowed_actions=allowed_version_actions(version.status))
+
+
+@router.get(
+    "/{dataset_id}/versions/{version_id}/lineage",
+    response_model=LineageResponse,
+)
+def get_version_lineage(
+    dataset_id: UUID,
+    version_id: UUID,
+    scope: DatasetVersionReadScope,
+    use_cases: DatasetUseCasesDep,
+    direction: Direction = "reverse",
+    depth: Annotated[int, Query(ge=1, le=MAX_DEPTH)] = 1,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> LineageResponse:
+    """DatasetVersion 血缘。
+
+    ``direction=reverse``（默认）列出"哪些 Episode 进了这个版本"
+    （``Episode → DatasetVersion`` 的 ``INCLUDED_IN`` 边）；
+    ``direction=forward`` 从版本继续往下游走（当前阶段只有 DatasetVersion
+    节点，返回空是正确结果，不是缺失实现）。
+
+    遍历复用 ``LineageService.traverse``（BFS、``MAX_DEPTH=5``、边去重），
+    不在此另写图遍历。
+
+    版本存在但尚未转 READY 时，血缘节点还没登记（节点在 validate 转 READY
+    时才写）。此时返回空图，而不是 404——资源确实存在，只是还没有血缘，
+    两者不能混为一谈。
+    """
+    # 先校验版本属于当前项目；之后即使血缘节点未登记，也只能返回空图。
+    use_cases.versions.get(scope, dataset_id, version_id)
+    edges = use_cases.lineage.traverse(
+        scope,
+        node_type=LineageNodeType.DATASET_VERSION,
+        node_id=version_id,
+        direction=_internal_direction(direction),
+        depth=depth,
+        limit=limit,
+        # 版本归属已由上面的权威查询确认，节点未登记是合法中间态。
+        require_node=False,
+    )
+    return LineageResponse(
+        items=[LineageEdgeOut.from_domain(edge) for edge in edges],
+        direction=direction,
+    )
 
 
 @router.post(

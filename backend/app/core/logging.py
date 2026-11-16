@@ -3,6 +3,12 @@
 阶段 0 使用标准库 + JSON formatter，避免过早引入额外依赖。
 formatter 对日志参数做截断与敏感字段脱敏，防止 Token、密码或超长
 客户端输入原样进入日志；异常堆栈同样截断后输出。
+
+``trace_id``：每条记录都带 ``trace_id``，取自 ``contextvars``（由
+``RequestIdMiddleware`` 按请求设置，取值等于 ``request_id``）。这样日志与
+响应头/错误体里的 ``X-Request-Id`` 可以直接对齐，业务代码不必逐处传参。
+请求外的日志（启动、Worker 主循环）没有请求上下文，``trace_id`` 为 ``null``，
+而不是编造一个值。
 """
 
 from __future__ import annotations
@@ -12,10 +18,14 @@ import logging
 import re
 import sys
 from collections.abc import Mapping
+from contextvars import ContextVar
 from datetime import UTC, datetime
 from typing import Any
 
 from app.core.config import get_settings
+
+# 当前请求的追踪标识。默认 ``None`` 表示"不在请求上下文中"。
+trace_id_var: ContextVar[str | None] = ContextVar("ddp_trace_id", default=None)
 
 _MAX_LOG_ARG_LENGTH = 200
 _MAX_LOG_MESSAGE_LENGTH = 2000
@@ -132,6 +142,7 @@ class JsonFormatter(logging.Formatter):
             "ts": datetime.now(UTC).isoformat(timespec="milliseconds"),
             "level": record.levelname,
             "logger": record.name,
+            "trace_id": trace_id_var.get(),
             "message": _format_message(record),
         }
         if record.exc_info:

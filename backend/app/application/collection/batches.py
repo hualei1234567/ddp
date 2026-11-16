@@ -125,7 +125,13 @@ class CollectionBatchUseCases:
 
         task = self._get_task(scope, task_id)
         sequence_no = command.sequence_no or self._batches.next_sequence_no(scope, task_id)
-        code = command.code or f"B-{sequence_no:04d}"
+        # code 必须在**项目内**唯一（唯一键是 (project_id, code)），而
+        # sequence_no 只在单个任务内递增。此前 code 只含 sequence_no，导致
+        # 同一项目里第二个任务建第一个批次时必然撞
+        # uq_annotation_batches_project_code / uq_collection_batches_project_code
+        # ——"多任务并行标注/采集"这条常规路径直接不可用。带上 task 短标识
+        # 即可同时满足"项目内唯一"与"人类可读"。
+        code = command.code or f"B-{task_id.hex[:8]}-{sequence_no:04d}"
         if task.target_episode_count > 0:
             total = self._batches.sum_expected_count(scope, task_id) + command.expected_count
             if total > task.target_episode_count:

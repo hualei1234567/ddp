@@ -55,3 +55,32 @@ describe("导航分区配置", () => {
     expect(findNavItem("/unknown-path")).toBeNull();
   });
 });
+
+describe("导航路径可达性", () => {
+  // 真实缺陷回归守卫：此前有一个完整实现的页面（数据需求，370 行、接
+  // modelOpsApi）在菜单里被写成 available:false 且路径指向根本不存在的
+  // /requirements，用户永远无法从导航到达它。让"菜单指向的路径必须在路由表
+  // 里存在"成为可执行断言，这类错误就不会再悄悄上线。
+  it("每个启用的导航项路径都能在路由表里找到对应声明", async () => {
+    // 用 Vite 的 ?raw 导入拿源码文本：vite/client 自带该类型声明，
+    // 不必为测一侧导航给整个前端引入 node 类型。
+    const { default: source } = await import("../routes.tsx?raw");
+
+    for (const section of navSections) {
+      for (const item of section.items) {
+        if (!item.available) {
+          continue;
+        }
+        // 根路径在路由表里以 <Route index> 声明，其余是相对写法 path="x"。
+        const declared =
+          item.path === "/"
+            ? /<Route\s+index\b/.test(source)
+            : source.includes(`path="${item.path.replace(/^\//, "")}"`);
+        expect(
+          declared,
+          `导航项「${item.label}」指向 ${item.path}，路由表里没有对应声明`,
+        ).toBe(true);
+      }
+    }
+  });
+});

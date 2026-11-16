@@ -1,5 +1,6 @@
 """ORM 模型聚合，供 Alembic 与仓储导入。"""
 
+from app.infrastructure.db.models.annotation_ai import AnnotationAiSuggestion
 from app.infrastructure.db.models.annotation_catalog import (
     AnnotationSampleEpisode,
     AnnotationSampleSet,
@@ -11,6 +12,10 @@ from app.infrastructure.db.models.annotation_quality import (
     GoldSet,
     IAAReport,
     QualitySample,
+)
+from app.infrastructure.db.models.annotation_quality_rules import (
+    AnnotationQualityFinding,
+    AnnotationQualityRun,
 )
 from app.infrastructure.db.models.annotation_results import (
     AnnotationArbitration,
@@ -32,6 +37,12 @@ from app.infrastructure.db.models.collection import (
     CollectionTaskSensor,
     IdempotencyRecord,
     OutboxEvent,
+)
+from app.infrastructure.db.models.collection_assets import (
+    ActionSpecModel,
+    CollectionPlanModel,
+    CollectionSopModel,
+    ScenarioModel,
 )
 from app.infrastructure.db.models.dataset_policies import (
     DatasetDedupPolicyModel,
@@ -89,10 +100,13 @@ from app.infrastructure.db.models.training import (
 
 __all__ = [
     "AcceptanceLedgerModel",
+    "AnnotationAiSuggestion",
     "AnnotationArbitration",
     "AnnotationAssignment",
     "AnnotationAssignmentEvent",
     "AnnotationBatch",
+    "AnnotationQualityFinding",
+    "AnnotationQualityRun",
     "AnnotationRecord",
     "AnnotationReview",
     "AnnotationSampleEpisode",
@@ -104,8 +118,12 @@ __all__ = [
     "CalibrationProfile",
     "CalibrationRecord",
     "CalibrationTargetRef",
+    "ActionSpecModel",
     "CollectionBatch",
+    "CollectionPlanModel",
+    "CollectionSopModel",
     "CollectionTask",
+    "ScenarioModel",
     "CollectionTaskDevice",
     "CollectionTaskSensor",
     "DataLineageEdgeModel",

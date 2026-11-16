@@ -57,6 +57,19 @@ class SqlRawAssetRepository:
                         sha256=asset.sha256,
                         status=asset.status.value,
                         captured_at=asset.captured_at,
+                        device_ids=[str(item) for item in asset.device_ids],
+                        sensor_ids=[str(item) for item in asset.sensor_ids],
+                        sensor_snapshot=(
+                            dict(asset.sensor_snapshot)
+                            if asset.sensor_snapshot is not None
+                            else None
+                        ),
+                        device_time_raw=(
+                            dict(asset.device_time_raw)
+                            if asset.device_time_raw is not None
+                            else None
+                        ),
+                        raw_metadata=dict(asset.raw_metadata),
                         ingested_at=asset.ingested_at,
                         storage_class=asset.storage_class.value,
                         retention_policy_id=asset.retention_policy_id,
@@ -213,6 +226,11 @@ class SqlRawAssetRepository:
             sha256=row.sha256,
             status=RawAssetStatus(row.status),
             captured_at=as_utc(row.captured_at),
+            device_ids=tuple(UUID(str(item)) for item in (row.device_ids or ())),
+            sensor_ids=tuple(UUID(str(item)) for item in (row.sensor_ids or ())),
+            sensor_snapshot=row.sensor_snapshot,
+            device_time_raw=row.device_time_raw,
+            raw_metadata=row.raw_metadata or {},
             ingested_at=as_utc(row.ingested_at),
             storage_class=StorageClass(row.storage_class),
             retention_policy_id=row.retention_policy_id,

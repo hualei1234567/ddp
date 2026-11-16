@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.domain.episodes.errors import (
-    CalibrationNotActiveError,
     DomainValidationError,
     TimeBaseInvalidError,
 )
@@ -175,10 +174,28 @@ def validate_time_base(value: object) -> dict[str, object]:
 
 
 def validate_calibration_snapshot(value: object) -> tuple[dict[str, object], ...]:
+    """校验标定快照；**允许为空数组**。
+
+    为什么允许空：契约 ``EpisodeCreate.calibration_snapshot`` 明确
+    ``default: []`` 且不在 ``required`` 里——允许调用方先建 Episode 再补标定，
+    也允许数据源本身不含标定信息（例如 Hugging Face 公开第一人称数据集，
+    真实元数据里只有视频与任务字段，没有任何相机内参或机械臂标定）。
+
+    此前这里强制非空并抛 ``calibration_not_active``，造成两个后果：
+    1. 契约允许的请求被 422 拒绝（实现比契约更严，客户端按契约写就会失败）；
+    2. 数据集侧的 ``CALIBRATION_MISSING`` 排除码永远不可达——空快照在
+       创建 Episode 时就被挡住了，根本走不到选择阶段。
+
+    放宽后两条门禁各归其位：
+    - **能否创建 Episode**：只看字段结构（这里）；
+    - **能否进入数据集**：``domain/datasets/selection.py`` 按快照是否为空
+      区分 ``CALIBRATION_MISSING``（没有）与 ``CALIBRATION_INVALID``（有但无效），
+      由数据集策略决定是否放行——这才是"数据准入"该管的判断。
+
+    非空时仍然逐项严格校验，不做任何放宽。
+    """
     if not isinstance(value, Sequence) or isinstance(value, str | bytes):
         raise DomainValidationError("calibration_snapshot 必须是数组")
-    if not value:
-        raise CalibrationNotActiveError("calibration_snapshot 不能为空")
     snapshots: list[dict[str, object]] = []
     for item in value:
         if not isinstance(item, Mapping):

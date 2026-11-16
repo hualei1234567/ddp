@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Query, Request
 
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.schemas import PageOut
 from app.api.v1.supplier_dependencies import (
     ExpectedVersion,
     IdempotencyKey,
@@ -17,14 +18,16 @@ from app.api.v1.supplier_dependencies import (
     WriteScope,
     request_id,
 )
+from app.api.v1.supplier_response_models import (
+    AcceptanceLedgerEntryOut,
+    DeliveryBatchOut,
+    InboundSegmentOut,
+)
 from app.api.v1.supplier_schemas import (
     BatchActionRequest,
     BatchCreate,
     SegmentCreate,
     SegmentDecisionRequest,
-    batch_out,
-    ledger_out,
-    segment_out,
 )
 from app.application.suppliers.commands import (
     NewDeliveryBatch,
@@ -35,7 +38,7 @@ from app.application.suppliers.commands import (
 router = APIRouter(prefix="/projects/{project_id}", tags=["inbound-batches"])
 
 
-@router.get("/inbound-batches")
+@router.get("/inbound-batches", response_model=PageOut[DeliveryBatchOut])
 def list_batches(
     scope: ReadScope,
     services: SupplierServicesDep,
@@ -43,7 +46,7 @@ def list_batches(
     supplier_id: UUID | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[DeliveryBatchOut]:
     items = services.batches.list(
         scope,
         status=status,
@@ -52,20 +55,20 @@ def list_batches(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.batch_id)
-    return {
-        "items": [batch_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[DeliveryBatchOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("/inbound-batches", status_code=201)
+@router.post("/inbound-batches", response_model=DeliveryBatchOut, status_code=201)
 def create_batch(
     payload: BatchCreate,
     request: Request,
     scope: WriteScope,
     services: SupplierServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> DeliveryBatchOut:
     batch = services.batches.create(
         scope,
         NewDeliveryBatch(
@@ -82,15 +85,18 @@ def create_batch(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return batch_out(batch)
+    return DeliveryBatchOut.from_domain(batch)
 
 
-@router.get("/inbound-batches/{batch_id}")
-def get_batch(batch_id: UUID, scope: ReadScope, services: SupplierServicesDep) -> dict[str, Any]:
-    return batch_out(services.batches.get(scope, batch_id))
+@router.get("/inbound-batches/{batch_id}", response_model=DeliveryBatchOut)
+def get_batch(batch_id: UUID, scope: ReadScope, services: SupplierServicesDep) -> DeliveryBatchOut:
+    return DeliveryBatchOut.from_domain(services.batches.get(scope, batch_id))
 
 
-@router.post("/inbound-batches/{batch_id}/actions/{action}")
+@router.post(
+    "/inbound-batches/{batch_id}/actions/{action}",
+    response_model=DeliveryBatchOut,
+)
 def act_on_batch(
     batch_id: UUID,
     action: str,
@@ -100,7 +106,7 @@ def act_on_batch(
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> DeliveryBatchOut:
     batch = services.batches.apply_action(
         scope,
         batch_id,
@@ -112,10 +118,10 @@ def act_on_batch(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return batch_out(batch)
+    return DeliveryBatchOut.from_domain(batch)
 
 
-@router.post("/inbound-batches/{batch_id}/finalize")
+@router.post("/inbound-batches/{batch_id}/finalize", response_model=DeliveryBatchOut)
 def finalize_batch(
     batch_id: UUID,
     payload: BatchActionRequest | None,
@@ -124,7 +130,7 @@ def finalize_batch(
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> DeliveryBatchOut:
     """终审属于高风险放行：要求项目 Owner；结果由片段统计决定。"""
     batch = services.batches.apply_action(
         scope,
@@ -137,10 +143,10 @@ def finalize_batch(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return batch_out(batch)
+    return DeliveryBatchOut.from_domain(batch)
 
 
-@router.get("/inbound-batches/{batch_id}/segments")
+@router.get("/inbound-batches/{batch_id}/segments", response_model=PageOut[InboundSegmentOut])
 def list_segments(
     batch_id: UUID,
     scope: ReadScope,
@@ -148,18 +154,20 @@ def list_segments(
     status: str | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[InboundSegmentOut]:
     items = services.batches.list_segments(
         scope, batch_id, status=status, after_id=decode_cursor(cursor), limit=fetch_limit(limit)
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.segment_id)
-    return {
-        "items": [segment_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[InboundSegmentOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
-@router.post("/inbound-batches/{batch_id}/segments", status_code=201)
+@router.post(
+    "/inbound-batches/{batch_id}/segments", response_model=InboundSegmentOut, status_code=201
+)
 def add_segment(
     batch_id: UUID,
     payload: SegmentCreate,
@@ -167,7 +175,7 @@ def add_segment(
     scope: WriteScope,
     services: SupplierServicesDep,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> InboundSegmentOut:
     segment = services.batches.add_segment(
         scope,
         batch_id,
@@ -183,20 +191,26 @@ def add_segment(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return segment_out(segment)
+    return InboundSegmentOut.from_domain(segment)
 
 
-@router.get("/inbound-batches/{batch_id}/segments/{segment_id}")
+@router.get(
+    "/inbound-batches/{batch_id}/segments/{segment_id}",
+    response_model=InboundSegmentOut,
+)
 def get_segment(
     batch_id: UUID,
     segment_id: UUID,
     scope: ReadScope,
     services: SupplierServicesDep,
-) -> dict[str, Any]:
-    return segment_out(services.batches.get_segment(scope, batch_id, segment_id))
+) -> InboundSegmentOut:
+    return InboundSegmentOut.from_domain(services.batches.get_segment(scope, batch_id, segment_id))
 
 
-@router.post("/inbound-batches/{batch_id}/segments/{segment_id}/actions/{action}")
+@router.post(
+    "/inbound-batches/{batch_id}/segments/{segment_id}/actions/{action}",
+    response_model=InboundSegmentOut,
+)
 def act_on_segment(
     batch_id: UUID,
     segment_id: UUID,
@@ -206,7 +220,7 @@ def act_on_segment(
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> InboundSegmentOut:
     segment = services.batches.apply_segment_action(
         scope,
         batch_id,
@@ -218,10 +232,13 @@ def act_on_segment(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return segment_out(segment)
+    return InboundSegmentOut.from_domain(segment)
 
 
-@router.post("/inbound-batches/{batch_id}/segments/{segment_id}/decision")
+@router.post(
+    "/inbound-batches/{batch_id}/segments/{segment_id}/decision",
+    response_model=InboundSegmentOut,
+)
 def decide_segment(
     batch_id: UUID,
     segment_id: UUID,
@@ -231,7 +248,7 @@ def decide_segment(
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
     idempotency_key: IdempotencyKey = None,
-) -> dict[str, Any]:
+) -> InboundSegmentOut:
     segment = services.batches.decide_segment(
         scope,
         batch_id,
@@ -243,10 +260,10 @@ def decide_segment(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return segment_out(segment)
+    return InboundSegmentOut.from_domain(segment)
 
 
-@router.get("/acceptance-ledger")
+@router.get("/acceptance-ledger", response_model=PageOut[AcceptanceLedgerEntryOut])
 def list_ledger(
     scope: ReadScope,
     services: SupplierServicesDep,
@@ -254,7 +271,7 @@ def list_ledger(
     supplier_id: UUID | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-) -> dict[str, Any]:
+) -> PageOut[AcceptanceLedgerEntryOut]:
     items = services.batches.ledger(
         scope,
         batch_id=batch_id,
@@ -263,10 +280,10 @@ def list_ledger(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.ledger_id)
-    return {
-        "items": [ledger_out(item) for item in page.items],
-        "next_cursor": page.next_cursor,
-    }
+    return PageOut(
+        items=[AcceptanceLedgerEntryOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 __all__ = ["router"]

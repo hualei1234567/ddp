@@ -166,8 +166,19 @@ class IngestionJobService:
                 "job_id": str(created.job_id),
                 "job_type": created.job_type.value,
                 "status": created.status.value,
+                # Worker 需要 pipeline/版本信息才能选择处理逻辑，随事件带过去
+                # 可以避免 Worker 再查一次库（也能保证"用当时声明的版本跑"）。
+                "pipeline_id": created.pipeline_id,
+                "pipeline_version": created.pipeline_version,
+                "parser_id": created.parser_id,
+                "parser_version": created.parser_version,
+                "config_hash": created.config_hash,
             },
             occurred_at=now,
+            # 投递类：此前是留痕类，于是**建了任务没有任何进程去执行**——
+            # IngestionJob 有完整 API、状态机与 worker-* 动作，却没有消费者，
+            # 等于一条只会记录"我要处理"而永远不处理的事件。
+            dispatch=True,
         )
         self._store(
             scope,

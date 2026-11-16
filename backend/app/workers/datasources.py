@@ -14,7 +14,6 @@ Worker 与 HTTP API 使用同一镜像但独立进程；**HTTP 线程不下载�
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import signal
 import threading
@@ -39,6 +38,7 @@ from app.infrastructure.repositories.datasources import (
     SqlMediaAssetRepository,
 )
 from app.infrastructure.repositories.outbox_validation import SqlOutboxValidationQueue
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from app.infrastructure.storage.data_source_objects import DataSourceObjectWriter
 from app.infrastructure.storage.s3 import S3MultipartStorage
 
@@ -73,22 +73,35 @@ class _HttpxFetcher:
             yield from response.iter_bytes()
 
 
+def _registry_parser(rows: list[dict[str, object]]) -> tuple[object, ...]:
+    """把已解析的 JSONL 行交给 Adapter 注册表选出解析器并执行。
+
+    ``ImportRunner`` 的 ``parse_episodes`` 契约是「已解析的行 → Episode 序列」，
+    而 Adapter 的 Parser 契约是 bytes。这里把行重新编码回 JSONL 再交给注册表，
+    让「选哪个 Adapter」由注册表按内容探测决定——探测逻辑只需要一处。
+    """
+    import json
+
+    from app.application.datasources.adapter_resolver import resolve_and_parse
+
+    payload = "\n".join(json.dumps(row, ensure_ascii=False) for row in rows).encode()
+    return resolve_and_parse(payload).episodes
+
+
 def _parse_metadata(data: bytes) -> list[dict[str, object]]:
-    """把 metadata.jsonl 字节解析为行列表；格式错误抛异常由调用方落库。"""
-    rows: list[dict[str, object]] = []
-    for lineno, line in enumerate(data.decode("utf-8").splitlines(), start=1):
-        if not line.strip():
-            continue
-        try:
-            value = json.loads(line)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"metadata 第 {lineno} 行不是合法 JSON：{exc}") from exc
-        if not isinstance(value, dict):
-            raise ValueError(f"metadata 第 {lineno} 行不是对象")
-        rows.append(value)
-    if not rows:
-        raise ValueError("metadata 为空")
-    return rows
+    """把 metadata.jsonl 字节解析为行列表；格式错误抛异常由调用方落库。
+
+    实现已下沉到 ``ddp_data.adapters.builtin.parse_jsonl_rows``：Adapter 的
+    Parser 契约是 bytes，解码逻辑必须有单一归属，否则换个入口就得再写一份。
+    这里仅保留薄委托，避免既有调用点与测试大改。
+    """
+    from ddp_data.adapters.builtin import GenericJsonlParseError, parse_jsonl_rows
+
+    try:
+        return parse_jsonl_rows(data)
+    except GenericJsonlParseError as exc:
+        # 调用方按 ValueError 处理（导入失败留痕），保持既有错误契约不变。
+        raise ValueError(f"metadata 解析失败：{exc}") from exc
 
 
 def build_runner(session: Session, settings: Settings) -> ImportRunner:
@@ -96,6 +109,7 @@ def build_runner(session: Session, settings: Settings) -> ImportRunner:
         sources=SqlDataSourceRepository(session),
         imports=SqlDataSourceImportRepository(session),
         assets=SqlMediaAssetRepository(session),
+        raw_assets=SqlRawAssetRepository(session),
         audit=SqlDatasetAuditRepository(session),
         outbox=SqlOutboxRepository(session),
         storage=DataSourceObjectWriter(S3MultipartStorage(settings)),
@@ -142,14 +156,16 @@ class DataSourceImportWorker:
                 # Worker 用事件里的 project_id 构造作用域；actor 取项目自身，
                 # 因为这是系统行为而非某个用户的请求。
                 scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
-                from ddp_data.lerobot import parse_preview_metadata
 
                 outcome = runner.execute(
                     scope,
                     import_id,
                     fetch=_HttpxFetcher(self._client),
                     parse_metadata=_parse_metadata,
-                    parse_episodes=parse_preview_metadata,
+                    # 解析器由 **Adapter 注册表** 决定，而不是在这里硬编码某个
+                    # 具体数据集的名字。此前写死 parse_preview_metadata，
+                    # 换一种数据格式就必须改 Worker，注册表等于形同虚设。
+                    parse_episodes=_registry_parser,
                     now=moment,
                 )
                 queue.mark_published(claimed.event_id, now=moment)
@@ -163,6 +179,33 @@ class DataSourceImportWorker:
                 }
             except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
                 session.rollback()
+                # 幂等优先：任务已在终态（SUCCEEDED/CANCELLED）说明这条导入
+                # 早就被处理过，事件是重复投递。此时**必须直接 PUBLISHED**，
+                # 不能走重试——重试永远只会得到同一句「状态不允许执行」，
+                # 白烧 attempts 直到死信，把"已完成的导入"记成"反复失败"。
+                # 真实库里 38 条历史事件正是这个形态。
+                if _import_already_terminal(session, import_id):
+                    queue.mark_published(claimed.event_id, now=moment)
+                    session.commit()
+                    return {
+                        "status": ImportProcessingStatus.PUBLISHED.value,
+                        "import_id": str(import_id),
+                        "skipped": "导入任务已在终态，事件为重复投递",
+                    }
+                # 先把**可重试**的失败从 FAILED 退回 PENDING，再决定事件怎么办。
+                #
+                # 不这么做的话：本次已把任务写成 FAILED（终态），而下面又会
+                # mark_retry 让事件下一轮再来；下一轮 execute 要求 PENDING，
+                # 状态机也拒绝 FAILED->RUNNING，于是每次重试都必然再失败，
+                # 直到死信——一次网络抖动就永久丢掉这条导入。
+                released = False
+                try:
+                    runner = build_runner(session, self._settings)
+                    scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
+                    released = runner.release_for_retry(scope, import_id, moment=moment)
+                except Exception:  # noqa: BLE001 - 退回失败不得掩盖原始异常
+                    session.rollback()
+                    logger.exception("导入任务退回重试失败", extra={"import_id": str(import_id)})
                 attempts = claimed.attempts + 1
                 if attempts >= self._settings.validation_max_attempts:
                     queue.mark_dead_letter(
@@ -175,6 +218,7 @@ class DataSourceImportWorker:
                         "status": ImportProcessingStatus.DEAD_LETTER.value,
                         "import_id": str(import_id),
                         "attempts": attempts,
+                        "released_for_retry": released,
                         "error": str(exc)[:500],
                     }
                 delay = min(
@@ -192,6 +236,7 @@ class DataSourceImportWorker:
                     "status": ImportProcessingStatus.RETRIED.value,
                     "import_id": str(import_id),
                     "attempts": attempts,
+                    "released_for_retry": released,
                     "error": str(exc)[:500],
                 }
 
@@ -200,6 +245,18 @@ class DataSourceImportWorker:
             result = self.process_once()
             if result["status"] == ImportProcessingStatus.IDLE.value:
                 stop_event.wait(self._settings.validation_worker_poll_interval_seconds)
+
+
+def _import_already_terminal(session: Session, import_id: UUID) -> bool:
+    """任务是否已在终态（不再接受执行）。项目范围由事件本身保证。"""
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models.datasources import DataSourceImportModel
+
+    status = session.scalar(
+        select(DataSourceImportModel.status).where(DataSourceImportModel.id == import_id)
+    )
+    return status in {"SUCCEEDED", "FAILED", "CANCELLED"}
 
 
 def _install_signal_handlers(stop_event: threading.Event) -> None:

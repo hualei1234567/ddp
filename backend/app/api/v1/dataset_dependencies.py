@@ -10,8 +10,10 @@ from fastapi import Depends, Header, Path, Request
 from app.api.deps import DbSession, get_project_context, get_project_scope, get_write_scope
 from app.api.v1.preconditions import require_expected_version
 from app.application.datasets.datasets import DatasetUseCases as DatasetCrudUseCases
+from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.policies import DatasetPolicyUseCases
 from app.application.datasets.versions import DatasetVersionUseCases
+from app.application.episodes.lineage import LineageService
 from app.core.errors import ForbiddenError
 from app.domain.identity.models import ProjectContext, ProjectRole, ProjectScope
 from app.infrastructure.repositories.dataset_audit import (
@@ -29,6 +31,7 @@ from app.infrastructure.repositories.dataset_repositories import (
     SqlDatasetRepository,
     SqlDatasetVersionRepository,
 )
+from app.infrastructure.repositories.lineage import SqlLineageRepository
 
 ReadScope = Annotated[ProjectScope, Depends(get_project_scope)]
 WriteScope = Annotated[ProjectScope, Depends(get_write_scope)]
@@ -57,6 +60,7 @@ class DatasetServices:
     datasets: DatasetCrudUseCases
     policies: DatasetPolicyUseCases
     versions: DatasetVersionUseCases
+    lineage: LineageService
 
 
 def get_dataset_use_cases(session: DbSession) -> DatasetServices:
@@ -69,6 +73,7 @@ def get_dataset_use_cases(session: DbSession) -> DatasetServices:
     audit = SqlDatasetAuditRepository(session)
     outbox = SqlDatasetOutboxRepository(session)
     idempotency = SqlDatasetIdempotencyRepository(session)
+    lineage = DatasetVersionLineageRecorder(SqlLineageRepository(session))
     return DatasetServices(
         datasets=DatasetCrudUseCases(
             datasets_repo,
@@ -95,6 +100,13 @@ def get_dataset_use_cases(session: DbSession) -> DatasetServices:
             audit,
             outbox,
             idempotency,
+            session,
+            lineage=lineage,
+        ),
+        lineage=LineageService(
+            SqlLineageRepository(session),
+            audit,
+            outbox,
             session,
         ),
     )

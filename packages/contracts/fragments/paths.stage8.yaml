@@ -1,0 +1,445 @@
+# 阶段 8（N8 真实采集与设备集成）路径片段。
+# 仅声明 backend/app/api/v1/collection_asset_routes.py 实际实现的端点（12 个操作）。
+#
+# 范围说明：本批只做四类采集素材实体（方案 / SOP / 场景 / 动作库）的
+# 「创建 / 列表 / 详情」。**没有更新与删除路径**，因此创建后状态恒为 DRAFT，
+# 版本号不可演进，`ACTIVE` / `ARCHIVED` 两个枚举值当前不可到达。
+# 契约如实反映这一点：不声明任何 action 端点，也不假装状态机已完备。
+
+collectionPlans:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listCollectionPlans
+    tags: [collection-assets]
+    summary: 采集方案列表
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 采集方案分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionPlanPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createCollectionPlan
+    tags: [collection-assets]
+    summary: 创建采集方案
+    description: |
+      `status` 不是请求字段：服务端固定初始化为 `DRAFT`。客户端不能提交
+      `project_id` / `version` / 审计字段。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CollectionPlanCreate" }
+    responses:
+      "201":
+        description: 已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionPlan" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+collectionPlanDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CollectionPlanId"
+  get:
+    operationId: getCollectionPlan
+    tags: [collection-assets]
+    summary: 采集方案详情
+    responses:
+      "200":
+        description: 采集方案
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionPlan" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+collectionSops:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listCollectionSops
+    tags: [collection-assets]
+    summary: SOP 列表
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: SOP 分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionSopPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createCollectionSop
+    tags: [collection-assets]
+    summary: 创建 SOP
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CollectionSopCreate" }
+    responses:
+      "201":
+        description: 已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionSop" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+collectionSopDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CollectionSopId"
+  get:
+    operationId: getCollectionSop
+    tags: [collection-assets]
+    summary: SOP 详情
+    responses:
+      "200":
+        description: SOP
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionSop" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+scenarios:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listScenarios
+    tags: [collection-assets]
+    summary: 场景列表
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 场景分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScenarioPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createScenario
+    tags: [collection-assets]
+    summary: 创建场景
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ScenarioCreate" }
+    responses:
+      "201":
+        description: 已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Scenario" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+scenarioDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ScenarioId"
+  get:
+    operationId: getScenario
+    tags: [collection-assets]
+    summary: 场景详情
+    responses:
+      "200":
+        description: 场景
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Scenario" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+actionSpecs:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listActionSpecs
+    tags: [collection-assets]
+    summary: 动作库列表
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 动作库分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ActionSpecPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createActionSpec
+    tags: [collection-assets]
+    summary: 创建动作库
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ActionSpecCreate" }
+    responses:
+      "201":
+        description: 已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ActionSpec" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+actionSpecDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ActionSpecId"
+  get:
+    operationId: getActionSpec
+    tags: [collection-assets]
+    summary: 动作库详情
+    responses:
+      "200":
+        description: 动作库
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ActionSpec" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# ---------------------------------------------------------------------------
+# N4 标注质量检查（backend/app/api/v1/annotation_quality_check_routes.py）
+# ---------------------------------------------------------------------------
+
+submissionQualityChecks:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubmissionId"
+  post:
+    operationId: runAnnotationQualityCheck
+    tags: [annotation-quality]
+    summary: 对一条标注提交执行质量检查
+    description: |
+      每次都产生一个新的 run（结论只追加、不改写）。`passed` 是三态：
+      `true` 合规、`false` 违规、`null` 表示该规则对这条记录**没有结论**
+      （缺 Episode 边界、任务未配阈值）。客户端不得把 `null` 渲染成"通过"。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    responses:
+      "201":
+        description: 本次检查结果
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityCheckRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  get:
+    operationId: listAnnotationQualityChecks
+    tags: [annotation-quality]
+    summary: 该提交的质量检查历史
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 检查记录分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityCheckRunPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# ---------------------------------------------------------------------------
+# N4 AI 预标注建议（backend/app/api/v1/annotation_ai.py）
+# ---------------------------------------------------------------------------
+
+submissionAiSuggestions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubmissionId"
+  post:
+    operationId: recordAnnotationAiSuggestions
+    tags: [annotation-ai]
+    summary: 登记一批 AI 预标注建议
+    description: |
+      建议独立存储，与人工结果分表：同名字段一旦人工填写，原始建议**不会丢失**，
+      因此可以算出人工修订幅度。`confidence` 必填（0–1），模型身份
+      （model_id / model_version / prompt_version）同样必填，用于回答
+      "这批标签来自哪个模型版本"。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionsCreate" }
+    responses:
+      "201":
+        description: 本次登记的建议（幂等重放时只返回首次那批）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  get:
+    operationId: listAnnotationAiSuggestions
+    tags: [annotation-ai]
+    summary: 该提交下的 AI 建议
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 建议分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiSuggestionConfirm:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AiSuggestionId"
+  post:
+    operationId: confirmAnnotationAiSuggestion
+    tags: [annotation-ai]
+    summary: 人工确认或修订一条 AI 建议
+    description: |
+      `human_value` 与 `suggested_value` 分别保留，两者之差即人工修订幅度。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionConfirm" }
+    responses:
+      "200":
+        description: 已确认的建议
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiSuggestion" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# ---------------------------------------------------------------------------
+# N5 DatasetVersion 血缘（backend/app/api/v1/dataset_version_routes.py）
+# ---------------------------------------------------------------------------
+
+datasetVersionLineage:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/VersionId"
+  get:
+    operationId: getDatasetVersionLineage
+    tags: [datasets]
+    summary: 数据集版本的图血缘
+    description: |
+      反向（`direction=reverse`）可回答"这个版本用了哪些 Episode"。
+      新建的 DRAFT 版本血缘节点要等 validate 转 READY 才登记，此时返回空图
+      而不是 404——版本确实存在，报 404 会让客户端误判成"版本被删或无权访问"。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/LineageDirection"
+      - $ref: "../openapi.yaml#/components/parameters/LineageDepth"
+      - $ref: "../openapi.yaml#/components/parameters/LineageLimit"
+    responses:
+      "200":
+        description: 血缘图
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/LineageResponse" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+aiSuggestionAgreement:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubmissionId"
+  get:
+    operationId: getAnnotationAiSuggestionAgreement
+    tags: [annotation-ai]
+    summary: 按模型版本聚合 AI 建议的人工处置
+    description: |
+      回答"模型给的标签，人接受了多少、改了多少、还没看多少"——
+      这是模型反馈闭环的输入：缺口分析知道**缺什么数据**，
+      但"模型靠不靠得住"必须先有采纳率。
+
+      三种处置互斥：`ACCEPTED`（规范化后人工值等于建议值）、
+      `REVISED`（不等）、`PENDING`（尚未确认）。
+
+      **`acceptance_rate` 的分母是已决定条数（accepted + revised），
+      不是总条数**：把待处理算进分母会让"还没人看"拉低采纳率，
+      读起来像"模型不行"。无任何已决定条目时为 `null` 而非 `0`
+      ——"没有样本"与"采纳率 0"是两件事。没有登记任何建议时
+      `items` 为空数组，不是一行全 0。
+    responses:
+      "200":
+        description: 各模型版本的采纳统计（按 model_id + model_version 排序）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AgreementSummary" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

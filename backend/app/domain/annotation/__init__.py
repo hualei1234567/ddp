@@ -44,6 +44,8 @@ from app.domain.annotation.enums import (
     LabelValueStatus,
     LabelVisibility,
     MissingSemantics,
+    QualityCheckStatus,
+    QualityRuleSeverity,
     QualitySampleAction,
     QualitySampleOutcome,
     QualitySampleStatus,
@@ -125,6 +127,18 @@ from app.domain.annotation.iaa import (
     IAAObservation,
     Span,
     compute_iaa,
+)
+from app.domain.annotation.quality_check import (
+    QualityCheckRun,
+    QualityEvaluation,
+    QualityFinding,
+)
+from app.domain.annotation.quality_rules import (
+    QualityRule,
+    QualityRuleRegistry,
+    RuleContext,
+    RuleOutcome,
+    default_registry,
 )
 from app.domain.annotation.quality_sample import (
     QualityCandidate,
@@ -258,6 +272,15 @@ __all__ = [
     "LabelVisibility",
     "MissingSemantics",
     "QualityCandidate",
+    "QualityCheckRun",
+    "QualityCheckStatus",
+    "QualityEvaluation",
+    "QualityFinding",
+    "QualityRule",
+    "QualityRuleRegistry",
+    "QualityRuleSeverity",
+    "RuleContext",
+    "RuleOutcome",
     "QualitySample",
     "QualitySampleAction",
     "QualitySampleNotReviewableError",
@@ -319,6 +342,7 @@ __all__ = [
     "compute_records_digest",
     "compute_sample_set_sha256",
     "compute_schema_sha256",
+    "default_registry",
     "evaluate_gold_set",
     "select_quality_candidates",
     "validate_record_labels",

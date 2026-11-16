@@ -91,6 +91,8 @@ def _import_values(item: DataSourceImport) -> dict[str, object]:
         "error_message": item.error_message,
         "started_at": item.started_at,
         "finished_at": item.finished_at,
+        "attempt": item.attempt,
+        "max_attempts": item.max_attempts,
     }
 
 
@@ -110,6 +112,8 @@ def _import_from_row(row: DataSourceImportModel) -> DataSourceImport:
         error_message=row.error_message,
         started_at=as_utc(row.started_at),
         finished_at=as_utc(row.finished_at),
+        attempt=row.attempt,
+        max_attempts=row.max_attempts,
         row_version=row.version,
     )
 
@@ -332,6 +336,7 @@ def _asset_from_row(row: MediaAssetModel) -> MediaAsset:
         content_type=row.content_type,
         task_name=row.task_name,
         created_at=as_utc(row.created_at),  # type: ignore[arg-type]
+        raw_asset_id=row.raw_asset_id,
         excerpt_start_seconds=row.excerpt_start_seconds,
         excerpt_seconds=row.excerpt_seconds,
         source_fps=row.source_fps,
@@ -362,6 +367,7 @@ class SqlMediaAssetRepository:
                 sha256=asset.sha256,
                 content_type=asset.content_type,
                 task_name=asset.task_name,
+                raw_asset_id=asset.raw_asset_id,
                 excerpt_start_seconds=asset.excerpt_start_seconds,
                 excerpt_seconds=asset.excerpt_seconds,
                 source_fps=asset.source_fps,

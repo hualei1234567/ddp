@@ -77,7 +77,11 @@ def test_no_fstring_event_type_anywhere_in_app() -> None:
         (
             "datasource.import",
             datasource_events.DATASOURCE_IMPORT_ACTION_EVENTS,
-            set(datasource_state_machines._IMPORT_ACTIONS),
+            # 客户端动作（契约 ImportAction）+ 系统动作（Worker 专用的 retry）。
+            # 两类都要有事件留痕，所以映射必须覆盖并集；retry 不出现在
+            # allowed_actions 里由 test_datasource_event_registry 单独守着。
+            set(datasource_state_machines._IMPORT_ACTIONS)
+            | set(datasource_state_machines._SYSTEM_ACTIONS),
             "datasource.import.",
         ),
         (

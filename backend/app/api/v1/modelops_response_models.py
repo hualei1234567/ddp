@@ -16,7 +16,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from app.domain.modelops.gaps import GapSummaryItem
+from app.domain.modelops.gaps import GapSummary, GapSummaryItem
 from app.domain.modelops.models import (
     DataRequirement,
     Evaluation,
@@ -381,6 +381,8 @@ class DataGapSummaryItemOut(BaseModel):
     target_count: int | None = None
     suggested_episode_count: int
     requirement_ids: list[str] = Field(default_factory=list)
+    # 契约尚未收录（缺口已登记）：实测 MEASURED / 人工 MANUAL / 未知 UNKNOWN。
+    coverage_source: str = "UNKNOWN"
 
     @classmethod
     def from_domain(cls, item: GapSummaryItem) -> DataGapSummaryItemOut:
@@ -392,10 +394,10 @@ class DataGapSummaryOut(BaseModel):
     freshness: str
 
     @classmethod
-    def from_domain(cls, items: list[GapSummaryItem]) -> DataGapSummaryOut:
+    def from_domain(cls, summary: GapSummary) -> DataGapSummaryOut:
         return cls(
-            items=[DataGapSummaryItemOut.from_domain(item) for item in items],
-            freshness="FRESH",
+            items=[DataGapSummaryItemOut.from_domain(item) for item in summary.items],
+            freshness=summary.freshness,
         )
 
 

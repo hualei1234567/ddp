@@ -156,11 +156,34 @@ class Settings(BaseSettings):
     training_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
     training_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
 
+    # 训练交付的需求匹配（TRN-002）：处置方式由部署配置决定，不在用例里硬编码。
+    #
+    # 默认 BLOCK 的理由：这条校验的存在意义就是拦住"交付的不是需求要的东西"。
+    # 若默认 WARN，等于把最需要拦截的错误变成一条没人看的日志——而误交付的代价
+    # （拿错数据训练出的模型）远高于一次交付被拒后补数据。只有明确接受该风险的
+    # 场景才应改成 WARN。
+    #
+    # on_unverifiable 默认 WARN 的理由与之相反：UNVERIFIABLE 是"版本上没有这项
+    # 事实"，属于信息投影缺失而非交付内容错。默认阻断会把所有尚未投影的数据模态
+    # 维度变成交付硬阻塞；默认告警 + 报告落库留证更合适。需要更严时可配置为 BLOCK。
+    training_delivery_match_on_failed: Literal["BLOCK", "WARN"] = "BLOCK"
+    training_delivery_match_on_unverifiable: Literal["BLOCK", "WARN"] = "WARN"
+    # 划分比例核对容差：版本内计数是整数，比例必然有舍入误差。
+    training_delivery_match_split_ratio_tolerance: float = Field(default=0.02, ge=0, le=1)
+
     # 模型平台 Adapter：评测/推理执行与 HMAC 回调；未配置时显式 503。
     model_adapter_shared_secrets: dict[str, str] = Field(default_factory=dict)
     model_adapter_capabilities: dict[str, list[str]] = Field(default_factory=dict)
     model_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
     model_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
+
+    # 数据缺口视图的新鲜度阈值：真实覆盖数据的最后更新时间距今超过该值即判 STALE。
+    # 阈值随数据接入节奏变化，必须可配；缺省 24 小时。
+    model_gap_freshness_stale_after_seconds: int = Field(
+        default=86400,
+        ge=60,
+        le=2_592_000,
+    )
 
     jwt_secret: str = "replace-me-in-production"  # noqa: S105 - 占位符，生产必须覆盖
     jwt_issuer: str = "ddp"

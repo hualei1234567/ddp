@@ -19,6 +19,7 @@ from app.application.idempotency import (
 from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
+from app.domain.collection.assets import ActionSpec, CollectionPlan, CollectionSop, Scenario
 from app.domain.collection.enums import CollectionBatchStatus, CollectionTaskStatus
 from app.domain.collection.models import CollectionBatch, CollectionTask
 from app.domain.identity.models import ProjectScope
@@ -127,6 +128,128 @@ class AuditRepository(Protocol):
 
 class OutboxRepository(Protocol):
     def enqueue(self, scope: ProjectScope, event: OutboxEvent) -> None: ...
+
+
+class CollectionPlanRepository(Protocol):
+    """采集方案仓储；按 ID 查询必须带项目过滤，跨项目一律返回 ``None``。"""
+
+    def add(self, scope: ProjectScope, plan: CollectionPlan) -> CollectionPlan: ...
+
+    def get(self, scope: ProjectScope, plan_id: UUID) -> CollectionPlan | None: ...
+
+    def get_by_code_version(
+        self,
+        scope: ProjectScope,
+        *,
+        code: str,
+        plan_version: int,
+    ) -> CollectionPlan | None: ...
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        status: str | None = None,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[CollectionPlan]: ...
+
+
+class CollectionSopRepository(Protocol):
+    def add(self, scope: ProjectScope, sop: CollectionSop) -> CollectionSop: ...
+
+    def get(self, scope: ProjectScope, sop_id: UUID) -> CollectionSop | None: ...
+
+    def get_by_code_version(
+        self,
+        scope: ProjectScope,
+        *,
+        code: str,
+        sop_version: str,
+    ) -> CollectionSop | None: ...
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        status: str | None = None,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[CollectionSop]: ...
+
+
+class ScenarioRepository(Protocol):
+    def add(self, scope: ProjectScope, scenario: Scenario) -> Scenario: ...
+
+    def get(self, scope: ProjectScope, scenario_id: UUID) -> Scenario | None: ...
+
+    def get_by_code(self, scope: ProjectScope, code: str) -> Scenario | None: ...
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        status: str | None = None,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[Scenario]: ...
+
+
+class ActionSpecRepository(Protocol):
+    def add(self, scope: ProjectScope, spec: ActionSpec) -> ActionSpec: ...
+
+    def get(self, scope: ProjectScope, spec_id: UUID) -> ActionSpec | None: ...
+
+    def get_by_code_version(
+        self,
+        scope: ProjectScope,
+        *,
+        code: str,
+        spec_version: str,
+    ) -> ActionSpec | None: ...
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        status: str | None = None,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[ActionSpec]: ...
+
+
+class CollectionAssetDirectory(Protocol):
+    """任务引用素材时的同项目存在性校验。
+
+    只返回"该 ID 在当前项目里是否存在"，不承载业务规则；理由与
+    :class:`AssignmentDirectory` 一致——跨对象前置条件放应用层，
+    数据库复合外键兜底。返回值刻意只暴露 ``bool``，避免调用方顺手把
+    素材内容读进任务用例、从而耦合两个聚合。
+    """
+
+    def plan_exists(self, scope: ProjectScope, plan_id: UUID) -> bool: ...
+
+    def sop_exists(self, scope: ProjectScope, sop_id: UUID) -> bool: ...
+
+    def sop_version_exists(
+        self,
+        scope: ProjectScope,
+        *,
+        sop_id: UUID,
+        sop_version: str,
+    ) -> bool: ...
+
+    def scenario_exists(self, scope: ProjectScope, scenario_id: UUID) -> bool: ...
+
+    def action_spec_exists(self, scope: ProjectScope, spec_id: UUID) -> bool: ...
+
+    def action_spec_version_exists(
+        self,
+        scope: ProjectScope,
+        *,
+        spec_id: UUID,
+        spec_version: str,
+    ) -> bool: ...
 
 
 # 幂等记录类型与仓储协议由 application 顶层统一声明，避免四个域各写一份。

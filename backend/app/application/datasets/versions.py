@@ -13,6 +13,7 @@ from app.application.datasets.commands import (
     PreviewSelection,
 )
 from app.application.datasets.idempotency import IdempotencyGuard, validate_key
+from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.ports import (
     AuditRepository,
     DatasetItemRepository,
@@ -63,6 +64,7 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        lineage: DatasetVersionLineageRecorder | None = None,
     ) -> None:
         self._datasets = datasets
         self._versions = versions
@@ -74,6 +76,10 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        # 版本转 READY 时写 Episode → DatasetVersion 的 INCLUDED_IN 边。
+        # 允许为 None 是为了保持既有纯读/纯策略用例的构造签名兼容；
+        # 生产装配一定注入，见 ``api/v1/dataset_dependencies.py``。
+        self._lineage = lineage
 
     # ---- 读取 ----
     def get_dataset(self, scope: ProjectScope, dataset_id: UUID) -> Dataset:
@@ -252,6 +258,16 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         )
         self._uow.commit()
         if command.build_now:
+            # ``path`` 是 apply_action 的必填关键字参数（用于标识这次动作的
+            # 幂等作用域）。此前这里漏传，导致 ``build_now=True`` 的建版本请求
+            # 在 HTTP 层直接 TypeError 500——「建并立即构建」这条最常用的路径
+            # 从未真正可用。
+            #
+            # **不把这个请求的幂等键传给内部 build**：幂等键绑定"同一请求体"，
+            # 而 create 与 build 的 body 不同，复用同一键会立刻撞
+            # ``idempotency_key_reused``。整条链路本来就由 create 自身的幂等记录
+            # 保护（重放时直接返回已建好的版本，不会走到这里），内部 build 无需
+            # 第二层幂等。
             return self.apply_action(
                 scope,
                 dataset_id,
@@ -259,6 +275,8 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
                 "build",
                 expected_version=created.row_version,
                 reason=None,
+                method=method,
+                path=path,
                 request_id=request_id,
             )
         return created

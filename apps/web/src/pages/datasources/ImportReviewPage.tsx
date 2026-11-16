@@ -4,11 +4,9 @@ import {
   Button,
   Card,
   Descriptions,
-  Empty,
   Form,
   Input,
   Space,
-  Spin,
   Tag,
   Typography,
   message,
@@ -17,6 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import PageContainer from "../../components/ui/PageContainer";
+import PageState from "../../components/ui/PageState";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useProjectId } from "../../hooks/useProjectId";
 import { ApiError } from "../../services/api";
@@ -66,26 +65,31 @@ export function QualitySection({
   error: string | null;
   onReload: () => void;
 }) {
+  // 统一状态组件：与全站其余页面一致，避免本页裸写 Spin/Alert/Empty
+  // 导致六态覆盖不一致（DEV-004 审计点名项）。
   if (loading) {
-    return <Spin />;
+    return <PageState variant="loading" title="正在加载质量报告…" compact />;
   }
   if (error) {
     return (
-      <Alert
-        type="error"
-        showIcon
-        message="质量报告加载失败"
+      <PageState
+        variant="error"
+        title="质量报告加载失败"
         description={error}
-        action={
-          <Button size="small" icon={<ReloadOutlined />} onClick={onReload}>
-            重试
-          </Button>
-        }
+        onRetry={onReload}
+        compact
       />
     );
   }
   if (!report) {
-    return <Empty description="尚无质量报告" />;
+    return (
+      <PageState
+        variant="empty"
+        title="尚无质量报告"
+        description="导入完成后由服务端质量规则生成"
+        compact
+      />
+    );
   }
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="middle">
@@ -186,25 +190,28 @@ export function ReviewSection({
   );
 
   if (loading) {
-    return <Spin />;
+    return <PageState variant="loading" title="正在加载审核记录…" compact />;
   }
   if (error) {
     return (
-      <Alert
-        type="error"
-        showIcon
-        message="审核记录加载失败"
+      <PageState
+        variant="error"
+        title="审核记录加载失败"
         description={error}
-        action={
-          <Button size="small" icon={<ReloadOutlined />} onClick={onReload}>
-            重试
-          </Button>
-        }
+        onRetry={onReload}
+        compact
       />
     );
   }
   if (!review) {
-    return <Empty description="尚未创建审核记录" />;
+    return (
+      <PageState
+        variant="empty"
+        title="尚未创建审核记录"
+        description="导入任务完成后可创建审核"
+        compact
+      />
+    );
   }
 
   const decided = review.status !== "PENDING";
@@ -407,7 +414,11 @@ export default function ImportReviewPage() {
   if (!resolvedImportId) {
     return (
       <PageContainer title="质量报告与审核">
-        <Empty description="缺少导入任务 ID；请从导入任务列表进入" />
+        <PageState
+          variant="empty"
+          title="缺少导入任务 ID"
+          description="请从导入任务列表进入"
+        />
       </PageContainer>
     );
   }

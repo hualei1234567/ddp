@@ -134,8 +134,10 @@ def approve_revision(client, project_id: UUID, request_body: dict[str, object]):
     return response.json()
 
 
-def approved_request(editor, approver, project_id: UUID, owner_id: UUID) -> dict[str, object]:
-    created = create_request(editor, project_id, owner_id)
+def approved_request(
+    editor, approver, project_id: UUID, owner_id: UUID, **snapshot_overrides: object
+) -> dict[str, object]:
+    created = create_request(editor, project_id, owner_id, **snapshot_overrides)
     submit_revision(editor, project_id, created)
     approve_revision(approver, project_id, created)
     response = approver.get(url(project_id, f"/training-requests/{created['training_request_id']}"))

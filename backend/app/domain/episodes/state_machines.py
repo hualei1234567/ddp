@@ -37,6 +37,31 @@ EPISODE_QUALITY_FROZEN_STATUSES: frozenset[EpisodeStatus] = frozenset(
     }
 )
 
+# 「可用于训练」的 Episode 状态口径。
+# datasets.selection 与 annotation.selection 目前各自内联同一份值；这两个域与
+# episodes 域没有依赖关系，为收敛而新增领域间依赖不划算，因此本次只在
+# episodes 域内提供权威常量，供新代码（缺口覆盖统计）引用，不改既有三处。
+EPISODE_COVERABLE_STATUSES: frozenset[EpisodeStatus] = frozenset(
+    {
+        EpisodeStatus.ACCEPTED,
+        EpisodeStatus.COMPLETED,
+    }
+)
+
+# 缺口视图「已覆盖」口径：数据已落定、可被统计与复用，但不要求通过训练门禁。
+# READY 起 manifest 与数据字段冻结（见 EPISODE_DATA_FROZEN_STATUSES），
+# 因此 READY/QUALITY_CHECKING 的 Episode 已经"有数据"，只是质检结论未定。
+# 与 EPISODE_COVERABLE_STATUSES 的区别是有意为之：若只算 ACCEPTED/COMPLETED，
+# QUALITY_STATUS 这个统计轴会退化成恒等于 PASS，失去诊断价值。
+EPISODE_COVERAGE_STATUSES: frozenset[EpisodeStatus] = frozenset(
+    {
+        EpisodeStatus.READY,
+        EpisodeStatus.QUALITY_CHECKING,
+        EpisodeStatus.ACCEPTED,
+        EpisodeStatus.COMPLETED,
+    }
+)
+
 EPISODE_DATA_FROZEN_FIELDS: tuple[str, ...] = (
     "episode_lineage_id",
     "episode_version",

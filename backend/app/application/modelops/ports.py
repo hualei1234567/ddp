@@ -13,6 +13,7 @@ from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
 from app.domain.identity.models import ProjectScope
+from app.domain.modelops.gaps import MeasuredCoverage
 from app.domain.modelops.models import (
     DataRequirement,
     Evaluation,
@@ -207,6 +208,23 @@ class DatasetGate(Protocol):
     def item_count(self, project_id: UUID, version_id: UUID) -> int: ...
 
 
+class EpisodeCoverageDirectory(Protocol):
+    """缺口视图的真实覆盖来源：按维度统计项目内可用 Episode 的只读端口。
+
+    只返回「实测到」的维度值；某维度值一个 Episode 都没有时**不出现**在结果里
+    （``current_count`` 的 0 与"测不到"必须区分，见 ADR-0013 §3.4）。
+    实现必须以服务端 ``ProjectScope`` 为准强制 ``project_id`` 隔离。
+    返回类型直接复用领域值对象 :class:`MeasuredCoverage`，不另立一份记录类型。
+    """
+
+    def coverage_by_dimension(
+        self,
+        scope: ProjectScope,
+        *,
+        dimension_types: frozenset[str] | None = None,
+    ) -> list[MeasuredCoverage]: ...
+
+
 class TrainingSourceGate(Protocol):
     """阶段 4 训练来源门禁：解析同项目的训练需求/交付/外部引用。
 
@@ -283,12 +301,14 @@ __all__ = [
     "CallbackRepository",
     "DatasetGate",
     "DataRequirement",
+    "EpisodeCoverageDirectory",
     "EvaluationRepository",
     "FeedbackRepository",
     "IdempotencyRecord",
     "IdempotencyRepository",
     "InferenceServiceRepository",
     "InferenceTaskRepository",
+    "MeasuredCoverage",
     "ModelPlatformGateway",
     "ModelRepository",
     "ModelVersionRepository",

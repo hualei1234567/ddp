@@ -256,7 +256,9 @@ def test_batch_flow_and_task_compatibility(
     body = batch.json()
     assert body["status"] == "PLANNED"
     assert body["sequence_no"] == 1
-    assert body["code"] == "B-0001"
+    # code 含 task 短标识：唯一键是 (project_id, code)，而 sequence_no 只在
+    # 单任务内递增，只写 B-0001 会让同项目第二个任务的第一个批次撞车。
+    assert body["code"] == f"B-{task_id.replace('-', '')[:8]}-0001"
 
     listed = editor.get(_tasks_url(ids.project_a, f"/{task_id}/batches"))
     assert [item["batch_id"] for item in listed.json()["items"]] == [body["batch_id"]]

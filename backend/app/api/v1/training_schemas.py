@@ -208,6 +208,9 @@ def training_delivery_out(delivery: TrainingDelivery) -> dict[str, Any]:
         "format": delivery.format,
         "format_version": delivery.format_version,
         "quality_report_ref": delivery.quality_report_ref,
+        # TRN-002 核对报告：``None`` 表示该交付建立于核对能力上线之前，
+        # 客户端不得把 ``None`` 渲染成"已通过"。
+        "requirement_match": delivery.requirement_match,
         "status": _value(delivery.status),
         "delivered_at": _iso(delivery.delivered_at),
         "accepted_by": delivery.accepted_by,

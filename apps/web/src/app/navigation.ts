@@ -75,11 +75,14 @@ export const navSections: NavSection[] = [
         available: false,
       },
       {
-        path: "/requirements",
+        // 真实页面挂在 /data-requirements（routes.tsx）；此前导航写成
+        // /requirements 并置 available=false，导致完整实现的页面在菜单里
+        // 是个永远点不动的禁用项，用户无法从导航到达。
+        path: "/data-requirements",
         label: "数据需求",
         description: "登记数据需求、场景规划与采集目标。",
         icon: createElement(FileTextOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/collection",
@@ -163,7 +166,6 @@ export const navSections: NavSection[] = [
         aliases: [
           "/evaluations",
           "/model-feedback",
-          "/data-requirements",
           "/data-gaps",
           "/inference-services",
           "/inference-tasks",

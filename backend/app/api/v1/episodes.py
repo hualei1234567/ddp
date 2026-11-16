@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -27,6 +28,7 @@ from app.application.episodes import (
     ReviseEpisodeCommand,
 )
 from app.core.errors import ValidationFailedError
+from app.domain.episodes.filters import EpisodeListFilters
 from app.domain.identity.models import ProjectScope
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["episodes"])
@@ -107,14 +109,36 @@ def list_episodes(
     status: str | None = None,
     task_id: UUID | None = None,
     batch_id: UUID | None = None,
+    quality_status: str | None = None,
+    annotation_status: str | None = None,
+    scene_label: Annotated[list[str] | None, Query(max_length=20)] = None,
+    device_id: UUID | None = None,
+    robot_id: UUID | None = None,
+    captured_from: Annotated[datetime | None, Query()] = None,
+    captured_to: Annotated[datetime | None, Query()] = None,
     cursor: str | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PageOut[EpisodeOut]:
+    """Episode 分页检索。
+
+    ``scene_label`` 可重复传参（``?scene_label=kitchen&scene_label=street``），
+    语义是"任一命中"；其余条件为等值或闭区间。所有条件在仓储层下推为 SQL，
+    不在 HTTP 层取回后过滤。
+    """
     page = use_cases.episodes.list_episodes(
         scope,
         status=status,
         task_id=task_id,
         batch_id=batch_id,
+        filters=EpisodeListFilters(
+            quality_status=quality_status,
+            annotation_status=annotation_status,
+            scene_labels=tuple(scene_label) if scene_label else None,
+            device_id=device_id,
+            robot_id=robot_id,
+            captured_from=captured_from,
+            captured_to=captured_to,
+        ),
         cursor=cursor,
         limit=limit,
     )

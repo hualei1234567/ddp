@@ -19,10 +19,12 @@ from app.application.idempotency import (
 from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
+from app.domain.annotation.ai_suggestion import AiSuggestion
 from app.domain.annotation.arbitration import AnnotationArbitration
 from app.domain.annotation.assignment import AnnotationAssignment
 from app.domain.annotation.batch import AnnotationBatch
 from app.domain.annotation.gold_set import GoldEvaluation, GoldSet
+from app.domain.annotation.quality_check import QualityCheckRun
 from app.domain.annotation.quality_sample import QualitySample
 from app.domain.annotation.review import AnnotationReview
 from app.domain.annotation.sample_set import AnnotationSampleSet, SampleEpisodeRef
@@ -349,6 +351,26 @@ class EpisodeDirectory(Protocol):
         episode_ids: tuple[UUID, ...],
     ) -> Mapping[UUID, tuple[int, int]]: ...
 
+    def apply_annotation_status(
+        self,
+        scope: ProjectScope,
+        *,
+        episode_ids: tuple[UUID, ...],
+        status: str,
+        now: datetime,
+    ) -> int:
+        """把 Episode 的 ``annotation_status`` 投影更新为给定状态。
+
+        返回实际更新的行数。**只推进、不回退**：已 ``APPROVED`` 的 Episode
+        不会被后续驳回退回（同一 Episode 可能有多个标注提交，先批准的那份
+        就不该被后来的驳回覆盖）。
+
+        为什么投影写在标注域：``annotation_status`` 的唯一权威来源是标注
+        流程，Episode 只是它的读模型。让 Episode 域自己推断"我该是什么标注
+        状态"等于把同一规则实现两遍。
+        """
+        ...
+
     def list_by_ids(
         self,
         scope: ProjectScope,
@@ -467,6 +489,8 @@ class AnnotationRecordRepository(Protocol):
         records: tuple[AnnotationRecord, ...],
     ) -> None: ...
 
+    def get(self, scope: ProjectScope, annotation_id: UUID) -> AnnotationRecord | None: ...
+
     def list_for_submission(
         self,
         scope: ProjectScope,
@@ -488,6 +512,38 @@ class AnnotationRecordRepository(Protocol):
         *,
         expected_version: int,
     ) -> AnnotationRecord: ...
+
+
+class AnnotationAiSuggestionRepository(Protocol):
+    """AI 预标注建议仓储；与标注记录物理分离，项目隔离由 ``ProjectScope`` 强制。"""
+
+    def add_many(
+        self,
+        scope: ProjectScope,
+        suggestions: tuple[AiSuggestion, ...],
+    ) -> None: ...
+
+    def get(self, scope: ProjectScope, suggestion_id: UUID) -> AiSuggestion | None: ...
+
+    def list_for_annotation(
+        self,
+        scope: ProjectScope,
+        annotation_id: UUID,
+    ) -> list[AiSuggestion]: ...
+
+    def list_for_submission(
+        self,
+        scope: ProjectScope,
+        submission_id: UUID,
+    ) -> list[AiSuggestion]: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        suggestion: AiSuggestion,
+        *,
+        expected_version: int,
+    ) -> AiSuggestion: ...
 
 
 class AnnotationReviewRepository(Protocol):
@@ -699,3 +755,28 @@ class OutboxRepository(Protocol):
 # IdempotencyRecord`` 调用点不变。
 IdempotencyRecord = _IdempotencyRecord
 IdempotencyRepository = _IdempotencyRepository
+
+
+class QualityCheckRepository(Protocol):
+    """质量检查执行记录仓储：只追加，不更新、不删除。
+
+    查询一律按 ``project_id`` 过滤；``get``/``list_for_submission`` 跨项目返回
+    空结果，由用例映射成 404。
+    """
+
+    def add(
+        self,
+        scope: ProjectScope,
+        record: QualityCheckRun,
+    ) -> QualityCheckRun: ...
+
+    def get(self, scope: ProjectScope, run_id: UUID) -> QualityCheckRun | None: ...
+
+    def list_for_submission(
+        self,
+        scope: ProjectScope,
+        *,
+        submission_id: UUID,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[QualityCheckRun]: ...

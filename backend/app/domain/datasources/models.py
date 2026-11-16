@@ -134,6 +134,11 @@ class DataSourceImport:
     error_message: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    # 已执行的尝试次数（从 1 开始）。用于「可重试失败」与「彻底失败」的区分：
+    # 导入任务进 FAILED 后按契约不得再动，所以第一次失败必须能退回 PENDING
+    # 重新领取；attempt 与 max_attempts 决定还能退几次。
+    attempt: int = 1
+    max_attempts: int = 3
     row_version: int = 1
 
     def __post_init__(self) -> None:
@@ -161,3 +166,18 @@ class DataSourceImport:
             raise DomainValidationError("scope=SAMPLE 时必须给出 sample_limit")
         if self.row_version < 1:
             raise DomainValidationError("row_version 必须大于等于 1")
+        if self.attempt < 1:
+            raise DomainValidationError("attempt 必须大于等于 1")
+        if self.max_attempts < 1:
+            raise DomainValidationError("max_attempts 必须大于等于 1")
+        if self.attempt > self.max_attempts:
+            raise DomainValidationError("attempt 不得超过 max_attempts")
+
+    @property
+    def can_retry(self) -> bool:
+        """是否还能重试：失败且未达上限。
+
+        与 ``IngestionJob.can_retry`` 同一语义——两处规则一致，不存在
+        「导入能重试、接入任务不能」这类分叉。
+        """
+        return self.status is ImportStatus.FAILED and self.attempt < self.max_attempts

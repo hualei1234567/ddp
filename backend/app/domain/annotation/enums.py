@@ -482,3 +482,26 @@ class IAAValueStatus(StrEnum):
 class IAAObservationSource(StrEnum):
     SUBMISSION = "SUBMISSION"
     GOLD_SET = "GOLD_SET"
+
+
+class QualityRuleSeverity(StrEnum):
+    """质量规则严重级别：ERROR 计入失败判定，WARN 只提醒。
+
+    只设两级：三级以上会让"是否阻断"的判定散落在各个调用点。是否需要阻断
+    由 ``count`` 与 ``QualityCheckStatus`` 的映射决定，见
+    :mod:`app.application.annotation.quality_checks`。
+    """
+
+    ERROR = "ERROR"
+    WARN = "WARN"
+
+
+class QualityCheckStatus(StrEnum):
+    """一次质量检查的**结论**（不是异步执行状态）。
+
+    同步执行且与业务写入同事务：执行失败即事务回滚，不存在"执行失败但留下
+    记录"的中间态，因此不需要 RUNNING / ERROR 之类的执行态词汇。
+    """
+
+    PASSED = "PASSED"
+    FAILED = "FAILED"

@@ -1222,6 +1222,14 @@ DataGapSummary:
             items:
               type: string
               format: uuid
+          coverage_source:
+            type: string
+            enum: [MEASURED, MANUAL, UNKNOWN]
+            description: |
+              `current_count` 的来源。`MEASURED` 为真实 Episode 统计，
+              `MANUAL` 为人工填写，`UNKNOWN` 表示二者都不可得。
+              `current_count=null` 与 `coverage_source=UNKNOWN` 必须一起读：
+              **测不到不等于覆盖率为 0，更不等于达标**。
     freshness:
       type: string
       enum:

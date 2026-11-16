@@ -99,6 +99,9 @@ from app.infrastructure.repositories.datasources import (  # noqa: E402
     SqlDataSourceRepository,
     SqlMediaAssetRepository,
 )
+from app.infrastructure.repositories.raw_assets import (  # noqa: E402
+    SqlRawAssetRepository,
+)
 from app.infrastructure.repositories.idempotency import (  # noqa: E402
     SqlIdempotencyRepository,
 )
@@ -297,6 +300,7 @@ def main() -> int:
             sources=SqlDataSourceRepository(s),
             imports=SqlDataSourceImportRepository(s),
             assets=SqlMediaAssetRepository(s),
+            raw_assets=SqlRawAssetRepository(s),
             audit=SqlDatasetAuditRepository(s),
             outbox=SqlOutboxRepository(s),
             storage=DataSourceObjectWriter(S3MultipartStorage(settings)),

@@ -327,6 +327,15 @@ class SqlAnnotationRecordRepository:
         )
         return [self._from_row(row) for row in rows]
 
+    def get(self, scope: ProjectScope, annotation_id: UUID) -> AnnotationRecord | None:
+        """按 ID 取记录：项目过滤由 ``scoped_select`` 强制，跨项目返回 ``None``。"""
+        row = self._session.scalar(
+            scoped_select(AnnotationRecordModel, scope).where(
+                AnnotationRecordModel.id == annotation_id
+            )
+        )
+        return self._from_row(row) if row is not None else None
+
     def list_for_task(
         self,
         scope: ProjectScope,

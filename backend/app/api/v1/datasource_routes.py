@@ -25,6 +25,9 @@ from app.api.v1.datasource_schemas import (
     DataSourceOut,
     DataSourcePatch,
     ImportActionRequest,
+    ImportEpisodeMaterializeRequest,
+    ImportEpisodeMaterializeResultOut,
+    MaterializedEpisodeOut,
     MediaAssetListOut,
     MediaAssetOut,
     MediaAssetPlaybackOut,
@@ -32,6 +35,7 @@ from app.api.v1.datasource_schemas import (
     ReviewCreateOut,
     ReviewDecisionRequest,
 )
+from app.api.v1.episode_dependencies import build_episode_service
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.schemas import PageOut
 from app.application.datasources import (
@@ -41,6 +45,9 @@ from app.application.datasources import (
     DataSourceUseCases,
     NewDataSource,
     NewDataSourceImport,
+)
+from app.application.datasources.episode_materialization import (
+    ImportEpisodeMaterializer,
 )
 from app.application.datasources.ports import (
     AuditRepository,
@@ -54,7 +61,8 @@ from app.application.datasources.ports import (
 )
 from app.application.datasources.reviews import DataReviewUseCases
 from app.core.config import get_settings
-from app.domain.datasources.errors import ResourceNotFoundError
+from app.domain.datasources.enums import ImportStatus
+from app.domain.datasources.errors import DomainValidationError, ResourceNotFoundError
 from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
     SqlDatasetOutboxRepository,
@@ -65,6 +73,7 @@ from app.infrastructure.repositories.datasources import (
     SqlDataSourceRepository,
     SqlMediaAssetRepository,
 )
+from app.infrastructure.repositories.episodes import SqlEpisodeRepository
 from app.infrastructure.repositories.idempotency import SqlIdempotencyRepository
 from app.infrastructure.storage.data_source_objects import DataSourceObjectReader
 from app.infrastructure.storage.s3 import S3MultipartStorage
@@ -133,6 +142,23 @@ def _as_asset_repo(value: object) -> MediaAssetRepository:
 
 
 ReviewServicesDep = Annotated[DataReviewUseCases, Depends(get_review_use_cases)]
+
+
+def get_episode_materializer(session: DbSession) -> ImportEpisodeMaterializer:
+    """导入产物 -> Episode 的物化用例。
+
+    Episode 侧的 8 个协作者由 ``build_episode_service`` 统一装配，不在这里
+    重抄一遍——重抄就多了一处会漂移的接线。
+    """
+    return ImportEpisodeMaterializer(
+        imports=_cast_import(SqlDataSourceImportRepository(session)),
+        assets=_as_asset_repo(SqlMediaAssetRepository(session)),
+        episodes=build_episode_service(session),
+        episode_repository=SqlEpisodeRepository(session),
+    )
+
+
+MaterializerDep = Annotated[ImportEpisodeMaterializer, Depends(get_episode_materializer)]
 
 
 @router.get("/data-sources", response_model=PageOut[DataSourceOut])
@@ -420,3 +446,45 @@ def quality_report(
 
 
 __all__ = ["router"]
+
+
+@router.post(
+    "/data-source-imports/{import_id}/episodes",
+    response_model=ImportEpisodeMaterializeResultOut,
+    status_code=201,
+)
+def materialize_import_episodes(
+    import_id: UUID,
+    scope: WriteScope,
+    use_cases: DataSourceServicesDep,
+    materializer: MaterializerDep,
+    payload: ImportEpisodeMaterializeRequest | None = None,
+) -> ImportEpisodeMaterializeResultOut:
+    """把一次成功导入的媒体资产生成 Canonical Episode（按 episode_key 分组）。
+
+    前置：导入状态必须 ``SUCCEEDED``。对失败/进行中的导入生成 Episode 等于
+    把半截数据当成样本，因此显式拒绝而不是"能跑就让它跑"。
+    """
+    job = use_cases.get_import(scope, import_id)
+    if job.status is not ImportStatus.SUCCEEDED:
+        raise DomainValidationError(
+            f"导入状态为 {job.status.value}，只有 SUCCEEDED 的导入才能生成 Episode"
+        )
+    result = materializer.materialize(
+        scope,
+        import_id,
+        scene_labels=tuple((payload or ImportEpisodeMaterializeRequest()).scene_labels),
+    )
+    return ImportEpisodeMaterializeResultOut(
+        import_id=result.import_id,
+        episode_count=result.episode_count,
+        episodes=[
+            MaterializedEpisodeOut(
+                episode_id=item.episode_id,
+                episode_key=item.episode_key,
+                raw_asset_ids=list(item.raw_asset_ids),
+            )
+            for item in result.created
+        ],
+        skipped_episode_keys=list(result.skipped_episode_keys),
+    )

@@ -31,6 +31,11 @@ class MediaAsset:
     content_type: str
     task_name: str
     created_at: datetime
+    # 指向 Canonical 层 RawAsset：导入的每个媒体文件同时是一条 RawAsset，
+    # 才受不可变/禁删/去重保护，也才能被 Episode 引用。
+    # 允许 None 只为读出本字段引入之前入库的 384 条历史行；新导入必填
+    # （import_runner 构造时必给，见该模块 ``_register_raw_asset``）。
+    raw_asset_id: UUID | None = None
     excerpt_start_seconds: float | None = None
     excerpt_seconds: float | None = None
     source_fps: float | None = None

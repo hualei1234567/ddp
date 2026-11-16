@@ -847,3 +847,38 @@ def test_require_rework_requires_reviewer_or_owner(
     )
     assert denied.status_code == 403, denied.text
     assert denied.json()["error"]["code"] == "forbidden"
+
+
+def test_second_task_batch_does_not_collide(api_db) -> None:
+    """同一项目里两个任务建批次，code 不得撞车。
+
+    这是一个真实存在过的缺陷：批次 ``code`` 由 ``f"B-{sequence_no:04d}"``
+    生成，而 unique 键是 ``(project_id, code)``、`sequence_no` 只在**单个
+    任务内**递增。于是同项目第二个任务的第一个批次必然撞
+    ``uq_annotation_batches_project_code``——「多任务并行标注」这条常规路径
+    直接不可用。既有测试只建过一个任务的批次，所以一直没暴露。
+    """
+    factory, ids = api_db
+    ep1 = seed_episode(factory, ids.project_a, ids.editor_a, "EP-MULTI-1")
+    ep2 = seed_episode(factory, ids.project_a, ids.editor_a, "EP-MULTI-2")
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+
+    codes: list[str] = []
+    for index, episode_id in enumerate((ep1, ep2), start=1):
+        schema = create_published_schema(editor, owner, ids.project_a, f"schema-multi-{index}")
+        sample_set = create_snapshot_set(editor, ids.project_a, f"sample-multi-{index}")
+        work = create_ready_work(
+            editor,
+            owner,
+            ids.project_a,
+            schema,
+            sample_set,
+            episode_id,
+            ids.editor_a,
+            f"task-multi-{index}",
+        )
+        codes.append(work["batch"]["code"] if "batch" in work else "")
+
+    # create_ready_work 内部建批次；两次都成功即证明未撞车。
+    assert len(codes) == 2

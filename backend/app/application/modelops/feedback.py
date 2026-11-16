@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from app.application.modelops.audit import record_change
@@ -11,6 +11,7 @@ from app.application.modelops.commands import NewFeedback
 from app.application.modelops.idempotency import IdempotencyGuard, validate_key
 from app.application.modelops.ports import (
     AuditRepository,
+    EpisodeCoverageDirectory,
     EvaluationRepository,
     FeedbackRepository,
     IdempotencyRepository,
@@ -21,7 +22,7 @@ from app.application.modelops.ports import (
     UnitOfWork,
 )
 from app.domain.identity.models import ProjectScope
-from app.domain.modelops.enums import FeedbackStatus, RequirementStatus
+from app.domain.modelops.enums import CoverageDimension, FeedbackStatus, RequirementStatus
 from app.domain.modelops.errors import (
     DomainValidationError,
     FeedbackAlreadyConvertedError,
@@ -31,7 +32,12 @@ from app.domain.modelops.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
-from app.domain.modelops.gaps import aggregate_gaps
+from app.domain.modelops.gaps import (
+    GapSummary,
+    MeasuredCoverage,
+    aggregate_gaps,
+    build_gap_summary,
+)
 from app.domain.modelops.models import ModelFeedback, new_feedback, new_requirement
 from app.domain.modelops.state_machines import target_status, validate_action_name
 from app.domain.modelops.validation import coerce_enum, optional_aware_datetime, optional_text
@@ -66,6 +72,8 @@ class FeedbackUseCases:
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        coverage: EpisodeCoverageDirectory | None = None,
+        coverage_stale_after: timedelta | None = None,
     ) -> None:
         self._feedback = feedback
         self._requirements = requirements
@@ -76,6 +84,10 @@ class FeedbackUseCases:
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        # 覆盖端口与新鲜度阈值都可选注入：未注入时缺口视图退化为"仅人工值"，
+        # 与改造前行为一致，不破坏既有调用点与既有测试。
+        self._coverage = coverage
+        self._coverage_stale_after = coverage_stale_after
 
     def get(self, scope: ProjectScope, feedback_id: UUID) -> ModelFeedback:
         item = self._feedback.get(scope, feedback_id)
@@ -362,7 +374,18 @@ class FeedbackUseCases:
             occurred_at=now,
         )
 
-    def gap_summary(self, scope: ProjectScope, *, dimension_type: str | None = None) -> list:
+    def gap_summary(
+        self,
+        scope: ProjectScope,
+        *,
+        dimension_type: str | None = None,
+    ) -> GapSummary:
+        """数据缺口视图：反馈侧聚合 + 真实 Episode 覆盖。
+
+        ``current_count`` 优先用实测覆盖；实测不可得的维度保留反馈里的人工值并
+        标记来源；``freshness`` 由实测数据的最近更新时间与可配阈值计算，
+        不再硬编码。
+        """
         feedback_items = self._feedback.list_open_dimensions(scope, dimension_type=dimension_type)
         requirements = self._requirements.list(scope, limit=100)
         links: dict[tuple[str, str], list[str]] = {}
@@ -375,10 +398,36 @@ class FeedbackUseCases:
             for dimension in requirement.dimensions:
                 key = (dimension.dimension_type, dimension.dimension_value)
                 links.setdefault(key, []).append(str(requirement.requirement_id))
-        return aggregate_gaps(
+        measured = self._measured_coverage(scope, dimension_type=dimension_type)
+        items = aggregate_gaps(
             [item.dimensions for item in feedback_items],
             links,
+            measured_coverage=measured,
         )
+        return build_gap_summary(
+            items,
+            measured_coverage=measured,
+            now=_utcnow(),
+            stale_after=self._coverage_stale_after,
+        )
+
+    def _measured_coverage(
+        self,
+        scope: ProjectScope,
+        *,
+        dimension_type: str | None,
+    ) -> list[MeasuredCoverage]:
+        """取真实覆盖；未装配覆盖端口时返回空列表（等价于只有人工值）。"""
+        if self._coverage is None:
+            return []
+        if dimension_type is not None:
+            try:
+                wanted = frozenset({CoverageDimension(dimension_type).value})
+            except ValueError:
+                # 该维度不可实测（ACTION/LABEL/MODALITY）：不查询，回退人工值。
+                return []
+            return list(self._coverage.coverage_by_dimension(scope, dimension_types=wanted))
+        return list(self._coverage.coverage_by_dimension(scope))
 
     def _replay(self, scope: ProjectScope, response_ref: str | None) -> ModelFeedback:
         if not response_ref:

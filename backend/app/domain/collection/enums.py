@@ -2,6 +2,10 @@
 
 取值以 ``docs/architecture/contract-draft/collection/state-machines.v1.json``
 为准；本轮实现只覆盖采集任务/批次，不包含上传、资产、Job 与 Episode。
+
+COL-002 追加：采集方案 / SOP / 场景 / 动作库四类**素材实体**的状态枚举。
+它们与任务状态机无关（素材是版本化的可复用定义，任务才走状态机），
+因此单独列出，不复用 ``CollectionTaskStatus``。
 """
 
 from __future__ import annotations
@@ -88,3 +92,20 @@ PUBLIC_TASK_ACTIONS: frozenset[str] = frozenset(
     if action is not CollectionTaskAction.SYSTEM_DATA_CHECK
 )
 PUBLIC_BATCH_ACTIONS: frozenset[str] = frozenset(action.value for action in CollectionBatchAction)
+
+
+class CollectionAssetStatus(StrEnum):
+    """素材实体的生命周期状态（四类实体共用一套取值）。
+
+    为什么共用：四类实体（方案 / SOP / 场景 / 动作库）在本阶段都只有
+    "草稿 → 启用 → 停用"这三个业务含义，取同一套枚举可以让 CHECK 约束、
+    列表过滤与前端状态标签保持一致；差异体现在各自的版本列（``plan_version``
+    / ``sop_version`` / ``spec_version``），而不是状态取值上。
+
+    刻意不含 ``PUBLISHED``：素材的"可被任务引用"由 ``ACTIVE`` 表达，
+    任务侧冻结的版本号已经记录了"当时用的是哪一版"，不需要第二条发布态。
+    """
+
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    ARCHIVED = "ARCHIVED"

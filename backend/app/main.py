@@ -25,13 +25,17 @@ from app.api.errors import (
     integrity_error_to_app,
     supplier_error_to_app,
 )
+from app.api.middleware.metrics import MetricsMiddleware
 from app.api.middleware.rate_limit import RateLimitMiddleware
 from app.api.middleware.request_id import RequestIdMiddleware
 from app.api.middleware.security_headers import SecurityHeadersMiddleware
+from app.api.observability import router as observability_router
+from app.api.v1.platform_response_models import HealthResponse
 from app.api.v1.router import api_router
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ValidationFailedError
 from app.core.logging import configure_logging
+from app.core.metrics import Metrics, build_metrics
 from app.domain.annotation.errors import AnnotationDomainError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.datasets.errors import DatasetDomainError
@@ -42,7 +46,9 @@ from app.domain.identity.errors import CrossProjectAccessError
 from app.domain.ingestion.errors import IngestionDomainError
 from app.domain.modelops.errors import ModelOpsDomainError
 from app.domain.suppliers.errors import SupplierDomainError
+from app.infrastructure.db.session import get_session_factory
 from app.infrastructure.rate_limit import RateLimiter, build_rate_limiter
+from app.infrastructure.repositories.observability import collect_business_counts
 
 logger = logging.getLogger(__name__)
 
@@ -85,12 +91,14 @@ def _register_middleware(
     app: FastAPI,
     settings: Settings,
     rate_limiter: RateLimiter | None,
+    metrics: Metrics,
 ) -> None:
     """注册中间件。
 
     Starlette 中后添加的中间件位于外层，因此按“内层 → 外层”顺序添加。
-    最终执行顺序：RequestId → SecurityHeaders → CORS → RateLimit → 路由。
-    这样限流/预检响应同样带安全头与 request_id。
+    最终执行顺序：RequestId → SecurityHeaders → CORS → Metrics → RateLimit → 路由。
+    这样限流/预检响应同样带安全头与 request_id；Metrics 在限流外层，被限流拒绝的
+    请求也计入统计。
     """
     if rate_limiter is not None:
         app.add_middleware(
@@ -98,6 +106,7 @@ def _register_middleware(
             settings=settings,
             limiter=rate_limiter,
         )
+    app.add_middleware(MetricsMiddleware, metrics=metrics)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_allowed_origins,
@@ -131,9 +140,14 @@ def create_app() -> FastAPI:
     if rate_limiter is not None:
         app.add_event_handler("shutdown", rate_limiter.close)
 
+    # 指标注册表随应用实例创建：业务指标在抓取时查库，因此注入会话工厂。
+    app.state.metrics = build_metrics(
+        counts_provider=lambda: collect_business_counts(get_session_factory())
+    )
+
     # 先注册中间件；Starlette 在首次请求时构建中间件栈，
     # 以确保异常处理器与后续注册的路由都处于中间件栈内。
-    _register_middleware(app, settings, rate_limiter)
+    _register_middleware(app, settings, rate_limiter, app.state.metrics)
 
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
@@ -344,16 +358,18 @@ def create_app() -> FastAPI:
             content=_error_payload(request, error),
         )
 
-    @app.get("/health", tags=["platform"])
-    def health() -> dict[str, str]:
-        return {
-            "status": "ok",
-            "service": settings.app_name,
-            "version": settings.app_version,
-            "env": settings.env,
-        }
+    @app.get("/health", tags=["platform"], response_model=HealthResponse)
+    def health() -> HealthResponse:
+        return HealthResponse(
+            status="ok",
+            service=settings.app_name,
+            version=settings.app_version,
+            env=settings.env,
+        )
 
     app.include_router(api_router, prefix="/api/v1")
+    # 运维端点放在根级（抓取端约定），不进 OpenAPI，见 app/api/observability.py。
+    app.include_router(observability_router)
     return app
 
 

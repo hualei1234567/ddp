@@ -11,17 +11,22 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.api.deps import DbSession
+from app.application.annotation.ai_suggestions import AnnotationAiSuggestionUseCases
 from app.application.annotation.arbitrations import AnnotationArbitrationUseCases
 from app.application.annotation.assignments import AnnotationAssignmentUseCases
 from app.application.annotation.batches import AnnotationBatchUseCases
 from app.application.annotation.gold_sets import GoldSetUseCases
 from app.application.annotation.iaa import IAAUseCases
+from app.application.annotation.quality_checks import QualityCheckUseCases
 from app.application.annotation.quality_samples import QualitySampleUseCases
 from app.application.annotation.reviews import AnnotationReviewUseCases
 from app.application.annotation.sample_sets import AnnotationSampleSetUseCases
 from app.application.annotation.schemas import AnnotationSchemaUseCases
 from app.application.annotation.submissions import AnnotationSubmissionUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
+from app.infrastructure.repositories.annotation_ai_suggestions import (
+    SqlAnnotationAiSuggestionRepository,
+)
 from app.infrastructure.repositories.annotation_assignments import (
     SqlAnnotationAssignmentRepository,
 )
@@ -40,6 +45,9 @@ from app.infrastructure.repositories.annotation_quality import (
     SqlGoldSetRepository,
     SqlIAAReportRepository,
     SqlQualitySampleRepository,
+)
+from app.infrastructure.repositories.annotation_quality_checks import (
+    SqlQualityCheckRepository,
 )
 from app.infrastructure.repositories.annotation_results import (
     SqlAnnotationArbitrationRepository,
@@ -66,7 +74,9 @@ class AnnotationUseCases:
     arbitrations: AnnotationArbitrationUseCases
     gold_sets: GoldSetUseCases
     quality_samples: QualitySampleUseCases
+    quality_checks: QualityCheckUseCases
     iaa: IAAUseCases
+    ai_suggestions: AnnotationAiSuggestionUseCases
 
 
 def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
@@ -81,12 +91,28 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
     arbitrations_repo = SqlAnnotationArbitrationRepository(session)
     gold_sets_repo = SqlGoldSetRepository(session)
     quality_repo = SqlQualitySampleRepository(session)
+    quality_check_repo = SqlQualityCheckRepository(session)
     iaa_repo = SqlIAAReportRepository(session)
+    ai_suggestions_repo = SqlAnnotationAiSuggestionRepository(session)
     audit = SqlAnnotationAuditRepository(session)
     outbox = SqlAnnotationOutboxRepository(session)
     idempotency = SqlAnnotationIdempotencyRepository(session)
     episodes = SqlEpisodeDirectory(session)
     members = SqlMemberDirectory(session)
+
+    # 先构造质量检查用例：提交用例要在提交成功后立刻跑一次检查，因此需要
+    # 持有它。两者不互相持有（检查用例不依赖提交用例），先建无顺序问题。
+    quality_checks = QualityCheckUseCases(
+        quality_check_repo,
+        submissions_repo,
+        records_repo,
+        tasks_repo,
+        schemas_repo,
+        episodes,
+        audit,
+        outbox,
+        session,
+    )
 
     return AnnotationUseCases(
         schemas=AnnotationSchemaUseCases(
@@ -153,6 +179,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             outbox,
             idempotency,
             session,
+            quality_checks,
         ),
         reviews=AnnotationReviewUseCases(
             reviews_repo,
@@ -164,6 +191,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             outbox,
             idempotency,
             session,
+            episodes=episodes,
         ),
         arbitrations=AnnotationArbitrationUseCases(
             arbitrations_repo,
@@ -175,6 +203,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             outbox,
             idempotency,
             session,
+            episodes=episodes,
         ),
         gold_sets=GoldSetUseCases(
             gold_sets_repo,
@@ -200,6 +229,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             idempotency,
             session,
         ),
+        quality_checks=quality_checks,
         iaa=IAAUseCases(
             iaa_repo,
             records_repo,
@@ -210,6 +240,18 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             outbox,
             session,
             idempotency,
+        ),
+        ai_suggestions=AnnotationAiSuggestionUseCases(
+            ai_suggestions_repo,
+            submissions_repo,
+            records_repo,
+            reviews_repo,
+            arbitrations_repo,
+            members,
+            audit,
+            outbox,
+            idempotency,
+            session,
         ),
     )
 

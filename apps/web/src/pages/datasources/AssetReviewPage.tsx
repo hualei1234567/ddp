@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 
 import PageContainer from "../../components/ui/PageContainer";
+import PageState from "../../components/ui/PageState";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useProjectId } from "../../hooks/useProjectId";
 import { dataSourceApi } from "../../services/datasources";
@@ -206,33 +207,30 @@ function ReviewContent({
   const currentCamera = camera ?? cameras[0] ?? null;
   const current = episodeAssets.find((item) => item.camera === currentCamera);
 
+  // 统一状态组件：与全站其余 60+ 页面一致，避免本页出现裸写
+  // Spin/Alert/Empty 导致六态覆盖不一致（DEV-004 审计点名项）。
   if (loading) {
-    return (
-      <div style={{ padding: 48, textAlign: "center" }}>
-        <Spin tip="正在加载媒体资产…" />
-      </div>
-    );
+    return <PageState variant="loading" title="正在加载媒体资产…" />;
   }
 
   if (error) {
     return (
-      <Alert
-        type="error"
-        showIcon
-        message="加载失败"
+      <PageState
+        variant="error"
+        title="加载失败"
         description={error.message}
-        action={
-          <Button size="small" onClick={() => void load()}>
-            重试
-          </Button>
-        }
+        onRetry={() => void load()}
       />
     );
   }
 
   if (assets.length === 0) {
     return (
-      <Empty description="该导入没有产出媒体资产；请确认导入任务已完成" />
+      <PageState
+        variant="empty"
+        title="该导入没有产出媒体资产"
+        description="请确认导入任务已完成"
+      />
     );
   }
 

@@ -1,0 +1,48 @@
+{
+  "package": "DDP 具身智能数据闭环平台 下一阶段建设蓝图 V2.0",
+  "baseline": "DDP_具身智能数据闭环平台建设总规范_V1.0_FINAL.md",
+  "supplementary_basis": "DDP_数据接入与样本验收中心_PRD_V1.3_全局复用优先版.md",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2507,
+      "sha256": "a676ebfe1e1bdecd7539dd834ed16ef0f662146faa378dc0d5fedffeccd88080"
+    },
+    {
+      "path": "建设文档/01_DDP下一阶段建设蓝图_V2.0.md",
+      "bytes": 19198,
+      "sha256": "dfb402129bf19ba0eaef0d9fd2aa4ff221231f64c03abaad09e16697ee2e1821"
+    },
+    {
+      "path": "建设文档/02_下一阶段路线图与里程碑.md",
+      "bytes": 5195,
+      "sha256": "78c54e3c0a57d5b48f8e55e278232d829300e0dec4f82b6691a44bb9b8309dd3"
+    },
+    {
+      "path": "建设文档/03_数据架构与Canonical_Schema演进规范.md",
+      "bytes": 6453,
+      "sha256": "67ee24010bb44ab375b7929ef6497f4a2d173260d1a3b3b57b3ef6609e4fd63c"
+    },
+    {
+      "path": "建设文档/04_核心模块PRD与验收矩阵.md",
+      "bytes": 5791,
+      "sha256": "a206952d712929f3a961dc4d9769fb2513d632d01e1e2dd529e0933803e33f40"
+    },
+    {
+      "path": "建设文档/05_工程治理复用优先与质量门禁.md",
+      "bytes": 5750,
+      "sha256": "108025e29a5436d427294cd51026366bab1ce3ec8dbada2aeafc021692278aee"
+    },
+    {
+      "path": "建设文档/06_Claude_Code下一阶段建设总Prompt.md",
+      "bytes": 6028,
+      "sha256": "3e99c236e9dbb7cd1b7d591b1b1c758f485cf1a6a5461d6bba19dcbfb6abbee4"
+    },
+    {
+      "path": "建设文档/07_V1.0现状审计与阶段准入模板.md",
+      "bytes": 3354,
+      "sha256": "30a65dc2c71f16f1b2a8c4e7a4e0b8c3d64b0ea37fa895a577d30a420239e993"
+    }
+  ],
+  "file_count": 8
+}

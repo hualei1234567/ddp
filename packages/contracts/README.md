@@ -19,7 +19,8 @@
 | `1.4.0` | 在 `1.3.0` 基础上增量加入阶段 6 供应商与到货验收已实现端点 | **FROZEN（DDP-361）** |
 | `1.5.0` | 在 `1.4.0` 基础上增量加入阶段 7 数据平面第一批（HF 数据源登记 + 导入任务） | **FROZEN（阶段 7 第一批）** |
 | `1.6.0` | 在 `1.5.0` 基础上补齐设备域已实现字段（G-20：`frame_id`/`frame_convention`、`calibration_version`/Profile 快照） | 已发布 |
-| `1.7.0` | 在 `1.6.0` 基础上增量加入 G-01 端点：`/robots` 全套与 `/calibration-profiles` | 当前 |
+| `1.7.0` | 在 `1.6.0` 基础上增量加入 G-01 端点：`/robots` 全套与 `/calibration-profiles` | 已发布 |
+| `1.8.0` | 在 `1.7.0` 基础上增量加入 N3–N9 已实现端点：采集素材四实体、标注质量检查与 AI 预标注建议、DatasetVersion 血缘；并补齐 `training-deliveries[].requirement_match`、`data-gaps[].items[].coverage_source` 与错误码 `training_delivery_requirement_unmet`；另收录质量检查「提交即自动执行」语义与 AI 建议采纳统计 `.../ai-suggestions/agreement` | 当前 |
 | `ddp.device/1.0.0` | 阶段 1 设备域冻结目标 | 已批准 |
 | `ddp.stage2/1.0.0` | 阶段 2 契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage3/1.0.0` | 阶段 3 标注契约冻结版本 | v1.0 FROZEN |

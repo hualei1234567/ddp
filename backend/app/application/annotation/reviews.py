@@ -8,6 +8,9 @@ from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
 from app.application.annotation.commands import NewAnnotationReview
+from app.application.annotation.episode_status_projection import (
+    project_submission_status,
+)
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
 from app.application.annotation.ports import (
     AnnotationRecordRepository,
@@ -15,6 +18,7 @@ from app.application.annotation.ports import (
     AnnotationSubmissionRepository,
     AnnotationTaskRepository,
     AuditRepository,
+    EpisodeDirectory,
     IdempotencyRepository,
     MemberDirectory,
     OutboxRepository,
@@ -61,6 +65,8 @@ class AnnotationReviewUseCases:
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        *,
+        episodes: EpisodeDirectory | None = None,
     ) -> None:
         self._reviews = reviews
         self._submissions = submissions
@@ -71,6 +77,7 @@ class AnnotationReviewUseCases:
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        self._episodes = episodes
 
     def get(self, scope: ProjectScope, review_id: UUID) -> AnnotationReview:
         review = self._reviews.get(scope, review_id)
@@ -285,6 +292,7 @@ class AnnotationReviewUseCases:
             updated_by=scope.actor_id,
         )
         self._submissions.save(scope, updated, expected_version=submission.version)
+        self._project(scope, submission, updated.status, now=now)
         target = {
             AnnotationSubmissionAction.APPROVE.value: AnnotationRecordStatus.APPROVED,
             AnnotationSubmissionAction.REJECT.value: AnnotationRecordStatus.REJECTED,
@@ -306,6 +314,27 @@ class AnnotationReviewUseCases:
             updated_by=scope.actor_id,
         )
         self._submissions.save(scope, updated, expected_version=submission.version)
+        self._project(scope, submission, updated.status, now=now)
+
+    def _project(self, scope: ProjectScope, submission, status, *, now: datetime) -> None:
+        """把提交状态投影到 Episode（规则见 episode_status_projection）。"""
+        if self._episodes is None:
+            return
+        project_submission_status(
+            self._episodes,
+            scope,
+            submission_status=status,
+            episode_ids=self._episode_ids_of(scope, submission.submission_id),
+            now=now,
+        )
+
+    def _episode_ids_of(self, scope: ProjectScope, submission_id: UUID) -> tuple[UUID, ...]:
+        return tuple(
+            dict.fromkeys(
+                record.episode_id
+                for record in self._records.list_for_submission(scope, submission_id)
+            )
+        )
 
     def _mark_records(
         self,

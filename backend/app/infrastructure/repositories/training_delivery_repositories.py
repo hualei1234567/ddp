@@ -64,6 +64,9 @@ class SqlTrainingDeliveryRepository:
             format=delivery.format,
             format_version=delivery.format_version,
             quality_report_ref=delivery.quality_report_ref,
+            requirement_match=(
+                dict(delivery.requirement_match) if delivery.requirement_match is not None else None
+            ),
             status=enum_value(delivery.status),
             delivered_at=delivery.delivered_at,
             accepted_by=delivery.accepted_by,
@@ -184,6 +187,9 @@ class SqlTrainingDeliveryRepository:
             format=row.format,
             format_version=row.format_version,
             quality_report_ref=row.quality_report_ref,
+            requirement_match=(
+                dict(row.requirement_match) if row.requirement_match is not None else None
+            ),
             status=TrainingDeliveryStatus(row.status),
             delivered_at=as_utc(row.delivered_at),
             accepted_by=row.accepted_by,
