@@ -87,11 +87,16 @@ class CollectionTask(Base, ProjectScopedAuditMixin):
     code: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     requirement_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # COL-002：四个素材引用由迁移 0040 补齐 (project_id, xxx_id) 复合外键。
+    # 列保持可空——历史任务没有这些引用，强制非空会破坏既有数据。
     plan_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     sop_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # ``sop_version`` 是**任务创建时冻结的 SOP 版本快照**：SOP 之后升版
+    # （新增 ``collection_sops`` 行）不会改写历史任务，故与 ``sop_id`` 分开存。
     sop_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     scenario_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     action_spec_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # 同 ``sop_version``：动作库版本快照，与 ``action_spec_id`` 成对冻结。
     action_spec_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     priority: Mapped[str] = mapped_column(String(8), nullable=False)
@@ -138,6 +143,33 @@ class CollectionTask(Base, ProjectScopedAuditMixin):
             ["project_id", "assigned_robot_id"],
             ["robots.project_id", "robots.id"],
             name="fk_collection_tasks_project_assigned_robot",
+            ondelete="RESTRICT",
+        ),
+        # COL-002：素材引用的数据库级项目隔离。ON DELETE RESTRICT 而不是 CASCADE ——
+        # 任务引用了某版本方案/SOP 之后，删除该素材必须显式先解绑任务，
+        # 否则会静默丢掉"这个任务当初按什么方案采集"的历史事实。
+        ForeignKeyConstraint(
+            ["project_id", "plan_id"],
+            ["collection_plans.project_id", "collection_plans.id"],
+            name="fk_collection_tasks_project_plan",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "sop_id"],
+            ["collection_sops.project_id", "collection_sops.id"],
+            name="fk_collection_tasks_project_sop",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "scenario_id"],
+            ["scenarios.project_id", "scenarios.id"],
+            name="fk_collection_tasks_project_scenario",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "action_spec_id"],
+            ["action_specs.project_id", "action_specs.id"],
+            name="fk_collection_tasks_project_action_spec",
             ondelete="RESTRICT",
         ),
         _enum_check("status", _TASK_STATUS_VALUES, "status_allowed"),

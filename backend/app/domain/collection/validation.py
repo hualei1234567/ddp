@@ -143,6 +143,41 @@ def frozen_mapping(value: object, field_name: str) -> Mapping[str, object]:
     return MappingProxyType(copied)
 
 
+def frozen_json_array(
+    value: object,
+    field_name: str,
+    *,
+    max_items: int,
+) -> tuple[object, ...]:
+    """校验 JSON 数组并冻结为元组（COL-002 的 ``steps`` / ``actions`` 用）。
+
+    与 :func:`frozen_mapping`` 共用同一套 JSON 值规则（深度、键数、字节数、
+    NaN 拒绝），只是顶层容器是数组。单独抽出来是因为"再写一遍深度/字节校验"
+    就成了第二份权威实现。
+    """
+    if value is None:
+        return ()
+    if isinstance(value, str) or not isinstance(value, list | tuple):
+        raise DomainValidationError(f"{field_name} 必须是数组")
+    if len(value) > max_items:
+        raise DomainValidationError(f"{field_name} 的条目数不得超过 {max_items} 个")
+    for item in value:
+        _validate_json_value(item, field_name, depth=0)
+    copied = tuple(_copy_json_value(item) for item in value)
+    try:
+        encoded = json.dumps(
+            copied,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+    except (TypeError, ValueError) as exc:
+        raise DomainValidationError(f"{field_name} 必须是合法 JSON 数组") from exc
+    if len(encoded.encode("utf-8")) > JSON_MAX_BYTES:
+        raise DomainValidationError(f"{field_name} 序列化后不得超过 {JSON_MAX_BYTES} 字节")
+    return copied
+
+
 def _validate_json_value(value: object, field_name: str, *, depth: int) -> int:
     if depth > JSON_MAX_DEPTH:
         raise DomainValidationError(f"{field_name} 的 JSON 嵌套深度不得超过 {JSON_MAX_DEPTH} 层")

@@ -33,6 +33,12 @@ from app.infrastructure.db.models.collection import (
     IdempotencyRecord,
     OutboxEvent,
 )
+from app.infrastructure.db.models.collection_assets import (
+    ActionSpecModel,
+    CollectionPlanModel,
+    CollectionSopModel,
+    ScenarioModel,
+)
 from app.infrastructure.db.models.dataset_policies import (
     DatasetDedupPolicyModel,
     DatasetLeakagePolicyModel,
@@ -104,8 +110,12 @@ __all__ = [
     "CalibrationProfile",
     "CalibrationRecord",
     "CalibrationTargetRef",
+    "ActionSpecModel",
     "CollectionBatch",
+    "CollectionPlanModel",
+    "CollectionSopModel",
     "CollectionTask",
+    "ScenarioModel",
     "CollectionTaskDevice",
     "CollectionTaskSensor",
     "DataLineageEdgeModel",
