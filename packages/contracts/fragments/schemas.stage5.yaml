@@ -493,6 +493,16 @@ EvaluationCreate:
       - string
       - 'null'
       format: uuid
+    cross_dataset_comparison:
+      type: boolean
+      default: false
+      description: |
+        跨数据集对比必须显式声明。未声明就比，等于让系统替用户假设「两个数据集
+        测的是同一件事」——而这个假设经常不成立，且失败方式是静默给出一个看起来
+        很确定的百分比。声明后仍会校验两侧模型的 `task_type` 一致；
+        取不到任务语义时按不可比拒绝（无法判定不等于可比）。
+        拒绝错误码：`evaluation_cross_dataset_not_declared` /
+        `evaluation_not_comparable`。
     metrics:
       type: object
       additionalProperties:
@@ -548,6 +558,15 @@ Evaluation:
       - string
       - 'null'
       format: uuid
+    baseline_dataset_version_id:
+      type:
+      - string
+      - 'null'
+      format: uuid
+      description: |
+        基线评测所用数据集版本的事实快照（刻意冗余：JOIN 基线行也能拿到，
+        但让客户端不必二次查询就能判断「这次对比跨不跨数据集」）。
+        与 `baseline_evaluation_id` 一致地受不可变守卫保护。
     status:
       $ref: ../openapi.yaml#/components/schemas/EvaluationStatus
     metrics:
