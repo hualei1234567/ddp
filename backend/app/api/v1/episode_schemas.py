@@ -84,6 +84,19 @@ class EpisodeRevisionCreate(BaseModel):
     code: str = Field(min_length=1, max_length=64)
 
 
+class ReadinessBlockerOut(BaseModel):
+    """自动就绪被拒绝的一条原因。
+
+    用精确模型而不是 ``dict[str, object]``：否则契约里声明的 ``code`` /
+    ``message`` / ``detail`` 永远对不上实现形状，契约一致性检查只能把它们
+    当成"契约多出来的字段"，真正的字段漂移反而被噪声掩盖。
+    """
+
+    code: str
+    message: str
+    detail: dict[str, object]
+
+
 class EpisodeOut(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -119,7 +132,7 @@ class EpisodeOut(BaseModel):
     # 自动就绪被拒绝的原因（[{"code","message","detail"}]）。空数组 + PENDING
     # 表示尚未尝试自动就绪；非空表示尝试过且明确被拒。这是「为什么它还没就绪」
     # 的权威来源，客户端不需要自己推断。
-    readiness_blockers: list[dict[str, object]]
+    readiness_blockers: list[ReadinessBlockerOut]
     preview_refs: list[dict[str, object]]
     supersedes_id: UUID | None
     attempt: int
@@ -162,7 +175,10 @@ class EpisodeOut(BaseModel):
             calibration_snapshot=[dict(item) for item in episode.calibration_snapshot],
             manifest_key=episode.manifest_key,
             manifest_sha256=episode.manifest_sha256,
-            readiness_blockers=[item.as_dict() for item in episode.readiness_blockers],
+            readiness_blockers=[
+                ReadinessBlockerOut.model_validate(item.as_dict())
+                for item in episode.readiness_blockers
+            ],
             preview_refs=[dict(item) for item in episode.preview_refs],
             supersedes_id=episode.supersedes_id,
             attempt=episode.attempt,

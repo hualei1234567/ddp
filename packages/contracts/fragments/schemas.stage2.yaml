@@ -443,7 +443,7 @@ CalibrationSnapshotItem:
     schema_version: {type: string, minLength: 1, maxLength: 64}
 Episode:
   type: object
-  required: [episode_id, project_id, episode_lineage_id, episode_version, code, task_id, batch_id, robot_id, device_ids, sensor_ids, status, quality_status, annotation_status, success, failure_reason, scene_labels, language_instruction, start_time_ns, end_time_ns, duration_ns, time_base, canonical_schema_version, pipeline_id, pipeline_version, segmentation_rule_version, frame_count, calibration_snapshot, manifest_key, manifest_sha256, preview_refs, supersedes_id, attempt, max_attempts, version, created_at, updated_at, created_by, updated_by]
+  required: [episode_id, project_id, episode_lineage_id, episode_version, code, task_id, batch_id, robot_id, device_ids, sensor_ids, status, quality_status, annotation_status, success, failure_reason, readiness_blockers, scene_labels, language_instruction, start_time_ns, end_time_ns, duration_ns, time_base, canonical_schema_version, pipeline_id, pipeline_version, segmentation_rule_version, frame_count, calibration_snapshot, manifest_key, manifest_sha256, preview_refs, supersedes_id, attempt, max_attempts, version, created_at, updated_at, created_by, updated_by]
   additionalProperties: false
   properties:
     episode_id: {type: string, format: uuid}
@@ -461,6 +461,37 @@ Episode:
     annotation_status: {$ref: "#/EpisodeAnnotationStatus"}
     success: {type: [boolean, "null"]}
     failure_reason: {type: [string, "null"], maxLength: 2000}
+    readiness_blockers:
+      type: array
+      description: |
+        自动就绪被拒绝的原因；空数组表示「尚未尝试或被清除」，不是「没有阻塞」。
+
+        **刻意不复用 `failure_reason`**：后者被 `mark_failed` / `reject` /
+        `invalidate` 占用，混用会让正常流水线的 Episode 被失败统计误计，
+        且真实失败原因会覆盖就绪原因。
+
+        判不了绝不放行：`FRAME_COUNT_UNDETERMINED` 等分支表示「无法确定」，
+        而不是「自动通过了」。
+      items:
+        type: object
+        additionalProperties: false
+        required: [code, message, detail]
+        properties:
+          code:
+            type: string
+            enum:
+              - STREAMS_MISSING
+              - STREAM_INCOMPLETE
+              - STREAM_SNAPSHOT_MISMATCH
+              - TIME_BASE_INVALID
+              - TIME_SYNC_UNVERIFIED
+              - CALIBRATION_MISSING
+              - DURATION_UNKNOWN
+              - FRAME_RATE_UNKNOWN
+              - FRAME_RATE_INCONSISTENT
+              - FRAME_COUNT_UNDETERMINED
+          message: {type: string, minLength: 1, maxLength: 500}
+          detail: {type: object, additionalProperties: true}
     scene_labels: {type: array, items: {type: string, maxLength: 100}, uniqueItems: true}
     language_instruction: {type: [string, "null"], maxLength: 1000}
     start_time_ns: {type: integer}
