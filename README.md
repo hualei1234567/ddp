@@ -104,7 +104,7 @@ make check
 | N4 | 标注与质量中心 | VERIFIED |
 | N5 | 数据资产与 Dataset 生命周期 | VERIFIED |
 | N6 | 训练集成与模型评测 | VERIFIED |
-| N7 | 模型反馈闭环 | PARTIAL（ACTION/LABEL/MODALITY 三轴覆盖待补） |
+| N7 | 模型反馈闭环 | VERIFIED（五轴全部接入真实落点） |
 | N8 | 真实采集与设备集成 | PARTIAL（真实机器人设备格式未接入，`BLOCKED` 无硬件） |
 | N9 | 规模化运营与企业治理 | PARTIAL（多基地/供应商已做；经营治理与配额见报告） |
 
@@ -115,7 +115,7 @@ make check
 
 | 环境 | 状态 |
 |---|---|
-| 本地 docker compose 完整栈 | 可运行，迁移自动执行到 `0043` |
+| 本地 docker compose 完整栈 | 可运行，迁移自动执行到 `0049`；Web 在 `:8088`（`DDP_WEB_PORT` 可改） |
 | staging | `BLOCKED`：目标主机名在本机无解析记录，需提供主机地址或 SSH 别名 |
 
 ## 许可证
