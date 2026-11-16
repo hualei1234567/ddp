@@ -1,7 +1,7 @@
 """evaluations.baseline_dataset_version_id —— 跨数据集基线对比的可追溯信息
 
-Revision ID: 0041
-Revises: 0040
+Revision ID: 0043
+Revises: 0042
 Create Date: 2026-11-16
 
 背景（N6 剩余能力）
@@ -105,12 +105,12 @@ from app.infrastructure.db.modelops_guards import (
     install_modelops_guards,
 )
 
-revision = "0041"
-down_revision = "0040"
+revision = "0043"
+down_revision = "0042"
 branch_labels = None
 depends_on = None
 
-logger = logging.getLogger("ddp.migration.0041")
+logger = logging.getLogger("ddp.migration.0043")
 
 _TABLE = "evaluations"
 _COLUMN = "baseline_dataset_version_id"
@@ -171,7 +171,7 @@ def _backfill_baseline_dataset_version() -> None:
       NULL。保留 ID 而新列为 NULL 会违反配对 CHECK，而"引用一个查不到的评测"
       本来就不是可用事实；置 NULL 后该评测变成"无基线"，比留一个半截引用可
       解释。被清理的行 ID 通过 ``logging`` 输出到 alembic 运行日志
-      （``ddp.migration.0041``），可审计、可追认，不是静默吞数据；
+      （``ddp.migration.0043``），可审计、可追认，不是静默吞数据；
     - 本迁移**不**校验基线可追溯到的历史评测是否真的满足新的可比性规则。
       可比性只在**新建**评测时校验；历史数据按当时规则创建，不做追溯改判。
 

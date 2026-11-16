@@ -144,7 +144,7 @@ class EvaluationRow(Base):
     )
     dataset_version_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     baseline_evaluation_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
-    # 基线评测所用数据集版本的快照（迁移 0041）。跨数据集对比放开后，
+    # 基线评测所用数据集版本的快照（迁移 0043）。跨数据集对比放开后，
     # 只看 ``baseline_evaluation_id`` 无法回答"基线是哪个数据集版本"——
     # 同数据集版本时该值等于 ``dataset_version_id``。
     baseline_dataset_version_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)

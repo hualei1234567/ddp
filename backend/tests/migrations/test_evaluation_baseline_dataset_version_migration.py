@@ -1,9 +1,9 @@
-"""迁移 0041：evaluations.baseline_dataset_version_id 的升级/回滚。
+"""迁移 0043：evaluations.baseline_dataset_version_id 的升级/回滚。
 
 本文件要证明的不是"列加上了"，而是三件在真实环境里会要命的事：
 
 1. **全新库与存量库两条路径都通过**。0021 用活的 ORM 表建 ``evaluations``，
-   给 ORM 加列后全新库会自动带出该列——若 0041 无条件 ``add_column``，
+   给 ORM 加列后全新库会自动带出该列——若 0043 无条件 ``add_column``，
    全新库升级直接 ``duplicate column``；
 2. **回填真的做了**。存量库里必然有「有基线」的评测（该列从 0021 起就能写），
    不回填就会在加配对 CHECK 时因约束违反让升级失败；
@@ -254,7 +254,7 @@ def _seed_project_model_chain(connection: object, ids: dict) -> None:
     )
 
 
-def _downgrade_table_to_pre_0041_shape(db_path: Path) -> None:
+def _downgrade_table_to_pre_0043_shape(db_path: Path) -> None:
     """把 evaluations 还原成 0021 当时的形状：没有新列，也没有配对 CHECK。
 
     当前 ORM 已含新列，因此 ``0021`` 在全新库上会自动建出它们；要模拟
@@ -293,7 +293,7 @@ def _downgrade_table_to_pre_0041_shape(db_path: Path) -> None:
 
 
 def test_fresh_database_upgrades_with_column_check_and_guards(tmp_path: Path) -> None:
-    """全新库：0021 已按 ORM 建出列与 CHECK，0041 必须是空操作。"""
+    """全新库：0021 已按 ORM 建出列与 CHECK，0043 必须是空操作。"""
     db_path = tmp_path / "fresh.db"
     command.upgrade(_config(db_path), "head")
 
@@ -308,7 +308,7 @@ def test_existing_database_gains_column_and_backfills_baseline(tmp_path: Path) -
     db_path = tmp_path / "legacy.db"
     config = _config(db_path)
     command.upgrade(config, "0040")
-    _downgrade_table_to_pre_0041_shape(db_path)
+    _downgrade_table_to_pre_0043_shape(db_path)
 
     ids = _seed_evaluation_rows(db_path, with_baseline=True)
     command.upgrade(config, "head")
@@ -339,7 +339,7 @@ def test_backfill_works_for_already_succeeded_evaluations(tmp_path: Path) -> Non
     db_path = tmp_path / "succeeded.db"
     config = _config(db_path)
     command.upgrade(config, "0040")
-    _downgrade_table_to_pre_0041_shape(db_path)
+    _downgrade_table_to_pre_0043_shape(db_path)
 
     ids = _seed_evaluation_rows(db_path, with_baseline=True, status="SUCCEEDED")
     command.upgrade(config, "head")
@@ -360,12 +360,12 @@ def test_dangling_baseline_is_cleared_with_audit_trail(tmp_path: Path) -> None:
 
     这列从 0021 起就允许写任意 UUID，真实库里完全可能有指向已不存在评测的
     基线。给这种行加"成对"CHECK 会失败；保留 ID 而新列为 NULL 也违反 CHECK。
-    因此清空并输出到 ``ddp.migration.0041`` 日志，可审计、可追认。
+    因此清空并输出到 ``ddp.migration.0043`` 日志，可审计、可追认。
     """
     db_path = tmp_path / "dangling.db"
     config = _config(db_path)
     command.upgrade(config, "0040")
-    _downgrade_table_to_pre_0041_shape(db_path)
+    _downgrade_table_to_pre_0043_shape(db_path)
 
     ids = _seed_evaluation_rows(db_path, with_baseline=False)
     # 手工写一个指向不存在评测的基线（旧代码允许这么写）。
@@ -387,7 +387,7 @@ def test_dangling_baseline_is_cleared_with_audit_trail(tmp_path: Path) -> None:
         def emit(self, record: logging.LogRecord) -> None:
             records.append(record)
 
-    target = logging.getLogger("ddp.migration.0041")
+    target = logging.getLogger("ddp.migration.0043")
     collector = _Collector(level=logging.WARNING)
     target.addHandler(collector)
     try:

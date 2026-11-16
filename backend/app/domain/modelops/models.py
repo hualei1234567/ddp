@@ -255,7 +255,7 @@ class Evaluation:
     # 这是**刻意的冗余**（基线行的 ``dataset_version_id`` 已受不可变守卫保护，
     # 理论上可回查）：冗余换来字段自足与契约可直接表达。代价是可能不一致，
     # 因此用下面的成对校验排除"只有一半"的写入；而"两值不同"是合法的
-    # ——跨数据集对比正是本字段存在的意义。详见迁移 0041 的模块文档。
+    # ——跨数据集对比正是本字段存在的意义。详见迁移 0043 的模块文档。
     # 同数据集版本时与 ``dataset_version_id`` 相等，不引入第二套语义。
     baseline_dataset_version_id: UUID | None = None
     metrics: dict[str, float] | None = None

@@ -152,8 +152,8 @@ _IMMUTABLE_WHEN = {
             "model_version_id",
             # 基线与基线数据集版本决定"这条评测是跟谁比出来的"，评测成功后改它
             # 等于篡改结论口径。此前遗漏了两者（与 0038 漏登记 requirement_match
-            # 同类）。新列随迁移 0041 加入，但这里必须先按实际列过滤再生成 SQL——
-            # 0041 在 SQLite 上要重建 evaluations 表，若触发器正文引用了尚未
+            # 同类）。新列随迁移 0043 加入，但这里必须先按实际列过滤再生成 SQL——
+            # 0043 在 SQLite 上要重建 evaluations 表，若触发器正文引用了尚未
             # 建出的列，重建会失败（见 training_guards 的同款处理）。
             "baseline_evaluation_id",
             "baseline_dataset_version_id",
@@ -206,11 +206,11 @@ def _active_columns(
 ) -> tuple[str, ...]:
     """只保留该表**当前实际存在**的列。
 
-    ``_IMMUTABLE_WHEN`` 是源码常量，而迁移可能在它之后才给表加列（例如 0041
+    ``_IMMUTABLE_WHEN`` 是源码常量，而迁移可能在它之后才给表加列（例如 0043
     加 ``baseline_dataset_version_id``）。若触发器正文引用了尚未建出的列：
 
     - SQLite 在重建该表（``batch_alter_table``）时解析触发器会失败；
-    - 更隐蔽的是**回滚**：迁移 0041 的 downgrade 会重装守卫，此时列已被删掉，
+    - 更隐蔽的是**回滚**：迁移 0043 的 downgrade 会重装守卫，此时列已被删掉，
       触发器正文引用它同样让整条回滚失败。
 
     因此按实际结构生成 SQL，与 ``training_guards._immutable_sqlite`` 同一做法。
