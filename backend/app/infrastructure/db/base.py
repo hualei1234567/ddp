@@ -53,7 +53,7 @@ def _install_ddp_guards(
     install_calibration_profile_guards(connection)
     install_audit_guards(connection)
     install_collection_state_guards(connection)
-    # 素材四表守卫依赖表已建：create_all 与迁移 0041 装的是同一份 DDL。
+    # 素材四表守卫依赖表已建：create_all 与迁移 0042 装的是同一份 DDL。
     install_asset_state_guards(connection)
     install_ingestion_state_guards(connection)
     install_episode_state_guards(connection)

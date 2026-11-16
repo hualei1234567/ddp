@@ -27,6 +27,7 @@ from app.api.v1 import (
     inference_routes,
     ingestion_jobs,
     lineage,
+    location_routes,
     model_adapter_routes,
     model_routes,
     platform,
@@ -48,6 +49,7 @@ api_router.include_router(calibration_profiles.router)
 api_router.include_router(calibrations.router)
 api_router.include_router(collection.router)
 api_router.include_router(collection_asset_routes.router)
+api_router.include_router(location_routes.router)
 api_router.include_router(uploads.router)
 api_router.include_router(ingestion_jobs.router)
 api_router.include_router(episodes.router)

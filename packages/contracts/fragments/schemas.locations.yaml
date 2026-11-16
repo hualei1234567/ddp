@@ -1,0 +1,58 @@
+# 阶段 9（N9）场地 schema 片段。
+#
+# 与 backend/app/api/v1/location_schemas.py 一一对应；长度上限取自
+# app/domain/locations/validation.py（唯一权威实现），不在此另立数字。
+
+LocationKind:
+  type: string
+  enum: [SITE, ROOM, LAB]
+  description: 场地的物理层级。`SITE` 为一个独立基地/园区。
+
+Location:
+  type: object
+  required: [location_id, project_id, code, name, kind, version, created_at, created_by, updated_at, updated_by, address, notes]
+  properties:
+    location_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    code: { type: string, minLength: 1, maxLength: 64 }
+    name: { type: string, minLength: 1, maxLength: 200 }
+    kind: { $ref: "../openapi.yaml#/components/schemas/LocationKind" }
+    address: { type: [string, "null"], maxLength: 500 }
+    notes: { type: [string, "null"], maxLength: 2000 }
+    version: { type: integer, minimum: 1 }
+    created_at: { type: [string, "null"], format: date-time }
+    updated_at: { type: [string, "null"], format: date-time }
+    created_by: { type: [string, "null"], format: uuid }
+    updated_by: { type: [string, "null"], format: uuid }
+
+LocationCreate:
+  type: object
+  additionalProperties: false
+  required: [code, name]
+  properties:
+    code: { type: string, minLength: 1, maxLength: 64 }
+    name: { type: string, minLength: 1, maxLength: 200 }
+    kind: { $ref: "../openapi.yaml#/components/schemas/LocationKind" }
+    address: { type: [string, "null"], maxLength: 500 }
+    notes: { type: [string, "null"], maxLength: 2000 }
+
+LocationPatch:
+  type: object
+  additionalProperties: false
+  description: |
+    `code` 不可改。只有显式提交的字段会被修改；显式 `null` 仅对
+    `address` / `notes` 生效（清空）。`name` / `kind` 传 `null` 返回 422。
+  properties:
+    name: { type: string, minLength: 1, maxLength: 200 }
+    kind: { $ref: "../openapi.yaml#/components/schemas/LocationKind" }
+    address: { type: [string, "null"], maxLength: 500 }
+    notes: { type: [string, "null"], maxLength: 2000 }
+
+LocationPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/Location" }
+    next_cursor: { type: [string, "null"] }

@@ -667,6 +667,11 @@ paths:
   # --- N5 DatasetVersion 血缘 ---
   /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/lineage:
     $ref: "./fragments/paths.stage8.yaml#/datasetVersionLineage"
+  # --- N9 多基地 / 场地 ---
+  /api/v1/projects/{project_id}/locations:
+    $ref: "./fragments/paths.stage9.yaml#/locations"
+  /api/v1/projects/{project_id}/locations/{location_id}:
+    $ref: "./fragments/paths.stage9.yaml#/locationDetail"
 components:
   securitySchemes:
     bearerAuth:
@@ -779,6 +784,11 @@ components:
     ActionSpecId: {$ref: "./fragments/components.stage8.yaml#/parameters/ActionSpecId"}
     AiSuggestionId: {$ref: "./fragments/components.stage8.yaml#/parameters/AiSuggestionId"}
     CollectionAssetAction: {$ref: "./fragments/components.stage8.yaml#/parameters/CollectionAssetAction"}
+    LocationId:
+      name: location_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   responses:
     Unauthorized: {$ref: "./fragments/components.yaml#/responses/Unauthorized"}
     Forbidden: {$ref: "./fragments/components.yaml#/responses/Forbidden"}
@@ -1122,6 +1132,11 @@ components:
     ScenarioPatch: {$ref: "./fragments/schemas.stage8.yaml#/ScenarioPatch"}
     ActionSpecPatch: {$ref: "./fragments/schemas.stage8.yaml#/ActionSpecPatch"}
     CollectionAssetActionRequest: {$ref: "./fragments/schemas.stage8.yaml#/CollectionAssetActionRequest"}
+    LocationKind: {$ref: "./fragments/schemas.locations.yaml#/LocationKind"}
+    Location: {$ref: "./fragments/schemas.locations.yaml#/Location"}
+    LocationCreate: {$ref: "./fragments/schemas.locations.yaml#/LocationCreate"}
+    LocationPatch: {$ref: "./fragments/schemas.locations.yaml#/LocationPatch"}
+    LocationPage: {$ref: "./fragments/schemas.locations.yaml#/LocationPage"}
     QualityFinding: {$ref: "./fragments/schemas.stage9.yaml#/QualityFinding"}
     QualityCheckRun: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRun"}
     QualityCheckRunPage: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRunPage"}

@@ -123,6 +123,7 @@ _EVENT_DOMAINS = frozenset(
         "device",
         "ingestion",
         "leakage_policy",
+        "location",
         "modelops",
         "quality_policy",
         "robot",
