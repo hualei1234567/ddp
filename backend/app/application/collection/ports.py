@@ -131,7 +131,13 @@ class OutboxRepository(Protocol):
 
 
 class CollectionPlanRepository(Protocol):
-    """采集方案仓储；按 ID 查询必须带项目过滤，跨项目一律返回 ``None``。"""
+    """采集方案仓储；按 ID 查询必须带项目过滤，跨项目一律返回 ``None``。
+
+    ``save_update`` / ``delete_draft`` 是 N8 新增的写路径（U 与 D）。
+    ``save_update`` 接收**已带新内容的实体**与 ``expected_version``，
+    由仓储用 ``WHERE version = expected_version`` 做乐观锁；
+    未命中时区分 404（行不存在）与 409（版本冲突）。
+    """
 
     def add(self, scope: ProjectScope, plan: CollectionPlan) -> CollectionPlan: ...
 
@@ -153,6 +159,16 @@ class CollectionPlanRepository(Protocol):
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[CollectionPlan]: ...
+
+    def save_update(
+        self,
+        scope: ProjectScope,
+        plan: CollectionPlan,
+        *,
+        expected_version: int,
+    ) -> CollectionPlan: ...
+
+    def delete_draft(self, scope: ProjectScope, plan_id: UUID) -> None: ...
 
 
 class CollectionSopRepository(Protocol):
@@ -177,6 +193,16 @@ class CollectionSopRepository(Protocol):
         limit: int = 20,
     ) -> list[CollectionSop]: ...
 
+    def save_update(
+        self,
+        scope: ProjectScope,
+        sop: CollectionSop,
+        *,
+        expected_version: int,
+    ) -> CollectionSop: ...
+
+    def delete_draft(self, scope: ProjectScope, sop_id: UUID) -> None: ...
+
 
 class ScenarioRepository(Protocol):
     def add(self, scope: ProjectScope, scenario: Scenario) -> Scenario: ...
@@ -193,6 +219,16 @@ class ScenarioRepository(Protocol):
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Scenario]: ...
+
+    def save_update(
+        self,
+        scope: ProjectScope,
+        scenario: Scenario,
+        *,
+        expected_version: int,
+    ) -> Scenario: ...
+
+    def delete_draft(self, scope: ProjectScope, scenario_id: UUID) -> None: ...
 
 
 class ActionSpecRepository(Protocol):
@@ -216,6 +252,16 @@ class ActionSpecRepository(Protocol):
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[ActionSpec]: ...
+
+    def save_update(
+        self,
+        scope: ProjectScope,
+        spec: ActionSpec,
+        *,
+        expected_version: int,
+    ) -> ActionSpec: ...
+
+    def delete_draft(self, scope: ProjectScope, spec_id: UUID) -> None: ...
 
 
 class CollectionAssetDirectory(Protocol):

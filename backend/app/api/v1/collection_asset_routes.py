@@ -1,10 +1,15 @@
-"""采集素材 HTTP 路由：采集方案 / SOP / 场景 / 动作库（COL-002）。
+"""采集素材 HTTP 路由：采集方案 / SOP / 场景 / 动作库（COL-002 + N8）。
 
-路由只做协议适配（路径、请求体、Idempotency-Key），业务规则在
-``app/application/collection/assets.py``；项目隔离与权限由服务端依赖强制。
+路由只做协议适配（路径、请求体、If-Match、Idempotency-Key），业务规则在
+``app/application/collection/assets.py`` 与 ``_asset_mutations.py``；
+项目隔离与权限由服务端依赖强制。
 
-四条路径形状一致（``POST`` 创建 + ``GET`` 列表 + ``GET`` 详情），所以共享
-同一组类型别名，不在每个函数里重复声明依赖。
+本文件只保留读路径与创建（COL-002）。N8 的写路径（PATCH / 状态动作 / DELETE）
+在 ``collection_asset_write_routes.py``：12 个写端点全部塞进来会让本文件越过
+500 行评审阈值，而写路径又共享同一组协议约束（``If-Match`` /
+``Idempotency-Key`` / ``DeleteScope``），按"读+创建 / 写"切分最自然。
+
+两个模块共用同一个 ``router`` 实例，因此路径前缀与 OpenAPI tag 不会分叉。
 """
 
 from __future__ import annotations
@@ -25,6 +30,7 @@ from app.api.v1.collection_asset_schemas import (
     ScenarioCreate,
     ScenarioOut,
 )
+from app.api.v1.collection_asset_write_routes import router as write_router
 from app.api.v1.collection_dependencies import CollectionUseCasesDep
 from app.api.v1.schemas import PageOut
 from app.application.collection import (
@@ -244,6 +250,10 @@ def get_action_spec(
     use_cases: CollectionUseCasesDep,
 ) -> ActionSpecOut:
     return ActionSpecOut.from_domain(use_cases.action_specs.get(scope, spec_id))
+
+
+# 写路径端点挂到同一个 router 上，保证前缀与 tag 一致。
+router.include_router(write_router)
 
 
 def _request_id(request: Request) -> str | None:

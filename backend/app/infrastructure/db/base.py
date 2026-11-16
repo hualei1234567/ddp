@@ -11,6 +11,7 @@ from app.infrastructure.db.annotation_quality_guards import install_quality_guar
 from app.infrastructure.db.annotation_result_guards import install_result_guards
 from app.infrastructure.db.annotation_work_guards import install_work_guards
 from app.infrastructure.db.collection_guards import (
+    install_asset_state_guards,
     install_audit_guards,
     install_collection_state_guards,
 )
@@ -52,6 +53,8 @@ def _install_ddp_guards(
     install_calibration_profile_guards(connection)
     install_audit_guards(connection)
     install_collection_state_guards(connection)
+    # 素材四表守卫依赖表已建：create_all 与迁移 0041 装的是同一份 DDL。
+    install_asset_state_guards(connection)
     install_ingestion_state_guards(connection)
     install_episode_state_guards(connection)
     install_catalog_guards(connection)

@@ -1,4 +1,4 @@
-"""采集素材 SQLAlchemy 仓储：方案 / SOP / 场景 / 动作库（COL-002）。
+"""采集素材 SQLAlchemy 仓储：方案 / SOP / 场景 / 动作库（COL-002 + N8）。
 
 四张表的读写形状同构，字段映射用模块级小函数复用；不复用基类：
 SQLAlchemy 模型类型不同，硬套泛型会让 pytest / mypy 都读不出真实字段，
@@ -7,12 +7,16 @@ SQLAlchemy 模型类型不同，硬套泛型会让 pytest / mypy 都读不出真
 所有查询强制 ``project_id`` 过滤（``scoped_select``），按 ID 取单条也带项目条件——
 跨项目资源返回 ``None``，由用例统一映射为 404，不泄漏"该 ID 在别的项目存在"。
 
-素材本阶段没有更新/删除路径，因此不实现 ``save``：少一个入口就少一处
-乐观锁与审计漏写的机会。将来加 PATCH 时再补，并按任务/批次的既有范式处理。
+N8 补齐 ``save_update`` / ``delete_draft`` 两个写入口（CRUD 的 U 与 D）。
+两者的**规则公共部分**（乐观锁、删除前置判定）在
+:mod:`app.infrastructure.repositories._collection_asset_write` 里只有一份实现，
+本文件只负责"哪类素材用哪个 Model / id 列 / 可改字段"。四段直白代码比硬套泛型
+更容易核对，而真正会写出变体的是规则、不是字段映射，所以按这个粒度拆分。
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -27,11 +31,16 @@ from app.domain.collection.assets import (
 )
 from app.domain.collection.errors import DomainValidationError
 from app.domain.identity.models import ProjectScope
+from app.infrastructure.db.models.collection import CollectionTask
 from app.infrastructure.db.models.collection_assets import (
     ActionSpecModel,
     CollectionPlanModel,
     CollectionSopModel,
     ScenarioModel,
+)
+from app.infrastructure.repositories._collection_asset_write import (
+    delete_asset_draft,
+    save_asset_update,
 )
 from app.infrastructure.repositories._collection_sql import (
     as_utc,
@@ -100,6 +109,42 @@ class SqlCollectionPlanRepository:
             )
         )
         return None if row is None else _plan(row)
+
+    def save_update(
+        self,
+        scope: ProjectScope,
+        plan: CollectionPlan,
+        *,
+        expected_version: int,
+    ) -> CollectionPlan:
+        scope.ensure(plan.project_id)
+        # ``code`` / ``plan_version`` 不在可改字段里，故不传给仓储——
+        # 显式省略比"写了同样的值"更能表达"这两个字段不可变"。
+        save_asset_update(
+            self._session,
+            scope,
+            model=CollectionPlanModel,
+            asset_id=plan.plan_id,
+            values={
+                "name": plan.name,
+                "description": plan.description,
+                "owner_id": plan.owner_id,
+                "status": enum_value(plan.status),
+            },
+            expected_version=expected_version,
+            resource_name="采集方案",
+        )
+        return replace(plan, version=expected_version + 1, updated_by=scope.actor_id)
+
+    def delete_draft(self, scope: ProjectScope, plan_id: UUID) -> None:
+        delete_asset_draft(
+            self._session,
+            scope,
+            model=CollectionPlanModel,
+            asset_id=plan_id,
+            task_column=CollectionTask.plan_id,
+            resource_name="采集方案",
+        )
 
     def list(
         self,
@@ -171,6 +216,41 @@ class SqlCollectionSopRepository:
         )
         return None if row is None else _sop(row)
 
+    def save_update(
+        self,
+        scope: ProjectScope,
+        sop: CollectionSop,
+        *,
+        expected_version: int,
+    ) -> CollectionSop:
+        scope.ensure(sop.project_id)
+        # ``code`` / ``sop_version`` / ``steps`` 不在可改字段里：
+        # 前两者是业务标识与版本快照锚点，后者是任务执行内容。
+        save_asset_update(
+            self._session,
+            scope,
+            model=CollectionSopModel,
+            asset_id=sop.sop_id,
+            values={
+                "name": sop.name,
+                "description": sop.description,
+                "status": enum_value(sop.status),
+            },
+            expected_version=expected_version,
+            resource_name="SOP",
+        )
+        return replace(sop, version=expected_version + 1, updated_by=scope.actor_id)
+
+    def delete_draft(self, scope: ProjectScope, sop_id: UUID) -> None:
+        delete_asset_draft(
+            self._session,
+            scope,
+            model=CollectionSopModel,
+            asset_id=sop_id,
+            task_column=CollectionTask.sop_id,
+            resource_name="SOP",
+        )
+
     def list(
         self,
         scope: ProjectScope,
@@ -232,6 +312,42 @@ class SqlScenarioRepository:
             )
         )
         return None if row is None else _scenario(row)
+
+    def save_update(
+        self,
+        scope: ProjectScope,
+        scenario: Scenario,
+        *,
+        expected_version: int,
+    ) -> Scenario:
+        scope.ensure(scenario.project_id)
+        # ``code`` 不可改（业务标识）；``scene_labels`` 可改——
+        # 场景不版本化，标签只参与检索（见 asset_lifecycle 的论证）。
+        save_asset_update(
+            self._session,
+            scope,
+            model=ScenarioModel,
+            asset_id=scenario.scenario_id,
+            values={
+                "name": scenario.name,
+                "scene_labels": list(scenario.scene_labels),
+                "description": scenario.description,
+                "status": enum_value(scenario.status),
+            },
+            expected_version=expected_version,
+            resource_name="采集场景",
+        )
+        return replace(scenario, version=expected_version + 1, updated_by=scope.actor_id)
+
+    def delete_draft(self, scope: ProjectScope, scenario_id: UUID) -> None:
+        delete_asset_draft(
+            self._session,
+            scope,
+            model=ScenarioModel,
+            asset_id=scenario_id,
+            task_column=CollectionTask.scenario_id,
+            resource_name="采集场景",
+        )
 
     def list(
         self,
@@ -302,6 +418,41 @@ class SqlActionSpecRepository:
             )
         )
         return None if row is None else _action_spec(row)
+
+    def save_update(
+        self,
+        scope: ProjectScope,
+        spec: ActionSpec,
+        *,
+        expected_version: int,
+    ) -> ActionSpec:
+        scope.ensure(spec.project_id)
+        # ``code`` / ``spec_version`` / ``actions`` 不在可改字段里，
+        # 理由与 SOP 的 ``steps`` 相同：执行内容只能新增版本行。
+        save_asset_update(
+            self._session,
+            scope,
+            model=ActionSpecModel,
+            asset_id=spec.action_spec_id,
+            values={
+                "name": spec.name,
+                "description": spec.description,
+                "status": enum_value(spec.status),
+            },
+            expected_version=expected_version,
+            resource_name="动作库",
+        )
+        return replace(spec, version=expected_version + 1, updated_by=scope.actor_id)
+
+    def delete_draft(self, scope: ProjectScope, spec_id: UUID) -> None:
+        delete_asset_draft(
+            self._session,
+            scope,
+            model=ActionSpecModel,
+            asset_id=spec_id,
+            task_column=CollectionTask.action_spec_id,
+            resource_name="动作库",
+        )
 
     def list(
         self,

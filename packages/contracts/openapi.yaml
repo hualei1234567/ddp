@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.8.0
+  version: 1.9.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -37,7 +37,8 @@ info:
       与 devices/sensors 对齐。
     - `1.8.0` 在 `1.7.0` 基础上**增量加入 N3–N9 阶段已实现端点**：
       采集素材四实体（collection-plans / collection-sops / scenarios / action-specs，
-      各「创建 / 列表 / 详情」——本批无更新与删除路径，状态恒为 DRAFT）；
+      各「创建 / 列表 / 详情」——本批无更新与删除路径，状态恒为 DRAFT；
+      **该限制已在 `1.9.0` 解除**）；
       标注质量检查（`annotation-submissions/{id}/quality-checks`）与 AI 预标注建议
       （`annotation-submissions/{id}/ai-suggestions`、`annotation-ai-suggestions/{id}/confirm`）；
       DatasetVersion 血缘（复用既有 `LineageResponse` 形状）。
@@ -51,6 +52,16 @@ info:
       且自动检查失败不得否决提交。以及 AI 建议采纳统计
       `GET .../ai-suggestions/agreement`（按模型版本聚合采纳/修订/待处理，
       采纳率分母为已决定条数，无样本时为 null 而非 0）。
+    - `1.9.0` 在 `1.8.0` 基础上**增量补齐采集素材的写路径**：四类素材各新增
+      「更新（PATCH）」与「状态迁移（POST .../actions/{action}）」与「删除（DELETE）」，
+      共 12 个操作。状态机 `DRAFT --activate--> ACTIVE --archive--> ARCHIVED` 由此
+      完整可达（`ARCHIVED` 为终态，无出边）；`1.8.0` 中「状态恒为 DRAFT」的限制解除。
+      字段可变性由 `backend/app/domain/collection/asset_lifecycle.py` 唯一裁决：
+      描述性字段（`name` / `description` / `scene_labels`）在 `DRAFT` / `ACTIVE` 可改，
+      `ARCHIVED` 一律不可改；执行内容字段（`CollectionSop.steps` /
+      `ActionSpec.actions`）任何状态都不开放原地修改——内容变更必须新增版本行，
+      否则任务冻结的版本快照会与行内容脱节。全部为增量：无路径删除、无字段删除、
+      无必填性收紧。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -68,7 +79,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.8.0
+  version: 1.9.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -619,23 +630,31 @@ paths:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportReviewDecisions"
   /api/v1/projects/{project_id}/media-assets/{asset_id}/playback:
     $ref: "./fragments/paths.stage7.yaml#/mediaAssetPlayback"
-  # --- N8 采集素材（四类实体，本批只有创建/列表/详情）---
+  # --- N8 采集素材（四类实体：创建/列表/详情/更新/状态迁移/删除）---
   /api/v1/projects/{project_id}/collection-plans:
     $ref: "./fragments/paths.stage8.yaml#/collectionPlans"
   /api/v1/projects/{project_id}/collection-plans/{plan_id}:
     $ref: "./fragments/paths.stage8.yaml#/collectionPlanDetail"
+  /api/v1/projects/{project_id}/collection-plans/{plan_id}/actions/{action}:
+    $ref: "./fragments/paths.stage8.yaml#/collectionPlanActions"
   /api/v1/projects/{project_id}/collection-sops:
     $ref: "./fragments/paths.stage8.yaml#/collectionSops"
   /api/v1/projects/{project_id}/collection-sops/{sop_id}:
     $ref: "./fragments/paths.stage8.yaml#/collectionSopDetail"
+  /api/v1/projects/{project_id}/collection-sops/{sop_id}/actions/{action}:
+    $ref: "./fragments/paths.stage8.yaml#/collectionSopActions"
   /api/v1/projects/{project_id}/scenarios:
     $ref: "./fragments/paths.stage8.yaml#/scenarios"
   /api/v1/projects/{project_id}/scenarios/{scenario_id}:
     $ref: "./fragments/paths.stage8.yaml#/scenarioDetail"
+  /api/v1/projects/{project_id}/scenarios/{scenario_id}/actions/{action}:
+    $ref: "./fragments/paths.stage8.yaml#/scenarioActions"
   /api/v1/projects/{project_id}/action-specs:
     $ref: "./fragments/paths.stage8.yaml#/actionSpecs"
   /api/v1/projects/{project_id}/action-specs/{spec_id}:
     $ref: "./fragments/paths.stage8.yaml#/actionSpecDetail"
+  /api/v1/projects/{project_id}/action-specs/{spec_id}/actions/{action}:
+    $ref: "./fragments/paths.stage8.yaml#/actionSpecActions"
   # --- N4 标注质量检查与 AI 预标注建议 ---
   /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/quality-checks:
     $ref: "./fragments/paths.stage8.yaml#/submissionQualityChecks"
@@ -759,6 +778,7 @@ components:
     ScenarioId: {$ref: "./fragments/components.stage8.yaml#/parameters/ScenarioId"}
     ActionSpecId: {$ref: "./fragments/components.stage8.yaml#/parameters/ActionSpecId"}
     AiSuggestionId: {$ref: "./fragments/components.stage8.yaml#/parameters/AiSuggestionId"}
+    CollectionAssetAction: {$ref: "./fragments/components.stage8.yaml#/parameters/CollectionAssetAction"}
   responses:
     Unauthorized: {$ref: "./fragments/components.yaml#/responses/Unauthorized"}
     Forbidden: {$ref: "./fragments/components.yaml#/responses/Forbidden"}
@@ -1097,6 +1117,11 @@ components:
     ActionSpec: {$ref: "./fragments/schemas.stage8.yaml#/ActionSpec"}
     ActionSpecCreate: {$ref: "./fragments/schemas.stage8.yaml#/ActionSpecCreate"}
     ActionSpecPage: {$ref: "./fragments/schemas.stage8.yaml#/ActionSpecPage"}
+    CollectionPlanPatch: {$ref: "./fragments/schemas.stage8.yaml#/CollectionPlanPatch"}
+    CollectionSopPatch: {$ref: "./fragments/schemas.stage8.yaml#/CollectionSopPatch"}
+    ScenarioPatch: {$ref: "./fragments/schemas.stage8.yaml#/ScenarioPatch"}
+    ActionSpecPatch: {$ref: "./fragments/schemas.stage8.yaml#/ActionSpecPatch"}
+    CollectionAssetActionRequest: {$ref: "./fragments/schemas.stage8.yaml#/CollectionAssetActionRequest"}
     QualityFinding: {$ref: "./fragments/schemas.stage9.yaml#/QualityFinding"}
     QualityCheckRun: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRun"}
     QualityCheckRunPage: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRunPage"}
