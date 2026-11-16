@@ -151,12 +151,29 @@ class DataSourceImportWorker:
                     "event_id": str(claimed.event_id),
                 }
 
+            # 系统执行身份必须是一个**真实存在**的 user：
+            # ``data_source_imports.updated_by`` / ``raw_assets.created_by`` 都
+            # 有 FK 到 ``users``。此前用 ``project_id`` 当 actor，任何一次状态
+            # 推进都会外键失败（与 ingestion_jobs Worker 修复前的缺陷同源：
+            # 表现为"任务反复重试却永不成功"）。取导入任务的创建人，语义也
+            # 成立——系统是代发起人执行其导入。
+            actor_id = _import_creator(session, import_id)
+            if actor_id is None:
+                queue.mark_dead_letter(
+                    claimed.event_id,
+                    attempts=claimed.attempts + 1,
+                    last_error=f"导入任务不存在或缺少创建人：{import_id}",
+                )
+                session.commit()
+                return {
+                    "status": ImportProcessingStatus.DEAD_LETTER.value,
+                    "event_id": str(claimed.event_id),
+                    "import_id": str(import_id),
+                }
+            scope = ProjectScope(claimed.project_id, actor_id=actor_id)
+
             try:
                 runner = build_runner(session, self._settings)
-                # Worker 用事件里的 project_id 构造作用域；actor 取项目自身，
-                # 因为这是系统行为而非某个用户的请求。
-                scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
-
                 outcome = runner.execute(
                     scope,
                     import_id,
@@ -200,9 +217,16 @@ class DataSourceImportWorker:
                 # 直到死信——一次网络抖动就永久丢掉这条导入。
                 released = False
                 try:
+                    # 回滚后重新解析身份：不能用上面的局部变量，事务内读到的
+                    # 值已随回滚失效。
+                    retry_actor = _import_creator(session, import_id)
                     runner = build_runner(session, self._settings)
-                    scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
-                    released = runner.release_for_retry(scope, import_id, moment=moment)
+                    if retry_actor is not None:
+                        released = runner.release_for_retry(
+                            ProjectScope(claimed.project_id, actor_id=retry_actor),
+                            import_id,
+                            moment=moment,
+                        )
                 except Exception:  # noqa: BLE001 - 退回失败不得掩盖原始异常
                     session.rollback()
                     logger.exception("导入任务退回重试失败", extra={"import_id": str(import_id)})
@@ -245,6 +269,21 @@ class DataSourceImportWorker:
             result = self.process_once()
             if result["status"] == ImportProcessingStatus.IDLE.value:
                 stop_event.wait(self._settings.validation_worker_poll_interval_seconds)
+
+
+def _import_creator(session: Session, import_id: UUID) -> UUID | None:
+    """导入任务的创建人，用作 Worker 的系统执行身份。
+
+    只暴露一个标量查询，不把 ``created_by`` 加进领域模型——Worker 需要的是
+    "以谁的名义写审计列"，不是业务字段。
+    """
+    from sqlalchemy import select
+
+    from app.infrastructure.db.models.datasources import DataSourceImportModel
+
+    return session.scalar(
+        select(DataSourceImportModel.created_by).where(DataSourceImportModel.id == import_id)
+    )
 
 
 def _import_already_terminal(session: Session, import_id: UUID) -> bool:
