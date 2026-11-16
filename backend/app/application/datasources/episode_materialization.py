@@ -43,6 +43,7 @@ from app.domain.datasources.errors import DomainValidationError
 from app.domain.datasources.media import MediaAsset
 from app.domain.episodes.errors import ConflictError as EpisodeConflictError
 from app.domain.episodes.models import Segmentation
+from app.domain.episodes.segmentation_rules import EPISODE_BOUNDARY_RULE_VERSION
 from app.domain.identity.models import ProjectScope
 
 # 导入链路的时间基准：数据集没有声明时钟与同步方式，如实填 DEGRADED + NONE。
@@ -57,7 +58,16 @@ IMPORT_TIME_BASE: Mapping[str, object] = {
 IMPORT_CANONICAL_SCHEMA_VERSION = "ddp.canonical/1.0.0-draft"
 IMPORT_PIPELINE_ID = "data_source_import"
 IMPORT_PIPELINE_VERSION = "1.0.0"
-IMPORT_SEGMENTATION_RULE_VERSION = "import-episode-key/1.0.0"
+# 复用 N3 的 episode-boundary 规则，不另立一套编号。
+#
+# 导入链路的边界并不是"我们切出来的"，而是解析器从 preview/metadata.jsonl
+# 的 example_id 分组读出来的——语义上正是 ``episode-boundary`` 的
+# ``boundary_source=PARSER``。此前这里写的是自定义版本号
+# ``import-episode-key/1.0.0``，该版本从未在注册表里登记，导入生成 Episode
+# 全线报 ``SegmentationRuleNotRegisteredError``。与其把没实现的自定义规则
+# 塞进注册表占位，不如如实复用它本来就在做的事。
+IMPORT_SEGMENTATION_RULE_VERSION = EPISODE_BOUNDARY_RULE_VERSION
+IMPORT_SEGMENTATION_BOUNDARY_SOURCE = "PARSER"
 
 _NS = 1_000_000_000
 
@@ -175,7 +185,12 @@ def _command_for(
             rule_version=IMPORT_SEGMENTATION_RULE_VERSION,
             start_time_ns=start_ns,
             end_time_ns=end_ns,
-            rule_parameters={"episode_key": episode_key},
+            # 只传该规则 schema 允许的字段：episode-boundary 是
+            # additionalProperties=False，多传会被参数校验拒绝。episode_key
+            # 已由 Episode 的 code 承载，不需要塞进规则参数。
+            rule_parameters={
+                "boundary_source": IMPORT_SEGMENTATION_BOUNDARY_SOURCE,
+            },
         ),
         time_base=dict(IMPORT_TIME_BASE),
         # 空快照：数据集本身不含标定信息，不伪造（详见模块文档）。
