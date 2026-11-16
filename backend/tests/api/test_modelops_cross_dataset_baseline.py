@@ -22,13 +22,15 @@ from app.core.config import Settings
 from tests.api.conftest import ApiIds, make_client
 from tests.api.dataset_support import url
 from tests.api.export_support import build_frozen_version
-from tests.api.test_modelops_api import (
-    FakeInspector,
-    _callback,
-    _create_model,
-    _ready_version,
-    _settings,
-)
+
+# 辅助函数已由 N7 作业抽到 modelops_support；这里直接复用，不再依赖另一个测试
+# 模块的内部名。只有 _callback 仍留在 test_modelops_api（它依赖该文件的签名头
+# 构造），单独导入。
+from tests.api.modelops_support import FakeInspector
+from tests.api.modelops_support import create_model as _create_model
+from tests.api.modelops_support import ready_version as _ready_version
+from tests.api.modelops_support import settings as _settings
+from tests.api.test_modelops_api import _callback
 
 # 与既有 modelops 用例同形的冻结数据集版本标识取法。
 THRESHOLDS = {"success_rate": {"min": 0.9}}
