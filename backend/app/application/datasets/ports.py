@@ -46,6 +46,7 @@ class DatasetRepository(Protocol):
         status: str | None = None,
         purpose: str | None = None,
         usage_policy: str | None = None,
+        tags: tuple[str, ...] = (),
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Dataset]: ...
@@ -210,6 +211,39 @@ class EpisodeCandidateDirectory(Protocol):
         scope: ProjectScope,
         filters: SelectionFilters,
     ) -> tuple[EpisodeCandidate, ...]: ...
+
+
+class LineageRecorder(Protocol):
+    """数据集域需要的**血缘登记能力**（只暴露写边，不暴露遍历）。
+
+    Episode → DatasetVersion 的 ``INCLUDED_IN`` 边在版本转 READY 时写入。
+    端口只声明两个动作，避免数据集域直接依赖 Episode 域的仓储实现：
+
+    - ``ensure_node``：登记节点投影，节点必须存在才能写边（复合外键兜底）；
+    - ``ensure_edge``：幂等追加一条边，已存在时不重复写。
+    """
+
+    def ensure_node(
+        self,
+        scope: ProjectScope,
+        *,
+        node_type: object,
+        node_id: UUID,
+        now: datetime,
+    ) -> None: ...
+
+    def ensure_edge(
+        self,
+        scope: ProjectScope,
+        *,
+        from_node_type: object,
+        from_node_id: UUID,
+        to_node_type: object,
+        to_node_id: UUID,
+        relation: object,
+        metadata: Mapping[str, object],
+        now: datetime,
+    ) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)

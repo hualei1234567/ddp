@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import ColumnElement, Select, and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -20,10 +20,16 @@ from app.domain.episodes.errors import (
     DomainValidationError,
     VersionConflictError,
 )
+from app.domain.episodes.filters import EpisodeListFilters
 from app.domain.episodes.models import Episode, EpisodeRawAsset
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.episodes import EpisodeModel, EpisodeRawAssetModel
+from app.infrastructure.db.models.ingestion import RawAssetModel
 from app.infrastructure.repositories._collection_sql import as_utc
+from app.infrastructure.repositories._json_array_predicates import (
+    json_array_any_of,
+    session_dialect,
+)
 
 _TERMINAL_FOR_OVERLAP = ("INVALIDATED", "REJECTED")
 
@@ -130,9 +136,15 @@ class SqlEpisodeRepository:
         status: EpisodeStatus | None = None,
         task_id: UUID | None = None,
         batch_id: UUID | None = None,
+        filters: EpisodeListFilters | None = None,
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Episode]:
+        """按游标分页列出 Episode；多维条件全部在 SQL 层下推。
+
+        过滤不能放到 Python 侧：一旦先按 ``limit`` 取回再筛，游标语义会失真
+        （返回 0 条却仍给出 next_cursor，或跳过本应命中的行）。
+        """
         if limit < 1 or limit > 101:
             raise DomainValidationError("limit 必须在 1 到 101 之间")
         statement = select(EpisodeModel).where(EpisodeModel.project_id == scope.project_id)
@@ -142,10 +154,90 @@ class SqlEpisodeRepository:
             statement = statement.where(EpisodeModel.task_id == task_id)
         if batch_id is not None:
             statement = statement.where(EpisodeModel.batch_id == batch_id)
+        if filters is not None:
+            statement = self._apply_filters(statement, filters)
         if after_id is not None:
             statement = statement.where(EpisodeModel.id > after_id)
         statement = statement.order_by(EpisodeModel.id).limit(limit)
         return [self._from_row(row) for row in self._session.scalars(statement)]
+
+    def _apply_filters(
+        self,
+        statement: Select[tuple[EpisodeModel]],
+        filters: EpisodeListFilters,
+    ) -> Select[tuple[EpisodeModel]]:
+        """把多维检索条件翻译成 WHERE 子句（不取数、不内存筛选）。"""
+        dialect = session_dialect(self._session)
+        if filters.quality_status is not None:
+            statement = statement.where(EpisodeModel.quality_status == filters.quality_status.value)
+        if filters.annotation_status is not None:
+            statement = statement.where(
+                EpisodeModel.annotation_status == filters.annotation_status.value
+            )
+        if filters.scene_labels:
+            statement = statement.where(
+                json_array_any_of(
+                    EpisodeModel.scene_labels,
+                    filters.scene_labels,
+                    dialect=dialect,
+                )
+            )
+        if filters.device_id is not None:
+            # device_ids 以 str(UUID) 存储，比较值必须同形。
+            statement = statement.where(
+                json_array_any_of(
+                    EpisodeModel.device_ids,
+                    (str(filters.device_id),),
+                    dialect=dialect,
+                )
+            )
+        if filters.robot_id is not None:
+            statement = statement.where(EpisodeModel.robot_id == filters.robot_id)
+        if filters.captured_from is not None or filters.captured_to is not None:
+            statement = statement.where(
+                self._captured_at_predicate(filters.captured_from, filters.captured_to)
+            )
+        return statement
+
+    def _captured_at_predicate(
+        self,
+        captured_from: datetime | None,
+        captured_to: datetime | None,
+    ) -> ColumnElement[bool]:
+        """捕获时间区间条件：取 Episode 关联资产 ``captured_at`` 的最早值判定。
+
+        用相关子查询表达，条件留在 SQL 里；无捕获时间的 Episode 自然不命中
+        （``MIN`` 为 NULL，比较结果为 NULL → 不满足），与
+        ``SelectionFilters.matches`` 的语义一致。
+        """
+        earliest = (
+            select(func.min(RawAssetModel.captured_at))
+            .select_from(EpisodeRawAssetModel)
+            .join(
+                RawAssetModel,
+                and_(
+                    RawAssetModel.project_id == EpisodeRawAssetModel.project_id,
+                    RawAssetModel.id == EpisodeRawAssetModel.asset_id,
+                ),
+            )
+            .where(
+                EpisodeRawAssetModel.project_id == EpisodeModel.project_id,
+                EpisodeRawAssetModel.episode_id == EpisodeModel.id,
+            )
+            .correlate(EpisodeModel)
+            .scalar_subquery()
+        )
+        conditions = []
+        if captured_from is not None:
+            conditions.append(earliest >= captured_from)
+        if captured_to is not None:
+            conditions.append(earliest <= captured_to)
+        if not conditions:  # 调用方保证至少一条；显式拒绝空条件掩盖缺陷。
+            raise DomainValidationError("captured_at 条件至少需要一端")
+        predicate = conditions[0]
+        for extra in conditions[1:]:
+            predicate = and_(predicate, extra)
+        return predicate
 
     def save(
         self,

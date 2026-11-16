@@ -37,6 +37,10 @@ from app.infrastructure.repositories._dataset_sql import (
     raise_update_failure,
     scoped_select,
 )
+from app.infrastructure.repositories._json_array_predicates import (
+    json_array_any_of,
+    session_dialect,
+)
 
 
 def _now() -> datetime:
@@ -111,9 +115,11 @@ class SqlDatasetRepository:
         status: str | None = None,
         purpose: str | None = None,
         usage_policy: str | None = None,
+        tags: tuple[str, ...] = (),
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[Dataset]:
+        """列出数据集；``tags`` 语义为"任一命中"，谓词下推到 SQL。"""
         limit = bounded_limit(limit, maximum=101)
         statement = scoped_select(DatasetModel, scope)
         if status is not None:
@@ -122,6 +128,14 @@ class SqlDatasetRepository:
             statement = statement.where(DatasetModel.purpose == purpose)
         if usage_policy is not None:
             statement = statement.where(DatasetModel.usage_policy == usage_policy)
+        if tags:
+            statement = statement.where(
+                json_array_any_of(
+                    DatasetModel.tags,
+                    tags,
+                    dialect=session_dialect(self._session),
+                )
+            )
         if after_id is not None:
             statement = statement.where(DatasetModel.id > after_id)
         statement = statement.order_by(DatasetModel.id).limit(limit)

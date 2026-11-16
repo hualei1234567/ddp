@@ -117,7 +117,18 @@ class LineageService:
         direction: str = "forward",
         depth: int = 1,
         limit: int = 20,
+        require_node: bool = True,
     ) -> list[LineageEdge]:
+        """从 ``node_id`` 起按方向 BFS 遍历血缘边。
+
+        ``require_node`` 默认为 ``True``：节点不在血缘图里就抛
+        :class:`ResourceNotFoundError`，防止调用方用"空图"差异探测资源存在性。
+
+        仅当调用方**已经用权威来源校验过该资源属于当前项目**时，才可以传
+        ``False``：此时"节点未登记"是合法中间态（例如 DatasetVersion 已存在但
+        还没转 READY、尚未写 INCLUDED_IN 边），应当返回空列表而不是伪装成
+        资源不存在。
+        """
         if direction not in {"forward", "backward"}:
             raise DomainValidationError("direction 只能是 forward 或 backward")
         if not 1 <= depth <= MAX_DEPTH:
@@ -128,7 +139,11 @@ class LineageService:
             normalized_type = LineageNodeType(node_type)
         except (TypeError, ValueError) as exc:
             raise DomainValidationError("node_type 取值非法") from exc
-        self._require_node(scope, normalized_type, node_id)
+        if require_node:
+            self._require_node(scope, normalized_type, node_id)
+        elif self._lineage.get_node(scope, node_type=normalized_type, node_id=node_id) is None:
+            # 节点未登记即无边可走；调用方已确认资源存在，空图是正确结果。
+            return []
         queue: deque[tuple[LineageNodeType, UUID, int]] = deque([(normalized_type, node_id, 0)])
         visited: set[tuple[LineageNodeType, UUID]] = {(normalized_type, node_id)}
         edges: list[LineageEdge] = []

@@ -35,7 +35,7 @@ from app.domain.datasets.errors import (
     VersionConflictError,
 )
 from app.domain.datasets.leakage import LeakageWaiver
-from app.domain.datasets.models import DatasetVersion
+from app.domain.datasets.models import DatasetItem, DatasetVersion
 from app.domain.datasets.pipeline import run_pipeline
 from app.domain.datasets.policies import (
     DedupPolicy,
@@ -273,8 +273,11 @@ class DatasetVersionActionsMixin:
         )
         if ready:
             existing = self._items.list_all(scope, version_id)
+            written_items = result.items
             if not existing:
                 self._items.add_many(scope, result.items)
+            else:
+                written_items = tuple(existing)
             updates = dict(result.version_updates)
             updates.update(
                 status=DatasetVersionStatus.READY,
@@ -284,6 +287,7 @@ class DatasetVersionActionsMixin:
             )
             updated = replace(current, **updates)
         else:
+            written_items = ()
             updated = replace(
                 current,
                 status=DatasetVersionStatus.VALIDATION_FAILED,
@@ -293,6 +297,17 @@ class DatasetVersionActionsMixin:
                 row_version=current.row_version + 1,
             )
         saved = self._versions.save(scope, updated, expected_version=current.row_version)
+        if ready:
+            # 版本转 READY 是血缘第四层的唯一写入点：每个入选条目一条
+            # Episode → DatasetVersion 的 INCLUDED_IN 边。重复 validate
+            # 不会重复写（仓储 ensure_edge 幂等）。
+            self._record_version_lineage(
+                scope,
+                dataset_id=dataset_id,
+                version_id=version_id,
+                items=written_items,
+                now=now,
+            )
         record_change(
             self._audit,
             self._outbox,
@@ -466,6 +481,51 @@ class DatasetVersionActionsMixin:
         )
         self._uow.commit()
         return saved
+
+    def _record_version_lineage(
+        self,
+        scope: ProjectScope,
+        *,
+        dataset_id: UUID,
+        version_id: UUID,
+        items: tuple[DatasetItem, ...] | list[DatasetItem],
+        now: datetime,
+    ) -> None:
+        """写 Episode → DatasetVersion 的 INCLUDED_IN 边（幂等）。
+
+        ``dataset_id`` 只用于边的 metadata：一条版本边必须能反查到所属数据集，
+        否则从 Episode 反向遍历只能看到 "进了某个 version" 而无法定位数据集。
+        """
+        if self._lineage is None:
+            return
+        created = self._lineage.record_inclusion(
+            scope,
+            dataset_version_id=version_id,
+            episode_ids=[item.episode_id for item in items],
+            now=now,
+            metadata={"dataset_id": str(dataset_id)},
+        )
+        if created:
+            record_change(
+                self._audit,
+                self._outbox,
+                scope,
+                resource_type=_VERSION,
+                resource_id=version_id,
+                action="lineage-included-in",
+                from_status=None,
+                to_status=None,
+                reason=None,
+                request_id=None,
+                details={"edge_count": created, "dataset_id": str(dataset_id)},
+                event_type="dataset.version.lineage_recorded",
+                event_payload={
+                    "dataset_version_id": str(version_id),
+                    "dataset_id": str(dataset_id),
+                    "edge_count": created,
+                },
+                occurred_at=now,
+            )
 
     def _simple_transition(
         self,

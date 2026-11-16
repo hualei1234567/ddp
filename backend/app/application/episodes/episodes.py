@@ -43,6 +43,7 @@ from app.domain.episodes.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
+from app.domain.episodes.filters import EpisodeListFilters
 from app.domain.episodes.lineage import LineageEdge, validate_supersedes_linear
 from app.domain.episodes.models import Episode, EpisodeRawAsset
 from app.domain.episodes.validation import build_manifest_key
@@ -239,15 +240,18 @@ class EpisodeService:
         status: str | None = None,
         task_id: UUID | None = None,
         batch_id: UUID | None = None,
+        filters: EpisodeListFilters | None = None,
         cursor: str | None = None,
         limit: int = 20,
     ) -> Page[Episode]:
+        """分页检索 Episode；多维条件由仓储在 SQL 层下推。"""
         bounded = _normalize_limit(limit)
         items = self._episodes.list(
             scope,
             status=_episode_status(status),
             task_id=task_id,
             batch_id=batch_id,
+            filters=filters,
             after_id=_decode_cursor(cursor),
             limit=bounded + 1,
         )
