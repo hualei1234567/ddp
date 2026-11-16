@@ -145,9 +145,36 @@ def chain(e2e_env: E2EEnv) -> Iterator[dict[str, Any]]:
     ]
     assert len(raw_asset_ids) == EXPECTED_ASSETS
 
-    # ---- 5. Episode 就绪 → 质检 → ACCEPTED ----
+    # ---- 5. Episode 就绪（平台自动生成 Manifest）→ 质检 → ACCEPTED ----
+    #
+    # 导入物化时平台自己生成了 Canonical Manifest：这里断言"没有人提交
+    # Manifest，Episode 也已经就绪"，并且失败时必须给出可读原因。
+    ready_bodies = {
+        key: editor.get(url(ids.project_a, f"/episodes/{UUID(item['episode_id'])}")).json()
+        for key, item in episodes_by_key.items()
+    }
+    for key, body in ready_bodies.items():
+        if key == "demo_001":
+            # 多机位 + 源数据不含标定：按领域规则必须保持 PENDING，并写明原因。
+            assert body["status"] == "PENDING", body
+            code_set = {item["code"] for item in body["readiness_blockers"]}
+            assert "CALIBRATION_MISSING" in code_set, body
+            assert body["manifest_key"] is None, body
+            continue
+        assert body["status"] == "READY", body
+        assert body["manifest_key"] and body["manifest_sha256"], body
+        assert body["frame_count"] > 0, body
+        assert body["readiness_blockers"] == [], body
+        # 帧数按「Episode 时长 × 声明帧率」推导：0.0–5.0s / 30fps -> 150 帧起。
+        assert body["frame_count"] >= 150, body
     accepted = [
-        advance_episode_to_accepted(editor, ids.project_a, episode_id) for episode_id in episode_ids
+        advance_episode_to_accepted(
+            editor,
+            ids.project_a,
+            episode_id,
+            manual_override=episode_id == UUID(episodes_by_key["demo_001"]["episode_id"]),
+        )
+        for episode_id in episode_ids
     ]
     assert all(item["status"] == "ACCEPTED" for item in accepted), accepted
     assert all(item["quality_status"] == "PASS" for item in accepted), accepted

@@ -10,6 +10,7 @@ from fastapi import Depends
 from app.api.deps import DbSession
 from app.api.v1.upload_dependencies import ObjectStorageDep, SettingsDep
 from app.application.episodes import EpisodeService, LineageService
+from app.application.episodes.readiness import EpisodeReadinessService
 from app.application.ingestion import RawAssetDownloadUseCases, RawAssetUseCases
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
@@ -53,6 +54,22 @@ def build_episode_service(
         SqlOutboxRepository(session),
         session,
         idempotency=SqlIdempotencyRepository(session) if with_idempotency else None,
+    )
+
+
+def build_readiness_service(session: DbSession) -> EpisodeReadinessService:
+    """装配自动就绪用例；与 ``build_episode_service`` 同理只接线一次。
+
+    导入物化端点要用它（创建 Episode 后立刻尝试就绪），因此和
+    ``build_episode_service`` 一样按请求装配，不跨请求共享。
+    """
+    return EpisodeReadinessService(
+        SqlEpisodeRepository(session),
+        SqlEpisodeRawAssetRepository(session),
+        SqlRawAssetRepository(session),
+        SqlAuditRepository(session),
+        SqlOutboxRepository(session),
+        session,
     )
 
 

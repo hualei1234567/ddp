@@ -35,7 +35,7 @@ from app.api.v1.datasource_schemas import (
     ReviewCreateOut,
     ReviewDecisionRequest,
 )
-from app.api.v1.episode_dependencies import build_episode_service
+from app.api.v1.episode_dependencies import build_episode_service, build_readiness_service
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.schemas import PageOut
 from app.application.datasources import (
@@ -155,6 +155,9 @@ def get_episode_materializer(session: DbSession) -> ImportEpisodeMaterializer:
         assets=_as_asset_repo(SqlMediaAssetRepository(session)),
         episodes=build_episode_service(session),
         episode_repository=SqlEpisodeRepository(session),
+        # 创建后立刻尝试自动就绪（Canonical Manifest 生成器），
+        # 否则 Episode 永远停在 PENDING 等人手工提交 Manifest。
+        readiness=build_readiness_service(session),
     )
 
 

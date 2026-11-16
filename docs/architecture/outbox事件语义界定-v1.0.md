@@ -191,6 +191,7 @@
 | `ingestion.episode.complete` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
 | `ingestion.episode.archive` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
 | `ingestion.episode.invalidate` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.readiness-blocked` | `READINESS_ACTION_EVENTS` | 留痕类 |
 | `modelops.data_requirement.submit` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
 | `modelops.data_requirement.approve` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
 | `modelops.data_requirement.reject` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |

@@ -36,6 +36,11 @@ CLOCK_SOURCES = frozenset(
 )
 SYNC_METHODS = frozenset({"PTP", "NTP", "HARDWARE_TRIGGER", "SOFTWARE_ESTIMATE", "MANUAL", "NONE"})
 SYNC_STATUSES = frozenset({"VERIFIED", "DEGRADED", "UNVERIFIED", "FAILED"})
+# 未通过时间同步校验的状态集合：fail-closed 的**唯一**权威定义。
+# ``validate_time_base``（能否建 Episode）与自动就绪判定
+# （``domain/episodes/readiness.py``，为什么还不能就绪）共用这一份，
+# 避免两处各写一组"哪些状态算未同步"而慢慢漂移。
+SYNC_STATUSES_UNVERIFIED = frozenset({"UNVERIFIED", "FAILED"})
 CALIBRATION_TARGET_TYPES = frozenset({"ROBOT", "DEVICE", "SENSOR", "SYSTEM"})
 
 _TIME_BASE_REQUIRED = ("time_domain", "clock_source", "sync_method", "sync_status")
@@ -168,7 +173,7 @@ def validate_time_base(value: object) -> dict[str, object]:
     sync_status = value["sync_status"]
     if sync_status not in SYNC_STATUSES:
         raise TimeBaseInvalidError("time_base.sync_status 取值非法")
-    if sync_status in {"UNVERIFIED", "FAILED"}:
+    if sync_status in SYNC_STATUSES_UNVERIFIED:
         raise TimeBaseInvalidError("时间同步未验证或失败，禁止创建 Episode")
     return _json_copy(value, "time_base")
 

@@ -278,6 +278,11 @@ def build_episode_manifest(
 ) -> dict[str, Any]:
     """按 ``MANIFEST_REQUIRED_KEYS`` 用已落库事实组装 Manifest。
 
+    **这是人工覆盖路径专用**：正常情况下 Manifest 由平台在导入物化时自动生成
+    （``app/domain/episodes/readiness.py`` + ``app/application/episodes/readiness.py``），
+    人工不再需要组装。保留本函数是为了覆盖"自动判定按规则拒绝、但有据可依"的特例，
+    并证明 ``actions/ready`` 这条既有契约仍可用。
+
     这不是"造业务结论"：每个 stream 的 object_key / sha256 / size_bytes 都来自
     ``GET /raw-assets/{id}`` 的真实响应；quality 如实填 Episode 当前状态
     （导入后为 NOT_CHECKED），不声称通过。
@@ -351,26 +356,46 @@ def advance_episode_to_accepted(
     episode_id: UUID,
     *,
     quality_status: str = "PASS",
+    manual_override: bool = False,
 ) -> dict[str, Any]:
     """READY → 质检 → PASS → ACCEPTED，全部走真实 Episode 用例。
+
+    Episode 的 READY 现在由**平台自己**在导入物化时置上（Canonical Manifest
+    生成器，见 ``docs/testing/主链端到端与可追溯性验收-2026-11-17.md`` §6.2 的
+    后续实现）。因此这里默认**断言它已经是 READY**，而不是替平台补一步：
+    若自动就绪回退成人工步骤，本函数会立刻失败。
+
+    ``manual_override=True`` 只用于"自动判定按规则拒绝、但有据可依"的特例
+    （例如多机位导入数据本身不含标定快照）。此时仍须先把真实事实组装成
+    Manifest——``build_episode_manifest`` 的每个字段都来自已落库资产，
+    ``quality`` 如实填当前状态，不编造结论。
 
     质检结论的来源见验收文档：先由平台自身的导入质量规则引擎判定（真实规则），
     再由本函数把结论登记到 Episode 上。``quality_status`` 不是随手填的常量。
     """
     current = editor.get(url(project_id, f"/episodes/{episode_id}")).json()
-    raw_assets = raw_assets_of(
-        editor, project_id, episode_asset_ids(editor, project_id, episode_id)
-    )
-    manifest = build_episode_manifest(current, raw_assets)
-    ready = episode_action(
-        editor,
-        project_id,
-        f"/episodes/{episode_id}/actions/ready",
-        version=current["version"],
-        payload={"manifest": manifest, "frame_count": current["frame_count"]},
-        idempotency_key=f"ready-{episode_id}",
-    ).json()
-    assert ready["status"] == "READY", ready
+    if not manual_override:
+        assert current["status"] == "READY", current
+        assert current["manifest_key"] and current["manifest_sha256"], current
+        assert current["frame_count"] > 0, current
+        assert current["readiness_blockers"] == [], current
+        ready = current
+    else:
+        assert current["status"] == "PENDING", current
+        assert current["readiness_blockers"], current
+        raw_assets = raw_assets_of(
+            editor, project_id, episode_asset_ids(editor, project_id, episode_id)
+        )
+        manifest = build_episode_manifest(current, raw_assets)
+        ready = episode_action(
+            editor,
+            project_id,
+            f"/episodes/{episode_id}/actions/ready",
+            version=current["version"],
+            payload={"manifest": manifest, "frame_count": current["frame_count"]},
+            idempotency_key=f"ready-{episode_id}",
+        ).json()
+        assert ready["status"] == "READY", ready
     checking = episode_action(
         editor,
         project_id,

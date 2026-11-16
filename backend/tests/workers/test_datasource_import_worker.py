@@ -113,3 +113,80 @@ def test_import_worker_publishes_event_and_stamps_real_actor(
         factory, MediaTransport(), now=datetime.now(UTC) + timedelta(seconds=2)
     )
     assert again["status"] == "IDLE", again
+
+
+def test_import_then_materialize_auto_readies_episodes(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """导入 → 物化 → Episode 自动就绪：Manifest 由平台生成，不由人补。
+
+    这是主链唯一断点（``docs/testing/主链端到端与可追溯性验收-2026-11-17.md``
+    §6.2：Canonical Manifest 生成器 ``MISSING``）的回归用例。同时覆盖两种结果
+    必须可区分：**导入成功** 与 **Episode 未就绪**。
+
+    - 单机位 + 已声明帧率：物化后立刻 ``READY``，落 ``manifest_sha256`` 与
+      ``frame_count``；
+    - 多机位（``demo_001``）+ 源数据不含标定：``PENDING``，原因
+      ``CALIBRATION_MISSING`` 可查询，导入任务仍是 ``SUCCEEDED``。
+    """
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    code = f"hf-auto-{UUID(int=0).hex[:6]}"
+    _, job = register_import_chain(editor, ids.project_a, code=code)
+
+    install_object_store(monkeypatch, InMemoryObjectStore())
+    result: dict[str, Any] = run_import_worker(
+        factory, MediaTransport(), now=datetime.now(UTC) + timedelta(seconds=1)
+    )
+    assert result["status"] == "PUBLISHED", result
+
+    materialized = editor.post(
+        url(ids.project_a, f"/data-source-imports/{job['import_id']}/episodes"),
+        json={"scene_labels": []},
+    )
+    assert materialized.status_code == 201, materialized.text
+    created = materialized.json()
+    assert created["episode_count"] == EXPECTED_EPISODES, created
+
+    # 物化响应里只有 episode_key；Episode 的 code 由物化器确定性生成（EP-{key}）。
+    episodes = {
+        f"EP-{item['episode_key']}": editor.get(
+            url(ids.project_a, f"/episodes/{item['episode_id']}")
+        ).json()
+        for item in created["episodes"]
+    }
+    blocked = episodes["EP-demo_001"]
+    assert blocked["status"] == "PENDING", blocked
+    assert {item["code"] for item in blocked["readiness_blockers"]} == {"CALIBRATION_MISSING"}
+    assert blocked["readiness_blockers"][0]["message"], blocked
+    assert blocked["manifest_key"] is None, blocked
+
+    for episode_code, episode in episodes.items():
+        if episode_code == "EP-demo_001":
+            continue
+        assert episode["status"] == "READY", episode
+        assert str(episode["manifest_sha256"]).startswith("sha256:"), episode
+        assert episode["manifest_key"], episode
+        assert episode["readiness_blockers"] == [], episode
+        assert episode["frame_count"] > 0, episode
+
+    # 两种结果可区分：Episode 就绪被拒不影响导入任务的结论。
+    imported = editor.get(url(ids.project_a, f"/data-source-imports/{job['import_id']}"))
+    assert imported.json()["status"] == "SUCCEEDED", imported.text
+
+    # 幂等：重复物化不产生新 Episode；已就绪的不会被重写，被拒的重新判一次。
+    again = editor.post(
+        url(ids.project_a, f"/data-source-imports/{job['import_id']}/episodes"),
+        json={"scene_labels": []},
+    )
+    assert again.status_code == 201, again.text
+    assert again.json()["episode_count"] == 0, again.text
+    assert set(again.json()["skipped_episode_keys"]) == {
+        item["episode_key"] for item in created["episodes"]
+    }
+    demo_002 = episodes["EP-demo_002"]
+    still_ready = editor.get(url(ids.project_a, f"/episodes/{demo_002['episode_id']}"))
+    assert still_ready.json()["status"] == "READY", still_ready.text
+    # 已就绪的 Episode 一次都没有被再次写入（版本号不变）。
+    assert still_ready.json()["version"] == demo_002["version"], still_ready.text
