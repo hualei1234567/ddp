@@ -8,78 +8,18 @@ import json
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from app.api.v1.modelops_dependencies import get_artifact_inspector
-from app.application.modelops.ports import ArtifactInspector
 from app.core.config import Settings
 
-from tests.api.conftest import ApiIds, make_client
+from tests.api.conftest import ApiIds
 from tests.api.dataset_support import url
 from tests.api.export_support import build_frozen_version
-
-SHA = "sha256:" + "a" * 64
-SECRET = "placeholder-model-adapter-secret-0123456789abcdef"
-
-
-class FakeInspector(ArtifactInspector):
-    def __init__(self, size: int, sha: str = SHA) -> None:
-        self.size = size
-        self.sha = sha
-
-    def object_size(self, object_key: str) -> int | None:
-        return self.size
-
-    def object_sha256(self, object_key: str) -> str | None:
-        return self.sha
-
-
-def _model_payload(owner_id, code: str | None = None) -> dict[str, object]:
-    return {
-        "code": code or f"model-{uuid4().hex[:8]}",
-        "name": "抓取策略模型",
-        "task_type": "IMITATION",
-        "framework": "pytorch",
-        "owner_id": str(owner_id),
-    }
-
-
-def _version_payload(size: int = 128) -> dict[str, object]:
-    return {
-        "artifact": {
-            "object_key": "models/policy.onnx",
-            "sha256": SHA,
-            "size_bytes": size,
-            "format": "ONNX",
-        },
-        "runtime": {
-            "framework": "pytorch",
-            "framework_version": "2.4.0",
-            "python_version": "3.11",
-        },
-    }
-
-
-def _create_model(client, project_id, owner_id) -> dict[str, object]:
-    response = client.post(url(project_id, "/models"), json=_model_payload(owner_id))
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
-def _ready_version(client, project_id, model_id, size: int = 128) -> dict[str, object]:
-    created = client.post(
-        url(project_id, f"/models/{model_id}/versions"), json=_version_payload(size)
-    )
-    assert created.status_code == 201, created.text
-    validated = client.post(
-        url(
-            project_id,
-            f"/models/{model_id}/versions/{created.json()['model_version_id']}/actions/validate",
-        ),
-        headers={"If-Match": f'"{created.json()["version"]}"'},
-        json={},
-    )
-    assert validated.status_code == 200, validated.text
-    assert validated.json()["status"] == "READY"
-    return validated.json()
+from tests.api.modelops_support import SECRET, SHA, FakeInspector
+from tests.api.modelops_support import client as _client
+from tests.api.modelops_support import create_model as _create_model
+from tests.api.modelops_support import feedback_with_dimension as _feedback_with_dimension
+from tests.api.modelops_support import model_payload as _model_payload
+from tests.api.modelops_support import ready_version as _ready_version
+from tests.api.modelops_support import version_payload as _version_payload
 
 
 def _signed_headers(body: bytes, *, nonce: str, timestamp: int | None = None) -> dict[str, str]:
@@ -100,16 +40,6 @@ def _callback(client, payload: dict[str, object], *, nonce: str | None = None):
         content=body,
         headers=_signed_headers(body, nonce=nonce or f"nonce-{uuid4().hex[:8]}"),
     )
-
-
-def _settings() -> Settings:
-    return Settings(env="local", model_adapter_shared_secrets={"mock": SECRET})
-
-
-def _client(factory, user_id, inspector: FakeInspector, *, settings_override=None):
-    client = make_client(factory, user_id, settings_override=settings_override or _settings())
-    client.app.dependency_overrides[get_artifact_inspector] = lambda: inspector
-    return client
 
 
 def test_model_version_publish_and_isolation(api_db) -> None:
@@ -904,21 +834,6 @@ def test_archived_model_rejects_new_version(api_db) -> None:
 # --------------------------------------------------------------------------- #
 # 数据缺口：真实覆盖联动（FBK-002）
 # --------------------------------------------------------------------------- #
-def _feedback_with_dimension(client, project_id, model_version_id, **dimension) -> dict:
-    response = client.post(
-        url(project_id, "/model-feedback"),
-        json={
-            "model_version_id": model_version_id,
-            "issue_type": "SCENE_COVERAGE",
-            "severity": "MAJOR",
-            "description": "覆盖不足",
-            "dimensions": [dimension],
-        },
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
-
-
 def test_data_gaps_uses_measured_episode_coverage(api_db) -> None:
     """缺口摘要的 current_count / coverage_source 来自真实 Episode 统计。"""
     factory, ids = api_db
@@ -945,33 +860,6 @@ def test_data_gaps_uses_measured_episode_coverage(api_db) -> None:
     assert kitchen["suggested_episode_count"] == 15
     # 有实测时间戳且在阈值内 → FRESH，而不是此前的硬编码常量。
     assert gaps["freshness"] == "FRESH"
-
-
-def test_data_gaps_falls_back_to_manual_source_for_unmeasurable_dimension(api_db) -> None:
-    """LABEL 在 Episode 上没有权威落点：保留人工值并标记 MANUAL。"""
-    factory, ids = api_db
-    editor = _client(factory, ids.editor_a, FakeInspector(128))
-    context = build_frozen_version(factory, ids)
-    model = _create_model(editor, ids.project_a, ids.owner_a)
-    version = _ready_version(editor, ids.project_a, model["model_id"])
-    assert context["version_id"]
-
-    _feedback_with_dimension(
-        editor,
-        ids.project_a,
-        version["model_version_id"],
-        dimension_type="LABEL",
-        dimension_value="grasp-cup",
-        current_count=3,
-        target_count=12,
-    )
-    gaps = editor.get(url(ids.project_a, "/data-gaps"), params={"dimension_type": "LABEL"}).json()
-    label = next(item for item in gaps["items"] if item["dimension_value"] == "grasp-cup")
-    assert label["coverage_source"] == "MANUAL"
-    assert label["current_count"] == 3
-    assert label["suggested_episode_count"] == 9
-    # 没有实测时间戳 → 新鲜度不得报 FRESH。
-    assert gaps["freshness"] == "UNKNOWN"
 
 
 def test_data_gaps_unknown_when_no_manual_value_and_no_coverage(api_db) -> None:

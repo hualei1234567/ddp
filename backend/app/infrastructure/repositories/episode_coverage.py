@@ -9,35 +9,44 @@
 - 某维度值没有可用 Episode 时**不返回该行**：0 与"测不到"必须可区分
   （ADR-0013 §3.4 要求缺失显示 UNKNOWN，不得记为 0）。
 
-JSON 数组维度（``scene_labels`` / ``device_ids``）的跨方言取舍：SQLite 与 PostgreSQL
-的「把 JSON 数组展开成多行」是两套不同语法——
+两类轴（规则声明在领域层 ``CLOSED_COVERAGE_DIMENSIONS``）：
 
-- SQLite 3.38+ 内置表值函数 ``json_each(x)``，产出 ``(key, value, ...)``；
-- PostgreSQL 用 ``jsonb_array_elements_text(x)``，产出单列 ``value``。
+- **开放轴** SCENE / ROBOT / DEVICE / QUALITY_STATUS：Episode 缺该属性是常态
+  （未打标、未绑定设备），缺值不等于 0，只返回实测到的维度值。
+- **封闭轴** ACTION / LABEL / MODALITY：只有每个 Episode 都有权威来源时才给结论。
+  总体完整时，调用方通过 ``wanted_keys`` 点名的、数据中缺席的维度值补一条
+  ``count=0`` 的实测记录——"查过全部且都没有"是真实的 0；总体不完整时整轴不返回，
+  上游据此回退人工值或 UNKNOWN。三个轴的解析链路见 ``episode_coverage_axes``。
 
-二者都由数据库原生完成展开，语义一致（每个数组元素一行），因此这里按会话方言选择
-表值函数，而不是为了迁就 SQLite 写「取回后在 Python 里解析 JSON」——后者会把全表读
-进内存、在数据量上来后直接变成性能事故。非 PostgreSQL / SQLite 方言显式抛错，
-绝不静默返回空统计（空统计会被上游误读成"覆盖为 0"）。
+非 PostgreSQL / SQLite 方言显式抛错，绝不静默返回空统计（空统计会被上游误读成
+"覆盖为 0"）。
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from sqlalchemy import func, select, true
 from sqlalchemy.orm import Session
 
-from app.domain.episodes.state_machines import EPISODE_COVERAGE_STATUSES
 from app.domain.identity.models import ProjectScope
-from app.domain.modelops.enums import CoverageDimension
+from app.domain.modelops.enums import CLOSED_COVERAGE_DIMENSIONS, CoverageDimension
 from app.domain.modelops.gaps import MeasuredCoverage
 from app.infrastructure.db.models.episodes import EpisodeModel
 from app.infrastructure.repositories._collection_sql import as_utc
+from app.infrastructure.repositories._coverage_sql import (
+    coverage_scope_conditions,
+    expand_text_array,
+)
+from app.infrastructure.repositories.episode_coverage_axes import (
+    AxisResult,
+    ClosedCoverageAxes,
+)
 
-_COVERAGE_STATUSES = tuple(sorted(item.value for item in EPISODE_COVERAGE_STATUSES))
+_CLOSED_VALUES = frozenset(item.value for item in CLOSED_COVERAGE_DIMENSIONS)
 
-# 维度 → 取该维度值并聚合；``json_array`` 标记哪些维度要从 JSON 数组横向展开。
+# 开放轴：维度 → 取该维度值并聚合；JSON 数组维度的展开见 ``_array_coverage``。
 _SCALAR_DIMENSIONS: dict[str, Any] = {
     CoverageDimension.ROBOT.value: EpisodeModel.robot_id,
     CoverageDimension.QUALITY_STATUS.value: EpisodeModel.quality_status,
@@ -53,28 +62,44 @@ class SqlEpisodeCoverageDirectory:
 
     def __init__(self, session: Session) -> None:
         self._session = session
+        self._closed = ClosedCoverageAxes(session)
 
     def coverage_by_dimension(
         self,
         scope: ProjectScope,
         *,
         dimension_types: frozenset[str] | None = None,
+        wanted_keys: Iterable[tuple[str, str]] | None = None,
     ) -> list[MeasuredCoverage]:
         dialect = self._session.get_bind().dialect.name
         if dialect not in {"sqlite", "postgresql"}:
             raise RuntimeError(f"未支持的数据库方言：{dialect}")
-        wanted = self._resolve_dimensions(dimension_types)
+        requested = self._resolve_dimensions(dimension_types)
         entries: list[MeasuredCoverage] = []
-        for dimension_type in sorted(wanted):
+        closed: dict[str, AxisResult] = {}
+        for dimension_type in sorted(requested):
             if dimension_type in _SCALAR_DIMENSIONS:
                 entries.extend(self._scalar_coverage(scope, dimension_type))
-            else:
+            elif dimension_type in _ARRAY_DIMENSIONS:
                 entries.extend(self._array_coverage(scope, dimension_type, dialect=dialect))
+            else:
+                result = self._closed.coverage(scope, dimension_type, dialect=dialect)
+                closed[dimension_type] = result
+                entries.extend(result.entries)
+        entries.extend(
+            self._zero_fill(
+                requested=requested,
+                closed=closed,
+                wanted_keys=wanted_keys,
+                present={(item.dimension_type, item.dimension_value) for item in entries},
+            )
+        )
+        entries.sort(key=lambda item: (item.dimension_type, item.dimension_value))
         return entries
 
     @staticmethod
     def _resolve_dimensions(dimension_types: frozenset[str] | None) -> frozenset[str]:
-        supported = frozenset(_SCALAR_DIMENSIONS) | frozenset(_ARRAY_DIMENSIONS)
+        supported = frozenset(_SCALAR_DIMENSIONS) | frozenset(_ARRAY_DIMENSIONS) | _CLOSED_VALUES
         if dimension_types is None:
             return supported
         unknown = {
@@ -87,11 +112,38 @@ class SqlEpisodeCoverageDirectory:
             raise ValueError(f"不支持的覆盖维度：{', '.join(sorted(unknown))}")
         return frozenset(dimension_types) & supported
 
-    def _base_where(self, scope: ProjectScope) -> tuple[Any, ...]:
-        return (
-            EpisodeModel.project_id == scope.project_id,
-            EpisodeModel.status.in_(_COVERAGE_STATUSES),
-        )
+    @staticmethod
+    def _zero_fill(
+        *,
+        requested: frozenset[str],
+        closed: dict[str, AxisResult],
+        wanted_keys: Iterable[tuple[str, str]] | None,
+        present: set[tuple[str, str]],
+    ) -> list[MeasuredCoverage]:
+        """给封闭轴里"查过且确实没有"的维度值补实测 0。
+
+        只对调用方点名的键补；开放轴与总体不完整的封闭轴一律不补（保持 UNKNOWN）。
+        """
+        if not wanted_keys:
+            return []
+        additions: list[MeasuredCoverage] = []
+        for dimension_type, dimension_value in sorted(set(wanted_keys)):
+            if dimension_type not in requested or dimension_type not in _CLOSED_VALUES:
+                continue
+            if (dimension_type, dimension_value) in present:
+                continue
+            result = closed.get(dimension_type)
+            if result is None or not result.complete:
+                continue
+            additions.append(
+                MeasuredCoverage(
+                    dimension_type=dimension_type,
+                    dimension_value=dimension_value,
+                    count=0,
+                    measured_at=result.measured_at,
+                )
+            )
+        return additions
 
     def _scalar_coverage(
         self,
@@ -101,7 +153,7 @@ class SqlEpisodeCoverageDirectory:
         column = _SCALAR_DIMENSIONS[dimension_type]
         statement = (
             select(column, func.count(EpisodeModel.id), func.max(EpisodeModel.updated_at))
-            .where(*self._base_where(scope), column.is_not(None))
+            .where(*coverage_scope_conditions(scope), column.is_not(None))
             .group_by(column)
         )
         return [
@@ -122,7 +174,7 @@ class SqlEpisodeCoverageDirectory:
         dialect: str,
     ) -> list[MeasuredCoverage]:
         column = _ARRAY_DIMENSIONS[dimension_type]
-        expanded = self._expand_array(column, dialect=dialect)
+        expanded = expand_text_array(column, dialect=dialect)
         statement = (
             select(
                 expanded.c.value,
@@ -130,11 +182,10 @@ class SqlEpisodeCoverageDirectory:
                 func.max(EpisodeModel.updated_at),
             )
             .select_from(EpisodeModel)
-            # json_each / jsonb_array_elements_text 是横向相关的表值函数：
-            # 显式 ON TRUE 让 SQLAlchemy 不把两段 FROM 判成笛卡尔积，
-            # 同时保持「每个数组元素一行」的原生展开语义。
+            # 表值函数是横向相关的：显式 ON TRUE 让 SQLAlchemy 不把两段 FROM
+            # 判成笛卡尔积，同时保持「每个数组元素一行」的原生展开语义。
             .join(expanded, true())
-            .where(*self._base_where(scope))
+            .where(*coverage_scope_conditions(scope))
             .group_by(expanded.c.value)
         )
         return [
@@ -146,20 +197,6 @@ class SqlEpisodeCoverageDirectory:
             )
             for value, count, measured_at in self._session.execute(statement)
         ]
-
-    @staticmethod
-    def _expand_array(column: Any, *, dialect: str) -> Any:
-        if dialect == "postgresql":
-            return (
-                func.jsonb_array_elements_text(column)
-                .table_valued("value", joins_implicitly=True)
-                .alias("coverage_value")
-            )
-        return (
-            func.json_each(column)
-            .table_valued("value", joins_implicitly=True)
-            .alias("coverage_value")
-        )
 
 
 __all__ = ["SqlEpisodeCoverageDirectory"]

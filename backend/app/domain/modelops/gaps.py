@@ -10,6 +10,11 @@
 - 真实覆盖可得 → ``current_count`` 取实测值，来源 ``MEASURED``；
 - 实测不可得但反馈里人工填了 → 保留人工值，来源 ``MANUAL``；
 - 两者都没有 → ``current_count=None``、来源 ``UNKNOWN``，建议补采记 0（不臆测）。
+
+反过来，**实测到但没有任何反馈条目**的维度也必须出现在结果里（``open_feedback_count=0``、
+来源 ``MEASURED``、目标未知）。缺口视图同时承担"项目里有哪些数据"的追溯职责；
+若只从人工反馈建桶，零反馈项目会返回空数组，被界面读成"没有任何数据"。
+测不到且无反馈的维度仍然不出现——不凭空造维度。
 """
 
 from __future__ import annotations
@@ -175,6 +180,9 @@ class GapSummary:
         )
 
 
+_GAP_DIMENSION_VALUES = frozenset(item.value for item in GapDimensionType)
+
+
 def _measured_index(
     measured: Iterable[MeasuredCoverage] | None,
 ) -> dict[tuple[str, str], MeasuredCoverage]:
@@ -196,6 +204,11 @@ def aggregate_gaps(
 
     ``measured_coverage`` 为可选的真实覆盖投影（来自 Episode SQL 聚合）。
     不传时行为与改造前完全一致：只用反馈里人工填写的 ``current_count``。
+
+    传入时，实测到但没有任何反馈条目的维度也会生成条目（``open_feedback_count=0``、
+    ``coverage_source=MEASURED``、目标未知故建议补采 0）：缺口视图首先是"项目里
+    有什么数据"的追溯入口，不能因为没人登记缺口就返回空数组。测不到的维度仍然
+    不出现——绝不凭空造维度。
     """
     buckets: dict[tuple[str, str], dict[str, object]] = {}
     for dimensions in feedback_items:
@@ -221,6 +234,13 @@ def aggregate_gaps(
                     else max(int(target), dimension.target_count)
                 )
     measured_by_key = _measured_index(measured_coverage)
+    # 实测到、但没有任何反馈条目的维度也要出现在结果里：否则"数据有、缺口没登记"
+    # 会返回空数组，被界面读成"没有任何数据"——这正是"没数据 ≠ 0"的反面。
+    # 只收录契约里的缺口维度（GapDimensionType）；QUALITY_STATUS 这类
+    # 仅用于统计端口的轴不得凭空造出缺口条目（见 MeasuredCoverage 文档）。
+    for key in measured_by_key:
+        if key[0] in _GAP_DIMENSION_VALUES:
+            buckets.setdefault(key, {"count": 0, "current": None, "target": None})
     items: list[GapSummaryItem] = []
     for (dimension_type, dimension_value), bucket in sorted(buckets.items()):
         target = bucket["target"]
