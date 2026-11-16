@@ -1,4 +1,5 @@
 import {
+  ApartmentOutlined,
   AppstoreOutlined,
   BarChartOutlined,
   CloudUploadOutlined,
@@ -11,6 +12,7 @@ import {
   FolderOpenOutlined,
   HomeOutlined,
   PartitionOutlined,
+  ReadOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
@@ -89,6 +91,16 @@ export const navSections: NavSection[] = [
         label: "数据采集",
         description: "管理采集任务、现场作业、SOP 与人员设备排期。",
         icon: createElement(ExperimentOutlined),
+        available: true,
+      },
+      {
+        // 阶段 8 的四类素材（方案 / SOP / 场景 / 动作库）此前后端已就绪、
+        // 前端零页面。入口独立于「数据采集」任务，避免把素材管理与现场作业
+        // 混在同一个列表里。
+        path: "/collection-assets",
+        label: "采集素材",
+        description: "管理采集方案、SOP、场景与动作库；状态动作以服务端返回为准。",
+        icon: createElement(ReadOutlined),
         available: true,
       },
       {
@@ -185,10 +197,19 @@ export const navSections: NavSection[] = [
         available: true,
       },
       {
+        // 阶段 9 的场地实体（基地 / 房间 / 实验室）已实现，单独成为可到达
+        // 的菜单项；「基地运营」里的排期与现场运营仍是规划能力，保持占位。
+        path: "/locations",
+        label: "场地管理",
+        description: "管理基地、房间与实验室场地实体；被设备与采集任务引用。",
+        icon: createElement(EnvironmentOutlined),
+        available: true,
+      },
+      {
         path: "/operations",
         label: "基地运营",
-        description: "管理场地、排期、现场运营与任务执行情况。",
-        icon: createElement(EnvironmentOutlined),
+        description: "管理采集排期、现场运营与任务执行情况。",
+        icon: createElement(ApartmentOutlined),
         available: false,
       },
       {
