@@ -13,22 +13,25 @@ Episode 行按真实状态机推进（数据库兜底不允许直插非 PENDING�
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from uuid import UUID, uuid4
 
 import pytest
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.base import Base
-from app.infrastructure.db.models.episodes import EpisodeModel
 from app.infrastructure.db.models.identity import Project, User
 from app.infrastructure.db.session import create_db_engine, create_session_factory
 from app.infrastructure.repositories.episode_coverage import SqlEpisodeCoverageDirectory
-from sqlalchemy import update
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-NOW = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
-SHA = "sha256:" + "a" * 64
+from tests.infrastructure.coverage_support import NOW as coverage_now
+from tests.infrastructure.coverage_support import SHA as coverage_sha
+from tests.infrastructure.coverage_support import episode_row as _episode
+from tests.infrastructure.coverage_support import insert_episodes as _insert
+
+NOW = coverage_now
+SHA = coverage_sha
 
 
 @pytest.fixture()
@@ -57,103 +60,6 @@ def coverage_db() -> Iterator[tuple[sessionmaker[Session], UUID, UUID, UUID]]:
         yield factory, project_a, project_b, user_id
     finally:
         engine.dispose()
-
-
-def _episode(
-    project_id: UUID,
-    user_id: UUID,
-    *,
-    target_status: str = "ACCEPTED",
-    quality_status: str = "PASS",
-    scene_labels: list[str] | None = None,
-    robot_id: UUID | None = None,
-    device_ids: list[str] | None = None,
-    updated_at: datetime = NOW,
-) -> EpisodeModel:
-    """构造一条 PENDING Episode；业务字段在 INSERT 时一次写定。"""
-    episode = EpisodeModel(
-        id=uuid4(),
-        project_id=project_id,
-        episode_lineage_id=uuid4(),
-        episode_version=1,
-        code=f"EP-{uuid4().hex[:12]}",
-        status="PENDING",
-        quality_status="NOT_CHECKED",
-        annotation_status="NOT_STARTED",
-        robot_id=robot_id,
-        device_ids=device_ids or [],
-        scene_labels=scene_labels or [],
-        start_time_ns=1_000,
-        end_time_ns=2_000,
-        duration_ns=1_000,
-        time_domain="UTC",
-        time_base={},
-        canonical_schema_version="ddp.canonical/1.0.0-draft",
-        pipeline_id="parser",
-        pipeline_version="1.0.0",
-        segmentation_rule_version="seg-manual-v1",
-        attempt=1,
-        max_attempts=3,
-        created_at=NOW,
-        updated_at=updated_at,
-        created_by=user_id,
-        updated_by=user_id,
-    )
-    # 目标状态与质量结论挂在实例上，仅供本文件的 _insert 推进使用。
-    episode._coverage_target = (target_status, quality_status)  # type: ignore[attr-defined]
-    return episode
-
-
-def _advance(session: Session, episode: EpisodeModel) -> None:
-    """沿合法迁移把 Episode 推到目标状态；READY 起冻结字段，故业务字段不再改。"""
-    target_status, target_quality = episode._coverage_target  # type: ignore[attr-defined]
-    statement = update(EpisodeModel).where(EpisodeModel.id == episode.id)
-    # ``updated_at`` 有 onupdate 兜底，会覆写成 CURRENT_TIMESTAMP；测试要显式
-    # 保留构造时的时间，否则"最后更新时间"断言会随真实时钟漂移。
-    fixed_updated_at = episode.updated_at
-
-    def step(**values: object) -> None:
-        session.execute(statement.values(updated_at=fixed_updated_at, **values))
-        session.flush()
-
-    if target_status == "PENDING":
-        return
-    if target_status == "INVALIDATED":
-        step(status="INVALIDATED")
-        return
-    step(status="PROCESSING")
-    if target_status == "PROCESSING":
-        return
-    step(
-        status="READY",
-        manifest_key=f"canonical/{episode.project_id}/{episode.id}/1/manifest.json",
-        manifest_sha256=SHA,
-    )
-    if target_status == "READY":
-        return
-    step(status="QUALITY_CHECKING")
-    step(quality_status=target_quality)
-    if target_status == "QUALITY_CHECKING":
-        return
-    if target_quality != "PASS":
-        # 非 PASS 只能停在 QUALITY_CHECKING；再往下走会被数据库兜底拒绝。
-        return
-    step(status="ACCEPTED")
-    if target_status == "ACCEPTED":
-        return
-    step(status="COMPLETED")
-    if target_status == "COMPLETED":
-        return
-    step(status="ARCHIVED")
-
-
-def _insert(factory: sessionmaker[Session], rows: list[EpisodeModel]) -> None:
-    with factory() as session:
-        session.add_all(rows)
-        session.flush()
-        for row in rows:
-            _advance(session, row)
-        session.commit()
 
 
 def _coverage(factory, project_id: UUID, user_id: UUID, dimensions: frozenset[str] | None = None):
@@ -293,16 +199,14 @@ def test_unknown_dimension_is_rejected_not_silently_ignored(coverage_db) -> None
 
 
 @pytest.mark.parametrize("dimension", ["ACTION", "LABEL", "MODALITY"])
-def test_unmeasurable_contract_dimension_cannot_be_requested(coverage_db, dimension: str) -> None:
-    """这三个契约维度在 Episode 上没有权威落点，只能被显式拒绝。"""
+def test_closed_dimension_is_supported_but_unmeasurable_when_population_incomplete(
+    coverage_db, dimension: str
+) -> None:
+    """三个封闭轴已接入实测；但这条 Episode 三轴都缺权威来源，必须返回空而不是 0。"""
     factory, project_a, _project_b, user_id = coverage_db
-    with factory() as session:
-        repo = SqlEpisodeCoverageDirectory(session)
-        with pytest.raises(ValueError, match="不支持的覆盖维度"):
-            repo.coverage_by_dimension(
-                ProjectScope(project_a, actor_id=user_id),
-                dimension_types=frozenset({dimension}),
-            )
+    _insert(factory, [_episode(project_a, user_id, scene_labels=["kitchen"])])
+    entries = _coverage(factory, project_a, user_id, frozenset({dimension}))
+    assert entries == []
 
 
 def test_default_dimension_set_covers_all_measurable_axes(coverage_db) -> None:
