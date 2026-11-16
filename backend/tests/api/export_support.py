@@ -108,11 +108,37 @@ def build_frozen_version(
     ids: ApiIds,
     *,
     code: str | None = None,
+    seed_prefix: str | None = None,
+    seed_salt: str = "",
 ) -> dict[str, object]:
-    """通过真实 API 构建并冻结一个数据集版本。"""
+    """通过真实 API 构建并冻结一个数据集版本。
+
+    ``seed_prefix`` / ``seed_salt`` 只在同一项目里需要**多个**冻结版本时传：
+
+    - Episode 上有 ``UNIQUE(project_id, code)``，两次都用默认前缀 ``ep``
+      会在造数据阶段就 ``UNIQUE constraint failed: episodes.project_id, episodes.code``；
+    - RawAsset 上有 ``UNIQUE(project_id, sha256, size_bytes)``，只改前缀仍会
+      撞车，因此还要让 Hash 随 ``seed_salt`` 变化才真正唯一。
+
+    Hash 必须是**合法的 sha256:64 位小写十六进制**：直接拼盐字符串会产出
+    非十六进制内容，下游的候选校验会把它判成不合格，build 报
+    ``dataset_insufficient_data``——失败点离原因很远，极难排查。因此用
+    ``hashlib.sha256`` 真算一遍。默认值（``None`` / 空串）保持既有行为不变。
+    """
     from uuid import uuid4
 
-    seed_dataset_episodes(factory, ids.project_a, ids.editor_a, count=10)
+    def _digest(seed: str) -> str:
+        return "sha256:" + hashlib.sha256(seed.encode()).hexdigest()
+
+    seed_kwargs: dict[str, object] = {}
+    if seed_prefix is not None:
+        seed_kwargs["prefix"] = seed_prefix
+    if seed_salt:
+        seed_kwargs["manifest_shas"] = [
+            _digest(f"{seed_salt}-manifest-{index:02d}") for index in range(10)
+        ]
+        seed_kwargs["raw_hashes"] = [_digest(f"{seed_salt}-raw-{index:02d}") for index in range(10)]
+    seed_dataset_episodes(factory, ids.project_a, ids.editor_a, count=10, **seed_kwargs)
     editor = make_client(factory, ids.editor_a)
     owner = make_client(factory, ids.owner_a)
     viewer = make_client(factory, ids.viewer_a)
