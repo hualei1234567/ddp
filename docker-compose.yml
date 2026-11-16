@@ -248,7 +248,11 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "8080:80"
+      # 宿主端口可配置。默认 8088 而不是 8080：8080 太容易被本机其他服务占用
+      # （实测本机被一个监听在 CGNAT 地址上的进程占着，Docker 的端口转发因此
+      # 静默失效——`docker port` 显示映射存在，实际连接被拒，容器内 nginx 却是
+      # 正常的）。这类故障排查成本高，换一个不常撞车的默认值更划算。
+      - "${DDP_WEB_PORT:-8088}:80"
 
 volumes:
   ddp-pgdata:
