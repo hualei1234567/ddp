@@ -106,7 +106,7 @@ describe("质量报告区", () => {
 
     expect(html).toContain("质量报告加载失败");
     expect(html).toContain("网络超时");
-    expect(html).toContain("重试");
+    expect(html.replace(/\s+/g, "")).toContain("重试");
   });
 
   it("确实没有报告时才显示空态", () => {

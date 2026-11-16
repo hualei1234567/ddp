@@ -95,7 +95,9 @@ describe("采集任务列表页面状态", () => {
 
     expect(html).toContain("加载失败");
     expect(html).toContain("internal_error");
-    expect(html).toContain("重 试");
+    // antd 对两个汉字的按钮会插空格（重试 → 重 试），
+    // 断言前先归一化空白，避免文案渲染细节左右用例。
+    expect(html.replace(/\s+/g, "")).toContain("重试");
   });
 
   it("移动端使用卡片，长 ID 中间省略并提供复制入口", () => {
