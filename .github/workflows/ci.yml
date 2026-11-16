@@ -154,7 +154,13 @@ jobs:
         with:
           python-version: "3.11"
       - name: 安装检查工具
-        run: pip install pytest pip-audit
+        # pytest：跑 scripts/tests 守卫用例；
+        # pip-audit：依赖漏洞扫描；
+        # pyyaml：scripts/tests/test_contract_parity_root_array.py 会加载
+        #   scripts/check_contract_parity.py，后者 import yaml。此前该依赖
+        #   在本地靠间接传递装上、CI 本 job 不装后端依赖，导致新增的这份
+        #   守卫测试在 CI 上 ImportError（本地却全绿）。显式声明，不靠巧合。
+        run: pip install pytest pip-audit pyyaml
       - name: Secret 扫描（阻断）
         run: python scripts/check_secrets.py
       - name: Agent Bash 守卫测试（阻断）

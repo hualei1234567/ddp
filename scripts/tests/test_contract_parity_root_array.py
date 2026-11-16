@@ -28,15 +28,24 @@ def _load_module():
     return module
 
 
-parity = _load_module()
+@pytest.fixture(scope="module")
+def parity():
+    """延迟加载：``check_contract_parity`` 顶层 ``import yaml``。
+
+    不在模块级加载，是因为 CI 的 security job 只装 ``pytest`` + ``pip-audit``
+    + ``pyyaml``，**不装后端依赖**——模块级导入会让整份文件在那种环境下
+    直接 collect error，把无关的守卫用例一起带红。真正需要后端 ``app``
+    包的那个用例自己声明依赖并跳过（见 ``parity_report``）。
+    """
+    return _load_module()
 
 
-def _flatten(schema: dict[str, object]):
+def _flatten(module, schema: dict[str, object]):
     document = {"components": {"schemas": {}}}
-    return parity.flatten_schema(schema, parity.Base(document, None))
+    return module.flatten_schema(schema, module.Base(document, None))
 
 
-def test_root_array_of_objects_is_typed() -> None:
+def test_root_array_of_objects_is_typed(parity) -> None:
     schema = {
         "type": "array",
         "items": {
@@ -45,25 +54,25 @@ def test_root_array_of_objects_is_typed() -> None:
             "properties": {"a": {"type": "integer"}, "b": {"type": ["string", "null"]}},
         },
     }
-    result = _flatten(schema)
+    result = _flatten(parity, schema)
     assert result.typed is True
     assert sorted(result.properties) == ["[].a", "[].b"]
     assert result.required == {"[].a"}
     assert result.nullable == {"[].b"}
 
 
-def test_root_array_with_untyped_items_stays_untyped() -> None:
+def test_root_array_with_untyped_items_stays_untyped(parity) -> None:
     """``items`` 是空 schema（任意值）时，仍然无法比对。"""
-    assert _flatten({"type": "array", "items": {}}).typed is False
+    assert _flatten(parity, {"type": "array", "items": {}}).typed is False
 
 
-def test_root_array_of_open_objects_stays_untyped() -> None:
+def test_root_array_of_open_objects_stays_untyped(parity) -> None:
     """``items`` 是开放对象（无 ``properties``）时同属"任意对象"。"""
     schema = {"type": "array", "items": {"type": "object", "additionalProperties": True}}
-    assert _flatten(schema).typed is False
+    assert _flatten(parity, schema).typed is False
 
 
-def test_nested_array_of_objects_is_typed() -> None:
+def test_nested_array_of_objects_is_typed(parity) -> None:
     schema = {
         "type": "array",
         "items": {
@@ -71,18 +80,28 @@ def test_nested_array_of_objects_is_typed() -> None:
             "items": {"type": "object", "properties": {"a": {"type": "integer"}}},
         },
     }
-    result = _flatten(schema)
+    result = _flatten(parity, schema)
     assert result.typed is True
     assert "[].[].a" in result.properties
 
 
-def test_object_root_still_typed() -> None:
-    assert _flatten({"type": "object", "properties": {"a": {"type": "integer"}}}).typed is True
-    assert _flatten({"type": "object", "additionalProperties": True}).typed is False
+def test_object_root_still_typed(parity) -> None:
+    assert _flatten(parity, {"type": "object", "properties": {"a": {"type": "integer"}}}).typed is True
+    assert _flatten(parity, {"type": "object", "additionalProperties": True}).typed is False
 
 
 @pytest.fixture(scope="module")
-def parity_report():
+def parity_report(parity):
+    """构建完整报告；需要后端 ``app`` 包（读运行时路由表）。
+
+    CI 的 security job 只装 ``pytest`` / ``pip-audit`` / ``pyyaml``，不装后端
+    依赖，因此这个 fixture 在那里**明确跳过**而不是报 ImportError——测试文件
+    其余纯函数用例不依赖后端，不该被一起带红。
+    """
+    try:
+        import app.main  # noqa: F401 - 只探测后端依赖是否可用
+    except ImportError:
+        pytest.skip("未安装后端依赖（app 包），跳过需要运行时路由表的用例")
     contract = parity._load_yaml(parity.CONTRACT_FILE)
     runtime = parity.load_runtime_openapi()
     return parity.build_report(contract, runtime)
