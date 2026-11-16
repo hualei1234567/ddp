@@ -16,6 +16,7 @@ from app.application.annotation.assignments import AnnotationAssignmentUseCases
 from app.application.annotation.batches import AnnotationBatchUseCases
 from app.application.annotation.gold_sets import GoldSetUseCases
 from app.application.annotation.iaa import IAAUseCases
+from app.application.annotation.quality_checks import QualityCheckUseCases
 from app.application.annotation.quality_samples import QualitySampleUseCases
 from app.application.annotation.reviews import AnnotationReviewUseCases
 from app.application.annotation.sample_sets import AnnotationSampleSetUseCases
@@ -40,6 +41,9 @@ from app.infrastructure.repositories.annotation_quality import (
     SqlGoldSetRepository,
     SqlIAAReportRepository,
     SqlQualitySampleRepository,
+)
+from app.infrastructure.repositories.annotation_quality_checks import (
+    SqlQualityCheckRepository,
 )
 from app.infrastructure.repositories.annotation_results import (
     SqlAnnotationArbitrationRepository,
@@ -66,6 +70,7 @@ class AnnotationUseCases:
     arbitrations: AnnotationArbitrationUseCases
     gold_sets: GoldSetUseCases
     quality_samples: QualitySampleUseCases
+    quality_checks: QualityCheckUseCases
     iaa: IAAUseCases
 
 
@@ -81,6 +86,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
     arbitrations_repo = SqlAnnotationArbitrationRepository(session)
     gold_sets_repo = SqlGoldSetRepository(session)
     quality_repo = SqlQualitySampleRepository(session)
+    quality_check_repo = SqlQualityCheckRepository(session)
     iaa_repo = SqlIAAReportRepository(session)
     audit = SqlAnnotationAuditRepository(session)
     outbox = SqlAnnotationOutboxRepository(session)
@@ -198,6 +204,17 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             audit,
             outbox,
             idempotency,
+            session,
+        ),
+        quality_checks=QualityCheckUseCases(
+            quality_check_repo,
+            submissions_repo,
+            records_repo,
+            tasks_repo,
+            schemas_repo,
+            episodes,
+            audit,
+            outbox,
             session,
         ),
         iaa=IAAUseCases(

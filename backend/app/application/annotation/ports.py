@@ -23,6 +23,7 @@ from app.domain.annotation.arbitration import AnnotationArbitration
 from app.domain.annotation.assignment import AnnotationAssignment
 from app.domain.annotation.batch import AnnotationBatch
 from app.domain.annotation.gold_set import GoldEvaluation, GoldSet
+from app.domain.annotation.quality_check import QualityCheckRun
 from app.domain.annotation.quality_sample import QualitySample
 from app.domain.annotation.review import AnnotationReview
 from app.domain.annotation.sample_set import AnnotationSampleSet, SampleEpisodeRef
@@ -699,3 +700,28 @@ class OutboxRepository(Protocol):
 # IdempotencyRecord`` 调用点不变。
 IdempotencyRecord = _IdempotencyRecord
 IdempotencyRepository = _IdempotencyRepository
+
+
+class QualityCheckRepository(Protocol):
+    """质量检查执行记录仓储：只追加，不更新、不删除。
+
+    查询一律按 ``project_id`` 过滤；``get``/``list_for_submission`` 跨项目返回
+    空结果，由用例映射成 404。
+    """
+
+    def add(
+        self,
+        scope: ProjectScope,
+        record: QualityCheckRun,
+    ) -> QualityCheckRun: ...
+
+    def get(self, scope: ProjectScope, run_id: UUID) -> QualityCheckRun | None: ...
+
+    def list_for_submission(
+        self,
+        scope: ProjectScope,
+        *,
+        submission_id: UUID,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[QualityCheckRun]: ...

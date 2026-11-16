@@ -12,6 +12,10 @@ from app.infrastructure.db.models.annotation_quality import (
     IAAReport,
     QualitySample,
 )
+from app.infrastructure.db.models.annotation_quality_rules import (
+    AnnotationQualityFinding,
+    AnnotationQualityRun,
+)
 from app.infrastructure.db.models.annotation_results import (
     AnnotationArbitration,
     AnnotationRecord,
@@ -93,6 +97,8 @@ __all__ = [
     "AnnotationAssignment",
     "AnnotationAssignmentEvent",
     "AnnotationBatch",
+    "AnnotationQualityFinding",
+    "AnnotationQualityRun",
     "AnnotationRecord",
     "AnnotationReview",
     "AnnotationSampleEpisode",
