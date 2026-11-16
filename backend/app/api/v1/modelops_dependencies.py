@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import Depends
@@ -34,6 +35,7 @@ from app.infrastructure.model_platform import (
     ConfiguredModelPlatformGateway,
     S3ArtifactInspector,
 )
+from app.infrastructure.repositories.episode_coverage import SqlEpisodeCoverageDirectory
 from app.infrastructure.repositories.modelops import (
     SqlDatasetGate,
     SqlEvaluationRepository,
@@ -152,6 +154,8 @@ def build_modelops_services(
         outbox=outbox,
         idempotency=idempotency,
         uow=session,
+        coverage=SqlEpisodeCoverageDirectory(session),
+        coverage_stale_after=timedelta(seconds=settings.model_gap_freshness_stale_after_seconds),
     )
     requirements = RequirementUseCases(
         requirements=requirements_repo,

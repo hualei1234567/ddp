@@ -162,6 +162,14 @@ class Settings(BaseSettings):
     model_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
     model_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
 
+    # 数据缺口视图的新鲜度阈值：真实覆盖数据的最后更新时间距今超过该值即判 STALE。
+    # 阈值随数据接入节奏变化，必须可配；缺省 24 小时。
+    model_gap_freshness_stale_after_seconds: int = Field(
+        default=86400,
+        ge=60,
+        le=2_592_000,
+    )
+
     jwt_secret: str = "replace-me-in-production"  # noqa: S105 - 占位符，生产必须覆盖
     jwt_issuer: str = "ddp"
     jwt_audience: str = "ddp-api"

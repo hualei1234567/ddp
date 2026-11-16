@@ -35,6 +35,8 @@ from app.domain.episodes.manifest import (
 )
 from app.domain.episodes.models import Episode, EpisodeRawAsset, Segmentation
 from app.domain.episodes.state_machines import (
+    EPISODE_COVERABLE_STATUSES,
+    EPISODE_COVERAGE_STATUSES,
     EPISODE_DATA_FROZEN_FIELDS,
     EPISODE_DATA_FROZEN_STATUSES,
     EPISODE_QUALITY_FROZEN_STATUSES,
@@ -47,6 +49,8 @@ from app.domain.episodes.state_machines import (
 __all__ = [
     "CalibrationNotActiveError",
     "DomainValidationError",
+    "EPISODE_COVERABLE_STATUSES",
+    "EPISODE_COVERAGE_STATUSES",
     "EPISODE_DATA_FROZEN_FIELDS",
     "EPISODE_DATA_FROZEN_STATUSES",
     "EPISODE_QUALITY_FROZEN_STATUSES",
