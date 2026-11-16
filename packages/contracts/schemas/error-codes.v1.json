@@ -641,6 +641,15 @@
       "implemented": true,
       "category": "inbound",
       "description": "验收账本只允许追加，不能修改或删除"
+    },
+    {
+      "code": "training_delivery_requirement_unmet",
+      "http": 422,
+      "retryable": false,
+      "surface": "api",
+      "implemented": true,
+      "category": "delivery",
+      "description": "交付的数据集版本不满足已批准需求快照；或该交付没有需求核对记录（NULL 表示未核对，不等于通过）；或 ready 复核时版本事实已漂移。details 含逐维度 expected/actual/status。"
     }
   ]
 }
