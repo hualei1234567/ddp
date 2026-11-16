@@ -23,6 +23,7 @@
 | [adr/0017-video-review-player.md](adr/0017-video-review-player.md) | 视频审看播放器选型：hls.js + 原生 video，不自研内核 | ACCEPTED |
 | [adr/0016-jwt-verification-via-pyjwt.md](adr/0016-jwt-verification-via-pyjwt.md) | JWT 校验迁移到 PyJWT，claim 策略仍由 DDP 裁决 | ACCEPTED |
 | [architecture/阶段7-全链路实施计划-Human1M.md](architecture/阶段7-全链路实施计划-Human1M.md) | NVIDIA Human-1M 全链路实施计划与诚实边界 | 已执行 |
+| [testing/主链端到端与可追溯性验收-2026-11-17.md](testing/主链端到端与可追溯性验收-2026-11-17.md) | **主链端到端与可追溯性验收**：逐跳状态矩阵、血缘正反向核查、跨项目隔离、修掉的断点与修不了的原因 | **现行** |
 | [testing/evidence/2026-11-15-human1m-chain/README.md](testing/evidence/2026-11-15-human1m-chain/README.md) | **真实数据全链路验收报告**：39 视频下载/解析/审看/审核/质量报告 | **已通过** |
 | [architecture/outbox事件语义界定-v1.0.md](architecture/outbox事件语义界定-v1.0.md) | 投递类 vs 留痕类事件的判据与归类（R-13 规则） | 现行 |
 
