@@ -107,6 +107,19 @@
 `ingestion.*` 的条目里有 1 条是投递类（上述 validation_requested），
 其余（上传会话/分片的进度与状态留痕）为留痕类。
 
+### 3.2.1 场地域（N9 多基地）
+
+| 事件 | 产生点 | 归类 |
+|---|---|---|
+| `location.created` | `LOCATION_CREATED_EVENT`（`application/locations/use_cases.py`） | 留痕类 |
+| `location.updated` | `LOCATION_UPDATED_EVENT`（同上） | 留痕类 |
+
+两者都是留痕类：场地的创建与改名不需要任何 worker 响应，下游读取的是
+`locations` 表本身。前缀 `location` 已登记在
+`scripts/check_outbox_events.py` 的 `_EVENT_DOMAINS`，否则该脚本会以
+"形态像领域事件但首段不在白名单"报警——这条守卫正是为了让新域必须显式登记。
+
+
 ### 3.3 R-13 收尾：其余域的动作事件静态化
 
 设备域之外还有 20 处 `event_type=f"..."`（数据集 / 数据源 / 摄入 / modelops /
