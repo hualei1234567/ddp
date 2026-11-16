@@ -29,7 +29,7 @@ from app.domain.datasets.training_state_machines import (
     revision_transition_pairs,
 )
 
-_JSON_COLUMNS = frozenset({"snapshot", "split_counts", "scope"})
+_JSON_COLUMNS = frozenset({"snapshot", "split_counts", "scope", "requirement_match"})
 
 
 def _pairs_sql(
@@ -111,12 +111,31 @@ def _transition_sqlite(
     """
 
 
-def _immutable_sqlite(table: str, columns: tuple[str, ...], message: str) -> str:
+def _immutable_sqlite(
+    table: str,
+    columns: tuple[str, ...],
+    message: str,
+    *,
+    existing: frozenset[str] | None = None,
+) -> str:
+    """生成不可变触发器。
+
+    ``existing`` 给出该表**当前实际存在**的列。守卫的列清单是源码常量，而
+    迁移可能在它之后再删列——若触发器仍引用已删除的列，SQLite 会在删列时
+    报 ``error in trigger ...: no such column: OLD.xxx`` 让回滚失败（
+    迁移 0038 的 downgrade 就是这么炸的）。因此生成 SQL 时按实际列过滤，
+    只保留真实存在的列。
+
+    一条列都不存在时返回空串，调用方跳过——建一个永不触发的触发器没有意义。
+    """
+    active = columns if existing is None else tuple(c for c in columns if c in existing)
+    if not active:
+        return ""
     return f"""
     CREATE TRIGGER IF NOT EXISTS trg_{table}_immutable
     BEFORE UPDATE ON {table}
     FOR EACH ROW
-    WHEN ({_any_changed_sqlite(columns)})
+    WHEN ({_any_changed_sqlite(active)})
     BEGIN
         SELECT RAISE(ABORT, '{message}');
     END
@@ -157,17 +176,50 @@ _DELIVERY_TERMINAL_SQL = _terminal_sql(delivery_terminal_states())
 _EXTERNAL_TERMINAL_SQL = _terminal_sql(external_terminal_states())
 _GRANT_TERMINAL_SQL = _terminal_sql(grant_terminal_states())
 
-_SQLITE_STATEMENTS = (
-    _insert_initial_sqlite("training_requests", "DRAFT", "training_request_initial_status_invalid"),
-    _transition_sqlite(
-        "training_requests", _REQUEST_PAIRS, "training_request_state_transition_invalid"
-    ),
-    _immutable_sqlite(
-        "training_requests",
-        REQUEST_IMMUTABLE_COLUMNS,
-        "training_request_identity_immutable",
-    ),
-    f"""
+
+def _existing_columns(connection: Connection) -> dict[str, frozenset[str]]:
+    """读出被守卫表的实际列集合，供生成触发器时过滤。"""
+    inspector = inspect(connection)
+    result: dict[str, frozenset[str]] = {}
+    for _trigger, table, _event, _function in _TRIGGERS:
+        if table in result:
+            continue
+        if not inspector.has_table(table):
+            result[table] = frozenset()
+            continue
+        result[table] = frozenset(column["name"] for column in inspector.get_columns(table))
+    return result
+
+
+def _sqlite_statements(connection: Connection) -> tuple[str, ...]:
+    """按**当前实际表结构**生成 SQLite 守卫语句。
+
+    为什么不是模块级常量：列清单是源码常量，迁移可能在之后删列。静态常量
+    生成的触发器会永久引用那个列名，SQLite 在 ``ALTER TABLE ... DROP COLUMN``
+    时校验触发器正文并失败——迁移 0038 的 downgrade 因此无法回滚。改为每次
+    安装时读一遍实际列，天然与 schema 同步；空语句直接跳过。
+    """
+    existing = _existing_columns(connection)
+    return tuple(statement for statement in _sqlite_statement_templates(existing) if statement)
+
+
+def _sqlite_statement_templates(
+    existing: dict[str, frozenset[str]],
+) -> tuple[str, ...]:
+    return (
+        _insert_initial_sqlite(
+            "training_requests", "DRAFT", "training_request_initial_status_invalid"
+        ),
+        _transition_sqlite(
+            "training_requests", _REQUEST_PAIRS, "training_request_state_transition_invalid"
+        ),
+        _immutable_sqlite(
+            "training_requests",
+            REQUEST_IMMUTABLE_COLUMNS,
+            "training_request_identity_immutable",
+            existing=existing.get("training_requests"),
+        ),
+        f"""
     CREATE TRIGGER IF NOT EXISTS trg_training_requests_terminal_immutable
     BEFORE UPDATE ON training_requests
     FOR EACH ROW
@@ -176,21 +228,24 @@ _SQLITE_STATEMENTS = (
         SELECT RAISE(ABORT, 'training_request_terminal_immutable');
     END
     """,
-    _no_delete_sqlite("training_requests", "training_request_delete_forbidden"),
-    _insert_initial_sqlite(
-        "training_request_revisions", "DRAFT", "training_request_revision_initial_status_invalid"
-    ),
-    _transition_sqlite(
-        "training_request_revisions",
-        _REVISION_PAIRS,
-        "training_request_revision_state_transition_invalid",
-    ),
-    _immutable_sqlite(
-        "training_request_revisions",
-        REVISION_IMMUTABLE_COLUMNS,
-        "training_request_revision_immutable",
-    ),
-    f"""
+        _no_delete_sqlite("training_requests", "training_request_delete_forbidden"),
+        _insert_initial_sqlite(
+            "training_request_revisions",
+            "DRAFT",
+            "training_request_revision_initial_status_invalid",
+        ),
+        _transition_sqlite(
+            "training_request_revisions",
+            _REVISION_PAIRS,
+            "training_request_revision_state_transition_invalid",
+        ),
+        _immutable_sqlite(
+            "training_request_revisions",
+            REVISION_IMMUTABLE_COLUMNS,
+            "training_request_revision_immutable",
+            existing=existing.get("training_request_revisions"),
+        ),
+        f"""
     CREATE TRIGGER IF NOT EXISTS trg_training_request_revisions_decision_immutable
     BEFORE UPDATE ON training_request_revisions
     FOR EACH ROW
@@ -200,7 +255,7 @@ _SQLITE_STATEMENTS = (
         SELECT RAISE(ABORT, 'training_request_revision_decision_immutable');
     END
     """,
-    f"""
+        f"""
     CREATE TRIGGER IF NOT EXISTS trg_training_request_revisions_terminal_immutable
     BEFORE UPDATE ON training_request_revisions
     FOR EACH ROW
@@ -209,17 +264,22 @@ _SQLITE_STATEMENTS = (
         SELECT RAISE(ABORT, 'training_request_revision_terminal_immutable');
     END
     """,
-    _no_delete_sqlite("training_request_revisions", "training_request_revision_delete_forbidden"),
-    _insert_initial_sqlite(
-        "training_deliveries", "DRAFT", "training_delivery_initial_status_invalid"
-    ),
-    _transition_sqlite(
-        "training_deliveries", _DELIVERY_PAIRS, "training_delivery_state_transition_invalid"
-    ),
-    _immutable_sqlite(
-        "training_deliveries", DELIVERY_IMMUTABLE_COLUMNS, "training_delivery_reference_immutable"
-    ),
-    f"""
+        _no_delete_sqlite(
+            "training_request_revisions", "training_request_revision_delete_forbidden"
+        ),
+        _insert_initial_sqlite(
+            "training_deliveries", "DRAFT", "training_delivery_initial_status_invalid"
+        ),
+        _transition_sqlite(
+            "training_deliveries", _DELIVERY_PAIRS, "training_delivery_state_transition_invalid"
+        ),
+        _immutable_sqlite(
+            "training_deliveries",
+            DELIVERY_IMMUTABLE_COLUMNS,
+            "training_delivery_reference_immutable",
+            existing=existing.get("training_deliveries"),
+        ),
+        f"""
     CREATE TRIGGER IF NOT EXISTS trg_training_deliveries_terminal_immutable
     BEFORE UPDATE ON training_deliveries
     FOR EACH ROW
@@ -228,25 +288,26 @@ _SQLITE_STATEMENTS = (
         SELECT RAISE(ABORT, 'training_delivery_terminal_immutable');
     END
     """,
-    _no_delete_sqlite("training_deliveries", "training_delivery_delete_forbidden"),
-    _insert_initial_sqlite(
-        "external_training_references",
-        "SUBMITTED",
-        "external_training_reference_initial_status_invalid",
-        column="external_status",
-    ),
-    _transition_sqlite(
-        "external_training_references",
-        _EXTERNAL_PAIRS,
-        "external_training_reference_state_transition_invalid",
-        column="external_status",
-    ),
-    _immutable_sqlite(
-        "external_training_references",
-        EXTERNAL_IMMUTABLE_COLUMNS,
-        "external_training_reference_identity_immutable",
-    ),
-    f"""
+        _no_delete_sqlite("training_deliveries", "training_delivery_delete_forbidden"),
+        _insert_initial_sqlite(
+            "external_training_references",
+            "SUBMITTED",
+            "external_training_reference_initial_status_invalid",
+            column="external_status",
+        ),
+        _transition_sqlite(
+            "external_training_references",
+            _EXTERNAL_PAIRS,
+            "external_training_reference_state_transition_invalid",
+            column="external_status",
+        ),
+        _immutable_sqlite(
+            "external_training_references",
+            EXTERNAL_IMMUTABLE_COLUMNS,
+            "external_training_reference_identity_immutable",
+            existing=existing.get("external_training_references"),
+        ),
+        f"""
     CREATE TRIGGER IF NOT EXISTS trg_external_training_references_terminal_immutable
     BEFORE UPDATE ON external_training_references
     FOR EACH ROW
@@ -255,17 +316,22 @@ _SQLITE_STATEMENTS = (
         SELECT RAISE(ABORT, 'external_training_reference_terminal_immutable');
     END
     """,
-    _no_delete_sqlite(
-        "external_training_references", "external_training_reference_delete_forbidden"
-    ),
-    _insert_initial_sqlite(
-        "dataset_grants", "PENDING_APPROVAL", "dataset_grant_initial_status_invalid"
-    ),
-    _transition_sqlite("dataset_grants", _GRANT_PAIRS, "dataset_grant_state_transition_invalid"),
-    _immutable_sqlite(
-        "dataset_grants", GRANT_IMMUTABLE_COLUMNS, "dataset_grant_identity_immutable"
-    ),
-    f"""
+        _no_delete_sqlite(
+            "external_training_references", "external_training_reference_delete_forbidden"
+        ),
+        _insert_initial_sqlite(
+            "dataset_grants", "PENDING_APPROVAL", "dataset_grant_initial_status_invalid"
+        ),
+        _transition_sqlite(
+            "dataset_grants", _GRANT_PAIRS, "dataset_grant_state_transition_invalid"
+        ),
+        _immutable_sqlite(
+            "dataset_grants",
+            GRANT_IMMUTABLE_COLUMNS,
+            "dataset_grant_identity_immutable",
+            existing=existing.get("dataset_grants"),
+        ),
+        f"""
     CREATE TRIGGER IF NOT EXISTS trg_dataset_grants_terminal_immutable
     BEFORE UPDATE ON dataset_grants
     FOR EACH ROW
@@ -274,8 +340,8 @@ _SQLITE_STATEMENTS = (
         SELECT RAISE(ABORT, 'dataset_grant_terminal_immutable');
     END
     """,
-    _no_delete_sqlite("dataset_grants", "dataset_grant_delete_forbidden"),
-)
+        _no_delete_sqlite("dataset_grants", "dataset_grant_delete_forbidden"),
+    )
 
 
 def _pg_function(name: str, body: str) -> str:
@@ -563,7 +629,7 @@ def install_training_guards(connection: Connection) -> None:
         return
     dialect = connection.dialect.name
     if dialect == "sqlite":
-        for statement in _SQLITE_STATEMENTS:
+        for statement in _sqlite_statements(connection):
             connection.exec_driver_sql(statement)
         return
     if dialect == "postgresql":

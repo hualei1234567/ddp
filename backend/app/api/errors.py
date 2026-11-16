@@ -471,6 +471,7 @@ _DATASET_STATUS_BY_CODE = {
     "training_delivery_acceptance_forbidden": 403,
     "training_delivery_already_accepted": 409,
     "training_delivery_mismatch": 422,
+    "training_delivery_requirement_unmet": 422,
     "training_adapter_unavailable": 503,
     "training_adapter_unsupported": 422,
     "training_external_run_conflict": 409,
@@ -531,6 +532,9 @@ _DATASET_MESSAGES = {
     "training_delivery_acceptance_forbidden": "交付创建人不得验收自己创建的交付",
     "training_delivery_already_accepted": "交付已验收，不能重复修改",
     "training_delivery_mismatch": "交付与需求 revision、数据集版本或导出任务不匹配",
+    "training_delivery_requirement_unmet": (
+        "数据集版本未满足已批准需求，禁止交付（按策略可配置为仅告警）"
+    ),
     "training_adapter_unavailable": "外部训练平台当前不可达",
     "training_adapter_unsupported": "训练 Adapter 不支持该能力",
     "training_external_run_conflict": "外部训练 run 或幂等键冲突",
@@ -548,6 +552,10 @@ _DATASET_DETAILS_SAFE_CODES = frozenset(
         "dataset_annotation_not_approved",
         "dataset_annotation_snapshot_mismatch",
         "dataset_access_denied",
+        # TRN-002：逐维度核对结论（维度名、期望值、版本实际值）必须回显，
+        # 否则交付方只能按 code 猜"差在哪一维"。details 只含需求快照字段与
+        # 该版本自身的聚合事实，不含跨项目对象名或存在性信息。
+        "training_delivery_requirement_unmet",
     }
 )
 

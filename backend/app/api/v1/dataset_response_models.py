@@ -603,6 +603,9 @@ class TrainingDeliveryOut(BaseModel):
     format: str | None = None
     format_version: str | None = None
     quality_report_ref: str | None = None
+    # TRN-002 需求核对报告。None 表示该交付建立于核对能力上线之前，
+    # **不是**"核对通过"；客户端必须区分三态。
+    requirement_match: dict[str, Any] | None = None
     status: str
     delivered_at: datetime | None = None
     accepted_by: UUID | None = None

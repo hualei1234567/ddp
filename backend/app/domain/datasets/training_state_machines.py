@@ -267,6 +267,11 @@ DELIVERY_IMMUTABLE_COLUMNS: tuple[str, ...] = (
     "format",
     "format_version",
     "quality_report_ref",
+    # 需求核对报告是「交付的这批数据是否满足已批准需求」的留证，一旦落库不可改：
+    # 迁移 0038 的文档早已声明它在清单里，实际漏登记——等于允许事后把
+    # FAILED/UNVERIFIABLE 改成 PASSED，绕开 N6 的全部阻断逻辑。触发器与
+    # 应用层共用本清单，登记在这里两处同时生效。
+    "requirement_match",
     "created_at",
     "created_by",
 )

@@ -213,6 +213,9 @@ class TrainingDeliveryModel(Base):
     format: Mapped[str] = mapped_column(String(16), nullable=False)
     format_version: Mapped[str] = mapped_column(String(64), nullable=False)
     quality_report_ref: Mapped[str | None] = mapped_column(String(71), nullable=True)
+    # TRN-002：创建交付时生成的需求匹配报告（不可变）。NULL 表示该交付建立于
+    # 核对能力上线之前，**不等于**核对通过——读取方不得把 NULL 当 PASSED。
+    requirement_match: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     accepted_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)

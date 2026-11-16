@@ -88,7 +88,7 @@ from app.infrastructure.db.collection_guards import (
 )
 
 revision = "0040"
-down_revision = "0034"
+down_revision = "0038"
 branch_labels = None
 depends_on = None
 
