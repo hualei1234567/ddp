@@ -8,9 +8,14 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+import json
+from types import SimpleNamespace
+from uuid import UUID, uuid4
 
+import pytest
 from app.core.config import Settings
+from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import ApiIds, make_client
@@ -264,3 +269,89 @@ def test_ready_rechecks_and_rejects_drifted_facts(
     # ready 不改写核对报告（该列不可变）。
     assert ready.json()["requirement_match"] == delivery["requirement_match"]
     assert run_export_worker(factory, ctx["storage"]).status in {"IDLE", "PUBLISHED"}
+
+
+def test_legacy_delivery_without_report_cannot_become_ready() -> None:
+    """核对能力上线前建的交付没有 ``requirement_match``，不得进入 READY。
+
+    NULL 表示「未核对」，不是「通过」。这条最容易在后续重构里被写成
+    ``if recorded is None: return``（当成"无需核对"放行）——那就等于用
+    「没检查」冒充「检查通过」，正是本模块三态设计要防的事。
+
+    这里直接驱动用例层而不是改库：该列现在是不可变的（见
+    ``test_recorded_match_report_is_immutable``），历史数据的形态只能
+    通过构造一个 ``requirement_match=None`` 的交付对象来模拟。
+    """
+    from app.application.datasets.training_deliveries import TrainingDeliveryUseCases
+
+    delivery = SimpleNamespace(
+        training_delivery_id=uuid4(),
+        requirement_match=None,
+        training_request_revision_id=uuid4(),
+    )
+    use_cases = TrainingDeliveryUseCases.__new__(TrainingDeliveryUseCases)
+    with pytest.raises(Exception) as caught:
+        # 只走到"是否有核对记录"这一层，不触达后续依赖。
+        use_cases._assert_recorded_match_still_valid(
+            scope=None, delivery=delivery, version=None, job=None
+        )
+    code = getattr(caught.value, "code", None)
+    assert code == _UNMET_CODE, f"应为需求未满足，实际 {type(caught.value).__name__}"
+    assert "没有需求核对记录" in str(caught.value)
+
+
+def test_recorded_match_report_is_immutable(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """核对报告落库后不可改：直接 UPDATE 必须被数据库拒绝。
+
+    这是 N6 阻断逻辑的最后一道防线。迁移 0038 的文档早就声明该列在
+    ``DELIVERY_IMMUTABLE_COLUMNS`` 里、应用层与触发器共用同一份清单，
+    但实际清单漏登记——等于允许事后把 FAILED/UNVERIFIABLE 改成 PASSED，
+    把「交付不合需求」的证据抹掉。本用例守住这条。
+    """
+    factory, ids = api_db
+    ctx = build_deliverable(factory, ids)
+    editor = make_client(factory, ids.editor_a, object_storage=ctx["storage"])
+    request_body = approved_request(
+        editor, make_client(factory, ids.owner_a), ids.project_a, ids.owner_a
+    )
+    created = editor.post(
+        url(ids.project_a, "/training-deliveries"),
+        json=delivery_payload(request_body, ctx, recipient_id=ids.owner_a),
+        headers={"Idempotency-Key": f"delivery-{uuid4().hex[:8]}"},
+    )
+    assert created.status_code == 201, created.text
+    delivery_id = created.json()["training_delivery_id"]
+
+    # SQLite 触发器抛 IntegrityError（RAISE(ABORT)）；PostgreSQL 抛 CheckViolation。
+    # 用绑定参数传 JSON 文本，避免引号在 SQL 字面量里转义出错导致"改了但没变"。
+    # SQLite 把 UUID 存成无连字符的 32 位十六进制，直接用字符串比对会对不上，
+    # 统一解析成 UUID 再比较。
+    with factory() as session:
+        listing = session.execute(
+            text("SELECT id, requirement_match FROM training_deliveries")
+        ).fetchall()
+    target = UUID(str(delivery_id))
+    before = next((value for row_id, value in listing if UUID(str(row_id)) == target), None)
+    # UUID 在 SQLite 里是无连字符形式，WHERE 也必须用同样的写法，
+    # 否则 UPDATE 一行都匹配不到 —— 触发器不会触发，用例会假绿。
+    raw_id = next(str(row_id) for row_id, value in listing if value == before)
+    forged = json.dumps({"status": "PASSED"})
+    assert forged != before, "伪造值必须与原始值不同，否则触发器不认为发生变更"
+    with pytest.raises(IntegrityError):
+        with factory() as session:
+            session.execute(
+                text(
+                    "UPDATE training_deliveries SET requirement_match = :forged " "WHERE id = :id"
+                ),
+                {"forged": forged, "id": raw_id},
+            )
+            session.commit()
+
+    with factory() as session:
+        stored = session.execute(
+            text("SELECT requirement_match FROM training_deliveries WHERE id = :id"),
+            {"id": raw_id},
+        ).scalar_one()
+    assert json.loads(stored)["status"] == "UNVERIFIABLE", "原结论不得被篡改"

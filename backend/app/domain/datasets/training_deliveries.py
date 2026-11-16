@@ -337,7 +337,10 @@ def new_training_delivery(
     item_count: int,
     split_counts: dict[str, int],
     quality_report_ref: str | None,
-    requirement_match: dict[str, object] | None,
+    # 默认 None 与实体字段一致：None 表示"未核对"，不是"通过"。
+    # 不给默认值会破坏所有既有调用方（构造一条不涉及需求核对语义的交付
+    # 也必须传这个参数），而它确实有合法的缺省形态——历史交付就是。
+    requirement_match: dict[str, object] | None = None,
     actor_id: UUID,
     now: datetime,
 ) -> TrainingDelivery:

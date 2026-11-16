@@ -14,8 +14,20 @@ TRN-002：交付时必须把「已批准需求快照」与「实际交付的数�
 - 存 ``MatchReport.to_payload()`` 的稳定载荷（逐维度 expected/actual/status）。
 - **可空**：本列上线前创建的交付没有核对记录。NULL 表示"未核对"，
   **不等于**通过；读取方不得把 NULL 折叠成 PASSED。
-- 写入后不可变：``DELIVERY_IMMUTABLE_COLUMNS`` 已加入该列，应用层与
-  ``training_guards`` 的触发器共用同一份清单，防止事后把 FAILED 改成 PASSED。
+- 写入后不可变：``DELIVERY_IMMUTABLE_COLUMNS`` 里登记了该列，应用层与
+  ``training_guards`` 的触发器共用同一份清单，防止事后把 FAILED/UNVERIFIABLE
+  改成 PASSED。（初版只写进了这里，清单本身漏登记，等于保护完全不存在——
+  已补上，并有 ``test_recorded_match_report_is_immutable`` 守着。）
+
+回滚动作顺序不是可选的
+--------------------
+``downgrade`` 必须先 ``drop_training_guards`` 再 ``drop_column``，最后
+``install_training_guards``。原因：该列是不可变清单的一员，触发器正文里
+引用了它，而 SQLite 在执行 ``ALTER TABLE ... DROP COLUMN`` 时会校验触发器
+正文——引用已删列直接报
+``error in trigger trg_training_deliveries_immutable after drop column:
+no such column: OLD.requirement_match``，让整条回滚失败。实测复现过。
+重装守卫时按删列后的实际结构生成，不会把该列写回去。
 
 为什么需要存在性判断（不是防御性编程，是真实的两条路径）
 --------------------------------------------------------
@@ -42,6 +54,10 @@ from __future__ import annotations
 
 import sqlalchemy as sa
 from alembic import op
+from app.infrastructure.db.training_guards import (
+    drop_training_guards,
+    install_training_guards,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "0038"
@@ -71,4 +87,12 @@ def upgrade() -> None:
 def downgrade() -> None:
     if not _has_column():
         return
+    # 删列前必须先拆训练守卫：``training_deliveries`` 的不可变触发器正文里
+    # 引用了本列（它是 DELIVERY_IMMUTABLE_COLUMNS 的一员）。SQLite 在
+    # ``DROP COLUMN`` 时会校验触发器正文，引用已删列直接报
+    # ``error in trigger ...: no such column: OLD.requirement_match``，
+    # 让回滚整条失败——实测如此。先 drop 再 drop column，最后重装守卫
+    # （重装时按删列后的实际结构生成，不会再把该列写回去）。
+    drop_training_guards(op.get_bind())
     op.drop_column(_TABLE, _COLUMN)
+    install_training_guards(op.get_bind())
