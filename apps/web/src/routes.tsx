@@ -20,6 +20,8 @@ import AnnotationTaskDetailPage from "./pages/annotation/AnnotationTaskDetailPag
 import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
 import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
 import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPage";
+import CollectionAssetDetailPage from "./pages/collectionAssets/AssetDetailPage";
+import CollectionAssetListPage from "./pages/collectionAssets/AssetListPage";
 import AssetReviewPage from "./pages/datasources/AssetReviewPage";
 import DataSourceListPage from "./pages/datasources/DataSourceListPage";
 import ImportListPage from "./pages/datasources/ImportListPage";
@@ -39,6 +41,8 @@ import DeviceListPage from "./pages/devices/DeviceListPage";
 import EpisodeDetailPage from "./pages/episodes/EpisodeDetailPage";
 import EpisodeListPage from "./pages/episodes/EpisodeListPage";
 import Forbidden from "./pages/Forbidden";
+import LocationDetailPage from "./pages/locations/LocationDetailPage";
+import LocationListPage from "./pages/locations/LocationListPage";
 import DataGapPage from "./pages/models/DataGapPage";
 import EvaluationDetailPage from "./pages/models/EvaluationDetailPage";
 import EvaluationListPage from "./pages/models/EvaluationListPage";
@@ -75,6 +79,16 @@ function CollectionIndexRedirect() {
   return (
     <Navigate
       to={{ pathname: "/collection/tasks", search: location.search }}
+      replace
+    />
+  );
+}
+
+function CollectionAssetIndexRedirect() {
+  const location = useLocation();
+  return (
+    <Navigate
+      to={{ pathname: "/collection-assets/plans", search: location.search }}
       replace
     />
   );
@@ -117,6 +131,17 @@ export default function AppRoutes() {
           path="collection/workbench/:taskId"
           element={<WorkbenchPage />}
         />
+        <Route path="collection-assets" element={<CollectionAssetIndexRedirect />} />
+        <Route
+          path="collection-assets/:assetType"
+          element={<CollectionAssetListPage />}
+        />
+        <Route
+          path="collection-assets/:assetType/:assetId"
+          element={<CollectionAssetDetailPage />}
+        />
+        <Route path="locations" element={<LocationListPage />} />
+        <Route path="locations/:locationId" element={<LocationDetailPage />} />
         <Route path="episodes" element={<EpisodeListPage />} />
         <Route path="episodes/:episodeId" element={<EpisodeDetailPage />} />
         <Route path="raw-assets/:assetId" element={<RawAssetDetailPage />} />
