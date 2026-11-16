@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import pytest
 from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -475,3 +476,461 @@ def test_asset_response_project_id_is_server_authoritative(
     )
     assert response.status_code == 422
     assert UUID(str(ids.project_a)) != UUID(str(ids.project_b))
+
+
+# --- N8 写路径：状态动作 / PATCH / DELETE -----------------------------------
+def _act(
+    client: TestClient,
+    project_id: object,
+    path: str,
+    asset_id: object,
+    action: str,
+    *,
+    version: int,
+    key: str | None = None,
+    json: dict[str, object] | None = None,
+) -> object:
+    headers = {"If-Match": f'"{version}"'}
+    if key is not None:
+        headers["Idempotency-Key"] = key
+    return client.post(
+        _url(project_id, path, f"/{asset_id}/actions/{action}"),
+        headers=headers,
+        json=json,
+    )
+
+
+ASSET_KINDS = (
+    ("collection-plans", "plan_id", plan_payload),
+    ("collection-sops", "sop_id", sop_payload),
+    ("scenarios", "scenario_id", scenario_payload),
+    ("action-specs", "action_spec_id", action_spec_payload),
+)
+
+
+@pytest.mark.parametrize(("path", "id_field", "factory"), ASSET_KINDS)
+def test_full_lifecycle_reaches_archived_and_stops_there(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    path: str,
+    id_field: str,
+    factory: object,
+) -> None:
+    """四类素材完整链路：DRAFT → ACTIVE → ARCHIVED，之后不可再迁出。
+
+    N8 的核心价值就是这个断言：在此之前 ``ACTIVE`` / ``ARCHIVED`` 两个枚举值
+    永远不可到达，``version`` 也不可演进。
+    """
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, path, factory())  # type: ignore[operator]
+    asset_id = created[id_field]
+    assert created["status"] == "DRAFT"
+    assert created["version"] == 1
+
+    activated = _act(client, ids.project_a, path, asset_id, "activate", version=1)
+    assert activated.status_code == 200, activated.text
+    assert activated.json()["status"] == "ACTIVE"
+    assert activated.json()["version"] == 2
+
+    archived = _act(client, ids.project_a, path, asset_id, "archive", version=2)
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["status"] == "ARCHIVED"
+    assert archived.json()["version"] == 3
+
+    # 终态：任何迁出都必须被拒绝，且不能"未知状态默认成功"。
+    for action in ("activate", "archive"):
+        denied = _act(client, ids.project_a, path, asset_id, action, version=3)
+        assert denied.status_code == 409, denied.text
+        assert denied.json()["error"]["code"] == "state_transition_invalid"
+
+
+@pytest.mark.parametrize(("path", "id_field", "factory"), ASSET_KINDS)
+def test_illegal_migration_is_conflict(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    path: str,
+    id_field: str,
+    factory: object,
+) -> None:
+    """跳过中间状态必须失败：DRAFT 不能直接 archive。"""
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, path, factory())  # type: ignore[operator]
+
+    denied = _act(client, ids.project_a, path, created[id_field], "archive", version=1)
+    assert denied.status_code == 409
+    assert denied.json()["error"]["code"] == "state_transition_invalid"
+
+
+def test_unknown_action_is_validation_error(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, "collection-plans", plan_payload())
+
+    denied = _act(
+        client, ids.project_a, "collection-plans", created["plan_id"], "publish", version=1
+    )
+    assert denied.status_code == 422
+    assert denied.json()["error"]["code"] == "validation_failed"
+
+
+def test_action_requires_if_match_and_rejects_stale_version(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, "collection-plans", plan_payload())
+    url = _url(ids.project_a, "collection-plans", f"/{created['plan_id']}/actions/activate")
+
+    missing = client.post(url)
+    assert missing.status_code == 428
+    assert missing.json()["error"]["code"] == "precondition_required"
+
+    stale = client.post(url, headers={"If-Match": '"7"'})
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "version_conflict"
+
+    invalid = client.post(url, headers={"If-Match": "not-a-version"})
+    assert invalid.status_code == 422
+    assert invalid.json()["error"]["code"] == "validation_failed"
+
+
+def test_action_idempotency_replay_returns_same_state(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """同键同体重放必须返回同一结果；同键不同体必须 409。
+
+    重放拿到的版本号是**当前**版本（3），不是当时响应里的 2——因为重放读的是
+    资源本身。这仍然满足幂等语义：客户端看到的状态与首次一致。
+    """
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, "collection-plans", plan_payload())
+    plan_id = created["plan_id"]
+
+    key = "asset-action-idem-1"
+    headers = {"If-Match": '"1"', "Idempotency-Key": key}
+    url = _url(ids.project_a, "collection-plans", f"/{plan_id}/actions/activate")
+    first = client.post(url, headers=headers)
+    replay = client.post(url, headers=headers)
+    assert first.status_code == 200, first.text
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["status"] == "ACTIVE"
+    # 重放读的是资源本身，因此拿到的是当前版本而不是首次响应里的版本。
+    assert replay.json()["version"] == 2
+    # 只有一次迁移：重放没有把状态再推进一步。
+    assert len(client.get(_url(ids.project_a, "collection-plans")).json()["items"]) == 1
+
+    # 同键不同体：必须报 idempotency_key_reused，不能静默当成重放。
+    reused = client.post(
+        _url(ids.project_a, "collection-plans", f"/{plan_id}/actions/archive"),
+        headers={"If-Match": '"2"', "Idempotency-Key": key},
+    )
+    assert reused.status_code == 409
+    assert reused.json()["error"]["code"] == "idempotency_key_reused"
+
+
+def test_action_writes_audit_and_outbox(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, "collection-plans", plan_payload())
+    _act(client, ids.project_a, "collection-plans", created["plan_id"], "activate", version=1)
+
+    with db_factory() as session:
+        actions = session.scalars(
+            select(AuditLog.action).where(
+                AuditLog.project_id == ids.project_a,
+                AuditLog.resource_type == "COLLECTION_PLAN",
+            )
+        ).all()
+        assert sorted(actions) == ["activate", "create"]
+        events = session.scalars(
+            select(OutboxEvent.event_type).where(OutboxEvent.project_id == ids.project_a)
+        ).all()
+        assert "collection.plan.status_changed" in events
+        # 留痕类事件：写入即 RECORDED，不进重试队列。
+        statuses = session.scalars(
+            select(OutboxEvent.status).where(OutboxEvent.project_id == ids.project_a)
+        ).all()
+        assert set(statuses) == {"RECORDED"}
+
+
+@pytest.mark.parametrize(("path", "id_field", "factory"), ASSET_KINDS)
+def test_patch_updates_descriptive_fields_on_draft_and_active(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    path: str,
+    id_field: str,
+    factory: object,
+) -> None:
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, path, factory())  # type: ignore[operator]
+    asset_id = created[id_field]
+
+    drafted = client.patch(
+        _url(ids.project_a, path, f"/{asset_id}"),
+        headers={"If-Match": '"1"'},
+        json={"name": "改过名", "description": "说明"},
+    )
+    assert drafted.status_code == 200, drafted.text
+    assert drafted.json()["name"] == "改过名"
+    assert drafted.json()["version"] == 2
+    # ``code`` 不会被 PATCH 改动。
+    assert drafted.json()["code"] == created["code"]
+
+    assert _act(client, ids.project_a, path, asset_id, "activate", version=2).status_code == 200
+    active = client.patch(
+        _url(ids.project_a, path, f"/{asset_id}"),
+        headers={"If-Match": '"3"'},
+        json={"description": "ACTIVE 下仍可改描述"},
+    )
+    assert active.status_code == 200, active.text
+    assert active.json()["description"] == "ACTIVE 下仍可改描述"
+    assert active.json()["version"] == 4
+
+
+def test_patch_cannot_change_code_or_execution_content(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """``code`` 是业务标识；``steps`` / ``actions`` 是执行内容。
+
+    两者都不在 PATCH 模型里，因此客户端提交即 422（``extra="forbid"``），
+    不会出现"提交了但被静默忽略"的情况。
+    """
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    sop = _create(client, ids.project_a, "collection-sops", sop_payload())
+
+    for payload in ({"code": "NEW-CODE"}, {"steps": []}, {"sop_version": "v9"}):
+        denied = client.patch(
+            _url(ids.project_a, "collection-sops", f"/{sop['sop_id']}"),
+            headers={"If-Match": '"1"'},
+            json=payload,
+        )
+        assert denied.status_code == 422, (payload, denied.text)
+        assert denied.json()["error"]["code"] == "validation_failed"
+
+
+def test_patch_archived_is_immutable(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, "collection-plans", plan_payload())
+    plan_id = created["plan_id"]
+    assert (
+        _act(client, ids.project_a, "collection-plans", plan_id, "activate", version=1).status_code
+        == 200
+    )
+    assert (
+        _act(client, ids.project_a, "collection-plans", plan_id, "archive", version=2).status_code
+        == 200
+    )
+
+    denied = client.patch(
+        _url(ids.project_a, "collection-plans", f"/{plan_id}"),
+        headers={"If-Match": '"3"'},
+        json={"description": "归档后还想改"},
+    )
+    assert denied.status_code == 409
+    assert denied.json()["error"]["code"] == "resource_immutable"
+
+
+def test_patch_requires_if_match(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, "collection-plans", plan_payload())
+
+    missing = client.patch(
+        _url(ids.project_a, "collection-plans", f"/{created['plan_id']}"),
+        json={"name": "改名"},
+    )
+    assert missing.status_code == 428
+    assert missing.json()["error"]["code"] == "precondition_required"
+
+
+def test_patch_empty_body_is_rejected(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, "collection-plans", plan_payload())
+
+    denied = client.patch(
+        _url(ids.project_a, "collection-plans", f"/{created['plan_id']}"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    assert denied.status_code == 422
+    assert denied.json()["error"]["code"] == "validation_failed"
+
+
+def test_scenario_scene_labels_patch(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, "scenarios", scenario_payload())
+
+    updated = client.patch(
+        _url(ids.project_a, "scenarios", f"/{created['scenario_id']}"),
+        headers={"If-Match": '"1"'},
+        json={"scene_labels": ["仓储", "仓储", "桌面"]},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["scene_labels"] == ["仓储", "桌面"]
+
+
+# --- DELETE -----------------------------------------------------------------
+@pytest.mark.parametrize(("path", "id_field", "factory"), ASSET_KINDS)
+def test_owner_deletes_draft_asset(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    path: str,
+    id_field: str,
+    factory: object,
+) -> None:
+    db_factory, ids = api_db
+    editor = make_client(db_factory, ids.editor_a)
+    owner = make_client(db_factory, ids.owner_a)
+    created = _create(editor, ids.project_a, path, factory())  # type: ignore[operator]
+    asset_id = created[id_field]
+
+    # 编辑者无 DELETE 权限（删除是不可逆动作，沿用既有权限矩阵）。
+    denied = editor.delete(_url(ids.project_a, path, f"/{asset_id}"))
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "forbidden"
+
+    response = owner.delete(_url(ids.project_a, path, f"/{asset_id}"))
+    assert response.status_code == 204, response.text
+    assert owner.get(_url(ids.project_a, path, f"/{asset_id}")).status_code == 404
+
+
+@pytest.mark.parametrize("action", ["activate"])
+def test_cannot_delete_non_draft(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    action: str,
+) -> None:
+    db_factory, ids = api_db
+    owner = make_client(db_factory, ids.owner_a)
+    created = _create(owner, ids.project_a, "collection-plans", plan_payload())
+    plan_id = created["plan_id"]
+    assert (
+        _act(owner, ids.project_a, "collection-plans", plan_id, action, version=1).status_code
+        == 200
+    )
+
+    denied = owner.delete(_url(ids.project_a, "collection-plans", f"/{plan_id}"))
+    assert denied.status_code == 409
+    assert denied.json()["error"]["code"] == "resource_immutable"
+
+
+def test_cannot_delete_asset_referenced_by_task(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """被任务引用的 DRAFT 素材不能删，且错误必须可读（不是裸 integrity 冲突）。"""
+    db_factory, ids = api_db
+    owner = make_client(db_factory, ids.owner_a)
+    plan = _create(owner, ids.project_a, "collection-plans", plan_payload())
+    task = _create(
+        owner,
+        ids.project_a,
+        "collection-tasks",
+        task_payload(plan_id=plan["plan_id"]),
+    )
+    assert task["plan_id"] == plan["plan_id"]
+
+    denied = owner.delete(_url(ids.project_a, "collection-plans", f"/{plan['plan_id']}"))
+    assert denied.status_code == 409, denied.text
+    assert denied.json()["error"]["code"] == "resource_immutable"
+    # 响应体不得泄漏数据库原文（表名 / FOREIGN KEY / SQL 片段）。
+    body = denied.text.lower()
+    for leak in ("foreign key", "collection_tasks", "sqlite", "integrityerror"):
+        assert leak not in body
+
+
+def test_delete_cross_project_is_not_found(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """B 项目的素材 ID 在 A 项目删除必须 404，不能因为"ID 存在"而泄漏。"""
+    db_factory, ids = api_db
+    owner = make_client(db_factory, ids.owner_a)
+    foreign = _create(owner, ids.project_b, "collection-plans", plan_payload("b-plan"))
+
+    denied = owner.delete(_url(ids.project_a, "collection-plans", f"/{foreign['plan_id']}"))
+    assert denied.status_code == 404
+    assert denied.json()["error"]["code"] == "resource_not_found"
+    # 原资源不受影响。
+    assert (
+        owner.get(_url(ids.project_b, "collection-plans", f"/{foreign['plan_id']}")).status_code
+        == 200
+    )
+
+
+def test_delete_writes_audit(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """删除后审计仍可追溯"删过什么"——这是选择硬删的前提。"""
+    db_factory, ids = api_db
+    owner = make_client(db_factory, ids.owner_a)
+    created = _create(owner, ids.project_a, "collection-plans", plan_payload())
+    assert (
+        owner.delete(_url(ids.project_a, "collection-plans", f"/{created['plan_id']}")).status_code
+        == 204
+    )
+
+    with db_factory() as session:
+        record = session.scalar(
+            select(AuditLog).where(
+                AuditLog.project_id == ids.project_a,
+                AuditLog.resource_type == "COLLECTION_PLAN",
+                AuditLog.action == "delete",
+            )
+        )
+        assert record is not None
+        assert str(record.resource_id) == created["plan_id"]
+        assert record.from_status == "DRAFT"
+        assert record.to_status is None
+
+
+# --- 权限分层 ---------------------------------------------------------------
+def test_viewer_cannot_patch_or_act_or_delete(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    db_factory, ids = api_db
+    client = make_client(db_factory, ids.editor_a)
+    created = _create(client, ids.project_a, "collection-plans", plan_payload())
+    viewer = make_client(db_factory, ids.viewer_a)
+    asset_id = created["plan_id"]
+
+    patch = viewer.patch(
+        _url(ids.project_a, "collection-plans", f"/{asset_id}"),
+        headers={"If-Match": '"1"'},
+        json={"name": "只读用户改名"},
+    )
+    assert patch.status_code == 403
+    assert patch.json()["error"]["code"] == "forbidden"
+
+    acted = _act(viewer, ids.project_a, "collection-plans", asset_id, "activate", version=1)
+    assert acted.status_code == 403
+    assert acted.json()["error"]["code"] == "forbidden"
+
+    deleted = viewer.delete(_url(ids.project_a, "collection-plans", f"/{asset_id}"))
+    assert deleted.status_code == 403
+    assert deleted.json()["error"]["code"] == "forbidden"
+
+
+def test_cross_project_asset_cannot_be_activated(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    db_factory, ids = api_db
+    owner = make_client(db_factory, ids.owner_a)
+    foreign = _create(owner, ids.project_b, "collection-sops", sop_payload("b-sop"))
+
+    denied = _act(owner, ids.project_a, "collection-sops", foreign["sop_id"], "activate", version=1)
+    assert denied.status_code == 404
+    assert denied.json()["error"]["code"] == "resource_not_found"

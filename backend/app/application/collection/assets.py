@@ -1,4 +1,4 @@
-"""采集素材用例：方案 / SOP / 场景 / 动作库的最小 CRUD（COL-002）。
+"""采集素材用例：方案 / SOP / 场景 / 动作库的 CRUD 与状态动作（COL-002 + N8）。
 
 为什么用泛型基类而不是四份平行实现
 ----------------------------------
@@ -7,8 +7,10 @@
 "幂等忘了记"这类缺陷出现四个变体，也违反"规则只允许存在一处权威实现"。
 差异只有三处，用类属性表达：仓储、ID 字段名、审计/事件标签。
 
-素材本阶段只有 create/list/get：没有状态动作，因此写路径不带 ``If-Match``；
-这是与任务/批次（有状态机、必须乐观锁）**有意为之的差异**，不是遗漏。
+读路径（create/list/get）在本模块；写路径（PATCH / 状态动作 / DELETE）在
+``_asset_mutations.py`` 的 ``AssetMutationMixin`` 里，避免本文件越过 500 行阈值。
+写路径带 ``If-Match`` 乐观锁与幂等键，与任务/批次一致——N8 之前素材没有写路径，
+所以那时"不带 ``If-Match``"是缺口的直接后果，不是设计选择。
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ from datetime import UTC, datetime
 from typing import Generic, Protocol, TypeVar
 from uuid import UUID, uuid4
 
+from app.application.collection._asset_mutations import AssetMutationMixin
 from app.application.collection.audit import record_change
 from app.application.collection.commands import (
     NewActionSpec,
@@ -43,6 +46,12 @@ from app.application.collection.ports import (
     ScenarioRepository,
     UnitOfWork,
 )
+from app.domain.collection.asset_lifecycle import (
+    ACTION_SPEC_PATCHABLE_FIELDS,
+    PLAN_PATCHABLE_FIELDS,
+    SCENARIO_PATCHABLE_FIELDS,
+    SOP_PATCHABLE_FIELDS,
+)
 from app.domain.collection.assets import (
     ActionSpec,
     CollectionPlan,
@@ -64,6 +73,21 @@ PLAN_CREATED_EVENT = "collection.plan.created"
 SOP_CREATED_EVENT = "collection.sop.created"
 SCENARIO_CREATED_EVENT = "collection.scenario.created"
 ACTION_SPEC_CREATED_EVENT = "collection.action_spec.created"
+
+# N8 写路径事件：更新 / 状态迁移 / 删除，各三类素材共 9 个。
+# 同样必须是字面量（见上），全部为留痕类（dispatch=False），无消费者。
+PLAN_UPDATED_EVENT = "collection.plan.updated"
+PLAN_STATUS_CHANGED_EVENT = "collection.plan.status_changed"
+PLAN_DELETED_EVENT = "collection.plan.deleted"
+SOP_UPDATED_EVENT = "collection.sop.updated"
+SOP_STATUS_CHANGED_EVENT = "collection.sop.status_changed"
+SOP_DELETED_EVENT = "collection.sop.deleted"
+SCENARIO_UPDATED_EVENT = "collection.scenario.updated"
+SCENARIO_STATUS_CHANGED_EVENT = "collection.scenario.status_changed"
+SCENARIO_DELETED_EVENT = "collection.scenario.deleted"
+ACTION_SPEC_UPDATED_EVENT = "collection.action_spec.updated"
+ACTION_SPEC_STATUS_CHANGED_EVENT = "collection.action_spec.status_changed"
+ACTION_SPEC_DELETED_EVENT = "collection.action_spec.deleted"
 
 
 class _Asset(Protocol):
@@ -90,15 +114,23 @@ RepoT = TypeVar("RepoT", bound=_ListableRepository)
 
 @dataclass(frozen=True, slots=True)
 class AssetSpec(Generic[AssetT]):
-    """一类素材的元数据：ID 字段名、审计/事件标签、用户可见资源名。"""
+    """一类素材的元数据：ID 字段名、审计/事件标签、可改字段、用户可见资源名。
+
+    ``patchable`` 来自领域层（``asset_lifecycle``），不在这里另立一份白名单——
+    "哪些字段可改"是业务规则，必须在领域层唯一。
+    """
 
     id_field: str
     resource_name: str
     resource_type: str
     created_event: str
+    updated_event: str
+    status_event: str
+    deleted_event: str
+    patchable: frozenset[str]
 
 
-class _AssetUseCases(Generic[AssetT, RepoT]):
+class _AssetUseCases(AssetMutationMixin[AssetT], Generic[AssetT, RepoT]):
     """素材 CRUD 的公共实现；子类只提供 ``spec`` / 仓储与实体工厂。"""
 
     spec: AssetSpec[AssetT]
@@ -216,6 +248,10 @@ class CollectionPlanUseCases(_AssetUseCases[CollectionPlan, CollectionPlanReposi
         resource_name="采集方案",
         resource_type=PLAN_RESOURCE_TYPE,
         created_event=PLAN_CREATED_EVENT,
+        updated_event=PLAN_UPDATED_EVENT,
+        status_event=PLAN_STATUS_CHANGED_EVENT,
+        deleted_event=PLAN_DELETED_EVENT,
+        patchable=PLAN_PATCHABLE_FIELDS,
     )
 
     def _build(self, scope: ProjectScope, command: object, now: datetime) -> CollectionPlan:
@@ -246,6 +282,10 @@ class CollectionSopUseCases(_AssetUseCases[CollectionSop, CollectionSopRepositor
         resource_name="SOP",
         resource_type=SOP_RESOURCE_TYPE,
         created_event=SOP_CREATED_EVENT,
+        updated_event=SOP_UPDATED_EVENT,
+        status_event=SOP_STATUS_CHANGED_EVENT,
+        deleted_event=SOP_DELETED_EVENT,
+        patchable=SOP_PATCHABLE_FIELDS,
     )
 
     def _build(self, scope: ProjectScope, command: object, now: datetime) -> CollectionSop:
@@ -276,6 +316,10 @@ class ScenarioUseCases(_AssetUseCases[Scenario, ScenarioRepository]):
         resource_name="采集场景",
         resource_type=SCENARIO_RESOURCE_TYPE,
         created_event=SCENARIO_CREATED_EVENT,
+        updated_event=SCENARIO_UPDATED_EVENT,
+        status_event=SCENARIO_STATUS_CHANGED_EVENT,
+        deleted_event=SCENARIO_DELETED_EVENT,
+        patchable=SCENARIO_PATCHABLE_FIELDS,
     )
 
     def _build(self, scope: ProjectScope, command: object, now: datetime) -> Scenario:
@@ -302,6 +346,10 @@ class ActionSpecUseCases(_AssetUseCases[ActionSpec, ActionSpecRepository]):
         resource_name="动作库",
         resource_type=ACTION_SPEC_RESOURCE_TYPE,
         created_event=ACTION_SPEC_CREATED_EVENT,
+        updated_event=ACTION_SPEC_UPDATED_EVENT,
+        status_event=ACTION_SPEC_STATUS_CHANGED_EVENT,
+        deleted_event=ACTION_SPEC_DELETED_EVENT,
+        patchable=ACTION_SPEC_PATCHABLE_FIELDS,
     )
 
     def _build(self, scope: ProjectScope, command: object, now: datetime) -> ActionSpec:
@@ -362,14 +410,26 @@ ASSET_RESOURCE_TYPES: Mapping[str, str] = {
 
 __all__ = [
     "ACTION_SPEC_CREATED_EVENT",
+    "ACTION_SPEC_DELETED_EVENT",
     "ACTION_SPEC_RESOURCE_TYPE",
+    "ACTION_SPEC_STATUS_CHANGED_EVENT",
+    "ACTION_SPEC_UPDATED_EVENT",
     "ASSET_RESOURCE_TYPES",
     "PLAN_CREATED_EVENT",
+    "PLAN_DELETED_EVENT",
     "PLAN_RESOURCE_TYPE",
+    "PLAN_STATUS_CHANGED_EVENT",
+    "PLAN_UPDATED_EVENT",
     "SCENARIO_CREATED_EVENT",
+    "SCENARIO_DELETED_EVENT",
     "SCENARIO_RESOURCE_TYPE",
+    "SCENARIO_STATUS_CHANGED_EVENT",
+    "SCENARIO_UPDATED_EVENT",
     "SOP_CREATED_EVENT",
+    "SOP_DELETED_EVENT",
     "SOP_RESOURCE_TYPE",
+    "SOP_STATUS_CHANGED_EVENT",
+    "SOP_UPDATED_EVENT",
     "ActionSpecUseCases",
     "AssetSpec",
     "CollectionPlanUseCases",

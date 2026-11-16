@@ -72,3 +72,57 @@ def test_create_schema_required_fields_match_contract() -> None:
     assert set(CollectionTaskCreate.model_json_schema()["required"]) == set(
         create_schema["required"]
     )
+
+
+# --- N8：素材生命周期与写路径 DTO -------------------------------------------
+def test_asset_state_machine_matches_domain_lifecycle() -> None:
+    """素材状态机是 N8 新引入的能力，契约补充时必须与领域层逐项一致。
+
+    契约文件暂未声明素材路径（见交付报告），因此这里不对 JSON Schema 做断言，
+    只钉死"合法迁移集合"与"终态"——这两项一旦漂移，客户端会按错误的
+    ``allowed_actions`` 渲染按钮。
+    """
+    from app.domain.collection.asset_state_machines import (
+        ASSET_TERMINAL,
+        allowed_asset_actions,
+        asset_transition_pairs,
+    )
+    from app.domain.collection.enums import CollectionAssetAction, CollectionAssetStatus
+
+    assert {status.value for status in CollectionAssetStatus} == {"DRAFT", "ACTIVE", "ARCHIVED"}
+    assert asset_transition_pairs() == frozenset({("DRAFT", "ACTIVE"), ("ACTIVE", "ARCHIVED")})
+    assert ASSET_TERMINAL == frozenset({CollectionAssetStatus.ARCHIVED})
+    assert allowed_asset_actions(CollectionAssetStatus.DRAFT) == frozenset({"activate"})
+    assert allowed_asset_actions(CollectionAssetStatus.ACTIVE) == frozenset({"archive"})
+    assert allowed_asset_actions(CollectionAssetStatus.ARCHIVED) == frozenset()
+    assert {action.value for action in CollectionAssetAction} == {"activate", "archive"}
+
+
+def test_asset_patch_models_exclude_immutable_fields() -> None:
+    """``code`` 与执行内容不能出现在 PATCH 模型里。
+
+    这不是风格问题：字段一旦出现在模型里，客户端就会提交、而后被服务端
+    拒绝或静默忽略；不出现才能让 422 明确指向"这个字段不在这里改"。
+    """
+    from app.api.v1.collection_asset_schemas import (
+        ActionSpecPatch,
+        CollectionPlanPatch,
+        CollectionSopPatch,
+        ScenarioPatch,
+    )
+
+    shared_forbidden = {"code", "status", "version", "project_id", "steps", "actions"}
+    for model in (CollectionPlanPatch, CollectionSopPatch, ScenarioPatch, ActionSpecPatch):
+        assert not shared_forbidden & set(model.model_fields), model.__name__
+
+    # 版本列是"内容版本"锚点，同样不可经 PATCH 修改。
+    for model, field in (
+        (CollectionPlanPatch, "plan_version"),
+        (CollectionSopPatch, "sop_version"),
+        (ActionSpecPatch, "spec_version"),
+    ):
+        assert field not in model.model_fields
+
+    assert "scene_labels" in ScenarioPatch.model_fields
+    for model in (CollectionPlanPatch, CollectionSopPatch, ActionSpecPatch):
+        assert "scene_labels" not in model.model_fields

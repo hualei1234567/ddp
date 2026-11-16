@@ -109,3 +109,24 @@ class CollectionAssetStatus(StrEnum):
     DRAFT = "DRAFT"
     ACTIVE = "ACTIVE"
     ARCHIVED = "ARCHIVED"
+
+
+class CollectionAssetAction(StrEnum):
+    """素材生命周期动作；四类实体共用（迁移表在 ``asset_state_machines``）。
+
+    只暴露 ``activate`` / ``archive`` 两个业务动作：
+    - ``activate``：``DRAFT → ACTIVE``，素材自此可被任务引用；
+    - ``archive``：``ACTIVE → ARCHIVED``，停止被新任务引用。
+
+    刻意**不提供** ``archive`` 的逆动作（``ARCHIVED`` 是终态）：
+    素材需要改内容时应新建版本行（``plan_version`` / ``sop_version`` /
+    ``spec_version`` 各加一），而不是把一份已被历史任务冻结引用过的定义
+    复活并偷偷改成另一份内容——那会让任务上的版本快照失去意义。
+    """
+
+    ACTIVATE = "activate"
+    ARCHIVE = "archive"
+
+
+# 路径动作白名单：素材没有系统内部动作，全部可暴露给客户端。
+PUBLIC_ASSET_ACTIONS: frozenset[str] = frozenset(action.value for action in CollectionAssetAction)
