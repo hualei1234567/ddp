@@ -663,7 +663,23 @@ def validate_record_labels(
     *,
     require_confirmed: bool = True,
 ) -> None:
-    """按 Schema 快照校验记录标签：未知键、类型、枚举、范围与必填。"""
+    """按 Schema 快照校验记录标签：未知键、类型、枚举、范围与必填。
+
+    ## 为什么 AI 置信度的强制放在这里，而不是 ``LabelValue.__post_init__``
+
+    ``__post_init__`` 是所有构造路径的必经之地，也包括**读库重建**
+    （``_normalize_labels`` 把 JSONB 读出来重新构造 ``LabelValue``）。
+    在那里加强制，历史库里那些 ``source=AI_ASSISTED`` 但没写 ``confidence``
+    的记录会直接构造失败——整条标注记录读不出来，连带提交也打不开。
+    那是用"修一个新约束"换"历史数据全不可读"，代价完全不成比例。
+
+    放在这里则只在**提交校验**路径生效：新提交必须合规，历史数据照常可读。
+    这是"约束只对新数据生效"的刻意选择，不是遗漏。
+
+    审计背景（N4 / QUA-005）：``source=AI_ASSISTED`` 与 ``confidence`` 之间
+    此前没有任何强制关系——AI 来源可以不带置信度，于是「AI 给的标签有多可信」
+    在数据层面无从回答，N7 的采纳统计只能退化为计数。
+    """
     by_key = {definition.label_key: definition for definition in definitions}
     seen: set[str] = set()
     for label in record.labels:
@@ -673,6 +689,10 @@ def validate_record_labels(
         seen.add(label.label_key)
         if require_confirmed and label.label_status is not LabelValueStatus.CONFIRMED:
             raise SubmissionIncompleteError("提交前标签值必须为 CONFIRMED")
+        if label.source is LabelValueSource.AI_ASSISTED and label.confidence is None:
+            # AI 来源必须带置信度：不然"无法证明达标"与"未提供依据"无法区分，
+            # 质量规则与采纳统计都会失去判断基础。
+            raise LabelValueInvalidError(f"AI_ASSISTED 标签 {label.label_key} 必须提供 confidence")
         _require_type(definition, label.value)
     missing = [
         definition.label_key

@@ -229,3 +229,36 @@ __all__ = [
     "SupplierMetricsOut",
     "SupplierOut",
 ]
+
+
+class SupplierPortfolioEntryOut(BaseModel):
+    supplier_id: str
+    code: str
+    name: str
+    status: str
+    has_settled_batches: bool
+    metrics: SupplierMetricsOut
+
+
+class SupplierPortfolioTotalsOut(BaseModel):
+    """组合汇总。
+
+    比率字段为 `null` 表示**没有任何供应商在该指标上有可计算数据**，
+    不是"整体为 0"。前端不得渲染成 0%。
+    """
+
+    total_suppliers: int
+    active_suppliers: int
+    suppliers_without_settled_batches: int
+    total_batches: int
+    settled_batches: int
+    on_time_rate: float | None = None
+    first_pass_rate: float | None = None
+    rework_rate: float | None = None
+    average_cycle_hours: float | None = None
+    segment_pass_rate: float | None = None
+
+
+class SupplierPortfolioOut(BaseModel):
+    totals: SupplierPortfolioTotalsOut
+    suppliers: list[SupplierPortfolioEntryOut]

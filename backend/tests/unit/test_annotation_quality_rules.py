@@ -19,7 +19,7 @@ from app.domain.annotation.enums import (
     QualityCheckStatus,
     QualityRuleSeverity,
 )
-from app.domain.annotation.errors import DomainValidationError
+from app.domain.annotation.errors import DomainValidationError, LabelValueInvalidError
 from app.domain.annotation.quality_check import (
     QualityCheckRun,
     QualityFinding,
@@ -39,7 +39,7 @@ from app.domain.annotation.quality_rules import (
     resolve_status,
 )
 from app.domain.annotation.schema import LabelDefinition
-from app.domain.annotation.submission import AnnotationRecord
+from app.domain.annotation.submission import AnnotationRecord, validate_record_labels
 
 SHA = "sha256:" + "a" * 64
 
@@ -594,3 +594,59 @@ def test_quality_check_run_rejects_inconsistent_counts() -> None:
             started_at=now,
             finished_at=now,
         )
+
+
+# ---------------------------------------------------------------------------
+# AI_ASSISTED 必须带 confidence（提交校验路径的强制）
+# ---------------------------------------------------------------------------
+
+
+def _definitions_for(labels: list[dict[str, object]]) -> tuple[LabelDefinition, ...]:
+    return tuple(
+        LabelDefinition(
+            label_key=str(item["label_key"]),
+            label_type=AnnotationLabelType.STRING,
+            required=False,
+            level=AnnotationLevel.EPISODE,
+        )
+        for item in labels
+    )
+
+
+def test_submit_rejects_ai_label_without_confidence() -> None:
+    """AI 来源的标签缺 confidence → 提交校验拒绝。
+
+    强制放在 ``validate_record_labels``（提交路径）而不是
+    ``LabelValue.__post_init__``（所有构造路径，含读库重建）：后者会让历史库中
+    这类记录直接构造失败、整条记录读不出来。
+    """
+    labels = [{"label_key": "action", "value": "PICK", "source": "AI_ASSISTED"}]
+    record = make_record(labels=labels)
+    with pytest.raises(LabelValueInvalidError):
+        validate_record_labels(record, _definitions_for(labels))
+
+
+def test_submit_accepts_ai_label_with_confidence() -> None:
+    labels = [{"label_key": "action", "value": "PICK", "source": "AI_ASSISTED", "confidence": 0.92}]
+    record = make_record(labels=labels)
+    # 不抛异常即为通过
+    validate_record_labels(record, _definitions_for(labels))
+
+
+def test_submit_accepts_human_label_without_confidence() -> None:
+    """人工标签不要求置信度——人手填的标签没有「模型把握」这个概念。"""
+    labels = [{"label_key": "action", "value": "PICK", "source": "HUMAN"}]
+    record = make_record(labels=labels)
+    validate_record_labels(record, _definitions_for(labels))
+
+
+def test_reading_legacy_ai_label_without_confidence_still_works() -> None:
+    """历史库里的 AI 标签（无 confidence）必须仍能构造，不能被新约束波及。
+
+    这是把强制放在提交校验路径而非实体构造路径的**核心理由**：读库重建走的是
+    ``LabelValue(**payload)``，若在 ``__post_init__`` 强制，这类历史记录会
+    整条读不出来。
+    """
+    legacy = make_record(labels=[{"label_key": "action", "value": "PICK", "source": "AI_ASSISTED"}])
+    assert legacy.labels[0].source is LabelValueSource.AI_ASSISTED
+    assert legacy.labels[0].confidence is None

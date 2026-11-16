@@ -18,7 +18,11 @@ from app.api.v1.supplier_dependencies import (
     WriteScope,
     request_id,
 )
-from app.api.v1.supplier_response_models import SupplierMetricsOut, SupplierOut
+from app.api.v1.supplier_response_models import (
+    SupplierMetricsOut,
+    SupplierOut,
+    SupplierPortfolioOut,
+)
 from app.api.v1.supplier_schemas import (
     SupplierActionRequest,
     SupplierCreate,
@@ -30,6 +34,32 @@ from app.core.errors import ForbiddenError
 from app.domain.identity.models import ProjectContext, ProjectRole
 
 router = APIRouter(prefix="/projects/{project_id}/suppliers", tags=["suppliers"])
+
+
+@router.get("/portfolio", response_model=SupplierPortfolioOut)
+def get_supplier_portfolio(
+    scope: ReadScope,
+    services: SupplierServicesDep,
+    status: Annotated[str | None, Query(max_length=32)] = None,
+    category: Annotated[str | None, Query(max_length=32)] = None,
+) -> SupplierPortfolioOut:
+    """本项目所有供应商的横向汇总。
+
+    单供应商的 ``/{supplier_id}/metrics`` 只能回答"这一家怎么样"；运营要问的
+    是"这批供应商里谁准时率最低""本月整体一次通过率多少"，那需要横向视图。
+
+    口径与单供应商视图**完全一致**（同一份 `summarize`），不另算一套。
+
+    比率字段为 `null` 表示没有任何供应商在该指标上有可计算数据，
+    **不是整体为 0**。`suppliers_without_settled_batches` 单独给出"本期没交付"
+    的家数——把这类供应商从列表里删掉会让"没交付"这件事看不见。
+
+    路由必须声明在 `/{supplier_id}/...` 之前：FastAPI 按声明顺序匹配，
+    否则 `portfolio` 会被当作 UUID 解析失败。
+    """
+    portfolio = services.suppliers.portfolio(scope, status=status, category=category)
+    payload = portfolio.to_payload()
+    return SupplierPortfolioOut.model_validate(payload)
 
 
 @router.get("", response_model=PageOut[SupplierOut])

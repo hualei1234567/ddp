@@ -107,6 +107,69 @@ SupplierMetrics:
     decided_segments: { type: integer, minimum: 0 }
     segment_pass_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
 
+SupplierPortfolioTotals:
+  type: object
+  required:
+    - total_suppliers
+    - active_suppliers
+    - suppliers_without_settled_batches
+    - total_batches
+    - settled_batches
+  additionalProperties: false
+  properties:
+    total_suppliers: { type: integer, minimum: 0 }
+    active_suppliers: { type: integer, minimum: 0 }
+    suppliers_without_settled_batches:
+      type: integer
+      minimum: 0
+      description: |
+        本期没有任何已结算批次的供应商家数。这类供应商**不参与**比率合并，
+        但必须出现在 `suppliers` 列表里——「这家没交付」是运营要看的信息。
+    total_batches: { type: integer, minimum: 0 }
+    settled_batches: { type: integer, minimum: 0 }
+    on_time_rate:
+      type: [number, "null"]
+      minimum: 0
+      maximum: 1
+      description: |
+        为 `null` 表示**没有任何供应商在该指标上有可计算数据**，不是整体为 0。
+        部分供应商在该指标上分母为 0 时同样返回 `null`：合并口径不完整时
+        不给出看起来精确的数字。
+    first_pass_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
+    rework_rate: { type: [number, "null"], minimum: 0, maximum: 1 }
+    average_cycle_hours: { type: [number, "null"], minimum: 0 }
+    segment_pass_rate:
+      type: [number, "null"]
+      minimum: 0
+      maximum: 1
+      description: |
+        计数口径：按各供应商的 accepted/decided 总数直接计算，
+        不受「某些供应商无数据」影响。
+
+SupplierPortfolioEntry:
+  type: object
+  required: [supplier_id, code, name, status, has_settled_batches, metrics]
+  additionalProperties: false
+  properties:
+    supplier_id: { type: string, format: uuid }
+    code: { type: string }
+    name: { type: string }
+    status: { type: string }
+    has_settled_batches:
+      type: boolean
+      description: 该供应商本期是否有已结算批次；false 时其比率均为 null
+    metrics: { $ref: "../openapi.yaml#/components/schemas/SupplierMetrics" }
+
+SupplierPortfolio:
+  type: object
+  required: [totals, suppliers]
+  additionalProperties: false
+  properties:
+    totals: { $ref: "../openapi.yaml#/components/schemas/SupplierPortfolioTotals" }
+    suppliers:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/SupplierPortfolioEntry" }
+
 DeliveryBatchCreate:
   type: object
   required: [supplier_id, batch_code]

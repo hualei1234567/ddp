@@ -573,6 +573,8 @@ paths:
     $ref: "./fragments/paths.stage6.yaml#/supplierDetail"
   /api/v1/projects/{project_id}/suppliers/{supplier_id}/actions/{action}:
     $ref: "./fragments/paths.stage6.yaml#/supplierActions"
+  /api/v1/projects/{project_id}/suppliers/portfolio:
+    $ref: "./fragments/paths.stage6.yaml#/supplierPortfolio"
   /api/v1/projects/{project_id}/suppliers/{supplier_id}/metrics:
     $ref: "./fragments/paths.stage6.yaml#/supplierMetrics"
   /api/v1/projects/{project_id}/inbound-batches:
@@ -1105,3 +1107,6 @@ components:
     AiSuggestionPage: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionPage"}
     AgreementItem: {$ref: "./fragments/schemas.stage9.yaml#/AgreementItem"}
     AgreementSummary: {$ref: "./fragments/schemas.stage9.yaml#/AgreementSummary"}
+    SupplierPortfolioTotals: {$ref: "./fragments/schemas.stage6.yaml#/SupplierPortfolioTotals"}
+    SupplierPortfolioEntry: {$ref: "./fragments/schemas.stage6.yaml#/SupplierPortfolioEntry"}
+    SupplierPortfolio: {$ref: "./fragments/schemas.stage6.yaml#/SupplierPortfolio"}
