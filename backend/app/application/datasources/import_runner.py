@@ -414,6 +414,10 @@ class ImportRunner:
             ingested_at=moment,
             storage_class=StorageClass.STANDARD,
             uploaded_by=scope.actor_id,
+            # 继承导入记录的归属：数据是为哪个采集任务/批次采的，资产上要能查到，
+            # 否则下游按任务统计产出永远是 0。
+            collection_task_id=job.collection_task_id,
+            batch_id=job.batch_id,
             raw_metadata=_import_metadata(source, job, episode, media),
             created_at=moment,
             updated_at=moment,

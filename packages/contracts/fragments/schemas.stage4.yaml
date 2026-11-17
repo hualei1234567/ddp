@@ -201,7 +201,14 @@ DedupPolicyCreate:
       items: { type: string, enum: [EPISODE_LINEAGE, MANIFEST_SHA256, RAW_ASSET_SHA256] }
     near_duplicate_enabled: { type: boolean, default: false }
     near_duplicate_enforcement: { type: string, enum: [WARN_ONLY, BLOCK], default: WARN_ONLY }
-    similarity_method: { type: [string, "null"], maxLength: 100 }
+    similarity_method:
+      type: [string, "null"]
+      maxLength: 100
+      default: TEMPORAL_OVERLAP_V1
+      description: |
+        近重复判定方法。当前唯一实现为 `TEMPORAL_OVERLAP_V1`（按时间重叠率、
+        时长差与场景标签判定）。传入其他值时返回 422，details 里会带
+        `supported` 列表，不会静默降级。
     similarity_threshold: { type: [number, "null"], minimum: 0, maximum: 1 }
     similarity_min_cluster_size: { type: [integer, "null"], minimum: 2 }
     grouping_keys: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }

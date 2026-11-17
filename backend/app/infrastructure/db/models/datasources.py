@@ -100,6 +100,18 @@ class DataSourceImportModel(Base, ProjectScopedMixin, LockVersionMixin):
     tool_version: Mapped[str] = mapped_column(String(100), nullable=False)
     sample_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     cache_location: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    # 数据归属：这次导入是为哪个采集任务/批次采的。导入产出的 RawAsset 与
+    # 物化出的 Episode 都继承它，用于「按任务统计产出」。
+    collection_task_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("collection_tasks.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    batch_id: Mapped[UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("collection_batches.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     imported_row_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     imported_file_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     error_message: Mapped[str | None] = mapped_column(String(2000), nullable=True)
@@ -130,6 +142,11 @@ class DataSourceImportModel(Base, ProjectScopedMixin, LockVersionMixin):
         CheckConstraint("attempt >= 1", name="import_attempt_positive"),
         CheckConstraint("max_attempts >= 1", name="import_max_attempts_positive"),
         CheckConstraint("attempt <= max_attempts", name="import_attempt_within_max"),
+        Index(
+            "ix_data_source_imports_task",
+            "project_id",
+            "collection_task_id",
+        ),
         Index(
             "ix_data_source_imports_source_status",
             "project_id",

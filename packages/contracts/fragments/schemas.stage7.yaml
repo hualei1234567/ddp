@@ -124,6 +124,16 @@ DataSourceImportCreate:
       description: |
         `scope=SAMPLE` 时必填。默认只做小样本导入，不默认全量下载。
     cache_location: { type: [string, "null"], maxLength: 1024 }
+    collection_task_id:
+      type: [string, "null"]
+      format: uuid
+      description: |
+        数据归属：本次导入是为哪个采集任务采的。导入产出的 RawAsset 与物化出
+        的 Episode 会继承该归属；为空表示不归属任何任务。
+    batch_id:
+      type: [string, "null"]
+      format: uuid
+      description: 归属到具体采集批次；为空时只归属到任务。
 
 ImportActionRequest:
   type: object
@@ -151,6 +161,8 @@ DataSourceImport:
     scope: { $ref: "../openapi.yaml#/components/schemas/ImportScope" }
     tool_name: { type: string }
     tool_version: { type: string }
+    collection_task_id: { type: [string, "null"], format: uuid }
+    batch_id: { type: [string, "null"], format: uuid }
     sample_limit: { type: [integer, "null"] }
     cache_location: { type: [string, "null"] }
     imported_row_count: { type: [integer, "null"] }

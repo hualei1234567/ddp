@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from uuid import UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,3 +45,8 @@ class NewDataSourceImport:
     tool_version: str
     sample_limit: int | None = None
     cache_location: str | None = None
+    # 导入数据的归属：数据是"为哪个采集任务/批次采的"。为空表示不归属任何
+    # 任务（例如公共数据集的一次性拉取）。导入产出的 RawAsset 会继承这两个值，
+    # 物化出的 Episode 同样带上 task_id——否则下游按任务统计永远查不到。
+    collection_task_id: UUID | None = None
+    batch_id: UUID | None = None

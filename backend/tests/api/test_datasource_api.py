@@ -478,3 +478,59 @@ def test_missing_review_is_404(api_db) -> None:
     )
 
     assert response.status_code == 404
+
+
+def test_import_can_claim_collection_task_ownership(api_db) -> None:
+    """导入可以声明「数据是为哪个采集任务采的」，并在响应里回读。
+
+    没有这个字段时，导入产出的资产与 Episode 的 `collection_task_id` 永远
+    是 NULL，按任务统计产出永远是 0——「导入到指定任务下」在产品上就不存在。
+    """
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source = client.post(_url(ids.project_a), json=_payload()).json()
+
+    task = client.post(
+        f"/api/v1/projects/{ids.project_a}/collection-tasks",
+        json={
+            "code": "task-import-owner",
+            "name": "导入归属测试任务",
+            "priority": "P2",
+            "target_episode_count": 5,
+            "target_duration_sec": 60,
+        },
+    )
+    assert task.status_code == 201, task.text
+    task_id = task.json()["task_id"]
+
+    created = client.post(
+        _url(ids.project_a, f"/{source['data_source_id']}/imports"),
+        json={
+            "scope": "SAMPLE",
+            "tool_name": "huggingface_hub",
+            "tool_version": "0.27.1",
+            "sample_limit": 5,
+            "collection_task_id": task_id,
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["collection_task_id"] == task_id
+
+
+def test_import_rejects_unknown_ownership_field(api_db) -> None:
+    """归属字段之外的未知键仍然被拒绝（`extra=forbid` 不放宽）。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source = client.post(_url(ids.project_a), json=_payload()).json()
+
+    created = client.post(
+        _url(ids.project_a, f"/{source['data_source_id']}/imports"),
+        json={
+            "scope": "SAMPLE",
+            "tool_name": "huggingface_hub",
+            "tool_version": "0.27.1",
+            "sample_limit": 5,
+            "unexpected": "x",
+        },
+    )
+    assert created.status_code == 422
