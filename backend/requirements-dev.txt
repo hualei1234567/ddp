@@ -1,4 +1,9 @@
 -r requirements.txt
+# PyYAML：`scripts/check_contract_parity.py` 与
+# `packages/contracts/scripts/check-compatibility.sh` 的预处理都要 import yaml。
+# 此前它只作为环境里的传递依赖存在——本地装了、CI 的 contract job 不一定装，
+# 属于「靠巧合能跑」。显式声明，锁版本。
+pyyaml==6.0.3
 pytest==8.3.4
 httpx==0.28.1
 ruff==0.8.6
