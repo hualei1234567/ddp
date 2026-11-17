@@ -11,7 +11,17 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.collection.enums import (
+    PUBLIC_BATCH_ACTIONS,
+    PUBLIC_TASK_ACTIONS,
+    CollectionBatchStatus,
+    CollectionTaskStatus,
+)
 from app.domain.collection.models import CollectionBatch, CollectionTask
+from app.domain.collection.state_machines import (
+    allowed_batch_actions,
+    allowed_task_actions,
+)
 
 
 class CollectionTaskCreate(BaseModel):
@@ -115,6 +125,9 @@ class CollectionTaskOut(BaseModel):
     target_duration_sec: int
     submitted_episode_count: int
     accepted_episode_count: int
+    # 服务端算好的可执行动作。前端按规范只渲染这里列出的按钮，不再自己
+    # 推断状态机——两边各写一份迁移表迟早会分叉。
+    allowed_actions: list[str]
     quality_summary: dict[str, object] | None
     status_reason: str | None
     blocked_reason: str | None
@@ -161,6 +174,9 @@ class CollectionTaskOut(BaseModel):
             updated_at=task.updated_at,
             created_by=task.created_by,
             updated_by=task.updated_by,
+            allowed_actions=sorted(
+                allowed_task_actions(CollectionTaskStatus(task.status)) & PUBLIC_TASK_ACTIONS
+            ),
         )
 
 
@@ -177,6 +193,7 @@ class CollectionBatchOut(BaseModel):
     expected_count: int
     submitted_count: int
     accepted_count: int
+    allowed_actions: list[str]
     status_reason: str | None
     version: int
     created_at: datetime | None
@@ -197,6 +214,10 @@ class CollectionBatchOut(BaseModel):
             expected_count=batch.expected_count,
             submitted_count=batch.submitted_count,
             accepted_count=batch.accepted_count,
+            allowed_actions=sorted(
+                allowed_batch_actions(CollectionBatchStatus(_value(batch.status)))
+                & PUBLIC_BATCH_ACTIONS
+            ),
             status_reason=batch.status_reason,
             version=batch.version,
             created_at=batch.created_at,

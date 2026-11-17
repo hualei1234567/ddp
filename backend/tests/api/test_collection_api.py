@@ -382,3 +382,40 @@ def test_batch_create_requires_existing_task_in_same_project(
     )
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "resource_not_found"
+
+
+def test_task_and_batch_expose_allowed_actions(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """响应必须带 ``allowed_actions``：前端只按它渲染按钮。
+
+    没有这个字段时，前端拿到 ``undefined`` 会把动作全部置灰——「有数据但
+    点不动」正是这么来的。这里同时断言字段存在、且随状态变化。
+    """
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    task = _create_task(editor, ids.project_a)
+
+    assert task["allowed_actions"] == ["cancel", "submit-review"]
+
+    url = _tasks_url(ids.project_a, f"/{task['task_id']}/actions")
+    submitted = editor.post(f"{url}/submit-review", headers={"If-Match": '"1"'}, json={})
+    assert submitted.status_code == 200, submitted.text
+    actions = submitted.json()["allowed_actions"]
+    assert "approve" in actions
+    # 系统内部动作不得出现在对外列表里。
+    assert "system-data-check" not in actions
+
+
+def test_batch_exposes_allowed_actions(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    task = _create_task(editor, ids.project_a)
+    created = editor.post(
+        _tasks_url(ids.project_a, f"/{task['task_id']}/batches"),
+        json={"code": "batch-1", "sequence_no": 1, "expected_count": 5},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["allowed_actions"] == ["cancel", "ready"]

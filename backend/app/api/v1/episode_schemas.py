@@ -12,7 +12,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.episodes.enums import EpisodeStatus
 from app.domain.episodes.models import Episode, Segmentation
+from app.domain.episodes.state_machines import allowed_episode_actions
 
 _SEGMENTATION_METHOD_PATTERN = "^(MANUAL_TIME_RANGE|RULE)$"
 _QUALITY_STATUS_PATTERN = "^(PASS|WARN|FAIL)$"
@@ -127,6 +129,7 @@ class EpisodeOut(BaseModel):
     segmentation_rule_version: str
     frame_count: int
     calibration_snapshot: list[dict[str, object]]
+    allowed_actions: list[str]
     manifest_key: str | None
     manifest_sha256: str | None
     # 自动就绪被拒绝的原因（[{"code","message","detail"}]）。空数组 + PENDING
@@ -188,7 +191,27 @@ class EpisodeOut(BaseModel):
             updated_at=episode.updated_at,
             created_by=episode.created_by,
             updated_by=episode.updated_by,
+            allowed_actions=sorted(
+                _PUBLIC_ACTION_BY_DOMAIN[action]
+                for action in allowed_episode_actions(EpisodeStatus(_value(episode.status)))
+                if action in _PUBLIC_ACTION_BY_DOMAIN
+            ),
         )
+
+
+# 对外动作名 → 应用层具名动作。未暴露 system-*/retry/archive。
+# 放在 DTO 层是因为「哪些动作对外可见」既决定响应里的 allowed_actions，
+# 也决定路由接受的 action 取值——两处各写一份必然分叉。
+EPISODE_ACTION_MAP: dict[str, str] = {
+    "ready": "ready",
+    "quality-check": "quality-check",
+    "quality-result": "record-quality",
+    "accept": "accept",
+    "reject": "reject",
+    "complete": "complete",
+    "invalidate": "invalidate",
+}
+_PUBLIC_ACTION_BY_DOMAIN = {internal: public for public, internal in EPISODE_ACTION_MAP.items()}
 
 
 def _value(value: object) -> str:
