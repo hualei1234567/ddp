@@ -269,6 +269,13 @@
       "title": "Status",
       "type": "string"
     },
+    "allowed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Actions",
+      "type": "array"
+    },
     "data_source": {
       "title": "Data Source",
       "type": "string"
@@ -426,6 +433,7 @@
     "records_digest",
     "item_count",
     "status",
+    "allowed_actions",
     "data_source",
     "record_refs",
     "records",

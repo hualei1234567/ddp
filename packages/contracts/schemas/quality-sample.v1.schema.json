@@ -47,6 +47,13 @@
       "title": "Status",
       "type": "string"
     },
+    "allowed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Actions",
+      "type": "array"
+    },
     "stratum": {
       "anyOf": [
         {
@@ -216,6 +223,7 @@
     "sample_type",
     "sample_reason",
     "status",
+    "allowed_actions",
     "stratum",
     "item_refs",
     "reviewer_id",

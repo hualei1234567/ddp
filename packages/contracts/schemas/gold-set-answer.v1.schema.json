@@ -75,6 +75,13 @@
     "version": {
       "title": "Version",
       "type": "integer"
+    },
+    "allowed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Actions",
+      "type": "array"
     }
   },
   "required": [
@@ -91,7 +98,8 @@
     "max_exposure_per_annotator",
     "rotation_policy",
     "items",
-    "version"
+    "version",
+    "allowed_actions"
   ],
   "type": "object",
   "additionalProperties": false

@@ -22,6 +22,7 @@ from app.api.v1.annotation_common import (
 from app.api.v1.annotation_dependencies import AnnotationUseCasesDep
 from app.api.v1.annotation_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.annotation_result_models import (
+    PUBLIC_SUBMISSION_ACTIONS,
     AnnotationArbitrationActionRequest,
     AnnotationArbitrationCreate,
     AnnotationArbitrationOut,
@@ -46,8 +47,6 @@ from app.core.errors import ForbiddenError, ValidationFailedError
 from app.domain.annotation.submission import submission_visible_to
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["annotation-submissions"])
-
-_SUBMISSION_ACTIONS = frozenset({"submit", "withdraw", "require-rework"})
 
 
 @router.post(
@@ -150,7 +149,7 @@ def act_on_submission(
     idempotency_key: IdempotencyKey = None,
     payload: AnnotationSubmissionActionRequest | None = None,
 ) -> AnnotationSubmissionOut:
-    if action not in _SUBMISSION_ACTIONS:
+    if action not in PUBLIC_SUBMISSION_ACTIONS:
         raise ValidationFailedError("提交资源不支持该动作，请使用复核或仲裁端点")
     submission = use_cases.submissions.apply_action(
         scope,

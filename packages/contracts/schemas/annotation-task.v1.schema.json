@@ -57,6 +57,13 @@
       "title": "Status",
       "type": "string"
     },
+    "allowed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Actions",
+      "type": "array"
+    },
     "target_item_count": {
       "title": "Target Item Count",
       "type": "integer"
@@ -239,6 +246,7 @@
     "schema_version",
     "schema_sha256",
     "status",
+    "allowed_actions",
     "target_item_count",
     "target_episode_count",
     "priority",

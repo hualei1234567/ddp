@@ -35,6 +35,13 @@
       "title": "Status",
       "type": "string"
     },
+    "allowed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Actions",
+      "type": "array"
+    },
     "assignment_role": {
       "title": "Assignment Role",
       "type": "string"
@@ -200,6 +207,7 @@
     "batch_id",
     "assignee_id",
     "status",
+    "allowed_actions",
     "assignment_role",
     "planned_item_count",
     "claimed_item_count",

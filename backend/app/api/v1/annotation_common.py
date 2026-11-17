@@ -23,3 +23,15 @@ ActionName = Annotated[str, Path(min_length=1, max_length=64)]
 def request_id(request: Request) -> str | None:
     value = getattr(request.state, "request_id", None)
     return value if isinstance(value, str) else None
+
+
+# 系统内部动作前缀。这些动作由应用层在状态推进时自行发起（例如提交后触发
+# ``system-review``、租约到期触发 ``system-expire``），不是用户可以点的按钮；
+# 它们若进入 ``allowed_actions``，前端会渲染出一个语义错误、后端也不该由用户
+# 触发的动作。对外动作集合的定义只保留这一处，供响应序列化共用。
+SYSTEM_ACTION_PREFIX = "system-"
+
+
+def public_actions(allowed: frozenset[str]) -> list[str]:
+    """把状态机允许的动作收敛成对外公开动作（排序稳定）。"""
+    return sorted(action for action in allowed if not action.startswith(SYSTEM_ACTION_PREFIX))
