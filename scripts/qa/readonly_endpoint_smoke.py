@@ -13,6 +13,8 @@
 ## 它怎么找真实 ID
 
 按路径参数名从数据库取一条真实记录（`robot_id` → `robots` 的第一行等）。
+参数名在不同资源下重复时（`task_id` 既是采集任务也是标注任务）按参数前一段
+路径判定表名，避免拿到别的表的 ID——那只会换来 404，而 404 不计入 5xx。
 取不到就跳过该端点并计入「跳过」，而不是伪造一个 ID——伪造只会得到 404，
 看起来像「端点没问题」，实际什么都没验证。
 
@@ -97,10 +99,48 @@ ID_SQL: dict[str, str] = {
     "model_id": "select id from models limit 1",
     "model_version_id": "select id from model_versions limit 1",
     "evaluation_id": "select id from evaluations limit 1",
-    "inference_service_id": "select id from inference_services limit 1",
-    "inference_task_id": "select id from inference_tasks limit 1",
     "feedback_id": "select id from model_feedback limit 1",
 }
+
+# 同一参数名在不同资源下指向**不同的表**：`task_id` 同时用于采集任务、标注任务、
+# 推理任务，`policy_id` 分别用于去重/拆分/泄漏/质量四类数据集策略。只按参数名取值
+# 会拿错表，而拿错的 ID 一般返回 404——404 不计入 5xx，**看起来就像巡检通过**。
+# 因此优先用参数前一段路径判定表名，判不出来才退回上面的 ID_SQL。
+SEGMENT_ID_SQL: dict[str, str] = {
+    "annotation-tasks": "select id from annotation_tasks limit 1",
+    "collection-tasks": "select id from collection_tasks limit 1",
+    "inference-tasks": "select id from inference_tasks limit 1",
+    "annotation-reviews": "select id from annotation_reviews limit 1",
+    "annotation-arbitrations": "select id from annotation_arbitrations limit 1",
+    "annotation-assignments": "select id from annotation_assignments limit 1",
+    "annotation-sample-sets": "select id from annotation_sample_sets limit 1",
+    "quality-samples": "select id from annotation_quality_samples limit 1",
+    "iaa-reports": "select id from annotation_iaa_reports limit 1",
+    "dedup-policies": "select id from dataset_dedup_policies limit 1",
+    "split-policies": "select id from dataset_split_policies limit 1",
+    "leakage-policies": "select id from dataset_leakage_policies limit 1",
+    "quality-policies": "select id from dataset_quality_policies limit 1",
+    "items": "select id from dataset_items limit 1",
+    "segments": "select id from inbound_segments limit 1",
+    "grants": "select id from dataset_grants limit 1",
+    "external-training-references": "select id from external_training_references limit 1",
+    "upload-sessions": "select id from upload_sessions limit 1",
+    "inference-services": "select id from inference_services limit 1",
+}
+
+# 参数名本身不足以定位、必须整体解析的端点：审计日志的资源类型与资源 ID 必须来自
+# **同一行**，否则组合出来必然是 404。
+PAIR_ID_SQL: dict[str, tuple[str, str, str]] = {
+    "/audit-logs/": (
+        "select resource_type || '|' || resource_id from audit_logs"
+        " where resource_type is not null and resource_id is not null limit 1",
+        "resource_type",
+        "resource_id",
+    ),
+}
+
+# 不是行 ID 的参数：导出产物路径要求在对象存储里真实存在，这里不伪造。
+NON_ID_PARAMS = frozenset({"artifact_path"})
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 
@@ -182,6 +222,53 @@ def _request(url: str, token: str) -> tuple[int, str]:
         return 0, f"连接失败：{exc}"
 
 
+class IdResolver:
+    """把路径参数解析成一条**真实存在**的记录 ID。
+
+    解析不到就返回 ``None``，调用方跳过该端点——伪造一个 ID 只会得到 404，
+    看起来像「端点没问题」，实际什么都没验证到。
+    """
+
+    def __init__(self, pg: dict[str, Any]) -> None:
+        self._pg = pg
+        self._cache: dict[str, str | None] = {}
+
+    def _query(self, sql: str) -> str | None:
+        if sql not in self._cache:
+            self._cache[sql] = _psql(sql, **self._pg)
+        return self._cache[sql]
+
+    def resolve(self, path: str, names: set[str]) -> dict[str, str] | None:
+        if names & NON_ID_PARAMS:
+            return None
+        for prefix, (sql, left, right) in PAIR_ID_SQL.items():
+            if prefix in path and names == {left, right}:
+                raw = self._query(sql)
+                value_left, separator, value_right = (raw or "").partition("|")
+                if not separator or not value_left or not value_right:
+                    return None
+                return {left: value_left, right: value_right}
+        segments = path.strip("/").split("/")
+        resolved: dict[str, str] = {}
+        for name in names:
+            sql = None
+            for index, segment in enumerate(segments):
+                if segment != "{" + name + "}":
+                    continue
+                if index and segments[index - 1] in SEGMENT_ID_SQL:
+                    sql = SEGMENT_ID_SQL[segments[index - 1]]
+                break
+            if sql is None:
+                sql = ID_SQL.get(name)
+            if sql is None:
+                return None
+            value = self._query(sql)
+            if not value:
+                return None
+            resolved[name] = value
+        return resolved
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="DDP 只读端点 5xx 巡检")
     parser.add_argument("--api-base", default="http://127.0.0.1:8000")
@@ -238,8 +325,7 @@ def main(argv: list[str] | None = None) -> int:
 
     contract = _load_contract()
     operations = _iter_get_operations(contract)
-    ids = {name: _psql(sql, **pg) for name, sql in ID_SQL.items()}
-    known = {name: value for name, value in ids.items() if value}
+    resolver = IdResolver(pg)
 
     probed = 0
     skipped = 0
@@ -250,12 +336,13 @@ def main(argv: list[str] | None = None) -> int:
         names = set(re.findall(r"\{(\w+)\}", path)) - {"project_id"}
         if args.simple_only and names:
             continue
-        if not names <= set(known):
+        resolved = resolver.resolve(path, names)
+        if resolved is None:
             skipped += 1
             continue
         url = args.api_base + path.replace("{project_id}", str(project_id))
-        for name in names:
-            url = url.replace("{" + name + "}", known[name])
+        for name, value in resolved.items():
+            url = url.replace("{" + name + "}", value)
         status, body = _request(url, token)
         probed += 1
         if status == 0 or status >= 500:
