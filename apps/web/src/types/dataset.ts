@@ -341,6 +341,11 @@ export interface ExternalTrainingReference {
   status_stale: boolean;
   model_ref: Record<string, unknown> | null;
   evaluation_ref: Record<string, unknown> | null;
+  /**
+   * 训练回调回传的产物元数据（model/metadata 的 object_key、sha256、size_bytes，
+   * 以及 metrics）。模型版本登记从这里取；null 表示该次训练没有产物信息。
+   */
+  artifacts: Record<string, unknown> | null;
   correlation_id: string;
   idempotency_key: string;
   error_code: string | null;

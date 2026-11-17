@@ -97,6 +97,11 @@ export interface EvaluationCreateInput {
   thresholds: Record<string, { min?: number | null; max?: number | null }>;
   baseline_evaluation_id?: string | null;
   adapter_id?: string | null;
+  /**
+   * 适配器执行参数，原样透传。多产物项目必须给 `model_object_key`，
+   * 否则适配器无法安全选择要评测的是哪个产物（会明确报 ambiguous）。
+   */
+  config?: Record<string, unknown>;
 }
 
 export interface InferenceServiceCreateInput {

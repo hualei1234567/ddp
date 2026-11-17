@@ -15,6 +15,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import ActionButtons from "../../components/dataset/ActionButtons";
+import {
+  datasetVersionActionConfirm,
+  datasetVersionActionPayload,
+} from "../../services/datasetVersionActions";
 import CountsGrid from "../../components/dataset/CountsGrid";
 import StatusTag from "../../components/dataset/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
@@ -388,10 +392,15 @@ function VersionDetailContent({
           <Typography.Text strong>版本动作</Typography.Text>
           <ActionButtons
             actions={version.allowed_actions}
+            // 冻结要求「非构建人 + 显式 QA 验证」。交互规则集中在
+            // services/datasetVersionActions，页面不自行拼参数。
+            confirm={datasetVersionActionConfirm}
+            actionPayload={datasetVersionActionPayload}
             onAction={async (action, payload) => {
               await datasetApi.actVersion(projectId, datasetId, versionId, action, {
                 version: version.version,
                 reason: payload.reason,
+                payload: payload.payload,
               });
               refreshAll();
             }}

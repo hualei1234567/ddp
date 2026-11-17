@@ -238,7 +238,12 @@ export interface DatasetApi {
     datasetId: string,
     versionId: string,
     action: string,
-    options: WriteOptions & { reason?: string | null },
+    options: WriteOptions & {
+      reason?: string | null;
+      // 动作级参数（冻结的 qa_verified、冻结/泄漏豁免等）。服务端把它们读作
+      // `command.payload`；此前前端只发 reason，导致冻结永远 422。
+      payload?: Record<string, unknown>;
+    },
   ): Promise<DatasetVersion>;
   listItems(
     projectId: string,
@@ -501,7 +506,7 @@ export function createDatasetApi(client: ApiClient): DatasetApi {
           method: "POST",
           signal: options.signal,
           headers: writeHeaders(options),
-          body: { reason: options.reason ?? null },
+          body: { reason: options.reason ?? null, payload: options.payload ?? null },
           validate: (value) =>
             assertProjectScope(parseDatasetVersion(value), projectId, "数据集版本"),
         },
