@@ -7,8 +7,19 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.v1.annotation_common import public_actions
 from app.domain.annotation.assignment import AnnotationAssignment
 from app.domain.annotation.batch import AnnotationBatch
+from app.domain.annotation.enums import (
+    AnnotationAssignmentStatus,
+    AnnotationBatchStatus,
+    AnnotationTaskStatus,
+)
+from app.domain.annotation.state_machines import (
+    allowed_assignment_actions,
+    allowed_batch_actions,
+    allowed_task_actions,
+)
 from app.domain.annotation.task import AnnotationTask
 from app.domain.annotation.workload import WorkloadSummary
 
@@ -120,6 +131,8 @@ class AnnotationTaskOut(BaseModel):
     schema_version: int
     schema_sha256: str
     status: str
+    # 服务端算好的可执行动作，前端只按它渲染按钮；系统内部动作不会出现。
+    allowed_actions: list[str]
     target_item_count: int
     target_episode_count: int
     priority: str
@@ -154,6 +167,9 @@ class AnnotationTaskOut(BaseModel):
             schema_version=task.schema_version,
             schema_sha256=task.schema_sha256,
             status=_value(task.status),
+            allowed_actions=public_actions(
+                allowed_task_actions(AnnotationTaskStatus(_value(task.status)))
+            ),
             target_item_count=task.target_item_count,
             target_episode_count=task.target_episode_count,
             priority=_value(task.priority),
@@ -184,6 +200,7 @@ class AnnotationBatchOut(BaseModel):
     code: str
     sequence_no: int
     status: str
+    allowed_actions: list[str]
     name: str | None
     stratum: str | None
     item_refs: list[UUID]
@@ -212,6 +229,9 @@ class AnnotationBatchOut(BaseModel):
             code=batch.code,
             sequence_no=batch.sequence_no,
             status=_value(batch.status),
+            allowed_actions=public_actions(
+                allowed_batch_actions(AnnotationBatchStatus(_value(batch.status)))
+            ),
             name=batch.name,
             stratum=batch.stratum,
             item_refs=list(batch.item_refs),
@@ -240,6 +260,7 @@ class AnnotationAssignmentOut(BaseModel):
     batch_id: UUID
     assignee_id: UUID
     status: str
+    allowed_actions: list[str]
     assignment_role: str
     planned_item_count: int
     claimed_item_count: int
@@ -268,6 +289,9 @@ class AnnotationAssignmentOut(BaseModel):
             batch_id=assignment.batch_id,
             assignee_id=assignment.assignee_id,
             status=_value(assignment.status),
+            allowed_actions=public_actions(
+                allowed_assignment_actions(AnnotationAssignmentStatus(_value(assignment.status)))
+            ),
             assignment_role=_value(assignment.assignment_role),
             planned_item_count=assignment.planned_item_count,
             claimed_item_count=assignment.claimed_item_count,

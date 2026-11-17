@@ -7,9 +7,25 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.v1.annotation_common import public_actions
 from app.domain.annotation.arbitration import AnnotationArbitration
+from app.domain.annotation.enums import (
+    AnnotationArbitrationStatus,
+    AnnotationReviewStatus,
+    AnnotationSubmissionStatus,
+)
 from app.domain.annotation.review import AnnotationReview
+from app.domain.annotation.state_machines import (
+    allowed_arbitration_actions,
+    allowed_review_actions,
+    allowed_submission_actions,
+)
 from app.domain.annotation.submission import AnnotationRecord, AnnotationSubmission
+
+# 提交资源上对外公开的动作。``approve`` 等裁决动作只能经复核 / 仲裁资源执行，
+# 直接调用提交动作端点会被拒绝；响应里的 ``allowed_actions`` 必须与这个集合
+# 取交集，否则前端会渲染出提交端点不接受的按钮。路由与 DTO 共用这一份。
+PUBLIC_SUBMISSION_ACTIONS = frozenset({"submit", "withdraw", "require-rework"})
 
 
 class AnnotationSubmissionCreate(BaseModel):
@@ -148,6 +164,7 @@ class AnnotationSubmissionOut(BaseModel):
     records_digest: str
     item_count: int
     status: str
+    allowed_actions: list[str]
     data_source: str
     record_refs: list[UUID]
     records: list[AnnotationRecordOut]
@@ -179,6 +196,10 @@ class AnnotationSubmissionOut(BaseModel):
             records_digest=submission.records_digest,
             item_count=submission.item_count,
             status=_value(submission.status),
+            allowed_actions=public_actions(
+                allowed_submission_actions(AnnotationSubmissionStatus(_value(submission.status)))
+                & PUBLIC_SUBMISSION_ACTIONS
+            ),
             data_source=_value(submission.data_source),
             record_refs=list(submission.record_refs),
             records=[AnnotationRecordOut.from_domain(item) for item in submission.records],
@@ -204,6 +225,7 @@ class AnnotationReviewOut(BaseModel):
     reviewer_id: UUID
     review_round: int
     status: str
+    allowed_actions: list[str]
     decision: str | None
     issues: list[dict[str, object]]
     checklist: list[dict[str, object]]
@@ -226,6 +248,9 @@ class AnnotationReviewOut(BaseModel):
             reviewer_id=review.reviewer_id,
             review_round=review.review_round,
             status=_value(review.status),
+            allowed_actions=public_actions(
+                allowed_review_actions(AnnotationReviewStatus(_value(review.status)))
+            ),
             decision=_value(review.decision) if review.decision is not None else None,
             issues=[item.to_payload() for item in review.issues],
             checklist=[item.to_payload() for item in review.checklist],
@@ -250,6 +275,7 @@ class AnnotationArbitrationOut(BaseModel):
     quorum: int
     trigger: str
     status: str
+    allowed_actions: list[str]
     votes: list[dict[str, object]]
     effective_vote_count: int
     final_decision: str | None
@@ -273,6 +299,9 @@ class AnnotationArbitrationOut(BaseModel):
             quorum=arbitration.quorum,
             trigger=_value(arbitration.trigger),
             status=_value(arbitration.status),
+            allowed_actions=public_actions(
+                allowed_arbitration_actions(AnnotationArbitrationStatus(_value(arbitration.status)))
+            ),
             votes=[item.to_payload() for item in arbitration.votes],
             effective_vote_count=arbitration.effective_vote_count,
             final_decision=(

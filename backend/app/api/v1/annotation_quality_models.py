@@ -6,13 +6,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.api.v1.annotation_common import public_actions
 from app.application.annotation.ports import GoldEvaluationRecord, IAAReportRecord
+from app.domain.annotation.enums import GoldSetStatus, QualitySampleStatus
 from app.domain.annotation.quality_sample import QualitySample
+from app.domain.annotation.state_machines import (
+    allowed_gold_set_actions,
+    allowed_quality_sample_actions,
+)
 
 
 class GoldSetCreate(BaseModel):
@@ -132,6 +139,21 @@ class GoldSetOut(BaseModel):
     rotation_policy: str
     items: list[dict[str, object]]
     version: int
+    allowed_actions: list[str]
+
+    @classmethod
+    def from_payload(cls, payload: Mapping[str, object]) -> GoldSetOut:
+        """由领域脱敏视图构造响应。
+
+        ``allowed_actions`` 只能由服务端按状态计算；``redacted_view()`` 是
+        领域层的既有单一来源，这里只补这一个字段，不改动脱敏语义。
+        """
+        return cls(
+            **payload,
+            allowed_actions=public_actions(
+                allowed_gold_set_actions(GoldSetStatus(str(payload["status"])))
+            ),
+        )
 
 
 class GoldSetAnswerOut(GoldSetOut):
@@ -187,6 +209,7 @@ class QualitySampleOut(BaseModel):
     sample_type: str
     sample_reason: str
     status: str
+    allowed_actions: list[str]
     stratum: str | None
     item_refs: list[UUID]
     reviewer_id: UUID | None
@@ -215,6 +238,9 @@ class QualitySampleOut(BaseModel):
             sample_type=_value(sample.sample_type),
             sample_reason=sample.sample_reason,
             status=_value(sample.status),
+            allowed_actions=public_actions(
+                allowed_quality_sample_actions(QualitySampleStatus(_value(sample.status)))
+            ),
             stratum=sample.stratum,
             item_refs=list(sample.item_refs),
             reviewer_id=sample.reviewer_id,

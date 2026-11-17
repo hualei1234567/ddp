@@ -33,6 +33,13 @@
       "title": "Status",
       "type": "string"
     },
+    "allowed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Actions",
+      "type": "array"
+    },
     "name": {
       "anyOf": [
         {
@@ -187,6 +194,7 @@
     "code",
     "sequence_no",
     "status",
+    "allowed_actions",
     "name",
     "stratum",
     "item_refs",

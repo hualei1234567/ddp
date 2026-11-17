@@ -68,7 +68,7 @@ def list_gold_sets(
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.gold_set_id)
     return PageOut(
-        items=[GoldSetOut(**item.redacted_view()) for item in page.items],
+        items=[GoldSetOut.from_payload(item.redacted_view()) for item in page.items],
         next_cursor=page.next_cursor,
     )
 
@@ -109,7 +109,7 @@ def create_gold_set(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return GoldSetOut(**gold_set.redacted_view())
+    return GoldSetOut.from_payload(gold_set.redacted_view())
 
 
 @router.get("/gold-sets/{gold_set_id}", response_model=GoldSetOut)
@@ -123,7 +123,7 @@ def get_gold_set(
     scope: ReadScope,
     use_cases: AnnotationUseCasesDep,
 ) -> GoldSetOut:
-    return GoldSetOut(**use_cases.gold_sets.redacted_view(scope, gold_set_id))
+    return GoldSetOut.from_payload(use_cases.gold_sets.redacted_view(scope, gold_set_id))
 
 
 @router.get("/gold-sets/{gold_set_id}/answers", response_model=GoldSetAnswerOut)
@@ -143,7 +143,7 @@ def get_gold_set_answers(
         gold_set_id,
         request_id=request_id(request),
     )
-    return GoldSetAnswerOut(**payload)
+    return GoldSetAnswerOut.from_payload(payload)
 
 
 @router.post("/gold-sets/{gold_set_id}/actions/{action}", response_model=GoldSetOut)
@@ -173,7 +173,7 @@ def act_on_gold_set(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return GoldSetOut(**gold_set.redacted_view())
+    return GoldSetOut.from_payload(gold_set.redacted_view())
 
 
 @router.post(

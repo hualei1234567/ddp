@@ -39,6 +39,13 @@
       "title": "Status",
       "type": "string"
     },
+    "allowed_actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Allowed Actions",
+      "type": "array"
+    },
     "decision": {
       "anyOf": [
         {
@@ -161,6 +168,7 @@
     "reviewer_id",
     "review_round",
     "status",
+    "allowed_actions",
     "decision",
     "issues",
     "checklist",
