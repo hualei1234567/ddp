@@ -57,4 +57,58 @@ if [[ -n "${base_version}" && -n "${current_version}" && "${base_major}" != "${c
   exit 0
 fi
 
-oasdiff breaking "${base_doc}" "${current}" --fail-on ERR
+# 声明为「开放集合」的枚举不参与破坏性判定。
+#
+# 为什么需要这一步：这些枚举是被大量响应共享的**可增长**取值集合。新增一个值会让
+# oasdiff 对每一个引用它的操作各报一条 `response-property-enum-value-added`——
+# 本次新增 4 个错误码直接产出 5508 条，把真正需要关注的破坏性变更埋掉了。
+#
+# 契约本身已经写明客户端必须容错（错误码：「未知错误不得默认成功」；血缘节点类型：
+# 新接入方会带来新节点类型）。因此这类增长按设计不算破坏性变更。
+#
+# 做法：比较前把**两侧**同名枚举归一成开放字符串。于是这些枚举的取值增删不误报，
+# 而它们的**结构变化**（变成对象、删掉字段）、以及所有其它枚举（状态机、类型、
+# 分区策略）的新增值仍然会被拦截。
+#
+# 清单必须显式列出并且逐个写明理由——不允许用通配或「全部枚举」开关。
+# 说明：oasdiff 的 `--err-ignore` 在 `breaking` 子命令下实测无效（连 `.*` 都不忽略），
+# 因此用预处理而不是忽略规则。1.37.0 与 CI 的 1.38.0 行为一致。
+OPEN_ENUMS="ErrorCode LineageNodeType"
+prepare_open_enums() {
+  local root="$1"
+  python3 - "$root" "$OPEN_ENUMS" <<'PYEOF'
+import pathlib
+import sys
+
+import yaml
+
+root = pathlib.Path(sys.argv[1])
+wanted = set(sys.argv[2].split())
+targets = 0
+for fragment in sorted((root / "fragments").glob("*.yaml")):
+    with fragment.open(encoding="utf-8") as handle:
+        document = yaml.safe_load(handle)
+    if not isinstance(document, dict):
+        continue
+    changed = False
+    for name in wanted & set(document):
+        schema = document[name]
+        if isinstance(schema, dict) and "enum" in schema:
+            schema.pop("enum", None)
+            schema["type"] = "string"
+            changed = True
+            targets += 1
+    if changed:
+        with fragment.open("w", encoding="utf-8") as handle:
+            yaml.safe_dump(document, handle, allow_unicode=True, sort_keys=False)
+if targets == 0:
+    print("警告：未在任何 fragment 中找到声明的开放枚举", file=sys.stderr)
+PYEOF
+}
+
+prepared_current="${tmpdir}/current-contract"
+cp -R "$(dirname "${current}")" "${prepared_current}"
+prepare_open_enums "${tmpdir}/packages/contracts"
+prepare_open_enums "${prepared_current}"
+
+oasdiff breaking "${base_doc}" "${prepared_current}/openapi.yaml" --fail-on ERR
