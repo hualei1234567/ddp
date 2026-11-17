@@ -22,7 +22,7 @@ from app.application.modelops.ports import (
 )
 from app.domain.identity.models import ProjectScope
 from app.domain.modelops.artifacts import ModelArtifact, ModelRuntime
-from app.domain.modelops.enums import ModelStatus, ModelVersionStatus
+from app.domain.modelops.enums import ArtifactVerification, ModelStatus, ModelVersionStatus
 from app.domain.modelops.errors import (
     DomainValidationError,
     DuplicateResourceError,
@@ -512,9 +512,15 @@ class ModelVersionUseCases:
     ) -> ModelVersion:
         if action == "validate":
             self._inspect_artifact(version.artifact)
+            # 校验通过必须把结论落到产物上：只改版本状态会让界面一直显示
+            # UNVERIFIED，等于「校验了但没人知道校验过」。
             return replace(
                 version,
                 status=ModelVersionStatus.READY.value,
+                artifact=replace(
+                    version.artifact,
+                    verification_status=ArtifactVerification.VERIFIED.value,
+                ),
                 validated_at=now,
                 updated_at=now,
                 updated_by=actor_id,

@@ -204,6 +204,9 @@ class SqlModelVersionRepository:
             )
             .values(
                 status=version.status,
+                # 校验结论（verification_status）写在 artifact 里，必须随 save
+                # 一起落库；只更新版本状态会让界面永远显示 UNVERIFIED。
+                artifact=version.artifact.to_payload(),
                 validated_at=version.validated_at,
                 released_by=version.released_by,
                 released_at=version.released_at,

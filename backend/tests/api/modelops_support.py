@@ -90,6 +90,8 @@ def ready_version(client, project_id, model_id, size: int = 128) -> dict[str, ob
     )
     assert validated.status_code == 200, validated.text
     assert validated.json()["status"] == "READY"
+    # 校验结论必须落到产物上：只改版本状态会让界面永远显示 UNVERIFIED。
+    assert validated.json()["artifact"]["verification_status"] == "VERIFIED"
     return validated.json()
 
 
