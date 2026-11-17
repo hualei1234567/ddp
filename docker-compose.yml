@@ -212,15 +212,21 @@ services:
 
   maintenance-worker:
     # 阶段 8：定时备份 + outbox 归档 + 幂等表清扫。
-    # 默认不开（maintenance_enabled 由 .env 控制）；开启前必须先设 DDP_BACKUP_DIR
-    # 并把该目录挂载为持久卷，否则备份会落在容器内临时层。
+    # 默认不开；开启前必须同时具备 DDP_MAINTENANCE_ENABLED=true 与
+    # DDP_BACKUP_DIR，并把该目录挂载为持久卷，否则备份会落在容器内临时层。
     #
     # 为什么是独立 profile 而不是 "app"：该 worker 在 maintenance_enabled=False
     # 时会立即退出，restart: unless-stopped 于是把它变成无限重启循环——
     # 日志每几秒刷一条 ERROR，容器状态永远在 Restarting，看起来像故障但其实是
     # 配置期望的行为。把它从默认里摘出去：需要备份时显式
-    # `docker compose --profile maintenance up -d maintenance-worker`，
-    # 并先在 .env 里设 DDP_MAINTENANCE_ENABLED=true。
+    # `docker compose --profile maintenance up -d maintenance-worker`。
+    #
+    # 为什么开关写在这里而不是 .env：`.env` 会被**所有**服务通过 env_file 加载，
+    # 而 `Settings.validate_runtime_security()` 要求「启用维护就必须有备份目录」。
+    # 把开关放进 .env 会让 api / web / 各 worker 一起读到 enabled=true 却没有
+    # DDP_BACKUP_DIR，于是**整个 stack 拒绝启动**——实测报错
+    # `RuntimeError: 安全配置不完整，拒绝启动：启用 DDP_MAINTENANCE_ENABLED 时
+    # 必须设置 DDP_BACKUP_DIR`。开关是这一个 worker 的部署参数，就近声明。
     profiles: ["maintenance"]
     build:
       context: .
@@ -231,6 +237,8 @@ services:
     environment:
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
       DDP_BACKUP_DIR: /var/backups/ddp
+      # 只在这个容器里打开维护任务；见上方注释。
+      DDP_MAINTENANCE_ENABLED: "true"
     volumes:
       - ddp-backups:/var/backups/ddp
     depends_on:
