@@ -102,8 +102,16 @@ def detect_near_duplicates(
     场景标签缺失的候选**不参与判定**——没有依据时不做断言。
     """
     if method not in NearDuplicateMethod.SUPPORTED:
+        # 带上 details：契约里该字段是自由字符串，调用方只能从响应知道
+        # "哪个值不可用、可用值是什么"。没有它，422 只有一句「校验失败」，
+        # 只能靠猜或翻代码。
         raise DomainValidationError(
-            f"未实现的近重复方法：{method!r}；已实现：{sorted(NearDuplicateMethod.SUPPORTED)}"
+            f"未实现的近重复方法：{method!r}；已实现：{sorted(NearDuplicateMethod.SUPPORTED)}",
+            details={
+                "field": "similarity_method",
+                "provided": str(method),
+                "supported": sorted(NearDuplicateMethod.SUPPORTED),
+            },
         )
     if not 0.0 < overlap_ratio <= 1.0:
         raise DomainValidationError("overlap_ratio 必须在 (0, 1] 之间")

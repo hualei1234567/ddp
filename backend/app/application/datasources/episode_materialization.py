@@ -173,7 +173,12 @@ class ImportEpisodeMaterializer:
         skipped: list[str] = []
         for episode_key in sorted(grouped):
             members = grouped[episode_key]
-            command = _command_for(episode_key, members, scene_labels=scene_labels)
+            command = _command_for(
+                episode_key,
+                members,
+                scene_labels=scene_labels,
+                collection_task_id=job.collection_task_id,
+            )
             # 幂等判重必须**在创建之前**：EpisodeService.create 还带一层
             # "同一 RawAsset 的时间区间不得被重复占用"检查，它会先于 code
             # 唯一性触发，抛 EpisodeOverlapConflictError。靠捕获异常判重会
@@ -247,11 +252,15 @@ def _command_for(
     members: list[MediaAsset],
     *,
     scene_labels: tuple[str, ...],
+    collection_task_id: UUID | None = None,
 ) -> CreateEpisodeCommand:
     raw_asset_ids = _unique([asset.raw_asset_id for asset in members])
     start_ns, end_ns = _time_range(members)
     first = members[0]
     return CreateEpisodeCommand(
+        # 物化出的 Episode 继承导入的采集任务归属：命令本来就支持 task_id，
+        # 只是这条链路一直没传，于是按任务统计永远查不到导入来的数据。
+        task_id=collection_task_id,
         raw_asset_ids=raw_asset_ids,
         segmentation=Segmentation(
             method="RULE",

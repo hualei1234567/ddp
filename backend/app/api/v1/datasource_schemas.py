@@ -96,6 +96,10 @@ class DataSourceImportCreate(BaseModel):
     tool_version: str = Field(min_length=1, max_length=100)
     sample_limit: int | None = Field(default=None, ge=1)
     cache_location: str | None = Field(default=None, max_length=1024)
+    # 数据归属：这批数据是为哪个采集任务/批次采的。导入产出的 RawAsset 与
+    # 物化出的 Episode 会继承它。
+    collection_task_id: UUID | None = None
+    batch_id: UUID | None = None
 
 
 class ImportActionRequest(BaseModel):
@@ -116,6 +120,8 @@ class DataSourceImportOut(BaseModel):
     tool_version: str
     sample_limit: int | None
     cache_location: str | None
+    collection_task_id: UUID | None
+    batch_id: UUID | None
     imported_row_count: int | None
     imported_file_count: int | None
     error_message: str | None
@@ -136,6 +142,8 @@ class DataSourceImportOut(BaseModel):
             tool_version=item.tool_version,
             sample_limit=item.sample_limit,
             cache_location=item.cache_location,
+            collection_task_id=item.collection_task_id,
+            batch_id=item.batch_id,
             imported_row_count=item.imported_row_count,
             imported_file_count=item.imported_file_count,
             error_message=item.error_message,

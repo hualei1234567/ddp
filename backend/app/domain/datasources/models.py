@@ -129,6 +129,8 @@ class DataSourceImport:
     tool_version: str
     sample_limit: int | None = None
     cache_location: str | None = None
+    collection_task_id: UUID | None = None
+    batch_id: UUID | None = None
     imported_row_count: int | None = None
     imported_file_count: int | None = None
     error_message: str | None = None

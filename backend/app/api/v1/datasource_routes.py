@@ -287,6 +287,8 @@ def create_import(
             tool_version=payload.tool_version,
             sample_limit=payload.sample_limit,
             cache_location=payload.cache_location,
+            collection_task_id=payload.collection_task_id,
+            batch_id=payload.batch_id,
         ),
         idempotency_key=idempotency_key,
         method=request.method,

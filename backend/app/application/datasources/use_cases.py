@@ -270,6 +270,10 @@ class DataSourceUseCases:
             "tool_name": command.tool_name,
             "tool_version": command.tool_version,
             "sample_limit": command.sample_limit,
+            "collection_task_id": (
+                str(command.collection_task_id) if command.collection_task_id else None
+            ),
+            "batch_id": str(command.batch_id) if command.batch_id else None,
         }
         now = _utcnow()
         replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
@@ -287,6 +291,8 @@ class DataSourceUseCases:
             tool_version=command.tool_version,
             sample_limit=command.sample_limit,
             cache_location=command.cache_location,
+            collection_task_id=command.collection_task_id,
+            batch_id=command.batch_id,
         )
         created = self._imports.add(scope, item)
         record_change(
