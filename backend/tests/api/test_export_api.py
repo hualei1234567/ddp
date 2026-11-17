@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import UUID, uuid4
 
 from app.infrastructure.db.models.collection import OutboxEvent
@@ -178,7 +179,7 @@ def test_export_worker_success_manifest_and_download(
     detail = editor.get(url(ids.project_a, f"/exports/{job_id}")).json()
     assert detail["status"] == "SUCCEEDED"
     assert detail["attempt"] == 1
-    assert detail["artifact_count"] == 4
+    assert detail["artifact_count"] == 6
     assert detail["total_bytes"] > 0
     assert detail["aggregate_sha256"].startswith("sha256:")
     assert detail["artifact_manifest_sha256"].startswith("sha256:")
@@ -188,24 +189,61 @@ def test_export_worker_success_manifest_and_download(
     assert manifest.status_code == 200, manifest.text
     body = manifest.json()
     assert body["export_job_id"] == job_id
-    assert body["artifact_count"] == 4
+    assert body["artifact_count"] == 6
     assert body["aggregate_sha256"] == detail["aggregate_sha256"]
     assert body["verification_status"] == "UNVERIFIED"
     paths = {item["path"] for item in body["artifacts"]}
     assert paths == {
         "meta/info.json",
         "meta/episodes.jsonl",
+        "meta/media.jsonl",
+        "data/episodes.jsonl",
         "meta/ddp_divisions.json",
         "ddp/sidecar.json",
     }
     for item in body["artifacts"]:
         assert item["sha256"].startswith("sha256:")
         object_key = f"{detail['output_prefix']}{item['path']}"
-        assert storage.objects[object_key]
+        assert storage.objects[object_key] is not None
         assert storage.sha256(object_key) == item["sha256"]
 
     divisions_key = f"{detail['output_prefix']}meta/ddp_divisions.json"
     assert b'"train"' in storage.objects[divisions_key]
+
+    # 训练输入索引：媒体位置与标签必须来自真实数据（测试库是真实 SQLite）。
+    media_key = f"{detail['output_prefix']}meta/media.jsonl"
+    media_rows = [
+        json.loads(line) for line in storage.objects[media_key].decode("utf-8").splitlines()
+    ]
+    assert len(media_rows) == 10
+    assert {row["role"] for row in media_rows} == {"PRIMARY"}
+    for row in media_rows:
+        assert row["object_key"].startswith("raw/")
+        assert row["object_key"].endswith("/content.mcap")
+        assert row["sha256"].startswith("sha256:")
+        assert row["size_bytes"] > 0
+        assert row["duration_ns"] == 10_000
+        assert row["content_type"] == "application/x-mcap"
+
+    training_key = f"{detail['output_prefix']}data/episodes.jsonl"
+    training_rows = [
+        json.loads(line) for line in storage.objects[training_key].decode("utf-8").splitlines()
+    ]
+    assert len(training_rows) == 10
+    assert {row["split"] for row in training_rows} <= {
+        "TRAIN",
+        "VALIDATION",
+        "TEST",
+    }
+    for row in training_rows:
+        # 测试库的批准记录 labels 为空：训练列必须如实留空，不得编造。
+        assert row["labels"] == []
+        assert row["action"] is None
+        assert row["quality_score"] is None
+        assert row["success"] is True  # 退回 Episode 自身的 success 事实列
+        assert row["duration_ns"] == 10_000
+        assert len(row["media_keys"]) == 1
+        assert row["media_keys"][0].startswith("raw/")
 
     download = editor.get(
         url(ids.project_a, f"/exports/{job_id}/artifacts/meta/info.json/download")

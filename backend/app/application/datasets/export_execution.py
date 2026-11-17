@@ -7,8 +7,10 @@ HTTP 线程不执行任何产物读写。
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Protocol
 from uuid import UUID
 
 from app.application.datasets.audit import record_change
@@ -41,17 +43,34 @@ from app.domain.datasets.errors import (
 )
 from app.domain.datasets.export_jobs import ExportJob
 from app.domain.datasets.exporting import (
+    EpisodeExportSource,
     ExportArtifactSpec,
     aggregate_sha256,
     build_artifact_manifest,
     build_export_artifacts,
     manifest_bytes,
 )
-from app.domain.datasets.models import DatasetVersion
+from app.domain.datasets.models import DatasetItem, DatasetVersion
 from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.errors import ObjectNotFoundError, ObjectStorageUnavailableError
 
 RESOURCE_TYPE = "EXPORT_JOB"
+
+
+class ExportEpisodeSourceDirectory(Protocol):
+    """导出所需的 Episode 事实、已批准标签与媒体位置读取端口。
+
+    与 ``ExportJobRepository`` 等端口分开放：它跨 episodes / annotation_records /
+    episode_raw_assets / raw_assets 多个模块取数，但不写任何数据，也不承担业务
+    规则——只把"导出要什么"翻译成一次读操作。实现必须在服务端强制
+    ``scope.project_id`` 过滤，不信任客户端传入的项目标识。
+    """
+
+    def list_for_items(
+        self,
+        scope: ProjectScope,
+        items: Sequence[DatasetItem],
+    ) -> Sequence[EpisodeExportSource]: ...
 
 
 class ExportExecutionService:
@@ -63,6 +82,7 @@ class ExportExecutionService:
         items: DatasetItemRepository,
         jobs: ExportJobRepository,
         storage: ExportObjectStorage,
+        episode_sources: ExportEpisodeSourceDirectory,
         audit: AuditRepository,
         outbox: OutboxRepository,
         uow: UnitOfWork,
@@ -73,6 +93,7 @@ class ExportExecutionService:
         self._items = items
         self._jobs = jobs
         self._storage = storage
+        self._episode_sources = episode_sources
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
@@ -120,12 +141,16 @@ class ExportExecutionService:
                 "数据集版本没有可导出的条目",
             )
         created_at = version.frozen_at or version.source_snapshot_at or moment
+        # 媒体位置与已批准标签只在 Worker 内读一次；读失败按任务失败处理，
+        # 绝不降级成"空标签也当成功"——那会把缺数据伪装成合法训练集。
+        sources = tuple(self._episode_sources.list_for_items(scope, tuple(items)))
         try:
             artifacts = build_export_artifacts(
                 job,
                 version,
                 items,
                 created_at=created_at,
+                sources=sources,
             )
         except ValueError as exc:
             return self._fail(scope, job, moment, "export_job_failed", str(exc))
@@ -449,4 +474,4 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
-__all__ = ["ExportExecutionService"]
+__all__ = ["ExportEpisodeSourceDirectory", "ExportExecutionService"]

@@ -1,30 +1,55 @@
 """LeRobot 元数据导出产物生成（确定性、无帧级映射）。
 
-本批只生成 ``ddp.lerobot/1.0.0`` 的元数据与 DDP sidecar：
+本批生成 ``ddp.lerobot/1.0.0`` 的元数据、训练输入索引与 DDP sidecar：
 - meta/info.json
-- meta/episodes.jsonl
+- meta/episodes.jsonl          Episode 溯源信息
+- meta/media.jsonl             每个 Episode 每一路视频的媒体位置（一个媒体一行）
+- data/episodes.jsonl          每行一个 Episode 的训练表（标签 + 媒体键）
 - meta/ddp_divisions.json
 - ddp/sidecar.json
 
 未实现真实 LeRobot 帧级映射、视频/observation/action 对齐与 Loader 兼容性验证；
 因此 ``verification_status`` 固定 ``UNVERIFIED``，不得宣称已兼容 LeRobot 生态。
-所有输出按规范 JSON 生成，相同输入必然得到相同文件清单与 Hash。
+所有输出按规范 JSON/NDJSON 生成，相同输入必然得到相同文件清单与 Hash。
+
+为什么训练表用 NDJSON 而不是 Parquet：本仓库目前没有 ``pyarrow`` 依赖，引入它会
+增加约 40MB 的二进制 wheel 与 ``numpy`` 传递依赖，并且会让产物 Hash/回读校验从
+"UTF-8 文本" 改成 "二进制字节"（现有 ``ExportArtifactSpec`` 与 Worker 校验路径都按
+文本口径实现）。本产物只承载元数据（媒体本体仍在对象存储），行数等于 Episode 数，
+NDJSON 与 ``meta/episodes.jsonl`` 同一套 RFC 8785 规范化口径，任何语言都能逐行复算出
+同一个 Hash。若将来确需列式产物，再单独评估 ``pyarrow`` 并把校验口径切换为字节。
 """
 
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from app.domain.datasets.canonical import canonical_json, plain, sha256_text
+from app.domain.datasets.canonical import canonical_json, plain, sha256_text, validate_sha256
 from app.domain.datasets.export_jobs import ExportJob
 from app.domain.datasets.models import DatasetItem, DatasetVersion
 
 JSON_CONTENT_TYPE = "application/json"
 NDJSON_CONTENT_TYPE = "application/x-ndjson"
+
+MEDIA_INDEX_PATH = "meta/media.jsonl"
+EPISODE_DATA_PATH = "data/episodes.jsonl"
+
+# 标签键 -> 训练列 的确定性映射。
+#
+# ``label_key`` 由各项目的标注 Schema 定义，不是固定枚举；这里只登记仓库里
+# 真实出现过的约定键（见 ``scripts/seed/modules/annotation.py`` 的 Schema 与
+# ``tests/api/dataset_support.py`` 的测试 Schema）。命中就填对应训练列，没命中
+# 就留空——完整的已批准标签始终原样写进 ``labels`` 列，不丢信息、不编造。
+OUTCOME_LABEL_KEYS: tuple[str, ...] = ("episode_outcome",)
+ACTION_LABEL_KEYS: tuple[str, ...] = ("action_segment", "action")
+QUALITY_SCORE_LABEL_KEYS: tuple[str, ...] = ("quality_score",)
+
+_SUCCESS_TEXT = frozenset({"success", "succeeded", "true"})
+_FAILURE_TEXT = frozenset({"failure", "failed", "false"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +97,168 @@ def _json_bytes(payload: Mapping[str, object] | list[object]) -> bytes:
     return canonical_json(payload).encode("utf-8")
 
 
+@dataclass(frozen=True, slots=True)
+class EpisodeMediaRef:
+    """Episode 引用的某一路媒体在对象存储中的位置。
+
+    ``object_key`` 指向对象存储里的真实文件（媒体本体不进数据库、也不内联进
+    导出产物）；``sha256``/``size_bytes`` 用于下载后校验内容未被替换。
+    """
+
+    episode_id: UUID
+    role: str
+    object_key: str
+    sha256: str
+    size_bytes: int
+    duration_ns: int | None = None
+    asset_id: UUID | None = None
+    content_type: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.role, str) or not self.role.strip():
+            raise ValueError("媒体 role 不得为空")
+        if not isinstance(self.object_key, str) or not self.object_key.strip():
+            raise ValueError("媒体 object_key 不得为空")
+        if self.object_key.startswith("/") or ".." in self.object_key.split("/"):
+            raise ValueError("媒体 object_key 非法")
+        validate_sha256(self.sha256, "media.sha256")
+        if not isinstance(self.size_bytes, int) or self.size_bytes <= 0:
+            raise ValueError("媒体 size_bytes 必须是正整数")
+        if self.duration_ns is not None and self.duration_ns < 0:
+            raise ValueError("媒体 duration_ns 不得为负")
+        if self.content_type is not None and not self.content_type.strip():
+            raise ValueError("媒体 content_type 不得为空字符串")
+
+
+@dataclass(frozen=True, slots=True)
+class EpisodeExportSource:
+    """导出所需的单个 Episode 事实：时长、成功标记、已批准标签与媒体位置。
+
+    ``labels`` 只来自 ``status=APPROVED`` 的标注记录，保持记录里的原始形态；
+    没有批准标签时为空元组，调用方**不得**据此编造训练标签。
+
+    标签值原样参与 RFC 8785 规范化：若某个标签值含超过 2^53 的整数（例如把
+    绝对纳秒时间戳直接写成数字），规范化会拒绝，导出任务以明确错误失败——
+    宁可失败，也不静默把类型改成字符串从而让产物 Hash 与源数据脱钩。
+    """
+
+    episode_id: UUID
+    duration_ns: int | None = None
+    success: bool | None = None
+    labels: tuple[Mapping[str, object], ...] = ()
+    media: tuple[EpisodeMediaRef, ...] = ()
+    annotation_submission_id: UUID | None = None
+    annotation_version: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.duration_ns is not None and self.duration_ns < 0:
+            raise ValueError("Episode duration_ns 不得为负")
+        normalized: list[dict[str, object]] = []
+        for label in self.labels:
+            if not isinstance(label, Mapping):
+                raise ValueError("标注标签必须是对象")
+            normalized.append(dict(plain(label)))
+        object.__setattr__(self, "labels", tuple(normalized))
+        object.__setattr__(self, "media", tuple(self.media))
+
+
+def _label_values(
+    labels: Sequence[Mapping[str, object]],
+    keys: tuple[str, ...],
+) -> list[object]:
+    """按键优先级取标签值；第一个命中的键即有值的键。"""
+    for key in keys:
+        values = [label.get("value") for label in labels if label.get("label_key") == key]
+        if values:
+            return values
+    return []
+
+
+def _single_label_value(
+    labels: Sequence[Mapping[str, object]],
+    keys: tuple[str, ...],
+) -> tuple[bool, object]:
+    """返回 ``(标签是否存在, 唯一值)``；多值/多段时唯一值为 ``None``。
+
+    多段动作等情况下"取第一条"是编造，因此宁可留空，让调用方去读 ``labels``。
+    """
+    values = _label_values(labels, keys)
+    if not values:
+        return False, None
+    distinct = {canonical_json({"value": plain(value)}) for value in values}
+    if len(distinct) != 1:
+        return True, None
+    return True, values[0]
+
+
+def _action_value(labels: Sequence[Mapping[str, object]]) -> str | None:
+    _found, value = _single_label_value(labels, ACTION_LABEL_KEYS)
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _success_value(
+    labels: Sequence[Mapping[str, object]],
+    fallback: bool | None,
+) -> bool | None:
+    """优先用已批准标签的结论；没有该标签时退回 Episode 自身的事实列。"""
+    found, value = _single_label_value(labels, OUTCOME_LABEL_KEYS)
+    if not found:
+        return fallback
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in _SUCCESS_TEXT:
+            return True
+        if normalized in _FAILURE_TEXT:
+            return False
+    return None
+
+
+def _quality_score_value(labels: Sequence[Mapping[str, object]]) -> float | None:
+    _found, value = _single_label_value(labels, QUALITY_SCORE_LABEL_KEYS)
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value)
+
+
+def _media_index(
+    ordered: Sequence[DatasetItem],
+    sources: Mapping[UUID, EpisodeExportSource],
+) -> tuple[list[dict[str, object]], dict[UUID, tuple[str, ...]]]:
+    """生成 ``meta/media.jsonl`` 行，并返回每个 Episode 的媒体键。
+
+    只保留数据集条目冻结的 ``raw_asset_ids``：条目是导出范围的权威，
+    Episode 上后加的关联不得混进一个已冻结版本。
+    """
+    rows: list[dict[str, object]] = []
+    keys: dict[UUID, list[str]] = {}
+    for item in ordered:
+        source = sources.get(item.episode_id)
+        if source is None:
+            continue
+        permitted = frozenset(item.raw_asset_ids)
+        for ref in sorted(source.media, key=lambda value: (value.role, value.object_key)):
+            if ref.episode_id != item.episode_id:
+                raise ValueError("媒体引用的 Episode 与数据集条目不一致")
+            if ref.asset_id is not None and ref.asset_id not in permitted:
+                continue
+            rows.append(
+                {
+                    "episode_id": str(ref.episode_id),
+                    "role": ref.role,
+                    "object_key": ref.object_key,
+                    "content_type": ref.content_type,
+                    "sha256": ref.sha256,
+                    "size_bytes": ref.size_bytes,
+                    "duration_ns": ref.duration_ns,
+                    "asset_id": str(ref.asset_id) if ref.asset_id is not None else None,
+                }
+            )
+            keys.setdefault(item.episode_id, []).append(ref.object_key)
+    return rows, {episode_id: tuple(dict.fromkeys(values)) for episode_id, values in keys.items()}
+
+
 def _jsonl_bytes(rows: Iterable[Mapping[str, object]]) -> bytes:
     return "".join(canonical_json(plain(row)) + "\n" for row in rows).encode("utf-8")
 
@@ -82,12 +269,19 @@ def build_export_artifacts(
     items: Iterable[DatasetItem],
     *,
     created_at: datetime,
+    sources: Iterable[EpisodeExportSource] = (),
 ) -> tuple[ExportArtifactSpec, ...]:
-    """生成确定性的元数据产物；调用方负责写入对象存储并回读校验。"""
+    """生成确定性的元数据产物；调用方负责写入对象存储并回读校验。
+
+    ``sources`` 提供 Episode 事实与已批准标签；缺省为空，此时媒体索引为空、
+    训练表里的标签列如实留空——不会用占位值冒充真实标注。
+    """
     ordered = tuple(sorted(items, key=lambda item: (str(item.episode_id), item.item_sha256 or "")))
     if not ordered:
         raise ValueError("导出产物不得为空")
+    source_map = {source.episode_id: source for source in sources}
     episode_refs = tuple(item.episode_id for item in ordered)
+    media_rows, media_keys = _media_index(ordered, source_map)
     split_members: dict[str, list[str]] = {"train": [], "validation": [], "test": []}
     for item in ordered:
         split = item.split.value if hasattr(item.split, "value") else str(item.split)
@@ -111,16 +305,19 @@ def build_export_artifacts(
         "canonicalization": "RFC8785_JCS",
         "frame_level_mapping": False,
         "verification_status": "UNVERIFIED",
+        "media_index_path": MEDIA_INDEX_PATH,
+        "episode_data_path": EPISODE_DATA_PATH,
         "created_at": created_at.isoformat(),
     }
     episode_rows = []
     for item in ordered:
+        split = item.split.value if hasattr(item.split, "value") else str(item.split)
         episode_rows.append(
             {
                 "episode_id": str(item.episode_id),
                 "episode_version": item.episode_version,
                 "episode_lineage_id": str(item.episode_lineage_id),
-                "split": item.split.value if hasattr(item.split, "value") else str(item.split),
+                "split": split,
                 "sample_role": (
                     item.sample_role.value
                     if hasattr(item.sample_role, "value")
@@ -134,6 +331,32 @@ def build_export_artifacts(
                 "schema_version": item.schema_version,
                 "item_sha256": item.item_sha256,
                 "time_range": plain(item.time_range),
+            }
+        )
+    training_rows = []
+    for item in ordered:
+        source = source_map.get(item.episode_id)
+        labels = source.labels if source is not None else ()
+        training_rows.append(
+            {
+                "episode_id": str(item.episode_id),
+                "episode_version": item.episode_version,
+                "split": item.split.value if hasattr(item.split, "value") else str(item.split),
+                "action": _action_value(labels),
+                "success": _success_value(
+                    labels,
+                    source.success if source is not None else None,
+                ),
+                "quality_score": _quality_score_value(labels),
+                "duration_ns": source.duration_ns if source is not None else None,
+                "media_keys": list(media_keys.get(item.episode_id, ())),
+                "annotation_submission_id": (
+                    str(source.annotation_submission_id)
+                    if source is not None and source.annotation_submission_id is not None
+                    else None
+                ),
+                "annotation_version": (source.annotation_version if source is not None else None),
+                "labels": [dict(label) for label in labels],
             }
         )
     divisions = {
@@ -196,6 +419,18 @@ def build_export_artifacts(
             episode_refs=episode_refs,
             sidecar=True,
         ),
+        ExportArtifactSpec(
+            path=MEDIA_INDEX_PATH,
+            data=_jsonl_bytes(media_rows),
+            content_type=NDJSON_CONTENT_TYPE,
+            episode_refs=tuple(sorted(media_keys)),
+        ),
+        ExportArtifactSpec(
+            path=EPISODE_DATA_PATH,
+            data=_jsonl_bytes(training_rows),
+            content_type=NDJSON_CONTENT_TYPE,
+            episode_refs=episode_refs,
+        ),
     )
     return tuple(sorted(artifacts, key=lambda artifact: artifact.path))
 
@@ -245,8 +480,12 @@ def decode_json(data: bytes) -> object:
 
 
 __all__ = [
+    "EPISODE_DATA_PATH",
+    "EpisodeExportSource",
+    "EpisodeMediaRef",
     "ExportArtifactSpec",
     "JSON_CONTENT_TYPE",
+    "MEDIA_INDEX_PATH",
     "NDJSON_CONTENT_TYPE",
     "aggregate_sha256",
     "build_artifact_manifest",

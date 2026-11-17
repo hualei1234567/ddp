@@ -81,7 +81,7 @@ def test_export_failure_then_retry_succeeds(
     succeeded = _detail(client, ids.project_a, job["export_job_id"])
     assert succeeded["status"] == "SUCCEEDED"
     assert succeeded["attempt"] == 2
-    assert succeeded["artifact_count"] == 4
+    assert succeeded["artifact_count"] == 6
 
 
 def test_export_not_retryable_after_max_attempts(

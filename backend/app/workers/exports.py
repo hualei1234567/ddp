@@ -40,6 +40,7 @@ from app.infrastructure.repositories.dataset_repositories import (
 )
 from app.infrastructure.repositories.export_jobs import SqlExportJobRepository
 from app.infrastructure.repositories.export_queue import SqlExportQueue
+from app.infrastructure.repositories.export_sources import SqlExportEpisodeSourceDirectory
 from app.infrastructure.storage.s3 import S3MultipartStorage
 
 logger = logging.getLogger("ddp.worker.exports")
@@ -72,6 +73,7 @@ def build_execution_service(
         items=SqlDatasetItemRepository(session),
         jobs=SqlExportJobRepository(session),
         storage=storage,
+        episode_sources=SqlExportEpisodeSourceDirectory(session),
         audit=SqlDatasetAuditRepository(session),
         outbox=SqlDatasetOutboxRepository(session),
         uow=session,
