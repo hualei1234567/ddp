@@ -8,13 +8,14 @@
 
 from __future__ import annotations
 
+import json
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from app.core.metrics_access import parse_source_networks
-from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 # HS256 密钥强度下限（字节级字符数）。低于该值视为配置不完整，非本地环境拒绝启动。
 _MIN_JWT_SECRET_LENGTH = 32
@@ -54,6 +55,62 @@ _HSTS_PRELOAD_MIN_AGE_SECONDS = 31_536_000
 # 限流 Redis URL 允许的协议。``rediss`` 走 TLS。Unix socket 不在支持范围：
 # 多副本部署必然跨主机，本机 socket 无法构成全局配额，容易造成误解。
 _REDIS_URL_SCHEMES = frozenset({"redis", "rediss"})
+
+
+def _parse_adapter_endpoint_map(raw: object) -> object:
+    """解析 ``adapter_id -> endpoint`` 映射。
+
+    同时接受 JSON 对象（与既有 ``*_ADAPTER_SHARED_SECRETS`` 一致）与
+    ``id=url,id=url`` 逗号分隔两种写法；**空字符串一律视为未配置**——
+    compose 里的 ``${VAR:-}`` 默认就把变量置成空串，一个空变量不应该让
+    整个 API 启动自检失败。
+
+    ``NoDecode`` 让 pydantic-settings 跳过自带的 JSON 解码，从而让本函数成为
+    唯一解析入口（否则空串会在解码阶段就抛 SettingsError，validator 根本不会执行）。
+    """
+    if raw is None:
+        return {}
+    if not isinstance(raw, str):
+        return raw
+    text = raw.strip()
+    if not text:
+        return {}
+    if text.startswith("{"):
+        try:
+            decoded = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"adapter endpoint 不是合法 JSON：{exc.msg}") from exc
+        if not isinstance(decoded, dict):
+            raise ValueError("adapter endpoint 必须是 JSON 对象")
+        return decoded
+    pairs: dict[str, str] = {}
+    for item in text.split(","):
+        name, separator, value = item.partition("=")
+        if not separator or not name.strip() or not value.strip():
+            raise ValueError(f"adapter endpoint 片段非法：{item!r}（应为 adapter_id=url）")
+        pairs[name.strip()] = value.strip()
+    return pairs
+
+
+def _endpoint_url_problems(variable: str, endpoints: dict[str, str]) -> list[str]:
+    """校验 adapter endpoint 是可直接请求的 http(s) 绝对地址。"""
+    problems: list[str] = []
+    for adapter_id, endpoint in endpoints.items():
+        if not adapter_id.strip() or adapter_id != adapter_id.strip():
+            problems.append(f"{variable} 的 Adapter ID 不得为空或包含首尾空白")
+            continue
+        if endpoint != endpoint.strip():
+            problems.append(f"{variable} 中 {adapter_id!r} 的 URL 不得包含首尾空白")
+            continue
+        parsed = urlsplit(endpoint)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            problems.append(
+                f"{variable} 中 {adapter_id!r} 必须是 http(s) 绝对地址，当前为 {endpoint!r}"
+            )
+            continue
+        if parsed.query or parsed.fragment:
+            problems.append(f"{variable} 中 {adapter_id!r} 的 URL 不得包含查询串或 fragment")
+    return problems
 
 
 class Settings(BaseSettings):
@@ -157,6 +214,17 @@ class Settings(BaseSettings):
     # DDP_TRAINING_ADAPTER_SHARED_SECRETS 形如 {"mock": "<32+ 字符密钥>"}。
     training_adapter_shared_secrets: dict[str, str] = Field(default_factory=dict)
     training_adapter_capabilities: dict[str, list[str]] = Field(default_factory=dict)
+    # 真实训练平台的 HTTP 入口：adapter_id -> 基础 URL（如
+    # {"mock": "http://training-adapter.internal:9100"}）。支持 JSON 对象或
+    # `id=url,id=url`，空串视为未配置。
+    #
+    # **未登记的 adapter 行为不变**：submit/get_status/cancel 仍抛
+    # training_adapter_unavailable（503），绝不伪造训练成功；只有登记了
+    # endpoint 的 adapter 才会真正发出 HTTP 请求。
+    training_adapter_endpoints: Annotated[dict[str, str], NoDecode] = Field(default_factory=dict)
+    # 单次 Adapter 调用超时。必须显式设置：没有超时的外部调用会把 API 线程
+    # 挂在不可达的平台上一整个 TCP 超时周期。超时按不可用处理（503），不重试。
+    training_adapter_timeout_seconds: float = Field(default=10.0, gt=0, le=600)
     training_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
     training_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
 
@@ -178,6 +246,11 @@ class Settings(BaseSettings):
     # 模型平台 Adapter：评测/推理执行与 HMAC 回调；未配置时显式 503。
     model_adapter_shared_secrets: dict[str, str] = Field(default_factory=dict)
     model_adapter_capabilities: dict[str, list[str]] = Field(default_factory=dict)
+    # 真实模型平台的 HTTP 入口：adapter_id -> 基础 URL（评测 /evaluations、
+    # 推理 /inference-tasks）。解析规则与 training_adapter_endpoints 一致；
+    # 未登记的 adapter 仍返回 503 model_adapter_unavailable。
+    model_adapter_endpoints: Annotated[dict[str, str], NoDecode] = Field(default_factory=dict)
+    model_adapter_timeout_seconds: float = Field(default=10.0, gt=0, le=600)
     model_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
     model_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
 
@@ -267,6 +340,11 @@ class Settings(BaseSettings):
     @property
     def has_complete_jwt_config(self) -> bool:
         return not self._jwt_config_problems()
+
+    @field_validator("training_adapter_endpoints", "model_adapter_endpoints", mode="before")
+    @classmethod
+    def _decode_adapter_endpoints(cls, raw: object) -> object:
+        return _parse_adapter_endpoint_map(raw)
 
     def validate_runtime_security(self) -> None:
         """启动自检：配置不安全时 fail-closed。
@@ -498,6 +576,11 @@ class Settings(BaseSettings):
                 problems.append(f"训练 Adapter {adapter_id!r} 能力声明存在重复项")
         if self.training_callback_nonce_ttl_seconds < self.training_callback_time_window_seconds:
             problems.append("DDP_TRAINING_CALLBACK_NONCE_TTL_SECONDS 不得小于回调时间窗")
+        problems.extend(
+            _endpoint_url_problems(
+                "DDP_TRAINING_ADAPTER_ENDPOINTS", self.training_adapter_endpoints
+            )
+        )
         return problems
 
     def _model_adapter_config_problems(self) -> list[str]:
@@ -522,6 +605,9 @@ class Settings(BaseSettings):
                 problems.append(f"模型 Adapter {adapter_id!r} 能力声明存在重复项")
         if self.model_callback_nonce_ttl_seconds < self.model_callback_time_window_seconds:
             problems.append("DDP_MODEL_CALLBACK_NONCE_TTL_SECONDS 不得小于回调时间窗")
+        problems.extend(
+            _endpoint_url_problems("DDP_MODEL_ADAPTER_ENDPOINTS", self.model_adapter_endpoints)
+        )
         return problems
 
 

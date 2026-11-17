@@ -68,11 +68,12 @@ from app.infrastructure.repositories.training_request_repositories import (
 from app.infrastructure.repositories.version_fact_directory import (
     SqlVersionFactDirectory,
 )
-from app.infrastructure.training_adapters import ConfiguredTrainingAdapterGateway
+from app.infrastructure.training_adapter_http import HttpTrainingAdapterGateway
 
 
 def get_training_adapter_gateway(settings: SettingsDep) -> TrainingAdapterGateway:
-    return ConfiguredTrainingAdapterGateway(settings)
+    # 登记了 endpoint 的 adapter 走真实 HTTP；未登记的仍抛 503（行为不变）。
+    return HttpTrainingAdapterGateway(settings)
 
 
 TrainingAdapterDep = Annotated[TrainingAdapterGateway, Depends(get_training_adapter_gateway)]

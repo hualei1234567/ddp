@@ -31,10 +31,8 @@ from app.application.modelops.model_registry import (
 )
 from app.application.modelops.requirements import RequirementUseCases
 from app.core.config import Settings
-from app.infrastructure.model_platform import (
-    ConfiguredModelPlatformGateway,
-    S3ArtifactInspector,
-)
+from app.infrastructure.model_platform import S3ArtifactInspector
+from app.infrastructure.model_platform_http import HttpModelPlatformGateway
 from app.infrastructure.repositories.episode_coverage import SqlEpisodeCoverageDirectory
 from app.infrastructure.repositories.modelops import (
     SqlDatasetGate,
@@ -67,7 +65,8 @@ class ModelOpsServices:
 
 
 def get_model_gateway(settings: SettingsDep):
-    return ConfiguredModelPlatformGateway(settings)
+    # 登记了 endpoint 的 adapter 走真实 HTTP；未登记的仍抛 503（行为不变）。
+    return HttpModelPlatformGateway(settings)
 
 
 def get_artifact_inspector(settings: SettingsDep):
@@ -92,7 +91,7 @@ def build_modelops_services(
     idempotency = SqlModelIdempotencyRepository(session)
     datasets = SqlDatasetGate(session)
     training_sources = SqlTrainingSourceGate(session)
-    gateway = gateway or ConfiguredModelPlatformGateway(settings)
+    gateway = gateway or HttpModelPlatformGateway(settings)
     artifacts = artifacts or S3ArtifactInspector(S3MultipartStorage(settings))
     models = ModelUseCases(
         models=models_repo,

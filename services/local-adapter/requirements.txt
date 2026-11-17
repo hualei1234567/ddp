@@ -1,0 +1,12 @@
+# 固定版本；许可证见 README「依赖与许可证」。
+fastapi==0.115.6          # MIT
+uvicorn[standard]==0.34.0 # BSD-3-Clause
+pydantic==2.10.4          # MIT
+httpx==0.28.1             # BSD-3-Clause
+boto3==1.35.90            # Apache-2.0
+scikit-learn==1.6.0       # BSD-3-Clause
+scipy==1.14.1             # BSD-3-Clause（固定，避免新版 scipy 与 sklearn 1.6 的 lbfgs 告警/数值问题）
+numpy==2.2.1              # BSD-3-Clause
+joblib==1.4.2             # BSD-3-Clause
+pyarrow==18.1.0           # Apache-2.0
+pytest==8.3.4             # MIT
