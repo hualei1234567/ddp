@@ -88,6 +88,9 @@ class EvaluationCreate(BaseModel):
     # 跨数据集而未声明则明确拒绝（错误码 evaluation_cross_dataset_not_declared）。
     cross_dataset_comparison: bool = False
     adapter_id: str | None = Field(default=None, min_length=1, max_length=100)
+    # 适配器执行参数（如产物 object_key、导出任务）。应用层早已透传，HTTP
+    # 层此前没有入口，导致评测只能依赖适配器"单产物回退"，多产物时直接失败。
+    config: dict[str, object] = Field(default_factory=dict)
 
 
 class InferenceServiceCreate(BaseModel):
