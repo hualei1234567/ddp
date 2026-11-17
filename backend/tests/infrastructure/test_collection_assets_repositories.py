@@ -12,7 +12,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -23,9 +23,17 @@ from app.domain.collection.assets import (
     CollectionSop,
     Scenario,
 )
-from app.domain.collection.errors import DuplicateResourceError
+from app.domain.collection.enums import CollectionAssetStatus
+from app.domain.collection.errors import (
+    DuplicateResourceError,
+    ResourceImmutableError,
+    ResourceNotFoundError,
+    VersionConflictError,
+)
+from app.domain.identity.errors import CrossProjectAccessError
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.base import Base
+from app.infrastructure.db.models.collection import CollectionTask as CollectionTaskModel
 from app.infrastructure.db.models.identity import Project, User
 from app.infrastructure.db.session import create_db_engine, create_session_factory
 from app.infrastructure.repositories.collection_asset_directory import (
@@ -37,6 +45,7 @@ from app.infrastructure.repositories.collection_assets import (
     SqlCollectionSopRepository,
     SqlScenarioRepository,
 )
+from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 NOW = datetime(2026, 11, 16, tzinfo=UTC)
@@ -294,3 +303,202 @@ def test_directory_rejects_other_project_assets(
             )
             is False
         )
+
+
+# --- N8 写路径：乐观锁与删除 ------------------------------------------------
+def test_save_update_bumps_version_and_rejects_stale_version(
+    asset_db: tuple[sessionmaker[Session], AssetIds],
+) -> None:
+    """乐观锁：第一次成功推进版本；用同一个旧版本再写必须冲突。
+
+    这是"同一版本被两次修改"的真实形态：并发的两个客户端都读到 version=1，
+    先提交者成功，后提交者必须拿到 409 而不是静默覆盖。
+    """
+    factory, ids = asset_db
+    with factory() as session:
+        repo = SqlCollectionPlanRepository(session)
+        scope = _scope(ids, ids.project_a)
+        plan = _plan(ids, ids.project_a)
+        repo.add(scope, plan)
+        session.commit()
+
+        updated = repo.save_update(scope, replace(plan, name="新名"), expected_version=1)
+        assert updated.version == 2
+        session.commit()
+        assert repo.get(scope, plan.plan_id).name == "新名"  # type: ignore[union-attr]
+
+        with pytest.raises(VersionConflictError):
+            repo.save_update(scope, replace(plan, name="覆盖"), expected_version=1)
+
+
+def test_save_update_on_missing_row_is_not_found(
+    asset_db: tuple[sessionmaker[Session], AssetIds],
+) -> None:
+    """行不存在必须是 404 而不是 409：两者对客户端的含义完全不同。"""
+    factory, ids = asset_db
+    with factory() as session:
+        repo = SqlCollectionSopRepository(session)
+        scope = _scope(ids, ids.project_a)
+        ghost = _sop(ids, ids.project_a, code="SOP-GHOST")
+        with pytest.raises(ResourceNotFoundError):
+            repo.save_update(scope, ghost, expected_version=1)
+
+
+def test_save_update_is_project_scoped(
+    asset_db: tuple[sessionmaker[Session], AssetIds],
+) -> None:
+    """跨项目写必须被拦下——不能靠"ID 存在"就允许更新。
+
+    拦截发生在 ``ProjectScope.ensure``，与 ``add`` / 任务的 ``save`` 同一约定：
+    实体自带的 ``project_id`` 与 scope 不符即拒绝。应用层的 ``get`` 会先返回 404，
+    这里是仓储层的第二道校验（防止用例层漏掉那次读）。
+    """
+    factory, ids = asset_db
+    with factory() as session:
+        repo = SqlScenarioRepository(session)
+        scope_a = _scope(ids, ids.project_a)
+        scenario = _scenario(ids, ids.project_a)
+        repo.add(scope_a, scenario)
+        session.commit()
+
+        with pytest.raises(CrossProjectAccessError):
+            repo.save_update(
+                _scope(ids, ids.project_b),
+                replace(scenario, name="越权改名"),
+                expected_version=1,
+            )
+        # 未改动：越权写不能留下任何痕迹。
+        assert repo.get(scope_a, scenario.scenario_id).name == "场景"
+
+
+def test_delete_draft_removes_row(
+    asset_db: tuple[sessionmaker[Session], AssetIds],
+) -> None:
+    factory, ids = asset_db
+    with factory() as session:
+        repo = SqlActionSpecRepository(session)
+        scope = _scope(ids, ids.project_a)
+        spec = _spec(ids, ids.project_a)
+        repo.add(scope, spec)
+        session.commit()
+
+        repo.delete_draft(scope, spec.action_spec_id)
+        session.commit()
+        assert repo.get(scope, spec.action_spec_id) is None
+
+
+def _advance_status(session: Session, plan_id: UUID, status: CollectionAssetStatus) -> None:
+    """把方案推进到目标状态。
+
+    不能直接插入非 DRAFT 行：``trg_collection_plans_initial_status`` 会拒绝
+    （这正是迁移 0041 要保证的事实）。因此逐级迁移，走真实触发器路径。
+    """
+    steps = {
+        CollectionAssetStatus.DRAFT: (),
+        CollectionAssetStatus.ACTIVE: ("ACTIVE",),
+        CollectionAssetStatus.ARCHIVED: ("ACTIVE", "ARCHIVED"),
+    }[status]
+    for target in steps:
+        session.execute(
+            text("UPDATE collection_plans SET status = :status WHERE id = :id"),
+            {"status": target, "id": plan_id.hex},
+        )
+    session.commit()
+
+
+@pytest.mark.parametrize("status", [CollectionAssetStatus.ACTIVE, CollectionAssetStatus.ARCHIVED])
+def test_delete_rejects_non_draft(
+    asset_db: tuple[sessionmaker[Session], AssetIds],
+    status: CollectionAssetStatus,
+) -> None:
+    factory, ids = asset_db
+    with factory() as session:
+        repo = SqlCollectionPlanRepository(session)
+        scope = _scope(ids, ids.project_a)
+        plan = _plan(ids, ids.project_a)
+        repo.add(scope, plan)
+        session.commit()
+        _advance_status(session, plan.plan_id, status)
+
+        with pytest.raises(ResourceImmutableError):
+            repo.delete_draft(scope, plan.plan_id)
+        assert repo.get(scope, plan.plan_id) is not None
+
+
+def test_delete_rejects_referenced_draft_with_readable_error(
+    asset_db: tuple[sessionmaker[Session], AssetIds],
+) -> None:
+    """被任务引用的 DRAFT 也不能删；错误必须是"被引用"而不是裸 IntegrityError。
+
+    数据库的 ``ON DELETE RESTRICT`` 复合外键会兜底，但它抛的是方言相关的
+    ``IntegrityError``，客户端只能看到笼统的 409。仓储必须先用可读语义拒绝。
+    """
+    factory, ids = asset_db
+    with factory() as session:
+        plan_repo = SqlCollectionPlanRepository(session)
+        scope = _scope(ids, ids.project_a)
+        plan = _plan(ids, ids.project_a)
+        plan_repo.add(scope, plan)
+        session.add(
+            CollectionTaskModel(
+                id=uuid4(),
+                project_id=ids.project_a,
+                code="T-1",
+                name="任务",
+                status="DRAFT",
+                priority="P1",
+                plan_id=plan.plan_id,
+                created_by=ids.user,
+                updated_by=ids.user,
+            )
+        )
+        session.commit()
+
+        with pytest.raises(ResourceImmutableError, match="已被采集任务引用"):
+            plan_repo.delete_draft(scope, plan.plan_id)
+        assert plan_repo.get(scope, plan.plan_id) is not None
+
+
+def test_delete_cross_project_row_is_not_found(
+    asset_db: tuple[sessionmaker[Session], AssetIds],
+) -> None:
+    factory, ids = asset_db
+    with factory() as session:
+        repo = SqlScenarioRepository(session)
+        scenario = _scenario(ids, ids.project_a)
+        repo.add(_scope(ids, ids.project_a), scenario)
+        session.commit()
+
+        with pytest.raises(ResourceNotFoundError):
+            repo.delete_draft(_scope(ids, ids.project_b), scenario.scenario_id)
+        assert repo.get(_scope(ids, ids.project_a), scenario.scenario_id) is not None
+
+
+def test_create_all_installs_same_asset_guards_as_migration() -> None:
+    """``create_all`` 与迁移 0041 必须装同一份素材守卫。
+
+    两者不一致会让"测试库全绿、真实库不拦"只在生产暴露——这正是
+    ``collection_guards.py`` 把 DDL 抽成一份的原因，这条测试守住它。
+    """
+    engine = create_db_engine(
+        "sqlite+pysqlite:///:memory:",
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout_seconds=5,
+        connect_timeout_seconds=5,
+    )
+    Base.metadata.create_all(engine)
+    try:
+        with engine.connect() as connection:
+            names = {
+                row[0]
+                for row in connection.exec_driver_sql(
+                    "SELECT name FROM sqlite_master WHERE type='trigger'"
+                ).fetchall()
+            }
+    finally:
+        engine.dispose()
+
+    for table in ("collection_plans", "collection_sops", "scenarios", "action_specs"):
+        assert f"trg_{table}_initial_status" in names
+        assert f"trg_{table}_transition" in names

@@ -15,7 +15,7 @@ CollectionAssetStatus:
 
 CollectionPlan:
   type: object
-  required: [plan_id, project_id, code, name, plan_version, status, version, created_at, created_by, updated_at, updated_by, description, owner_id]
+  required: [plan_id, project_id, code, name, plan_version, status, version, created_at, created_by, updated_at, updated_by, description, owner_id, allowed_actions]
   properties:
     plan_id: { type: string, format: uuid }
     project_id: { type: string, format: uuid }
@@ -30,6 +30,12 @@ CollectionPlan:
     updated_at: { type: [string, "null"], format: date-time }
     created_by: { type: [string, "null"], format: uuid }
     updated_by: { type: [string, "null"], format: uuid }
+    allowed_actions:
+      type: array
+      items: { type: string, enum: [activate, archive] }
+      description: |
+        当前状态下服务端允许的动作，供前端按此渲染按钮。
+        `ARCHIVED` 为终态，返回空数组。与状态迁移校验同源计算。
 
 CollectionPlanCreate:
   type: object
@@ -53,7 +59,7 @@ CollectionPlanPage:
 
 CollectionSop:
   type: object
-  required: [sop_id, project_id, code, name, sop_version, steps, status, version, created_at, created_by, updated_at, updated_by, description]
+  required: [sop_id, project_id, code, name, sop_version, steps, status, version, created_at, created_by, updated_at, updated_by, description, allowed_actions]
   properties:
     sop_id: { type: string, format: uuid }
     project_id: { type: string, format: uuid }
@@ -70,6 +76,12 @@ CollectionSop:
     updated_at: { type: [string, "null"], format: date-time }
     created_by: { type: [string, "null"], format: uuid }
     updated_by: { type: [string, "null"], format: uuid }
+    allowed_actions:
+      type: array
+      items: { type: string, enum: [activate, archive] }
+      description: |
+        当前状态下服务端允许的动作，供前端按此渲染按钮。
+        `ARCHIVED` 为终态，返回空数组。与状态迁移校验同源计算。
 
 CollectionSopCreate:
   type: object
@@ -95,7 +107,7 @@ CollectionSopPage:
 
 Scenario:
   type: object
-  required: [scenario_id, project_id, code, name, scene_labels, status, version, created_at, created_by, updated_at, updated_by, description]
+  required: [scenario_id, project_id, code, name, scene_labels, status, version, created_at, created_by, updated_at, updated_by, description, allowed_actions]
   properties:
     scenario_id: { type: string, format: uuid }
     project_id: { type: string, format: uuid }
@@ -112,6 +124,12 @@ Scenario:
     updated_at: { type: [string, "null"], format: date-time }
     created_by: { type: [string, "null"], format: uuid }
     updated_by: { type: [string, "null"], format: uuid }
+    allowed_actions:
+      type: array
+      items: { type: string, enum: [activate, archive] }
+      description: |
+        当前状态下服务端允许的动作，供前端按此渲染按钮。
+        `ARCHIVED` 为终态，返回空数组。与状态迁移校验同源计算。
 
 ScenarioCreate:
   type: object
@@ -137,7 +155,7 @@ ScenarioPage:
 
 ActionSpec:
   type: object
-  required: [action_spec_id, project_id, code, name, spec_version, actions, status, version, created_at, created_by, updated_at, updated_by, description]
+  required: [action_spec_id, project_id, code, name, spec_version, actions, status, version, created_at, created_by, updated_at, updated_by, description, allowed_actions]
   properties:
     action_spec_id: { type: string, format: uuid }
     project_id: { type: string, format: uuid }
@@ -154,6 +172,12 @@ ActionSpec:
     updated_at: { type: [string, "null"], format: date-time }
     created_by: { type: [string, "null"], format: uuid }
     updated_by: { type: [string, "null"], format: uuid }
+    allowed_actions:
+      type: array
+      items: { type: string, enum: [activate, archive] }
+      description: |
+        当前状态下服务端允许的动作，供前端按此渲染按钮。
+        `ARCHIVED` 为终态，返回空数组。与状态迁移校验同源计算。
 
 ActionSpecCreate:
   type: object
@@ -176,3 +200,61 @@ ActionSpecPage:
       type: array
       items: { $ref: "../openapi.yaml#/components/schemas/ActionSpec" }
     next_cursor: { type: [string, "null"] }
+
+# --- N8：写路径请求体 -------------------------------------------------------
+# 全部字段可选、`additionalProperties: false`：PATCH 语义是「只改提交的字段」，
+# 未知字段直接 422 而不是被静默忽略。显式 `null` 与「未提交」语义不同
+# （前者清空 `description`，后者不动），因此 `description` 允许 null。
+
+CollectionPlanPatch:
+  type: object
+  additionalProperties: false
+  description: |
+    `code` / `plan_version` 不可改：前者是业务标识，后者标识内容版本。
+    `ARCHIVED` 状态下不允许任何修改。
+  properties:
+    name: { type: string, minLength: 1, maxLength: 200 }
+    description: { type: [string, "null"], maxLength: 2000 }
+
+CollectionSopPatch:
+  type: object
+  additionalProperties: false
+  description: |
+    `steps` 不可改：执行内容变更必须新增版本行，否则任务冻结的版本快照会与
+    行内容脱节。`ARCHIVED` 状态下不允许任何修改。
+  properties:
+    name: { type: string, minLength: 1, maxLength: 200 }
+    description: { type: [string, "null"], maxLength: 2000 }
+
+ScenarioPatch:
+  type: object
+  additionalProperties: false
+  description: |
+    场景不版本化，故 `scene_labels` 可改。标签由服务端保序去重。
+    `ARCHIVED` 状态下不允许任何修改。
+  properties:
+    name: { type: string, minLength: 1, maxLength: 200 }
+    description: { type: [string, "null"], maxLength: 2000 }
+    scene_labels:
+      type: array
+      maxItems: 32
+      items: { type: string, minLength: 1, maxLength: 64 }
+
+ActionSpecPatch:
+  type: object
+  additionalProperties: false
+  description: |
+    `actions` 不可改：执行内容变更必须新增版本行，理由同 `CollectionSopPatch`。
+    `ARCHIVED` 状态下不允许任何修改。
+  properties:
+    name: { type: string, minLength: 1, maxLength: 200 }
+    description: { type: [string, "null"], maxLength: 2000 }
+
+CollectionAssetActionRequest:
+  type: object
+  additionalProperties: false
+  description: |
+    状态动作请求体。整个 body 可选；`reason` 不强制（素材动作不同于审批类动作，
+    不要求填写原因）。提交时写入审计记录。
+  properties:
+    reason: { type: [string, "null"], maxLength: 1000 }

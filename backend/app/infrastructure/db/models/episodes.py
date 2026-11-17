@@ -126,6 +126,14 @@ class EpisodeModel(Base):
     )
     manifest_key: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     manifest_sha256: Mapped[str | None] = mapped_column(String(71), nullable=True)
+    # 最近一次自动就绪判定的拒绝原因（[{"code","message","detail"}]）。
+    # 空数组 + PENDING = 尚未尝试自动就绪；非空 = 尝试过且被明确拒绝。
+    readiness_blockers: Mapped[list[dict[str, object]]] = mapped_column(
+        _JSON_TYPE,
+        nullable=False,
+        default=list,
+        server_default=text("'[]'"),
+    )
     preview_refs: Mapped[list[dict[str, object]]] = mapped_column(
         _JSON_TYPE,
         nullable=False,

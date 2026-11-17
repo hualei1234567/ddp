@@ -22,6 +22,7 @@ from app.application.modelops.ports import (
 )
 from app.domain.identity.models import ProjectScope
 from app.domain.modelops.adapters import ensure_capability
+from app.domain.modelops.comparability import ComparisonSubjects, require_comparable
 from app.domain.modelops.enums import (
     EvaluationStatus,
     EvaluationVerdict,
@@ -37,7 +38,7 @@ from app.domain.modelops.errors import (
     VersionConflictError,
 )
 from app.domain.modelops.evaluation import compute_verdict, parse_metrics, parse_thresholds
-from app.domain.modelops.models import Evaluation, new_evaluation
+from app.domain.modelops.models import Evaluation, ModelVersion, new_evaluation
 from app.domain.modelops.state_machines import validate_action_name
 
 _RESOURCE = "EVALUATION"
@@ -106,6 +107,63 @@ class EvaluationUseCases:
             limit=limit,
         )
 
+    def _validate_baseline(
+        self,
+        scope: ProjectScope,
+        version: ModelVersion,
+        command: NewEvaluation,
+    ) -> UUID | None:
+        """校验基线并返回其数据集版本（无基线时为 ``None``）。
+
+        跨数据集版本的对比**不是**无条件放开：任务语义不同时给出的百分比
+        没有意义，而系统会照常算出"提升 12%"。因此要求显式声明，并在声明后
+        仍校验两侧任务大类一致（判定细则见 ``domain/modelops/comparability``）。
+
+        基线查不到一律报"不存在或跨项目"，不区分两者——不泄漏跨项目对象的
+        存在性（与 ``TrainingSourceGate`` 的口径一致）。
+        """
+        if command.baseline_evaluation_id is None:
+            if command.cross_dataset_comparison:
+                # 没有基线谈不上跨数据集对比。静默忽略会让客户端以为声明生效。
+                raise DomainValidationError("cross_dataset_comparison 需要同时提供基线评测")
+            return None
+        baseline = self._evaluations.get(scope, command.baseline_evaluation_id)
+        if baseline is None:
+            raise EvaluationBaselineInvalidError("基线评测不存在或跨项目")
+        cross_dataset = baseline.dataset_version_id != command.dataset_version_id
+        # 任务类型只在跨数据集时才查：同数据集版本走的是改造前的路径，
+        # 不该因此多出两次「模型行是否可见」的依赖与查询。
+        current_task_type = self._task_type_of(scope, version) if cross_dataset else None
+        baseline_task_type = (
+            self._task_type_of_version(scope, baseline.model_version_id) if cross_dataset else None
+        )
+        require_comparable(
+            ComparisonSubjects(
+                baseline_dataset_version_id=baseline.dataset_version_id,
+                current_dataset_version_id=command.dataset_version_id,
+                baseline_task_type=baseline_task_type,
+                current_task_type=current_task_type,
+            ),
+            declared=command.cross_dataset_comparison,
+        )
+        return baseline.dataset_version_id
+
+    def _task_type_of(self, scope: ProjectScope, version: ModelVersion) -> str | None:
+        """模型版本的 ``task_type``；模型行不可见时返回 ``None``（不可判定）。"""
+        model = self._models.get(scope, version.model_id)
+        return None if model is None else model.task_type
+
+    def _task_type_of_version(self, scope: ProjectScope, version_id: UUID) -> str | None:
+        """按版本 ID 取任务类型；版本或模型不可见时返回 ``None``（不可判定）。
+
+        跨数据集对比里基线往往属于**另一个模型**（模型升级场景），因此必须
+        按基线自己的模型版本去查，不能复用当前请求的模型。
+        """
+        version = self._versions.get(scope, version_id)
+        if version is None:
+            return None
+        return self._task_type_of(scope, version)
+
     def create(
         self,
         scope: ProjectScope,
@@ -130,18 +188,26 @@ class EvaluationUseCases:
         dataset_status, validity_status = state
         if dataset_status != "FROZEN" or validity_status != "VALID":
             raise EvaluationDatasetNotReadyError("评测数据集版本必须已冻结且有效")
-        if command.baseline_evaluation_id is not None:
-            baseline = self._evaluations.get(scope, command.baseline_evaluation_id)
-            if baseline is None:
-                raise EvaluationBaselineInvalidError("基线评测不存在或跨项目")
-            if baseline.dataset_version_id != command.dataset_version_id:
-                raise EvaluationBaselineInvalidError("基线评测与当前评测数据集不一致")
+        baseline_dataset_version_id = self._validate_baseline(
+            scope,
+            version,
+            command,
+        )
         thresholds = parse_thresholds(command.thresholds)
         key = validate_key(idempotency_key)
+        # 幂等指纹必须覆盖所有影响结果的输入。此前漏了 baseline_evaluation_id：
+        # 同一幂等键先建带基线、再建不带基线，第二次会被当成重放，静默返回
+        # 第一次的评测——客户端拿到的对象与请求体不符，且没有任何报错。
         body = {
             "model_version_id": str(command.model_version_id),
             "dataset_version_id": str(command.dataset_version_id),
             "thresholds": thresholds,
+            "baseline_evaluation_id": (
+                None
+                if command.baseline_evaluation_id is None
+                else str(command.baseline_evaluation_id)
+            ),
+            "cross_dataset_comparison": command.cross_dataset_comparison,
         }
         now = _utcnow()
         replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
@@ -154,6 +220,7 @@ class EvaluationUseCases:
             dataset_version_id=command.dataset_version_id,
             thresholds=thresholds,
             baseline_evaluation_id=command.baseline_evaluation_id,
+            baseline_dataset_version_id=baseline_dataset_version_id,
             actor_id=scope.actor_id,
             now=now,
         )
@@ -182,12 +249,28 @@ class EvaluationUseCases:
             details={
                 "model_version_id": str(created.model_version_id),
                 "dataset_version_id": str(created.dataset_version_id),
+                "baseline_evaluation_id": (
+                    None
+                    if created.baseline_evaluation_id is None
+                    else str(created.baseline_evaluation_id)
+                ),
+                "baseline_dataset_version_id": (
+                    None
+                    if created.baseline_dataset_version_id is None
+                    else str(created.baseline_dataset_version_id)
+                ),
+                "cross_dataset_comparison": command.cross_dataset_comparison,
             },
             event_type="modelops.evaluation.created",
             event_payload={
                 "evaluation_id": str(created.evaluation_id),
                 "model_version_id": str(created.model_version_id),
                 "dataset_version_id": str(created.dataset_version_id),
+                "baseline_dataset_version_id": (
+                    None
+                    if created.baseline_dataset_version_id is None
+                    else str(created.baseline_dataset_version_id)
+                ),
             },
             occurred_at=now,
         )
@@ -251,6 +334,7 @@ class EvaluationUseCases:
                 dataset_version_id=evaluation.dataset_version_id,
                 thresholds=evaluation.thresholds,
                 baseline_evaluation_id=evaluation.baseline_evaluation_id,
+                baseline_dataset_version_id=evaluation.baseline_dataset_version_id,
                 actor_id=scope.actor_id,
                 now=now,
             )

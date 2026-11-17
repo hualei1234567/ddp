@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Protocol
@@ -111,6 +111,18 @@ class RawAssetRepository(Protocol):
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[RawAsset]: ...
+
+    def list_source_types(
+        self,
+        scope: ProjectScope,
+        asset_ids: Sequence[UUID],
+    ) -> dict[UUID, str]:
+        """批量读取资产声明的来源类型（``UPLOAD`` / ``DEVICE`` / ``IMPORT``）。
+
+        血缘投影需要区分「本来就是手工上传」与「声称来自导入但关联缺失」，
+        逐条 ``get`` 会变成 N+1；本项目内查不到的 id 不出现在返回字典里。
+        """
+        ...
 
 
 class RawAssetLinkRepository(Protocol):

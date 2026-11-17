@@ -552,6 +552,10 @@ def _import_metadata(
         "episode_key": episode.episode_key,
         "source_path": media.path,
         "camera": media.camera,
+        # 声明帧率是「帧数」的唯一可用依据（平台不解码视频）。MediaAsset 上有列，
+        # RawAsset 没有；Episode 自动就绪只认 Canonical 事实，因此必须在这里
+        # 留一份，否则生成 Manifest 时永远推不出 frame_count。
+        "source_fps": media.source_fps,
         "task_name": episode.task_name,
         # 自然语言指令是 Canonical Episode 的必备语义字段，DataSource/MediaAsset
         # 都没有对应的列；不在这里留一份，后续生成 Episode 时就永久丢掉了。

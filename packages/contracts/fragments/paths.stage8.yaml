@@ -1,10 +1,13 @@
 # 阶段 8（N8 真实采集与设备集成）路径片段。
 # 仅声明 backend/app/api/v1/collection_asset_routes.py 实际实现的端点（12 个操作）。
 #
-# 范围说明：本批只做四类采集素材实体（方案 / SOP / 场景 / 动作库）的
-# 「创建 / 列表 / 详情」。**没有更新与删除路径**，因此创建后状态恒为 DRAFT，
-# 版本号不可演进，`ACTIVE` / `ARCHIVED` 两个枚举值当前不可到达。
-# 契约如实反映这一点：不声明任何 action 端点，也不假装状态机已完备。
+# 范围说明：四类采集素材实体（方案 / SOP / 场景 / 动作库）的
+# 「创建 / 列表 / 详情 / 更新 / 状态迁移 / 删除」。状态机为
+# `DRAFT --activate--> ACTIVE --archive--> ARCHIVED`（终态），
+# 因此 `ACTIVE` / `ARCHIVED` 由 `/actions/{action}` 到达。
+#
+# 更新与删除的字段可变性规则见 fragments/../docs 与
+# backend/app/domain/collection/asset_lifecycle.py（唯一权威实现）。
 
 collectionPlans:
   parameters:
@@ -68,7 +71,57 @@ collectionPlanDetail:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
-
+  patch:
+    operationId: updateCollectionPlan
+    tags: [collection-assets]
+    summary: 更新采集方案
+    description: |
+      只允许改 `name` / `description`。`code` 是业务标识、`plan_version` 是版本锚点，
+      均不可改。
+      
+      `DRAFT` 与 `ACTIVE` 都可改：任务不冻结素材名称，只冻结版本列，改名不会让
+      任何任务的快照失真。`ARCHIVED` 一律不可改——终态即「只作为历史事实存在」。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CollectionPlanPatch" }
+    responses:
+      "200":
+        description: 更新后的采集方案
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionPlan" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  delete:
+    operationId: deleteCollectionPlan
+    tags: [collection-assets]
+    summary: 删除采集方案
+    description: |
+      素材必须处于 `DRAFT` 且未被采集任务引用才可删除。
+      
+      - `ACTIVE` 可能正被新任务挑选，不允许删；
+      - `ARCHIVED` 是历史任务版本快照的事实载体，不允许删；
+      - 被任务引用时数据库复合外键会拒绝，应用层先查引用并返回可读错误
+        （`resource_immutable`），不把 SQL 原文透出。
+      
+      硬删而非软删：删除前已确认无引用，且删除动作写审计（`action=delete`）。
+      再加 `deleted_at` 会让「这个 ID 还在不在」出现第三种答案。
+    responses:
+      "204": { description: 已删除（无响应体） }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 collectionSops:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"
@@ -128,7 +181,56 @@ collectionSopDetail:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
-
+  patch:
+    operationId: updateCollectionSop
+    tags: [collection-assets]
+    summary: 更新SOP
+    description: |
+      只允许改 `name` / `description`。`steps` **在任何状态下都不开放修改**（连
+      `DRAFT` 也不）：任务的版本一致性校验只比对被引用那一行自身的版本列，原地改
+      步骤而不改版本号，会让冻结的 v1 快照指向已被改写的定义。内容变更的合法路径
+      是**新增版本行**（`(project_id, code, sop_version)` 唯一约束即为此设计）。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CollectionSopPatch" }
+    responses:
+      "200":
+        description: 更新后的SOP
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionSop" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  delete:
+    operationId: deleteCollectionSop
+    tags: [collection-assets]
+    summary: 删除SOP
+    description: |
+      素材必须处于 `DRAFT` 且未被采集任务引用才可删除。
+      
+      - `ACTIVE` 可能正被新任务挑选，不允许删；
+      - `ARCHIVED` 是历史任务版本快照的事实载体，不允许删；
+      - 被任务引用时数据库复合外键会拒绝，应用层先查引用并返回可读错误
+        （`resource_immutable`），不把 SQL 原文透出。
+      
+      硬删而非软删：删除前已确认无引用，且删除动作写审计（`action=delete`）。
+      再加 `deleted_at` 会让「这个 ID 还在不在」出现第三种答案。
+    responses:
+      "204": { description: 已删除（无响应体） }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 scenarios:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"
@@ -188,7 +290,54 @@ scenarioDetail:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
-
+  patch:
+    operationId: updateScenario
+    tags: [collection-assets]
+    summary: 更新场景
+    description: |
+      允许改 `name` / `description` / `scene_labels`。场景本就不版本化，标签只参与
+      检索与统计聚合，不构成任务执行快照的一部分。标签由服务端保序去重。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ScenarioPatch" }
+    responses:
+      "200":
+        description: 更新后的场景
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Scenario" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  delete:
+    operationId: deleteScenario
+    tags: [collection-assets]
+    summary: 删除场景
+    description: |
+      素材必须处于 `DRAFT` 且未被采集任务引用才可删除。
+      
+      - `ACTIVE` 可能正被新任务挑选，不允许删；
+      - `ARCHIVED` 是历史任务版本快照的事实载体，不允许删；
+      - 被任务引用时数据库复合外键会拒绝，应用层先查引用并返回可读错误
+        （`resource_immutable`），不把 SQL 原文透出。
+      
+      硬删而非软删：删除前已确认无引用，且删除动作写审计（`action=delete`）。
+      再加 `deleted_at` 会让「这个 ID 还在不在」出现第三种答案。
+    responses:
+      "204": { description: 已删除（无响应体） }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 actionSpecs:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"
@@ -248,7 +397,54 @@ actionSpecDetail:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
-
+  patch:
+    operationId: updateActionSpec
+    tags: [collection-assets]
+    summary: 更新动作库
+    description: |
+      只允许改 `name` / `description`。`actions` 任何状态都不开放修改，理由同 SOP 的
+      `steps`：原地改内容会让任务冻结的版本快照与行内容脱节。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ActionSpecPatch" }
+    responses:
+      "200":
+        description: 更新后的动作库
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ActionSpec" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  delete:
+    operationId: deleteActionSpec
+    tags: [collection-assets]
+    summary: 删除动作库
+    description: |
+      素材必须处于 `DRAFT` 且未被采集任务引用才可删除。
+      
+      - `ACTIVE` 可能正被新任务挑选，不允许删；
+      - `ARCHIVED` 是历史任务版本快照的事实载体，不允许删；
+      - 被任务引用时数据库复合外键会拒绝，应用层先查引用并返回可读错误
+        （`resource_immutable`），不把 SQL 原文透出。
+      
+      硬删而非软删：删除前已确认无引用，且删除动作写审计（`action=delete`）。
+      再加 `deleted_at` 会让「这个 ID 还在不在」出现第三种答案。
+    responses:
+      "204": { description: 已删除（无响应体） }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 # ---------------------------------------------------------------------------
 # N4 标注质量检查（backend/app/api/v1/annotation_quality_check_routes.py）
 # ---------------------------------------------------------------------------
@@ -265,8 +461,10 @@ submissionQualityChecks:
       每次都产生一个新的 run（结论只追加、不改写）。`passed` 是三态：
       `true` 合规、`false` 违规、`null` 表示该规则对这条记录**没有结论**
       （缺 Episode 边界、任务未配阈值）。客户端不得把 `null` 渲染成"通过"。
-    parameters:
-      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+
+      **刻意不支持 `Idempotency-Key`**：每次执行都会新增一条 run 记录，
+      这是审计事实，重放一条已存在的 run 反而会掩盖"又跑了一次"。
+      需要「已检查过」的判断请查 `GET .../quality-checks` 历史，而不是靠幂等键。
     responses:
       "201":
         description: 本次检查结果
@@ -442,4 +640,144 @@ aiSuggestionAgreement:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+collectionPlanActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CollectionPlanId"
+    - $ref: "../openapi.yaml#/components/parameters/CollectionAssetAction"
+  post:
+    operationId: applyCollectionPlanAction
+    tags: [collection-assets]
+    summary: 采集方案状态迁移
+    description: |
+      合法迁移只有两条：`DRAFT --activate--> ACTIVE`、`ACTIVE --archive--> ARCHIVED`。
+      `ARCHIVED` 是终态，任何迁出尝试返回 409；跳过中间状态（如 `DRAFT → ARCHIVED`）
+      同样 409。状态守卫在数据库层另有一份同源实现，绕过应用层也拦得住。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CollectionAssetActionRequest" }
+    responses:
+      "200":
+        description: 迁移后的采集方案
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionPlan" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+collectionSopActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/CollectionSopId"
+    - $ref: "../openapi.yaml#/components/parameters/CollectionAssetAction"
+  post:
+    operationId: applyCollectionSopAction
+    tags: [collection-assets]
+    summary: SOP状态迁移
+    description: |
+      合法迁移只有两条：`DRAFT --activate--> ACTIVE`、`ACTIVE --archive--> ARCHIVED`。
+      `ARCHIVED` 是终态，任何迁出尝试返回 409；跳过中间状态（如 `DRAFT → ARCHIVED`）
+      同样 409。状态守卫在数据库层另有一份同源实现，绕过应用层也拦得住。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CollectionAssetActionRequest" }
+    responses:
+      "200":
+        description: 迁移后的SOP
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CollectionSop" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+scenarioActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ScenarioId"
+    - $ref: "../openapi.yaml#/components/parameters/CollectionAssetAction"
+  post:
+    operationId: applyScenarioAction
+    tags: [collection-assets]
+    summary: 场景状态迁移
+    description: |
+      合法迁移只有两条：`DRAFT --activate--> ACTIVE`、`ACTIVE --archive--> ARCHIVED`。
+      `ARCHIVED` 是终态，任何迁出尝试返回 409；跳过中间状态（如 `DRAFT → ARCHIVED`）
+      同样 409。状态守卫在数据库层另有一份同源实现，绕过应用层也拦得住。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CollectionAssetActionRequest" }
+    responses:
+      "200":
+        description: 迁移后的场景
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Scenario" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+actionSpecActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ActionSpecId"
+    - $ref: "../openapi.yaml#/components/parameters/CollectionAssetAction"
+  post:
+    operationId: applyActionSpecAction
+    tags: [collection-assets]
+    summary: 动作库状态迁移
+    description: |
+      合法迁移只有两条：`DRAFT --activate--> ACTIVE`、`ACTIVE --archive--> ARCHIVED`。
+      `ARCHIVED` 是终态，任何迁出尝试返回 409；跳过中间状态（如 `DRAFT → ARCHIVED`）
+      同样 409。状态守卫在数据库层另有一份同源实现，绕过应用层也拦得住。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/CollectionAssetActionRequest" }
+    responses:
+      "200":
+        description: 迁移后的动作库
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ActionSpec" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

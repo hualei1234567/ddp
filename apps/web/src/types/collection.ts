@@ -128,6 +128,9 @@ export const LINEAGE_NODE_TYPE_VALUES = [
   "ANNOTATION",
   "DATASET_VERSION",
   "TRAINING_RUN",
+  // 数据源与导入任务：只读投影节点，用于回答「这条数据最初从哪来」。
+  "DATA_SOURCE",
+  "DATA_SOURCE_IMPORT",
 ] as const;
 
 export const LINEAGE_RELATION_VALUES = [

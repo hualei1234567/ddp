@@ -34,6 +34,7 @@ from app.application.devices.ports import (
     RobotRepository,
     UnitOfWork,
 )
+from app.application.locations.ports import LocationDirectory
 from app.domain.common.ids import new_id
 from app.domain.devices.enums import CalibrationTargetType, LifecycleStatus
 from app.domain.devices.errors import (
@@ -91,6 +92,7 @@ class RobotUseCases:
         audit: AuditRepository,
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
+        locations: LocationDirectory,
     ) -> None:
         self._robots = robots
         self._profiles = profiles
@@ -99,6 +101,7 @@ class RobotUseCases:
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
+        self._locations = locations
 
     def list_robots(
         self,
@@ -148,6 +151,7 @@ class RobotUseCases:
         if replay is not None:
             return self._replay(scope, replay.response_ref)
         self._validate_profile(scope, command.calibration_profile_id)
+        self._validate_location(scope, command.location_id)
         robot = Robot(
             robot_id=new_id(),
             project_id=scope.project_id,
@@ -223,6 +227,8 @@ class RobotUseCases:
             self._validate_profile(
                 scope, _optional_uuid(changes["calibration_profile_id"], "calibration_profile_id")
             )
+        if "location_id" in changes:
+            self._validate_location(scope, _optional_uuid(changes["location_id"], "location_id"))
         updated = self._robots.save(
             scope,
             replace(current, **dict(changes)),
@@ -361,6 +367,18 @@ class RobotUseCases:
         except ValueError as exc:
             raise ResourceNotFoundError("机器人", response_ref) from exc
         return self.get_robot(scope, robot_id)
+
+    def _validate_location(self, scope: ProjectScope, location_id: UUID | None) -> None:
+        """场地引用必须同项目存在；``None`` 表示"尚未指定基地"，合法放行。
+
+        与 ``DeviceUseCases._validate_location`` 同一规则。数据库的复合外键是
+        最后一道兜底，但它的 ``IntegrityError`` 原文不可读、客户端无法按 code
+        分支，因此这里提前给出可读的 404。
+        """
+        if location_id is None:
+            return
+        if not self._locations.location_exists(scope, location_id):
+            raise ResourceNotFoundError("采集场地", location_id)
 
     def _validate_profile(self, scope: ProjectScope, profile_id: UUID | None) -> None:
         if profile_id is None:

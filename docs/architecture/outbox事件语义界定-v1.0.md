@@ -107,6 +107,37 @@
 `ingestion.*` 的条目里有 1 条是投递类（上述 validation_requested），
 其余（上传会话/分片的进度与状态留痕）为留痕类。
 
+### 3.2.1 场地域（N9 多基地）
+
+| 事件 | 产生点 | 归类 |
+|---|---|---|
+| `location.created` | `LOCATION_CREATED_EVENT`（`application/locations/use_cases.py`） | 留痕类 |
+| `location.updated` | `LOCATION_UPDATED_EVENT`（同上） | 留痕类 |
+
+两者都是留痕类：场地的创建与改名不需要任何 worker 响应，下游读取的是
+`locations` 表本身。前缀 `location` 已登记在
+`scripts/check_outbox_events.py` 的 `_EVENT_DOMAINS`，否则该脚本会以
+"形态像领域事件但首段不在白名单"报警——这条守卫正是为了让新域必须显式登记。
+
+
+### 3.2.2 经营治理（N9 规模化运营）
+
+| 事件 | 产生点 | 归类 |
+|---|---|---|
+| `governance.quota.created` | `GOVERNANCE_QUOTA_CREATED_EVENT`（`application/governance/use_cases.py`） | 留痕类 |
+| `governance.quota.updated` | `GOVERNANCE_QUOTA_UPDATED_EVENT`（同上） | 留痕类 |
+| `governance.quota.exceeded` | `GOVERNANCE_QUOTA_EXCEEDED_EVENT`（同上） | 留痕类 |
+
+三者都是留痕类：配额变更与超限拒绝不需要任何 worker 响应，审计查询直接读
+`audit_logs` / `outbox_events`。`quota.exceeded` 的 `result` 固定为
+`FAILURE`（`audit_logs.result` 的既有 CHECK 只允许 `SUCCESS` / `FAILURE`），
+且**独立提交**——被拒绝的业务写入不会发生，若与随后抛出的异常共处一个
+最终回滚的事务里，这条拒绝记录就永远查不到。
+
+前缀 `governance` 已登记在 `scripts/check_outbox_events.py` 的
+`_EVENT_DOMAINS`；用量快照刷新是系统测量，不产生领域事件。
+
+
 ### 3.3 R-13 收尾：其余域的动作事件静态化
 
 设备域之外还有 20 处 `event_type=f"..."`（数据集 / 数据源 / 摄入 / modelops /
@@ -160,6 +191,7 @@
 | `ingestion.episode.complete` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
 | `ingestion.episode.archive` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
 | `ingestion.episode.invalidate` | `INGESTION_EPISODE_ACTION_EVENTS` | 留痕类 |
+| `ingestion.episode.readiness-blocked` | `READINESS_ACTION_EVENTS` | 留痕类 |
 | `modelops.data_requirement.submit` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
 | `modelops.data_requirement.approve` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |
 | `modelops.data_requirement.reject` | `DATA_REQUIREMENT_ACTION_EVENTS` | 留痕类 |

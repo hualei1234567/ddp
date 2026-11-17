@@ -1,0 +1,97 @@
+# N9 规模化运营：项目资源配额与用量报表（3 个操作）。
+# 对应 backend/app/api/v1/governance_routes.py 与 governance_schemas.py。
+#
+# 三态口径（与采集素材、训练交付、数据缺口一致）：
+#   - `used = null` 表示**尚无可用统计**，不是 0；
+#   - `limit = null` 表示**未配置上限**，不是上限为 0；
+#   - `status = UNMEASURED` 与 `OK` 是两种不同结论，客户端不得合并渲染。
+#
+# 超限在写入前拒绝，不是事后对账：受配额约束的 5 个写端点
+# （Episode / DatasetVersion / IngestionJob / InferenceTask / UploadSession 创建）
+# 额外返回 409 `quota_exceeded` 或 503 `quota_measurement_unavailable`。
+
+quotas:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listResourceQuotas
+    tags: [governance]
+    summary: 项目配额列表
+    description: |
+      只返回**已配置**的配额。某类资源没有条目代表「未设上限」，报表里以
+      `UNLIMITED` 呈现——这里不补空行，避免把「没配置」伪装成「配置为空」。
+    responses:
+      "200":
+        description: 配额列表
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QuotaList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+quotaDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ResourceKind"
+  put:
+    operationId: setResourceQuota
+    tags: [governance]
+    summary: 设置或修改某类资源的配额上限
+    description: |
+      **新建**不需要 `If-Match`；**修改**必须带 `If-Match: "<version>"`，
+      缺失返回 428、版本不符返回 409——避免静默覆盖其他管理员的调整。
+
+      成功响应带 `ETag: "<version>"`，客户端据此更新本地版本。
+      没有删除配额的操作：只能把上限调大或调小，不能「取消上限」——
+      「未配置」与「上限为 0」在报表里是两种不同状态，允许删除会让它们混淆。
+    parameters:
+      - name: If-Match
+        in: header
+        required: false
+        description: 修改既有配额时必填，格式 `"<version>"`（含引号）。
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/QuotaSet" }
+    responses:
+      "200":
+        description: 设置后的配额
+        headers:
+          ETag:
+            description: 新版本号，格式 `"<version>"`。
+            schema: { type: string }
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Quota" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+usageReport:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: getUsageReport
+    tags: [governance]
+    summary: 用量—配额对照报表
+    description: |
+      每个条目都带 `measured_at`（统计截止时间）与 `measurement_source`
+      （权威来源标识）。统计数据来自离线快照，不在请求线程里扫全表。
+
+      `entries` 固定 5 条、顺序为 `ResourceKind` 声明顺序，因此客户端可以
+      按位置渲染而不必自己排序。
+    responses:
+      "200":
+        description: 用量报表
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/UsageReport" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

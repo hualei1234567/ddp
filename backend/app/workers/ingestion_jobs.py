@@ -310,6 +310,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.once:
         logger.info("单次处理完成", extra={"result": worker.process_once()})
         return 0
+    # 启动日志不是装饰：容器 Up 但「进程到底在不在消费」是运维最先要确认的事。
+    # 与 export/outbox worker 保持同一口径。
+    logger.info(
+        "接入任务 Worker 已启动",
+        extra={"poll_interval": settings.validation_worker_poll_interval_seconds},
+    )
     worker.run(stop_event=stop_event)
     return 0
 

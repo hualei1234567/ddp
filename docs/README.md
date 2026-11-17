@@ -1,7 +1,7 @@
 # DDP 文档索引
 
 > 项目：DDP（Embodied AI Data Platform）
-> 更新：2026-11-15
+> 更新：2026-11-17
 > 建设基线：`docs/DDP_具身智能数据闭环平台建设总规范_V1.0_FINAL.md`
 > 治理基线：`docs/ddp/00–09`、`prompts/ddp/01–04`、`templates/ddp/*`
 
@@ -9,7 +9,8 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| **[05-现状审计报告-2026-11-14.md](05-现状审计报告-2026-11-14.md)** | 阶段 0–6 实现后的只读全量审计：技术栈事实、模块状态、复用清单、P0/P1 债务、目标架构差距（数据平面 MISSING）、任务 DAG、9 个 OPEN 项 | **待用户确认 OPEN 项** |
+| **[N0-N9-项目最终报告-2026-11-17.md](roadmap/next-stage-v2/audit/N0-N9-项目最终报告-2026-11-17.md)** | **当前事实基线**：N0–N9 全量建设的阶段完成度、主链逐跳状态、数据可追溯性、修掉的 8 个真实缺陷、11 项缺口、部署情况、真实测试数字 | **现行** |
+| [05-现状审计报告-2026-11-14.md](05-现状审计报告-2026-11-14.md) | 阶段 0–6 实现后的只读全量审计（历史）：技术栈事实、模块状态、复用清单、P0/P1 债务、目标架构差距、任务 DAG | 历史记录 |
 | [ddp/00-项目基线与使用说明.md](ddp/00-项目基线与使用说明.md) | 持续迭代治理文件包入口：基线、原则、模块映射、迭代工作流、Agent 协作、代码质量、数据治理、GitHub 规范、测试验收 | 现行 |
 
 ## 阶段 7 数据平面（第一批已实现）
@@ -22,6 +23,7 @@
 | [adr/0017-video-review-player.md](adr/0017-video-review-player.md) | 视频审看播放器选型：hls.js + 原生 video，不自研内核 | ACCEPTED |
 | [adr/0016-jwt-verification-via-pyjwt.md](adr/0016-jwt-verification-via-pyjwt.md) | JWT 校验迁移到 PyJWT，claim 策略仍由 DDP 裁决 | ACCEPTED |
 | [architecture/阶段7-全链路实施计划-Human1M.md](architecture/阶段7-全链路实施计划-Human1M.md) | NVIDIA Human-1M 全链路实施计划与诚实边界 | 已执行 |
+| [testing/主链端到端与可追溯性验收-2026-11-17.md](testing/主链端到端与可追溯性验收-2026-11-17.md) | **主链端到端与可追溯性验收**：逐跳状态矩阵、血缘正反向核查、跨项目隔离、修掉的断点与修不了的原因 | **现行** |
 | [testing/evidence/2026-11-15-human1m-chain/README.md](testing/evidence/2026-11-15-human1m-chain/README.md) | **真实数据全链路验收报告**：39 视频下载/解析/审看/审核/质量报告 | **已通过** |
 | [architecture/outbox事件语义界定-v1.0.md](architecture/outbox事件语义界定-v1.0.md) | 投递类 vs 留痕类事件的判据与归类（R-13 规则） | 现行 |
 
@@ -29,12 +31,14 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
+| [operations/备份与恢复演练记录-2026-11-17.md](operations/备份与恢复演练记录-2026-11-17.md) | **最新**：迁移 0043 结构（83 表 / 188 触发器）的真实备份恢复演练 | 已执行 |
 | [operations/备份与恢复演练记录-2026-11-14.md](operations/备份与恢复演练记录-2026-11-14.md) | 真实 PG 16 备份恢复演练：71 表 / 177 触发器一致；对象存储缺口如实登记 | 已执行 |
 | [operations/main-分支保护与评审纪律.md](operations/main-分支保护与评审纪律.md) | 私有仓无平台强制力时的替代方案与重新决策触发条件 | 现行 |
 | [operations/docker-compose-minio变更说明.md](operations/docker-compose-minio变更说明.md) | MinIO 镜像固定与卷路径变更的数据影响说明 | 现行 |
+| [operations/Prometheus指标抓取与metrics访问控制.md](operations/Prometheus指标抓取与metrics访问控制.md) | `/metrics` 静态 Bearer 令牌 + 来源网段白名单、未配置时的失败关闭口径、抓取配置示例与排查表 | 现行 |
 
 > ⚠️ 本文件下方「阶段 0 交付」一节为 2026-11-08 的历史记录，其中「当前工程为空」
-> 等表述已过期；**当前事实以 `05-现状审计报告-2026-11-14.md` 为准**。
+> 等表述已过期；**当前事实以 `N0-N9-项目最终报告-2026-11-17.md` 为准**。
 
 ## 阶段 0 交付（历史记录，2026-11-08）
 

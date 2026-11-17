@@ -33,6 +33,7 @@ from app.infrastructure.repositories.collection_audit import (
 )
 from app.infrastructure.repositories.collection_batches import SqlCollectionBatchRepository
 from app.infrastructure.repositories.collection_tasks import SqlCollectionTaskRepository
+from app.infrastructure.repositories.locations import SqlLocationDirectory
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +51,7 @@ def get_collection_use_cases(session: DbSession) -> CollectionUseCases:
     batches = SqlCollectionBatchRepository(session)
     directory = SqlAssignmentDirectory(session)
     asset_directory = SqlCollectionAssetDirectory(session)
+    location_directory = SqlLocationDirectory(session)
     audit = SqlAuditRepository(session)
     outbox = SqlOutboxRepository(session)
     idempotency = SqlIdempotencyRepository(session)
@@ -63,6 +65,7 @@ def get_collection_use_cases(session: DbSession) -> CollectionUseCases:
             idempotency=idempotency,
             uow=session,
             asset_directory=asset_directory,
+            location_directory=location_directory,
         ),
         batches=CollectionBatchUseCases(
             tasks=tasks,

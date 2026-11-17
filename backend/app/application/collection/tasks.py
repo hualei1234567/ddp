@@ -7,7 +7,10 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from app.application.collection.asset_references import assert_task_asset_references
+from app.application.collection.asset_references import (
+    assert_task_asset_references,
+    assert_task_location_reference,
+)
 from app.application.collection.audit import record_change
 from app.application.collection.commands import NewCollectionTask
 from app.application.collection.idempotency import IdempotencyGuard, validate_key
@@ -27,6 +30,7 @@ from app.application.collection.ports import (
     OutboxRepository,
     UnitOfWork,
 )
+from app.application.locations.ports import LocationDirectory
 from app.domain.collection.enums import (
     PUBLIC_TASK_ACTIONS,
     CollectionTaskStatus,
@@ -86,11 +90,13 @@ class CollectionTaskUseCases:
         uow: UnitOfWork,
         *,
         asset_directory: CollectionAssetDirectory,
+        location_directory: LocationDirectory,
     ) -> None:
         self._tasks = tasks
         self._batches = batches
         self._directory = directory
         self._asset_directory = asset_directory
+        self._locations = location_directory
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
@@ -156,6 +162,11 @@ class CollectionTaskUseCases:
             scenario_id=command.scenario_id,
             action_spec_id=command.action_spec_id,
             action_spec_version=command.action_spec_version,
+        )
+        assert_task_location_reference(
+            self._locations,
+            scope,
+            location_id=command.location_id,
         )
 
         task = CollectionTask(
@@ -248,6 +259,13 @@ class CollectionTaskUseCases:
                 scenario_id=current.scenario_id,
                 action_spec_id=current.action_spec_id,
                 action_spec_version=current.action_spec_version,
+            )
+
+        if "location_id" in changes:
+            assert_task_location_reference(
+                self._locations,
+                scope,
+                location_id=_optional_uuid(changes["location_id"], "location_id"),
             )
 
         now = _utcnow()
@@ -421,6 +439,15 @@ class CollectionTaskUseCases:
                 if status != "ACTIVE":
                     raise DomainValidationError("分配资源当前不可用")
 
+        # ``location_id`` 也是动作可提交字段（``_ACTION_FIELDS``），
+        # 必须与创建/PATCH 走同一份场地校验，否则 assign 就成了绕过校验的后门。
+        if "location_id" in payload:
+            assert_task_location_reference(
+                self._locations,
+                scope,
+                location_id=_optional_uuid(payload["location_id"], "location_id"),
+            )
+
     def _validate_completion(
         self,
         scope: ProjectScope,
@@ -506,3 +533,15 @@ def _reason(payload: Mapping[str, object] | None) -> str | None:
         return None
     value = payload.get("reason")
     return value if isinstance(value, str) else None
+
+
+def _optional_uuid(value: object, field_name: str) -> UUID | None:
+    """把 PATCH 请求体里的可选 UUID 归一；``None`` 表示清空该引用。"""
+    if value is None:
+        return None
+    if isinstance(value, UUID):
+        return value
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError) as exc:
+        raise DomainValidationError(f"{field_name} 必须是 UUID") from exc

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
@@ -211,8 +212,16 @@ class DatasetGate(Protocol):
 class EpisodeCoverageDirectory(Protocol):
     """缺口视图的真实覆盖来源：按维度统计项目内可用 Episode 的只读端口。
 
-    只返回「实测到」的维度值；某维度值一个 Episode 都没有时**不出现**在结果里
-    （``current_count`` 的 0 与"测不到"必须区分，见 ADR-0013 §3.4）。
+    **开放轴**（SCENE/ROBOT/DEVICE/QUALITY_STATUS）只返回「实测到」的维度值；
+    某维度值一个 Episode 都没有时**不出现**在结果里（``current_count`` 的 0 与
+    "测不到"必须区分，见 ADR-0013 §3.4）。
+
+    **封闭轴**（ACTION/LABEL/MODALITY，见 ``CLOSED_COVERAGE_DIMENSIONS``）语义不同：
+    该轴的数据总体完整时，可以断言"缺席即 0"。调用方通过 ``wanted_keys`` 声明
+    它需要结论的 ``(dimension_type, dimension_value)``，实现可以在总体完整时为
+    缺席的键补一条 ``count=0`` 的实测记录；总体不完整时不补（上游据此回退人工值
+    或 UNKNOWN），绝不用部分总体的计数冒充权威结论。
+
     实现必须以服务端 ``ProjectScope`` 为准强制 ``project_id`` 隔离。
     返回类型直接复用领域值对象 :class:`MeasuredCoverage`，不另立一份记录类型。
     """
@@ -222,6 +231,7 @@ class EpisodeCoverageDirectory(Protocol):
         scope: ProjectScope,
         *,
         dimension_types: frozenset[str] | None = None,
+        wanted_keys: Iterable[tuple[str, str]] | None = None,
     ) -> list[MeasuredCoverage]: ...
 
 

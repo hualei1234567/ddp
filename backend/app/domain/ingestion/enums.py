@@ -34,6 +34,20 @@ class RawAssetStatus(StrEnum):
     TOMBSTONED = "TOMBSTONED"
 
 
+# 「可作为 Episode 数据流」的状态集合。
+#
+# episodes 与 datasets 两域各有一份同义的内联判断（历史遗留），本常量为
+# **新代码**的权威引用点，不回溯改动既有实现——与
+# ``episodes/state_machines.py`` 里 ``EPISODE_COVERABLE_STATUSES`` 的处理口径一致：
+# 先给新代码一处可引用的事实，避免第四份副本继续增殖。
+RAW_ASSET_STREAM_USABLE_STATUSES: frozenset[str] = frozenset(
+    {
+        RawAssetStatus.VALID.value,
+        RawAssetStatus.ARCHIVED.value,
+    }
+)
+
+
 # 内容去重只对这些“可用态”生效；REJECTED/TOMBSTONED 不占用唯一键。
 RAW_ASSET_ACTIVE_STATUSES: frozenset[str] = frozenset(
     {

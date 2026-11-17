@@ -155,6 +155,7 @@ class EvaluationOut(BaseModel):
     model_version_id: UUID
     dataset_version_id: UUID
     baseline_evaluation_id: UUID | None = None
+    baseline_dataset_version_id: UUID | None = None
     status: str
     metrics: dict[str, float]
     thresholds: dict[str, dict[str, float | None]]
@@ -177,6 +178,7 @@ class EvaluationOut(BaseModel):
             model_version_id=evaluation.model_version_id,
             dataset_version_id=evaluation.dataset_version_id,
             baseline_evaluation_id=evaluation.baseline_evaluation_id,
+            baseline_dataset_version_id=evaluation.baseline_dataset_version_id,
             status=evaluation.status,
             metrics=dict(evaluation.metrics or {}),
             thresholds=evaluation.thresholds,

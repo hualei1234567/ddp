@@ -11,6 +11,7 @@ from app.application.episodes.commands import (
 )
 from app.application.episodes.episodes import EpisodeService
 from app.application.episodes.lineage import LineageService
+from app.application.episodes.provenance import SourceProvenanceResolver
 from app.application.ingestion.commands import CreateIngestionJobCommand
 from app.application.ingestion.jobs import IngestionJobService
 from app.domain.episodes.models import Episode, Segmentation
@@ -19,6 +20,9 @@ from app.domain.identity.models import ProjectScope
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
     SqlOutboxRepository,
+)
+from app.infrastructure.repositories.datasource_provenance import (
+    SqlSourceProvenanceRepository,
 )
 from app.infrastructure.repositories.episodes import (
     SqlEpisodeRawAssetRepository,
@@ -155,8 +159,28 @@ def build_services(
         session,
     )
     job_service = IngestionJobService(jobs, raw_assets, audit, outbox, session)
-    lineage_service = LineageService(lineage, audit, outbox, session)
+    lineage_service = LineageService(
+        lineage,
+        audit,
+        outbox,
+        session,
+        SourceProvenanceResolver(
+            SqlSourceProvenanceRepository(session),
+            raw_assets,
+        ),
+    )
     return episode_service, job_service, lineage_service
+
+
+def build_readiness_service(session: Session):
+    """装配自动就绪用例。
+
+    刻意走**生产装配函数**而不是在测试里再抄一遍六个协作者：接线一旦漂移，
+    测试就测不到真实链路了。
+    """
+    from app.api.v1.episode_dependencies import build_readiness_service as build
+
+    return build(session)
 
 
 def make_ready(
@@ -183,6 +207,7 @@ def make_ready(
 
 __all__ = [
     "SHA_A",
+    "build_readiness_service",
     "build_services",
     "calibration_snapshot",
     "create_command",

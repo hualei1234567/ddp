@@ -29,6 +29,11 @@ from app.domain.suppliers.errors import (
 )
 from app.domain.suppliers.metrics import BatchSample, SupplierMetrics, summarize
 from app.domain.suppliers.models import Supplier
+from app.domain.suppliers.portfolio import (
+    SupplierPortfolio,
+    SupplierPortfolioEntry,
+    build_portfolio,
+)
 from app.domain.suppliers.state_machines import (
     allowed_actions,
     target_status,
@@ -282,6 +287,45 @@ class SupplierUseCases:
         ]
         accepted, decided = self._segments.count_decided(scope, supplier_id)
         return summarize(samples, accepted_segments=accepted, decided_segments=decided)
+
+    def portfolio(
+        self,
+        scope: ProjectScope,
+        *,
+        status: str | None = None,
+        category: str | None = None,
+        max_suppliers: int = 200,
+    ) -> SupplierPortfolio:
+        """本项目所有供应商的横向汇总。
+
+        为什么需要它：单个供应商的绩效只能回答"这一家怎么样"。运营真正要问的
+        是"这批供应商里谁的准时率最低""本月整体一次通过率多少"——在只有
+        ``/{supplier_id}/metrics`` 的形态下，只能人工拉 N 次再自己算。
+
+        口径与单供应商视图**完全一致**：每一项都经由同一个
+        :meth:`metrics` 计算，不在这里另算一套。
+
+        ``max_suppliers`` 是防御性上界：跨供应商汇总要逐个算绩效（每家一次
+        批次查询 + 一次分段计数），无上限会在供应商很多时变成 N+1 放大。
+        超出时**明确报错**而不是静默截断——截断后的汇总会给出一个"看起来完整"
+        的错数字。
+        """
+        suppliers = self.list(scope, status=status, category=category, limit=max_suppliers + 1)
+        if len(suppliers) > max_suppliers:
+            raise DomainValidationError(
+                f"供应商数量超过横向汇总上限 {max_suppliers}，请先按 status/category 过滤"
+            )
+        entries = tuple(
+            SupplierPortfolioEntry(
+                supplier_id=str(supplier.supplier_id),
+                code=supplier.code,
+                name=supplier.name,
+                status=str(supplier.status),
+                metrics=self.metrics(scope, supplier.supplier_id),
+            )
+            for supplier in suppliers
+        )
+        return build_portfolio(entries)
 
     def _replay_supplier(self, scope: ProjectScope, response_ref: str | None) -> Supplier:
         """按幂等记录重放：只返回当前项目内的资源，越权与缺失同样 404。"""

@@ -7,15 +7,20 @@ from typing import Annotated
 
 from fastapi import Depends, Header, Path, Request
 
-from app.api.deps import DbSession, get_project_context, get_project_scope, get_write_scope
+from app.api.deps import (
+    DbSession,
+    get_owner_scope,
+    get_project_scope,
+    get_write_scope,
+)
 from app.api.v1.preconditions import require_expected_version
 from app.application.datasets.datasets import DatasetUseCases as DatasetCrudUseCases
 from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.policies import DatasetPolicyUseCases
 from app.application.datasets.versions import DatasetVersionUseCases
 from app.application.episodes.lineage import LineageService
-from app.core.errors import ForbiddenError
-from app.domain.identity.models import ProjectContext, ProjectRole, ProjectScope
+from app.application.episodes.provenance import SourceProvenanceResolver
+from app.domain.identity.models import ProjectScope
 from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
     SqlDatasetIdempotencyRepository,
@@ -31,7 +36,11 @@ from app.infrastructure.repositories.dataset_repositories import (
     SqlDatasetRepository,
     SqlDatasetVersionRepository,
 )
+from app.infrastructure.repositories.datasource_provenance import (
+    SqlSourceProvenanceRepository,
+)
 from app.infrastructure.repositories.lineage import SqlLineageRepository
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 
 ReadScope = Annotated[ProjectScope, Depends(get_project_scope)]
 WriteScope = Annotated[ProjectScope, Depends(get_write_scope)]
@@ -43,15 +52,8 @@ IdempotencyKey = Annotated[
 ActionName = Annotated[str, Path(min_length=1, max_length=64)]
 
 
-def get_owner_scope(
-    context: Annotated[ProjectContext, Depends(get_project_context)],
-) -> ProjectScope:
-    """归档/恢复等高风险动作要求项目 Owner（或平台管理员）。"""
-    if not context.is_platform_admin and context.role is not ProjectRole.OWNER:
-        raise ForbiddenError("该动作要求项目负责人权限")
-    return ProjectScope.from_context(context)
-
-
+# 项目负责人作用域的权威实现在 ``app.api.deps``（审计日志读取与数据集
+# 归档/授权共用同一判定），这里只保留既有导出名，避免改各路由的导入路径。
 OwnerScope = Annotated[ProjectScope, Depends(get_owner_scope)]
 
 
@@ -108,6 +110,12 @@ def get_dataset_use_cases(session: DbSession) -> DatasetServices:
             audit,
             outbox,
             session,
+            # 版本血缘只用到持久化边，但仍需装配投影协作方：少了它，任何
+            # 走到 RAW_ASSET 的遍历都会拿不到数据源链。
+            SourceProvenanceResolver(
+                SqlSourceProvenanceRepository(session),
+                SqlRawAssetRepository(session),
+            ),
         ),
     )
 

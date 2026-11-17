@@ -16,6 +16,18 @@
   ``EpisodeService.create``——它已经有 8 个协作者与完整校验，重写一遍就是
   第二套权威规则（CLAUDE.md「禁止复制粘贴业务规则」）。
 
+**创建之后立刻尝试自动就绪**
+
+Episode 创建完并不等于可用：进入 ``READY`` 需要 Canonical Manifest，而此前平台
+没有任何组件生成它（验收文档 §6.2 记为 ``MISSING``），整条链停在 ``PENDING`` 等
+人工补一步。现在本模块在每条 Episode 创建成功后调用
+``EpisodeReadinessService.auto_ready``：成功则落 Manifest 与 ``frame_count``；
+被拒则 Episode 保持 ``PENDING`` 并把原因写进 ``readiness_blockers``，
+**导入本身仍然成功**——「导入完成」与「Episode 就绪」是两个结果，不能混为一谈。
+
+判定的规则不在本层（见 ``domain/episodes/readiness.py``），本层只负责在正确的
+时机调用它，并保证失败不把导入一起拖垮、重试不产生重复就绪。
+
 **如实标注的限制**
 
 导入的公开数据集通常**不含标定信息**（HF Human-1M 的 preview/metadata.jsonl
@@ -39,6 +51,11 @@ from app.application.datasources.ports import (
 from app.application.episodes.commands import CreateEpisodeCommand
 from app.application.episodes.episodes import EpisodeService
 from app.application.episodes.ports import EpisodeRepository
+from app.application.episodes.readiness import (
+    EpisodeReadinessService,
+    ReadinessOutcome,
+    ReadinessStatus,
+)
 from app.domain.datasources.errors import DomainValidationError
 from app.domain.datasources.media import MediaAsset
 from app.domain.episodes.errors import ConflictError as EpisodeConflictError
@@ -77,6 +94,9 @@ class MaterializedEpisode:
     episode_id: UUID
     episode_key: str
     raw_asset_ids: tuple[UUID, ...]
+    # 创建后立刻尝试的自动就绪结果；``None`` 只在调用方显式不装配就绪服务时出现
+    # （生产路径不允许——构造函数要求该服务）。
+    readiness: ReadinessOutcome | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,10 +104,28 @@ class MaterializeResult:
     import_id: UUID
     created: tuple[MaterializedEpisode, ...]
     skipped_episode_keys: tuple[str, ...]
+    # 已存在的 Episode 也重试一次就绪（数据补齐后可以真的就绪），结果记在这里。
+    refreshed: tuple[MaterializedEpisode, ...] = ()
 
     @property
     def episode_count(self) -> int:
         return len(self.created)
+
+    @property
+    def ready_count(self) -> int:
+        return sum(
+            1
+            for item in (*self.created, *self.refreshed)
+            if item.readiness is not None and item.readiness.status is ReadinessStatus.READY
+        )
+
+    @property
+    def blocked_count(self) -> int:
+        return sum(
+            1
+            for item in (*self.created, *self.refreshed)
+            if item.readiness is not None and item.readiness.status is ReadinessStatus.BLOCKED
+        )
 
 
 class ImportEpisodeMaterializer:
@@ -105,11 +143,15 @@ class ImportEpisodeMaterializer:
         assets: MediaAssetRepository,
         episodes: EpisodeService,
         episode_repository: EpisodeRepository,
+        readiness: EpisodeReadinessService,
     ) -> None:
         self._imports = imports
         self._assets = assets
         self._episodes = episodes
         self._episode_repo = episode_repository
+        # 必填而不是可选：漏接会让"自动就绪"静默失效，退回人工补 Manifest——
+        # 那正是本次要修的断点，不能用一个默认值把它藏回去。
+        self._readiness = readiness
 
     def materialize(
         self,
@@ -127,6 +169,7 @@ class ImportEpisodeMaterializer:
             raise DomainValidationError("该导入没有任何媒体资产，无法生成 Episode")
 
         created: list[MaterializedEpisode] = []
+        refreshed: list[MaterializedEpisode] = []
         skipped: list[str] = []
         for episode_key in sorted(grouped):
             members = grouped[episode_key]
@@ -135,8 +178,19 @@ class ImportEpisodeMaterializer:
             # "同一 RawAsset 的时间区间不得被重复占用"检查，它会先于 code
             # 唯一性触发，抛 EpisodeOverlapConflictError。靠捕获异常判重会
             # 把"重复物化"误报成"时间区间冲突"。
-            if self._episode_repo.get_by_code(scope, command.code) is not None:
+            existing = self._episode_repo.get_by_code(scope, command.code)
+            if existing is not None:
                 skipped.append(episode_key)
+                # 重试语义：Episode 已存在不代表它就绪（上一次可能因事实不全被拒）。
+                # 再判一次是幂等的：已就绪的返回 SKIPPED，不会被重复写。
+                refreshed.append(
+                    MaterializedEpisode(
+                        episode_id=existing.episode_id,
+                        episode_key=episode_key,
+                        raw_asset_ids=command.raw_asset_ids,
+                        readiness=self._auto_ready(scope, existing.episode_id),
+                    )
+                )
                 continue
             try:
                 episode = self._episodes.create(scope, command)
@@ -149,12 +203,31 @@ class ImportEpisodeMaterializer:
                     episode_id=episode.episode_id,
                     episode_key=episode_key,
                     raw_asset_ids=command.raw_asset_ids,
+                    readiness=self._auto_ready(scope, episode.episode_id),
                 )
             )
         return MaterializeResult(
             import_id=import_id,
             created=tuple(created),
             skipped_episode_keys=tuple(skipped),
+            refreshed=tuple(refreshed),
+        )
+
+    def _auto_ready(
+        self,
+        scope: ProjectScope,
+        episode_id: UUID,
+    ) -> ReadinessOutcome:
+        """尝试自动就绪；被拒是**正常结果**，不得让它变成导入失败。
+
+        只有"判不了"（判定层登记的阻塞项）会走到 ``BLOCKED``；真正的异常
+        （数据库错误、领域校验缺陷）照常抛出——那是缺陷，不能吞。
+        并发写入由用例内部处理（回滚并返回 ``SKIPPED``）。
+        """
+        return self._readiness.auto_ready(
+            scope,
+            episode_id,
+            provenance_source=IMPORT_PIPELINE_ID,
         )
 
 

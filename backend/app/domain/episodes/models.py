@@ -26,6 +26,10 @@ from app.domain.episodes.manifest import (
     compute_manifest_sha256,
     validate_manifest_identity,
 )
+from app.domain.episodes.readiness_result import (
+    ReadinessBlocker,
+    normalize_readiness_blockers,
+)
 from app.domain.episodes.state_machines import (
     EPISODE_DATA_FROZEN_FIELDS,
     EPISODE_DATA_FROZEN_STATUSES,
@@ -189,6 +193,10 @@ class Episode:
     frame_count: int = 0
     manifest_key: str | None = None
     manifest_sha256: str | None = None
+    # 最近一次自动就绪判定的拒绝原因（可查询、面向人）。
+    # 空元组 + PENDING = 尚未尝试自动就绪；非空 = 尝试过且被明确拒绝。
+    # 这是运维事实字段，不属于 ``EPISODE_DATA_FROZEN_FIELDS``（数据字段）。
+    readiness_blockers: tuple[ReadinessBlocker, ...] = ()
     preview_refs: tuple[Mapping[str, object], ...] = ()
     supersedes_id: UUID | None = None
     attempt: int = 1
@@ -299,6 +307,15 @@ class Episode:
             if self.manifest_sha256 is None
             else validate_sha256(self.manifest_sha256, "manifest_sha256"),
         )
+        object.__setattr__(
+            self,
+            "readiness_blockers",
+            normalize_readiness_blockers(self.readiness_blockers),
+        )
+        if self.readiness_blockers and self.status in EPISODE_DATA_FROZEN_STATUSES:
+            # 数据已冻结（READY 起）却还挂着"为什么没就绪"的原因，说明状态与
+            # 事实互相矛盾；宁可拒绝写入，也不留一条自相矛盾的行。
+            raise DomainValidationError("READY 之后不得残留 readiness_blockers")
         preview_refs: list[dict[str, object]] = []
         for item in self.preview_refs:
             if not isinstance(item, Mapping):
@@ -378,8 +395,31 @@ class Episode:
             manifest_key=manifest_key,
             manifest_sha256=manifest_sha256,
             frame_count=non_negative_int(frame_count, "frame_count"),
+            # 就绪即意味着此前的阻塞原因已消解；残留会让"为什么没就绪"永远有答案。
+            readiness_blockers=(),
             updated_at=now,
         )
+
+    def record_readiness_blocked(
+        self,
+        *,
+        blockers: tuple[ReadinessBlocker, ...],
+        now: datetime,
+    ) -> Episode:
+        """登记"为什么还不能自动就绪"；**状态保持 PENDING 不变**。
+
+        只有 PENDING 可以登记：其余状态要么已就绪（原因已消解），要么已被人工
+        驳回/失效（原因由 ``failure_reason`` 承载），此时再写阻塞项会让两个
+        来源互相覆盖。
+        """
+        normalized = normalize_readiness_blockers(blockers)
+        if not normalized:
+            raise DomainValidationError("登记阻塞原因时至少要有一条")
+        if self.status is not EpisodeStatus.PENDING:
+            raise DomainValidationError(
+                f"只有 PENDING 的 Episode 可以登记就绪阻塞原因，当前为 {self.status.value}"
+            )
+        return replace(self, readiness_blockers=normalized, updated_at=now)
 
     def assert_manifest_unchanged(self, manifest: Mapping[str, object]) -> None:
         if self.manifest_sha256 is None:
@@ -494,6 +534,7 @@ class Episode:
             manifest_key=None,
             manifest_sha256=None,
             frame_count=0,
+            readiness_blockers=(),
             supersedes_id=self.episode_id,
             attempt=1,
             version=1,

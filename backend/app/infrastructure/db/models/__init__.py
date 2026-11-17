@@ -74,6 +74,10 @@ from app.infrastructure.db.models.episodes import (
     LineageNodeRefModel,
 )
 from app.infrastructure.db.models.export_jobs import ExportJobModel
+from app.infrastructure.db.models.governance import (
+    ResourceQuotaModel,
+    UsageSnapshotModel,
+)
 from app.infrastructure.db.models.identity import Project, ProjectMember, User
 from app.infrastructure.db.models.ingestion import (
     RawAssetLinkModel,
@@ -83,6 +87,7 @@ from app.infrastructure.db.models.ingestion import (
     UploadSessionModel,
 )
 from app.infrastructure.db.models.jobs import IngestionJobModel
+from app.infrastructure.db.models.locations import LocationModel
 from app.infrastructure.db.models.suppliers import (
     AcceptanceLedgerModel,
     DeliveryBatchModel,
@@ -151,6 +156,7 @@ __all__ = [
     "InboundSegmentModel",
     "IngestionJobModel",
     "LineageNodeRefModel",
+    "LocationModel",
     "OutboxEvent",
     "Project",
     "ProjectMember",
@@ -159,6 +165,7 @@ __all__ = [
     "RawAssetModel",
     "Robot",
     "Sensor",
+    "ResourceQuotaModel",
     "SupplierModel",
     "TrainingAdapterCallbackModel",
     "TrainingDeliveryModel",
@@ -167,6 +174,7 @@ __all__ = [
     "UploadPartChecksumBindingModel",
     "UploadPartModel",
     "UploadSessionModel",
+    "UsageSnapshotModel",
     "User",
 ]
 

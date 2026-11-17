@@ -22,6 +22,7 @@ from app.domain.identity.models import (
     Principal,
     ProjectAction,
     ProjectContext,
+    ProjectRole,
     ProjectScope,
 )
 from app.infrastructure.auth.jwt import TokenValidationError, decode_hs256_token
@@ -45,11 +46,14 @@ def _is_loopback(request: Request) -> bool:
     return client is not None and client.host in _LOOPBACK_HOSTS
 
 
-def _bearer_token(request: Request) -> str | None:
+def extract_bearer_token(request: Request) -> str | None:
     """提取 Bearer token；存在 Authorization 但格式错误时直接拒绝。
 
     一旦客户端声明了 ``Authorization``，就不得再回退到 X-User-Id，
     避免本地 Header 后门被用来掩盖错误的令牌。
+
+    公开为模块级函数是为了让 ``/metrics`` 的静态令牌校验复用**同一套**头部
+    解析语义（大小写、分隔符、空白），而不是在运维端点上再写一份。
     """
     authorization = request.headers.get("Authorization")
     if authorization is None:
@@ -88,7 +92,7 @@ def get_current_principal(
     - 平台角色只能来自经过签名的 ``platform_role`` 声明，请求头不能提升权限；
     - 非本地环境缺失令牌一律 401，不存在隐式放行。
     """
-    token = _bearer_token(request)
+    token = extract_bearer_token(request)
     if token is not None:
         return _principal_from_token(token, settings)
 
@@ -180,6 +184,20 @@ def get_delete_scope(
 ) -> ProjectScope:
     """删除作用域：仅 owner/平台管理员可通过。"""
     return _checked_scope(context, ProjectAction.DELETE)
+
+
+def get_owner_scope(
+    context: Annotated[ProjectContext, Depends(get_project_context)],
+) -> ProjectScope:
+    """项目负责人作用域：仅 owner 或平台管理员。
+
+    用于治理类读取（审计日志）与高风险动作（数据集归档/恢复、授权）。
+    动作粒度不够用：``DELETE`` 在语义上是删除，``MANAGE_MEMBERS`` 是成员管理，
+    都不能准确表达"可以读治理数据"，因此这里按项目角色显式判定，默认拒绝。
+    """
+    if not context.is_platform_admin and context.role is not ProjectRole.OWNER:
+        raise ForbiddenError("该动作要求项目负责人权限")
+    return ProjectScope.from_context(context)
 
 
 def get_scope(action: ProjectAction) -> Callable[..., ProjectScope]:

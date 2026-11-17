@@ -16,13 +16,23 @@ import pytest
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.models.episodes import EpisodeModel
-from app.infrastructure.db.models.identity import Project, User
+from app.infrastructure.db.models.identity import Project, ProjectMember, User
 from app.infrastructure.db.session import create_session_factory
 from app.infrastructure.repositories.episode_coverage import SqlEpisodeCoverageDirectory
-from sqlalchemy import create_engine, event, update
+from sqlalchemy import create_engine, event, text, update
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.schema import CreateSchema, DropSchema
+
+from tests.infrastructure.annotation_chain_support import approve_episodes
+from tests.infrastructure.coverage_support import (
+    add_action_spec,
+    add_collection_task,
+    add_robot,
+    add_sensor,
+    episode_row,
+    insert_episodes,
+)
 
 _POSTGRES_URL = os.environ.get("DDP_TEST_POSTGRES_URL") or os.environ.get(
     "DDP_DATABASE_URL",
@@ -214,3 +224,156 @@ def test_postgres_sql_uses_native_jsonb_function(postgres_engine: Engine) -> Non
     # 聚合必须发生在 SQL 里：语句里应出现 GROUP BY 与 count。
     assert "GROUP BY" in joined
     assert "count(" in joined.lower()
+
+
+# --------------------------------------------------------------------------- #
+# 封闭轴：PostgreSQL 分支（jsonb_array_elements / jsonb_typeof / uuid 文本归一）
+# --------------------------------------------------------------------------- #
+def _seed_closed(engine: Engine) -> tuple[sessionmaker[Session], UUID, UUID]:
+    factory = create_session_factory(engine)
+    project_id, user_id = uuid4(), uuid4()
+    with factory() as session:
+        session.add_all(
+            [
+                Project(id=project_id, code=f"pg-close-{project_id.hex[:8]}", name="PG 封闭轴"),
+                User(id=user_id, display_name="PG 用户"),
+            ]
+        )
+        session.flush()
+        session.add(ProjectMember(project_id=project_id, user_id=user_id, role="owner"))
+        session.commit()
+    return factory, project_id, user_id
+
+
+def test_postgres_modality_axis_expands_sensor_ids(postgres_engine: Engine) -> None:
+    factory, project_id, user_id = _seed_closed(postgres_engine)
+    with factory() as session:
+        robot = add_robot(session, project_id, user_id)
+        rgb = add_sensor(session, project_id, user_id, robot_id=robot, sensor_type="RGB")
+        depth = add_sensor(session, project_id, user_id, robot_id=robot, sensor_type="DEPTH")
+        session.commit()
+    insert_episodes(
+        factory,
+        [
+            episode_row(project_id, user_id, sensor_ids=[str(rgb), str(depth)]),
+            episode_row(project_id, user_id, sensor_ids=[str(rgb)]),
+        ],
+    )
+    entries = _coverage(factory, project_id, user_id, frozenset({"MODALITY"}))
+    assert {entry.dimension_value: entry.count for entry in entries} == {"RGB": 2, "DEPTH": 1}
+
+
+def test_postgres_action_axis_expands_referenced_spec_actions(postgres_engine: Engine) -> None:
+    factory, project_id, user_id = _seed_closed(postgres_engine)
+    with factory() as session:
+        spec = add_action_spec(
+            session,
+            project_id,
+            user_id,
+            actions=[{"code": "pick"}, {"code": "place"}],
+        )
+        task = add_collection_task(session, project_id, user_id, action_spec_id=spec)
+        session.commit()
+    insert_episodes(
+        factory,
+        [
+            episode_row(project_id, user_id, task_id=task),
+            episode_row(project_id, user_id, task_id=task),
+        ],
+    )
+    entries = _coverage(factory, project_id, user_id, frozenset({"ACTION"}))
+    assert {entry.dimension_value: entry.count for entry in entries} == {"pick": 2, "place": 2}
+
+
+def test_postgres_label_axis_reads_approved_record_labels(postgres_engine: Engine) -> None:
+    factory, project_id, user_id = _seed_closed(postgres_engine)
+    episode = episode_row(project_id, user_id)
+    insert_episodes(factory, [episode])
+    with factory() as session:
+        approve_episodes(
+            session,
+            project_id,
+            user_id,
+            labels_by_episode={episode.id: [{"label_key": "grasp"}]},
+        )
+        session.commit()
+    with factory() as session:
+        entries = SqlEpisodeCoverageDirectory(session).coverage_by_dimension(
+            ProjectScope(project_id, actor_id=user_id),
+            dimension_types=frozenset({"LABEL"}),
+            wanted_keys={("LABEL", "grasp-cup")},
+        )
+    counts = {entry.dimension_value: entry.count for entry in entries}
+    assert counts == {"grasp": 1, "grasp-cup": 0}
+
+
+def test_postgres_closed_axis_sql_uses_jsonb_object_functions(postgres_engine: Engine) -> None:
+    factory, project_id, user_id = _seed_closed(postgres_engine)
+    with factory() as session:
+        spec = add_action_spec(session, project_id, user_id, actions=[{"code": "pick"}])
+        task = add_collection_task(session, project_id, user_id, action_spec_id=spec)
+        session.commit()
+    insert_episodes(factory, [episode_row(project_id, user_id, task_id=task)])
+    captured: list[str] = []
+
+    def _capture(_conn, _cursor, statement, _params, _context, _many) -> None:
+        captured.append(statement)
+
+    event.listen(postgres_engine, "before_cursor_execute", _capture)
+    try:
+        _coverage(factory, project_id, user_id, frozenset({"ACTION"}))
+    finally:
+        event.remove(postgres_engine, "before_cursor_execute", _capture)
+    joined = "\n".join(captured)
+    assert "jsonb_array_elements(" in joined
+    assert "jsonb_typeof" in joined
+
+
+def test_postgres_action_axis_works_when_column_is_json_not_jsonb(
+    postgres_engine: Engine,
+) -> None:
+    """迁移建表时 ``action_specs.actions`` 是 ``json``，不是 ``jsonb``。
+
+    这里把列改成与**迁移产物**一致的类型再查一次。
+
+    为什么必须有这条用例：其余 PG 测试都走 ``Base.metadata.create_all``，
+    而 ORM 用的是 ``JSON().with_variant(JSONB, "postgresql")``——建出来是
+    ``jsonb``。于是「直接对 json 列调 ``jsonb_array_elements``」这种错误在
+    测试里永远不会出现，只在真实迁移库上 500。
+
+    实测过一次：真实库 `GET /data-gaps` 返回
+    ``function jsonb_array_elements(json) does not exist``。
+    修复是在 SQL 里显式 ``cast(... as jsonb)``；本用例锁住它。
+    """
+    factory, project_id, user_id = _seed_closed(postgres_engine)
+    with postgres_engine.begin() as conn:
+        conn.execute(
+            text("ALTER TABLE action_specs " "ALTER COLUMN actions TYPE json USING actions::json")
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE annotation_records " "ALTER COLUMN labels TYPE json USING labels::json"
+            )
+        )
+
+    with factory() as session:
+        spec = add_action_spec(
+            session, project_id, user_id, actions=[{"code": "pick"}, {"code": "place"}]
+        )
+        task = add_collection_task(session, project_id, user_id, action_spec_id=spec)
+        session.commit()
+    episode = episode_row(project_id, user_id, task_id=task)
+    insert_episodes(factory, [episode])
+    with factory() as session:
+        approve_episodes(
+            session,
+            project_id,
+            user_id,
+            labels_by_episode={episode.id: [{"label_key": "grasp"}]},
+        )
+        session.commit()
+
+    action_entries = _coverage(factory, project_id, user_id, frozenset({"ACTION"}))
+    assert {e.dimension_value: e.count for e in action_entries} == {"pick": 1, "place": 1}
+    label_entries = _coverage(factory, project_id, user_id, frozenset({"LABEL"}))
+    assert {e.dimension_value: e.count for e in label_entries} == {"grasp": 1}

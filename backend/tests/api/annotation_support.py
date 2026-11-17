@@ -182,14 +182,24 @@ def create_ready_work(
     actor_id: UUID,
     code: str,
     quality_policy: dict[str, object] | None = None,
+    *,
+    episode_ids: list[UUID] | None = None,
+    planned_item_count: int | None = None,
 ) -> dict[str, object]:
+    """创建一个可直接标注的任务（Schema 已发布、样本集已快照）。
+
+    ``episode_ids`` / ``planned_item_count`` 只为多 Episode 场景补充：
+    端到端链路一次提交多个 Episode 的标注；默认仍是最小的一条，既有调用不变。
+    """
+    target_ids = list(episode_ids) if episode_ids is not None else [episode_id]
+    item_count = planned_item_count if planned_item_count is not None else len(target_ids)
     payload: dict[str, object] = {
         "code": code,
         "name": f"任务 {code}",
         "sample_set_id": sample_set["sample_set_id"],
         "schema_id": schema["schema_id"],
-        "target_item_count": 1,
-        "target_episode_count": 1,
+        "target_item_count": item_count,
+        "target_episode_count": len(target_ids),
         "priority": "P1",
     }
     if quality_policy is not None:
@@ -218,7 +228,10 @@ def create_ready_work(
 
     batch_created = editor.post(
         url(project_id, f"/annotation-tasks/{task_id}/batches"),
-        json={"planned_item_count": 1, "item_refs": [str(episode_id)]},
+        json={
+            "planned_item_count": item_count,
+            "item_refs": [str(item) for item in target_ids],
+        },
     )
     assert batch_created.status_code == 201, batch_created.text
     batch = batch_created.json()
@@ -233,7 +246,7 @@ def create_ready_work(
         url(project_id, f"/annotation-batches/{batch['batch_id']}/annotation-assignments"),
         json={
             "assignee_id": str(actor_id),
-            "planned_item_count": 1,
+            "planned_item_count": item_count,
             "planned_minutes": 30,
         },
     )
@@ -316,12 +329,15 @@ def create_submitted(
     project_id: object,
     assignment_id: object,
     episode_id: UUID,
+    *,
+    episode_ids: list[UUID] | None = None,
 ) -> dict[str, object]:
+    target_ids = list(episode_ids) if episode_ids is not None else [episode_id]
     created = editor.post(
         url(project_id, "/annotation-submissions"),
         json={
             "assignment_id": str(assignment_id),
-            "records": [record_payload(episode_id)],
+            "records": [record_payload(item) for item in target_ids],
             "data_source": "REAL",
         },
     )

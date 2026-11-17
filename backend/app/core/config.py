@@ -12,11 +12,15 @@ from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
 
+from app.core.metrics_access import parse_source_networks
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # HS256 密钥强度下限（字节级字符数）。低于该值视为配置不完整，非本地环境拒绝启动。
 _MIN_JWT_SECRET_LENGTH = 32
+# ``/metrics`` 静态抓取令牌的最小长度。与 JWT 密钥同口径：它是唯一凭证，
+# 可被在线穷举，不能为了"好记"放行短值。
+_MIN_METRICS_TOKEN_LENGTH = 32
 # 明确视为未替换的占位密钥；命中后生产环境拒绝启动。
 _PLACEHOLDER_JWT_SECRETS = frozenset(
     {
@@ -244,6 +248,18 @@ class Settings(BaseSettings):
     # 键前缀，便于与其他 Redis 使用者隔离；不含项目数据，仅桶名与脱敏后的来源。
     rate_limit_redis_key_prefix: str = "ddp:rl"
 
+    # Prometheus 抓取端点（GET /metrics）的访问控制。抓取端是机器，不是用户：
+    # 无法使用用户 JWT，因此用静态 Bearer 令牌 + 可选来源网段白名单。
+    # 判定逻辑与失败关闭口径见 app/core/metrics_access.py。
+    #
+    # 默认空令牌：local 环境放行，非本地环境的 /metrics 请求返回 503（不是启动失败
+    # ——一次安全加固不应让整个 API 起不来；抓取端会以 up=0 明确报错）。
+    metrics_access_token: str = ""
+    # 允许抓取的来源网段（CIDR 或单地址），空列表表示不限制来源。
+    # 只比对 ASGI 对端地址，不读 X-Forwarded-For（可伪造）；反向代理场景把
+    # 代理自身地址写进白名单。
+    metrics_allowed_source_networks: list[str] = Field(default_factory=list)
+
     @property
     def is_local(self) -> bool:
         return self.env.lower() in {"local", "dev", "development"}
@@ -261,6 +277,7 @@ class Settings(BaseSettings):
         """
         problems = self._cors_config_problems()
         problems.extend(self._rate_limit_config_problems())
+        problems.extend(self._metrics_access_config_problems())
         problems.extend(self._security_headers_config_problems())
         problems.extend(self._validation_worker_config_problems())
         problems.extend(self._export_worker_config_problems())
@@ -369,6 +386,34 @@ class Settings(BaseSettings):
             problems.append("DDP_RATE_LIMIT_REDIS_URL 缺少主机名")
         if port is not None and not (0 < port < 65_536):
             problems.append("DDP_RATE_LIMIT_REDIS_URL 端口必须在 1–65535 之间")
+        return problems
+
+    def _metrics_access_config_problems(self) -> list[str]:
+        """``/metrics`` 访问控制配置自检。
+
+        令牌只在配置后才校验：未配置时由请求级拒绝兜底（见
+        ``app/core/metrics_access.py`` 的失败关闭说明），不在启动期拦截——
+        否则一次安全加固会让 API 无法启动。
+
+        配置了就必须是像样的密钥：过短的静态令牌可被在线穷举，而这正是本
+        机制唯一的凭证。占位符同样拒绝，避免 ``.env`` 复制粘贴后误以为已加固。
+        """
+        problems: list[str] = []
+        token = self.metrics_access_token
+        if token:
+            if token != token.strip():
+                problems.append("DDP_METRICS_ACCESS_TOKEN 不得包含首尾空白")
+            elif token.lower() in _PLACEHOLDER_JWT_SECRETS:
+                problems.append("DDP_METRICS_ACCESS_TOKEN 为占位符，请替换为随机值")
+            elif len(token) < _MIN_METRICS_TOKEN_LENGTH:
+                problems.append(
+                    f"DDP_METRICS_ACCESS_TOKEN 长度不足 {_MIN_METRICS_TOKEN_LENGTH} 个字符"
+                )
+        for raw in self.metrics_allowed_source_networks:
+            try:
+                parse_source_networks([raw])
+            except ValueError as exc:
+                problems.append(f"DDP_METRICS_ALLOWED_SOURCE_NETWORKS 非法：{exc}")
         return problems
 
     def _security_headers_config_problems(self) -> list[str]:

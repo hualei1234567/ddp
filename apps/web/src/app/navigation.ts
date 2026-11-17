@@ -1,5 +1,7 @@
 import {
+  ApartmentOutlined,
   AppstoreOutlined,
+  AuditOutlined,
   BarChartOutlined,
   CloudUploadOutlined,
   ClusterOutlined,
@@ -11,6 +13,7 @@ import {
   FolderOpenOutlined,
   HomeOutlined,
   PartitionOutlined,
+  ReadOutlined,
   RobotOutlined,
   SafetyCertificateOutlined,
   SettingOutlined,
@@ -43,7 +46,14 @@ export interface NavSection {
   items: NavItem[];
 }
 
-export const PLATFORM_STAGE_LABEL = "阶段 7 · 数据平面";
+/**
+ * 顶部阶段标签的**静态兜底**。
+ *
+ * 真实阶段以服务端 `/platform/meta` 的 `phase` 为准（工作台展示的是它）。
+ * 这里只在下拉菜单这类拿不到异步数据的静态位置使用，因此必须与当前
+ * 服务端默认值保持一致；服务端改阶段时这里要同步。
+ */
+export const PLATFORM_STAGE_LABEL = "阶段 8 · 规模化运营";
 
 /**
  * 一级导航分区，依据规范 §18.2。
@@ -72,7 +82,7 @@ export const navSections: NavSection[] = [
         label: "项目管理",
         description: "管理项目、采集方案与项目范围内的数据资产。",
         icon: createElement(AppstoreOutlined),
-        available: false,
+        available: true,
       },
       {
         // 真实页面挂在 /data-requirements（routes.tsx）；此前导航写成
@@ -89,6 +99,16 @@ export const navSections: NavSection[] = [
         label: "数据采集",
         description: "管理采集任务、现场作业、SOP 与人员设备排期。",
         icon: createElement(ExperimentOutlined),
+        available: true,
+      },
+      {
+        // 阶段 8 的四类素材（方案 / SOP / 场景 / 动作库）此前后端已就绪、
+        // 前端零页面。入口独立于「数据采集」任务，避免把素材管理与现场作业
+        // 混在同一个列表里。
+        path: "/collection-assets",
+        label: "采集素材",
+        description: "管理采集方案、SOP、场景与动作库；状态动作以服务端返回为准。",
+        icon: createElement(ReadOutlined),
         available: true,
       },
       {
@@ -122,11 +142,14 @@ export const navSections: NavSection[] = [
         aliases: ["/annotation"],
       },
       {
+        // 后端 N4 质量能力（黄金集 / 抽检 / IAA / 提交质量检查）早已就绪，
+        // 此前导航写成 available:false，用户永远进不到这些页面。
         path: "/quality",
         label: "质量管理",
-        description: "执行质检规则、抽检与质量门禁。",
+        description:
+          "金标准集（黄金集）、质检抽检、IAA 报告与提交质量检查；无结论不等于通过。",
         icon: createElement(SafetyCertificateOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/assets",
@@ -185,10 +208,19 @@ export const navSections: NavSection[] = [
         available: true,
       },
       {
+        // 阶段 9 的场地实体（基地 / 房间 / 实验室）已实现，单独成为可到达
+        // 的菜单项；「基地运营」里的排期与现场运营仍是规划能力，保持占位。
+        path: "/locations",
+        label: "场地管理",
+        description: "管理基地、房间与实验室场地实体；被设备与采集任务引用。",
+        icon: createElement(EnvironmentOutlined),
+        available: true,
+      },
+      {
         path: "/operations",
         label: "基地运营",
-        description: "管理场地、排期、现场运营与任务执行情况。",
-        icon: createElement(EnvironmentOutlined),
+        description: "管理采集排期、现场运营与任务执行情况。",
+        icon: createElement(ApartmentOutlined),
         available: false,
       },
       {
@@ -196,7 +228,7 @@ export const navSections: NavSection[] = [
         label: "人员与团队",
         description: "管理采集、标注、质检等角色与团队。",
         icon: createElement(TeamOutlined),
-        available: false,
+        available: true,
       },
       {
         path: "/suppliers",
@@ -213,11 +245,24 @@ export const navSections: NavSection[] = [
     label: "平台治理",
     items: [
       {
+        // N9 配额与用量报表：后端 `GET /usage-report`、`GET /quotas`、
+        // `PUT /quotas/{kind}` 已就绪且契约已收录；此前菜单是禁用项，
+        // 用户永远到不了「用多少、剩多少、超没超」。
         path: "/analytics",
         label: "经营分析",
-        description: "查看运营指标、产能与成本分析。",
+        description:
+          "项目级资源用量与配额对照：已用 / 上限 / 剩余 / 状态 / 统计截止时间；未测量与 0 严格区分。",
         icon: createElement(BarChartOutlined),
-        available: false,
+        available: true,
+      },
+      {
+        // 平台一直在写 audit_logs，这里补上唯一的读入口：谁在什么时候
+        // 对什么资源做了什么。只读且仅项目负责人/平台管理员可看。
+        path: "/audit-logs",
+        label: "审计日志",
+        description: "按资源、动作、时间与结果追溯全项目的操作留痕。",
+        icon: createElement(AuditOutlined),
+        available: true,
       },
       {
         path: "/settings",

@@ -1,0 +1,130 @@
+# 审计日志只读查询（2 个 GET）。
+# 对应 backend/app/api/v1/audit_log_routes.py。
+#
+# 权限：仅项目负责人（owner）或平台管理员。审计日志含操作者身份与操作原因，
+# 能读审计等于能看到全项目的操作画像与人员行为——**不能沿用普通 READ**。
+# viewer / editor 一律 403。
+#
+# 只读：不提供 POST / PATCH / DELETE。审计记录可追溯的前提是它不可篡改。
+
+auditLogs:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listAuditLogs
+    tags: [audit-logs]
+    summary: 跨资源的审计日志检索
+    description: |
+      按发生时间倒序，键集分页。全部条件在仓储层下推为 SQL（走
+      `ix_audit_logs_project_occurred_at` / `ix_audit_logs_project_resource`），
+      不在应用层取回后过滤。
+
+      `occurred_from` / `occurred_to` 为**闭区间且必须带时区**：naive 时间无法
+      确定是 UTC 还是本地时间，静默按某个时区解释会让追溯结果「看起来对、实际
+      错一截」——审计场景不接受这种模糊，直接 422。起止写反同样 422，
+      而不是返回空列表（空列表会读作「这段时间没有操作」）。
+
+      `result` 只接受 `SUCCESS` / `FAILURE`（与表 CHECK 约束同源）。
+      非法 `result` / `limit` / `cursor` 返回 422，不静默忽略。
+
+      `resource_type` 只限制长度、不枚举：它是各业务用例写入的稳定短名，
+      枚举会与写入方脱节，新增资源类型不该改客户端。
+    parameters:
+      - name: resource_type
+        in: query
+        required: false
+        schema: { type: string, minLength: 1, maxLength: 64 }
+      - name: resource_id
+        in: query
+        required: false
+        schema: { type: string, format: uuid }
+      - name: action
+        in: query
+        required: false
+        schema: { type: string, minLength: 1, maxLength: 64 }
+      - name: actor_user_id
+        in: query
+        required: false
+        schema: { type: string, format: uuid }
+      - name: result
+        in: query
+        required: false
+        schema: { $ref: "../openapi.yaml#/components/schemas/AuditResult" }
+      - name: occurred_from
+        in: query
+        required: false
+        description: 闭区间起点，必须带时区偏移。
+        schema: { type: string, format: date-time }
+      - name: occurred_to
+        in: query
+        required: false
+        description: 闭区间终点，必须带时区偏移。
+        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 审计日志分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AuditLogPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+auditLogResourceTimeline:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: resource_type
+      in: path
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 64 }
+    - name: resource_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: getAuditLogResourceTimeline
+    tags: [audit-logs]
+    summary: 单个资源的时间线
+    description: |
+      「这个对象身上发生过什么」的直达入口，语义等价于通用端点固定
+      `resource_type` + `resource_id`。独立路径让外部审计工具不必知道两个
+      过滤参数名，访问日志里也能直接看出「有人在查某个对象」。
+
+      **跨项目资源返回 200 + 空 `items`**，与「本项目没有该记录」的响应完全
+      一致——不泄露该 ID 是否存在。
+    parameters:
+      - name: action
+        in: query
+        required: false
+        schema: { type: string, minLength: 1, maxLength: 64 }
+      - name: actor_user_id
+        in: query
+        required: false
+        schema: { type: string, format: uuid }
+      - name: result
+        in: query
+        required: false
+        schema: { $ref: "../openapi.yaml#/components/schemas/AuditResult" }
+      - name: occurred_from
+        in: query
+        required: false
+        schema: { type: string, format: date-time }
+      - name: occurred_to
+        in: query
+        required: false
+        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 该资源的时间线分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AuditLogPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

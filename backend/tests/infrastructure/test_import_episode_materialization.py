@@ -18,6 +18,7 @@ import pytest
 from app.application.datasources.episode_materialization import (
     ImportEpisodeMaterializer,
 )
+from app.application.episodes.readiness import ReadinessStatus
 from app.domain.datasources.media import MediaAsset
 from app.domain.datasources.models import DataSource, DataSourceImport
 from app.domain.identity.models import ProjectScope
@@ -36,13 +37,19 @@ from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from tests.infrastructure.episode_support import build_services
+from tests.infrastructure.episode_support import build_readiness_service, build_services
 
 NOW = datetime(2026, 11, 16, tzinfo=UTC)
 _SHA = "a" * 40
 
 
-def _raw_asset(scope: ProjectScope, index: int) -> RawAsset:
+def _raw_asset(
+    scope: ProjectScope,
+    index: int,
+    *,
+    camera: str,
+    source_fps: float | None = 30.0,
+) -> RawAsset:
     asset_id = uuid4()
     return RawAsset(
         asset_id=asset_id,
@@ -60,6 +67,9 @@ def _raw_asset(scope: ProjectScope, index: int) -> RawAsset:
         status=RawAssetStatus.VALIDATING,
         uploaded_by=scope.actor_id,
         ingested_at=NOW,
+        # 机位与声明帧率是自动就绪判定的事实来源；导入链路由
+        # ``import_runner._import_metadata`` 写入同一组键。
+        raw_metadata={"camera": camera, "source_fps": source_fps},
         created_at=NOW,
         updated_at=NOW,
         created_by=scope.actor_id,
@@ -120,7 +130,10 @@ def env(tmp_path: Path) -> tuple[sessionmaker[Session], ProjectScope, UUID, list
         )
         raw_repo = SqlRawAssetRepository(session)
         media_repo = SqlMediaAssetRepository(session)
-        raw_assets = [_raw_asset(scope, i) for i in range(3)]
+        raw_assets = [
+            _raw_asset(scope, index, camera=camera)
+            for index, camera in enumerate(("main", "wrist", "main"))
+        ]
         for asset in raw_assets:
             created = raw_repo.add(scope, asset)
             raw_repo.save(scope, created.mark_valid(now=NOW), expected_version=created.version)
@@ -148,6 +161,8 @@ def env(tmp_path: Path) -> tuple[sessionmaker[Session], ProjectScope, UUID, list
                     raw_asset_id=raw_assets[index].asset_id,
                     excerpt_start_seconds=start,
                     excerpt_seconds=seconds,
+                    # 声明帧率是 frame_count 的唯一依据（平台不解码视频）。
+                    source_fps=30.0,
                     created_at=NOW,
                 ),
             )
@@ -167,6 +182,7 @@ def _materializer(session: Session) -> ImportEpisodeMaterializer:
         assets=SqlMediaAssetRepository(session),
         episodes=episode_service,
         episode_repository=SqlEpisodeRepository(session),
+        readiness=build_readiness_service(session),
     )
 
 
@@ -267,3 +283,83 @@ def test_empty_import_fails_loudly(env) -> None:
 
     with factory() as session, pytest.raises(DomainValidationError):
         _materializer(session).materialize(scope, empty_id)
+
+
+def _episode_rows(session: Session, scope: ProjectScope) -> dict[str, object]:
+    from app.infrastructure.db.models.episodes import EpisodeModel
+
+    rows = session.scalars(select(EpisodeModel).where(EpisodeModel.project_id == scope.project_id))
+    return {row.code: row for row in rows}
+
+
+def test_materialize_auto_readies_single_camera_episode(env) -> None:
+    """单机位 + 已声明帧率：创建后立刻自动置 READY，无需人工提交 Manifest。"""
+    factory, scope, import_id, _ = env
+    with factory() as session:
+        result = _materializer(session).materialize(scope, import_id)
+
+    by_key = {item.episode_key: item for item in result.created}
+    assert by_key["demo_002"].readiness is not None
+    assert by_key["demo_002"].readiness.status is ReadinessStatus.READY
+    # 多机位且源数据无标定：按领域规则拒绝，但导入本身成功。
+    assert by_key["demo_001"].readiness is not None
+    assert by_key["demo_001"].readiness.status is ReadinessStatus.BLOCKED
+    assert result.ready_count == 1
+    assert result.blocked_count == 1
+
+    with factory() as session:
+        rows = _episode_rows(session, scope)
+    ready = rows["EP-demo_002"]
+    assert ready.status == "READY"
+    assert ready.manifest_key == (f"canonical/{scope.project_id}/{ready.id}/1/manifest.json")
+    assert str(ready.manifest_sha256).startswith("sha256:")
+    # 5 秒 × 30fps：帧数由 Episode 时间范围与声明帧率推导，不是猜的。
+    assert ready.frame_count == 150
+    assert list(ready.readiness_blockers) == []
+
+    blocked = rows["EP-demo_001"]
+    assert blocked.status == "PENDING"
+    assert blocked.manifest_key is None
+    assert blocked.manifest_sha256 is None
+    codes = [item["code"] for item in blocked.readiness_blockers]
+    assert codes == ["CALIBRATION_MISSING"]
+    assert blocked.readiness_blockers[0]["message"]
+
+
+def test_blocked_readiness_does_not_fail_the_import(env) -> None:
+    """「导入成功」与「Episode 就绪」是两个结果：后者被拒不得回滚前者。"""
+    factory, scope, import_id, _ = env
+    with factory() as session:
+        result = _materializer(session).materialize(scope, import_id)
+        job = SqlDataSourceImportRepository(session).get(scope, import_id)
+    assert job is not None
+    assert job.status.value == "SUCCEEDED"
+    assert result.episode_count == 2
+    assert result.blocked_count == 1
+
+
+def test_repeat_materialize_retries_readiness_without_duplicate_writes(env) -> None:
+    """幂等：重跑不造第二份 Episode；已就绪的不重写，被拒的重新判一次。"""
+    factory, scope, import_id, _ = env
+    with factory() as session:
+        first = _materializer(session).materialize(scope, import_id)
+    assert first.episode_count == 2
+    with factory() as session:
+        ready_version = _episode_rows(session, scope)["EP-demo_002"].version
+
+    with factory() as session:
+        second = _materializer(session).materialize(scope, import_id)
+    assert second.episode_count == 0
+    assert set(second.skipped_episode_keys) == {"demo_001", "demo_002"}
+    refreshed = {item.episode_key: item.readiness for item in second.refreshed}
+    assert refreshed["demo_002"] is not None
+    assert refreshed["demo_002"].status is ReadinessStatus.SKIPPED
+    assert refreshed["demo_001"] is not None
+    assert refreshed["demo_001"].status is ReadinessStatus.BLOCKED
+
+    with factory() as session:
+        rows = _episode_rows(session, scope)
+    # 已就绪的 Episode 一次都没有被再次写入（版本号不变）。
+    assert rows["EP-demo_002"].version == ready_version
+    assert rows["EP-demo_002"].status == "READY"
+    assert rows["EP-demo_001"].status == "PENDING"
