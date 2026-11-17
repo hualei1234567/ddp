@@ -163,7 +163,8 @@ export interface AnnotationFeedback {
 function detail(error: ApiError): string {
   const code = error.code ?? "unknown";
   const requestId = error.requestId ?? "—";
-  return `错误码：${code}；request_id：${requestId}。`;
+  // 专项文案之外始终附带服务端 error.message，页面不需要再猜失败原因。
+  return `服务端消息：${error.message}；错误码：${code}；request_id：${requestId}。`;
 }
 
 export function describeAnnotationActionError(

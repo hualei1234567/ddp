@@ -1,9 +1,12 @@
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Descriptions, Space, Table, Tag, Typography } from "antd";
 import type { TableColumnsType } from "antd";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import ActionButtons from "../../components/annotation/ActionButtons";
+import type { AnnotationActionPayload } from "../../components/annotation/ActionButtons";
+import AnnotationFeedbackAlert from "../../components/annotation/AnnotationFeedbackAlert";
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
@@ -13,6 +16,12 @@ import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
 import { annotationApi } from "../../services/annotation";
+import { resolveAnnotationActions } from "../../services/annotationActions";
+import {
+  annotationSuccess,
+  describeAnnotationActionError,
+  type AnnotationFeedback,
+} from "../../services/annotationPresentation";
 import {
   buildAnnotationSampleSetListPath,
 } from "../../services/annotationUrl";
@@ -73,6 +82,33 @@ function SampleSetDetailContent({
   );
   const { data, error, loading, refreshing, stale, reload } = useRequest(load);
   const phase = resolvePagePhase({ hasData: data !== null, loading, error });
+  const [feedback, setFeedback] = useState<AnnotationFeedback | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  const handleAction = async (
+    action: string,
+    payload: AnnotationActionPayload,
+  ) => {
+    if (data === null) {
+      throw new Error("样本集尚未加载完成，请刷新后重试。");
+    }
+    setBusyAction(action);
+    setFeedback(null);
+    try {
+      await annotationApi.actOnSampleSet(projectId, sampleSetId, action, {
+        version: data.version,
+        reason: payload.reason,
+        warnConfirmed: payload.warnConfirmed ?? false,
+      });
+      setFeedback(annotationSuccess(`样本集动作 ${action} 已提交。`));
+      reload();
+    } catch (caught) {
+      setFeedback(describeAnnotationActionError(caught));
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const extra = (
     <Space wrap>
@@ -106,6 +142,18 @@ function SampleSetDetailContent({
             onRetry={reload}
           />
         ) : null}
+        <AnnotationFeedbackAlert feedback={feedback} />
+        <Space direction="vertical" size={8} className="ddp-stack">
+          <Typography.Text strong>状态动作</Typography.Text>
+          <ActionButtons
+            kind="sample-set"
+            actions={resolveAnnotationActions("sample-set", data.status, data.allowed_actions).actions}
+            busyAction={busyAction}
+            warnActions={["preview"]}
+            showFallbackNote
+            onAction={handleAction}
+          />
+        </Space>
         <Descriptions column={{ xs: 1, sm: 2, lg: 3 }} size="small" bordered>
           <Descriptions.Item label="样本集 ID">
             <IdentifierValue value={data.sample_set_id} label="样本集 ID" />
@@ -167,7 +215,7 @@ function SampleSetDetailContent({
   return (
     <PageContainer
       title={data ? `样本集 · ${data.code}` : "标注样本集详情"}
-      description="只读查看样本快照、入选理由与排除统计。"
+      description="查看样本快照、入选理由与排除统计，并推进预览 / 快照 / 取消动作。"
       extra={extra}
     >
       {body}

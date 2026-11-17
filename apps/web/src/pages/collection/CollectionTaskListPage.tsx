@@ -8,15 +8,15 @@ import {
   Space,
   Table,
   Tag,
-  Tooltip,
   Typography,
 } from "antd";
 import type { TableColumnsType } from "antd";
 import type { ReactNode } from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import CollectionStatusTag from "../../components/collection/CollectionStatusTag";
+import CreateTaskModal from "../../components/collection/CreateTaskModal";
 import TaskFilters from "../../components/collection/TaskFilters";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import ApiErrorState from "../../components/ui/ApiErrorState";
@@ -297,7 +297,7 @@ export function CollectionTaskListBody({
               ? hasMore
                 ? "已加载任务中没有匹配项；还有更多任务未加载，可继续加载后再筛选。"
                 : "当前筛选条件下没有任务，可清空筛选后重试。"
-              : "创建任务接口属于阶段 2 后续实现范围；服务端端点未实现时不应伪造任务数据。"
+              : "尚未创建采集任务。点击右上角「新建任务」创建第一条任务；关联的采集方案、SOP、场景与动作库需先在本项目登记。"
           }
           action={
             filtersActive ? (
@@ -445,6 +445,7 @@ function CollectionTaskListContent({
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const [searchParams] = useSearchParams();
+  const [createOpen, setCreateOpen] = useState(false);
 
   const loadTasks = useCallback(
     (options: CursorPageRequestOptions) =>
@@ -544,13 +545,13 @@ function CollectionTaskListContent({
       <Typography.Text type="secondary">
         更新于 {formatTimestamp(updatedAt)}
       </Typography.Text>
-      <Tooltip title="任务创建表单与接口不在 DDP-305 前端范围内；阶段 2 端点尚未实现">
-        <span>
-          <Button type="primary" icon={<PlusOutlined />} disabled>
-            新建任务
-          </Button>
-        </span>
-      </Tooltip>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => setCreateOpen(true)}
+      >
+        新建任务
+      </Button>
       <Button
         icon={<ReloadOutlined />}
         loading={refreshing}
@@ -563,38 +564,46 @@ function CollectionTaskListContent({
   );
 
   return (
-    <PageContainer
-      title="采集任务"
-      description="按阶段 2 契约草案（DRAFT）展示采集任务。状态与可执行动作以服务端为准；任务创建接口尚未实现时，页面只呈现真实的加载/错误/禁用状态，不使用 Mock 数据冒充业务结果。"
-      extra={extra}
-      filters={filtersElement}
-    >
-      <Alert
-        type="info"
-        showIcon
-        message="阶段 2 契约草案，后端端点尚未实现"
-        description="本页按 DDP-301 草案接入；若后端返回 404/501，页面会展示 Error 与错误码，而不是伪造任务数据。"
-      />
-      <CollectionTaskListBody
+    <>
+      <PageContainer
+        title="采集任务"
+        description="按项目展示采集任务。新建任务与列表查询走服务端真实接口；状态迁移与可执行动作以服务端 allowed_actions 为准。"
+        extra={extra}
+        filters={filtersElement}
+      >
+        <Alert
+          type="info"
+          showIcon
+          message="动作按钮以服务端 allowed_actions 为准"
+          description="任务详情与现场工作台只渲染服务端下发的动作；若服务端未返回该字段，页面会明确提示而不是按状态自行推断。"
+        />
+        <CollectionTaskListBody
+          projectId={projectId}
+          filters={filters}
+          phase={phase}
+          error={error}
+          items={items}
+          filteredItems={filteredItems}
+          hasMore={hasMore}
+          loading={loading}
+          refreshing={refreshing}
+          loadingMore={loadingMore}
+          loadMoreError={loadMoreError}
+          stale={stale}
+          updatedAt={updatedAt}
+          isMobile={isMobile}
+          onRetry={reload}
+          onResetFilters={resetFilters}
+          onLoadMore={loadMore}
+        />
+      </PageContainer>
+      <CreateTaskModal
         projectId={projectId}
-        filters={filters}
-        phase={phase}
-        error={error}
-        items={items}
-        filteredItems={filteredItems}
-        hasMore={hasMore}
-        loading={loading}
-        refreshing={refreshing}
-        loadingMore={loadingMore}
-        loadMoreError={loadMoreError}
-        stale={stale}
-        updatedAt={updatedAt}
-        isMobile={isMobile}
-        onRetry={reload}
-        onResetFilters={resetFilters}
-        onLoadMore={loadMore}
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={reload}
       />
-    </PageContainer>
+    </>
   );
 }
 

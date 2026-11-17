@@ -8,12 +8,14 @@ import {
   Typography,
 } from "antd";
 import type { TableColumnsType } from "antd";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
 import GoldAnswerSection from "../../components/annotation/GoldAnswerSection";
+import GoldEvaluationPanel from "../../components/annotation/GoldEvaluationPanel";
 import GoldSetActionBar from "../../components/quality/GoldSetActionBar";
+import type { QualityActionOption } from "../../services/qualityPresentation";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
@@ -23,9 +25,21 @@ import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
 import { ApiError } from "../../services/api";
 import { annotationApi } from "../../services/annotation";
+import {
+  presentAnnotationAction,
+  requiresAnnotationReason,
+  resolveAnnotationActions,
+} from "../../services/annotationActions";
+import type {
+  GoldEvaluationCreateInput,
+  GoldInjectionCreateInput,
+} from "../../services/annotationGoldSetApi";
+import type {
+  GoldEvaluation,
+  GoldInjection,
+} from "../../services/annotationQualityParsers";
 import { buildAnnotationGoldSetListPath } from "../../services/annotationUrl";
 import { resolvePagePhase } from "../../services/pagePhase";
-import { GOLD_SET_ACTIONS } from "../../services/qualityPresentation";
 import type { GoldSet, GoldSetItem } from "../../types/annotation";
 
 function itemColumns(): TableColumnsType<GoldSetItem> {
@@ -82,7 +96,48 @@ function GoldSetDetailContent({
   const [answers, setAnswers] = useState<GoldSet | null>(null);
   const [answerError, setAnswerError] = useState<ApiError | null>(null);
   const [answerLoading, setAnswerLoading] = useState(false);
+  const [evaluation, setEvaluation] = useState<GoldEvaluation | null>(null);
+  const [injection, setInjection] = useState<GoldInjection | null>(null);
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
   const phase = resolvePagePhase({ hasData: data !== null, loading, error });
+  const goldActions = useMemo<QualityActionOption[]>(() => {
+    if (data === null) {
+      return [];
+    }
+    return resolveAnnotationActions(
+      "gold-set",
+      data.status,
+      data.allowed_actions,
+    ).actions.map((action) => ({
+      action,
+      label: presentAnnotationAction(action),
+      danger: requiresAnnotationReason("gold-set", action),
+    }));
+  }, [data]);
+
+  const handleEvaluate = async (input: GoldEvaluationCreateInput) => {
+    setEvaluationError(null);
+    try {
+      setEvaluation(await annotationApi.evaluateGoldSet(projectId, goldSetId, input));
+    } catch (caught) {
+      setEvaluationError(
+        caught instanceof Error ? caught.message : "黄金集评估失败。",
+      );
+      throw caught;
+    }
+  };
+
+  const handleInject = async (input: GoldInjectionCreateInput) => {
+    setEvaluationError(null);
+    try {
+      setInjection(await annotationApi.injectGoldSet(projectId, goldSetId, input));
+    } catch (caught) {
+      setEvaluationError(
+        caught instanceof Error ? caught.message : "黄金项注入失败。",
+      );
+      throw caught;
+    }
+  };
 
   const loadAnswers = useCallback(async () => {
     setAnswerLoading(true);
@@ -172,7 +227,7 @@ function GoldSetDetailContent({
         <Space direction="vertical" size={8} className="ddp-stack">
           <Typography.Text strong>状态动作</Typography.Text>
           <GoldSetActionBar
-            actions={GOLD_SET_ACTIONS}
+            actions={goldActions}
             busy={busyAction}
             onAction={handleAction}
           />
@@ -217,6 +272,14 @@ function GoldSetDetailContent({
           pagination={false}
           scroll={{ x: 900 }}
         />
+        <GoldEvaluationPanel
+          goldSet={data}
+          evaluation={evaluation}
+          injection={injection}
+          error={evaluationError}
+          onEvaluate={handleEvaluate}
+          onInject={handleInject}
+        />
         <Space direction="vertical" size={8} className="ddp-stack">
           <GoldAnswerSection
             answers={answers}
@@ -232,7 +295,7 @@ function GoldSetDetailContent({
   return (
     <PageContainer
       title={data ? `黄金集 · ${data.code}` : "黄金集详情"}
-      description="默认脱敏视图；期望答案必须显式请求，403 会展示为 Forbidden。"
+      description="默认脱敏视图；可执行状态动作、评估与注入，期望答案必须显式请求。"
       extra={extra}
     >
       {body}

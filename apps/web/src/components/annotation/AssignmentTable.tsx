@@ -2,6 +2,8 @@ import { Space, Table, Tag, Tooltip, Typography } from "antd";
 import type { TableColumnsType } from "antd";
 import { Link } from "react-router-dom";
 
+import type { WithAllowedActions } from "../../services/annotationAllowedActions";
+import { resolveAnnotationActions } from "../../services/annotationActions";
 import type { ApiError } from "../../services/api";
 import {
   buildAnnotationWorkbenchPath,
@@ -11,9 +13,19 @@ import type { AnnotationAssignment } from "../../types/annotation";
 import ApiErrorState from "../ui/ApiErrorState";
 import IdentifierValue from "../ui/IdentifierValue";
 import PageState from "../ui/PageState";
+import ActionButtons from "./ActionButtons";
+import type { AnnotationActionPayload } from "./ActionButtons";
 import AnnotationStatusTag from "./AnnotationStatusTag";
 
-function columns(projectId: string): TableColumnsType<AnnotationAssignment> {
+function columns(
+  projectId: string,
+  busyAction: string | null,
+  onAction?: (
+    item: WithAllowedActions<AnnotationAssignment>,
+    action: string,
+    payload: AnnotationActionPayload,
+  ) => Promise<void>,
+): TableColumnsType<WithAllowedActions<AnnotationAssignment>> {
   return [
     {
       title: "分配 ID",
@@ -62,6 +74,31 @@ function columns(projectId: string): TableColumnsType<AnnotationAssignment> {
       render: (value: string | null) => formatDateTime(value),
     },
     {
+      title: "动作",
+      key: "actions",
+      width: 320,
+      fixed: "right",
+      render: (_value, item) => {
+        if (!onAction) {
+          return <Typography.Text type="secondary">—</Typography.Text>;
+        }
+        const resolution = resolveAnnotationActions("assignment", item.status, item.allowed_actions);
+        return (
+          <ActionButtons
+            kind="assignment"
+            size="small"
+            actions={resolution.actions}
+            busyAction={
+              busyAction?.startsWith(`${item.assignment_id}:`)
+                ? busyAction.split(":")[1] ?? null
+                : null
+            }
+            onAction={(action, payload) => onAction(item, action, payload)}
+          />
+        );
+      },
+    },
+    {
       title: "工作台",
       key: "workbench",
       width: 150,
@@ -82,11 +119,18 @@ function columns(projectId: string): TableColumnsType<AnnotationAssignment> {
 
 interface AssignmentTableProps {
   projectId: string;
-  items: AnnotationAssignment[];
+  items: WithAllowedActions<AnnotationAssignment>[];
   loading: boolean;
   error: ApiError | null;
   stale: boolean;
   onRetry: () => void;
+  /** `${assignment_id}:${action}`，用于只让当前行按钮转圈。 */
+  busyAction?: string | null;
+  onAction?: (
+    item: WithAllowedActions<AnnotationAssignment>,
+    action: string,
+    payload: AnnotationActionPayload,
+  ) => Promise<void>;
 }
 
 export default function AssignmentTable({
@@ -96,6 +140,8 @@ export default function AssignmentTable({
   error,
   stale,
   onRetry,
+  busyAction = null,
+  onAction,
 }: AssignmentTableProps) {
   if (loading) {
     return <PageState compact variant="loading" title="正在加载分配" />;
@@ -123,13 +169,13 @@ export default function AssignmentTable({
           onRetry={onRetry}
         />
       ) : null}
-      <Table<AnnotationAssignment>
+      <Table<WithAllowedActions<AnnotationAssignment>>
         rowKey="assignment_id"
         size="small"
-        columns={columns(projectId)}
+        columns={columns(projectId, busyAction, onAction)}
         dataSource={items}
         pagination={false}
-        scroll={{ x: 1300 }}
+        scroll={{ x: 1620 }}
       />
     </Space>
   );

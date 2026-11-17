@@ -209,6 +209,99 @@ describe("阶段 2 采集 API client", () => {
     });
   });
 
+  it("创建批次只提交契约字段并携带幂等键", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(collectionBatchFixture, 201),
+    );
+    const api = createCollectionsApi(clientWith(fetchImpl));
+
+    const batch = await api.createBatch(
+      PROJECT_ID,
+      TASK_ID,
+      {
+        expected_count: 8,
+        code: "B-EXTRA-01",
+        sequence_no: 2,
+        assigned_to: null,
+        scheduled_start: null,
+        scheduled_end: null,
+      },
+      { idempotencyKey: "idem-batch-create" },
+    );
+
+    const init = fetchImpl.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(batch.batch_id).toBe(collectionBatchFixture.batch_id);
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      `http://api.test/api/v1/projects/${PROJECT_ID}/collection-tasks/${TASK_ID}/batches`,
+    );
+    expect(init?.method).toBe("POST");
+    expect(init?.headers).toMatchObject({
+      "Idempotency-Key": "idem-batch-create",
+    });
+    expect(JSON.parse(String(init?.body))).toEqual({
+      expected_count: 8,
+      code: "B-EXTRA-01",
+      sequence_no: 2,
+      assigned_to: null,
+      scheduled_start: null,
+      scheduled_end: null,
+    });
+  });
+
+  it("批次动作走 collection-batches 路径并带 If-Match 与原因", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(collectionBatchFixture),
+    );
+    const api = createCollectionsApi(clientWith(fetchImpl));
+
+    await api.actOnBatch(
+      PROJECT_ID,
+      collectionBatchFixture.batch_id,
+      "pause",
+      {
+        version: 3,
+        reason: "设备故障",
+        idempotencyKey: "idem-batch-action",
+      },
+    );
+
+    const init = fetchImpl.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(
+      `http://api.test/api/v1/projects/${PROJECT_ID}/collection-batches/${collectionBatchFixture.batch_id}/actions/pause`,
+    );
+    expect(init?.headers).toMatchObject({
+      "If-Match": '"3"',
+      "Idempotency-Key": "idem-batch-action",
+    });
+    expect(JSON.parse(String(init?.body))).toEqual({ reason: "设备故障" });
+  });
+
+  it("批次分配动作附带 assigned_to，未传时不发送该字段", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse(collectionBatchFixture))
+      .mockResolvedValueOnce(jsonResponse(collectionBatchFixture));
+    const api = createCollectionsApi(clientWith(fetchImpl));
+
+    await api.actOnBatch(PROJECT_ID, collectionBatchFixture.batch_id, "assign", {
+      version: 3,
+      assignedTo: "88888888-8888-7888-8888-888888888888",
+    });
+    expect(
+      JSON.parse(String((fetchImpl.mock.calls[0]?.[1] as RequestInit).body)),
+    ).toEqual({
+      reason: null,
+      assigned_to: "88888888-8888-7888-8888-888888888888",
+    });
+
+    await api.actOnBatch(PROJECT_ID, collectionBatchFixture.batch_id, "ready", {
+      version: 3,
+    });
+    expect(
+      JSON.parse(String((fetchImpl.mock.calls[1]?.[1] as RequestInit).body)),
+    ).toEqual({ reason: null });
+  });
+
   it("403 保持统一 ApiError，页面可映射 Forbidden", async () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse(

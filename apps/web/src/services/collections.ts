@@ -1,4 +1,5 @@
 import type {
+  CollectionBatch,
   CollectionBatchPage,
   CollectionTask,
   CollectionTaskCreateInput,
@@ -11,6 +12,7 @@ import type {
 } from "../types/collection";
 import { apiClient, type ApiClient } from "./api";
 import {
+  parseCollectionBatch,
   parseCollectionBatchPage,
   parseCollectionTask,
   parseCollectionTaskPage,
@@ -55,6 +57,24 @@ export interface TaskCreateOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * 批次创建请求体，字段与 `CollectionBatchCreate` 一致。
+ * `code` / `sequence_no` 服务端可自动生成；`expected_count` 必填。
+ */
+export interface CollectionBatchCreateInput {
+  expected_count: number;
+  code?: string | null;
+  sequence_no?: number | null;
+  assigned_to?: string | null;
+  scheduled_start?: string | null;
+  scheduled_end?: string | null;
+}
+
+/** 批次动作：If-Match + Idempotency-Key；可按契约附带原因与执行人。 */
+export interface BatchActionOptions extends TaskActionOptions {
+  assignedTo?: string | null;
+}
+
 export interface CollectionsApi {
   listTasks: (
     projectId: string,
@@ -81,6 +101,18 @@ export interface CollectionsApi {
     taskId: string,
     options?: PageRequestOptions,
   ) => Promise<CollectionBatchPage>;
+  createBatch: (
+    projectId: string,
+    taskId: string,
+    input: CollectionBatchCreateInput,
+    options?: TaskCreateOptions,
+  ) => Promise<CollectionBatch>;
+  actOnBatch: (
+    projectId: string,
+    batchId: string,
+    action: string,
+    options: BatchActionOptions,
+  ) => Promise<CollectionBatch>;
   listEpisodes: (
     projectId: string,
     options?: EpisodeListOptions,
@@ -194,6 +226,52 @@ export function createCollectionsApi(client: ApiClient): CollectionsApi {
               projectId,
               "采集批次列表",
             ),
+        },
+      );
+    },
+
+    async createBatch(projectId, taskId, input, options = {}) {
+      return client.request(
+        projectPath(
+          projectId,
+          `/collection-tasks/${requireIdentifier(taskId, "task_id")}/batches`,
+        ),
+        {
+          method: "POST",
+          signal: options.signal,
+          headers: {
+            "Idempotency-Key":
+              options.idempotencyKey ?? createIdempotencyKey(),
+          },
+          body: input,
+          validate: (value) =>
+            assertProjectScope(parseCollectionBatch(value), projectId, "采集批次"),
+        },
+      );
+    },
+
+    async actOnBatch(projectId, batchId, action, options) {
+      return client.request(
+        projectPath(
+          projectId,
+          `/collection-batches/${requireIdentifier(batchId, "batch_id")}/actions/${requireIdentifier(action, "action")}`,
+        ),
+        {
+          method: "POST",
+          signal: options.signal,
+          headers: {
+            "If-Match": formatIfMatch(options.version),
+            "Idempotency-Key":
+              options.idempotencyKey ?? createIdempotencyKey(),
+          },
+          // 契约 `CollectionBatchActionRequest` 只声明 reason / assigned_to，
+          // 未使用的字段不下发（服务端 extra=forbid）。
+          body:
+            options.assignedTo === undefined
+              ? { reason: options.reason ?? null }
+              : { reason: options.reason ?? null, assigned_to: options.assignedTo },
+          validate: (value) =>
+            assertProjectScope(parseCollectionBatch(value), projectId, "采集批次"),
         },
       );
     },

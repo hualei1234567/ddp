@@ -41,6 +41,8 @@ import CollectionTaskListPage from "./pages/collection/CollectionTaskListPage";
 import WorkbenchPage from "./pages/collection/WorkbenchPage";
 import DeviceDetailPage from "./pages/devices/DeviceDetailPage";
 import DeviceListPage from "./pages/devices/DeviceListPage";
+import RobotDetailPage from "./pages/devices/RobotDetailPage";
+import RobotListPage from "./pages/devices/RobotListPage";
 import EpisodeDetailPage from "./pages/episodes/EpisodeDetailPage";
 import EpisodeListPage from "./pages/episodes/EpisodeListPage";
 import Forbidden from "./pages/Forbidden";
@@ -143,6 +145,8 @@ export default function AppRoutes() {
         <Route path="people" element={<PeoplePage />} />
         <Route path="devices" element={<DeviceListPage />} />
         <Route path="devices/:deviceId" element={<DeviceDetailPage />} />
+        <Route path="robots" element={<RobotListPage />} />
+        <Route path="robots/:robotId" element={<RobotDetailPage />} />
         <Route path="collection" element={<CollectionIndexRedirect />} />
         <Route path="collection/tasks" element={<CollectionTaskListPage />} />
         <Route

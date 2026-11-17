@@ -177,6 +177,44 @@ describe("采集任务详情页面状态", () => {
     expect(staleHtml).toContain("上次成功获取的批次数据");
   });
 
+  it("批次 Tab 按 allowed_actions 渲染动作并说明创建入口", () => {
+    const html = renderDetail({
+      activeTab: "batches",
+      batchesContent: (
+        <BatchListBody
+          {...emptyBatches}
+          items={[collectionBatchFixture]}
+          onCreate={() => undefined}
+          onAction={() => Promise.resolve()}
+        />
+      ),
+    });
+
+    expect(html).toContain("暂停采集");
+    expect(html).toContain("提交批次");
+    expect(html).toContain("新建批次");
+  });
+
+  it("批次缺少 allowed_actions 时不渲染动作按钮", () => {
+    const batches = {
+      ...collectionBatchFixture,
+      allowed_actions: undefined,
+    };
+    const html = renderDetail({
+      activeTab: "batches",
+      batchesContent: (
+        <BatchListBody
+          {...emptyBatches}
+          items={[batches]}
+          onAction={() => Promise.resolve()}
+        />
+      ),
+    });
+
+    expect(html).not.toContain("暂停采集");
+    expect(html).toContain("动作集合未下发");
+  });
+
   it("操作记录 Tab 明确 Disabled，不伪造审计时间线", () => {
     const html = renderDetail({ activeTab: "operations" });
     expect(html).toContain("操作记录接口尚未定义");

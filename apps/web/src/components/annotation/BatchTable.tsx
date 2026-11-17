@@ -1,15 +1,26 @@
 import { Space, Table, Typography } from "antd";
 import type { TableColumnsType } from "antd";
 
+import type { WithAllowedActions } from "../../services/annotationAllowedActions";
+import { resolveAnnotationActions } from "../../services/annotationActions";
 import type { ApiError } from "../../services/api";
 import { formatDateTime } from "../../services/format";
 import type { AnnotationBatch } from "../../types/annotation";
 import ApiErrorState from "../ui/ApiErrorState";
 import IdentifierValue from "../ui/IdentifierValue";
 import PageState from "../ui/PageState";
+import ActionButtons from "./ActionButtons";
+import type { AnnotationActionPayload } from "./ActionButtons";
 import AnnotationStatusTag from "./AnnotationStatusTag";
 
-function columns(): TableColumnsType<AnnotationBatch> {
+function columns(
+  busyAction: string | null,
+  onAction?: (
+    batch: WithAllowedActions<AnnotationBatch>,
+    action: string,
+    payload: AnnotationActionPayload,
+  ) => Promise<void>,
+): TableColumnsType<WithAllowedActions<AnnotationBatch>> {
   return [
     {
       title: "批次",
@@ -80,15 +91,47 @@ function columns(): TableColumnsType<AnnotationBatch> {
       width: 170,
       render: (value: string | null) => formatDateTime(value),
     },
+    {
+      title: "动作",
+      key: "actions",
+      width: 320,
+      fixed: "right",
+      render: (_value, batch) => {
+        if (!onAction) {
+          return <Typography.Text type="secondary">—</Typography.Text>;
+        }
+        const resolution = resolveAnnotationActions("batch", batch.status, batch.allowed_actions);
+        return (
+          <ActionButtons
+            kind="batch"
+            size="small"
+            actions={resolution.actions}
+            busyAction={
+              busyAction?.startsWith(`${batch.batch_id}:`)
+                ? busyAction.split(":")[1] ?? null
+                : null
+            }
+            onAction={(action, payload) => onAction(batch, action, payload)}
+          />
+        );
+      },
+    },
   ];
 }
 
 interface BatchTableProps {
-  items: AnnotationBatch[];
+  items: WithAllowedActions<AnnotationBatch>[];
   loading: boolean;
   error: ApiError | null;
   stale: boolean;
   onRetry: () => void;
+  /** `${batch_id}:${action}`，用于只让当前行按钮转圈。 */
+  busyAction?: string | null;
+  onAction?: (
+    batch: WithAllowedActions<AnnotationBatch>,
+    action: string,
+    payload: AnnotationActionPayload,
+  ) => Promise<void>;
 }
 
 export default function BatchTable({
@@ -97,6 +140,8 @@ export default function BatchTable({
   error,
   stale,
   onRetry,
+  busyAction = null,
+  onAction,
 }: BatchTableProps) {
   if (loading) {
     return <PageState compact variant="loading" title="正在加载批次" />;
@@ -124,13 +169,13 @@ export default function BatchTable({
           onRetry={onRetry}
         />
       ) : null}
-      <Table<AnnotationBatch>
+      <Table<WithAllowedActions<AnnotationBatch>>
         rowKey="batch_id"
         size="small"
-        columns={columns()}
+        columns={columns(busyAction, onAction)}
         dataSource={items}
         pagination={false}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1520 }}
       />
     </Space>
   );

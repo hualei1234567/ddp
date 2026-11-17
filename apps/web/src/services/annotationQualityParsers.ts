@@ -22,6 +22,10 @@ import {
   QUALITY_SAMPLE_TYPE_VALUES,
 } from "../types/annotation";
 import {
+  attachAllowedActions,
+  type WithAllowedActions,
+} from "./annotationAllowedActions";
+import {
   readArray,
   readJsonValue,
   readOptionalBooleanValue,
@@ -30,6 +34,7 @@ import {
   readOptionalPositiveInteger,
   readOptionalRecordArray,
   readRecord,
+  readRecordArray,
 } from "./annotationParsers";
 import { parseChecklistItem, parseReviewIssue } from "./annotationReviewParsers";
 import {
@@ -46,6 +51,7 @@ import {
   readPositiveInteger,
   readSha256Checksum,
   readString,
+  readStringArray,
   readUuid,
   readUuidArray,
 } from "./validation";
@@ -110,9 +116,12 @@ function parseGoldSetItem(value: unknown, path: string): GoldSetItem {
   return parsed;
 }
 
-export function parseGoldSet(value: unknown, path = "黄金集"): GoldSet {
+export function parseGoldSet(
+  value: unknown,
+  path = "黄金集",
+): WithAllowedActions<GoldSet> {
   const record = asRecord(value, path);
-  return {
+  return attachAllowedActions({
     gold_set_id: readUuid(record, "gold_set_id", `${path}.gold_set_id`),
     project_id: readUuid(record, "project_id", `${path}.project_id`),
     code: readString(record, "code", `${path}.code`),
@@ -154,19 +163,21 @@ export function parseGoldSet(value: unknown, path = "黄金集"): GoldSet {
     ),
     items: readArray(record, "items", `${path}.items`, parseGoldSetItem),
     version: readPositiveInteger(record, "version", `${path}.version`),
-  };
+  }, record, path);
 }
 
-export function parseGoldSetPage(value: unknown): CursorPage<GoldSet> {
+export function parseGoldSetPage(
+  value: unknown,
+): CursorPage<WithAllowedActions<GoldSet>> {
   return parseCursorPage(value, "黄金集列表", parseGoldSet);
 }
 
 export function parseQualitySample(
   value: unknown,
   path = "质检抽检",
-): QualitySample {
+): WithAllowedActions<QualitySample> {
   const record = asRecord(value, path);
-  return {
+  return attachAllowedActions({
     quality_sample_id: readUuid(
       record,
       "quality_sample_id",
@@ -233,12 +244,12 @@ export function parseQualitySample(
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
-  };
+  }, record, path);
 }
 
 export function parseQualitySamplePage(
   value: unknown,
-): CursorPage<QualitySample> {
+): CursorPage<WithAllowedActions<QualitySample>> {
   return parseCursorPage(value, "质检抽检列表", parseQualitySample);
 }
 
@@ -346,3 +357,80 @@ export {
   parseReviewIssue,
   parseChecklistItem,
 };
+
+/** 黄金集评估结果（`POST /gold-sets/{id}/evaluations`）。 */
+export interface GoldEvaluation {
+  evaluation_id: string;
+  project_id: string;
+  gold_set_id: string;
+  task_id: string;
+  submission_id: string;
+  evaluated_count: number;
+  passed_count: number;
+  /** `null` 表示没有可评估项，**不是 0%**。 */
+  accuracy: number | null;
+  status: string;
+  sample_size: number;
+  results: Record<string, unknown>[];
+  computed_at: string;
+}
+
+/** 黄金集注入结果（`POST /gold-sets/{id}/injections`）。 */
+export interface GoldInjection {
+  gold_set_id: string;
+  items: Record<string, unknown>[];
+  exposure_ids: string[];
+}
+
+export function parseGoldEvaluation(
+  value: unknown,
+  path = "黄金集评估",
+): GoldEvaluation {
+  const record = asRecord(value, path);
+  return {
+    evaluation_id: readUuid(
+      record,
+      "evaluation_id",
+      `${path}.evaluation_id`,
+    ),
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    gold_set_id: readUuid(record, "gold_set_id", `${path}.gold_set_id`),
+    task_id: readUuid(record, "task_id", `${path}.task_id`),
+    submission_id: readUuid(
+      record,
+      "submission_id",
+      `${path}.submission_id`,
+    ),
+    evaluated_count: readInteger(
+      record,
+      "evaluated_count",
+      `${path}.evaluated_count`,
+    ),
+    passed_count: readInteger(
+      record,
+      "passed_count",
+      `${path}.passed_count`,
+    ),
+    accuracy: readOptionalNumber(record, "accuracy", `${path}.accuracy`),
+    status: readString(record, "status", `${path}.status`),
+    sample_size: readInteger(record, "sample_size", `${path}.sample_size`),
+    results: readRecordArray(record, "results", `${path}.results`),
+    computed_at: readString(record, "computed_at", `${path}.computed_at`),
+  };
+}
+
+export function parseGoldInjection(
+  value: unknown,
+  path = "黄金集注入",
+): GoldInjection {
+  const record = asRecord(value, path);
+  return {
+    gold_set_id: readUuid(record, "gold_set_id", `${path}.gold_set_id`),
+    items: readRecordArray(record, "items", `${path}.items`),
+    exposure_ids: readStringArray(
+      record,
+      "exposure_ids",
+      `${path}.exposure_ids`,
+    ),
+  };
+}

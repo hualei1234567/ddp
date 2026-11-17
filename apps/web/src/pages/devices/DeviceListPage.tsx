@@ -7,14 +7,14 @@ import {
   Space,
   Table,
   Tag,
-  Tooltip,
   Typography,
 } from "antd";
 import type { TableColumnsType } from "antd";
 import type { ReactNode } from "react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
+import DeviceFormModal from "../../components/devices/DeviceFormModal";
 import DeviceFilters from "../../components/devices/DeviceFilters";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import MobileFilterDrawer from "../../components/devices/MobileFilterDrawer";
@@ -444,6 +444,7 @@ function DeviceListContent({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [createOpen, setCreateOpen] = useState(false);
 
   const filters = readDeviceListFilters(searchParams);
 
@@ -582,13 +583,13 @@ function DeviceListContent({ projectId }: { projectId: string }) {
       <Typography.Text type="secondary">
         更新于 {formatTimestamp(updatedAt)}
       </Typography.Text>
-      <Tooltip title="设备创建流程待契约冻结与后端接口接入后开放">
-        <span>
-          <Button type="primary" icon={<PlusOutlined />} disabled>
-            新建设备
-          </Button>
-        </span>
-      </Tooltip>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => setCreateOpen(true)}
+      >
+        新建设备
+      </Button>
       <Button
         icon={<ReloadOutlined />}
         loading={refreshing}
@@ -601,33 +602,45 @@ function DeviceListContent({ projectId }: { projectId: string }) {
   );
 
   return (
-    <PageContainer
-      title="设备纳管"
-      description="按 DDP-101 设备域契约展示设备档案、状态与标定信息。列表按游标分页加载；筛选与统计基于已加载数据，并随地址栏保留。状态与可用动作以服务端返回为准，前端不做权威权限校验。"
-      extra={extra}
-      filters={filtersElement}
-    >
-      <DeviceListBody
+    <>
+      <PageContainer
+        title="设备纳管"
+        description="按 DDP-101 设备域契约展示设备档案、状态与标定信息。列表按游标分页加载；筛选与统计基于已加载数据，并随地址栏保留。状态与可用动作以服务端返回为准，前端不做权威权限校验。"
+        extra={extra}
+        filters={filtersElement}
+      >
+        <DeviceListBody
+          projectId={projectId}
+          filters={filters}
+          phase={phase}
+          error={error}
+          items={items}
+          filteredItems={filteredItems}
+          hasMore={hasMore}
+          loading={loading}
+          refreshing={refreshing}
+          loadingMore={loadingMore}
+          loadMoreError={loadMoreError}
+          stale={stale}
+          updatedAt={updatedAt}
+          isMobile={isMobile}
+          onRetry={reload}
+          onResetFilters={resetFilters}
+          onLoadMore={loadMore}
+          onOpenDevice={(deviceId) => navigate(detailTarget(deviceId))}
+        />
+      </PageContainer>
+      <DeviceFormModal
         projectId={projectId}
-        filters={filters}
-        phase={phase}
-        error={error}
-        items={items}
-        filteredItems={filteredItems}
-        hasMore={hasMore}
-        loading={loading}
-        refreshing={refreshing}
-        loadingMore={loadingMore}
-        loadMoreError={loadMoreError}
-        stale={stale}
-        updatedAt={updatedAt}
-        isMobile={isMobile}
-        onRetry={reload}
-        onResetFilters={resetFilters}
-        onLoadMore={loadMore}
-        onOpenDevice={(deviceId) => navigate(detailTarget(deviceId))}
+        mode="create"
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSaved={(saved) => {
+          reload();
+          navigate(detailTarget(saved.device_id));
+        }}
       />
-    </PageContainer>
+    </>
   );
 }
 

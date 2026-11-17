@@ -1,10 +1,12 @@
-import { ReloadOutlined } from "@ant-design/icons";
+import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Grid, Select, Space, Table, Typography } from "antd";
 import type { TableColumnsType } from "antd";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
+import SchemaDefinitionDrawer from "../../components/annotation/SchemaDefinitionDrawer";
+import type { SchemaDefinitionSubmitPayload } from "../../components/annotation/SchemaDefinitionDrawer";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
@@ -15,6 +17,7 @@ import { useCursorPage } from "../../hooks/useCursorPage";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
 import { annotationApi } from "../../services/annotation";
+import type { AnnotationSchemaCreateInput } from "../../services/annotationSchemaApi";
 import { presentAnnotationStatus } from "../../services/annotationPresentation";
 import {
   buildAnnotationSchemaDetailPath,
@@ -95,6 +98,7 @@ function SchemaListContent({
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const [searchParams] = useSearchParams();
+  const [createOpen, setCreateOpen] = useState(false);
   const load = useCallback(
     (options: CursorPageRequestOptions) =>
       annotationApi.listSchemas(projectId, {
@@ -138,7 +142,7 @@ function SchemaListContent({
   return (
     <PageContainer
       title="标注 Schema"
-      description="只读查看 Schema 版本、标签定义与快照 Hash。已发布 Schema 不可原地修改；发布与审批动作不在本页。"
+      description="查看 Schema 版本、标签定义与快照 Hash；可新建 Schema 并推进发布/废弃。已发布版本不可原地修改。"
       filters={
         <Space wrap>
           <Typography.Text>状态</Typography.Text>
@@ -156,9 +160,18 @@ function SchemaListContent({
         </Space>
       }
       extra={
-        <Button icon={<ReloadOutlined />} loading={refreshing} onClick={reload}>
-          刷新
-        </Button>
+        <Space wrap>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateOpen(true)}
+          >
+            新建 Schema
+          </Button>
+          <Button icon={<ReloadOutlined />} loading={refreshing} onClick={reload}>
+            刷新
+          </Button>
+        </Space>
       }
     >
       {phase === "forbidden" && error ? (
@@ -202,6 +215,19 @@ function SchemaListContent({
           />
         </Space>
       )}
+      <SchemaDefinitionDrawer
+        open={createOpen}
+        mode="create"
+        onClose={() => setCreateOpen(false)}
+        onSubmit={async ({ input }: SchemaDefinitionSubmitPayload) => {
+          const created = await annotationApi.createSchema(
+            projectId,
+            input as AnnotationSchemaCreateInput,
+          );
+          setCreateOpen(false);
+          navigate(buildAnnotationSchemaDetailPath(projectId, created.schema_id));
+        }}
+      />
     </PageContainer>
   );
 }
