@@ -202,3 +202,37 @@ def test_comparison_rejects_mismatched_kinds() -> None:
             usage=_usage(ResourceKind.EPISODES, 1),
             quota=_quota(ResourceKind.DATASET_VERSIONS, 5),
         )
+
+
+def test_object_storage_usage_casts_sum_to_bigint() -> None:
+    """``sum(bigint)`` 在 Postgres 返回 numeric，必须显式 cast 回 bigint。
+
+    背景：没有 cast 时，psycopg 把结果映射成 ``Decimal``，``ResourceUsage``
+    只接受 ``int``，于是**项目一旦配置了 ``OBJECT_STORAGE_BYTES`` 配额，
+    所有上传都会 422**「value 必须是非负整数」。
+
+    为什么用编译断言而不是直接跑：单元测试夹具是 SQLite 内存库，
+    ``sum(bigint)`` 在 SQLite 上本来就返回整数，跑起来永远不会红——这正是
+    这个缺陷能活到现在的原因。这里直接检查生成的 SQL 是否带 CAST。
+    """
+    from uuid import uuid4
+
+    from app.domain.governance.models import ResourceKind
+    from app.infrastructure.repositories.governance import _project_value
+    from sqlalchemy.dialects import postgresql
+
+    class _RecordingSession:
+        def __init__(self) -> None:
+            self.statement: object | None = None
+
+        def scalar(self, statement: object) -> int:
+            self.statement = statement
+            return 0
+
+    session = _RecordingSession()
+    _project_value(session, ResourceKind.OBJECT_STORAGE_BYTES, uuid4())  # type: ignore[arg-type]
+
+    assert session.statement is not None
+    sql = str(session.statement.compile(dialect=postgresql.dialect()))
+    assert "CAST" in sql.upper()
+    assert "BIGINT" in sql.upper()

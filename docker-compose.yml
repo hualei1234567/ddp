@@ -104,7 +104,11 @@ services:
     environment:
       # 容器内必须用服务名，而不是宿主 .env 里的 localhost。
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
-      DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
+      # 写死容器内地址，**不要**插值 ${DDP_S3_ENDPOINT}：.env 里那一项是给
+      # 宿主机脚本（种子、巡检、boto3 校验）用的 localhost:9000，一旦被插值
+      # 进来，容器内的 S3 客户端就会去连 localhost，上传/校验/导出全部
+      # 503 object_storage_unavailable。需要连外部 S3 时用 override 文件。
+      DDP_S3_ENDPOINT: http://minio:9000
       # 限流后端：容器内必须指向 redis 服务名；宿主的 localhost 在容器里不通。
       DDP_RATE_LIMIT_REDIS_URL: redis://redis:6379/0
     depends_on:
@@ -133,7 +137,7 @@ services:
     environment:
       # 与 API 相同：容器内使用服务名访问数据库、缓存与对象存储。
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
-      DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
+      DDP_S3_ENDPOINT: http://minio:9000
     depends_on:
       postgres:
         condition: service_healthy
@@ -159,7 +163,7 @@ services:
     env_file: .env
     environment:
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
-      DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
+      DDP_S3_ENDPOINT: http://minio:9000
     depends_on:
       postgres:
         condition: service_healthy
@@ -183,7 +187,7 @@ services:
     env_file: .env
     environment:
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
-      DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
+      DDP_S3_ENDPOINT: http://minio:9000
     depends_on:
       postgres:
         condition: service_healthy
@@ -202,7 +206,7 @@ services:
     env_file: .env
     environment:
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
-      DDP_S3_ENDPOINT: ${DDP_S3_ENDPOINT:-http://minio:9000}
+      DDP_S3_ENDPOINT: http://minio:9000
     depends_on:
       postgres:
         condition: service_healthy
