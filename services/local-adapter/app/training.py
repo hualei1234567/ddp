@@ -226,6 +226,8 @@ def run_training(
         "model_size_bytes": float(len(model_data)),
     }
     detail = {
+        # 训练指标回传 DDP：平台侧模型版本需要它，不能只留在适配器自己的运行记录里。
+        "metrics": metrics,
         "layout": {
             "export_prefix": layout.prefix,
             "export_job_id": layout.export_job_id,

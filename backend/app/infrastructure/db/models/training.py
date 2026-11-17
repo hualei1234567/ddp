@@ -333,6 +333,8 @@ class ExternalTrainingReferenceModel(Base):
     last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     model_ref: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
     evaluation_ref: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
+    # 回调回传的产物元数据：模型版本登记的唯一来源，见迁移 0051。
+    artifacts: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
     correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)

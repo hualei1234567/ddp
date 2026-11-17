@@ -384,6 +384,30 @@ class ExternalTrainingReferenceUseCases:
             raise ResourceNotFoundError("外部训练引用", response_ref) from exc
 
 
+def _extract_artifacts(payload: dict[str, object]) -> dict[str, object] | None:
+    """从回调体里取产物元数据，供模型版本登记使用。
+
+    约定（local-adapter 已实现）：``payload.payload`` 是适配器自定的详情对象，
+    其中的 ``model`` / ``metadata`` 两项描述产物对象（``object_key`` / ``sha256`` /
+    ``size_bytes``）。也接受适配器直接把 ``artifacts`` 放在详情里。
+
+    取不到就返回 ``None``——"对方没报产物"和"报了空对象"必须区分，后者会让
+    前端误以为有产物可登记。
+    """
+    detail = payload.get("payload")
+    if not isinstance(detail, dict):
+        return None
+    declared = detail.get("artifacts")
+    if isinstance(declared, dict):
+        return dict(declared)
+    picked = {
+        name: dict(value)
+        for name in ("model", "metadata", "metrics")
+        if isinstance((value := detail.get(name)), dict)
+    }
+    return picked or None
+
+
 class AdapterCallbackUseCases:
     """处理 Adapter 回调；验签由 API 层在读取原始 body 后调用。"""
 
@@ -486,6 +510,7 @@ class AdapterCallbackUseCases:
             actor_id=reference.created_by,
             model_ref=result.model_ref,
             evaluation_ref=result.evaluation_ref,
+            artifacts=_extract_artifacts(payload),
             error_code=result.error_code,
             error_summary=result.error_summary,
             stale=result.status_stale,

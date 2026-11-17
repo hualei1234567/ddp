@@ -243,6 +243,9 @@ def external_reference_out(reference: ExternalTrainingReference) -> dict[str, An
         "last_synced_at": _iso(reference.last_synced_at),
         "model_ref": reference.model_ref,
         "evaluation_ref": reference.evaluation_ref,
+        # 产物元数据（object_key/sha256/size_bytes）；模型版本登记从这里取，
+        # 不再需要回查 Adapter 的运维接口。
+        "artifacts": reference.artifacts,
         "correlation_id": reference.correlation_id,
         "idempotency_key": reference.idempotency_key,
         "error_code": reference.error_code,

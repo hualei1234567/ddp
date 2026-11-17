@@ -402,3 +402,189 @@ def test_adapter_callback_invalid_external_status_is_domain_error() -> None:
             error_summary=None,
             payload={"event_id": "event-1"},
         )
+
+
+def test_external_reference_keeps_callback_artifacts() -> None:
+    """产物元数据必须随成功状态落库：没有它，模型版本登记只能靠人肉抄 object_key。"""
+    actor = uuid4()
+    reference = new_external_reference(
+        external_ref_id=uuid4(),
+        project_id=uuid4(),
+        adapter_id="local-training",
+        adapter_version="1.0.0",
+        training_delivery_id=uuid4(),
+        training_request_revision_id=uuid4(),
+        dataset_version_id=uuid4(),
+        external_run_id="run-artifacts",
+        external_run_url=None,
+        correlation_id="corr-artifacts",
+        idempotency_key="idem-artifacts",
+        model_ref=None,
+        evaluation_ref=None,
+        actor_id=actor,
+        now=NOW,
+    )
+    artifacts = {
+        "model": {
+            "object_key": "models/p/run/model.joblib",
+            "sha256": "sha256:abc",
+            "size_bytes": 30542,
+        }
+    }
+    succeeded = reference.apply_status(
+        ExternalTrainingStatus.SUCCEEDED,
+        now=NOW,
+        actor_id=actor,
+        artifacts=artifacts,
+    )
+    assert succeeded.artifacts == artifacts
+    # 未提供 artifacts 的后续状态更新不得把已有产物抹掉。
+    again = succeeded.apply_status(ExternalTrainingStatus.SUCCEEDED, now=NOW, actor_id=actor)
+    assert again.artifacts == artifacts
+
+
+def test_external_reference_rejects_oversized_or_non_object_artifacts() -> None:
+    actor = uuid4()
+    reference = new_external_reference(
+        external_ref_id=uuid4(),
+        project_id=uuid4(),
+        adapter_id="local-training",
+        adapter_version="1.0.0",
+        training_delivery_id=uuid4(),
+        training_request_revision_id=uuid4(),
+        dataset_version_id=uuid4(),
+        external_run_id="run-big",
+        external_run_url=None,
+        correlation_id="corr-big",
+        idempotency_key="idem-big",
+        model_ref=None,
+        evaluation_ref=None,
+        actor_id=actor,
+        now=NOW,
+    )
+    with pytest.raises(DomainValidationError):
+        reference.apply_status(
+            ExternalTrainingStatus.SUCCEEDED, now=NOW, actor_id=actor, artifacts=["not-a-dict"]
+        )
+    with pytest.raises(DomainValidationError):
+        reference.apply_status(
+            ExternalTrainingStatus.SUCCEEDED,
+            now=NOW,
+            actor_id=actor,
+            artifacts={"blob": "x" * (40 * 1024)},
+        )
+
+
+def test_extract_artifacts_accepts_adapter_detail_shape() -> None:
+    """适配器把产物放在 detail.model / detail.metadata 时也要识别。"""
+    from app.application.datasets.training_references import _extract_artifacts
+
+    detail = {
+        "event_id": "e1",
+        "payload": {
+            "model": {"object_key": "models/p/run/model.joblib", "size_bytes": 1},
+            "metadata": {"object_key": "models/p/run/metadata.json", "size_bytes": 2},
+            "metrics": {"train_accuracy": 0.75},
+            "classes": ["grasp"],
+        },
+    }
+    assert _extract_artifacts(detail) == {
+        "model": {"object_key": "models/p/run/model.joblib", "size_bytes": 1},
+        "metadata": {"object_key": "models/p/run/metadata.json", "size_bytes": 2},
+        "metrics": {"train_accuracy": 0.75},
+    }
+    assert _extract_artifacts({"payload": {"classes": ["grasp"]}}) is None
+    assert _extract_artifacts({"payload": None}) is None
+
+
+def test_adapter_callback_persists_artifact_metadata() -> None:
+    """回调成功后必须把产物元数据写进引用，供模型版本登记使用。"""
+    from app.application.datasets.training_references import AdapterCallbackUseCases
+
+    actor = uuid4()
+    project_id = uuid4()
+    reference = new_external_reference(
+        external_ref_id=uuid4(),
+        project_id=project_id,
+        adapter_id="local-training",
+        adapter_version="1.0.0",
+        training_delivery_id=uuid4(),
+        training_request_revision_id=uuid4(),
+        dataset_version_id=uuid4(),
+        external_run_id="run-save",
+        external_run_url=None,
+        correlation_id="corr-save",
+        idempotency_key="idem-save",
+        model_ref=None,
+        evaluation_ref=None,
+        actor_id=actor,
+        now=NOW,
+    )
+    saving: dict[str, object] = {}
+
+    class _References:
+        def get_by_run(self, *, adapter_id: str, external_run_id: str) -> object:
+            return reference
+
+        def save(self, scope: object, *, reference: object, expected_version: int) -> object:
+            saving["reference"] = reference
+            return reference
+
+    class _Callbacks:
+        def get_by_event(self, adapter_id: str, event_id: str) -> None:
+            return None
+
+        def get_by_nonce(self, adapter_id: str, nonce: str) -> None:
+            return None
+
+        def add(self, record: object) -> None:
+            return None
+
+        def prune_before(self, received_before: object) -> None:
+            return None
+
+    class _Outbox:
+        def enqueue(self, *args: object, **kwargs: object) -> None:
+            return None
+
+    class _Uow:
+        def commit(self) -> None:
+            return None
+
+    use_cases = AdapterCallbackUseCases(
+        references=_References(),
+        callbacks=_Callbacks(),
+        outbox=_Outbox(),
+        uow=_Uow(),
+        nonce_ttl_seconds=600,
+    )
+    use_cases.handle(
+        adapter_id="local-training",
+        nonce="nonce-artifacts-01",
+        event_id="event-artifacts",
+        adapter_version="1.0.0",
+        external_run_id="run-save",
+        external_status="SUCCEEDED",
+        model_ref={"model_id": "local-adapter/run-save"},
+        evaluation_ref=None,
+        error_code=None,
+        error_summary=None,
+        payload={
+            "event_id": "event-artifacts",
+            "payload": {
+                "model": {
+                    "object_key": "models/p/run-save/model.joblib",
+                    "sha256": "sha256:abc",
+                    "size_bytes": 30542,
+                }
+            },
+        },
+    )
+    saved = saving["reference"]
+    assert saved.artifacts == {
+        "model": {
+            "object_key": "models/p/run-save/model.joblib",
+            "sha256": "sha256:abc",
+            "size_bytes": 30542,
+        }
+    }

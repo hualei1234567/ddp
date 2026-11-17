@@ -54,6 +54,11 @@
         "registered_at": {"type": ["string", "null"], "format": "date-time"}
       }
     },
+    "artifacts": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "description": "适配器回调回传的产物元数据（如 model/metadata 的 object_key、sha256、size_bytes）。用于在平台内登记模型版本；DDP 只存元数据，不复制权重。"
+    },
     "correlation_id": {"type": "string", "minLength": 1, "maxLength": 128},
     "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
     "error_code": {"type": ["string", "null"], "maxLength": 100},
