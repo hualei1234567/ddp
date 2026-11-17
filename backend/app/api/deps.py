@@ -56,7 +56,10 @@ def extract_bearer_token(request: Request) -> str | None:
     解析语义（大小写、分隔符、空白），而不是在运维端点上再写一份。
     """
     authorization = request.headers.get("Authorization")
-    if authorization is None:
+    if not authorization:
+        # 空值等同于未提供。反向代理在「未配置本地开发令牌」时会注入空
+        # Authorization 头，若把它当作「声明了令牌但格式错误」，一个空配置
+        # 就会把 401 的语义从「未认证」改成「格式错误」，排障方向被带偏。
         return None
     scheme, separator, credentials = authorization.partition(" ")
     if scheme.lower() != "bearer" or not separator or not credentials.strip():
