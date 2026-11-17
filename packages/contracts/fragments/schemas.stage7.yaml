@@ -198,6 +198,7 @@ MediaAsset:
   type: object
   required:
     - asset_id
+    - raw_asset_id
     - project_id
     - data_source_id
     - import_id
@@ -213,6 +214,10 @@ MediaAsset:
   additionalProperties: false
   properties:
     asset_id: { type: string, format: uuid }
+    raw_asset_id:
+      type: [string, "null"]
+      format: uuid
+      description: 指向 Canonical 层 RawAsset；导入的每个媒体文件同时是一条 RawAsset。
     project_id: { type: string, format: uuid }
     data_source_id: { type: string, format: uuid }
     import_id: { type: string, format: uuid }
