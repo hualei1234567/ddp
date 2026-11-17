@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -23,6 +24,40 @@ _APPROVED_SUBMISSION_STATUSES = ("APPROVED", "RESOLVED_APPROVED")
 _INVALID_CALIBRATION_STATUSES = frozenset(
     {"REVOKED", "EXPIRED", "INVALID", "INVALIDATED", "REJECTED", "FAILED"}
 )
+
+
+def load_episode_assets(
+    session: Session,
+    scope: ProjectScope,
+    episode_ids: Sequence[UUID],
+) -> dict[UUID, list[tuple[EpisodeRawAssetModel, RawAssetModel]]]:
+    """一次查询取回多个 Episode 的原始资产关联与资产行，按 Episode 分组。
+
+    "Episode 指向哪些真实文件"这件事只在这里定义一次：选择候选与导出媒体索引
+    都复用它，避免两边各写一份 join 后出现口径差异。调用方必须在服务端传入
+    可信的 ``scope``——项目过滤在此强制，不依赖调用方自己拼条件。
+    """
+    if not episode_ids:
+        return {}
+    rows = session.execute(
+        select(EpisodeRawAssetModel, RawAssetModel)
+        .join(
+            RawAssetModel,
+            and_(
+                RawAssetModel.project_id == EpisodeRawAssetModel.project_id,
+                RawAssetModel.id == EpisodeRawAssetModel.asset_id,
+            ),
+        )
+        .where(
+            EpisodeRawAssetModel.project_id == scope.project_id,
+            EpisodeRawAssetModel.episode_id.in_(list(episode_ids)),
+        )
+        .order_by(EpisodeRawAssetModel.episode_id, EpisodeRawAssetModel.asset_id)
+    )
+    grouped: dict[UUID, list[tuple[EpisodeRawAssetModel, RawAssetModel]]] = defaultdict(list)
+    for link, asset in rows:
+        grouped[link.episode_id].append((link, asset))
+    return grouped
 
 
 class SqlEpisodeCandidateDirectory:
@@ -59,25 +94,7 @@ class SqlEpisodeCandidateDirectory:
         scope: ProjectScope,
         episode_ids: list[UUID],
     ) -> dict[UUID, list[tuple[EpisodeRawAssetModel, RawAssetModel]]]:
-        rows = self._session.execute(
-            select(EpisodeRawAssetModel, RawAssetModel)
-            .join(
-                RawAssetModel,
-                and_(
-                    RawAssetModel.project_id == EpisodeRawAssetModel.project_id,
-                    RawAssetModel.id == EpisodeRawAssetModel.asset_id,
-                ),
-            )
-            .where(
-                EpisodeRawAssetModel.project_id == scope.project_id,
-                EpisodeRawAssetModel.episode_id.in_(episode_ids),
-            )
-            .order_by(EpisodeRawAssetModel.episode_id, EpisodeRawAssetModel.asset_id)
-        )
-        grouped: dict[UUID, list[tuple[EpisodeRawAssetModel, RawAssetModel]]] = defaultdict(list)
-        for link, asset in rows:
-            grouped[link.episode_id].append((link, asset))
-        return grouped
+        return load_episode_assets(self._session, scope, episode_ids)
 
     def _load_approved_annotations(
         self,
