@@ -1,10 +1,12 @@
-import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
+import { ArrowLeftOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Space, Table, Tag, Typography } from "antd";
 import type { TableColumnsType } from "antd";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
+import AnnotationFeedbackAlert from "../../components/annotation/AnnotationFeedbackAlert";
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
+import QualitySampleCreateDrawer from "../../components/annotation/QualitySampleCreateDrawer";
 import TaskScopedPrompt from "../../components/annotation/TaskScopedPrompt";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import ApiErrorState from "../../components/ui/ApiErrorState";
@@ -16,6 +18,11 @@ import { useCursorPage } from "../../hooks/useCursorPage";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
 import { annotationApi } from "../../services/annotation";
+import {
+  annotationSuccess,
+  type AnnotationFeedback,
+} from "../../services/annotationPresentation";
+import type { QualitySampleCreateRequest } from "../../services/annotationQualityApi";
 import {
   buildAnnotationQualityDetailPath,
   buildAnnotationQualityListPath,
@@ -125,9 +132,36 @@ function QualityListContent({
     loadMore,
   } = useCursorPage(load, (item) => item.quality_sample_id);
   const phase = resolvePagePhase({ hasData: items.length > 0, loading, error });
+  const [createOpen, setCreateOpen] = useState(false);
+  const [feedback, setFeedback] = useState<AnnotationFeedback | null>(null);
+
+  const handleCreate = async (request: QualitySampleCreateRequest) => {
+    if (request.mode === "plan") {
+      const samples = await annotationApi.planQualitySamples(projectId, request.input);
+      if (samples.length === 0) {
+        throw new Error("计划未生成任何抽检样本；请检查候选提交、抽样数量与风险阈值。");
+      }
+      setFeedback(annotationSuccess(`已生成 ${samples.length} 条抽检。`));
+    } else {
+      await annotationApi.createQualitySample(projectId, request.input);
+      setFeedback(annotationSuccess("抽检已创建。"));
+    }
+    setCreateOpen(false);
+    reload();
+  };
 
   const extra = (
     <Space wrap>
+      <Button
+        type="primary"
+        icon={<PlusOutlined />}
+        onClick={() => {
+          setFeedback(null);
+          setCreateOpen(true);
+        }}
+      >
+        生成抽检
+      </Button>
       <Link to={buildAnnotationTaskDetailPath(projectId, taskId)}>
         <Button icon={<ArrowLeftOutlined />}>返回任务</Button>
       </Link>
@@ -155,6 +189,7 @@ function QualityListContent({
   } else {
     body = (
       <Space direction="vertical" size={12} className="ddp-stack">
+        <AnnotationFeedbackAlert feedback={feedback} />
         {stale ? (
           <PageState
             compact
@@ -180,7 +215,7 @@ function QualityListContent({
           onLoadMore={loadMore}
         />
         <Typography.Text type="secondary">
-          抽检只读；标注员不得自选或复核抽检样本，结论与策略版本以服务端记录为准。
+          标注员不得自选或复核抽检样本；结论与策略版本以服务端记录为准。
         </Typography.Text>
       </Space>
     );
@@ -189,10 +224,17 @@ function QualityListContent({
   return (
     <PageContainer
       title="质检抽检"
-      description={`任务 ${taskId} · 只读查看抽样策略、复核人与结论。`}
+      description={`任务 ${taskId} · 查看或生成抽样，推进复核结论。`}
       extra={extra}
     >
       {body}
+      <QualitySampleCreateDrawer
+        open={createOpen}
+        projectId={projectId}
+        taskId={taskId}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreate}
+      />
     </PageContainer>
   );
 }

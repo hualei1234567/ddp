@@ -313,6 +313,26 @@ export function resolveServerActions(
   return result;
 }
 
+/**
+ * 批次动作沿用同一状态机，但文案要落在「批次」而不是「任务」上
+ * （否则批次行里出现「提交任务」会让人误以为点错对象）。
+ */
+const BATCH_ACTION_LABEL_OVERRIDES: Partial<Record<CollectionAction, string>> = {
+  submit: "提交批次",
+  assign: "分配执行人",
+  complete: "完成批次",
+  cancel: "取消批次",
+};
+
+export function resolveBatchActions(
+  allowedActions: string[] | undefined,
+): { action: CollectionAction; label: string; requiresReason: boolean }[] {
+  return resolveServerActions(allowedActions).map((entry) => ({
+    ...entry,
+    label: BATCH_ACTION_LABEL_OVERRIDES[entry.action] ?? entry.label,
+  }));
+}
+
 export interface CountProgress {
   current: number;
   target: number;

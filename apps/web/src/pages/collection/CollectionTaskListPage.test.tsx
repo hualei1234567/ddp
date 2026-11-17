@@ -63,7 +63,7 @@ describe("采集任务列表页面状态", () => {
   it("首次加载成功但无任务时展示空态", () => {
     const html = renderList({ items: [], filteredItems: [] });
     expect(html).toContain("当前项目还没有采集任务");
-    expect(html).toContain("不应伪造任务数据");
+    expect(html).toContain("新建任务");
   });
 
   it("有任务但筛选无匹配时展示无匹配空态", () => {

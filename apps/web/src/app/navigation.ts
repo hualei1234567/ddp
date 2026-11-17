@@ -20,6 +20,7 @@ import {
   TagsOutlined,
   TeamOutlined,
   ThunderboltOutlined,
+  ToolOutlined,
   TruckOutlined,
 } from "@ant-design/icons";
 import { createElement, type ReactNode } from "react";
@@ -203,8 +204,19 @@ export const navSections: NavSection[] = [
       {
         path: "/devices",
         label: "设备纳管",
-        description: "管理机器人、传感器、标定信息与设备状态。",
+        description: "管理设备、传感器、标定信息与设备状态。",
         icon: createElement(ClusterOutlined),
+        available: true,
+      },
+      {
+        // 后端 `/robots` 的列表、创建、修改与 5 个生命周期动作早已实现，
+        // 但前端此前零页面、零引用：设备与传感器都靠 robot_id 挂载，
+        // 没有机器人入口就没法完成纳管链路。
+        path: "/robots",
+        label: "机器人",
+        description:
+          "登记机器人档案与生命周期状态；设备、传感器与采集任务通过它挂载。",
+        icon: createElement(ToolOutlined),
         available: true,
       },
       {

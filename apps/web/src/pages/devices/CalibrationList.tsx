@@ -1,7 +1,10 @@
-import { Space, Table, Tag, Typography } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
+import { Button, Space, Table, Tag, Typography } from "antd";
 import type { TableColumnsType } from "antd";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import CalibrationActionBar from "../../components/devices/CalibrationActionBar";
+import CalibrationCreateModal from "../../components/devices/CalibrationCreateModal";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import StatusTag from "../../components/devices/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
@@ -11,6 +14,10 @@ import { useCursorPage } from "../../hooks/useCursorPage";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useRefreshOnToken } from "../../hooks/useRefreshOnToken";
 import { devicesApi } from "../../services/devices";
+import type {
+  CalibrationAction,
+  CalibrationRecordWithActions,
+} from "../../services/devices";
 import {
   isCalibrationExpired,
   summarizeCalibrationExpiry,
@@ -26,6 +33,8 @@ import type { CalibrationRecord } from "../../types/device";
 interface CalibrationListProps {
   projectId: string;
   deviceId: string;
+  /** 设备已绑定的标定配置；用于新建标定时预填。 */
+  calibrationProfileId?: string | null;
   /** 详情页刷新令牌；变化时重新从第一页加载。 */
   refreshToken?: number;
   /** 详情页概览需要标定过期摘要，不必等用户打开 Tab。 */
@@ -42,7 +51,14 @@ function formatValidity(
   return `${formatDateTime(validFrom)} 至 ${formatDateTime(validTo)}`;
 }
 
-const columns: TableColumnsType<CalibrationRecord> = [
+function buildColumns(options: {
+  busyCalibrationId: string | null;
+  onAction: (
+    record: CalibrationRecordWithActions,
+    action: CalibrationAction,
+  ) => Promise<void>;
+}): TableColumnsType<CalibrationRecordWithActions> {
+  return [
   {
     title: "标定 ID",
     dataIndex: "calibration_id",
@@ -136,8 +152,22 @@ const columns: TableColumnsType<CalibrationRecord> = [
     width: 170,
     render: (value: string | null) => formatDateTime(value),
   },
+  {
+    title: "操作",
+    key: "actions",
+    width: 300,
+    fixed: "right",
+    render: (_value, record) => (
+      <CalibrationActionBar
+        allowedActions={record.allowed_actions}
+        busy={options.busyCalibrationId === record.calibration_id}
+        compact
+        onAction={(action) => options.onAction(record, action)}
+      />
+    ),
+  },
 ];
-
+}
 export interface CalibrationFreshnessNoticeProps {
   records: CalibrationRecord[];
   /** 最近一次刷新失败但保留了旧数据。 */
@@ -201,6 +231,7 @@ export function CalibrationFreshnessNotice({
 export default function CalibrationList({
   projectId,
   deviceId,
+  calibrationProfileId = null,
   refreshToken = 0,
   onExpiryChange,
 }: CalibrationListProps) {
@@ -225,7 +256,54 @@ export default function CalibrationList({
     loadMore,
   } = useCursorPage(loadCalibrations, (record) => record.calibration_id);
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const [busyCalibrationId, setBusyCalibrationId] = useState<string | null>(
+    null,
+  );
+
   useRefreshOnToken(refreshToken, reload);
+
+  const handleAction = useCallback(
+    async (record: CalibrationRecordWithActions, action: CalibrationAction) => {
+      setBusyCalibrationId(record.calibration_id);
+      try {
+        await devicesApi.actOnCalibration(
+          projectId,
+          record.calibration_id,
+          action,
+          { version: record.version },
+        );
+        reload();
+      } finally {
+        setBusyCalibrationId(null);
+      }
+    },
+    [projectId, reload],
+  );
+
+  const columns = buildColumns({ busyCalibrationId, onAction: handleAction });
+
+  const createButton = (
+    <Button
+      type="primary"
+      size="small"
+      icon={<PlusOutlined />}
+      onClick={() => setCreateOpen(true)}
+    >
+      登记标定
+    </Button>
+  );
+
+  const createModal = (
+    <CalibrationCreateModal
+      projectId={projectId}
+      deviceId={deviceId}
+      calibrationProfileId={calibrationProfileId}
+      open={createOpen}
+      onClose={() => setCreateOpen(false)}
+      onSaved={reload}
+    />
+  );
 
   // 数据变化时重新取当前时间，摘要与提示共用同一时间基准。
   const { evaluatedAt, expiry } = useMemo(() => {
@@ -249,7 +327,13 @@ export default function CalibrationList({
   }
 
   if (items.length === 0 && error) {
-    return <ApiErrorState error={error} onRetry={reload} compact />;
+    return (
+      <Space direction="vertical" size={12} className="ddp-stack">
+        <ApiErrorState error={error} onRetry={reload} compact />
+        {createButton}
+        {createModal}
+      </Space>
+    );
   }
 
   if (items.length === 0) {
@@ -262,8 +346,9 @@ export default function CalibrationList({
           description={
             hasMore
               ? "已加载范围内没有标定记录，可继续加载更多。"
-              : "该设备还没有标定记录；标定登记流程接入后会在此显示。"
+              : "该设备还没有标定记录。可点击「登记标定」创建草稿；提交与校验动作在登记后执行。"
           }
+          action={createButton}
         />
         <LoadMoreBar
           loadedCount={items.length}
@@ -274,6 +359,7 @@ export default function CalibrationList({
           error={loadMoreError}
           onLoadMore={loadMore}
         />
+        {createModal}
       </Space>
     );
   }
@@ -286,12 +372,18 @@ export default function CalibrationList({
         onRetry={reload}
         now={evaluatedAt}
       />
-      <Table<CalibrationRecord>
+      <Space wrap>
+        <Typography.Text type="secondary">
+          已加载 {items.length} 条标定记录
+        </Typography.Text>
+        {createButton}
+      </Space>
+      <Table<CalibrationRecordWithActions>
         rowKey="calibration_id"
         columns={columns}
         dataSource={items}
         pagination={false}
-        scroll={{ x: 1240 }}
+        scroll={{ x: 1540 }}
       />
       <LoadMoreBar
         loadedCount={items.length}
@@ -302,6 +394,7 @@ export default function CalibrationList({
         error={loadMoreError}
         onLoadMore={loadMore}
       />
+      {createModal}
     </Space>
   );
 }

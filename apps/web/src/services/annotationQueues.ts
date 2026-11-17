@@ -5,6 +5,7 @@ import type {
   AnnotationSubmission,
 } from "../types/annotation";
 import type { AnnotationApi } from "./annotation";
+import type { AiSuggestion, SuggestionAgreement } from "./annotationAiParsers";
 import { ApiError } from "./api";
 import { asApiError } from "./annotationWorkbench";
 import { fetchAllCursorPages } from "./cursorPage";
@@ -145,6 +146,10 @@ export interface SubmissionBundle {
   reviews: AnnotationReview[];
   arbitrations: AnnotationArbitration[];
   records: AnnotationRecord[];
+  /** AI 预标注建议；失败时为空数组并进入 partialErrors。 */
+  aiSuggestions: AiSuggestion[];
+  /** 按模型版本聚合的一致率；失败时为 null 并进入 partialErrors。 */
+  aiAgreement: SuggestionAgreement | null;
   partialErrors: QueuePartialError[];
 }
 
@@ -159,7 +164,7 @@ export async function loadSubmissionBundle(
     signal,
   });
   const partialErrors: QueuePartialError[] = [];
-  const [reviews, arbitrations, records] = await Promise.all([
+  const [reviews, arbitrations, records, aiSuggestions, aiAgreement] = await Promise.all([
     api
       .listSubmissionReviews(projectId, submissionId, { signal })
       .then((page) => page.items)
@@ -198,6 +203,37 @@ export async function loadSubmissionBundle(
             }
             return [];
           }),
+    api
+      .listAiSuggestions(projectId, submissionId, { signal })
+      .then((page) => page.items)
+      .catch((caught: unknown) => {
+        if (!signal.aborted) {
+          partialErrors.push({
+            scope: "AI 建议",
+            error: asApiError(caught, "AI 建议加载失败"),
+          });
+        }
+        return [];
+      }),
+    api
+      .getSuggestionAgreement(projectId, submissionId, { signal })
+      .catch((caught: unknown) => {
+        if (!signal.aborted) {
+          partialErrors.push({
+            scope: "AI 建议一致率",
+            error: asApiError(caught, "AI 建议一致率加载失败"),
+          });
+        }
+        return null;
+      }),
   ]);
-  return { submission, reviews, arbitrations, records, partialErrors };
+  return {
+    submission,
+    reviews,
+    arbitrations,
+    records,
+    aiSuggestions,
+    aiAgreement,
+    partialErrors,
+  };
 }

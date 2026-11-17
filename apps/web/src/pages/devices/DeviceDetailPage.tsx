@@ -18,6 +18,8 @@ import {
   useSearchParams,
 } from "react-router-dom";
 
+import DeviceActionBar from "../../components/devices/DeviceActionBar";
+import DeviceFormModal from "../../components/devices/DeviceFormModal";
 import StatusTag from "../../components/devices/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
@@ -34,6 +36,7 @@ import {
 } from "../../services/deviceListUrl";
 import type { DeviceDetailTab } from "../../services/deviceListUrl";
 import { devicesApi } from "../../services/devices";
+import type { DeviceAction, DeviceActionPayload } from "../../services/devices";
 import { evaluateDeviceFreshness } from "../../services/deviceFreshness";
 import type {
   CalibrationExpirySummary,
@@ -77,7 +80,7 @@ function DeviceOverview({
         type="info"
         showIcon
         message="状态以服务端为准"
-        description="本页只展示设备档案与标定记录；状态变更、维修与退役动作将在设备写入流程接入后开放。"
+        description="本页展示设备档案、状态动作与标定记录。启用前服务端会校验必需的标定是否生效；非法状态迁移与版本冲突会被服务端拒绝。"
       />
       <Descriptions column={{ xs: 1, sm: 1, md: 2 }} size="middle" bordered>
         <Descriptions.Item label="设备名称">
@@ -127,7 +130,18 @@ function DeviceOverview({
           )}
         </Descriptions.Item>
         <Descriptions.Item label="挂载机器人">
-          <IdentifierValue value={device.robot_id} label="机器人 ID" />
+          <IdentifierValue
+            value={device.robot_id}
+            label="机器人 ID"
+            to={
+              device.robot_id
+                ? {
+                    pathname: `/robots/${encodeURIComponent(device.robot_id)}`,
+                    search: `?project_id=${encodeURIComponent(device.project_id)}`,
+                  }
+                : undefined
+            }
+          />
         </Descriptions.Item>
         <Descriptions.Item label="位置">
           <IdentifierValue value={device.location_id} label="位置 ID" />
@@ -188,6 +202,8 @@ export interface DeviceDetailBodyProps {
   tabsRefreshToken: number;
   /** 标定 Tab 回报的过期摘要；未加载时为 null。 */
   calibrationExpiry?: CalibrationExpirySummary | null;
+  /** 状态动作区；由页面注入，保持本组件可静态渲染。 */
+  actionsNode?: ReactNode;
   onTabChange: (key: string) => void;
   onExpiryChange?: (summary: CalibrationExpirySummary) => void;
   onRetry: () => void;
@@ -209,6 +225,7 @@ export function DeviceDetailBody({
   listSearch,
   tabsRefreshToken,
   calibrationExpiry = null,
+  actionsNode,
   onTabChange,
   onExpiryChange,
   onRetry,
@@ -288,6 +305,7 @@ export function DeviceDetailBody({
           />
         ) : null}
         <Card>
+          {actionsNode ? <div style={{ marginBottom: 16 }}>{actionsNode}</div> : null}
           <Tabs
             activeKey={activeTab}
             onChange={onTabChange}
@@ -319,6 +337,7 @@ export function DeviceDetailBody({
                   <CalibrationList
                     projectId={projectId}
                     deviceId={deviceId}
+                    calibrationProfileId={data.calibration_profile_id}
                     refreshToken={tabsRefreshToken}
                     onExpiryChange={onExpiryChange}
                   />
@@ -360,6 +379,8 @@ function DeviceDetailContent({
   const [tabsRefreshToken, setTabsRefreshToken] = useState(0);
   const [calibrationExpiry, setCalibrationExpiry] =
     useState<CalibrationExpirySummary | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
 
   const handleCalibrationExpiry = useCallback(
     (summary: CalibrationExpirySummary) => {
@@ -385,6 +406,24 @@ function DeviceDetailContent({
     reload();
     setTabsRefreshToken((token) => token + 1);
   }, [reload]);
+
+  const handleAction = useCallback(
+    async (action: DeviceAction, payload: DeviceActionPayload) => {
+      if (!data) {
+        return;
+      }
+      setBusyAction(action);
+      try {
+        await devicesApi.actOnDevice(projectId, data.device_id, action, payload, {
+          version: data.version,
+        });
+        reload();
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [data, projectId, reload],
+  );
 
   const handleTabChange = useCallback(
     (key: string) => {
@@ -448,6 +487,12 @@ function DeviceDetailContent({
       <Typography.Text type="secondary">
         更新于 {formatTimestamp(updatedAt)}
       </Typography.Text>
+      <Button
+        onClick={() => setEditOpen(true)}
+        disabled={!data || Boolean(busyAction)}
+      >
+        编辑设备
+      </Button>
       <Link to={`/devices${listSearch}`}>
         <Button icon={<ArrowLeftOutlined />}>返回列表</Button>
       </Link>
@@ -461,25 +506,45 @@ function DeviceDetailContent({
     </Space>
   );
 
+  const actionsNode = data ? (
+    <DeviceActionBar
+      allowedActions={data.allowed_actions}
+      entityLabel="设备"
+      busy={Boolean(busyAction)}
+      onAction={handleAction}
+    />
+  ) : null;
+
   return (
-    <PageContainer title={title} description={description} extra={extra}>
-      <DeviceDetailBody
+    <>
+      <PageContainer title={title} description={description} extra={extra}>
+        <DeviceDetailBody
+          projectId={projectId}
+          deviceId={deviceId}
+          data={data}
+          phase={phase}
+          error={error}
+          stale={stale}
+          activeTab={activeTab}
+          listSearch={listSearch}
+          tabsRefreshToken={tabsRefreshToken}
+          calibrationExpiry={calibrationExpiry}
+          actionsNode={actionsNode}
+          onTabChange={handleTabChange}
+          onExpiryChange={handleCalibrationExpiry}
+          onRetry={reload}
+          onBackToList={() => navigate(`/devices${listSearch}`)}
+        />
+      </PageContainer>
+      <DeviceFormModal
         projectId={projectId}
-        deviceId={deviceId}
-        data={data}
-        phase={phase}
-        error={error}
-        stale={stale}
-        activeTab={activeTab}
-        listSearch={listSearch}
-        tabsRefreshToken={tabsRefreshToken}
-        calibrationExpiry={calibrationExpiry}
-        onTabChange={handleTabChange}
-        onExpiryChange={handleCalibrationExpiry}
-        onRetry={reload}
-        onBackToList={() => navigate(`/devices${listSearch}`)}
+        mode="edit"
+        device={data}
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        onSaved={() => refreshAll()}
       />
-    </PageContainer>
+    </>
   );
 }
 

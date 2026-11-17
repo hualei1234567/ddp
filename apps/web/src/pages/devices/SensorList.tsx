@@ -1,8 +1,11 @@
-import { Space, Table, Typography } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
+import { Button, Space, Table, Typography } from "antd";
 import type { TableColumnsType } from "antd";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
+import DeviceActionBar from "../../components/devices/DeviceActionBar";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
+import SensorFormModal from "../../components/devices/SensorFormModal";
 import StatusTag from "../../components/devices/StatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
@@ -10,7 +13,12 @@ import PageState from "../../components/ui/PageState";
 import { useCursorPage } from "../../hooks/useCursorPage";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useRefreshOnToken } from "../../hooks/useRefreshOnToken";
-import { devicesApi } from "../../services/devices";
+import {
+  devicesApi,
+  type DeviceAction,
+  type DeviceActionPayload,
+  type SensorRecord,
+} from "../../services/devices";
 import {
   formatDateTime,
   formatMetric,
@@ -18,7 +26,6 @@ import {
   formatText,
 } from "../../services/format";
 import { getSensorType } from "../../services/devicePresentation";
-import type { Sensor } from "../../types/device";
 
 interface SensorListProps {
   projectId: string;
@@ -27,7 +34,16 @@ interface SensorListProps {
   refreshToken?: number;
 }
 
-const columns: TableColumnsType<Sensor> = [
+function buildColumns(options: {
+  busySensorId: string | null;
+  onEdit: (sensor: SensorRecord) => void;
+  onAction: (
+    sensor: SensorRecord,
+    action: DeviceAction,
+    payload: DeviceActionPayload,
+  ) => Promise<void>;
+}): TableColumnsType<SensorRecord> {
+  return [
   {
     title: "传感器 ID",
     dataIndex: "sensor_id",
@@ -118,8 +134,29 @@ const columns: TableColumnsType<Sensor> = [
     dataIndex: "updated_at",
     render: (value: string | null) => formatDateTime(value),
   },
+  {
+    title: "操作",
+    key: "actions",
+    width: 300,
+    render: (_value, record) => (
+      <Space direction="vertical" size={6}>
+        <Button size="small" onClick={() => options.onEdit(record)}>
+          编辑
+        </Button>
+        <DeviceActionBar
+          allowedActions={record.allowed_actions}
+          entityLabel="传感器"
+          compact
+          busy={options.busySensorId === record.sensor_id}
+          onAction={(action, payload) =>
+            options.onAction(record, action, payload)
+          }
+        />
+      </Space>
+    ),
+  },
 ];
-
+}
 export default function SensorList({
   projectId,
   deviceId,
@@ -146,7 +183,69 @@ export default function SensorList({
     loadMore,
   } = useCursorPage(loadSensors, (sensor) => sensor.sensor_id);
 
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<SensorRecord | null>(null);
+  const [busySensorId, setBusySensorId] = useState<string | null>(null);
+
   useRefreshOnToken(refreshToken, reload);
+
+  const handleAction = useCallback(
+    async (
+      sensor: SensorRecord,
+      action: DeviceAction,
+      payload: DeviceActionPayload,
+    ) => {
+      setBusySensorId(sensor.sensor_id);
+      try {
+        await devicesApi.actOnSensor(projectId, sensor.sensor_id, action, payload, {
+          version: sensor.version,
+        });
+        reload();
+      } finally {
+        setBusySensorId(null);
+      }
+    },
+    [projectId, reload],
+  );
+
+  const columns = buildColumns({
+    busySensorId,
+    onEdit: (sensor) => setEditing(sensor),
+    onAction: handleAction,
+  });
+
+  const createButton = (
+    <Button
+      type="primary"
+      size="small"
+      icon={<PlusOutlined />}
+      onClick={() => setCreateOpen(true)}
+    >
+      新建传感器
+    </Button>
+  );
+
+  const formModals = (
+    <>
+      <SensorFormModal
+        projectId={projectId}
+        deviceId={deviceId}
+        mode="create"
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSaved={() => reload()}
+      />
+      <SensorFormModal
+        projectId={projectId}
+        deviceId={deviceId}
+        mode="edit"
+        sensor={editing}
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        onSaved={() => reload()}
+      />
+    </>
+  );
 
   if (items.length === 0 && loading) {
     return (
@@ -160,7 +259,13 @@ export default function SensorList({
   }
 
   if (items.length === 0 && error) {
-    return <ApiErrorState error={error} onRetry={reload} compact />;
+    return (
+      <Space direction="vertical" size={12} className="ddp-stack">
+        <ApiErrorState error={error} onRetry={reload} compact />
+        {createButton}
+        {formModals}
+      </Space>
+    );
   }
 
   if (items.length === 0) {
@@ -173,8 +278,9 @@ export default function SensorList({
           description={
             hasMore
               ? "已加载范围内没有传感器记录，可继续加载更多。"
-              : "该设备还没有关联传感器记录；传感器写入流程接入后会在此显示。"
+              : "该设备还没有关联传感器记录。可点击「新建传感器」登记编码、类型、坐标系与采样率。"
           }
+          action={createButton}
         />
         <LoadMoreBar
           loadedCount={items.length}
@@ -185,6 +291,7 @@ export default function SensorList({
           error={loadMoreError}
           onLoadMore={loadMore}
         />
+        {formModals}
       </Space>
     );
   }
@@ -192,12 +299,18 @@ export default function SensorList({
   return (
     <Space direction="vertical" size={12} className="ddp-stack">
       {stale ? <PageState variant="stale" compact onRetry={reload} /> : null}
-      <Table<Sensor>
+      <Space wrap>
+        <Typography.Text type="secondary">
+          已加载 {items.length} 条传感器
+        </Typography.Text>
+        {createButton}
+      </Space>
+      <Table<SensorRecord>
         rowKey="sensor_id"
         columns={columns}
         dataSource={items}
         pagination={false}
-        scroll={{ x: 1180 }}
+        scroll={{ x: 1480 }}
       />
       <LoadMoreBar
         loadedCount={items.length}
@@ -208,6 +321,7 @@ export default function SensorList({
         error={loadMoreError}
         onLoadMore={loadMore}
       />
+      {formModals}
     </Space>
   );
 }

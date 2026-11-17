@@ -26,6 +26,10 @@ import {
   TASK_PRIORITY_VALUES,
 } from "../types/annotation";
 import {
+  attachAllowedActions,
+  type WithAllowedActions,
+} from "./annotationAllowedActions";
+import {
   asRecord,
   ContractValidationError,
   parseCursorPage,
@@ -151,9 +155,9 @@ function parseLabelDefinition(
 export function parseAnnotationSchema(
   value: unknown,
   path = "标注 Schema",
-): AnnotationSchema {
+): WithAllowedActions<AnnotationSchema> {
   const record = asRecord(value, path);
-  return {
+  return attachAllowedActions({
     schema_id: readUuid(record, "schema_id", `${path}.schema_id`),
     project_id: readUuid(record, "project_id", `${path}.project_id`),
     code: readString(record, "code", `${path}.code`),
@@ -221,12 +225,12 @@ export function parseAnnotationSchema(
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
-  };
+  }, record, path);
 }
 
 export function parseAnnotationSchemaPage(
   value: unknown,
-): CursorPage<AnnotationSchema> {
+): CursorPage<WithAllowedActions<AnnotationSchema>> {
   return parseCursorPage(value, "标注 Schema 列表", parseAnnotationSchema);
 }
 
@@ -281,10 +285,10 @@ function parseSampleEpisodeRef(
 export function parseAnnotationSampleSet(
   value: unknown,
   path = "标注样本集",
-): AnnotationSampleSet {
+): WithAllowedActions<AnnotationSampleSet> {
   const record = asRecord(value, path);
   const snapshotSha = record.snapshot_sha256;
-  return {
+  return attachAllowedActions({
     sample_set_id: readUuid(
       record,
       "sample_set_id",
@@ -374,21 +378,21 @@ export function parseAnnotationSampleSet(
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
-  };
+  }, record, path);
 }
 
 export function parseAnnotationSampleSetPage(
   value: unknown,
-): CursorPage<AnnotationSampleSet> {
+): CursorPage<WithAllowedActions<AnnotationSampleSet>> {
   return parseCursorPage(value, "标注样本集列表", parseAnnotationSampleSet);
 }
 
 export function parseAnnotationTask(
   value: unknown,
   path = "标注任务",
-): AnnotationTask {
+): WithAllowedActions<AnnotationTask> {
   const record = asRecord(value, path);
-  return {
+  return attachAllowedActions({
     task_id: readUuid(record, "task_id", `${path}.task_id`),
     project_id: readUuid(record, "project_id", `${path}.project_id`),
     code: readString(record, "code", `${path}.code`),
@@ -489,21 +493,21 @@ export function parseAnnotationTask(
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
-  };
+  }, record, path);
 }
 
 export function parseAnnotationTaskPage(
   value: unknown,
-): CursorPage<AnnotationTask> {
+): CursorPage<WithAllowedActions<AnnotationTask>> {
   return parseCursorPage(value, "标注任务列表", parseAnnotationTask);
 }
 
 export function parseAnnotationBatch(
   value: unknown,
   path = "标注批次",
-): AnnotationBatch {
+): WithAllowedActions<AnnotationBatch> {
   const record = asRecord(value, path);
-  return {
+  return attachAllowedActions({
     batch_id: readUuid(record, "batch_id", `${path}.batch_id`),
     project_id: readUuid(record, "project_id", `${path}.project_id`),
     task_id: readUuid(record, "task_id", `${path}.task_id`),
@@ -569,21 +573,21 @@ export function parseAnnotationBatch(
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
-  };
+  }, record, path);
 }
 
 export function parseAnnotationBatchPage(
   value: unknown,
-): CursorPage<AnnotationBatch> {
+): CursorPage<WithAllowedActions<AnnotationBatch>> {
   return parseCursorPage(value, "标注批次列表", parseAnnotationBatch);
 }
 
 export function parseAnnotationAssignment(
   value: unknown,
   path = "标注分配",
-): AnnotationAssignment {
+): WithAllowedActions<AnnotationAssignment> {
   const record = asRecord(value, path);
-  return {
+  return attachAllowedActions({
     assignment_id: readUuid(
       record,
       "assignment_id",
@@ -666,12 +670,12 @@ export function parseAnnotationAssignment(
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
-  };
+  }, record, path);
 }
 
 export function parseAnnotationAssignmentPage(
   value: unknown,
-): CursorPage<AnnotationAssignment> {
+): CursorPage<WithAllowedActions<AnnotationAssignment>> {
   return parseCursorPage(value, "标注分配列表", parseAnnotationAssignment);
 }
 

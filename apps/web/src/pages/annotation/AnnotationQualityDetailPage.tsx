@@ -1,8 +1,11 @@
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Descriptions, Space, Tag, Typography } from "antd";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import ActionButtons from "../../components/annotation/ActionButtons";
+import type { AnnotationActionPayload } from "../../components/annotation/ActionButtons";
+import AnnotationFeedbackAlert from "../../components/annotation/AnnotationFeedbackAlert";
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
@@ -12,6 +15,12 @@ import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
 import { annotationApi } from "../../services/annotation";
+import { resolveAnnotationActions } from "../../services/annotationActions";
+import {
+  annotationSuccess,
+  describeAnnotationActionError,
+  type AnnotationFeedback,
+} from "../../services/annotationPresentation";
 import {
   buildAnnotationQualityListPath,
   buildAnnotationSubmissionPath,
@@ -34,6 +43,38 @@ function QualityDetailContent({
   );
   const { data, error, loading, refreshing, stale, reload } = useRequest(load);
   const phase = resolvePagePhase({ hasData: data !== null, loading, error });
+  const [feedback, setFeedback] = useState<AnnotationFeedback | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  const handleAction = async (
+    action: string,
+    payload: AnnotationActionPayload,
+  ) => {
+    if (data === null) {
+      throw new Error("抽检尚未加载完成，请刷新后重试。");
+    }
+    setBusyAction(action);
+    setFeedback(null);
+    try {
+      await annotationApi.actOnQualitySample(
+        projectId,
+        qualitySampleId,
+        action,
+        {
+          version: data.version,
+          reason: payload.reason,
+          reviewerId: payload.reviewerId ?? null,
+        },
+      );
+      setFeedback(annotationSuccess(`抽检动作 ${action} 已提交。`));
+      reload();
+    } catch (caught) {
+      setFeedback(describeAnnotationActionError(caught));
+      throw caught;
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const extra = (
     <Space wrap>
@@ -73,6 +114,18 @@ function QualityDetailContent({
             onRetry={reload}
           />
         ) : null}
+        <AnnotationFeedbackAlert feedback={feedback} />
+        <Space direction="vertical" size={8} className="ddp-stack">
+          <Typography.Text strong>抽检动作</Typography.Text>
+          <ActionButtons
+            kind="quality-sample"
+            actions={resolveAnnotationActions("quality-sample", data.status, data.allowed_actions).actions}
+            busyAction={busyAction}
+            reviewerRequiredActions={["assign"]}
+            showFallbackNote
+            onAction={handleAction}
+          />
+        </Space>
         <Descriptions column={{ xs: 1, sm: 2, lg: 3 }} size="small" bordered>
           <Descriptions.Item label="抽检 ID">
             <IdentifierValue value={data.quality_sample_id} label="抽检 ID" />
@@ -144,7 +197,7 @@ function QualityDetailContent({
   return (
     <PageContainer
       title="质检抽检详情"
-      description="只读查看抽样策略、复核人与闭环结论。"
+      description="查看抽样策略、复核人与闭环结论，并推进抽检动作。"
       extra={extra}
     >
       {body}

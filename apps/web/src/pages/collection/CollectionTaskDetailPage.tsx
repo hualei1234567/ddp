@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 
 import CollectionStatusTag from "../../components/collection/CollectionStatusTag";
+import CreateBatchModal from "../../components/collection/CreateBatchModal";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
@@ -29,6 +30,7 @@ import {
   describeTaskActionError,
   taskActionSuccess,
 } from "../../services/taskActionFeedback";
+import type { CollectionBatch } from "../../types/collection";
 import CollectionTaskDetailBody from "./taskDetail/CollectionTaskDetailBody";
 import type { Feedback } from "./taskDetail/CollectionTaskDetailBody";
 import BatchListBody from "./taskDetail/BatchListBody";
@@ -42,6 +44,8 @@ function BatchListContainer({
   taskId: string;
   isMobile: boolean;
 }) {
+  const [busyBatchId, setBusyBatchId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const loadBatches = useCallback(
     (options: CursorPageRequestOptions) =>
       collectionsApi.listBatches(projectId, taskId, {
@@ -63,6 +67,22 @@ function BatchListContainer({
     loadMore,
   } = useCursorPage(loadBatches, (batch) => batch.batch_id);
 
+  const handleBatchAction = useCallback(
+    async (batch: CollectionBatch, action: string, reason: string | null) => {
+      setBusyBatchId(batch.batch_id);
+      try {
+        await collectionsApi.actOnBatch(projectId, batch.batch_id, action, {
+          version: batch.version,
+          reason,
+        });
+        reload();
+      } finally {
+        setBusyBatchId(null);
+      }
+    },
+    [projectId, reload],
+  );
+
   return (
     <BatchListBody
       items={items}
@@ -74,6 +94,18 @@ function BatchListContainer({
       loadMoreError={loadMoreError}
       stale={stale}
       isMobile={isMobile}
+      busyBatchId={busyBatchId}
+      onAction={handleBatchAction}
+      onCreate={() => setCreateOpen(true)}
+      createModal={
+        <CreateBatchModal
+          projectId={projectId}
+          taskId={taskId}
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={reload}
+        />
+      }
       onRetry={reload}
       onLoadMore={loadMore}
     />

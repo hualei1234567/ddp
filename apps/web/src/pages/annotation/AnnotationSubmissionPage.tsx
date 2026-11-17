@@ -3,6 +3,7 @@ import { Button, Divider, Space, Typography } from "antd";
 import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import AiSuggestionPanel from "../../components/annotation/AiSuggestionPanel";
 import AnnotationFeedbackAlert from "../../components/annotation/AnnotationFeedbackAlert";
 import ArbitrationPanel, {
   type ArbitrationCreateFormInput,
@@ -30,6 +31,7 @@ import {
 } from "../../services/annotationUrl";
 import { formatTimestamp } from "../../services/format";
 import { resolvePagePhase } from "../../services/pagePhase";
+import type { AiSuggestion } from "../../services/annotationAiParsers";
 import type {
   AnnotationArbitration,
   ArbitrationDecision,
@@ -44,6 +46,7 @@ function SubmissionContent({
 }) {
   const navigate = useNavigate();
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [busySuggestionId, setBusySuggestionId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<AnnotationFeedback | null>(null);
 
   const load = useCallback(
@@ -90,6 +93,48 @@ function SubmissionContent({
         }),
       action === "submit" ? "提交已冻结，等待复核。" : "草稿已撤回。",
     );
+  };
+
+  const handleAdoptSuggestion = async (suggestion: AiSuggestion) => {
+    setBusySuggestionId(suggestion.suggestion_id);
+    setFeedback(null);
+    try {
+      await annotationApi.confirmAiSuggestion(
+        projectId,
+        suggestion.suggestion_id,
+        suggestion.suggested_value,
+        { version: suggestion.version },
+      );
+      setFeedback(annotationSuccess("AI 建议已采纳。"));
+      reload();
+    } catch (caught) {
+      setFeedback(describeAnnotationActionError(caught));
+    } finally {
+      setBusySuggestionId(null);
+    }
+  };
+
+  const handleReviseSuggestion = async (
+    suggestion: AiSuggestion,
+    humanValue: unknown,
+  ) => {
+    setBusySuggestionId(suggestion.suggestion_id);
+    setFeedback(null);
+    try {
+      await annotationApi.confirmAiSuggestion(
+        projectId,
+        suggestion.suggestion_id,
+        humanValue,
+        { version: suggestion.version },
+      );
+      setFeedback(annotationSuccess("AI 建议修订已提交。"));
+      reload();
+    } catch (caught) {
+      setFeedback(describeAnnotationActionError(caught));
+      throw caught;
+    } finally {
+      setBusySuggestionId(null);
+    }
   };
 
   const handleCreateReview = (reviewerId: string) => {
@@ -250,6 +295,15 @@ function SubmissionContent({
           busyAction={busyAction}
           onSubmit={() => handleSubmissionAction("submit")}
           onWithdraw={() => handleSubmissionAction("withdraw")}
+        />
+        <Divider orientation="left">AI 建议</Divider>
+        <AiSuggestionPanel
+          suggestions={data.aiSuggestions}
+          agreement={data.aiAgreement}
+          busySuggestionId={busySuggestionId}
+          onAdopt={handleAdoptSuggestion}
+          onRevise={handleReviseSuggestion}
+          onReload={reload}
         />
         <Divider orientation="left">复核</Divider>
         <ReviewPanel

@@ -1,10 +1,11 @@
-import { ReloadOutlined } from "@ant-design/icons";
+import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Grid, Select, Space, Table, Typography } from "antd";
 import type { TableColumnsType } from "antd";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import AnnotationStatusTag from "../../components/annotation/AnnotationStatusTag";
+import SampleSetCreateDrawer from "../../components/annotation/SampleSetCreateDrawer";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
@@ -15,6 +16,7 @@ import { useCursorPage } from "../../hooks/useCursorPage";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
 import { annotationApi } from "../../services/annotation";
+import type { AnnotationSampleSetCreateInput } from "../../services/annotationSchemaApi";
 import { presentAnnotationStatus } from "../../services/annotationPresentation";
 import { buildAnnotationSampleSetDetailPath } from "../../services/annotationUrl";
 import { formatDateTime } from "../../services/format";
@@ -99,6 +101,7 @@ function SampleSetListContent({
   const navigate = useNavigate();
   const screens = Grid.useBreakpoint();
   const [searchParams] = useSearchParams();
+  const [createOpen, setCreateOpen] = useState(false);
   const load = useCallback(
     (options: CursorPageRequestOptions) =>
       annotationApi.listSampleSets(projectId, {
@@ -160,9 +163,18 @@ function SampleSetListContent({
         </Space>
       }
       extra={
-        <Button icon={<ReloadOutlined />} loading={refreshing} onClick={reload}>
-          刷新
-        </Button>
+        <Space wrap>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setCreateOpen(true)}
+          >
+            新建样本集
+          </Button>
+          <Button icon={<ReloadOutlined />} loading={refreshing} onClick={reload}>
+            刷新
+          </Button>
+        </Space>
       }
     >
       {phase === "forbidden" && error ? (
@@ -206,6 +218,17 @@ function SampleSetListContent({
           />
         </Space>
       )}
+      <SampleSetCreateDrawer
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={async (input: AnnotationSampleSetCreateInput) => {
+          const created = await annotationApi.createSampleSet(projectId, input);
+          setCreateOpen(false);
+          navigate(
+            buildAnnotationSampleSetDetailPath(projectId, created.sample_set_id),
+          );
+        }}
+      />
     </PageContainer>
   );
 }
