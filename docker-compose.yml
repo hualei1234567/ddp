@@ -111,6 +111,12 @@ services:
       DDP_S3_ENDPOINT: http://minio:9000
       # 限流后端：容器内必须指向 redis 服务名；宿主的 localhost 在容器里不通。
       DDP_RATE_LIMIT_REDIS_URL: redis://redis:6379/0
+      # 训练 / 模型 Adapter 的真实 HTTP 网关（可选）。这里显式透传，是因为
+      # `${VAR:-}` 才算"可被 CI / shell 环境注入"；不写这两行时只有 env_file
+      # 生效。默认空串 = 未接线：对应 adapter 仍返回 503，行为与接线前一致
+      # （空串由 Settings 解析为「未配置」，不会让启动自检失败）。
+      DDP_TRAINING_ADAPTER_ENDPOINTS: ${DDP_TRAINING_ADAPTER_ENDPOINTS:-}
+      DDP_MODEL_ADAPTER_ENDPOINTS: ${DDP_MODEL_ADAPTER_ENDPOINTS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -138,6 +144,10 @@ services:
       # 与 API 相同：容器内使用服务名访问数据库、缓存与对象存储。
       DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
       DDP_S3_ENDPOINT: http://minio:9000
+      # Adapter 网关同样在 worker 侧生效：outbox 投递/重放路径可能触达
+      # 训练与模型平台，配置口径必须与 api 一致，否则两侧行为不同。
+      DDP_TRAINING_ADAPTER_ENDPOINTS: ${DDP_TRAINING_ADAPTER_ENDPOINTS:-}
+      DDP_MODEL_ADAPTER_ENDPOINTS: ${DDP_MODEL_ADAPTER_ENDPOINTS:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -247,6 +257,45 @@ services:
       - ddp-backups:/var/backups/ddp
     depends_on:
       postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  local-adapter:
+    # 真实执行的本地训练/推理/评测 Adapter（CPU 参考实现）。
+    # 它只负责「被 DDP 调用 + 回 HMAC 回调」；DDP 侧需通过
+    # DDP_TRAINING_ADAPTER_ENDPOINTS / DDP_MODEL_ADAPTER_ENDPOINTS 指向本服务。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: services/local-adapter/Dockerfile
+    container_name: ddp-local-adapter
+    # 刻意不用 env_file: .env：该服务只需要对象存储与自身 adapter 配置，
+    # 不应拿到 DDP 的数据库/JWT 等无关凭据。
+    environment:
+      # 容器内必须用服务名；宿主机 .env 里的 localhost 在容器里不通。
+      DDP_API_BASE_URL: http://api:8000
+      DDP_S3_ENDPOINT: http://minio:9000
+      DDP_S3_ACCESS_KEY: ${DDP_S3_ACCESS_KEY:-minioadmin}
+      DDP_S3_SECRET_KEY: ${DDP_S3_SECRET_KEY:-minioadmin}
+      DDP_S3_BUCKET: ${DDP_S3_BUCKET:-ddp-raw}
+      DDP_S3_REGION: ${DDP_S3_REGION:-us-east-1}
+      LOCAL_ADAPTER_PUBLIC_BASE_URL: ${LOCAL_ADAPTER_PUBLIC_BASE_URL:-http://localhost:9100}
+      LOCAL_ADAPTER_TRAINING_ADAPTER_ID: ${LOCAL_ADAPTER_TRAINING_ADAPTER_ID:-local-training}
+      LOCAL_ADAPTER_TRAINING_ADAPTER_VERSION: ${LOCAL_ADAPTER_TRAINING_ADAPTER_VERSION:-1.0.0}
+      LOCAL_ADAPTER_MODEL_ADAPTER_ID: ${LOCAL_ADAPTER_MODEL_ADAPTER_ID:-local-model}
+      LOCAL_ADAPTER_MODEL_ADAPTER_VERSION: ${LOCAL_ADAPTER_MODEL_ADAPTER_VERSION:-1.0.0}
+      # 默认值与 .env.example 中 DDP_*_ADAPTER_SHARED_SECRETS 保持一致；
+      # 正式环境必须由 Secret 注入覆盖，禁止沿用本地默认值。
+      LOCAL_ADAPTER_TRAINING_SECRET: ${LOCAL_ADAPTER_TRAINING_SECRET:-local-training-dev-secret-0123456789abcdef}
+      LOCAL_ADAPTER_MODEL_SECRET: ${LOCAL_ADAPTER_MODEL_SECRET:-local-model-dev-secret-0123456789abcdef}
+      LOCAL_ADAPTER_FFMPEG_PATH: /usr/bin/ffmpeg
+      LOCAL_ADAPTER_FFPROBE_PATH: /usr/bin/ffprobe
+    ports:
+      - "${DDP_LOCAL_ADAPTER_PORT:-9100}:9100"
+    depends_on:
+      api:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     restart: unless-stopped
 
