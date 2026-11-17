@@ -47,6 +47,8 @@ function CreateTaskModal({
     service_id?: string;
     dataset_version_id?: string;
     episode_ids?: string[];
+    adapter_id?: string;
+    model_object_key?: string;
   }
   const [form] = Form.useForm<FormValues>();
   const [submitting, setSubmitting] = useState(false);
@@ -55,15 +57,23 @@ function CreateTaskModal({
   const submit = async () => {
     try {
       const values = await form.validateFields();
+      const objectKey = values.model_object_key?.trim();
       const input: InferenceTaskCreateInput = {
         model_version_id: values.model_version_id,
         service_id: values.service_id || null,
         dataset_version_id: values.dataset_version_id || null,
         episode_ids: values.episode_ids ?? [],
+        // 不填适配器时任务停在 QUEUED：这是如实状态，不是"自动执行"。
+        adapter_id: values.adapter_id?.trim() || null,
+        config: objectKey ? { model_object_key: objectKey } : {},
       };
       setSubmitting(true);
       await modelOpsApi.createTask(projectId, input);
-      messageApi.success("推理任务已入队（QUEUED）");
+      messageApi.success(
+        values.adapter_id?.trim()
+          ? "推理任务已提交适配器，结果由回调回写。"
+          : "推理任务已入队（QUEUED）；未指定适配器，不会自动执行。",
+      );
       form.resetFields();
       onCreated();
       onClose();
@@ -115,6 +125,20 @@ function CreateTaskModal({
           </Form.Item>
           <Form.Item name="episode_ids" label="Episode ID 列表">
             <Select mode="tags" tokenSeparators={[",", " "]} placeholder="批量推理时填写" />
+          </Form.Item>
+          <Form.Item
+            name="adapter_id"
+            label="执行适配器（可选）"
+            extra="留空则只入队、不执行；填写已登记的适配器 ID 才会真实推理并回调结果。"
+          >
+            <Input placeholder="例如 local-model" />
+          </Form.Item>
+          <Form.Item
+            name="model_object_key"
+            label="模型产物 object_key（可选）"
+            extra="项目下只有一个产物时可留空；多个产物时必须指定。"
+          >
+            <Input placeholder="models/{project}/{run}/model.joblib" />
           </Form.Item>
         </Form>
       </Modal>

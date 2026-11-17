@@ -45,6 +45,8 @@ interface EvaluationFormValues {
   model_version_id: string;
   dataset_version_id: string;
   baseline_evaluation_id?: string;
+  adapter_id?: string;
+  model_object_key?: string;
   benchmarks: ThresholdFormRow[];
 }
 
@@ -78,14 +80,23 @@ function CreateEvaluationModal({
         return;
       }
       setSubmitting(true);
+      const objectKey = values.model_object_key?.trim();
       await modelOpsApi.createEvaluation(projectId, {
         model_version_id: values.model_version_id,
         dataset_version_id: values.dataset_version_id,
         thresholds,
         baseline_evaluation_id: values.baseline_evaluation_id ?? null,
+        // 指定 adapter 才会真的提交到执行侧；不指定时评测停在 QUEUED，
+        // 这是如实状态而不是"自动完成"。
+        adapter_id: values.adapter_id?.trim() || null,
+        config: objectKey ? { model_object_key: objectKey } : {},
         metrics: {},
       });
-      messageApi.success("评测已入队（QUEUED），等待适配器回调结果。");
+      messageApi.success(
+        values.adapter_id?.trim()
+          ? "评测已提交适配器，结论由回调回写。"
+          : "评测已入队（QUEUED）；未指定适配器，不会自动执行。",
+      );
       form.resetFields();
       onCreated();
       onClose();
@@ -138,6 +149,20 @@ function CreateEvaluationModal({
             rules={[{ pattern: UUID_PATTERN, message: "必须是标准 UUID" }]}
           >
             <Input />
+          </Form.Item>
+          <Form.Item
+            name="adapter_id"
+            label="执行适配器（可选）"
+            extra="留空则只入队、不执行；填写已登记的适配器 ID 才会真实提交并回调结论。"
+          >
+            <Input placeholder="例如 local-model" />
+          </Form.Item>
+          <Form.Item
+            name="model_object_key"
+            label="模型产物 object_key（可选）"
+            extra="项目下只有一个产物时可留空由适配器解析；多个产物时必须指定。"
+          >
+            <Input placeholder="models/{project}/{run}/model.joblib" />
           </Form.Item>
           <Typography.Text strong>评测指标阈值</Typography.Text>
           <Form.List name="benchmarks" initialValue={[{ name: "" }]}>

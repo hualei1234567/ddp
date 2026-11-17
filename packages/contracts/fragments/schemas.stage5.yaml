@@ -525,6 +525,12 @@ EvaluationCreate:
       type: string
       minLength: 1
       maxLength: 100
+    config:
+      type: object
+      additionalProperties: true
+      description: |
+        适配器执行参数，原样透传给 Adapter（例如产物 `model_object_key`、`export_job_id`）。
+        DDP 不解释其内容；Adapter 依据它定位模型产物与导出数据。
 Evaluation:
   type: object
   required:

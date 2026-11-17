@@ -156,6 +156,9 @@ class DataSourceImportOut(BaseModel):
 
 class MediaAssetOut(BaseModel):
     asset_id: UUID
+    # 指向 Canonical 层 RawAsset。没有它，前端从「导入资产」无法跳到
+    # 「原始资产」详情，调用方也只能靠 sha256 去猜是哪一个。
+    raw_asset_id: UUID | None
     project_id: UUID
     data_source_id: UUID
     import_id: UUID
@@ -176,6 +179,7 @@ class MediaAssetOut(BaseModel):
     def from_domain(cls, item: MediaAsset) -> MediaAssetOut:
         return cls(
             asset_id=item.asset_id,
+            raw_asset_id=item.raw_asset_id,
             project_id=item.project_id,
             data_source_id=item.data_source_id,
             import_id=item.import_id,

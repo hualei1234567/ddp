@@ -233,6 +233,7 @@ class SqlExternalReferenceRepository:
             last_synced_at=reference.last_synced_at,
             model_ref=dict(reference.model_ref) if reference.model_ref else None,
             evaluation_ref=(dict(reference.evaluation_ref) if reference.evaluation_ref else None),
+            artifacts=dict(reference.artifacts) if reference.artifacts else None,
             correlation_id=reference.correlation_id,
             idempotency_key=reference.idempotency_key,
             error_code=reference.error_code,
@@ -333,6 +334,7 @@ class SqlExternalReferenceRepository:
                 evaluation_ref=(
                     dict(reference.evaluation_ref) if reference.evaluation_ref else None
                 ),
+                artifacts=dict(reference.artifacts) if reference.artifacts else None,
                 error_code=reference.error_code,
                 error_summary=reference.error_summary,
                 updated_at=now,
@@ -373,6 +375,7 @@ class SqlExternalReferenceRepository:
             last_synced_at=as_utc(row.last_synced_at) or _now(),
             model_ref=dict(row.model_ref) if row.model_ref else None,
             evaluation_ref=dict(row.evaluation_ref) if row.evaluation_ref else None,
+            artifacts=dict(row.artifacts) if row.artifacts else None,
             correlation_id=row.correlation_id,
             idempotency_key=row.idempotency_key,
             error_code=row.error_code,

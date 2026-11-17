@@ -569,6 +569,7 @@ export function parseExternalTrainingReference(value: unknown): ExternalTraining
       : false,
     model_ref: readOptionalRecord(record, "model_ref", "externalReference"),
     evaluation_ref: readOptionalRecord(record, "evaluation_ref", "externalReference"),
+    artifacts: readOptionalRecord(record, "artifacts", "externalReference"),
     correlation_id: readString(record, "correlation_id", "externalReference"),
     idempotency_key: readString(record, "idempotency_key", "externalReference"),
     error_code: readOptionalString(record, "error_code", "externalReference"),

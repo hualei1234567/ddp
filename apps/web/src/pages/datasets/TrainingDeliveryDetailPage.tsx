@@ -87,6 +87,24 @@ function ExternalReferencesPanel({
     { title: "Adapter", key: "adapter", width: 180, render: (_, item) => `${item.adapter_id} ${item.adapter_version}` },
     { title: "外部 Run", dataIndex: "external_run_id", ellipsis: true },
     {
+      title: "训练产物",
+      key: "artifacts",
+      width: 240,
+      // 产物地址由回调落库。放在这里是为了让"训练完成 → 登记模型版本"
+      // 在界面上接得上：用户能直接复制 object_key，而不必去翻适配器。
+      render: (_, item) => {
+        const model = item.artifacts?.model as { object_key?: unknown } | undefined;
+        const key = typeof model?.object_key === "string" ? model.object_key : null;
+        return key ? (
+          <Typography.Text copyable={{ text: key }} ellipsis style={{ maxWidth: 220 }}>
+            {key}
+          </Typography.Text>
+        ) : (
+          <Typography.Text type="secondary">—</Typography.Text>
+        );
+      },
+    },
+    {
       title: "状态",
       key: "status",
       width: 130,

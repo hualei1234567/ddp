@@ -72,6 +72,7 @@ def create_evaluation(
             baseline_evaluation_id=payload.baseline_evaluation_id,
             cross_dataset_comparison=payload.cross_dataset_comparison,
             adapter_id=payload.adapter_id,
+            config=dict(payload.config),
         ),
         idempotency_key=idempotency_key,
         method=request.method,
