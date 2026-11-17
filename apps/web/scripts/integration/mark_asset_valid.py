@@ -20,14 +20,36 @@ from sqlalchemy.orm import Session
 from app.infrastructure.db.models.ingestion import RawAssetModel
 
 
+def _is_local_endpoint(value: str) -> bool:
+    """只允许本机回环地址/容器内主机名。
+
+    脱敏时原先硬编码的 staging IP 被替换成占位符，占位符本身没有判定意义。
+    改为**白名单**：只放行 loopback 与 compose 服务名，其余一律拒绝——
+    这比「黑名单某个 IP」更严格，也不会因为运维换机器而失效。
+    """
+    from urllib.parse import urlparse
+
+    host = value
+    if "://" in value:
+        host = urlparse(value).hostname or ""
+    elif "@" in value:
+        host = value.rsplit("@", 1)[1].split(":")[0].split("/")[0]
+    else:
+        host = value.split(":")[0].split("/")[0]
+    host = host.strip().lower()
+    if host in {"localhost", "127.0.0.1", "::1", "postgres", "minio", "redis", "api"}:
+        return True
+    return host.startswith("127.")
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit("用法：mark_asset_valid.py <asset_id>")
     database_url = os.environ.get("DDP_DATABASE_URL", "").strip()
     if not database_url:
         raise SystemExit("缺少 DDP_DATABASE_URL")
-    if "staging" in database_url.lower() or "xxx.xxx.xxx.xxx" in database_url:
-        raise SystemExit("拒绝使用 staging 数据库")
+    if not _is_local_endpoint(database_url):
+        raise SystemExit("拒绝使用非本机数据库（该脚本只用于本地集成测试）")
 
     try:
         asset_id = UUID(sys.argv[1])

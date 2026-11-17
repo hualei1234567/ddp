@@ -4,7 +4,7 @@
 # - 临时 MinIO 容器仅监听 127.0.0.1:9100，脚本退出时删除；
 # - SQLite 使用 /tmp/ddp-it-307.db，仅本任务临时数据；
 # - 不读取仓库 .env，后端在临时目录启动，环境变量全部显式注入；
-# - 不访问 staging / xxx.xxx.xxx.xxx。
+# - 只访问本机回环地址，不访问任何远端环境。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

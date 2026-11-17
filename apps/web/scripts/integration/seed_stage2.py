@@ -25,12 +25,34 @@ PROJECT_NAME = "DDP-307 集成测试项目"
 USER_NAME = "DDP-307 集成测试用户"
 
 
+def _is_local_endpoint(value: str) -> bool:
+    """只允许本机回环地址/容器内主机名。
+
+    脱敏时原先硬编码的 staging IP 被替换成占位符，占位符本身没有判定意义。
+    改为**白名单**：只放行 loopback 与 compose 服务名，其余一律拒绝——
+    这比「黑名单某个 IP」更严格，也不会因为运维换机器而失效。
+    """
+    from urllib.parse import urlparse
+
+    host = value
+    if "://" in value:
+        host = urlparse(value).hostname or ""
+    elif "@" in value:
+        host = value.rsplit("@", 1)[1].split(":")[0].split("/")[0]
+    else:
+        host = value.split(":")[0].split("/")[0]
+    host = host.strip().lower()
+    if host in {"localhost", "127.0.0.1", "::1", "postgres", "minio", "redis", "api"}:
+        return True
+    return host.startswith("127.")
+
+
 def _database_url() -> str:
     value = os.environ.get("DDP_DATABASE_URL", "").strip()
     if not value:
         raise SystemExit("缺少 DDP_DATABASE_URL")
-    if "staging" in value.lower() or "xxx.xxx.xxx.xxx" in value:
-        raise SystemExit("拒绝使用 staging 数据库")
+    if not _is_local_endpoint(value):
+        raise SystemExit("拒绝使用非本机数据库（该脚本只用于本地集成测试）")
     return value
 
 
@@ -66,8 +88,8 @@ def _ensure_bucket() -> None:
     secret_key = os.environ.get("DDP_S3_SECRET_KEY", "").strip()
     if not endpoint or not bucket:
         raise SystemExit("缺少 DDP_S3_ENDPOINT / DDP_S3_BUCKET")
-    if "xxx.xxx.xxx.xxx" in endpoint:
-        raise SystemExit("拒绝连接 staging 对象存储")
+    if not _is_local_endpoint(endpoint):
+        raise SystemExit("拒绝连接非本机对象存储（该脚本只用于本地集成测试）")
     client = boto3.client(
         "s3",
         endpoint_url=endpoint,
