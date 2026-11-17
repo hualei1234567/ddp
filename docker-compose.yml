@@ -255,6 +255,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    environment:
+      # 本地开发令牌（形如 "Bearer eyJ..."）。浏览器端没有登录流程，靠它给
+      # /api 请求补上身份；留空则什么都不注入，需要在前端「设置令牌」手动粘贴。
+      # 只用于本机开发栈：令牌会出现在 nginx 配置里，不要用于任何共享环境。
+      DDP_WEB_DEV_AUTH: ${DDP_WEB_DEV_AUTH:-}
     ports:
       # 宿主端口可配置。默认 8088 而不是 8080：8080 太容易被本机其他服务占用
       # （实测本机被一个监听在 CGNAT 地址上的进程占着，Docker 的端口转发因此

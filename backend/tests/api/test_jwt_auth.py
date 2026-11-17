@@ -270,6 +270,35 @@ def test_malformed_authorization_does_not_fall_back_to_header_identity() -> None
     _assert_unauthorized(response)
 
 
+def test_empty_authorization_is_treated_as_absent() -> None:
+    """空 Authorization 头等同于「没带令牌」，不是「令牌格式错误」。
+
+    反向代理在未配置本地开发令牌时会注入空头。若把它当成格式错误，
+    一个空配置就会把 401 的语义从「未认证」改成「格式错误」，排障时
+    会被引到错误方向。
+    """
+    client = _build_client(_LOCAL_DEFAULT)
+
+    response = client.get("/test/me", headers={"Authorization": ""})
+
+    _assert_unauthorized(response)
+    assert "格式错误" not in response.json()["error"]["message"]
+
+
+def test_empty_authorization_still_allows_local_header_identity() -> None:
+    """空头不构成「声明了令牌」，本地 Header 后门的既有语义不变。"""
+    user_id = uuid4()
+    client = _build_client(_LOCAL_HEADER_AUTH)
+
+    response = client.get(
+        "/test/me",
+        headers={"Authorization": "", "X-User-Id": str(user_id)},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user_id"] == str(user_id)
+
+
 def test_invalid_bearer_does_not_fall_back_to_header_identity() -> None:
     client = _build_client(_LOCAL_HEADER_AUTH)
 
