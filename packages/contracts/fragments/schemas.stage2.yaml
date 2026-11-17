@@ -9,7 +9,7 @@ TaskPriority:
   enum: [P0, P1, P2]
 CollectionTask:
   type: object
-  required: [task_id, project_id, code, name, requirement_id, plan_id, sop_id, sop_version, scenario_id, action_spec_id, action_spec_version, status, priority, assigned_to, assigned_robot_id, assigned_device_ids, assigned_sensor_ids, location_id, scheduled_start, scheduled_end, actual_start, actual_end, target_episode_count, target_duration_sec, submitted_episode_count, accepted_episode_count, quality_summary, status_reason, blocked_reason, version, created_at, updated_at, created_by, updated_by]
+  required: [task_id, project_id, code, name, requirement_id, plan_id, sop_id, sop_version, scenario_id, action_spec_id, action_spec_version, status, priority, assigned_to, assigned_robot_id, assigned_device_ids, assigned_sensor_ids, location_id, scheduled_start, scheduled_end, actual_start, actual_end, target_episode_count, target_duration_sec, submitted_episode_count, accepted_episode_count, quality_summary, status_reason, blocked_reason, version, created_at, updated_at, created_by, updated_by, allowed_actions]
   additionalProperties: false
   properties:
     task_id: {type: string, format: uuid}
@@ -46,6 +46,7 @@ CollectionTask:
     updated_at: {type: [string, "null"], format: date-time}
     created_by: {type: [string, "null"], format: uuid}
     updated_by: {type: [string, "null"], format: uuid}
+    allowed_actions: {type: array, items: {type: string}}
 CollectionTaskCreate:
   type: object
   required: [code, name, priority, target_episode_count, target_duration_sec]
@@ -100,7 +101,7 @@ CollectionTaskPage:
     next_cursor: {type: [string, "null"]}
 CollectionBatch:
   type: object
-  required: [batch_id, project_id, task_id, code, sequence_no, status, assigned_to, scheduled_start, scheduled_end, expected_count, submitted_count, accepted_count, status_reason, version, created_at, updated_at]
+  required: [batch_id, project_id, task_id, code, sequence_no, status, assigned_to, scheduled_start, scheduled_end, expected_count, submitted_count, accepted_count, status_reason, version, created_at, updated_at, allowed_actions]
   additionalProperties: false
   properties:
     batch_id: {type: string, format: uuid}
@@ -119,6 +120,7 @@ CollectionBatch:
     version: {type: integer, minimum: 1}
     created_at: {type: [string, "null"], format: date-time}
     updated_at: {type: [string, "null"], format: date-time}
+    allowed_actions: {type: array, items: {type: string}}
 CollectionBatchCreate:
   type: object
   required: [expected_count]
@@ -495,7 +497,7 @@ CalibrationSnapshotItem:
     schema_version: {type: string, minLength: 1, maxLength: 64}
 Episode:
   type: object
-  required: [episode_id, project_id, episode_lineage_id, episode_version, code, task_id, batch_id, robot_id, device_ids, sensor_ids, status, quality_status, annotation_status, success, failure_reason, readiness_blockers, scene_labels, language_instruction, start_time_ns, end_time_ns, duration_ns, time_base, canonical_schema_version, pipeline_id, pipeline_version, segmentation_rule_version, frame_count, calibration_snapshot, manifest_key, manifest_sha256, preview_refs, supersedes_id, attempt, max_attempts, version, created_at, updated_at, created_by, updated_by]
+  required: [episode_id, project_id, episode_lineage_id, episode_version, code, task_id, batch_id, robot_id, device_ids, sensor_ids, status, quality_status, annotation_status, success, failure_reason, readiness_blockers, scene_labels, language_instruction, start_time_ns, end_time_ns, duration_ns, time_base, canonical_schema_version, pipeline_id, pipeline_version, segmentation_rule_version, frame_count, calibration_snapshot, manifest_key, manifest_sha256, preview_refs, supersedes_id, attempt, max_attempts, version, created_at, updated_at, created_by, updated_by, allowed_actions]
   additionalProperties: false
   properties:
     episode_id: {type: string, format: uuid}
@@ -567,6 +569,7 @@ Episode:
     updated_at: {type: [string, "null"], format: date-time}
     created_by: {type: [string, "null"], format: uuid}
     updated_by: {type: [string, "null"], format: uuid}
+    allowed_actions: {type: array, items: {type: string}}
 EpisodeCreate:
   type: object
   required: [raw_asset_ids, segmentation, time_base, canonical_schema_version, pipeline_id, pipeline_version]

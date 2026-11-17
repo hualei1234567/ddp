@@ -336,3 +336,29 @@ def test_reject_and_invalidate_require_reason(
     )
     assert invalidate.status_code == 200
     assert invalidate.json()["status"] == "INVALIDATED"
+
+
+def test_episode_exposes_allowed_actions(
+    episode_api: tuple[Any, ApiIds, UUID, sessionmaker[Session]],
+) -> None:
+    """Episode 响应带 ``allowed_actions``，且只含对外暴露的动作。
+
+    `system-*` / `retry` / `archive` 不在公开集合里，必须被过滤掉——
+    前端拿到它们会渲染出按了必然 422 的按钮。
+    """
+    client, ids, asset_id, _factory = episode_api
+    created = _create(client, ids.project_a, asset_id, code="ep-actions", key="ep-actions-key")
+
+    actions = created["allowed_actions"]
+    # 新建 Episode 处于 PENDING，公开动作只有「作废」；关键是不为空、
+    # 且只含对外暴露的动作。
+    assert actions == ["invalidate"], (created["status"], actions)
+    assert set(actions) <= {
+        "ready",
+        "quality-check",
+        "quality-result",
+        "accept",
+        "reject",
+        "complete",
+        "invalidate",
+    }

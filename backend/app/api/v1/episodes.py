@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from app.api.deps import get_project_scope, get_write_scope
 from app.api.v1.episode_dependencies import EpisodeUseCasesDep
 from app.api.v1.episode_schemas import (
+    EPISODE_ACTION_MAP,
     EpisodeActionRequest,
     EpisodeCreate,
     EpisodeOut,
@@ -48,15 +49,9 @@ EpisodeAction = Literal[
     "invalidate",
 ]
 
-# 对外动作名 → 应用层具名动作；未暴露 system-*/retry/archive。
-_ACTION_MAP = {
-    "quality-check": "quality-check",
-    "quality-result": "record-quality",
-    "accept": "accept",
-    "reject": "reject",
-    "complete": "complete",
-    "invalidate": "invalidate",
-}
+# 对外动作名 → 应用层具名动作；映射本身定义在 DTO 层，响应里的
+# allowed_actions 与这里接受的动作必须来自同一份表。
+_ACTION_MAP = {key: value for key, value in EPISODE_ACTION_MAP.items() if key != "ready"}
 
 
 @router.post("/episodes", response_model=EpisodeOut, status_code=201)
