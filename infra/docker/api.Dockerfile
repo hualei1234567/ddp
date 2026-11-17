@@ -34,5 +34,12 @@ COPY backend/ .
 COPY data-platform/ /app/data-platform/
 ENV PYTHONPATH=/app/data-platform
 
+# 标定参数契约文件：`app.domain.devices.parameter_schema` 以「仓库根/docs/...」
+# 的布局读取它。镜像里代码在 /app，推导出的根是 `/`，所以文件要落在 /docs。
+# 不放这块的话，容器内 `POST /calibrations` 必定 422：
+#   「标定参数契约文件缺失：/docs/architecture/contract-draft/device/...」
+COPY docs/architecture/contract-draft/device/calibration-parameters.v1.schema.json \
+     /docs/architecture/contract-draft/device/calibration-parameters.v1.schema.json
+
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

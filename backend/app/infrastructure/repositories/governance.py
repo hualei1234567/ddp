@@ -23,7 +23,7 @@ from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import BigInteger, delete, func, select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -309,8 +309,14 @@ def _project_value(session: Session, kind: ResourceKind, project_id: UUID) -> in
             .where(InferenceTaskRow.project_id == project_id)
         )
     if kind is ResourceKind.OBJECT_STORAGE_BYTES:
+        # 必须 cast 回 bigint：Postgres 的 sum(bigint) 返回 numeric，
+        # psycopg 会把它映射成 Decimal，而 ResourceUsage 只接受 int，
+        # 于是「项目配了 OBJECT_STORAGE_BYTES 配额」时上传会直接 422
+        # 「value 必须是非负整数」——一个纯类型问题把整条上传链路堵死。
         return session.scalar(
-            select(func.coalesce(func.sum(RawAssetModel.size_bytes), 0)).where(
+            select(
+                func.cast(func.coalesce(func.sum(RawAssetModel.size_bytes), 0), BigInteger)
+            ).where(
                 RawAssetModel.project_id == project_id,
                 RawAssetModel.status.in_(_STORAGE_OCCUPYING_STATUSES),
             )
@@ -324,7 +330,7 @@ def _grouped_values(session: Session, kind: ResourceKind) -> dict[UUID, int]:
         statement = (
             select(
                 RawAssetModel.project_id,
-                func.coalesce(func.sum(RawAssetModel.size_bytes), 0),
+                func.cast(func.coalesce(func.sum(RawAssetModel.size_bytes), 0), BigInteger),
             )
             .where(RawAssetModel.status.in_(_STORAGE_OCCUPYING_STATUSES))
             .group_by(RawAssetModel.project_id)

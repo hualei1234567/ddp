@@ -14,7 +14,16 @@ dist
 data
 .env
 .env.*
-docs
+# 标定参数契约文件要进镜像：`backend/app/domain/devices/parameter_schema.py`
+# 以仓库根为基准读取它，容器里代码在 /app，推导出的根是 /，所以必须落在
+# /docs/architecture/contract-draft/device/。其余 docs 仍然不进镜像。
+# 注意：父目录被整体排除时 `!子路径` 不生效，所以逐级放行。
+docs/*
+!docs/architecture
+docs/architecture/*
+!docs/architecture/contract-draft
+docs/architecture/contract-draft/*
+!docs/architecture/contract-draft/device
 ai-team
 *.md
 !README.md
