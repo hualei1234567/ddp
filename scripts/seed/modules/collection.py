@@ -11,17 +11,17 @@
 
 关于任务终态
 ------------
-``SUBMITTED`` 之后只有 ``system-data-check`` 能把任务推进到 ``DATA_CHECKING``，
-而它被刻意排除在公开动作之外（``PUBLIC_TASK_ACTIONS``），系统侧也没有触发点。
-因此任务在客户端可走的最后状态就是 ``SUBMITTED``——这是已知缺口，不是脚本
-少走一步；批次不受影响，能一路走到 ``ACCEPTED``。
+``SUBMITTED`` 之后由 ``domain-worker`` 的巡检推进到 ``DATA_CHECKING``（系统动作
+``system-data-check`` 不对外暴露，也不该由客户端调用），随后 accept / complete
+是公开动作。本模块只负责把任务推进到 ``SUBMITTED`` 并验证数据检查前的状态；
+完整闭环由 ``scripts/qa/full_chain_smoke.py`` 的 ``[4b]`` 在真实栈上验证。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from seed.client import Client, Context, expect, if_match
+from seed.client import Client, Context, SeedFailure, expect, if_match
 
 GROUP = "collection"
 
@@ -204,13 +204,30 @@ def run(ctx: Context, client: Client) -> None:
     task = _act(reviewer, task_path, "approve", task["version"], "任务评审通过")
     task = _act(client, task_path, "ready", task["version"], "任务进入就绪")
     version = task["version"]
+    # 分配同时绑定执行人、机器人、设备与传感器：这几列此前从未被真实写过，
+    # `collection_task_devices` / `collection_task_sensors` 一直是空表。
+    assignment: dict[str, Any] = {
+        "assigned_to": ctx.user_id,
+        "scheduled_start": "2026-11-18T01:00:00Z",
+    }
+    for key, field_name in (
+        ("robot_primary", "assigned_robot_id"),
+        ("device_camera", "assigned_device_ids"),
+        ("sensor_rgb", "assigned_sensor_ids"),
+    ):
+        try:
+            value = ctx.recall("fleet", key)
+        except SeedFailure:
+            # 未跑 fleet 模块时如实跳过，不伪造 ID。
+            continue
+        assignment[field_name] = [value] if field_name.endswith("_ids") else value
     task = _act(
         client,
         task_path,
         "assign",
         version,
-        "任务指派",
-        {"assigned_to": ctx.user_id, "scheduled_start": "2026-11-18T01:00:00Z"},
+        "任务指派（含机器人/设备/传感器）",
+        assignment,
     )
     version = task["version"]
     task = _act(client, task_path, "start", version, "任务开始")
