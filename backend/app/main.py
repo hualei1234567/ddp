@@ -58,7 +58,7 @@ from app.domain.quality.errors import QualityDomainError
 from app.domain.suppliers.errors import SupplierDomainError
 from app.infrastructure.db.session import get_session_factory
 from app.infrastructure.rate_limit import RateLimiter, build_rate_limiter
-from app.infrastructure.repositories.observability import collect_business_counts
+from app.infrastructure.repositories.observability import collect_business_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ def create_app() -> FastAPI:
 
     # 指标注册表随应用实例创建：业务指标在抓取时查库，因此注入会话工厂。
     app.state.metrics = build_metrics(
-        counts_provider=lambda: collect_business_counts(get_session_factory())
+        snapshot_provider=lambda: collect_business_snapshot(get_session_factory())
     )
 
     # 先注册中间件；Starlette 在首次请求时构建中间件栈，
