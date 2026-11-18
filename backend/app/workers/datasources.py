@@ -26,8 +26,9 @@ import httpx
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.datasources.import_runner import ImportRunner
+from app.application.ingestion.ports import ClaimedValidationEvent
 from app.core.config import Settings, get_settings
-from app.core.logging import configure_logging
+from app.core.logging import bind_trace, configure_logging, trace_from_event_payload
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.session import create_session_factory, get_engine
 from app.infrastructure.repositories.collection_audit import SqlOutboxRepository
@@ -137,147 +138,191 @@ class DataSourceImportWorker:
             claimed = queue.claim_next(now=moment, event_type=IMPORT_REQUESTED_EVENT)
             if claimed is None:
                 return {"status": ImportProcessingStatus.IDLE.value}
+            # 追踪上下文覆盖处理与结果日志；来源是事件 payload 的 request_id，
+            # 缺失时生成并标注 generated，退出 with 后复位。
+            with bind_trace(trace_from_event_payload(claimed.payload)) as trace:
+                result = self._process_claimed(session, queue, claimed, moment)
+                _log_result(result)
+                if trace.is_generated:
+                    logger.info(
+                        "导入事件缺少可用 request_id，已生成本地 trace_id event_id=%s",
+                        claimed.event_id,
+                    )
+                return result
 
-            raw_id = claimed.payload.get("import_id")
-            try:
-                import_id = UUID(str(raw_id))
-            except (TypeError, ValueError):
-                queue.mark_dead_letter(
-                    claimed.event_id,
-                    attempts=claimed.attempts + 1,
-                    last_error=f"payload 缺少合法 import_id：{raw_id!r}",
-                )
-                session.commit()
-                return {
-                    "status": ImportProcessingStatus.DEAD_LETTER.value,
-                    "event_id": str(claimed.event_id),
-                }
+    def _process_claimed(
+        self,
+        session: Session,
+        queue: SqlOutboxValidationQueue,
+        claimed: ClaimedValidationEvent,
+        moment: datetime,
+    ) -> dict[str, object]:
+        raw_id = claimed.payload.get("import_id")
+        try:
+            import_id = UUID(str(raw_id))
+        except (TypeError, ValueError):
+            queue.mark_dead_letter(
+                claimed.event_id,
+                attempts=claimed.attempts + 1,
+                last_error=f"payload 缺少合法 import_id：{raw_id!r}",
+            )
+            session.commit()
+            return {
+                "status": ImportProcessingStatus.DEAD_LETTER.value,
+                "event_id": str(claimed.event_id),
+            }
 
-            # 系统执行身份必须是一个**真实存在**的 user：
-            # ``data_source_imports.updated_by`` / ``raw_assets.created_by`` 都
-            # 有 FK 到 ``users``。此前用 ``project_id`` 当 actor，任何一次状态
-            # 推进都会外键失败（与 ingestion_jobs Worker 修复前的缺陷同源：
-            # 表现为"任务反复重试却永不成功"）。取导入任务的创建人，语义也
-            # 成立——系统是代发起人执行其导入。
-            actor_id = _import_creator(session, import_id)
-            if actor_id is None:
-                queue.mark_dead_letter(
-                    claimed.event_id,
-                    attempts=claimed.attempts + 1,
-                    last_error=f"导入任务不存在或缺少创建人：{import_id}",
-                )
-                session.commit()
-                return {
-                    "status": ImportProcessingStatus.DEAD_LETTER.value,
-                    "event_id": str(claimed.event_id),
-                    "import_id": str(import_id),
-                }
-            scope = ProjectScope(claimed.project_id, actor_id=actor_id)
+        # 系统执行身份必须是一个**真实存在**的 user：
+        # ``data_source_imports.updated_by`` / ``raw_assets.created_by`` 都
+        # 有 FK 到 ``users``。此前用 ``project_id`` 当 actor，任何一次状态
+        # 推进都会外键失败（与 ingestion_jobs Worker 修复前的缺陷同源：
+        # 表现为"任务反复重试却永不成功"）。取导入任务的创建人，语义也
+        # 成立——系统是代发起人执行其导入。
+        actor_id = _import_creator(session, import_id)
+        if actor_id is None:
+            queue.mark_dead_letter(
+                claimed.event_id,
+                attempts=claimed.attempts + 1,
+                last_error=f"导入任务不存在或缺少创建人：{import_id}",
+            )
+            session.commit()
+            return {
+                "status": ImportProcessingStatus.DEAD_LETTER.value,
+                "event_id": str(claimed.event_id),
+                "import_id": str(import_id),
+            }
+        scope = ProjectScope(claimed.project_id, actor_id=actor_id)
 
-            try:
-                runner = build_runner(session, self._settings)
-                outcome = runner.execute(
-                    scope,
-                    import_id,
-                    fetch=_HttpxFetcher(self._client),
-                    parse_metadata=_parse_metadata,
-                    # 解析器由 **Adapter 注册表** 决定，而不是在这里硬编码某个
-                    # 具体数据集的名字。此前写死 parse_preview_metadata，
-                    # 换一种数据格式就必须改 Worker，注册表等于形同虚设。
-                    parse_episodes=_registry_parser,
-                    now=moment,
-                )
+        try:
+            runner = build_runner(session, self._settings)
+            outcome = runner.execute(
+                scope,
+                import_id,
+                fetch=_HttpxFetcher(self._client),
+                parse_metadata=_parse_metadata,
+                # 解析器由 **Adapter 注册表** 决定，而不是在这里硬编码某个
+                # 具体数据集的名字。此前写死 parse_preview_metadata，
+                # 换一种数据格式就必须改 Worker，注册表等于形同虚设。
+                parse_episodes=_registry_parser,
+                now=moment,
+            )
+            queue.mark_published(claimed.event_id, now=moment)
+            session.commit()
+            return {
+                "status": ImportProcessingStatus.PUBLISHED.value,
+                "import_id": str(import_id),
+                "episodes": outcome.episode_count,
+                "assets": outcome.asset_count,
+                "bytes": outcome.total_bytes,
+            }
+        except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
+            session.rollback()
+            # 幂等优先：任务已在终态（SUCCEEDED/CANCELLED）说明这条导入
+            # 早就被处理过，事件是重复投递。此时**必须直接 PUBLISHED**，
+            # 不能走重试——重试永远只会得到同一句「状态不允许执行」，
+            # 白烧 attempts 直到死信，把"已完成的导入"记成"反复失败"。
+            # 真实库里 38 条历史事件正是这个形态。
+            if _import_already_terminal(session, import_id):
                 queue.mark_published(claimed.event_id, now=moment)
                 session.commit()
                 return {
                     "status": ImportProcessingStatus.PUBLISHED.value,
                     "import_id": str(import_id),
-                    "episodes": outcome.episode_count,
-                    "assets": outcome.asset_count,
-                    "bytes": outcome.total_bytes,
+                    "skipped": "导入任务已在终态，事件为重复投递",
                 }
-            except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
-                session.rollback()
-                # 幂等优先：任务已在终态（SUCCEEDED/CANCELLED）说明这条导入
-                # 早就被处理过，事件是重复投递。此时**必须直接 PUBLISHED**，
-                # 不能走重试——重试永远只会得到同一句「状态不允许执行」，
-                # 白烧 attempts 直到死信，把"已完成的导入"记成"反复失败"。
-                # 真实库里 38 条历史事件正是这个形态。
-                if _import_already_terminal(session, import_id):
-                    queue.mark_published(claimed.event_id, now=moment)
-                    session.commit()
-                    return {
-                        "status": ImportProcessingStatus.PUBLISHED.value,
-                        "import_id": str(import_id),
-                        "skipped": "导入任务已在终态，事件为重复投递",
-                    }
-                # **先判死信，再决定是否退回 PENDING**。顺序反了会留下
-                # 「导入 PENDING、事件已死信」的永久孤儿：导入侧
-                # ``max_attempts``（默认 3）与事件侧
-                # ``validation_max_attempts``（默认 5、可配）不同源，后者更小
-                # 时最后一次失败会先退回 PENDING，再把事件判死信——没有事件、
-                # 没有终态、也没有客户端重试入口。死信时保持 FAILED，错误摘要
-                # 与步骤日志都留在导入上，人工可查。
-                attempts = claimed.attempts + 1
-                if attempts >= self._settings.validation_max_attempts:
-                    queue.mark_dead_letter(
-                        claimed.event_id,
-                        attempts=attempts,
-                        last_error=str(exc)[:2000],
-                    )
-                    session.commit()
-                    return {
-                        "status": ImportProcessingStatus.DEAD_LETTER.value,
-                        "import_id": str(import_id),
-                        "attempts": attempts,
-                        "released_for_retry": False,
-                        "error": str(exc)[:500],
-                    }
-                # 还有重试机会：把**可重试**的失败从 FAILED 退回 PENDING。
-                #
-                # 不这么做的话：本次已把任务写成 FAILED，而下面又会
-                # mark_retry 让事件下一轮再来；下一轮 execute 要求 PENDING，
-                # 状态机也拒绝 FAILED->RUNNING，于是每次重试都必然再失败，
-                # 直到死信——一次网络抖动就永久丢掉这条导入。
-                released = False
-                try:
-                    # 回滚后重新解析身份：不能用上面的局部变量，事务内读到的
-                    # 值已随回滚失效。
-                    retry_actor = _import_creator(session, import_id)
-                    runner = build_runner(session, self._settings)
-                    if retry_actor is not None:
-                        released = runner.release_for_retry(
-                            ProjectScope(claimed.project_id, actor_id=retry_actor),
-                            import_id,
-                            moment=moment,
-                        )
-                except Exception:  # noqa: BLE001 - 退回失败不得掩盖原始异常
-                    session.rollback()
-                    logger.exception("导入任务退回重试失败", extra={"import_id": str(import_id)})
-                delay = min(
-                    self._settings.validation_retry_max_seconds,
-                    self._settings.validation_retry_base_seconds * (2 ** (attempts - 1)),
-                )
-                queue.mark_retry(
+            # **先判死信，再决定是否退回 PENDING**。顺序反了会留下
+            # 「导入 PENDING、事件已死信」的永久孤儿：导入侧
+            # ``max_attempts``（默认 3）与事件侧
+            # ``validation_max_attempts``（默认 5、可配）不同源，后者更小
+            # 时最后一次失败会先退回 PENDING，再把事件判死信——没有事件、
+            # 没有终态、也没有客户端重试入口。死信时保持 FAILED，错误摘要
+            # 与步骤日志都留在导入上，人工可查。
+            attempts = claimed.attempts + 1
+            if attempts >= self._settings.validation_max_attempts:
+                queue.mark_dead_letter(
                     claimed.event_id,
                     attempts=attempts,
-                    available_at=moment + timedelta(seconds=delay),
                     last_error=str(exc)[:2000],
                 )
                 session.commit()
                 return {
-                    "status": ImportProcessingStatus.RETRIED.value,
+                    "status": ImportProcessingStatus.DEAD_LETTER.value,
                     "import_id": str(import_id),
                     "attempts": attempts,
-                    "released_for_retry": released,
+                    "released_for_retry": False,
                     "error": str(exc)[:500],
                 }
+            # 还有重试机会：把**可重试**的失败从 FAILED 退回 PENDING。
+            #
+            # 不这么做的话：本次已把任务写成 FAILED，而下面又会
+            # mark_retry 让事件下一轮再来；下一轮 execute 要求 PENDING，
+            # 状态机也拒绝 FAILED->RUNNING，于是每次重试都必然再失败，
+            # 直到死信——一次网络抖动就永久丢掉这条导入。
+            released = False
+            try:
+                # 回滚后重新解析身份：不能用上面的局部变量，事务内读到的
+                # 值已随回滚失效。
+                retry_actor = _import_creator(session, import_id)
+                runner = build_runner(session, self._settings)
+                if retry_actor is not None:
+                    released = runner.release_for_retry(
+                        ProjectScope(claimed.project_id, actor_id=retry_actor),
+                        import_id,
+                        moment=moment,
+                    )
+            except Exception:  # noqa: BLE001 - 退回失败不得掩盖原始异常
+                session.rollback()
+                logger.exception("导入任务退回重试失败", extra={"import_id": str(import_id)})
+            delay = min(
+                self._settings.validation_retry_max_seconds,
+                self._settings.validation_retry_base_seconds * (2 ** (attempts - 1)),
+            )
+            queue.mark_retry(
+                claimed.event_id,
+                attempts=attempts,
+                available_at=moment + timedelta(seconds=delay),
+                last_error=str(exc)[:2000],
+            )
+            session.commit()
+            return {
+                "status": ImportProcessingStatus.RETRIED.value,
+                "import_id": str(import_id),
+                "attempts": attempts,
+                "released_for_retry": released,
+                "error": str(exc)[:500],
+            }
 
     def run(self, *, stop_event: threading.Event) -> None:
         while not stop_event.is_set():
             result = self.process_once()
             if result["status"] == ImportProcessingStatus.IDLE.value:
                 stop_event.wait(self._settings.validation_worker_poll_interval_seconds)
+
+
+def _log_result(result: dict[str, object]) -> None:
+    """在已绑定 trace 的上下文内记录事件结果，便于按 ID 串联查询。"""
+    status = result.get("status")
+    if status == ImportProcessingStatus.PUBLISHED.value:
+        logger.info(
+            "导入事件已处理 import_id=%s episodes=%s assets=%s",
+            result.get("import_id"),
+            result.get("episodes"),
+            result.get("assets"),
+        )
+    elif status == ImportProcessingStatus.RETRIED.value:
+        logger.warning(
+            "导入事件将重试 import_id=%s attempts=%s error=%s",
+            result.get("import_id"),
+            result.get("attempts"),
+            result.get("error"),
+        )
+    elif status == ImportProcessingStatus.DEAD_LETTER.value:
+        logger.error(
+            "导入事件进入死信 event_id=%s import_id=%s error=%s",
+            result.get("event_id"),
+            result.get("import_id"),
+            result.get("error"),
+        )
 
 
 def _import_creator(session: Session, import_id: UUID) -> UUID | None:

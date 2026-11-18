@@ -7,7 +7,15 @@ formatter 对日志参数做截断与敏感字段脱敏，防止 Token、密码�
 ``trace_id``：每条记录都带 ``trace_id``，取自 ``contextvars``（由
 ``RequestIdMiddleware`` 按请求设置，取值等于 ``request_id``）。这样日志与
 响应头/错误体里的 ``X-Request-Id`` 可以直接对齐，业务代码不必逐处传参。
-请求外的日志（启动、Worker 主循环）没有请求上下文，``trace_id`` 为 ``null``，
+
+Worker 处理 outbox 事件时没有 HTTP 请求，本模块提供
+:func:`trace_from_event_payload` / :func:`bind_trace` 恢复来源请求的
+``request_id``（事件 payload 中的 ``request_id`` 由生产侧原样带入）；
+没有来源或来源不合法时生成新 ``trace_id``，并用 ``trace_source=generated``
+显式标注，绝不把事件 ID 或聚合 ID 伪装成请求 ID。上下文用 token 复位，
+不会跨事件泄漏。
+
+请求外的日志（启动、Worker 主循环）没有追踪上下文，``trace_id`` 为 ``null``，
 而不是编造一个值。
 """
 
@@ -17,15 +25,28 @@ import json
 import logging
 import re
 import sys
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from contextlib import contextmanager
 from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Final
+from uuid import uuid4
 
 from app.core.config import get_settings
 
-# 当前请求的追踪标识。默认 ``None`` 表示"不在请求上下文中"。
+#: ``X-Request-Id`` / ``trace_id`` 的长度与字符集上限。与请求头校验共用一条规则，
+#: 避免 Worker 恢复上下文时接受 HTTP 侧会拒绝的值。
+MAX_TRACE_ID_LENGTH: Final = 128
+
+#: 追踪来源标记：来自事件/审计的既有 request_id，或本地生成。
+TRACE_SOURCE_EVENT: Final = "event"
+TRACE_SOURCE_GENERATED: Final = "generated"
+
+# 当前请求的追踪标识。默认 ``None`` 表示"不在追踪上下文中"。
 trace_id_var: ContextVar[str | None] = ContextVar("ddp_trace_id", default=None)
+# 追踪来源；HTTP 请求不设置（保持既有日志字段不变），仅 Worker 事件上下文使用。
+trace_source_var: ContextVar[str | None] = ContextVar("ddp_trace_source", default=None)
 
 _MAX_LOG_ARG_LENGTH = 200
 _MAX_LOG_MESSAGE_LENGTH = 2000
@@ -136,6 +157,71 @@ def _format_message(record: logging.LogRecord) -> str:
     return _truncate(_redact_text(text), _MAX_LOG_MESSAGE_LENGTH)
 
 
+def is_safe_trace_id(value: object) -> bool:
+    """追踪标识只接受长度受限的可打印 ASCII，避免日志/响应头注入。
+
+    HTTP 中间件与 Worker 事件上下文共用这一条规则：Worker 从 payload 恢复
+    的 ``request_id`` 同样来自外部输入，不能因为"不是请求头"就放宽校验。
+    """
+    if not isinstance(value, str):
+        return False
+    if not value or len(value) > MAX_TRACE_ID_LENGTH:
+        return False
+    return all(32 <= ord(char) < 127 for char in value)
+
+
+@dataclass(frozen=True, slots=True)
+class TraceContext:
+    """一次事件处理使用的追踪上下文。
+
+    ``source`` 为 :data:`TRACE_SOURCE_EVENT` 表示取自事件/审计的既有
+    ``request_id``；:data:`TRACE_SOURCE_GENERATED` 表示来源缺失或非法、
+    由 Worker 生成——后者必须显式标注，不能被误读成"来自某次请求"。
+    """
+
+    trace_id: str
+    source: str
+
+    @property
+    def is_generated(self) -> bool:
+        return self.source == TRACE_SOURCE_GENERATED
+
+
+def trace_from_event_payload(payload: Mapping[str, object] | None) -> TraceContext:
+    """从 outbox/审计事件 payload 恢复追踪上下文。
+
+    只认 ``request_id`` 字段：它是审计与 outbox 已有的关联列，语义不变。
+    来源缺失、类型不对或不符合安全字符集时生成本地 ``trace_id`` 并标注
+    ``generated``；绝不拿 ``event_id`` / ``aggregate_id`` 顶替，避免把
+    "某条事件"伪装成"某次请求"。
+    """
+    raw = payload.get("request_id") if isinstance(payload, Mapping) else None
+    if is_safe_trace_id(raw):
+        return TraceContext(trace_id=str(raw), source=TRACE_SOURCE_EVENT)
+    return TraceContext(trace_id=uuid4().hex, source=TRACE_SOURCE_GENERATED)
+
+
+def current_trace_id() -> str | None:
+    """当前上下文的 ``trace_id``（无上下文时为 ``None``）。"""
+    return trace_id_var.get()
+
+
+@contextmanager
+def bind_trace(context: TraceContext) -> Iterator[TraceContext]:
+    """在 ``with`` 块内绑定追踪上下文，退出时按 token 复位。
+
+    用 token 而非 ``set(None)``：嵌套（如 Worker 调用的应用服务内部再次
+    绑定）或异常退出时不会丢失外层值；事件之间也不会串号。
+    """
+    id_token = trace_id_var.set(context.trace_id)
+    source_token = trace_source_var.set(context.source)
+    try:
+        yield context
+    finally:
+        trace_source_var.reset(source_token)
+        trace_id_var.reset(id_token)
+
+
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload: dict[str, object] = {
@@ -145,6 +231,10 @@ class JsonFormatter(logging.Formatter):
             "trace_id": trace_id_var.get(),
             "message": _format_message(record),
         }
+        source = trace_source_var.get()
+        if source is not None:
+            # 只在 Worker 事件上下文输出；HTTP 请求日志保持既有字段不变。
+            payload["trace_source"] = source
         if record.exc_info:
             payload["exc"] = _truncate(
                 _redact_text(self.formatException(record.exc_info)),

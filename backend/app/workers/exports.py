@@ -25,8 +25,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.application.datasets.export_execution import ExportExecutionService
 from app.application.datasets.export_ports import ExportObjectStorage
 from app.application.datasets.exports import EXPORT_REQUESTED_EVENT
+from app.application.ingestion.ports import ClaimedValidationEvent
 from app.core.config import Settings, get_settings
-from app.core.logging import configure_logging
+from app.core.logging import bind_trace, configure_logging, trace_from_event_payload
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.session import create_session_factory, get_engine
 from app.infrastructure.repositories.dataset_audit import (
@@ -99,22 +100,31 @@ class ExportWorker:
             claimed = queue.claim_next(now=moment, event_type=EXPORT_REQUESTED_EVENT)
             if claimed is None:
                 return ExportProcessResult(status=ExportProcessingStatus.IDLE)
-            job_id = _job_id(claimed.payload, claimed.aggregate_id)
-            try:
-                jobs = SqlExportJobRepository(session)
-                lookup_scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
-                job = jobs.get(lookup_scope, job_id)
-                if job is None:
-                    queue.mark_published(claimed.event_id, now=moment)
-                    session.commit()
-                    return ExportProcessResult(
-                        status=ExportProcessingStatus.PUBLISHED,
-                        event_id=claimed.event_id,
-                        job_id=job_id,
+            # 追踪上下文覆盖处理与结果日志；来源是事件 payload 的 request_id，
+            # 缺失时生成并标注 generated，退出 with 后复位。
+            with bind_trace(trace_from_event_payload(claimed.payload)) as trace:
+                result = self._process_claimed(session, queue, claimed, moment)
+                _log_result(result)
+                if trace.is_generated:
+                    logger.info(
+                        "导出事件缺少可用 request_id，已生成本地 trace_id event_id=%s",
+                        result.event_id,
                     )
-                scope = ProjectScope(claimed.project_id, actor_id=job.requested_by)
-                service = build_execution_service(session, self._settings, self._storage)
-                service.execute(scope, job_id, now=moment)
+                return result
+
+    def _process_claimed(
+        self,
+        session: Session,
+        queue: SqlExportQueue,
+        claimed: ClaimedValidationEvent,
+        moment: datetime,
+    ) -> ExportProcessResult:
+        job_id = _job_id(claimed.payload, claimed.aggregate_id)
+        try:
+            jobs = SqlExportJobRepository(session)
+            lookup_scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
+            job = jobs.get(lookup_scope, job_id)
+            if job is None:
                 queue.mark_published(claimed.event_id, now=moment)
                 session.commit()
                 return ExportProcessResult(
@@ -122,42 +132,52 @@ class ExportWorker:
                     event_id=claimed.event_id,
                     job_id=job_id,
                 )
-            except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
-                session.rollback()
-                attempts = claimed.attempts + 1
-                if attempts >= self._settings.export_worker_max_attempts:
-                    queue.mark_dead_letter(
-                        claimed.event_id,
-                        attempts=attempts,
-                        last_error=str(exc)[:2000],
-                    )
-                    session.commit()
-                    return ExportProcessResult(
-                        status=ExportProcessingStatus.DEAD_LETTER,
-                        event_id=claimed.event_id,
-                        job_id=job_id,
-                        attempts=attempts,
-                        error=str(exc),
-                    )
-                delay = _retry_delay(
-                    attempts,
-                    base_seconds=self._settings.export_worker_retry_base_seconds,
-                    max_seconds=self._settings.export_worker_retry_max_seconds,
-                )
-                queue.mark_retry(
+            scope = ProjectScope(claimed.project_id, actor_id=job.requested_by)
+            service = build_execution_service(session, self._settings, self._storage)
+            service.execute(scope, job_id, now=moment)
+            queue.mark_published(claimed.event_id, now=moment)
+            session.commit()
+            return ExportProcessResult(
+                status=ExportProcessingStatus.PUBLISHED,
+                event_id=claimed.event_id,
+                job_id=job_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
+            session.rollback()
+            attempts = claimed.attempts + 1
+            if attempts >= self._settings.export_worker_max_attempts:
+                queue.mark_dead_letter(
                     claimed.event_id,
                     attempts=attempts,
-                    available_at=moment + delay,
                     last_error=str(exc)[:2000],
                 )
                 session.commit()
                 return ExportProcessResult(
-                    status=ExportProcessingStatus.RETRIED,
+                    status=ExportProcessingStatus.DEAD_LETTER,
                     event_id=claimed.event_id,
                     job_id=job_id,
                     attempts=attempts,
                     error=str(exc),
                 )
+            delay = _retry_delay(
+                attempts,
+                base_seconds=self._settings.export_worker_retry_base_seconds,
+                max_seconds=self._settings.export_worker_retry_max_seconds,
+            )
+            queue.mark_retry(
+                claimed.event_id,
+                attempts=attempts,
+                available_at=moment + delay,
+                last_error=str(exc)[:2000],
+            )
+            session.commit()
+            return ExportProcessResult(
+                status=ExportProcessingStatus.RETRIED,
+                event_id=claimed.event_id,
+                job_id=job_id,
+                attempts=attempts,
+                error=str(exc),
+            )
 
     def run(
         self,
@@ -188,6 +208,32 @@ class ExportWorker:
             if result.status is ExportProcessingStatus.IDLE:
                 stop.wait(self._settings.export_worker_poll_interval_seconds)
         logger.info("Export Worker 已停止")
+
+
+def _log_result(result: ExportProcessResult) -> None:
+    """在已绑定 trace 的上下文内记录事件结果，便于按 ID 串联查询。"""
+    if result.status is ExportProcessingStatus.PUBLISHED:
+        logger.info(
+            "导出事件已处理 event_id=%s job_id=%s",
+            result.event_id,
+            result.job_id,
+        )
+    elif result.status is ExportProcessingStatus.RETRIED:
+        logger.warning(
+            "导出事件将重试 event_id=%s job_id=%s attempts=%s error=%s",
+            result.event_id,
+            result.job_id,
+            result.attempts,
+            result.error,
+        )
+    elif result.status is ExportProcessingStatus.DEAD_LETTER:
+        logger.error(
+            "导出事件进入死信 event_id=%s job_id=%s attempts=%s error=%s",
+            result.event_id,
+            result.job_id,
+            result.attempts,
+            result.error,
+        )
 
 
 def _job_id(payload: object, aggregate_id: UUID) -> UUID:

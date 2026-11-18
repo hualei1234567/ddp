@@ -190,6 +190,9 @@ class RawAssetUseCases:
                             else None
                         ),
                         "actor_user_id": str(scope.actor_id),
+                        # 让 Worker 能从事件恢复发起请求的 trace_id；
+                        # 字段是附加的，不改变既有字段语义。
+                        **({"request_id": request_id} if request_id is not None else {}),
                     },
                     now=now,
                     aggregate_type="RAW_ASSET",

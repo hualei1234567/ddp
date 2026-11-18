@@ -15,8 +15,9 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Response
+from fastapi import APIRouter, Query, Request, Response
 
+from app.api.deps import request_id
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.processing_dependencies import (
     ExpectedVersion,
@@ -59,6 +60,7 @@ def list_processing_runs(
 @router.post("", response_model=ProcessingRunOut, status_code=201)
 def create_processing_run(
     payload: ProcessingRunCreate,
+    request: Request,
     response: Response,
     scope: WriteScope,
     services: ProcessingServicesDep,
@@ -75,6 +77,8 @@ def create_processing_run(
             pipeline_version=payload.pipeline_version,
             input_refs=tuple(payload.input_refs),
         ),
+        # 透传请求 ID，Worker 才能把异步执行链路与发起请求对齐。
+        request_id=request_id(request),
     )
     response.headers["ETag"] = f'"{run.row_version}"'
     return ProcessingRunOut.from_domain(run)

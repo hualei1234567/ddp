@@ -334,6 +334,9 @@ class UploadCompletionService:
                     "validation_job_id": str(job_id),
                     "upload_session_id": str(saved.upload_session_id),
                     "actor_user_id": str(scope.actor_id),
+                    # Worker 据此恢复发起请求的 trace_id；缺失时由 Worker
+                    # 生成并标注 generated，不拿 event_id 冒充。
+                    **({"request_id": request_id} if request_id is not None else {}),
                 },
                 now=utcnow(),
                 aggregate_type="RAW_ASSET",

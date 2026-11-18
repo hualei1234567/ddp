@@ -28,6 +28,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.ingestion.ports import ClaimedValidationEvent
 from app.application.observability_redaction import sanitize_log_message
 from app.application.processing.pipeline import (
     ConcurrentRunUpdate,
@@ -45,7 +46,7 @@ from app.application.quality.episode_checks import EpisodeQualityChecks
 from app.application.quality.registry import default_registry
 from app.application.quality.use_cases import QualityRunUseCases
 from app.core.config import Settings, get_settings
-from app.core.logging import configure_logging
+from app.core.logging import bind_trace, configure_logging, trace_from_event_payload
 from app.domain.identity.models import ProjectScope
 from app.domain.processing.enums import ProcessingRunStatus
 from app.domain.processing.errors import (
@@ -120,103 +121,121 @@ class ProcessingRunWorker:
             claimed = queue.claim_next(now=moment, event_type=RUN_REQUESTED_EVENT)
             if claimed is None:
                 return {"status": RunProcessingStatus.IDLE.value}
+            # 追踪上下文覆盖处理与结果日志；来源是事件 payload 的 request_id，
+            # 缺失时生成并标注 generated，退出 with 后复位。
+            with bind_trace(trace_from_event_payload(claimed.payload)) as trace:
+                result = self._process_claimed(session, queue, claimed, moment)
+                _log_result(result)
+                if trace.is_generated:
+                    logger.info(
+                        "处理运行事件缺少可用 request_id，已生成本地 trace_id event_id=%s",
+                        claimed.event_id,
+                    )
+                return result
 
-            # claim 的行锁只在当前事务内有效；pipeline 会按阶段提交，锁会释放。
-            # 先落一个租约再提交，避免第二个 Worker 在同一运行上并发执行阶段。
-            if not queue.mark_claimed(
-                claimed.event_id,
-                now=moment,
-                lease_seconds=self._settings.processing_event_lease_seconds,
-            ):
-                session.commit()
-                return {
-                    "status": RunProcessingStatus.PUBLISHED.value,
-                    "skipped": "事件已被另一 Worker 领取",
-                }
+    def _process_claimed(
+        self,
+        session: Session,
+        queue: SqlOutboxValidationQueue,
+        claimed: ClaimedValidationEvent,
+        moment: datetime,
+    ) -> dict[str, object]:
+        # claim 的行锁只在当前事务内有效；pipeline 会按阶段提交，锁会释放。
+        # 先落一个租约再提交，避免第二个 Worker 在同一运行上并发执行阶段。
+        if not queue.mark_claimed(
+            claimed.event_id,
+            now=moment,
+            lease_seconds=self._settings.processing_event_lease_seconds,
+        ):
             session.commit()
+            return {
+                "status": RunProcessingStatus.PUBLISHED.value,
+                "skipped": "事件已被另一 Worker 领取",
+            }
+        session.commit()
 
-            raw_id = claimed.payload.get("run_id")
-            try:
-                run_id = UUID(str(raw_id))
-            except (TypeError, ValueError):
-                queue.mark_dead_letter(
-                    claimed.event_id,
-                    attempts=claimed.attempts + 1,
-                    last_error=f"payload 缺少合法 run_id：{raw_id!r}",
-                )
-                session.commit()
-                return {
-                    "status": RunProcessingStatus.DEAD_LETTER.value,
-                    "event_id": str(claimed.event_id),
-                }
-
-            runs = SqlProcessingRunRepository(session)
-            run = runs.get(
-                # 读只需要项目范围；写用运行创建人（updated_by 有 FK 到 users）。
-                ProjectScope(claimed.project_id, actor_id=claimed.project_id),
-                run_id,
+        raw_id = claimed.payload.get("run_id")
+        try:
+            run_id = UUID(str(raw_id))
+        except (TypeError, ValueError):
+            queue.mark_dead_letter(
+                claimed.event_id,
+                attempts=claimed.attempts + 1,
+                last_error=f"payload 缺少合法 run_id：{raw_id!r}",
             )
-            if run is None:
-                queue.mark_dead_letter(
-                    claimed.event_id,
-                    attempts=claimed.attempts + 1,
-                    last_error=f"处理运行不存在或不属于该项目：{run_id}",
-                )
-                session.commit()
-                return {
-                    "status": RunProcessingStatus.DEAD_LETTER.value,
-                    "run_id": str(run_id),
-                }
+            session.commit()
+            return {
+                "status": RunProcessingStatus.DEAD_LETTER.value,
+                "event_id": str(claimed.event_id),
+            }
 
-            scope = ProjectScope(claimed.project_id, actor_id=run.created_by or run.updated_by)
-            pipeline = self._build_pipeline(session)
+        runs = SqlProcessingRunRepository(session)
+        run = runs.get(
+            # 读只需要项目范围；写用运行创建人（updated_by 有 FK 到 users）。
+            ProjectScope(claimed.project_id, actor_id=claimed.project_id),
+            run_id,
+        )
+        if run is None:
+            queue.mark_dead_letter(
+                claimed.event_id,
+                attempts=claimed.attempts + 1,
+                last_error=f"处理运行不存在或不属于该项目：{run_id}",
+            )
+            session.commit()
+            return {
+                "status": RunProcessingStatus.DEAD_LETTER.value,
+                "run_id": str(run_id),
+            }
 
-            try:
-                outcome = pipeline.execute(scope, run_id, now=moment)
-            except ConcurrentRunUpdate as exc:
-                # 另一 Worker 已推进或客户端已取消：本事件不需要再投递。
-                session.rollback()
-                queue.mark_published(claimed.event_id, now=moment)
-                session.commit()
-                return {
-                    "status": RunProcessingStatus.PUBLISHED.value,
-                    "run_id": str(run_id),
-                    "skipped": f"运行被并发推进或取消：{exc}",
-                }
-            except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
-                logger.exception("处理运行执行异常", extra={"run_id": str(run_id)})
-                session.rollback()
-                self._force_fail(session, scope, run_id, moment, exc)
-                return self._settle_failure(
-                    session,
-                    queue,
-                    claimed=claimed,
-                    scope=scope,
-                    run_id=run_id,
-                    moment=moment,
-                    last_error=str(exc),
-                )
+        scope = ProjectScope(claimed.project_id, actor_id=run.created_by or run.updated_by)
+        pipeline = self._build_pipeline(session)
 
-            if outcome.status == PipelineOutcomeStatus.FAILED.value:
-                return self._settle_failure(
-                    session,
-                    queue,
-                    claimed=claimed,
-                    scope=scope,
-                    run_id=run_id,
-                    moment=moment,
-                    last_error=outcome.error_summary or outcome.error_code or "阶段失败",
-                    retryable=outcome.retryable,
-                )
-
+        try:
+            outcome = pipeline.execute(scope, run_id, now=moment)
+        except ConcurrentRunUpdate as exc:
+            # 另一 Worker 已推进或客户端已取消：本事件不需要再投递。
+            session.rollback()
             queue.mark_published(claimed.event_id, now=moment)
             session.commit()
             return {
                 "status": RunProcessingStatus.PUBLISHED.value,
                 "run_id": str(run_id),
-                "outcome": outcome.status,
-                "note": outcome.reason,
+                "skipped": f"运行被并发推进或取消：{exc}",
             }
+        except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
+            logger.exception("处理运行执行异常", extra={"run_id": str(run_id)})
+            session.rollback()
+            self._force_fail(session, scope, run_id, moment, exc)
+            return self._settle_failure(
+                session,
+                queue,
+                claimed=claimed,
+                scope=scope,
+                run_id=run_id,
+                moment=moment,
+                last_error=str(exc),
+            )
+
+        if outcome.status == PipelineOutcomeStatus.FAILED.value:
+            return self._settle_failure(
+                session,
+                queue,
+                claimed=claimed,
+                scope=scope,
+                run_id=run_id,
+                moment=moment,
+                last_error=outcome.error_summary or outcome.error_code or "阶段失败",
+                retryable=outcome.retryable,
+            )
+
+        queue.mark_published(claimed.event_id, now=moment)
+        session.commit()
+        return {
+            "status": RunProcessingStatus.PUBLISHED.value,
+            "run_id": str(run_id),
+            "outcome": outcome.status,
+            "note": outcome.reason,
+        }
 
     def _build_pipeline(self, session: Session) -> ProcessingPipeline:
         runs = SqlProcessingRunRepository(session)
@@ -406,6 +425,25 @@ class ProcessingRunWorker:
             result = self.process_once()
             if result["status"] == RunProcessingStatus.IDLE.value:
                 stop_event.wait(self._settings.validation_worker_poll_interval_seconds)
+
+
+def _log_result(result: dict[str, object]) -> None:
+    """在已绑定 trace 的上下文内记录非成功结果。"""
+    status = result.get("status")
+    if status == RunProcessingStatus.RETRIED.value:
+        logger.warning(
+            "处理运行事件将重试 run_id=%s attempts=%s error=%s",
+            result.get("run_id"),
+            result.get("attempts"),
+            result.get("error"),
+        )
+    elif status == RunProcessingStatus.DEAD_LETTER.value:
+        logger.error(
+            "处理运行事件进入死信 run_id=%s attempts=%s error=%s",
+            result.get("run_id"),
+            result.get("attempts"),
+            result.get("error"),
+        )
 
 
 def _install_signal_handlers(stop_event: threading.Event) -> None:

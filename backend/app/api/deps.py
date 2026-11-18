@@ -46,6 +46,15 @@ def _is_loopback(request: Request) -> bool:
     return client is not None and client.host in _LOOPBACK_HOSTS
 
 
+def request_id(request: Request) -> str | None:
+    """当前请求的 ``X-Request-Id``（由 ``RequestIdMiddleware`` 写入 state）。
+
+    单一实现：数据集/标注/处理等路由共用，避免每个依赖模块各写一份。
+    """
+    value = getattr(request.state, "request_id", None)
+    return value if isinstance(value, str) else None
+
+
 def extract_bearer_token(request: Request) -> str | None:
     """提取 Bearer token；存在 Authorization 但格式错误时直接拒绝。
 

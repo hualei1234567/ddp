@@ -12,11 +12,14 @@ outbox、RawAsset 生命周期、媒体资产落库全部是生产实现。
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import pytest
+from app.core.logging import JsonFormatter, trace_id_var
 from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
 from app.infrastructure.db.models.datasources import DataSourceImportModel
 from sqlalchemy import select
@@ -300,3 +303,68 @@ def test_import_worker_failure_logs_error_without_leaking_url(
         assert not any(
             len(token) > 1 and token.startswith("/") for token in item["message"].split()
         ), item
+
+
+class _CollectingJsonHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.payloads: list[dict[str, object]] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.payloads.append(json.loads(self.format(record)))
+
+
+def test_import_worker_reuses_request_id_in_logs_and_audit(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """HTTP request_id → import_requested 事件 → Worker 日志/审计，同一 ID。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    code = f"hf-trace-{UUID(int=0).hex[:6]}"
+    _, job = register_import_chain(
+        editor,
+        ids.project_a,
+        code=code,
+        request_id="req-import-1",
+    )
+
+    store = InMemoryObjectStore()
+    install_object_store(monkeypatch, store)
+
+    handler = _CollectingJsonHandler()
+    handler.setFormatter(JsonFormatter())
+    worker_logger = logging.getLogger("ddp.worker.datasources")
+    worker_logger.addHandler(handler)
+    try:
+        result = run_import_worker(
+            factory,
+            MediaTransport(),
+            now=datetime.now(UTC) + timedelta(seconds=1),
+        )
+    finally:
+        worker_logger.removeHandler(handler)
+
+    assert result["status"] == "PUBLISHED", result
+    with factory() as session:
+        requested = session.scalar(
+            select(OutboxEvent).where(
+                OutboxEvent.project_id == ids.project_a,
+                OutboxEvent.event_type == "datasource.import_requested",
+            )
+        )
+        assert requested is not None
+        assert requested.payload["request_id"] == "req-import-1"
+        audits = session.scalars(
+            select(AuditLog).where(
+                AuditLog.project_id == ids.project_a,
+                AuditLog.resource_type == "data_source_import",
+            )
+        ).all()
+        assert audits
+        assert all(item.request_id == "req-import-1" for item in audits)
+
+    assert handler.payloads, "Worker 必须留下可检索的结果日志"
+    assert all(item["trace_id"] == "req-import-1" for item in handler.payloads)
+    assert all(item["trace_source"] == "event" for item in handler.payloads)
+    assert trace_id_var.get() is None

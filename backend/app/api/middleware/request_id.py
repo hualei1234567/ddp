@@ -30,16 +30,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.core.logging import trace_id_var
-
-_MAX_REQUEST_ID_LENGTH = 128
-
-
-def _is_safe_request_id(value: str | None) -> bool:
-    """只接受长度受限的可打印 ASCII，避免日志/响应头注入。"""
-    if not value or len(value) > _MAX_REQUEST_ID_LENGTH:
-        return False
-    return all(32 <= ord(char) < 127 for char in value)
+from app.core.logging import is_safe_trace_id, trace_id_var
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
@@ -49,7 +40,9 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
         incoming = request.headers.get("X-Request-Id")
-        request_id = incoming if _is_safe_request_id(incoming) else uuid4().hex
+        # 校验规则由 ``app.core.logging.is_safe_trace_id`` 单点定义，Worker
+        # 恢复事件上下文时复用同一规则，避免两处口径漂移。
+        request_id = incoming if is_safe_trace_id(incoming) else uuid4().hex
         request.state.request_id = request_id
         # 与 request_id 同值（见模块注释）；用 token 复位，避免 contextvar
         # 在连接复用/任务切换时泄漏到下一个请求。

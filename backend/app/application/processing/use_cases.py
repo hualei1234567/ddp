@@ -82,6 +82,7 @@ class ProcessingRunUseCases:
         scope: ProjectScope,
         command: NewProcessingRun,
         *,
+        request_id: str | None = None,
         now: datetime | None = None,
     ) -> ProcessingRun:
         moment = now or _utcnow()
@@ -109,7 +110,7 @@ class ProcessingRunUseCases:
             from_status=None,
             to_status=created.status,
             reason=None,
-            request_id=None,
+            request_id=request_id,
             details={
                 "pipeline_version": created.pipeline_version,
                 "input_ref_count": len(created.input_refs),
@@ -118,6 +119,8 @@ class ProcessingRunUseCases:
             event_payload={
                 "run_id": str(created.run_id),
                 "pipeline_version": created.pipeline_version,
+                # Worker 据此沿用发起请求的 trace_id；附加字段。
+                **({"request_id": request_id} if request_id is not None else {}),
             },
             occurred_at=moment,
             dispatch=True,

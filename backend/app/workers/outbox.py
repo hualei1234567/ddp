@@ -17,7 +17,7 @@ import argparse
 import logging
 import signal
 import threading
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -29,7 +29,7 @@ from app.application.ingestion.validation_events import (
     ValidationEventProcessor,
 )
 from app.core.config import Settings, get_settings
-from app.core.logging import configure_logging
+from app.core.logging import bind_trace, configure_logging, trace_from_event_payload
 from app.infrastructure.db.session import create_session_factory, get_engine
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
@@ -77,10 +77,27 @@ class OutboxWorker:
         self._storage = storage
 
     def process_once(self, *, now: datetime | None = None) -> ProcessResult:
+        moment = now or datetime.now(UTC)
         with self._factory() as session:
             processor = build_validation_processor(session, self._settings, self._storage)
-            result = processor.process_next(now=now)
-        _log_result(result)
+            event = processor.claim_next(now=moment)
+            if event is None:
+                return ProcessResult(status=ProcessingStatus.IDLE)
+            # 追踪上下文覆盖「处理 + 结果日志」：来源是事件 payload 里的
+            # request_id；缺失/非法时生成新 ID 并标注 generated，绝不拿
+            # event_id 冒充请求 ID。退出 with 后按 token 复位，不串下一条事件。
+            with bind_trace(trace_from_event_payload(event.payload)) as trace:
+                result = processor.process_claimed(
+                    event,
+                    trace_id=trace.trace_id,
+                    now=moment,
+                )
+                _log_result(result)
+                if trace.is_generated:
+                    logger.info(
+                        "校验事件缺少可用 request_id，已生成本地 trace_id event_id=%s",
+                        result.event_id,
+                    )
         return result
 
     def run(
