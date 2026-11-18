@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from uuid import UUID
 
@@ -21,7 +22,11 @@ from app.domain.datasources.enums import (
     ImportStage,
     ImportStatus,
 )
-from app.domain.datasources.errors import DuplicateResourceError, VersionConflictError
+from app.domain.datasources.errors import (
+    DomainValidationError,
+    DuplicateResourceError,
+    VersionConflictError,
+)
 from app.domain.datasources.media import MediaAsset
 from app.domain.datasources.models import DataSource, DataSourceImport, DataSourceImportLog
 from app.domain.datasources.review import DataReview
@@ -577,6 +582,19 @@ class SqlMediaAssetRepository:
         return _asset_from_row(row) if row is not None else None
 
 
+def _review_evidence_from_row(raw: object) -> dict[str, object] | None:
+    """把 ``data_source_reviews.evidence`` 列还原为领域证据对象。
+
+    ``NULL`` 原样返回 None（历史记录没有证据，交给用例回退审计留痕）。
+    非对象值说明行被外部篡改：宁可让契约校验拒绝，也不静默当作无证据。
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise DomainValidationError("审核记录的 evidence 不是对象")
+    return dict(raw)
+
+
 def _review_from_row(row: DataReviewModel) -> DataReview:
     return DataReview(
         review_id=row.id,
@@ -590,6 +608,7 @@ def _review_from_row(row: DataReviewModel) -> DataReview:
         created_at=as_utc(row.created_at),  # type: ignore[arg-type]
         decided_at=as_utc(row.decided_at),
         row_version=row.version,
+        evidence=_review_evidence_from_row(row.evidence),
     )
 
 
@@ -612,6 +631,7 @@ class SqlDataReviewRepository:
                 reviewer_id=review.reviewer_id,
                 submitted_by=review.submitted_by,
                 decided_at=review.decided_at,
+                evidence=dict(review.evidence) if review.evidence is not None else None,
             )
         )
         try:
@@ -644,6 +664,7 @@ class SqlDataReviewRepository:
                 reason=review.reason,
                 reviewer_id=review.reviewer_id,
                 decided_at=review.decided_at,
+                evidence=dict(review.evidence) if review.evidence is not None else None,
                 version=expected_version + 1,
                 updated_by=scope.actor_id,
             )
