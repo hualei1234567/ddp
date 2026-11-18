@@ -185,11 +185,16 @@ def create_ready_work(
     *,
     episode_ids: list[UUID] | None = None,
     planned_item_count: int | None = None,
+    claim_only: bool = False,
 ) -> dict[str, object]:
     """创建一个可直接标注的任务（Schema 已发布、样本集已快照）。
 
     ``episode_ids`` / ``planned_item_count`` 只为多 Episode 场景补充：
     端到端链路一次提交多个 Episode 的标注；默认仍是最小的一条，既有调用不变。
+
+    ``claim_only=True`` 停在"已领取（CLAIMED）"这一步：租约过期巡检需要
+    CLAIMED/ASSIGNED 的分配，继续 start 会把它推进到 IN_PROGRESS，那已经
+    不是"领了活没干"的状态。
     """
     target_ids = list(episode_ids) if episode_ids is not None else [episode_id]
     item_count = planned_item_count if planned_item_count is not None else len(target_ids)
@@ -271,6 +276,12 @@ def create_ready_work(
         json={},
     )
     assert claimed.status_code == 200, claimed.text
+    if claim_only:
+        return {
+            "task": created.json(),
+            "batch": batch,
+            "assignment": claimed.json(),
+        }
     task_started = editor.post(
         url(project_id, f"/annotation-tasks/{task_id}/actions/start"),
         headers={"If-Match": '"5"'},

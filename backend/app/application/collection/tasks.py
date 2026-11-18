@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from app.application.collection.asset_references import (
@@ -50,6 +51,17 @@ from app.domain.collection.state_machines import (
 )
 from app.domain.identity.models import ProjectScope
 
+if TYPE_CHECKING:
+    from typing import Protocol
+
+    class EpisodeCountDirectory(Protocol):
+        def count_by_task(self, scope: ProjectScope, task_id: UUID) -> dict[str, int]: ...
+
+        def counts_by_task(
+            self, scope: ProjectScope, task_ids: list[UUID]
+        ) -> dict[UUID, dict[str, int]]: ...
+
+
 _TASK_PATCHABLE_FIELDS = frozenset(
     {
         "name",
@@ -91,12 +103,17 @@ class CollectionTaskUseCases:
         *,
         asset_directory: CollectionAssetDirectory,
         location_directory: LocationDirectory,
+        episode_counts: EpisodeCountDirectory | None = None,
     ) -> None:
         self._tasks = tasks
         self._batches = batches
         self._directory = directory
         self._asset_directory = asset_directory
         self._locations = location_directory
+        # Episode 计数（submitted/accepted）此前没有任何写入点：complete 的
+        # "验收数量达标"判定永远不成立，只能靠豁免。每次动作前用 Episode 事实
+        # 重新算一遍并随保存写回，比"状态迁移时 +1"更不容易长期偏移。
+        self._episode_counts = episode_counts
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
@@ -119,13 +136,17 @@ class CollectionTaskUseCases:
             after_id=decode_cursor(cursor),
             limit=bounded_limit + 1,
         )
+        counts = self._episode_counts_for(scope, [item.task_id for item in items])
+        items = [self._apply_counts(item, counts) for item in items]
         return build_page(items, limit=bounded_limit, id_of=lambda item: item.task_id)
 
     def get_task(self, scope: ProjectScope, task_id: UUID) -> CollectionTask:
         task = self._tasks.get(scope, task_id)
         if task is None:
             raise ResourceNotFoundError("采集任务", task_id)
-        return task
+        # 计数以 Episode 事实为准：列表、详情、动作三条路径口径必须一致，
+        # 否则会出现"详情显示 1 条已验收、complete 却说未达标"的自相矛盾。
+        return self._with_episode_counts(scope, task)
 
     def create_task(
         self,
@@ -398,6 +419,45 @@ class CollectionTaskUseCases:
         )
         self._uow.commit()
         return saved
+
+    def _episode_counts_for(
+        self,
+        scope: ProjectScope,
+        task_ids: list[UUID],
+    ) -> dict[UUID, dict[str, int]]:
+        if self._episode_counts is None:
+            return {}
+        return self._episode_counts.counts_by_task(scope, task_ids)
+
+    def _apply_counts(
+        self,
+        task: CollectionTask,
+        counts: Mapping[UUID, dict[str, int]],
+    ) -> CollectionTask:
+        if task.task_id is None:
+            return task
+        bucket = counts.get(task.task_id)
+        if bucket is None:
+            return task
+        return replace(
+            task,
+            submitted_episode_count=int(bucket["total"]),
+            accepted_episode_count=int(bucket["accepted"]),
+        )
+
+    def _with_episode_counts(
+        self,
+        scope: ProjectScope,
+        task: CollectionTask,
+    ) -> CollectionTask:
+        if self._episode_counts is None or task.task_id is None:
+            return task
+        counts = self._episode_counts.count_by_task(scope, task.task_id)
+        return replace(
+            task,
+            submitted_episode_count=int(counts["total"]),
+            accepted_episode_count=int(counts["accepted"]),
+        )
 
     def _validate_assignment(
         self,

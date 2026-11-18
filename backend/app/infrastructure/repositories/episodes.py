@@ -130,6 +130,47 @@ class SqlEpisodeRepository:
         )
         return self._from_row(row) if row is not None else None
 
+    def count_by_task(self, scope: ProjectScope, task_id: UUID) -> dict[str, int]:
+        rows = self._session.execute(
+            select(EpisodeModel.status, func.count())
+            .where(
+                EpisodeModel.project_id == scope.project_id,
+                EpisodeModel.task_id == task_id,
+            )
+            .group_by(EpisodeModel.status)
+        ).all()
+        counts = {str(status): int(count) for status, count in rows}
+        accepted = counts.get("ACCEPTED", 0) + counts.get("COMPLETED", 0)
+        return {"total": sum(counts.values()), "accepted": accepted}
+
+    def counts_by_task(
+        self,
+        scope: ProjectScope,
+        task_ids: list[UUID],
+    ) -> dict[UUID, dict[str, int]]:
+        """批量按任务统计：列表页一次 GROUP BY 取完，不做 N+1 查询。"""
+        if not task_ids:
+            return {}
+        rows = self._session.execute(
+            select(EpisodeModel.task_id, EpisodeModel.status, func.count())
+            .where(
+                EpisodeModel.project_id == scope.project_id,
+                EpisodeModel.task_id.in_(task_ids),
+            )
+            .group_by(EpisodeModel.task_id, EpisodeModel.status)
+        ).all()
+        result: dict[UUID, dict[str, int]] = {
+            task_id: {"total": 0, "accepted": 0} for task_id in task_ids
+        }
+        for task_id, status, count in rows:
+            if task_id is None:
+                continue
+            bucket = result.setdefault(task_id, {"total": 0, "accepted": 0})
+            bucket["total"] += int(count)
+            if str(status) in ("ACCEPTED", "COMPLETED"):
+                bucket["accepted"] += int(count)
+        return result
+
     def list(
         self,
         scope: ProjectScope,

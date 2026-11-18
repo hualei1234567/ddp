@@ -44,13 +44,26 @@ class EpisodeRepository(Protocol):
         limit: int = 20,
     ) -> list[Episode]: ...
 
-    def save(
+    def count_by_task(
         self,
         scope: ProjectScope,
-        episode: Episode,
-        *,
-        expected_version: int,
-    ) -> Episode: ...
+        task_id: UUID,
+    ) -> dict[str, int]:
+        """按采集任务统计 Episode：``total`` 与 ``accepted``（ACCEPTED/COMPLETED）。
+
+        采集任务的 ``submitted_episode_count`` / ``accepted_episode_count`` 此前
+        从来没人写，``complete`` 的"验收数量达标"判定永远不成立、只能靠豁免。
+        计数从 Episode 事实重算，而不是在每次状态迁移里加一（那样漏一次就永久偏）。
+        """
+        ...
+
+    def counts_by_task(
+        self,
+        scope: ProjectScope,
+        task_ids: list[UUID],
+    ) -> dict[UUID, dict[str, int]]:
+        """批量版本：列表页一次查询拿到多个任务的计数，避免 N+1。"""
+        ...
 
 
 class EpisodeRawAssetRepository(Protocol):

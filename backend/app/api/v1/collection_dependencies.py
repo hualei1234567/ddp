@@ -33,6 +33,7 @@ from app.infrastructure.repositories.collection_audit import (
 )
 from app.infrastructure.repositories.collection_batches import SqlCollectionBatchRepository
 from app.infrastructure.repositories.collection_tasks import SqlCollectionTaskRepository
+from app.infrastructure.repositories.episodes import SqlEpisodeRepository
 from app.infrastructure.repositories.locations import SqlLocationDirectory
 
 
@@ -66,6 +67,8 @@ def get_collection_use_cases(session: DbSession) -> CollectionUseCases:
             uow=session,
             asset_directory=asset_directory,
             location_directory=location_directory,
+            # 完成前的"验收数量"用 Episode 事实实时计算，不再依赖没人写过的计数器。
+            episode_counts=SqlEpisodeRepository(session),
         ),
         batches=CollectionBatchUseCases(
             tasks=tasks,
