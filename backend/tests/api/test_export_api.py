@@ -342,3 +342,32 @@ def test_export_cancel_and_if_match(api_db: tuple[sessionmaker[Session], ApiIds]
     )
     assert retry.status_code == 410
     assert retry.json()["error"]["code"] == "export_job_cancelled"
+
+
+def test_export_rejects_unknown_validity_with_explainable_error(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """来源不可达（UNKNOWN）与已失效（STALE）同样 fail-closed，但必须可解释。"""
+    factory, ids = api_db
+    ctx = build_frozen_version(factory, ids)
+    storage = FakeExportStorage()
+    editor = make_client(factory, ids.editor_a, object_storage=storage)
+
+    with factory() as session:
+        session.execute(
+            update(DatasetVersionModel)
+            .where(DatasetVersionModel.id == UUID(ctx["version_id"]))
+            .values(validity_status="UNKNOWN")
+        )
+        session.commit()
+
+    blocked = editor.post(
+        url(ids.project_a, "/exports"),
+        json=export_payload(ctx["version_id"]),
+        headers={"Idempotency-Key": "export-unknown-validity"},
+    )
+    assert blocked.status_code == 409
+    error = blocked.json()["error"]
+    assert error["code"] == "dataset_upstream_invalidated"
+    assert error["details"]["validity_status"] == "UNKNOWN"
+    assert "未确认" in error["message"]

@@ -368,8 +368,12 @@ class DatasetVersionActionsMixin:
         self._ensure_expected(current, expected_version)
         if "freeze" not in allowed_version_actions(current.status):
             raise DatasetNotReadyError("只有 READY 版本可以冻结")
-        if current.validity_status is not ValidityStatus.VALID:
-            raise UpstreamInvalidatedError("版本有效性不是 VALID，禁止冻结")
+        blocked = current.validity_block_reason
+        if blocked is not None:
+            raise UpstreamInvalidatedError(
+                f"{blocked}，禁止冻结",
+                details={"validity_status": current.validity_status.value},
+            )
         if current.created_by == scope.actor_id:
             raise FreezeApprovalForbiddenError("构建人不得作为唯一冻结审批人")
         if not bool(command.payload.get("qa_verified")):
