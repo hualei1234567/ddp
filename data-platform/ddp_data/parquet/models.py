@@ -1,4 +1,4 @@
-"""Parquet 只读元数据的数据模型（无 IO、无依赖）。"""
+"""Parquet 只读元数据的数据模型（无 IO、无外部依赖）。"""
 
 from __future__ import annotations
 
@@ -6,54 +6,44 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True, slots=True)
-class ParquetSchemaField:
-    """schema 树中的一个字段（根节点不包含在内）。
+class ParquetColumn:
+    """PyArrow 元数据中的一个**叶子**列。
 
-    ``path`` 是完整路径元组（含自身）；字段名本身可能含点号（如 LeRobot 的
-    ``observation.state``），因此路径不做字符串拼接解析。
+    ``path`` 使用 Parquet 的规范点分路径（如 ``observation.state.list.element``）；
+    顶层字段名本身可能含点号，因此判断“关键列”只看
+    :attr:`ParquetMetadata.top_level_fields`，不解析点分路径。
     """
 
     name: str
-    path: tuple[str, ...]
-    physical_type: str | None
+    path: str
+    physical_type: str
     logical_type: str | None
     converted_type: str | None
     repetition: str
-    num_children: int
-    type_length: int | None = None
-    scale: int | None = None
-    precision: int | None = None
-    field_id: int | None = None
-
-    @property
-    def is_leaf(self) -> bool:
-        return self.num_children == 0
+    max_definition_level: int
+    max_repetition_level: int
 
 
 @dataclass(frozen=True, slots=True)
 class ParquetMetadata:
     """footer 中的文件级元数据；只含 schema 与计数，不含行数据。"""
 
-    version: int
+    format_version: str
     num_rows: int
     row_group_count: int
-    root_name: str
     created_by: str | None
-    fields: tuple[ParquetSchemaField, ...]
+    top_level_fields: tuple[str, ...]
+    columns: tuple[ParquetColumn, ...]
 
     @property
-    def top_level_fields(self) -> tuple[ParquetSchemaField, ...]:
-        return tuple(field for field in self.fields if len(field.path) == 1)
+    def leaf_columns(self) -> tuple[ParquetColumn, ...]:
+        return self.columns
 
-    @property
-    def leaf_columns(self) -> tuple[ParquetSchemaField, ...]:
-        return tuple(field for field in self.fields if field.is_leaf)
-
-    def field_by_path(self, path: tuple[str, ...]) -> ParquetSchemaField | None:
-        for field in self.fields:
-            if field.path == path:
-                return field
+    def column_by_path(self, path: str) -> ParquetColumn | None:
+        for column in self.columns:
+            if column.path == path:
+                return column
         return None
 
 
-__all__ = ["ParquetMetadata", "ParquetSchemaField"]
+__all__ = ["ParquetColumn", "ParquetMetadata"]

@@ -36,7 +36,7 @@ from enum import StrEnum
 from types import MappingProxyType
 
 from ddp_data.parquet.metadata import read_parquet_metadata
-from ddp_data.parquet.models import ParquetMetadata, ParquetSchemaField
+from ddp_data.parquet.models import ParquetColumn, ParquetMetadata
 
 ADAPTER_ID = "parquet.table_readonly"
 ADAPTER_VERSION = "1.0.0"
@@ -79,17 +79,17 @@ class ParquetLayout(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ParquetColumnSummary:
-    """一个叶子物理列的可解释摘要；组字段不在此列。"""
+    """一个叶子物理列的可解释摘要；组字段不在此列。
 
-    path: tuple[str, ...]
+    ``path`` 使用 Parquet 规范点分路径（含嵌套字段），与 PyArrow 元数据一致。
+    """
+
+    name: str
+    path: str
     physical_type: str
     logical_type: str | None
     converted_type: str | None
     repetition: str
-
-    @property
-    def path_text(self) -> str:
-        return "/".join(self.path)
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +142,7 @@ def summarize_metadata(
     expected_columns: Sequence[ExpectedColumn] | None = None,
 ) -> ParquetTablePreview:
     """把已读取的元数据收敛为预览；不访问文件，便于测试与复用。"""
-    top_level = tuple(field.name for field in metadata.top_level_fields)
+    top_level = metadata.top_level_fields
     layout = _detect_layout(top_level)
     expected = _resolve_expected(layout, expected_columns)
     names = [item.name for item in expected]
@@ -163,7 +163,7 @@ def summarize_metadata(
         row_group_count=metadata.row_group_count,
         created_by=metadata.created_by,
         top_level_fields=top_level,
-        columns=tuple(_column_summary(field) for field in metadata.leaf_columns),
+        columns=tuple(_column_summary(column) for column in metadata.columns),
         key_columns=MappingProxyType(key_columns),
         missing_fields=missing,
         missing_required_fields=missing_required,
@@ -188,15 +188,14 @@ def _resolve_expected(
     return ()
 
 
-def _column_summary(field: ParquetSchemaField) -> ParquetColumnSummary:
-    if field.physical_type is None:  # pragma: no cover - 由 schema 构建阶段保证
-        raise ValueError("叶子列缺少物理类型")
+def _column_summary(column: ParquetColumn) -> ParquetColumnSummary:
     return ParquetColumnSummary(
-        path=field.path,
-        physical_type=field.physical_type,
-        logical_type=field.logical_type,
-        converted_type=field.converted_type,
-        repetition=field.repetition,
+        name=column.name,
+        path=column.path,
+        physical_type=column.physical_type,
+        logical_type=column.logical_type,
+        converted_type=column.converted_type,
+        repetition=column.repetition,
     )
 
 

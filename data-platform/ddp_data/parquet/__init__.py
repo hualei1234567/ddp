@@ -1,13 +1,9 @@
 """Parquet 只读 Adapter：footer 元数据、schema、表预览（DDP-V21-N3-003）。
 
 只做“读元数据”，不做数据页解码、转码或落盘；结果有界、错误显式。
+底层使用官方 PyArrow。
 """
 
-from ddp_data.parquet._schema import (
-    MAX_FIELD_NAME_BYTES,
-    MAX_NESTING_DEPTH,
-    MAX_SCHEMA_ELEMENTS,
-)
 from ddp_data.parquet.adapter import (
     ADAPTER_ID,
     ADAPTER_VERSION,
@@ -31,27 +27,21 @@ from ddp_data.parquet.errors import (
     ParquetProbeError,
 )
 from ddp_data.parquet.metadata import (
-    MAX_CREATED_BY_BYTES,
     MAX_METADATA_BYTES,
-    MAX_ROW_GROUPS,
     read_parquet_metadata,
     read_parquet_metadata_from,
 )
-from ddp_data.parquet.models import ParquetMetadata, ParquetSchemaField
+from ddp_data.parquet.models import ParquetColumn, ParquetMetadata
 
 __all__ = [
     "ADAPTER_ID",
     "ADAPTER_VERSION",
     "DEFAULT_PARQUET_ADAPTER",
     "LEROBOT_TABULAR_COLUMNS",
-    "MAX_CREATED_BY_BYTES",
-    "MAX_FIELD_NAME_BYTES",
     "MAX_METADATA_BYTES",
-    "MAX_NESTING_DEPTH",
-    "MAX_ROW_GROUPS",
-    "MAX_SCHEMA_ELEMENTS",
     "ExpectedColumn",
     "NotParquetError",
+    "ParquetColumn",
     "ParquetColumnSummary",
     "ParquetEncryptedError",
     "ParquetInputError",
@@ -61,7 +51,6 @@ __all__ = [
     "ParquetMetadataLimitError",
     "ParquetProbeError",
     "ParquetReadOnlyAdapter",
-    "ParquetSchemaField",
     "ParquetTablePreview",
     "detect_parquet",
     "read_parquet_metadata",

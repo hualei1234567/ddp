@@ -1,42 +1,37 @@
 """Parquet 文件级元数据只读读取（DDP-V21-N3-003）。
 
-**能力边界**
+**实现来源**
 
-本模块只读 Parquet footer 中的 ``FileMetaData``：格式版本、写入器、行数、
-行组数、schema 树（字段名/物理类型/逻辑类型/重复性，解析在
-:mod:`ddp_data.parquet._schema`）。它**不读取数据页**，因此：
+使用官方 **PyArrow**（``pyarrow.parquet.read_metadata`` / ``ParquetSchema``），
+不自研 footer 协议解析。PyArrow 只读取 footer 元数据，不解码数据页；本模块
+在此之上保留平台的统一语义：
 
-- 不返回任何行值、统计量或编码信息；
-- 不支持加密 footer（``PARE`` 魔数）与加密列；
-- 不把整个文件读入内存——只读文件头 4 字节、尾部 8 字节与声明的 footer 区间，
-  footer 长度本身有上限（``MAX_METADATA_BYTES``）；
-- 行组列表只取数量后整体跳过，不把每个行组物化成 Python 对象。
+- **有界**：读取前先校验首尾 ``PAR1`` 标记、footer 长度上限与长度/文件大小
+  一致性；加密 footer（``PARE``）与非法结构显式失败。
+- **显式**：非 Parquet、损坏、加密、元数据超限全部抛 :mod:`errors` 中的异常，
+  绝不返回空 schema / 0 行冒充“读到了但没数据”。
+- **脱敏**：对外错误消息不含文件路径，也不回显原始字节；底层 PyArrow 异常
+  （可能带路径）不作为错误文本透出。
 
-**依赖决策（重要）**
+只读范围：schema/行数/行组数/写入器与逻辑类型。行值、列统计、压缩编码不在
+本模块范围内。
 
-``CLAUDE.md`` 要求协议类能力优先使用官方 SDK；但本仓库当前没有 PyArrow，
-且任务约束禁止未评估新增依赖。Parquet footer 是公开稳定的 Thrift Compact
-Protocol 结构，只解码它即可获得真实 schema 与行数。该实现是**唯一例外**：
-只读、有界、不含数据页解码；一旦后续批准 PyArrow，应优先替换为官方实现，
-本模块的返回结构可作为兼容层保留。详细理由写入交付说明与 PR。
-
-**错误纪律**
-
-非 Parquet、损坏、加密、元数据超限、schema 自相矛盾全部抛显式异常；
-绝不返回空 schema / 0 行来冒充“读到了但没数据”。错误消息不带文件路径，
-也不回显原始字节。
+**依赖**：``data-platform/requirements.txt`` 固定 ``pyarrow==23.0.1``；
+后端测试 job 与本地 venv 必须安装该文件，不能依赖开发机巧合。
 """
 
 from __future__ import annotations
 
+import json
 import os
 import struct
 from collections.abc import Mapping
 from pathlib import Path
 from typing import BinaryIO
 
-from ddp_data.parquet._schema import MAX_SCHEMA_ELEMENTS, decode_schema
-from ddp_data.parquet._thrift import CompactReader, CompactType, ThriftDecodeError
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 from ddp_data.parquet.errors import (
     NotParquetError,
     ParquetEncryptedError,
@@ -44,25 +39,20 @@ from ddp_data.parquet.errors import (
     ParquetMetadataError,
     ParquetMetadataLimitError,
 )
-from ddp_data.parquet.models import ParquetMetadata
+from ddp_data.parquet.models import ParquetColumn, ParquetMetadata
 
 MAX_METADATA_BYTES = 16 * 1024 * 1024
-MAX_ROW_GROUPS = 100_000
-MAX_CREATED_BY_BYTES = 1_024
-MAX_NESTING_DEPTH = 64
 
 _HEADER_BYTES = 4
 _TRAILER_BYTES = 8
 _MIN_FILE_BYTES = _HEADER_BYTES + _TRAILER_BYTES
 _MAGIC = b"PAR1"
 _ENCRYPTED_MAGIC = b"PARE"
-_SUPPORTED_FORMAT_VERSIONS = frozenset({1, 2})
-
-_FIELD_VERSION = 1
-_FIELD_SCHEMA = 2
-_FIELD_NUM_ROWS = 3
-_FIELD_ROW_GROUPS = 4
-_FIELD_CREATED_BY = 6
+_TIME_UNITS: Mapping[str, str] = {
+    "milliseconds": "MILLIS",
+    "microseconds": "MICROS",
+    "nanoseconds": "NANOS",
+}
 
 
 def read_parquet_metadata(path: str | os.PathLike[str]) -> ParquetMetadata:
@@ -74,8 +64,9 @@ def read_parquet_metadata(path: str | os.PathLike[str]) -> ParquetMetadata:
         size = file_path.stat().st_size
         with file_path.open("rb") as handle:
             return read_parquet_metadata_from(handle, size=size)
-    except OSError as exc:
-        raise ParquetInputError("Parquet 文件读取失败") from exc
+    except OSError:
+        # 不链式保留原始异常：底层错误可能携带绝对路径。
+        raise ParquetInputError("Parquet 文件读取失败") from None
 
 
 def read_parquet_metadata_from(handle: BinaryIO, *, size: int) -> ParquetMetadata:
@@ -84,7 +75,20 @@ def read_parquet_metadata_from(handle: BinaryIO, *, size: int) -> ParquetMetadat
     暴露这一层是为了让调用方使用**对象存储下载到临时文件的句柄**或测试替身，
     也便于验证“不会整文件读入内存”。
     """
-    _check_size(size)
+    _precheck_footer(handle, size)
+    try:
+        arrow_metadata = pq.read_metadata(handle)
+    except (pa.ArrowException, OSError):
+        # 不链式保留原始异常：PyArrow/Thrift 错误可能包含路径或原始内容。
+        raise ParquetMetadataError("footer 元数据无法解码") from None
+    return _to_model(arrow_metadata)
+
+
+def _precheck_footer(handle: BinaryIO, size: int) -> None:
+    if size < 0:
+        raise ParquetInputError("文件大小不能为负")
+    if size < _MIN_FILE_BYTES:
+        raise NotParquetError("文件小于 Parquet 最小长度")
     handle.seek(0)
     if handle.read(_HEADER_BYTES) != _MAGIC:
         raise NotParquetError("缺少 Parquet 文件头标记")
@@ -104,147 +108,105 @@ def read_parquet_metadata_from(handle: BinaryIO, *, size: int) -> ParquetMetadat
         raise ParquetMetadataLimitError(f"footer 元数据长度超过 {MAX_METADATA_BYTES} 字节上限")
     if metadata_length > size - _MIN_FILE_BYTES:
         raise NotParquetError("footer 元数据长度超出文件大小")
-    handle.seek(size - _TRAILER_BYTES - metadata_length)
-    payload = handle.read(metadata_length)
-    if len(payload) != metadata_length:
-        raise NotParquetError("footer 元数据读取不完整")
-    return _decode_file_metadata(payload)
 
 
-def _check_size(size: int) -> None:
-    if size < 0:
-        raise ParquetInputError("文件大小不能为负")
-    if size < _MIN_FILE_BYTES:
-        raise NotParquetError("文件小于 Parquet 最小长度")
-
-
-def _decode_file_metadata(payload: bytes) -> ParquetMetadata:
-    reader = CompactReader(payload, max_depth=MAX_NESTING_DEPTH)
-    try:
-        values = reader.read_struct_with(
-            {
-                _FIELD_VERSION: lambda type_id: _read_int_field(
-                    reader, type_id, CompactType.I32, "version"
-                ),
-                _FIELD_SCHEMA: lambda type_id: _read_schema_list(reader, type_id),
-                _FIELD_NUM_ROWS: lambda type_id: _read_int_field(
-                    reader, type_id, CompactType.I64, "num_rows"
-                ),
-                _FIELD_ROW_GROUPS: lambda type_id: _read_row_group_count(reader, type_id),
-                _FIELD_CREATED_BY: lambda type_id: _read_text_field(reader, type_id, "created_by"),
-            }
-        )
-    except ThriftDecodeError as exc:
-        raise ParquetMetadataError(f"footer 元数据无法解码：{exc}") from exc
-    version = _required_i32(values, _FIELD_VERSION, "version")
-    num_rows = _required_i64(values, _FIELD_NUM_ROWS, "num_rows")
-    row_group_count = _required_int(values, _FIELD_ROW_GROUPS, "row_groups")
-    created_by = _optional_str(values, _FIELD_CREATED_BY, "created_by")
-    schema = _required_sequence(values, _FIELD_SCHEMA, "schema")
-    if version not in _SUPPORTED_FORMAT_VERSIONS:
-        raise ParquetMetadataError(f"不支持的 Parquet 格式版本：{version}")
-    if num_rows < 0:
+def _to_model(arrow_metadata: pq.FileMetaData) -> ParquetMetadata:
+    schema = arrow_metadata.schema
+    arrow_schema = schema.to_arrow_schema()
+    columns = tuple(_column_of(schema.column(index)) for index in range(len(schema)))
+    num_rows = int(arrow_metadata.num_rows)
+    if num_rows < 0:  # pragma: no cover - PyArrow 不会返回负行数
         raise ParquetMetadataError("num_rows 不能为负")
-    if row_group_count < 0 or row_group_count > MAX_ROW_GROUPS:
-        raise ParquetMetadataLimitError(
-            f"行组数量超过 {MAX_ROW_GROUPS} 上限或为负：{row_group_count}"
-        )
-    fields, root_name = decode_schema(schema)
     return ParquetMetadata(
-        version=version,
+        format_version=str(arrow_metadata.format_version),
         num_rows=num_rows,
-        row_group_count=row_group_count,
-        root_name=root_name,
-        created_by=created_by,
-        fields=fields,
+        row_group_count=int(arrow_metadata.num_row_groups),
+        created_by=arrow_metadata.created_by or None,
+        top_level_fields=tuple(arrow_schema.names),
+        columns=columns,
     )
 
 
-def _expect_type(type_id: int, expected: CompactType, label: str) -> None:
-    if type_id != expected:
-        raise ParquetMetadataError(f"{label} 的 Thrift 类型非法")
+def _column_of(column: pq.ColumnSchema) -> ParquetColumn:
+    max_definition_level = int(column.max_definition_level)
+    max_repetition_level = int(column.max_repetition_level)
+    return ParquetColumn(
+        name=str(column.name),
+        path=str(column.path),
+        physical_type=str(column.physical_type),
+        logical_type=_logical_type_text(column.logical_type),
+        converted_type=_normalize_converted(column.converted_type),
+        repetition=_repetition(max_definition_level, max_repetition_level),
+        max_definition_level=max_definition_level,
+        max_repetition_level=max_repetition_level,
+    )
 
 
-def _read_int_field(reader: CompactReader, type_id: int, expected: CompactType, label: str) -> int:
-    _expect_type(type_id, expected, label)
-    if expected is CompactType.I32:
-        return reader.read_i32()
-    return reader.read_i64()
+def _repetition(max_definition_level: int, max_repetition_level: int) -> str:
+    if max_repetition_level > 0:
+        return "REPEATED"
+    if max_definition_level > 0:
+        return "OPTIONAL"
+    return "REQUIRED"
 
 
-def _read_schema_list(reader: CompactReader, type_id: int) -> list[object]:
-    _expect_type(type_id, CompactType.LIST, "schema")
-    size, element_type = reader.read_list_header()
-    _expect_type(element_type, CompactType.STRUCT, "schema element")
-    if size > MAX_SCHEMA_ELEMENTS:
-        raise ParquetMetadataLimitError(f"schema 元素数量超过 {MAX_SCHEMA_ELEMENTS} 上限")
-    return [reader.read_value(CompactType.STRUCT) for _ in range(size)]
-
-
-def _read_row_group_count(reader: CompactReader, type_id: int) -> int:
-    """只取行组数量；行组内容整体跳过，不物化成 Python 对象。"""
-    _expect_type(type_id, CompactType.LIST, "row_groups")
-    size, element_type = reader.read_list_header()
-    _expect_type(element_type, CompactType.STRUCT, "row_groups element")
-    if size > MAX_ROW_GROUPS:
-        raise ParquetMetadataLimitError(f"行组数量超过 {MAX_ROW_GROUPS} 上限：{size}")
-    for _ in range(size):
-        reader.skip(CompactType.STRUCT)
-    return size
-
-
-def _read_text_field(reader: CompactReader, type_id: int, label: str) -> str:
-    _expect_type(type_id, CompactType.BINARY, label)
-    return reader.read_text(max_bytes=MAX_CREATED_BY_BYTES)
-
-
-def _required_i32(values: Mapping[int, object], field_id: int, label: str) -> int:
-    value = _required_int(values, field_id, label)
-    if not -(2**31) <= value < 2**31:
-        raise ParquetMetadataError(f"{label} 超出 i32 范围")
-    return value
-
-
-def _required_i64(values: Mapping[int, object], field_id: int, label: str) -> int:
-    value = _required_int(values, field_id, label)
-    if not -(2**63) <= value < 2**63:
-        raise ParquetMetadataError(f"{label} 超出 i64 范围")
-    return value
-
-
-def _required_int(values: Mapping[int, object], field_id: int, label: str) -> int:
-    value = values.get(field_id)
-    if value is None:
-        raise ParquetMetadataError(f"footer 缺少必填字段 {label}")
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ParquetMetadataError(f"{label} 必须是整数")
-    return value
-
-
-def _required_sequence(values: Mapping[int, object], field_id: int, label: str) -> list[object]:
-    value = values.get(field_id)
-    if value is None:
-        raise ParquetMetadataError(f"footer 缺少必填字段 {label}")
-    if not isinstance(value, list):
-        raise ParquetMetadataError(f"{label} 必须是列表")
-    return value
-
-
-def _optional_str(values: Mapping[int, object], field_id: int, label: str) -> str | None:
-    value = values.get(field_id)
+def _normalize_converted(value: object) -> str | None:
     if value is None:
         return None
-    if not isinstance(value, str):
-        raise ParquetMetadataError(f"{label} 必须是字符串")
-    return value
+    text = str(value)
+    return None if text in ("", "NONE") else text
+
+
+def _logical_type_text(logical_type: pq.ParquetLogicalType | None) -> str | None:
+    if logical_type is None:
+        return None
+    name = logical_type.type
+    if not name or name == "NONE":
+        return None
+    detail = _logical_detail(logical_type)
+    if name == "DECIMAL":
+        return _decimal_text(detail)
+    if name in ("TIME", "TIMESTAMP"):
+        return _temporal_text(str(name), detail)
+    if name == "INT":
+        return _integer_text(detail)
+    return str(name)
+
+
+def _logical_detail(logical_type: pq.ParquetLogicalType) -> Mapping[str, object]:
+    try:
+        value = json.loads(logical_type.to_json())
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def _decimal_text(detail: Mapping[str, object]) -> str:
+    scale = detail.get("scale")
+    precision = detail.get("precision")
+    return f"DECIMAL(scale={scale}, precision={precision})"
+
+
+def _temporal_text(name: str, detail: Mapping[str, object]) -> str:
+    unit = _TIME_UNITS.get(str(detail.get("timeUnit")))
+    adjusted = detail.get("isAdjustedToUTC")
+    if unit is None or not isinstance(adjusted, bool):
+        return name
+    return f"{name}(unit={unit}, utc={adjusted})"
+
+
+def _integer_text(detail: Mapping[str, object]) -> str:
+    bit_width = detail.get("bitWidth")
+    signed = detail.get("isSigned")
+    if bit_width is None or not isinstance(signed, bool):
+        return "INTEGER"
+    return f"INTEGER(bitWidth={bit_width}, signed={signed})"
 
 
 __all__ = [
-    "MAX_CREATED_BY_BYTES",
     "MAX_METADATA_BYTES",
-    "MAX_NESTING_DEPTH",
-    "MAX_ROW_GROUPS",
     "NotParquetError",
+    "ParquetColumn",
     "ParquetEncryptedError",
     "ParquetInputError",
     "ParquetMetadata",
