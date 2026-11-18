@@ -15,6 +15,7 @@ from app.domain.annotation.enums import (
     AnnotationBatchStatus,
     AnnotationTaskStatus,
 )
+from app.domain.annotation.review_policy import ReviewPolicy
 from app.domain.annotation.state_machines import (
     allowed_assignment_actions,
     allowed_batch_actions,
@@ -40,6 +41,22 @@ class AnnotationTaskCreate(BaseModel):
     assignment_mode: str = Field(default="MANUAL", max_length=16)
     iaa_policy: dict[str, object] = Field(default_factory=dict)
     quality_policy: dict[str, object] = Field(default_factory=dict)
+    # 双标策略的便捷字段；严格校验由 ReviewPolicy 统一完成。
+    review_mode: str = Field(default="SINGLE", max_length=8)
+    agreement_threshold: float | None = Field(default=None, ge=0, le=1)
+    auto_approve: bool = False
+
+    def merged_iaa_policy(self) -> dict[str, object]:
+        policy = dict(self.iaa_policy)
+        explicit = self.model_fields_set
+        if "review_mode" in explicit:
+            policy["review_mode"] = self.review_mode
+        if "agreement_threshold" in explicit:
+            policy["agreement_threshold"] = self.agreement_threshold
+        if "auto_approve" in explicit:
+            policy["auto_approve"] = self.auto_approve
+        ReviewPolicy.from_mapping(policy)
+        return policy
 
 
 class AnnotationTaskPatch(BaseModel):
@@ -137,6 +154,8 @@ class AnnotationTaskOut(BaseModel):
     target_episode_count: int
     priority: str
     assignment_mode: str
+    # 从 iaa_policy 派生：SINGLE / DOUBLE，前端据此展示双标门槛与一致性结论。
+    review_mode: str
     iaa_policy: dict[str, object]
     quality_policy: dict[str, object]
     progress: dict[str, object]
@@ -181,6 +200,7 @@ class AnnotationTaskOut(BaseModel):
             target_episode_count=task.target_episode_count,
             priority=_value(task.priority),
             assignment_mode=_value(task.assignment_mode),
+            review_mode=task.review_mode.value,
             iaa_policy=dict(task.iaa_policy),
             quality_policy=dict(task.quality_policy),
             progress=dict(task.progress),

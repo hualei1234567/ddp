@@ -446,6 +446,8 @@ paths:
     $ref: "./fragments/paths.stage3.yaml#/annotationTasks"
   /api/v1/projects/{project_id}/annotation-tasks/{task_id}:
     $ref: "./fragments/paths.stage3.yaml#/annotationTaskDetail"
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}/consistency:
+    $ref: "./fragments/paths.stage3.yaml#/annotationTaskConsistency"
   /api/v1/projects/{project_id}/annotation-tasks/{task_id}/actions/{action}:
     $ref: "./fragments/paths.stage3.yaml#/annotationTaskActions"
   /api/v1/projects/{project_id}/annotation-tasks/{task_id}/batches:
@@ -1004,6 +1006,7 @@ components:
     AnnotationSchema: {$ref: "./schemas/annotation-schema.v1.schema.json"}
     AnnotationSampleSet: {$ref: "./schemas/annotation-sample-set.v1.schema.json"}
     AnnotationTask: {$ref: "./schemas/annotation-task.v1.schema.json"}
+    DoubleAnnotationConsistency: {$ref: "./schemas/double-annotation-consistency.v1.schema.json"}
     AnnotationBatch: {$ref: "./schemas/annotation-batch.v1.schema.json"}
     AnnotationAssignment: {$ref: "./schemas/annotation-assignment.v1.schema.json"}
     AnnotationSubmission: {$ref: "./schemas/annotation-submission.v1.schema.json"}

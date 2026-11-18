@@ -788,6 +788,15 @@ class MemberDirectory(Protocol):
 
     def user_role(self, scope: ProjectScope, user_id: UUID) -> str | None: ...
 
+    def list_member_ids(
+        self,
+        scope: ProjectScope,
+        *,
+        role: str | None = None,
+    ) -> list[UUID]:
+        """按角色列出项目成员；用于自动仲裁时挑选仲裁人。"""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class AuditRecord:

@@ -41,6 +41,11 @@ export default function TaskOverview({ projectId, task }: TaskOverviewProps) {
         <Descriptions.Item label="分配模式">
           {task.assignment_mode}
         </Descriptions.Item>
+        <Descriptions.Item label="复核模式">
+          <Tag color={task.review_mode === "DOUBLE" ? "purple" : undefined}>
+            {task.review_mode === "DOUBLE" ? "双标（DOUBLE）" : "单人（SINGLE）"}
+          </Tag>
+        </Descriptions.Item>
         <Descriptions.Item label="Schema">
           <Space direction="vertical" size={0}>
             <Link

@@ -23,6 +23,7 @@ from app.domain.annotation.errors import (
     TaskNotApprovedError,
     TaskNotReadyError,
 )
+from app.domain.annotation.review_policy import ReviewMode, ReviewPolicy
 from app.domain.annotation.state_machines import (
     action_requires_reason,
     task_target,
@@ -200,6 +201,9 @@ class AnnotationTask:
             positive_int(self.target_episode_count, "target_episode_count"),
         )
         object.__setattr__(self, "iaa_policy", _normalize_policy(self.iaa_policy, "iaa_policy"))
+        # 双标策略不是第二套状态机：它只决定一致性门槛与是否自动通过，
+        # 存在既有的 iaa_policy JSON 中；这里在创建/读取时校验一次。
+        ReviewPolicy.from_mapping(self.iaa_policy)
         object.__setattr__(
             self,
             "quality_policy",
@@ -227,6 +231,14 @@ class AnnotationTask:
             optional_text(self.blocked_reason, "blocked_reason", max_length=REASON_MAX_LENGTH),
         )
         object.__setattr__(self, "version", positive_int(self.version, "version"))
+
+    @property
+    def review_policy(self) -> ReviewPolicy:
+        return ReviewPolicy.from_mapping(self.iaa_policy)
+
+    @property
+    def review_mode(self) -> ReviewMode:
+        return self.review_policy.review_mode
 
     @property
     def is_binding_frozen(self) -> bool:

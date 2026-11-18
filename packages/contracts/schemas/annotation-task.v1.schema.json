@@ -80,6 +80,10 @@
       "title": "Assignment Mode",
       "type": "string"
     },
+    "review_mode": {
+      "title": "Review Mode",
+      "type": "string"
+    },
     "iaa_policy": {
       "additionalProperties": true,
       "title": "Iaa Policy",
@@ -256,6 +260,7 @@
     "target_episode_count",
     "priority",
     "assignment_mode",
+    "review_mode",
     "iaa_policy",
     "quality_policy",
     "progress",

@@ -119,7 +119,7 @@ class IAAUseCases:
         ):
             raise SchemaSnapshotMismatchError("任务 Schema 快照不可复算")
         observations = [
-            _to_observation(item.record, item.annotator_id)
+            to_iaa_observation(item.record, item.annotator_id)
             for item in self._records.list_for_task(
                 scope,
                 task_id=task_id,
@@ -247,7 +247,8 @@ class IAAUseCases:
         return report
 
 
-def _to_observation(record, annotator_id: UUID) -> IAAObservation:
+def to_iaa_observation(record, annotator_id: UUID) -> IAAObservation:
+    """把标注记录投影成 IAA 观测；提交/双标一致性共用这一份转换。"""
     values: dict[str, object] = {}
     spans: list[Span] = []
     for label in record.labels:
@@ -280,4 +281,4 @@ def _as_uuid(value: object, resource: str) -> UUID:
     raise DomainValidationError(f"{resource} ID 非法")
 
 
-__all__ = ["IAAUseCases"]
+__all__ = ["IAAUseCases", "to_iaa_observation"]

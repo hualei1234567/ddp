@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -19,6 +20,7 @@ from app.api.v1.annotation_common import (
     WriteScope,
     request_id,
 )
+from app.api.v1.annotation_consistency_models import DoubleAnnotationConsistencyOut
 from app.api.v1.annotation_dependencies import AnnotationUseCasesDep
 from app.api.v1.annotation_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.annotation_result_models import (
@@ -44,7 +46,10 @@ from app.application.annotation.commands import (
     NewAnnotationSubmission,
 )
 from app.core.errors import ForbiddenError, ValidationFailedError
+from app.domain.annotation.enums import AnnotationSubmissionAction
 from app.domain.annotation.submission import submission_visible_to
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["annotation-submissions"])
 
@@ -162,7 +167,30 @@ def act_on_submission(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return AnnotationSubmissionOut.from_domain(submission)
+    consistency = None
+    if action == AnnotationSubmissionAction.SUBMIT.value:
+        # 门槛判定是提交后的编排，不否决已完成的提交：判定失败只记日志，
+        # 响应仍返回提交本身。判定成功时才把结论一并回传（契约字段 consistency）。
+        try:
+            result = use_cases.consistency.after_submission(
+                scope,
+                submission,
+                request_id=request_id(request),
+            )
+            consistency = DoubleAnnotationConsistencyOut.from_result(result)
+            # 自动通过会推进提交状态，重新读取以返回真实状态。
+            submission = use_cases.submissions.get(scope, submission.submission_id)
+        except Exception:  # noqa: BLE001 - 门槛执行失败不得否决已提交的标注
+            logger.warning(
+                "提交后双标一致性判定失败；提交本身已保留",
+                extra={
+                    "submission_id": str(submission.submission_id),
+                    "project_id": str(scope.project_id),
+                    "request_id": request_id(request),
+                },
+                exc_info=True,
+            )
+    return AnnotationSubmissionOut.from_domain(submission, consistency=consistency)
 
 
 @router.get(

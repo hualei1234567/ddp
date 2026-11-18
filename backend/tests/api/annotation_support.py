@@ -190,9 +190,11 @@ def create_ready_work(
     actor_id: UUID,
     code: str,
     quality_policy: dict[str, object] | None = None,
+    iaa_policy: dict[str, object] | None = None,
     *,
     episode_ids: list[UUID] | None = None,
     planned_item_count: int | None = None,
+    target_item_count: int | None = None,
     claim_only: bool = False,
 ) -> dict[str, object]:
     """创建一个可直接标注的任务（Schema 已发布、样本集已快照）。
@@ -206,17 +208,20 @@ def create_ready_work(
     """
     target_ids = list(episode_ids) if episode_ids is not None else [episode_id]
     item_count = planned_item_count if planned_item_count is not None else len(target_ids)
+    total_item_count = target_item_count if target_item_count is not None else item_count
     payload: dict[str, object] = {
         "code": code,
         "name": f"任务 {code}",
         "sample_set_id": sample_set["sample_set_id"],
         "schema_id": schema["schema_id"],
-        "target_item_count": item_count,
+        "target_item_count": total_item_count,
         "target_episode_count": len(target_ids),
         "priority": "P1",
     }
     if quality_policy is not None:
         payload["quality_policy"] = quality_policy
+    if iaa_policy is not None:
+        payload["iaa_policy"] = iaa_policy
     created = editor.post(url(project_id, "/annotation-tasks"), json=payload)
     assert created.status_code == 201, created.text
     task_id = created.json()["task_id"]
@@ -318,22 +323,27 @@ def create_ready_work(
     }
 
 
-def record_payload(episode_id: UUID) -> dict[str, object]:
+def record_payload(
+    episode_id: UUID,
+    *,
+    action: str = "PICK",
+    segment: tuple[int, int] = (1_100, 1_500),
+) -> dict[str, object]:
     return {
         "episode_id": str(episode_id),
         "episode_version": 1,
         "labels": [
             {
                 "label_key": "action",
-                "value": "PICK",
+                "value": action,
                 "source": "HUMAN",
                 "label_status": "CONFIRMED",
             },
             {
                 "label_key": "segment",
                 "value": {
-                    "start_time_ns": 1_100,
-                    "end_time_ns": 1_500,
+                    "start_time_ns": segment[0],
+                    "end_time_ns": segment[1],
                     "time_domain": "UTC",
                 },
                 "source": "HUMAN",
@@ -350,13 +360,18 @@ def create_submitted(
     episode_id: UUID,
     *,
     episode_ids: list[UUID] | None = None,
+    action: str = "PICK",
+    segment: tuple[int, int] = (1_100, 1_500),
 ) -> dict[str, object]:
     target_ids = list(episode_ids) if episode_ids is not None else [episode_id]
     created = editor.post(
         url(project_id, "/annotation-submissions"),
         json={
             "assignment_id": str(assignment_id),
-            "records": [record_payload(item) for item in target_ids],
+            "records": [
+                record_payload(item, action=action, segment=segment)
+                for item in target_ids
+            ],
             "data_source": "REAL",
         },
     )

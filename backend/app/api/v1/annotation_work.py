@@ -16,6 +16,7 @@ from app.api.v1.annotation_common import (
     WriteScope,
     request_id,
 )
+from app.api.v1.annotation_consistency_models import DoubleAnnotationConsistencyOut
 from app.api.v1.annotation_dependencies import AnnotationUseCasesDep
 from app.api.v1.annotation_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.annotation_work_models import (
@@ -91,7 +92,7 @@ def create_task(
             due_at=payload.due_at,
             priority=payload.priority,
             assignment_mode=payload.assignment_mode,
-            iaa_policy=payload.iaa_policy,
+            iaa_policy=payload.merged_iaa_policy(),
             quality_policy=payload.quality_policy,
         ),
         idempotency_key=idempotency_key,
@@ -109,6 +110,21 @@ def get_task(
     use_cases: AnnotationUseCasesDep,
 ) -> AnnotationTaskOut:
     return AnnotationTaskOut.from_domain(use_cases.tasks.get(scope, task_id))
+
+
+@router.get(
+    "/annotation-tasks/{task_id}/consistency",
+    response_model=DoubleAnnotationConsistencyOut,
+)
+def get_task_consistency(
+    task_id: UUID,
+    scope: ReadScope,
+    use_cases: AnnotationUseCasesDep,
+) -> DoubleAnnotationConsistencyOut:
+    """双标一致性结论（只读，不创建仲裁、不自动通过）。"""
+    return DoubleAnnotationConsistencyOut.from_result(
+        use_cases.consistency.evaluate(scope, task_id)
+    )
 
 
 @router.patch("/annotation-tasks/{task_id}", response_model=AnnotationTaskOut)
