@@ -38,12 +38,8 @@ def _client_error(code: str, status: int) -> ClientError:
 
 def test_existing_object_is_reachable() -> None:
     client = _FakeClient()
-    assert _probe(client).probe("canonical/p/e/1/manifest.json") is (
-        SourceReachability.REACHABLE
-    )
-    assert client.calls == [
-        {"Bucket": "ddp-raw", "Key": "canonical/p/e/1/manifest.json"}
-    ]
+    assert _probe(client).probe("canonical/p/e/1/manifest.json") is (SourceReachability.REACHABLE)
+    assert client.calls == [{"Bucket": "ddp-raw", "Key": "canonical/p/e/1/manifest.json"}]
 
 
 @pytest.mark.parametrize("code", ["NoSuchKey", "404", "NotFound"])

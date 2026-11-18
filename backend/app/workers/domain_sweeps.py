@@ -262,11 +262,7 @@ def main(argv: list[str] | None = None) -> int:
     factory = create_session_factory(get_engine())
     worker = DomainSweepWorker(
         factory,
-        source_probe=(
-            S3SourceProbe(settings)
-            if settings.dataset_source_probe_enabled
-            else None
-        ),
+        source_probe=(S3SourceProbe(settings) if settings.dataset_source_probe_enabled else None),
         probe_attempts=settings.dataset_source_probe_attempts,
         max_objects_per_version=settings.dataset_source_probe_max_objects_per_version,
         max_failures_per_run=settings.dataset_source_probe_max_failures_per_run,

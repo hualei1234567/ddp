@@ -396,9 +396,7 @@ class DatasetValiditySweep:
                 return None
             if verdict is SourceReachability.MISSING:
                 missing += 1
-        reachability = (
-            SourceReachability.MISSING if missing else SourceReachability.REACHABLE
-        )
+        reachability = SourceReachability.MISSING if missing else SourceReachability.REACHABLE
         return _SourceOutcome(
             reachability=reachability,
             missing=missing,

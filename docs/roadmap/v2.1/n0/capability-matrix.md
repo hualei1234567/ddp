@@ -51,7 +51,7 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N3-01 | Canonical 实体 12 类 | **PARTIAL** | N3-001：`data-platform/ddp_data/canonical/` 定义 Frame / VideoStream / SensorStream / Action / Observation / Episode（`ddp.canonical/1.0.0`，只读契约 + LeRobot 投影） | 统一 QualityResult 仍无跨域实体；Frame/Stream 尚无生产者与持久化（ADR-0035 有意不建表） |
-| DDP-V21-N3-02 | Adapter 接口与注册发现 | **PARTIAL** | `data-platform/ddp_data/adapters/registry.py:76-162`；`builtin.py:226,252`；`adapter_resolver.py:32` | `AdapterSpec` 只有 detect/parse；fetch/verify/write 散在 `import_runner.py` 等，不在接口内 |
+| DDP-V21-N3-02 | Adapter 接口与注册发现 | **VERIFIED** | N3-002：`AdapterSpec` 新增可选 `fetch/verify/write`，能力集由实现推导，未实现显式抛 `AdapterCapabilityError`；旧 Adapter 零改动；注册表可按能力检索 | 内置 Adapter 暂只声明 parse/detect；导入链路尚未接线新能力（后续增量） |
 | DDP-V21-N3-03 | 多格式 Adapter 优先级（LeRobot/Parquet/MP4/MCAP/ROS/HDF5） | **PARTIAL** | LeRobot preview：`lerobot/parser.py:104`；JSONL：`builtin.py` | 完整 LeRobot Parquet、Parquet、MP4 metadata、MCAP、ROS Bag、HDF5 均无字段级解析；仅魔数识别 |
 
 ## 4. N4 Processing Pipeline + 质量中心
@@ -61,14 +61,14 @@
 | DDP-V21-N4-01 | Processing Run 实体与状态机（CREATED/QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED/RETRYING） | **VERIFIED** | N4-001/002/005：七态状态机、迁移 0056/0057、`processing.run.requested` 投递与 `processing-worker` 消费、阶段步骤表与 `GET /steps`；FILE_VALIDATION 与 QUALITY_PRE_CHECK 真实执行，其余六阶段显式 SKIPPED | 解析/切片/清洗处理器属后续增量；前端 `/processing` 页面仍 PLANNED |
 | DDP-V21-N4-02 | 时间同步（timestamp/frame index/offset/drift） | **PARTIAL** | `domain/episodes/sync_drift.py:110`；导入质量 `stream_sync_aligned` | 只检测 start/duration 偏移；无帧索引、无校正、drift 不落库 |
 | DDP-V21-N4-03 | Episode 切分（metadata/time range/manual/task boundary） | **PARTIAL** | `domain/episodes/segmentation_rules.py:235,317,409`；`episode_materialization.py:131` | 只有 MANUAL_TIME_RANGE / fixed-window / episode-boundary；无 task-boundary、无帧级切片 |
-| DDP-V21-N4-04 | 质量引擎（checksum/decode/fps/resolution/duration/timestamp/missing frame/metadata/annotation） | **PARTIAL** | N4-004 + N4-005：统一规则注册表 + 六类分层 + 规则集内容 SHA + `quality_runs/quality_findings`（迁移 0058）+ 3 个 API；单 Episode/导入任务可手工触发；处理流水线 QUALITY 阶段逐 Episode 自动质检（单次上限 200，结果可回查） | decode/resolution/missing-frame 仍无规则；质量结论尚未接入下游门禁（N4-006）；数据集规则源入口未开放 |
+| DDP-V21-N4-04 | 质量引擎（checksum/decode/fps/resolution/duration/timestamp/missing frame/metadata/annotation） | **PARTIAL** | N4-004/005/008：统一规则注册表 + 六类分层 + 规则集内容 SHA + `quality_runs/quality_findings`（迁移 0058）+ 创建/详情/findings/按对象列举；处理流水线 QUALITY 阶段逐 Episode 自动质检（单次上限 200） | decode/resolution/missing-frame 仍无规则；质量结论尚未接入数据集构造/交付门禁（N4-007）；数据集规则源入口未开放 |
 
 ## 5. N5 数据资产与 Dataset 生命周期
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N5-01 | Asset Catalog 跨资源检索 | **PARTIAL** | 各资源列表 API（raw-assets / episodes / datasets / annotation tasks） | 无统一目录与联合检索；Annotation/Quality 维度未接入 |
-| DDP-V21-N5-02 | Dataset Version 生命周期（DRAFT→…→FROZEN→DEPRECATED） | **VERIFIED** | `domain/datasets/{enums,state_machines,models}.py`；`validity_status` 子轴；冻结后 DB 触发器不可变；`test_dataset_validity_api.py` | 实际用 `SUPERSEDED` 表达弃用，与任务书 `DEPRECATED` 命名不同（语义等价，需在契约说明） |
+| DDP-V21-N5-02 | Dataset Version 生命周期（DRAFT→…→FROZEN→DEPRECATED） | **VERIFIED** | `domain/datasets/{enums,state_machines,models}.py`；`validity_status` 子轴（N5-004 起巡检可写 UNKNOWN）；冻结后 DB 触发器不可变；导出/交付/冻结对非 VALID fail-closed 且错误可区分 UNKNOWN | 实际用 `SUPERSEDED` 表达弃用，与任务书 `DEPRECATED` 命名不同（语义等价，需在契约说明）；探测只覆盖 manifest（N5-007） |
 | DDP-V21-N5-03 | Manifest 字段完整性与固定 | **VERIFIED** | `domain/datasets/manifest.py:33-153`；`test_dataset_domain.py:442` | files 以 raw_asset_ids + item_sha256 表达，无独立文件清单（可接受） |
 | DDP-V21-N5-04 | Lineage 全链 | **VERIFIED** | N5-002/005/006：Episode→Annotation、Episode→Quality、DatasetVersion→TRAINING_RUN（`TRAINED_ON`，ADR-0036）全部同事务写边、幂等；迁移 0059；存量引用可用 `app.workers.lineage_backfill` 默认 dry-run、显式 `--apply` 回填 | 无通用图查询 API（逐节点遍历） |
 
@@ -79,7 +79,7 @@
 | DDP-V21-N6-01 | Schema Registry（action/skill/language/contact/object/failure/temporal） | **PARTIAL** | `domain/annotation/schema.py:226`；10 种 label type / 6 层 level | 无七类预设注册表；项目自建；种子仅 4 个标签 |
 | DDP-V21-N6-02 | 标注任务（batch/assignment/priority/SLA/reviewer/status） | **VERIFIED** | N6-002：纯函数 `is_overdue` + 列表 `overdue` 下推过滤 + 派生字段 `is_overdue` + 巡检计数 + 前端逾期标签/汇总 | 无自动改派/关闭（刻意）；全局逾期卡片需独立汇总端点 |
 | DDP-V21-N6-03 | AI 辅助标注（suggestion/confidence/human confirmation） | **VERIFIED** | `ai_suggestion.py:113-235`；`annotation_ai.py`；AI 值单独存储、`AI_ASSISTED` 标记、人工确认强一致 | — |
-| DDP-V21-N6-04 | QA：抽检/盲审/双标/IAA/仲裁 | **PARTIAL** | N6-003 + N6-006：双标策略 + 一致性判定复用 IAA + 不达标自动仲裁；创建页提供双标表单（阈值/auto_approve 默认关闭、二次确认、按角色展示，服务端仍权威） | 普通复核仍非盲审 |
+| DDP-V21-N6-04 | QA：抽检/盲审/双标/IAA/仲裁 | **PARTIAL** | N6-003/004/006：双标策略 + 一致性判定复用 IAA + 不达标自动仲裁；`blind_review` 普通复核盲审（服务端对非标注人脱敏，含 Hash/AI 人工值）；创建页双标表单 | 盲审对所有非标注人生效（仲裁人豁免未定义）；聚合统计仍有小样本推断风险 |
 | DDP-V21-N6-05 | 返工闭环 Reject→Reason→Rework→Review→Pass | **VERIFIED** | `state_rules.py:159-162,284-295`；`review.py:241`；`submissions.py:113` 轮次上限；API 用例 | — |
 
 ## 7. N7 Training / Evaluation / Data Gap
@@ -97,7 +97,7 @@
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
-| DDP-V21-N8-01 | Metrics（延迟/错误/队列/导入吞吐/处理时长/质量失败/存储） | **PARTIAL** | `core/metrics.py`；`GET /metrics`（Prometheus 文本）；`test_metrics_api.py` | 有 HTTP/ingestion/episode/进程指标；缺队列积压、导入吞吐、处理时长、质量失败、存储 |
+| DDP-V21-N8-01 | Metrics（延迟/错误/队列/导入吞吐/处理时长/质量失败/存储） | **PARTIAL** | `core/metrics.py`；`GET /metrics`；N8-004 增加 outbox 积压/最老等待/死信、导入最近成功与 24h 吞吐、处理/质量状态分布、对象缺失；按组超时降级 | 处理时长仍缺（无全局时间索引）；状态表缺 `status` 前缀索引（TD-11）；PG 运行时路径仅编译级验证 |
 | DDP-V21-N8-02 | Trace（Request→Application→DB→Worker→Storage） | **PARTIAL** | `api/middleware/request_id.py`；audit `request_id`；outbox `request_id`；N8-003 Worker 从事件 payload 恢复 trace，缺失/非法时生成并标注 `generated`，上下文按 token 复位 | 无 traceparent/OTel；历史存量事件无 request_id，只能生成本地 trace；日志外的步骤表无 trace 列 |
 | DDP-V21-N8-03 | 性能基线（100/1K/10K episodes、并发导入/审核、Video Range） | **MISSING** | 无压测脚本与记录 | 全部缺失 |
 | DDP-V21-N8-04 | Backup / Restore | **VERIFIED** | `scripts/ops/backup-restore-drill.sh`；`docs/operations/备份与恢复演练记录-2026-11-17.md`（PG+MinIO 全量、抽样 sha256 一致） | 仅本机、无加密/异地/RTO |

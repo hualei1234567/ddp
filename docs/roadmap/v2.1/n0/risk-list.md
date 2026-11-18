@@ -53,6 +53,10 @@
 | RK-30 | 评测列表复用详情响应，每条最多内联 64 KiB `failure_cases`；一页 100 条最坏约 6.4 MB | `fragments/schemas.stage5.yaml` 的 `Evaluation`；契约明确"上限即分页" | 中 | P2 | 列表页保持小 `limit`；后续评估独立 `failure-cases` 子资源端点 | 后端 / 前端 |
 | RK-31 | `quality-runs` 没有按对象列举接口，导入审看页无法自动发现历史运行，只能深链或手动触发 | `fragments/paths.quality.yaml`；N2-006 实现 | 中 | P2 | 补 `GET /quality-runs?subject_type=&subject_id=`（N4-008） | 后端 / 前端 |
 | RK-32 | 多基地概览按 `location_id` 聚合依赖 `project_id` 前缀索引，未在 PG 做 `EXPLAIN`；单项目超大时可能退化为项目级扫描 | `location_resources.py`；N9-005 报告 | 中 | P2 | 数据量到阈值时补 `(project_id, location_id)` 索引并留 EXPLAIN 证据 | 后端 |
+| RK-33 | 盲审对所有非标注人生效，仲裁人/负责人也看不到标签值；若业务需要仲裁豁免，当前无规则 | `review_policy.py`；N6-004 报告 | 中 | P2 | 明确仲裁豁免规则后再开放；当前按最严格口径 | 产品 / 后端 |
+| RK-34 | `/metrics` 业务指标为拉取式全库聚合，状态表缺 `status` 前缀索引；PG 运行时路径仅编译级验证 | `observability.py`；TD-11 | 中 | P2 | 2s 超时按组降级；数据量上来后预聚合或补索引；PG 环境补一次抓取回归 | 后端 / 运维 |
+| RK-35 | 来源探测只 HEAD Canonical manifest，manifest 存在不代表所有 `raw_assets` 对象都在 | `validity.py`；N5-004 报告 | 中 | P2 | 后续把 `raw_assets.object_key` 纳入第二层探测（N5-007） | 后端 |
+| RK-36 | Adapter 的 fetch/verify/write 能力尚未接入导入链路，当前内置 Adapter 只声明 parse/detect | `registry.py`；N3-002 报告 | 低 | P2 | 后续按格式接入时再启用，避免能力声明与实际执行脱节 | 后端 |
 
 ## 5. 产品与验收口径
 

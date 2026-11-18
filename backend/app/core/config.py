@@ -175,9 +175,7 @@ class Settings(BaseSettings):
     dataset_source_probe_enabled: bool = True
     dataset_source_probe_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
     dataset_source_probe_attempts: int = Field(default=2, ge=1, le=5)
-    dataset_source_probe_max_objects_per_version: int = Field(
-        default=200, ge=1, le=2000
-    )
+    dataset_source_probe_max_objects_per_version: int = Field(default=200, ge=1, le=2000)
     dataset_source_probe_max_failures_per_run: int = Field(default=5, ge=1, le=100)
 
     # 上传策略：由项目/部署配置覆盖，不在用例内硬编码阈值。

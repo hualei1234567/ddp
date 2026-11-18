@@ -364,12 +364,16 @@ def _sweep(
 
 
 def _version_detail(ctx: dict[str, Any], ids: ApiIds, version_id: str) -> dict[str, Any]:
-    return ctx["editor"].get(
-        url(
-            ids.project_a,
-            f"/datasets/{ctx['dataset']['dataset_id']}/versions/{version_id}",
+    return (
+        ctx["editor"]
+        .get(
+            url(
+                ids.project_a,
+                f"/datasets/{ctx['dataset']['dataset_id']}/versions/{version_id}",
+            )
         )
-    ).json()
+        .json()
+    )
 
 
 def test_source_probe_reachable_keeps_version_valid(
@@ -415,9 +419,7 @@ def test_source_probe_missing_marks_unknown_idempotently(
     assert again == []
     with factory() as session:
         audits = list(
-            session.scalars(
-                select(AuditLog).where(AuditLog.action == "system-mark-unknown")
-            )
+            session.scalars(select(AuditLog).where(AuditLog.action == "system-mark-unknown"))
         )
     assert len(audits) == 1
 
