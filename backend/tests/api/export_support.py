@@ -139,9 +139,7 @@ def build_frozen_version(
             _digest(f"{seed_salt}-manifest-{index:02d}") for index in range(10)
         ]
         seed_kwargs["raw_hashes"] = [_digest(f"{seed_salt}-raw-{index:02d}") for index in range(10)]
-    episodes = seed_dataset_episodes(
-        factory, ids.project_a, ids.editor_a, count=10, **seed_kwargs
-    )
+    episodes = seed_dataset_episodes(factory, ids.project_a, ids.editor_a, count=10, **seed_kwargs)
     editor = make_client(factory, ids.editor_a)
     owner = make_client(factory, ids.owner_a)
     viewer = make_client(factory, ids.viewer_a)

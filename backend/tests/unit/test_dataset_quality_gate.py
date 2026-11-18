@@ -126,9 +126,7 @@ def test_selection_gate_filters_and_reports_reason_codes() -> None:
     passed = candidate(3)
     verdicts = {
         below.episode_id: _verdict(below.episode_id, QualityRunStatus.PASSED, 0.79),
-        incomplete.episode_id: _verdict(
-            incomplete.episode_id, QualityRunStatus.INCOMPLETE, None
-        ),
+        incomplete.episode_id: _verdict(incomplete.episode_id, QualityRunStatus.INCOMPLETE, None),
         passed.episode_id: _verdict(passed.episode_id, QualityRunStatus.PASSED, 0.8),
     }
     outcome = evaluate_selection(

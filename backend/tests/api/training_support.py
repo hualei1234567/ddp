@@ -199,6 +199,9 @@ class FakeTrainingGateway:
 
     def __init__(self, execution_mode: str | None) -> None:
         self._execution_mode = execution_mode
+        # 记录 Adapter 实际收到的配置：训练平台需要完整参数，而 DDP 落库的
+        # 只是脱敏摘要。两者必须分开断言（N7-002）。
+        self.submitted_configs: list[dict[str, object]] = []
 
     def capabilities(self, adapter_id: str) -> frozenset[str]:
         return frozenset({"submit", "status", "cancel"})
@@ -207,6 +210,8 @@ class FakeTrainingGateway:
         return ExecutionMode(self._execution_mode) if self._execution_mode else None
 
     def submit(self, **kwargs: object) -> AdapterRunRef:
+        config = kwargs.get("config")
+        self.submitted_configs.append(dict(config) if isinstance(config, dict) else {})
         return AdapterRunRef(external_run_id=f"run-{uuid4().hex[:8]}")
 
     def get_status(self, **kwargs: object) -> AdapterRunStatus:

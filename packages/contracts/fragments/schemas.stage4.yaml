@@ -385,6 +385,16 @@ ExternalTrainingReferenceCreate:
     model_ref: { type: [object, "null"], additionalProperties: true }
     evaluation_ref: { type: [object, "null"], additionalProperties: true }
     config: { type: object, additionalProperties: true }
+    code_version:
+      type: [string, "null"]
+      minLength: 1
+      maxLength: 100
+      description: 训练代码/镜像版本标识。未知留空，服务端不推断，提交后不可修改。
+    model_version:
+      type: [string, "null"]
+      minLength: 1
+      maxLength: 100
+      description: 本次 run 的模型版本标识。未知留空，服务端不推断，提交后不可修改。
     execution_mode:
       type: string
       enum: [LOCAL, MOCK, DRY_RUN, REMOTE]

@@ -228,6 +228,8 @@ def create_external_reference(
             model_ref=payload.model_ref,
             evaluation_ref=payload.evaluation_ref,
             config=payload.config,
+            code_version=payload.code_version,
+            model_version=payload.model_version,
             execution_mode=payload.execution_mode,
         ),
         idempotency_key=idempotency_key,

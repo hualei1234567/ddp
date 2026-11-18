@@ -12,7 +12,7 @@
 
 from __future__ import annotations
 
-from app.core.logging import DEFAULT_LOG_MESSAGE_MAX_LENGTH
+from app.core.logging import DEFAULT_LOG_MESSAGE_MAX_LENGTH, is_secret_name
 from app.core.logging import sanitize_log_message as _sanitize
 
 
@@ -25,4 +25,8 @@ def sanitize_log_message(
     return _sanitize(message, limit=limit)
 
 
-__all__ = ["DEFAULT_LOG_MESSAGE_MAX_LENGTH", "sanitize_log_message"]
+__all__ = [
+    "DEFAULT_LOG_MESSAGE_MAX_LENGTH",
+    "is_secret_name",
+    "sanitize_log_message",
+]

@@ -279,9 +279,7 @@ def test_duration_and_fps_fall_back_to_video_stream(
     assert result.fps == 30.0
 
 
-def test_too_many_streams_fails_explicitly(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_too_many_streams_fails_explicitly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = _mp4_file(tmp_path)
     payload = json.dumps(
         {"streams": [{"index": index, "codec_type": "data"} for index in range(MAX_STREAMS + 1)]}

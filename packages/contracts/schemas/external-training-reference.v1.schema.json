@@ -65,6 +65,23 @@
       "additionalProperties": true,
       "description": "适配器回调回传的产物元数据（如 model/metadata 的 object_key、sha256、size_bytes）。用于在平台内登记模型版本；DDP 只存元数据，不复制权重。"
     },
+    "config_summary": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "description": "提交训练时的配置摘要：服务端在落库前裁剪到 ≤8KiB，并把密钥/凭据/绝对路径替换为占位符。null 只表示迁移 0063 之前的存量记录未保存配置，不等于提交时没有配置（后者是空对象）。"
+    },
+    "code_version": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "训练代码/镜像版本标识，由发起方在提交时声明；未知为 null，服务端不推断，提交后不可修改。"
+    },
+    "model_version": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 100,
+      "description": "本次 run 的模型版本标识，由发起方在提交时声明；未知为 null，服务端不推断，提交后不可修改。"
+    },
     "correlation_id": {"type": "string", "minLength": 1, "maxLength": 128},
     "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
     "error_code": {"type": ["string", "null"], "maxLength": 100},

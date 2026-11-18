@@ -97,9 +97,7 @@ _SENSITIVE_KEY_NAME = (
 # 键名 + 分隔符 + 可选 Bearer scheme。JSON 形态 ``"api_key": "..."`` 的收尾
 # 引号也在 prefix 内，替换后引号结构保持不变。
 _CREDENTIAL_PREFIX = (
-    r"(?P<prefix>(?<![A-Za-z0-9_])"
-    + _SENSITIVE_KEY_NAME
-    + r"[\"']?\s*[=:]\s*(?:bearer\s+)?)"
+    r"(?P<prefix>(?<![A-Za-z0-9_])" + _SENSITIVE_KEY_NAME + r"[\"']?\s*[=:]\s*(?:bearer\s+)?)"
 )
 
 # 引号值优先匹配：``password="a b"`` 若先走非引号规则，只会吃掉 ``"a``，
@@ -108,17 +106,14 @@ _QUOTED_CREDENTIAL_PATTERN = re.compile(
     rf"(?i){_CREDENTIAL_PREFIX}(?P<quote>['\"])(?:(?!(?P=quote)).)*?(?P=quote)"
 )
 # 非引号值到空白/逗号/分号/引号为止，不越过行内分隔符。
-_UNQUOTED_CREDENTIAL_PATTERN = re.compile(
-    rf"(?i){_CREDENTIAL_PREFIX}(?!['\"])([^\s,;&\"']+)"
-)
+_UNQUOTED_CREDENTIAL_PATTERN = re.compile(rf"(?i){_CREDENTIAL_PREFIX}(?!['\"])([^\s,;&\"']+)")
 
 # Pydantic 的校验错误把用户输入原样带进文本：
 #   ``String should have at least 20 characters [type=string_too_short,
 #   input_value='hunter2', input_type=str]``
 # 键名本身不敏感，固定格式后面紧跟的引号值必须整体抹掉。
 _PYDANTIC_INPUT_PATTERN = re.compile(
-    r"(?i)(?P<prefix>\binput_value\s*[=:]\s*)"
-    r"(?P<quote>['\"])(?:(?!(?P=quote)).)*?(?P=quote)"
+    r"(?i)(?P<prefix>\binput_value\s*[=:]\s*)" r"(?P<quote>['\"])(?:(?!(?P=quote)).)*?(?P=quote)"
 )
 # 裸 Bearer：没有键名时也要抹掉 scheme 后面的令牌。
 _BEARER_PATTERN = re.compile(r"(?i)(?P<prefix>\b(?:bearer\s+))([A-Za-z0-9._~+/=-]+)")
@@ -146,6 +141,25 @@ def _truncate(value: str, maximum: int) -> str:
 def _is_sensitive_key(key: object) -> bool:
     lowered = str(key).lower()
     return any(marker in lowered for marker in _SENSITIVE_KEY_MARKERS)
+
+
+# 键名判定：``token`` 子串会把 ``tokenizer`` 误判为凭据，因此公开入口用
+# 边界正则；日志参数的宽松子串判定仍保留在 ``_is_sensitive_key`` 内部。
+_SECRET_NAME_PATTERN = re.compile(
+    r"(?i)(?:^|[^a-z0-9])"
+    r"(?:token|secret|password|passwd|api[_-]?key|apikey|authorization|credential|"
+    r"cookie|private[_-]?key)"
+    r"(?:$|[^a-z0-9])"
+)
+
+
+def is_secret_name(name: object) -> bool:
+    """键名/字段名是否表示凭据类信息。
+
+    ``hf_token`` 命中，``tokenizer``/``token_count`` 不命中。只做名字判断，
+    不读取也不推断值；凭据值仍由 :func:`redact_credentials` 处理。
+    """
+    return bool(_SECRET_NAME_PATTERN.search(str(name or "")))
 
 
 def _redaction_replacement(match: re.Match[str], placeholder: str, keep_key: bool) -> str:
