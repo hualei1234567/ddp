@@ -103,11 +103,11 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 ### 6.1 后端全量结果
 
 ```
-2546 passed, 18 skipped（含真实 PostgreSQL，P2 批次后，680.77s）
+2549 passed, 18 skipped（含真实 PostgreSQL，P2 批次后，489.34s）
 ```
 
 - 命令：`cd backend && .venv/bin/python -m pytest -o addopts="" -q`
-- 集合 2564 = 2546 passed + 18 skipped（PostgreSQL 验收环境）；skip 为 PostgreSQL 专属用例（未设 `DDP_TEST_POSTGRES_URL`）与平台条件用例。
+- 集合 2567 = 2549 passed + 18 skipped（PostgreSQL 验收环境）；skip 为 PostgreSQL 专属用例（未设 `DDP_TEST_POSTGRES_URL`）与平台条件用例。
 - 前端：`793 passed / 19 skipped`（105 文件，P2 批次后）（`cd apps/web && npm test`）。
 - 结论：SQLite 全绿；**PostgreSQL 路径本轮未重跑**，按仓库 CI 的 PG 迁移 job 与历史证据为准，N0 不据此升级 PG 状态。
 
