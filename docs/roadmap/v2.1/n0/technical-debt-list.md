@@ -12,7 +12,7 @@
 | ID | 债务 | 位置 | 证据 / 复核结论 | 影响 | 修复建议 |
 |---|---|---|---|---|---|
 | TD-01 | **6 个文件 >800 行**：`annotation/submissions.py` 908、`api/errors.py` 877、`episodes/episodes.py` 850、`repositories/calibration_records.py` 821、`annotation/ports.py` 809、`datasets/version_actions.py` 803 | 见左 | `find backend/app apps/web/src (...)-exec wc -l {} + \| awk '$1>800'` | 违反 CLAUDE.md §五与 V2.1 门禁 §3；修改成本与缺陷概率上升 | 按职责拆分并补测试；不得为拆而拆，需先补请求层/仓储层测试锁定语义 |
-| TD-04 | **`validity_status = UNKNOWN` 无写入点** | `domain/datasets/enums.py`、`application/datasets/validity.py` | N0 复核：巡检只写 VALID/STALE；UNKNOWN 仅在枚举 | 来源不可达时无法表达「不知道是否有效」，只能维持 VALID | 增加来源可达性探测，探测失败写 UNKNOWN；需产品确认语义 |
+| TD-04 | ~~`validity_status = UNKNOWN` 无写入点~~ **已闭环**（N5-004：巡检探测 Canonical manifest 可达性，明确缺失写 UNKNOWN、超时不下结论；导出/交付/冻结 fail-closed） | — | — | — | — |
 | TD-05 | **Episode 级自动质检缺失** | `application/datasources/*`、`domain/episodes/*` | 报告 §5 第 2 项 MISSING；导入级规则有，逐 Episode 结论由外部登记 | 质量中心无法自动回答「哪些 Episode 不合格」 | 在 N4 建设 Quality Engine 时落到 Episode 粒度，规则版本化 |
 | TD-06 | **Processing Pipeline 八阶段无独立实体** | `backend/app/domain` 无 `ProcessingRun` | 复核：仅 `ingestion_jobs`；无 CREATED…RETRYING 状态机 | N4 的「可观察、可重试、可追踪」无法满足 | N4-01 新建 ProcessingRun（复用 ingestion job 与 outbox 模式） |
 | TD-07 | **staging 部署 BLOCKED** | `docs/operations/*` | 报告 §6.3：主机名无法解析；本轮未重试绕过 | N8-05 出口不成立；发布链路未验证 | 用户提供可达主机后补；在此之前 staging 相关任务全部 BLOCKED |

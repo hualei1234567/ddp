@@ -188,6 +188,28 @@ class QualityRunUseCases:
             raise ResourceNotFoundError("质量运行", run_id)
         return run
 
+    def list_runs(
+        self,
+        scope: ProjectScope,
+        *,
+        subject_type: QualitySubjectType,
+        subject_id: UUID,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[QualityRun]:
+        """按对象列历史运行，创建时间/ID 倒序。
+
+        对象不存在（或跨项目）时返回空列表而不是 404：本接口是列表过滤，
+        没有可定位的单条资源；调用方需要确认对象存在性时用对象自身的详情端点。
+        """
+        return self._runs.list(
+            scope,
+            subject_type=subject_type,
+            subject_id=subject_id,
+            after_id=after_id,
+            limit=limit,
+        )
+
     def list_findings(
         self,
         scope: ProjectScope,

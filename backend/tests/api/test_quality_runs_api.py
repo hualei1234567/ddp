@@ -393,3 +393,160 @@ def test_episode_without_any_evaluable_fact_is_incomplete_not_passed(api_db) -> 
     assert categories["ANNOTATION"]["status"] == "NOT_APPLICABLE"
     assert categories["OVERALL"]["status"] == "NOT_APPLICABLE"
     assert categories["OVERALL"]["score"] is None
+
+
+# ---------------------------------------------------------------------------
+# N4-008：按对象列举历史运行
+# ---------------------------------------------------------------------------
+
+
+def _list(client, project_id: object, **params: object):
+    return client.get(url(project_id, "/quality-runs"), params=params)
+
+
+def test_list_runs_filters_by_subject_and_orders_desc(api_db) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    _, import_id = _seed_import(factory, ids)
+    _, other_import_id = _seed_import(factory, ids)
+
+    created = [
+        _create(editor, ids.project_a, "DATASOURCE_IMPORT", import_id).json()["run_id"]
+        for _ in range(3)
+    ]
+    _create(editor, ids.project_a, "DATASOURCE_IMPORT", other_import_id)
+
+    response = _list(
+        editor,
+        ids.project_a,
+        subject_type="DATASOURCE_IMPORT",
+        subject_id=str(import_id),
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    # 创建时间/ID 倒序：最新的一次运行排在最前。
+    assert [item["run_id"] for item in body["items"]] == list(reversed(created))
+    assert body["next_cursor"] is None
+    assert all(item["project_id"] == str(ids.project_a) for item in body["items"])
+    assert all(item["subject_id"] == str(import_id) for item in body["items"])
+
+
+def test_list_runs_pagination_is_stable_without_duplicates(api_db) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    _, import_id = _seed_import(factory, ids)
+    created = [
+        _create(editor, ids.project_a, "DATASOURCE_IMPORT", import_id).json()["run_id"]
+        for _ in range(5)
+    ]
+    base = dict(subject_type="DATASOURCE_IMPORT", subject_id=str(import_id))
+
+    first = _list(editor, ids.project_a, **base, limit=2)
+    assert first.status_code == 200, first.text
+    assert len(first.json()["items"]) == 2
+    cursor = first.json()["next_cursor"]
+    assert cursor
+
+    second = _list(editor, ids.project_a, **base, limit=2, cursor=cursor)
+    assert second.status_code == 200, second.text
+    assert len(second.json()["items"]) == 2
+    assert second.json()["next_cursor"]
+
+    third = _list(
+        editor,
+        ids.project_a,
+        **base,
+        limit=2,
+        cursor=second.json()["next_cursor"],
+    )
+    assert third.status_code == 200, third.text
+    assert len(third.json()["items"]) == 1
+    assert third.json()["next_cursor"] is None
+
+    merged = [item["run_id"] for page in (first, second, third) for item in page.json()["items"]]
+    assert merged == list(reversed(created))
+    assert len(set(merged)) == len(merged)
+
+
+def test_list_runs_empty_object_is_empty_page_not_404(api_db) -> None:
+    factory, ids = api_db
+    viewer = make_client(factory, ids.viewer_a)
+
+    response = _list(
+        viewer,
+        ids.project_a,
+        subject_type="DATASOURCE_IMPORT",
+        subject_id=str(uuid4()),
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"items": [], "next_cursor": None}
+
+
+def test_list_runs_rejects_unknown_or_missing_parameters(api_db) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+
+    unknown = _list(
+        editor,
+        ids.project_a,
+        subject_type="NOT_A_SUBJECT",
+        subject_id=str(uuid4()),
+    )
+    assert unknown.status_code == 422
+    assert unknown.json()["error"]["code"] == "validation_failed"
+
+    missing_subject_id = editor.get(
+        url(ids.project_a, "/quality-runs"),
+        params={"subject_type": "DATASOURCE_IMPORT"},
+    )
+    assert missing_subject_id.status_code == 422
+    assert missing_subject_id.json()["error"]["code"] == "validation_failed"
+
+    bad_cursor = _list(
+        editor,
+        ids.project_a,
+        subject_type="DATASOURCE_IMPORT",
+        subject_id=str(uuid4()),
+        cursor="not-a-cursor",
+    )
+    assert bad_cursor.status_code == 422
+    assert bad_cursor.json()["error"]["code"] == "validation_failed"
+
+
+def test_list_runs_is_project_isolated_and_permission_checked(api_db) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    viewer = make_client(factory, ids.viewer_a)
+    outsider = make_client(factory, ids.outsider)
+    owner = make_client(factory, ids.owner_a)
+    _, import_id = _seed_import(factory, ids)
+    older_run = _create(editor, ids.project_a, "DATASOURCE_IMPORT", import_id).json()["run_id"]
+    latest_run = _create(editor, ids.project_a, "DATASOURCE_IMPORT", import_id).json()["run_id"]
+    params = {"subject_type": "DATASOURCE_IMPORT", "subject_id": str(import_id)}
+
+    # 只读角色允许列举；项目外用户被拒。
+    assert _list(viewer, ids.project_a, **params).status_code == 200
+    forbidden = _list(outsider, ids.project_a, **params)
+    assert forbidden.status_code == 403
+    assert forbidden.json()["error"]["code"] == "forbidden"
+
+    # owner 同时属于 A/B：在 B 的路径下查 A 的对象必须得到空页，不泄漏存在性。
+    cross = _list(owner, ids.project_b, **params)
+    assert cross.status_code == 200, cross.text
+    assert cross.json() == {"items": [], "next_cursor": None}
+
+    # 跨项目游标不能把 A 的记录带进 B 的结果：键集锚点按项目限定，取不到即空页。
+    first = _list(editor, ids.project_a, **params, limit=1)
+    assert [item["run_id"] for item in first.json()["items"]] == [latest_run]
+    cursor = first.json()["next_cursor"]
+    assert cursor
+
+    cross_cursor = _list(owner, ids.project_b, **params, cursor=cursor)
+    assert cross_cursor.status_code == 200, cross_cursor.text
+    assert cross_cursor.json() == {"items": [], "next_cursor": None}
+
+    # 同一游标在 A 内继续翻页仍然正常（证明上面的空页来自项目隔离而不是游标失效）。
+    second = _list(editor, ids.project_a, **params, limit=1, cursor=cursor)
+    assert [item["run_id"] for item in second.json()["items"]] == [older_run]

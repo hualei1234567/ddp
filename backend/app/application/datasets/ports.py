@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
@@ -30,6 +31,32 @@ from app.domain.identity.models import ProjectScope
 
 class UnitOfWork(Protocol):
     def commit(self) -> None: ...
+
+
+class SourceReachability(StrEnum):
+    """来源对象可达性探测结论。
+
+    三态必须分开，否则无法区分"确认丢失"与"我们探测不到"：
+
+    - ``REACHABLE``：对象存在；
+    - ``MISSING``：对象**明确不存在**（存储返回 404/NotFound），是稳定事实；
+    - ``UNREACHABLE``：超时、鉴权失败、驱动错误等**无法判定**的情况。
+    """
+
+    REACHABLE = "REACHABLE"
+    MISSING = "MISSING"
+    UNREACHABLE = "UNREACHABLE"
+
+
+class ValiditySourceProbe(Protocol):
+    """来源对象存在性探测端口。
+
+    实现必须在对象不存在时返回 ``MISSING``，在存储不可用/超时等无法判定的
+    情况下返回 ``UNREACHABLE``；不得抛驱动异常给应用层，也不得把临时故障
+    当作"不存在"。探测只做 HEAD 级别的元数据读取，不下载内容。
+    """
+
+    def probe(self, object_key: str) -> SourceReachability: ...
 
 
 class DatasetRepository(Protocol):

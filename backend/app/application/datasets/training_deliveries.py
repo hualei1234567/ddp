@@ -30,7 +30,6 @@ from app.domain.datasets.enums import (
     DatasetStatus,
     DatasetVersionStatus,
     ExportJobStatus,
-    ValidityStatus,
 )
 from app.domain.datasets.errors import (
     DomainValidationError,
@@ -520,8 +519,12 @@ class TrainingDeliveryUseCases:
             raise TrainingDeliveryNotReadyError("已归档数据集不能交付")
         if version.status is not DatasetVersionStatus.FROZEN:
             raise TrainingDeliveryNotReadyError("只能交付 FROZEN 数据集版本")
-        if version.validity_status is not ValidityStatus.VALID:
-            raise TrainingDeliveryNotReadyError("数据集版本已失效，不能交付")
+        blocked = version.validity_block_reason
+        if blocked is not None:
+            raise TrainingDeliveryNotReadyError(
+                f"{blocked}，不能交付",
+                details={"validity_status": version.validity_status.value},
+            )
         if getattr(job, "dataset_version_id", None) != version.dataset_version_id:
             raise TrainingDeliveryMismatchError("导出任务与数据集版本不匹配")
         if getattr(job, "status", None) is not ExportJobStatus.SUCCEEDED:

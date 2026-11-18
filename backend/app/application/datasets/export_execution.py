@@ -32,7 +32,6 @@ from app.domain.datasets.enums import (
     DatasetStatus,
     DatasetVersionStatus,
     ExportJobStatus,
-    ValidityStatus,
 )
 from app.domain.datasets.errors import (
     ArchiveBlockedError,
@@ -299,13 +298,14 @@ class ExportExecutionService:
                 "数据集版本不再是 FROZEN，禁止导出",
             )
             return None
-        if version.validity_status is not ValidityStatus.VALID:
+        blocked = version.validity_block_reason
+        if blocked is not None:
             self._fail(
                 scope,
                 job,
                 moment,
                 UpstreamInvalidatedError.code,
-                "数据集版本有效性已失效，禁止导出",
+                f"{blocked}，禁止导出",
             )
             return None
         return version

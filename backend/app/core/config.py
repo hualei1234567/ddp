@@ -170,6 +170,14 @@ class Settings(BaseSettings):
     s3_bucket: str = "ddp-raw"
     s3_region: str = "us-east-1"
 
+    # 数据集来源可达性探测（validity_status=UNKNOWN 的唯一写入点）。
+    # 只在领域巡检 Worker 中执行，HTTP 线程不接触对象存储；全部为部署阈值。
+    dataset_source_probe_enabled: bool = True
+    dataset_source_probe_timeout_seconds: float = Field(default=3.0, gt=0, le=30)
+    dataset_source_probe_attempts: int = Field(default=2, ge=1, le=5)
+    dataset_source_probe_max_objects_per_version: int = Field(default=200, ge=1, le=2000)
+    dataset_source_probe_max_failures_per_run: int = Field(default=5, ge=1, le=100)
+
     # 上传策略：由项目/部署配置覆盖，不在用例内硬编码阈值。
     upload_max_size_bytes: int = Field(default=10 * 1024**3, gt=0)
     upload_part_size_bytes: int = Field(default=16 * 1024**2, gt=0)

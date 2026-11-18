@@ -123,4 +123,95 @@ describe("createQualityRunApi", () => {
       api.listFindings(QUALITY_PROJECT_ID, QUALITY_RUN_ID),
     ).rejects.toMatchObject({ kind: "invalid_response" });
   });
+
+  it("按对象列举历史运行：GET 带过滤/游标/上限并校验项目与对象", async () => {
+    const { api, fetchImpl } = makeApi(() =>
+      jsonResponse({
+        items: [qualityRunFixture()],
+        next_cursor: "cursor-2",
+      }),
+    );
+
+    const page = await api.listRuns(QUALITY_PROJECT_ID, {
+      subject_type: "DATASOURCE_IMPORT",
+      subject_id: QUALITY_IMPORT_ID,
+      cursor: "cursor-1",
+      limit: 20,
+    });
+
+    expect(page.next_cursor).toBe("cursor-2");
+    expect(page.items).toHaveLength(1);
+    const [url, init] = fetchImpl.mock.calls[0] ?? [];
+    expect(url).toContain(
+      `/api/v1/projects/${QUALITY_PROJECT_ID}/quality-runs?`,
+    );
+    expect(url).toContain("subject_type=DATASOURCE_IMPORT");
+    expect(url).toContain(`subject_id=${QUALITY_IMPORT_ID}`);
+    expect(url).toContain("cursor=cursor-1");
+    expect(url).toContain("limit=20");
+    expect(init?.method ?? "GET").toBe("GET");
+  });
+
+  it("空结果原样返回，不被改写成报错或假数据", async () => {
+    const { api } = makeApi(() =>
+      jsonResponse({ items: [], next_cursor: null }),
+    );
+
+    const page = await api.listRuns(QUALITY_PROJECT_ID, {
+      subject_type: "DATASOURCE_IMPORT",
+      subject_id: QUALITY_IMPORT_ID,
+    });
+
+    expect(page).toEqual({ items: [], next_cursor: null });
+  });
+
+  it("列举结果串项目时拒绝整页", async () => {
+    const { api } = makeApi(() =>
+      jsonResponse({
+        items: [
+          qualityRunFixture({
+            project_id: "99999999-9999-4999-8999-999999999999",
+          }),
+        ],
+        next_cursor: null,
+      }),
+    );
+
+    await expect(
+      api.listRuns(QUALITY_PROJECT_ID, {
+        subject_type: "DATASOURCE_IMPORT",
+        subject_id: QUALITY_IMPORT_ID,
+      }),
+    ).rejects.toMatchObject({ kind: "invalid_response" });
+  });
+
+  it("列举结果与请求的检查对象不一致时拒绝", async () => {
+    const { api } = makeApi(() =>
+      jsonResponse({
+        items: [qualityRunFixture()],
+        next_cursor: null,
+      }),
+    );
+
+    await expect(
+      api.listRuns(QUALITY_PROJECT_ID, {
+        subject_type: "DATASOURCE_IMPORT",
+        subject_id: "66666666-6666-4666-8666-666666666666",
+      }),
+    ).rejects.toMatchObject({ kind: "invalid_response" });
+  });
+
+  it("空 subject_id 在发请求前拒绝", async () => {
+    const { api, fetchImpl } = makeApi(() =>
+      jsonResponse({ items: [], next_cursor: null }),
+    );
+
+    await expect(
+      api.listRuns(QUALITY_PROJECT_ID, {
+        subject_type: "DATASOURCE_IMPORT",
+        subject_id: "   ",
+      }),
+    ).rejects.toThrow("subject_id 不能为空");
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
 });

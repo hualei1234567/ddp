@@ -8,6 +8,43 @@
 qualityRuns:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listQualityRuns
+    tags: [quality]
+    summary: 按对象列举历史质量运行
+    description: |
+      按 `subject_type` + `subject_id` 列出该对象的历史运行，**创建时间倒序**
+      （同一时间按 `run_id` 倒序，等价于 UUIDv7 创建顺序），游标分页。
+      游标取上一页最后一条的 `run_id`；游标只对同一组查询参数有效。
+
+      服务端强制项目隔离；`subject_type` / `subject_id` 必填，未知
+      `subject_type` 返回 422 `validation_failed`。对象不存在或跨项目返回
+      **空页**而不是 404：列表过滤没有可定位的单条资源，也不能用状态码
+      差异探测其他项目的对象。
+
+      本接口只读，不触发检查、不改变历史结论；`DATASET_VERSION` 可被列举，
+      但这不代表 `POST` 已开放该对象的检查入口。
+    parameters:
+      - name: subject_type
+        in: query
+        required: true
+        schema: { $ref: "../openapi.yaml#/components/schemas/QualitySubjectType" }
+      - name: subject_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: 历史运行分页（空对象为空数组）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityRunPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
   post:
     operationId: createQualityRun
     tags: [quality]

@@ -10,7 +10,9 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID, uuid4
 
+from app.application.datasets.ports import SourceReachability
 from app.application.datasets.validity import DatasetValiditySweep
+from app.infrastructure.db.models.collection import AuditLog
 from app.infrastructure.db.models.datasets import DatasetVersionModel
 from app.infrastructure.db.models.episodes import EpisodeModel
 from app.infrastructure.repositories.collection_audit import (
@@ -324,3 +326,159 @@ def test_sweep_leaves_healthy_version_valid(
         .json()
     )
     assert detail["validity_status"] == "VALID"
+
+
+class _FakeSourceProbe:
+    """来源探测端口替身：按固定结论应答并记录探测过的对象键。"""
+
+    def __init__(self, verdict: SourceReachability) -> None:
+        self.verdict = verdict
+        self.calls: list[str] = []
+
+    def probe(self, object_key: str) -> SourceReachability:
+        self.calls.append(object_key)
+        return self.verdict
+
+
+def _sweep(
+    session: Session,
+    probe: _FakeSourceProbe,
+    *,
+    attempts: int = 1,
+    max_failures: int = 5,
+    max_objects: int = 200,
+) -> DatasetValiditySweep:
+    return DatasetValiditySweep(
+        SqlDatasetVersionRepository(session),
+        SqlDatasetItemRepository(session),
+        SqlDatasetUpstreamDirectory(session),
+        SqlProjectMemberRepository(session),
+        SqlAuditRepository(session),
+        SqlOutboxRepository(session),
+        session,
+        source_probe=probe,
+        probe_attempts=attempts,
+        max_objects_per_version=max_objects,
+        max_failures_per_run=max_failures,
+    )
+
+
+def _version_detail(ctx: dict[str, Any], ids: ApiIds, version_id: str) -> dict[str, Any]:
+    return (
+        ctx["editor"]
+        .get(
+            url(
+                ids.project_a,
+                f"/datasets/{ctx['dataset']['dataset_id']}/versions/{version_id}",
+            )
+        )
+        .json()
+    )
+
+
+def test_source_probe_reachable_keeps_version_valid(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    version_id = str(ctx["version"]["dataset_version_id"])
+    probe = _FakeSourceProbe(SourceReachability.REACHABLE)
+
+    with factory() as session:
+        outcomes = _sweep(session, probe).run_once(limit=50)
+
+    assert outcomes == []
+    # 确实探测了当前项目的 Episode Manifest，而且是服务端得到的作用域。
+    assert probe.calls
+    assert all(str(ids.project_a) in key for key in probe.calls)
+    assert _version_detail(ctx, ids, version_id)["validity_status"] == "VALID"
+
+
+def test_source_probe_missing_marks_unknown_idempotently(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    version_id = str(ctx["version"]["dataset_version_id"])
+    probe = _FakeSourceProbe(SourceReachability.MISSING)
+
+    with factory() as session:
+        outcomes = _sweep(session, probe).run_once(limit=50)
+
+    assert len(outcomes) == 1
+    assert outcomes[0].version_id == UUID(version_id)
+    assert any("不存在" in reason for reason in outcomes[0].reasons)
+    detail = _version_detail(ctx, ids, version_id)
+    assert detail["validity_status"] == "UNKNOWN"
+    # UNKNOWN 是"无法确认"，不是已失效：负责人仍可标记失效。
+    assert "invalidate" in detail["allowed_actions"]
+    assert not any(action.startswith("system-") for action in detail["allowed_actions"])
+
+    with factory() as session:
+        again = _sweep(session, probe).run_once(limit=50)
+    assert again == []
+    with factory() as session:
+        audits = list(
+            session.scalars(select(AuditLog).where(AuditLog.action == "system-mark-unknown"))
+        )
+    assert len(audits) == 1
+
+
+def test_source_probe_unreachable_keeps_valid_and_is_bounded(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """超时/存储不可用是"探测不到"，不得把 VALID 写坏；探测次数必须有界。"""
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    version_id = str(ctx["version"]["dataset_version_id"])
+    probe = _FakeSourceProbe(SourceReachability.UNREACHABLE)
+
+    with factory() as session:
+        outcomes = _sweep(
+            session,
+            probe,
+            attempts=2,
+            max_failures=2,
+        ).run_once(limit=50)
+
+    assert outcomes == []
+    # 首个对象重试 attempts 次后即放弃本版本，不再继续探测其余 Episode；
+    # 失败计数由单轮预算约束，不会无限放大。
+    assert len(probe.calls) == 2
+    assert _version_detail(ctx, ids, version_id)["validity_status"] == "VALID"
+
+
+def test_source_probe_recovery_requires_human_revalidate(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    dataset_id = str(ctx["dataset"]["dataset_id"])
+    version_id = str(ctx["version"]["dataset_version_id"])
+    probe = _FakeSourceProbe(SourceReachability.MISSING)
+
+    with factory() as session:
+        assert len(_sweep(session, probe).run_once(limit=50)) == 1
+    assert _version_detail(ctx, ids, version_id)["validity_status"] == "UNKNOWN"
+
+    # 来源恢复可达：系统只推进到 STALE，不替人断言"内容仍然有效"。
+    probe.verdict = SourceReachability.REACHABLE
+    with factory() as session:
+        outcomes = _sweep(session, probe).run_once(limit=50)
+    assert len(outcomes) == 1
+    assert any("恢复" in reason for reason in outcomes[0].reasons)
+    detail = _version_detail(ctx, ids, version_id)
+    assert detail["validity_status"] == "STALE"
+    assert "revalidate" in detail["allowed_actions"]
+
+    restored = _act(
+        ctx["editor"],
+        ids.project_a,
+        dataset_id,
+        version_id,
+        "revalidate",
+        int(detail["version"]),
+        reason="来源恢复后人工确认",
+    )
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["validity_status"] == "VALID"

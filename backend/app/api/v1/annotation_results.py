@@ -103,8 +103,23 @@ def list_submissions(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.submission_id)
+    # 列表虽不内联记录内容，但 records_digest 覆盖全部标签值；盲审任务下
+    # 非标注人拿到的摘要同样必须置空，否则可离线枚举低熵标签。
+    policy = use_cases.submissions.review_policy_for_task(scope, task_id) if page.items else None
     return PageOut(
-        items=[AnnotationSubmissionOut.from_domain(item) for item in page.items],
+        items=[
+            AnnotationSubmissionOut.from_domain(
+                item,
+                redact_labels=(
+                    policy is not None
+                    and policy.hides_labels_from(
+                        actor_id=scope.actor_id,
+                        annotator_id=item.annotator_id,
+                    )
+                ),
+            )
+            for item in page.items
+        ],
         next_cursor=page.next_cursor,
     )
 
@@ -120,7 +135,8 @@ def get_submission(
 ) -> AnnotationSubmissionOut:
     submission = use_cases.submissions.get(scope, submission_id)
     _assert_not_foreign_draft(scope.actor_id, submission.annotator_id, submission.status)
-    return AnnotationSubmissionOut.from_domain(submission)
+    redact_labels = use_cases.submissions.should_redact_labels(scope, submission)
+    return AnnotationSubmissionOut.from_domain(submission, redact_labels=redact_labels)
 
 
 @router.get(
@@ -134,8 +150,13 @@ def list_submission_records(
 ) -> PageOut[AnnotationRecordOut]:
     submission = use_cases.submissions.get(scope, submission_id)
     _assert_not_foreign_draft(scope.actor_id, submission.annotator_id, submission.status)
+    # 盲审任务的标签值脱敏在服务端完成：复核人只能拿到标签键。
+    redact_labels = use_cases.submissions.should_redact_labels(scope, submission)
     return PageOut(
-        items=[AnnotationRecordOut.from_domain(item) for item in submission.records],
+        items=[
+            AnnotationRecordOut.from_domain(item, redact_labels=redact_labels)
+            for item in submission.records
+        ],
         next_cursor=None,
     )
 
@@ -190,7 +211,12 @@ def act_on_submission(
                 },
                 exc_info=True,
             )
-    return AnnotationSubmissionOut.from_domain(submission, consistency=consistency)
+    redact_labels = use_cases.submissions.should_redact_labels(scope, submission)
+    return AnnotationSubmissionOut.from_domain(
+        submission,
+        consistency=consistency,
+        redact_labels=redact_labels,
+    )
 
 
 @router.get(

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import QualityRunReport from "../../components/quality/QualityRunReport";
@@ -174,9 +174,9 @@ function LoadedQualityRun({
 /**
  * 导入页的统一质量运行区块（容器）。
  *
- * 服务端只提供"按运行 ID 读取"，没有"按导入列举运行"的接口，因此：
  * - 页面通过 `?quality_run_id=` 回看指定运行（刷新/分享不丢失）；
- * - 没有运行 ID 时显示"尚未质检"，由用户显式触发一次 POST；
+ * - 没有运行 ID 时按导入对象查询最近一次运行并自动填入 URL；
+ *   查询为空才显示"尚未质检"，由用户显式触发一次 POST；
  * - 触发成功后把新运行 ID 写回 URL，不覆盖任何历史记录。
  */
 export default function ImportQualityRunSection({
@@ -192,6 +192,36 @@ export default function ImportQualityRunSection({
   const [runError, setRunError] = useState<ApiError | null>(null);
   const [category, setCategory] = useState<QualityRuleCategory | null>(null);
   const [severity, setSeverity] = useState<QualitySeverity | null>(null);
+
+  // 没有 URL 运行 ID 时自动发现该导入最近一次运行。
+  // 用 `listRuns` 而不是猜测 ID：服务端按创建时间倒序返回，第一页首条即最近运行。
+  const latest = useRequest<QualityRun | null>(
+    useCallback(
+      async (signal) => {
+        if (runId !== null) {
+          return null;
+        }
+        const page = await qualityRunApi.listRuns(projectId, {
+          subject_type: "DATASOURCE_IMPORT",
+          subject_id: importId,
+          limit: 1,
+          signal,
+        });
+        return page.items[0] ?? null;
+      },
+      [importId, projectId, runId],
+    ),
+  );
+
+  useEffect(() => {
+    const discovered = latest.data;
+    if (runId !== null || discovered === null) {
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.set(QUALITY_RUN_ID_PARAM, discovered.run_id);
+    setSearchParams(next, { replace: true });
+  }, [latest.data, runId, searchParams, setSearchParams]);
 
   const trigger = useCallback(async () => {
     setRunning(true);
@@ -212,13 +242,15 @@ export default function ImportQualityRunSection({
   }, [importId, projectId, searchParams, setSearchParams]);
 
   if (runId === null) {
+    // 发现期间不要先显示"尚未质检"：那会在请求返回前给出没有依据的结论。
+    const discovering = latest.loading || latest.data !== null;
     return (
       <QualityRunReport
-        phase="ready"
+        phase={discovering ? "loading" : latest.error ? "error" : "ready"}
         run={null}
         refreshing={false}
         stale={false}
-        error={null}
+        error={latest.error}
         running={running}
         runError={runError}
         findings={EMPTY_FINDINGS}
@@ -226,7 +258,7 @@ export default function ImportQualityRunSection({
         severity={severity}
         onCategoryChange={setCategory}
         onSeverityChange={setSeverity}
-        onReload={() => undefined}
+        onReload={latest.reload}
         onRun={() => void trigger()}
         onLoadMoreFindings={() => undefined}
         assetsHref={buildAssetsHref(importId)}

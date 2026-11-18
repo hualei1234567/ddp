@@ -547,7 +547,7 @@ _DATASET_MESSAGES = {
     "dataset_leakage_check_unknown": "泄漏检查无法完成，按失败关闭",
     "dataset_quality_gate_failed": "质量门禁未通过",
     "dataset_annotation_not_approved": "引用了未批准的标注",
-    "dataset_upstream_invalidated": "上游数据失效，数据集版本已陈旧",
+    "dataset_upstream_invalidated": "数据集版本有效性未确认（已失效或来源不可达），禁止导出与交付",
     "dataset_manifest_mismatch": "Manifest Hash 或内容不一致",
     "dataset_freeze_requires_approval": "缺少独立 QA 核验或冻结审批",
     "dataset_archive_blocked": "归档或恢复条件不满足",
@@ -579,7 +579,7 @@ _DATASET_MESSAGES = {
     "training_request_approval_forbidden": "提交人不得审批或驳回自己的需求",
     "training_request_revision_conflict": "需求 revision 冲突或已被取代",
     "training_request_not_approved": "需求 revision 未批准，不能进入交付",
-    "training_delivery_not_ready": "交付所需的数据集版本或导出产物未就绪",
+    "training_delivery_not_ready": "交付所需的数据集版本或导出产物未就绪（含有效性未确认或已失效）",
     "training_delivery_acceptance_forbidden": "交付创建人不得验收自己创建的交付",
     "training_delivery_already_accepted": "交付已验收，不能重复修改",
     "training_delivery_mismatch": "交付与需求 revision、数据集版本或导出任务不匹配",
@@ -607,6 +607,10 @@ _DATASET_DETAILS_SAFE_CODES = frozenset(
         # 否则交付方只能按 code 猜"差在哪一维"。details 只含需求快照字段与
         # 该版本自身的聚合事实，不含跨项目对象名或存在性信息。
         "training_delivery_requirement_unmet",
+        # 有效性门禁：validity_status 是请求方本就能读到的字段，
+        # 回显它才能区分"已失效"与"来源不可达、无法确认"。
+        "dataset_upstream_invalidated",
+        "training_delivery_not_ready",
     }
 )
 
