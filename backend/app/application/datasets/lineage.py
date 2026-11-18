@@ -1,12 +1,13 @@
 """DatasetVersion 血缘登记编排。
 
-职责很小但必须单独成文件：版本转 READY 时把 ``Episode → DatasetVersion`` 的
-``INCLUDED_IN`` 边写入血缘图。规则要点：
+职责很小但必须单独成文件：把数据集域产生的血缘边统一写进血缘图——
+版本转 READY 时的 ``Episode → DatasetVersion``（``INCLUDED_IN``），以及外部训练
+引用创建时的 ``DatasetVersion → TrainingRun``（``TRAINED_ON``，ADR-0036）。规则要点：
 
 1. **两端节点都必须先登记**。血缘表的两端有指向 ``lineage_node_refs`` 的复合外键，
    未登记节点写边会被数据库拒绝；这里按"先节点、后边"的顺序显式登记。
-2. **幂等**。重复 validate（例如 VALIDATION_FAILED 后重试）不得重复写边；
-   判定交给仓储的 :meth:`ensure_edge`，它在唯一约束冲突时回读确认。
+2. **幂等**。重复 validate（例如 VALIDATION_FAILED 后重试）或同一幂等键重放
+   不得重复写边；判定交给仓储的 :meth:`ensure_edge`，它在唯一约束冲突时回读确认。
 3. **不修改 dataset_items**。条目写入语义保持原有实现，本模块只读条目的
    ``episode_id``。
 
@@ -27,7 +28,7 @@ from app.domain.identity.models import ProjectScope
 
 
 class DatasetVersionLineageRecorder:
-    """把 ``episodes`` → ``dataset_version`` 的 INCLUDED_IN 边写入血缘图。"""
+    """把数据集域的血缘节点与边写入血缘图（INCLUDED_IN / INVALIDATES / TRAINED_ON）。"""
 
     def __init__(self, lineage: LineageRecorder) -> None:
         self._lineage = lineage
@@ -75,6 +76,44 @@ class DatasetVersionLineageRecorder:
             ):
                 created += 1
         return created
+
+    def record_training_run(
+        self,
+        scope: ProjectScope,
+        *,
+        dataset_version_id: UUID,
+        training_run_id: UUID,
+        now: datetime,
+        metadata: Mapping[str, object] | None = None,
+    ) -> bool:
+        """登记 ``DatasetVersion --TRAINED_ON--> TrainingRun`` 边。
+
+        ``training_run_id`` 是平台内代表一次训练的 ``external_ref_id``（ADR-0036）。
+        返回**本次新建**的边是否写入；边已存在（幂等重放）返回 ``False``。
+        节点登记幂等，重复调用无副作用。
+        """
+        self._lineage.ensure_node(
+            scope,
+            node_type=LineageNodeType.DATASET_VERSION,
+            node_id=dataset_version_id,
+            now=now,
+        )
+        self._lineage.ensure_node(
+            scope,
+            node_type=LineageNodeType.TRAINING_RUN,
+            node_id=training_run_id,
+            now=now,
+        )
+        return self._lineage.ensure_edge(
+            scope,
+            from_node_type=LineageNodeType.DATASET_VERSION,
+            from_node_id=dataset_version_id,
+            to_node_type=LineageNodeType.TRAINING_RUN,
+            to_node_id=training_run_id,
+            relation=LineageRelation.TRAINED_ON,
+            metadata=dict(metadata or {}),
+            now=now,
+        )
 
     def record_inclusion(
         self,

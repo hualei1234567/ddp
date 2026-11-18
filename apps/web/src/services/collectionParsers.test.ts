@@ -29,6 +29,7 @@ import {
   uploadPartFixture,
   USER_ID,
 } from "./__fixtures__/collectionFixtures";
+import { LINEAGE_RELATION_LABELS } from "./lineagePresentation";
 import { ContractValidationError } from "./validation";
 
 describe("采集任务与批次解析", () => {
@@ -141,6 +142,22 @@ describe("Episode 解析", () => {
       "reverse",
     );
     expect(response.items[0]?.relation).toBe("SEGMENTED_INTO");
+    const trainedOn = parseLineageResponse(
+      {
+        items: [
+          {
+            ...edge,
+            from_node_type: "DATASET_VERSION",
+            to_node_type: "TRAINING_RUN",
+            relation: "TRAINED_ON",
+          },
+        ],
+        direction: "forward",
+      },
+      "forward",
+    );
+    expect(trainedOn.items[0]?.relation).toBe("TRAINED_ON");
+    expect(LINEAGE_RELATION_LABELS.TRAINED_ON).toBe("用于训练");
     expect(() =>
       parseLineageResponse({ items: [edge], direction: "forward" }, "reverse"),
     ).toThrow(ContractValidationError);

@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from app.application.datasets.audit import record_change
 from app.application.datasets.idempotency import IdempotencyGuard, validate_key
+from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.ports import (
     AuditRepository,
     IdempotencyRepository,
@@ -82,6 +83,7 @@ class ExternalTrainingReferenceUseCases:
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        lineage: DatasetVersionLineageRecorder,
     ) -> None:
         self._deliveries = deliveries
         self._references = references
@@ -90,6 +92,7 @@ class ExternalTrainingReferenceUseCases:
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        self._lineage = lineage
 
     def get(self, scope: ProjectScope, reference_id: UUID) -> ExternalTrainingReference:
         reference = self._references.get(scope, reference_id)
@@ -212,6 +215,21 @@ class ExternalTrainingReferenceUseCases:
             now=now,
         )
         created = self._references.add(scope, reference)
+        # 血缘与引用**同事务**：写边失败会让本次会话整体回滚，不允许出现
+        # "引用已登记但没有血缘"的半成功状态（ADR-0036）。
+        self._lineage.record_training_run(
+            scope,
+            dataset_version_id=created.dataset_version_id,
+            training_run_id=created.external_ref_id,
+            now=now,
+            metadata={
+                "training_delivery_id": str(created.training_delivery_id),
+                "training_request_revision_id": str(created.training_request_revision_id),
+                "adapter_id": created.adapter_id,
+                "external_run_id": created.external_run_id,
+                "execution_mode": created.execution_mode.value,
+            },
+        )
         record_change(
             self._audit,
             self._outbox,
