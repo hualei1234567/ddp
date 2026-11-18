@@ -159,7 +159,11 @@ export function createAnnotationTaskApi(client: ApiClient): AnnotationTaskApi {
     async listTasks(projectId, options) {
       return client.get(projectPath(projectId, "/annotation-tasks"), {
         signal: options?.signal,
-        query: { status: options?.status, ...pageQuery(options) },
+        query: {
+          status: options?.status,
+          overdue: options?.overdue,
+          ...pageQuery(options),
+        },
         validate: (value) =>
           assertPageScope(
             parseAnnotationTaskPage(value),

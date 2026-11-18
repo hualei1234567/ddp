@@ -33,6 +33,7 @@ from app.domain.annotation.validation import (
     DESCRIPTION_MAX_LENGTH,
     NAME_MAX_LENGTH,
     REASON_MAX_LENGTH,
+    aware_datetime,
     coerce_enum,
     frozen_mapping,
     non_negative_int,
@@ -54,6 +55,14 @@ PROGRESS_FIELDS = (
     "arbitration_items",
 )
 MISSING_SEMANTICS = frozenset({"NONE", "N/A", "UNKNOWN", "STALE", "PARTIAL"})
+# SLA 逾期只对"仍在推进"的任务有意义：进入终态后即使 due_at 已过也不再算逾期。
+SLA_CLOSED_STATUSES = frozenset(
+    {
+        AnnotationTaskStatus.COMPLETED,
+        AnnotationTaskStatus.CANCELLED,
+        AnnotationTaskStatus.ARCHIVED,
+    }
+)
 _BINDING_FIELDS = ("sample_set_id", "schema_id", "schema_version", "schema_sha256")
 # 审批通过前的状态：此时"未批准"是正确的拒绝理由。
 _PRE_APPROVAL_STATUSES = frozenset(
@@ -66,6 +75,24 @@ _PRE_APPROVAL_STATUSES = frozenset(
 
 def _now() -> datetime:
     return datetime.now(UTC)
+
+
+def is_overdue(task: AnnotationTask, now: datetime) -> bool:
+    """返回任务在 ``now`` 时刻是否已超过 SLA 截止时间（纯函数）。
+
+    逾期是**派生事实**，不是任务状态，因此不新增状态枚举值、也不写库：
+
+    - 没有 ``due_at`` → 没有 SLA，永不逾期；
+    - 已进入终态（完成 / 取消 / 归档）→ 历史截止时间不再构成逾期；
+    - 只有 ``now`` 严格晚于 ``due_at`` 才算逾期，恰好等于截止时刻不算。
+
+    ``now`` 必须带时区，与领域内其余时间字段保持同一语义；调用方不得传
+    本地时间冒充 UTC。本函数不修改 ``task``，也不自动改派或关闭任务。
+    """
+    moment = aware_datetime(now, "now")
+    if task.due_at is None or task.status in SLA_CLOSED_STATUSES:
+        return False
+    return moment > task.due_at
 
 
 def _normalize_progress(value: object) -> Mapping[str, object]:
@@ -278,4 +305,10 @@ class AnnotationTask:
         return replace(self, progress=progress)
 
 
-__all__ = ["AnnotationTask", "MISSING_SEMANTICS", "PROGRESS_FIELDS"]
+__all__ = [
+    "AnnotationTask",
+    "MISSING_SEMANTICS",
+    "PROGRESS_FIELDS",
+    "SLA_CLOSED_STATUSES",
+    "is_overdue",
+]

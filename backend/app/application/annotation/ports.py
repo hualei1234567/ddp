@@ -156,9 +156,15 @@ class AnnotationTaskRepository(Protocol):
         scope: ProjectScope,
         *,
         status: str | None = None,
+        overdue: bool | None = None,
+        now: datetime | None = None,
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[AnnotationTask]: ...
+
+    def count_overdue(self, now: datetime) -> int:
+        """跨项目统计逾期任务数；只读，供巡检 worker 观测。"""
+        ...
 
     def save(
         self,

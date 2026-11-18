@@ -112,6 +112,11 @@
       ],
       "title": "Due At"
     },
+    "is_overdue": {
+      "title": "Is Overdue",
+      "description": "派生事实：截止时间已过且任务未进入终态（完成/取消/归档）。",
+      "type": "boolean"
+    },
     "accepted_at": {
       "anyOf": [
         {
@@ -256,6 +261,7 @@
     "progress",
     "quality_summary",
     "due_at",
+    "is_overdue",
     "accepted_at",
     "completed_at",
     "gold_set_id",

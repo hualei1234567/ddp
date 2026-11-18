@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "./api";
 import {
   describeAnnotationActionError,
+  describeDueDistance,
   isSeparationError,
   presentAnnotationStatus,
   presentProgress,
@@ -75,5 +76,37 @@ describe("标注状态与错误展示", () => {
       true,
     );
     expect(isSeparationError(httpError(403, "forbidden"))).toBe(false);
+  });
+});
+
+describe("标注任务 SLA 时长展示", () => {
+  const now = new Date("2026-11-18T12:00:00Z");
+
+  it("未到期显示剩余时长", () => {
+    expect(describeDueDistance("2026-11-18T14:30:00Z", false, now)).toBe(
+      "剩余 2 小时 30 分钟",
+    );
+  });
+
+  it("已逾期显示超时时长", () => {
+    expect(describeDueDistance("2026-11-17T12:00:00Z", true, now)).toBe(
+      "已超时 1 天",
+    );
+  });
+
+  it("终态任务的过期截止时间不再显示为超时", () => {
+    expect(describeDueDistance("2026-11-17T12:00:00Z", false, now)).toBe("");
+  });
+
+  it("无截止时间或非法时间不展示时长", () => {
+    expect(describeDueDistance(null, false, now)).toBe("");
+    expect(describeDueDistance(undefined, true, now)).toBe("");
+    expect(describeDueDistance("not-a-date", true, now)).toBe("");
+  });
+
+  it("不足一分钟仍给出明确口径", () => {
+    expect(describeDueDistance("2026-11-18T11:59:30Z", true, now)).toBe(
+      "已超时 不足 1 分钟",
+    );
   });
 });

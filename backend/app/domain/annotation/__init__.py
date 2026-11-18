@@ -179,7 +179,7 @@ from app.domain.annotation.submission import (
     compute_records_digest,
     validate_record_labels,
 )
-from app.domain.annotation.task import AnnotationTask
+from app.domain.annotation.task import SLA_CLOSED_STATUSES, AnnotationTask, is_overdue
 from app.domain.annotation.workload import CapacityPolicy, WorkloadSummary
 
 __all__ = [
@@ -213,6 +213,7 @@ __all__ = [
     "AnnotationTask",
     "AnnotationTaskAction",
     "AnnotationTaskStatus",
+    "SLA_CLOSED_STATUSES",
     "ArbitrationDecision",
     "ArbitrationQuorumNotMetError",
     "ArbitrationRequiredError",
@@ -344,6 +345,7 @@ __all__ = [
     "compute_schema_sha256",
     "default_registry",
     "evaluate_gold_set",
+    "is_overdue",
     "select_quality_candidates",
     "validate_record_labels",
 ]

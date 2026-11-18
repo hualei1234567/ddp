@@ -458,6 +458,7 @@ export function parseAnnotationTask(
       `${path}.quality_summary`,
     ),
     due_at: readOptionalString(record, "due_at", `${path}.due_at`),
+    is_overdue: readBoolean(record, "is_overdue", `${path}.is_overdue`),
     accepted_at: readOptionalString(
       record,
       "accepted_at",

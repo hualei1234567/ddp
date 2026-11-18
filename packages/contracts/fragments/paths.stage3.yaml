@@ -165,6 +165,7 @@ annotationTasks:
     summary: 标注任务列表（游标分页）
     parameters:
       - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationTaskStatus"}}
+      - {name: overdue, in: query, required: false, schema: {type: boolean}, description: 仅返回逾期（true）或未逾期（false）的任务；缺省不过滤}
       - $ref: "../openapi.yaml#/components/parameters/Cursor"
       - $ref: "../openapi.yaml#/components/parameters/Limit"
     responses:

@@ -167,6 +167,7 @@ export const annotationTaskFixture: AnnotationTask = {
   },
   quality_summary: {},
   due_at: "2026-11-30T18:00:00Z",
+  is_overdue: false,
   accepted_at: null,
   completed_at: null,
   gold_set_id: null,

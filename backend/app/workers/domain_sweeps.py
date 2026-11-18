@@ -1,4 +1,4 @@
-"""领域巡检 Worker：标注租约过期 + 采集任务数据检查。
+"""领域巡检 Worker：标注租约过期 + 标注任务逾期 + 采集任务数据检查。
 
 运行方式::
 
@@ -16,8 +16,10 @@
 - 数据集版本有 ``validity_status`` 子状态机（``VALID→STALE``），但没有任何
   检测器写入它；``invalidate`` / ``revalidate`` 因此永远不可达，失效版本
   仍然可以继续导出与交付。
+- 标注任务有 ``due_at``，但没有到期观测。逾期是派生事实，本 worker 只做
+  只读计数与日志，**不改派、不关闭、不写状态**。
 
-本 worker 按固定周期跑这三类巡检。每类都是**有界批量 + 幂等**（只处理
+本 worker 按固定周期跑这四类巡检（逾期扫描只读）。每类都是**有界批量 + 幂等**（只处理
 ``SUBMITTED`` / 已到租约的记录），单条失败只记日志并留待下一轮，不中断整批。
 
 **为什么不塞进 maintenance worker**
@@ -129,6 +131,14 @@ class DomainSweepWorker:
         logger.info("标注租约巡检完成", extra={"expired": expired})
         return expired
 
+    # ---- 标注任务逾期扫描（只读） ----
+    def count_overdue_tasks(self, *, now: datetime | None = None) -> int:
+        moment = now or datetime.now(UTC)
+        with self._factory() as session:
+            overdue = SqlAnnotationTaskRepository(session).count_overdue(moment)
+        logger.info("标注任务逾期扫描完成", extra={"overdue_tasks": overdue})
+        return overdue
+
     # ---- 采集任务数据检查 ----
     def check_collection_tasks(self, *, now: datetime | None = None) -> int:
         moment = now or datetime.now(UTC)
@@ -173,14 +183,19 @@ class DomainSweepWorker:
         moment = now or datetime.now(UTC)
         result = {
             "expired_assignments": 0,
+            "overdue_annotation_tasks": 0,
             "checked_collection_tasks": 0,
             "stale_dataset_versions": 0,
         }
-        # 两类巡检互相独立：一类失败不阻止另一类（失败会在下一轮重试）。
+        # 各类巡检互相独立：一类失败不阻止另一类（失败会在下一轮重试）。
         try:
             result["expired_assignments"] = self.expire_assignments(now=moment)
         except Exception:  # noqa: BLE001 —— 巡检失败不终止进程
             logger.exception("标注租约巡检失败，下一轮重试")
+        try:
+            result["overdue_annotation_tasks"] = self.count_overdue_tasks(now=moment)
+        except Exception:  # noqa: BLE001
+            logger.exception("标注任务逾期扫描失败，下一轮重试")
         try:
             result["checked_collection_tasks"] = self.check_collection_tasks(now=moment)
         except Exception:  # noqa: BLE001
@@ -206,7 +221,9 @@ def _install_signal_handlers(stop_event: threading.Event) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="DDP 领域巡检 Worker（租约过期 / 数据检查）")
+    parser = argparse.ArgumentParser(
+        description="DDP 领域巡检 Worker（租约过期 / 逾期扫描 / 数据检查）"
+    )
     parser.add_argument("--once", action="store_true", help="巡检一次后退出")
     parser.add_argument(
         "--interval-seconds",

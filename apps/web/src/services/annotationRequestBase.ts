@@ -10,6 +10,8 @@ import type { PageRequestOptions } from "./projectScope";
 
 export interface AnnotationListOptions extends PageRequestOptions {
   status?: string;
+  /** true 仅逾期、false 仅未逾期；缺省不过滤（服务端 SQL 下推）。 */
+  overdue?: boolean;
 }
 
 export interface AnnotationWriteOptions {

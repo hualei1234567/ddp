@@ -268,3 +268,54 @@ export function presentProgress(
 export function presentMissingSemantics(value: unknown): string {
   return typeof value === "string" && value !== "" ? value : "N/A";
 }
+
+/** 把毫秒差格式化为粗粒度时长，避免为"剩余/超时"引入新的日期库。 */
+function formatDurationMs(ms: number): string {
+  const totalMinutes = Math.max(0, Math.floor(ms / 60_000));
+  if (totalMinutes < 1) {
+    return "不足 1 分钟";
+  }
+  const days = Math.floor(totalMinutes / 1_440);
+  const hours = Math.floor((totalMinutes % 1_440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) {
+    parts.push(`${days} 天`);
+  }
+  if (hours > 0) {
+    parts.push(`${hours} 小时`);
+  }
+  if (days === 0 && minutes > 0) {
+    parts.push(`${minutes} 分钟`);
+  }
+  return parts.join(" ");
+}
+
+/**
+ * 截止时间的剩余/超时时长。
+ *
+ * ``isOverdue`` 是服务端计算的权威逾期事实：时钟偏差导致的"还没到点"
+ * 不改变红标；已经结束的任务（服务端 is_overdue=false）即使截止时间在
+ * 过去也不再显示"已超时"，避免把历史任务渲染成异常。
+ */
+export function describeDueDistance(
+  dueAt: string | null | undefined,
+  isOverdue: boolean,
+  now: Date = new Date(),
+): string {
+  if (!dueAt) {
+    return "";
+  }
+  const due = new Date(dueAt);
+  if (Number.isNaN(due.getTime())) {
+    return "";
+  }
+  const diffMs = due.getTime() - now.getTime();
+  if (diffMs > 0) {
+    return `剩余 ${formatDurationMs(diffMs)}`;
+  }
+  if (!isOverdue) {
+    return "";
+  }
+  return `已超时 ${formatDurationMs(-diffMs)}`;
+}
