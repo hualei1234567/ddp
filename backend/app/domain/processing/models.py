@@ -33,6 +33,14 @@ from app.domain.processing.state_machines import (
     target_status,
     validate_action_name,
 )
+from app.domain.processing.validation import (
+    non_negative_int,
+    optional_aware,
+    optional_text,
+    positive_int,
+    required_text,
+    required_uuid,
+)
 
 MAX_REFS = 1000
 REF_MAX_LENGTH = 1024
@@ -71,49 +79,6 @@ _FINISHED_STATUSES = frozenset(
 )
 
 
-def _required_uuid(value: object, field_name: str) -> UUID:
-    if not isinstance(value, UUID):
-        raise DomainValidationError(f"{field_name} 必须是 UUID")
-    return value
-
-
-def _text(value: object, field_name: str, *, max_length: int) -> str:
-    if not isinstance(value, str):
-        raise DomainValidationError(f"{field_name} 必须是字符串")
-    cleaned = value.strip()
-    if not cleaned:
-        raise DomainValidationError(f"{field_name} 不能为空")
-    if len(cleaned) > max_length:
-        raise DomainValidationError(f"{field_name} 超过最大长度 {max_length}")
-    return cleaned
-
-
-def _optional_text(value: object, field_name: str, *, max_length: int) -> str | None:
-    if value is None:
-        return None
-    return _text(value, field_name, max_length=max_length)
-
-
-def _optional_aware(value: object, field_name: str) -> datetime | None:
-    if value is None:
-        return None
-    if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
-        raise DomainValidationError(f"{field_name} 必须是带时区时间")
-    return value
-
-
-def _non_negative_int(value: object, field_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise DomainValidationError(f"{field_name} 必须是非负整数")
-    return value
-
-
-def _positive_int(value: object, field_name: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise DomainValidationError(f"{field_name} 必须是正整数")
-    return value
-
-
 def _coerce_status(value: object) -> str:
     try:
         return ProcessingRunStatus(value).value  # type: ignore[arg-type]
@@ -131,7 +96,7 @@ def _refs(value: object, field_name: str, *, allow_empty: bool) -> tuple[str, ..
         raise DomainValidationError(f"{field_name} 最多 {MAX_REFS} 项")
     result: list[str] = []
     for item in value:
-        cleaned = _text(item, field_name, max_length=REF_MAX_LENGTH)
+        cleaned = required_text(item, field_name, max_length=REF_MAX_LENGTH)
         if cleaned not in result:
             result.append(cleaned)
     return tuple(result)
@@ -175,12 +140,12 @@ class ProcessingRun:
     updated_by: UUID | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "run_id", _required_uuid(self.run_id, "run_id"))
-        object.__setattr__(self, "project_id", _required_uuid(self.project_id, "project_id"))
+        object.__setattr__(self, "run_id", required_uuid(self.run_id, "run_id"))
+        object.__setattr__(self, "project_id", required_uuid(self.project_id, "project_id"))
         object.__setattr__(
             self,
             "pipeline_version",
-            _text(
+            required_text(
                 self.pipeline_version,
                 "pipeline_version",
                 max_length=PIPELINE_VERSION_MAX_LENGTH,
@@ -202,31 +167,31 @@ class ProcessingRun:
             "stage",
             None if self.stage is None else coerce_stage(self.stage),
         )
-        object.__setattr__(self, "attempt", _non_negative_int(self.attempt, "attempt"))
+        object.__setattr__(self, "attempt", non_negative_int(self.attempt, "attempt"))
         object.__setattr__(
             self,
             "retry_count",
-            _non_negative_int(self.retry_count, "retry_count"),
+            non_negative_int(self.retry_count, "retry_count"),
         )
         object.__setattr__(
             self,
             "error_code",
-            _optional_text(self.error_code, "error_code", max_length=ERROR_CODE_MAX_LENGTH),
+            optional_text(self.error_code, "error_code", max_length=ERROR_CODE_MAX_LENGTH),
         )
         object.__setattr__(
             self,
             "error_summary",
-            _optional_text(
+            optional_text(
                 self.error_summary,
                 "error_summary",
                 max_length=ERROR_SUMMARY_MAX_LENGTH,
             ),
         )
-        object.__setattr__(self, "started_at", _optional_aware(self.started_at, "started_at"))
-        object.__setattr__(self, "finished_at", _optional_aware(self.finished_at, "finished_at"))
-        object.__setattr__(self, "row_version", _positive_int(self.row_version, "row_version"))
-        object.__setattr__(self, "created_at", _optional_aware(self.created_at, "created_at"))
-        object.__setattr__(self, "updated_at", _optional_aware(self.updated_at, "updated_at"))
+        object.__setattr__(self, "started_at", optional_aware(self.started_at, "started_at"))
+        object.__setattr__(self, "finished_at", optional_aware(self.finished_at, "finished_at"))
+        object.__setattr__(self, "row_version", positive_int(self.row_version, "row_version"))
+        object.__setattr__(self, "created_at", optional_aware(self.created_at, "created_at"))
+        object.__setattr__(self, "updated_at", optional_aware(self.updated_at, "updated_at"))
         self._validate_invariants()
 
     def _validate_invariants(self) -> None:
@@ -274,10 +239,10 @@ class ProcessingRun:
     ) -> ProcessingRun:
         """按显式迁移表生成新状态；非法动作/字段组合一律拒绝。"""
         action_name = validate_action_name(action)
-        moment = _optional_aware(now, "now")
+        moment = optional_aware(now, "now")
         if moment is None:
             raise DomainValidationError("now 不能为空")
-        actor = _required_uuid(actor_id, "actor_id")
+        actor = required_uuid(actor_id, "actor_id")
         target = target_status(self.status, action_name)
 
         if action_name == ProcessingRunAction.WORKER_ADVANCE.value and stage is None:
@@ -346,12 +311,12 @@ class ProcessingRun:
             updates.update(
                 {
                     "finished_at": moment,
-                    "error_code": _text(
+                    "error_code": required_text(
                         error_code,
                         "error_code",
                         max_length=ERROR_CODE_MAX_LENGTH,
                     ),
-                    "error_summary": _text(
+                    "error_summary": required_text(
                         error_summary,
                         "error_summary",
                         max_length=ERROR_SUMMARY_MAX_LENGTH,

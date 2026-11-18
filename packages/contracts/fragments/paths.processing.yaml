@@ -1,8 +1,9 @@
 # N4-001：处理运行（ProcessingRun）路径。
 # 对应 backend/app/api/v1/processing_routes.py。
 #
-# 本版只提供实体与状态机：创建 / 列表 / 详情 / 客户端取消。
-# 八阶段编排、Worker claim/advance 的触发入口属于 N4-002，不在此契约内。
+# N4-001 提供实体与状态机；N4-002 增加八阶段步骤记录：
+# 详情内联有界的 `steps`，并提供 `GET .../steps` 分页查询完整历史。
+# Worker claim/advance/fail 仍是服务端内部动作，不暴露给客户端。
 #
 # 客户端只能看到服务端计算的 `allowed_actions`；`system-*` / `worker-*`
 # 永远不出现在响应里，也不能被客户端调用。
@@ -43,8 +44,9 @@ processingRuns:
     tags: [processing]
     summary: 创建处理运行
     description: |
-      初始状态固定为 `CREATED`。创建本身不触发执行：排队由服务端调度器
-      调用内部动作 `system-queue` 完成，HTTP 线程不承担大文件处理。
+      初始状态固定为 `CREATED`。创建与一条投递类 outbox 事件
+      （`processing.run.requested`）同事务写入；八阶段执行由
+      `app.workers.processing` 异步完成，HTTP 线程不承担大文件处理。
     requestBody:
       required: true
       content:
@@ -86,6 +88,35 @@ processingRunDetail:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+processingRunSteps:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: listProcessingRunSteps
+    tags: [processing]
+    summary: 处理运行阶段步骤
+    description: |
+      按游标分页返回该运行的八个阶段执行记录（含历史重试尝试）。
+      同一 `(run_id, stage, attempt)` 只有一行；`SKIPPED` 必带跳过原因，
+      `FAILED` 必带错误码与摘要。运行不存在或跨项目返回 404。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: 步骤分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingRunStepPage" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

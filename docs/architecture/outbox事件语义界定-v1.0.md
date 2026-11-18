@@ -45,7 +45,7 @@
 
 ## 3. 当前归类
 
-### 3.1 投递类（3 个，均有消费者与测试）
+### 3.1 投递类（5 个，均有消费者与测试）
 
 | 事件 | 消费者 | 状态 |
 |---|---|---|
@@ -53,6 +53,7 @@
 | `dataset.export.requested` | `workers/exports.py` | ✅ 已实现 |
 | `datasource.import_requested` | `workers/datasources.py` | ✅ 已实现 |
 | `ingestion.job.created` | `workers/ingestion_jobs.py` | ✅ 已实现（2026-11-16 由留痕类改为投递类） |
+| `processing.run.requested` | `workers/processing.py` | ✅ 已实现（2026-11-18，N4-002 八阶段编排） |
 
 投递类清单的唯一权威是 `scripts/check_outbox_events.py` 的 `DISPATCH_EVENTS`：
 它同时被 CI 与 `make check` 校验，声明与实现不一致会直接失败。

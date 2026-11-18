@@ -1,4 +1,4 @@
-# N4-001：处理运行 schema。
+# N4-001/N4-002：处理运行与阶段步骤 schema。
 # 长度/取值上限取自 backend/app/domain/processing/（唯一权威实现）。
 
 ProcessingRunStatus:
@@ -7,6 +7,14 @@ ProcessingRunStatus:
   description: |
     七态状态机。`SUCCEEDED` / `CANCELLED` 是终态；`FAILED` 可经服务端
     `RETRYING` 重试。`FAILED` 不是终态，客户端不得把它渲染成"已结束"。
+
+ProcessingStepStatus:
+  type: string
+  enum: [RUNNING, SUCCEEDED, FAILED, SKIPPED]
+  description: |
+    单个阶段的执行结果。`SKIPPED` 是一等状态，不是"成功"的别名：它表示
+    该阶段在当前流水线版本下没有真实实现，必须同时带非空 `log_summary`
+    （跳过原因）。把未实现阶段写成 `SUCCEEDED` 会让"处理完成"变成谎话。
 
 ProcessingStage:
   type: string
@@ -112,6 +120,66 @@ ProcessingRun:
     version: { type: integer, minimum: 1 }
     created_at: { type: string, format: date-time }
     updated_at: { type: string, format: date-time }
+    steps:
+      oneOf:
+        - type: array
+          maxItems: 200
+          items: { $ref: "../openapi.yaml#/components/schemas/ProcessingRunStep" }
+        - type: "null"
+      description: |
+        仅详情响应内联（有界，最多 200 条）。列表响应为 `null`；完整历史走
+        `GET .../steps` 分页。
+
+ProcessingRunStep:
+  type: object
+  required:
+    - step_id
+    - run_id
+    - stage
+    - attempt
+    - status
+    - started_at
+    - created_at
+    - updated_at
+  additionalProperties: false
+  properties:
+    step_id: { type: string, format: uuid }
+    run_id: { type: string, format: uuid }
+    stage: { $ref: "../openapi.yaml#/components/schemas/ProcessingStage" }
+    attempt:
+      type: integer
+      minimum: 1
+      description: 执行尝试序号；与运行 `attempt` 对齐，重试会递增。
+    status: { $ref: "../openapi.yaml#/components/schemas/ProcessingStepStatus" }
+    log_summary:
+      type: [string, "null"]
+      maxLength: 1000
+      description: 已脱敏的一行摘要；`SKIPPED` 时必非空（跳过原因）。
+    error_code:
+      type: [string, "null"]
+      maxLength: 64
+      description: 仅 `FAILED` 非空。
+    error_summary:
+      type: [string, "null"]
+      maxLength: 2000
+      description: 仅 `FAILED` 非空。
+    started_at: { type: string, format: date-time }
+    finished_at:
+      type: [string, "null"]
+      format: date-time
+      description: 终态必非空；`RUNNING` 为 `null`。
+    created_at: { type: string, format: date-time }
+    updated_at: { type: string, format: date-time }
+
+ProcessingRunStepPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/ProcessingRunStep" }
+    next_cursor: { type: [string, "null"] }
 
 ProcessingRunPage:
   type: object

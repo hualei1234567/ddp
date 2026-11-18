@@ -21,17 +21,28 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
     Uuid,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.domain.processing.enums import ProcessingRunStatus, ProcessingStage
+from app.domain.processing.enums import (
+    ProcessingRunStatus,
+    ProcessingStage,
+    ProcessingStepStatus,
+)
+from app.domain.processing.steps import (
+    STEP_ERROR_CODE_MAX_LENGTH,
+    STEP_ERROR_SUMMARY_MAX_LENGTH,
+    STEP_LOG_MAX_LENGTH,
+)
 from app.infrastructure.db.base import Base
 
 _STATUS_VALUES = ", ".join(repr(item.value) for item in ProcessingRunStatus)
 _STAGE_VALUES = ", ".join(repr(item.value) for item in ProcessingStage)
+_STEP_STATUS_VALUES = ", ".join(repr(item.value) for item in ProcessingStepStatus)
 _JSON_TYPE = JSON().with_variant(JSONB, "postgresql")
 
 
@@ -150,4 +161,109 @@ class ProcessingRunModel(Base):
     )
 
 
-__all__ = ["ProcessingRunModel"]
+class ProcessingRunStepModel(Base):
+    """单个阶段的一次执行尝试（N4-002）。
+
+    ``(run_id, stage, attempt)`` 唯一：重试会增加 ``attempt``，历史失败行
+    保留可查，不会被覆盖。数据库 CHECK 与领域不变量一一对应，绕过用例
+    直接插行也写不出"跳过却没有原因""失败却没有错误码"的记录。
+    """
+
+    __tablename__ = "processing_run_steps"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("processing_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default=ProcessingStepStatus.RUNNING.value,
+        server_default=text("'RUNNING'"),
+    )
+    log_summary: Mapped[str | None] = mapped_column(String(STEP_LOG_MAX_LENGTH), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(
+        String(STEP_ERROR_CODE_MAX_LENGTH),
+        nullable=True,
+    )
+    error_summary: Mapped[str | None] = mapped_column(
+        String(STEP_ERROR_SUMMARY_MAX_LENGTH),
+        nullable=True,
+    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+        onupdate=text("CURRENT_TIMESTAMP"),
+    )
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+    updated_by: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "stage",
+            "attempt",
+            name="uq_processing_run_steps_run_stage_attempt",
+        ),
+        CheckConstraint(f"stage IN ({_STAGE_VALUES})", name="stage_allowed"),
+        CheckConstraint(f"status IN ({_STEP_STATUS_VALUES})", name="status_allowed"),
+        CheckConstraint("attempt >= 1", name="attempt_positive"),
+        CheckConstraint(
+            "status <> 'RUNNING' OR finished_at IS NULL",
+            name="running_without_finished_at",
+        ),
+        CheckConstraint(
+            "status = 'RUNNING' OR finished_at IS NOT NULL",
+            name="terminal_requires_finished_at",
+        ),
+        CheckConstraint(
+            "finished_at IS NULL OR finished_at >= started_at",
+            name="finished_after_started",
+        ),
+        CheckConstraint(
+            "status <> 'FAILED' OR (error_code IS NOT NULL AND error_summary IS NOT NULL)",
+            name="failed_requires_error",
+        ),
+        CheckConstraint(
+            "status = 'FAILED' OR (error_code IS NULL AND error_summary IS NULL)",
+            name="error_only_when_failed",
+        ),
+        CheckConstraint(
+            "status <> 'SKIPPED' OR (log_summary IS NOT NULL AND length(log_summary) > 0)",
+            name="skipped_requires_reason",
+        ),
+        Index(
+            "ix_processing_run_steps_project_run_id",
+            "project_id",
+            "run_id",
+            "id",
+        ),
+    )
+
+
+__all__ = ["ProcessingRunModel", "ProcessingRunStepModel"]
