@@ -392,3 +392,87 @@ def test_suspend_and_retire_require_reason(api_db) -> None:
         json={},
     )
     assert no_reason_retire.status_code == 422, no_reason_retire.text
+
+
+# --- G-11 收口：PATCH 必须留痕，且只记真正变化的字段 -----------------------
+
+
+def test_patch_device_writes_one_update_audit(api_db) -> None:
+    """PATCH 此前零审计：改了哪个字段只能靠对比历史快照推断。"""
+    from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
+    from sqlalchemy import select
+
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device = client.post(_device_url(ids.project_a), json=device_payload()).json()
+
+    patched = client.patch(
+        _device_url(ids.project_a, f"/{device['device_id']}"),
+        headers={"If-Match": '"1"'},
+        json={"name": "新名称", "device_type": "COMPUTE"},
+    )
+    assert patched.status_code == 200, patched.text
+
+    with factory() as session:
+        audits = list(
+            session.scalars(
+                select(AuditLog).where(
+                    AuditLog.project_id == ids.project_a,
+                    AuditLog.resource_type == "device",
+                    AuditLog.resource_id == UUID(device["device_id"]),
+                    AuditLog.action == "update",
+                )
+            )
+        )
+        events = list(
+            session.scalars(
+                select(OutboxEvent).where(
+                    OutboxEvent.project_id == ids.project_a,
+                    OutboxEvent.aggregate_type == "device",
+                    OutboxEvent.aggregate_id == UUID(device["device_id"]),
+                    OutboxEvent.event_type == "device.updated",
+                )
+            )
+        )
+
+    assert len(audits) == 1, "一次 PATCH 只应产生一条 update 审计"
+    audit = audits[0]
+    # device_type 传的是与库里相同的 "COMPUTE"，不能因字符串/枚举形状差异误报。
+    assert (audit.details or {}).get("changed_fields") == ["name"]
+    assert audit.from_status == audit.to_status == "PROVISIONED"
+    assert audit.actor_user_id == ids.editor_a
+    assert audit.request_id, "PATCH 也必须把 X-Request-Id 带进审计"
+    assert [event.event_type for event in events] == ["device.updated"]
+    assert events[0].payload["changed_fields"] == ["name"]
+    assert events[0].payload["device_id"] == device["device_id"]
+
+
+def test_patch_device_without_real_change_writes_no_audit(api_db) -> None:
+    """无变化 PATCH 仍按原语义归档（版本 +1），但不该在 audit_logs 留噪音。"""
+    from app.infrastructure.db.models.collection import AuditLog
+    from sqlalchemy import func, select
+
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    payload = device_payload()
+    device = client.post(_device_url(ids.project_a), json=payload).json()
+
+    patched = client.patch(
+        _device_url(ids.project_a, f"/{device['device_id']}"),
+        headers={"If-Match": '"1"'},
+        json={"name": payload["name"], "device_type": payload["device_type"]},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["version"] == 2, "业务语义未变：PATCH 仍走存档"
+
+    with factory() as session:
+        count = session.scalar(
+            select(func.count())
+            .select_from(AuditLog)
+            .where(
+                AuditLog.resource_id == UUID(device["device_id"]),
+                AuditLog.action == "update",
+            )
+        )
+
+    assert count == 0

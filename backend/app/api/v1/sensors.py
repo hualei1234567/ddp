@@ -87,6 +87,7 @@ def get_sensor(
 def update_sensor(
     sensor_id: UUID,
     payload: SensorPatch,
+    request: Request,
     scope: WriteScope,
     use_cases: SensorUseCasesDep,
     expected_version: ExpectedVersion,
@@ -96,6 +97,7 @@ def update_sensor(
         sensor_id,
         expected_version=expected_version,
         changes=payload.model_dump(exclude_unset=True),
+        request_id=request_id(request),
     )
     return SensorOut.from_domain(sensor)
 

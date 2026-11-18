@@ -346,3 +346,57 @@ def test_profile_supersedes_is_persisted_and_chain_cannot_fork(
     )
     assert fork.status_code == 422, fork.text
     assert fork.json()["error"]["code"] == "validation_failed"
+
+
+def test_patch_robot_writes_one_update_audit(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """G-11 收口：机器人 PATCH 必须留痕，且只记真正变化的字段。"""
+    from uuid import UUID
+
+    from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
+    from sqlalchemy import select
+
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    created = _create_robot(editor, ids.project_a)
+    robot_id = UUID(created["robot_id"])
+
+    patched = editor.patch(
+        f"/api/v1/projects/{ids.project_a}/robots/{robot_id}",
+        headers={"If-Match": '"1"'},
+        json={"name": "主机器人（改名）", "robot_type": "HUMANOID"},
+    )
+    assert patched.status_code == 200, patched.text
+
+    with factory() as session:
+        audits = list(
+            session.scalars(
+                select(AuditLog).where(
+                    AuditLog.project_id == ids.project_a,
+                    AuditLog.resource_type == "robot",
+                    AuditLog.resource_id == robot_id,
+                    AuditLog.action == "update",
+                )
+            )
+        )
+        events = list(
+            session.scalars(
+                select(OutboxEvent).where(
+                    OutboxEvent.project_id == ids.project_a,
+                    OutboxEvent.aggregate_type == "robot",
+                    OutboxEvent.aggregate_id == robot_id,
+                    OutboxEvent.event_type == "robot.updated",
+                )
+            )
+        )
+
+    assert len(audits) == 1, "一次 PATCH 只应产生一条 update 审计"
+    audit = audits[0]
+    assert (audit.details or {}).get("changed_fields") == ["name"]
+    assert audit.from_status == audit.to_status == "PROVISIONED"
+    assert audit.actor_user_id == ids.editor_a
+    assert audit.request_id
+    assert [event.event_type for event in events] == ["robot.updated"]
+    assert events[0].payload["changed_fields"] == ["name"]
+    assert events[0].payload["robot_id"] == str(robot_id)

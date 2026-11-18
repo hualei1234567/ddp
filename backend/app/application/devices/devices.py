@@ -20,6 +20,7 @@ from app.application.devices.pagination import (
     decode_cursor,
     normalize_limit,
 )
+from app.application.devices.patch_audit import record_patch
 from app.application.devices.ports import (
     AuditRepository,
     CalibrationProfileRepository,
@@ -81,6 +82,9 @@ DEVICE_ACTION_EVENTS: dict[str, str] = {
     "suspend": "device.suspend",
     "retire": "device.retire",
 }
+
+#: PATCH 留痕事件（G-11）；同样用模块级常量而不是 f-string。
+DEVICE_UPDATED_EVENT = "device.updated"
 
 
 class DeviceUseCases:
@@ -226,7 +230,9 @@ class DeviceUseCases:
         *,
         expected_version: int,
         changes: Mapping[str, object],
+        request_id: str | None = None,
     ) -> Device:
+        """编辑档案；只把真正变化的字段写进审计（G-11）。"""
         self._ensure_patchable(changes)
         current = self.get_device(scope, device_id)
         if current.version != expected_version:
@@ -240,10 +246,25 @@ class DeviceUseCases:
             )
         if "location_id" in changes:
             self._validate_location(scope, _optional_uuid(changes["location_id"], "location_id"))
+        candidate = _replace_device(current, changes)
         updated = self._devices.save(
             scope,
-            _replace_device(current, changes),
+            candidate,
             expected_version=expected_version,
+        )
+        record_patch(
+            self._audit,
+            self._outbox,
+            scope,
+            resource_type="device",
+            resource_id=updated.device_id,
+            id_field="device_id",
+            current=current,
+            candidate=candidate,
+            changes=changes,
+            event_type=DEVICE_UPDATED_EVENT,
+            request_id=request_id,
+            occurred_at=datetime.now(UTC),
         )
         self._uow.commit()
         return updated
