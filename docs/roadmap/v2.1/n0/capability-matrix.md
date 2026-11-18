@@ -13,8 +13,8 @@
 
 | 状态 | 数量 |
 |---|---:|
-| VERIFIED | 18 |
-| PARTIAL | 25 |
+| VERIFIED | 21 |
+| PARTIAL | 22 |
 | MISSING | 3 |
 | BLOCKED | 1 |
 | **合计** | **47** |
@@ -40,7 +40,7 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N2-01 | 数据源中心（HF/URL/本地/S3） | **PARTIAL** | N2-003：登记可显式 `verify_remote` 调用 `HuggingFaceAdapter.describe()`（默认关闭、超时 10s）+ 详情页/详情 API | 仍只支持 Hugging Face；URL/本地/S3 源未实现 |
-| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **PARTIAL** | 状态机 + Worker + API + 列表页；`validate_import_action` 已在 HTTP 用例入口拒绝系统动作（N2-001） | N2-002 已补阶段/进度/步骤日志与只读端点；仍为手动刷新，无自动轮询 |
+| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **VERIFIED** | 状态机 + Worker + API + 列表页；阶段/进度/步骤日志（cursor 分页）；RUNNING 时 7s 自动轮询、终态停止；系统动作已隔离 | 列表轮询会重置已加载分页（已知取舍，N2-010） |
 | DDP-V21-N2-03 | Raw Asset 字段、状态机、动作、去重 | **VERIFIED** | `domain/ingestion/models.py:332`；`state_machines.py:65`；`uploads.py:234-267`；`test_raw_asset_actions_api.py`；`scripts/qa/raw_asset_lifecycle_smoke.py` | — |
 | DDP-V21-N2-04 | Episode Explorer（时间/任务/机器人/相机/质量/状态） | **VERIFIED** | N2-004：camera 过滤（`EXISTS` 下推）+ 前端质量/标注/机器人/机位/时间筛选，全部写入 URL；契约补齐 11 个 query 参数 | `EpisodeListPage.tsx` 729 行，后续评估拆分 |
 | DDP-V21-N2-05 | 人工审看（播放/倍速/Range/时间轴/导航/多视角/decision+reason+evidence） | **PARTIAL** | N2-005：倍速/时间轴/2 机位同屏/结构化 evidence；预签名 URL + 206 Range 已实测 | 审看绑定导入任务，无 Episode 级导航；多机位为独立播放（不保证音画同步） |
@@ -61,7 +61,7 @@
 | DDP-V21-N4-01 | Processing Run 实体与状态机（CREATED/QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED/RETRYING） | **VERIFIED** | N4-001 + N4-002：七态状态机、迁移 0056/0057、`processing.run.requested` 投递与 `processing-worker` 消费、阶段步骤表与 `GET /steps`；FILE_VALIDATION 真实执行，其余七阶段显式 SKIPPED | 真实解析/切片/质检处理器属后续增量；前端 `/processing` 页面仍 PLANNED |
 | DDP-V21-N4-02 | 时间同步（timestamp/frame index/offset/drift） | **PARTIAL** | `domain/episodes/sync_drift.py:110`；导入质量 `stream_sync_aligned` | 只检测 start/duration 偏移；无帧索引、无校正、drift 不落库 |
 | DDP-V21-N4-03 | Episode 切分（metadata/time range/manual/task boundary） | **PARTIAL** | `domain/episodes/segmentation_rules.py:235,317,409`；`episode_materialization.py:131` | 只有 MANUAL_TIME_RANGE / fixed-window / episode-boundary；无 task-boundary、无帧级切片 |
-| DDP-V21-N4-04 | 质量引擎（checksum/decode/fps/resolution/duration/timestamp/missing frame/metadata/annotation） | **PARTIAL** | 导入规则 `datasources/quality.py`（v1.1.0）；标注规则 `annotation/quality_rules.py`；资产 hash/size | decode、resolution、missing-frame 规则不存在；Episode 级自动质检缺失；无统一规则注册表 |
+| DDP-V21-N4-04 | 质量引擎（checksum/decode/fps/resolution/duration/timestamp/missing frame/metadata/annotation） | **PARTIAL** | N4-004：统一规则注册表 + 六类分层 + 规则集内容 SHA + `quality_runs/quality_findings`（迁移 0058）+ 3 个 API；导入/标注/数据集三套规则原样注册 | decode/resolution/missing-frame 仍无规则；只支持单 Episode/导入任务手工触发（批量自动属 N4-005）；数据集规则源已注册但入口未开放 |
 
 ## 5. N5 数据资产与 Dataset 生命周期
 
@@ -70,7 +70,7 @@
 | DDP-V21-N5-01 | Asset Catalog 跨资源检索 | **PARTIAL** | 各资源列表 API（raw-assets / episodes / datasets / annotation tasks） | 无统一目录与联合检索；Annotation/Quality 维度未接入 |
 | DDP-V21-N5-02 | Dataset Version 生命周期（DRAFT→…→FROZEN→DEPRECATED） | **VERIFIED** | `domain/datasets/{enums,state_machines,models}.py`；`validity_status` 子轴；冻结后 DB 触发器不可变；`test_dataset_validity_api.py` | 实际用 `SUPERSEDED` 表达弃用，与任务书 `DEPRECATED` 命名不同（语义等价，需在契约说明） |
 | DDP-V21-N5-03 | Manifest 字段完整性与固定 | **VERIFIED** | `domain/datasets/manifest.py:33-153`；`test_dataset_domain.py:442` | files 以 raw_asset_ids + item_sha256 表达，无独立文件清单（可接受） |
-| DDP-V21-N5-04 | Lineage 全链 | **PARTIAL** | N5-002：Episode→Annotation（复核/仲裁通过）与 Episode→Quality（质量检查运行）同事务写边、幂等 | DatasetVersion→TrainingRun 缺关系枚举与 DB CHECK，需独立 ADR + 迁移；无通用图查询 API |
+| DDP-V21-N5-04 | Lineage 全链 | **VERIFIED** | N5-002 + N5-005：Episode→Annotation、Episode→Quality、DatasetVersion→TRAINING_RUN（`TRAINED_ON`，ADR-0036）全部同事务写边、幂等；迁移 0059 | 无通用图查询 API（逐节点遍历） |
 
 ## 6. N6 标注治理
 
@@ -79,7 +79,7 @@
 | DDP-V21-N6-01 | Schema Registry（action/skill/language/contact/object/failure/temporal） | **PARTIAL** | `domain/annotation/schema.py:226`；10 种 label type / 6 层 level | 无七类预设注册表；项目自建；种子仅 4 个标签 |
 | DDP-V21-N6-02 | 标注任务（batch/assignment/priority/SLA/reviewer/status） | **VERIFIED** | N6-002：纯函数 `is_overdue` + 列表 `overdue` 下推过滤 + 派生字段 `is_overdue` + 巡检计数 + 前端逾期标签/汇总 | 无自动改派/关闭（刻意）；全局逾期卡片需独立汇总端点 |
 | DDP-V21-N6-03 | AI 辅助标注（suggestion/confidence/human confirmation） | **VERIFIED** | `ai_suggestion.py:113-235`；`annotation_ai.py`；AI 值单独存储、`AI_ASSISTED` 标记、人工确认强一致 | — |
-| DDP-V21-N6-04 | QA：抽检/盲审/双标/IAA/仲裁 | **PARTIAL** | `quality_sample.py`、`gold_set.py`（blind 强制）、`iaa.py:420`、`arbitration.py:92` | 普通复核非盲审；无双标任务实体与一致性门槛；双标靠重复分配 |
+| DDP-V21-N6-04 | QA：抽检/盲审/双标/IAA/仲裁 | **PARTIAL** | N6-003：双标策略（`review_mode/agreement_threshold/agreement_metric/auto_approve`）+ 一致性判定复用 IAA + 不达标自动仲裁；抽检/黄金集盲测/IAA/仲裁既有 | 普通复核仍非盲审；双标配置只能经 API 传入，创建页无表单 |
 | DDP-V21-N6-05 | 返工闭环 Reject→Reason→Rework→Review→Pass | **VERIFIED** | `state_rules.py:159-162,284-295`；`review.py:241`；`submissions.py:113` 轮次上限；API 用例 | — |
 
 ## 7. N7 Training / Evaluation / Data Gap
@@ -89,7 +89,7 @@
 | DDP-V21-N7-01 | Training Dataset Grant | **VERIFIED** | `domain/datasets/dataset_grants.py:48`；`dataset_grant_routes.py`；`test_dataset_grant_api.py` | 无独立 requester/purpose（`created_by` + reason 兼任） |
 | DDP-V21-N7-02 | Training Adapter（Local/Mock/Dry Run） | **PARTIAL** | `ExecutionMode`（LOCAL/MOCK/DRY_RUN/REMOTE/UNKNOWN）+ 迁移 0054 + 部署声明 `DDP_TRAINING_ADAPTER_EXECUTION_MODES` + 前端显著标注；`local-adapter` 真实执行 | MOCK/DRY_RUN 目前是**显式标记**而非独立执行器；未配置模式时提交 422（fail-closed，刻意） |
 | DDP-V21-N7-03 | Training Run 记录 | **PARTIAL** | `domain/datasets/training_references.py:114`；`training_delivery_routes.py` | 无独立 TrainingRun；config 不落库；无 code_version/model_version；无 worker 轮询 |
-| DDP-V21-N7-04 | Evaluation（model/dataset/config/metrics/artifacts/failure cases） | **PARTIAL** | `domain/modelops/models.py:243`；`evaluation_routes.py`；HMAC 回调 | 无 failure_cases 结构，失败明细只能塞自由 JSON |
+| DDP-V21-N7-04 | Evaluation（model/dataset/config/metrics/artifacts/failure cases） | **VERIFIED** | N7-003：`FailureCase` 领域值对象 + 迁移 0061 + 回调校验（类别/重复/4KiB/200 条/64KiB）+ 响应与前端详情展示；成功评测后不可变 | 列表响应可能较大（每评测 ≤64KiB），后续可加独立明细端点 |
 | DDP-V21-N7-05 | Data Gap（多来源、target_count、priority、status） | **PARTIAL** | `domain/modelops/gaps.py`；`feedback_routes.py:116` | 来源仅人工反馈 + Episode 覆盖；无 failed task/low score/标注分歧/缺失技能 |
 | DDP-V21-N7-06 | 闭环 Evaluation→Failure→Gap→Requirement→New Data | **PARTIAL** | `application/modelops/feedback.py:221,291`；`requirements.py:318`；e2e 主链 | 每步手工触发；无自动「失败→缺口」；新数据回流未验证 |
 

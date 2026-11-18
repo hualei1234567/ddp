@@ -97,9 +97,7 @@ def test_double_annotation_two_annotators_pass(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:
     factory, ids = api_db
-    episode_id, second_id, editor, _owner, second, work = _double_work(
-        factory, ids, "double-pass"
-    )
+    episode_id, second_id, editor, _owner, second, work = _double_work(factory, ids, "double-pass")
     second_assignment = _add_assignment(
         editor,
         ids.project_a,
@@ -108,9 +106,7 @@ def test_double_annotation_two_annotators_pass(
     )
     _claim_and_start(second, ids.project_a, second_assignment)
 
-    first = create_submitted(
-        editor, ids.project_a, work["assignment"]["assignment_id"], episode_id
-    )
+    first = create_submitted(editor, ids.project_a, work["assignment"]["assignment_id"], episode_id)
     assert first["consistency"]["status"] == "PENDING_SECOND_ANNOTATOR"
 
     second_submission = create_submitted(
@@ -124,9 +120,7 @@ def test_double_annotation_two_annotators_pass(
     assert consistency["arbitration_ids"] == []
     assert consistency["auto_approved"] is False
 
-    task = editor.get(
-        url(ids.project_a, f"/annotation-tasks/{work['task']['task_id']}")
-    ).json()
+    task = editor.get(url(ids.project_a, f"/annotation-tasks/{work['task']['task_id']}")).json()
     assert task["review_mode"] == "DOUBLE"
 
     fetched = editor.get(
@@ -143,9 +137,7 @@ def test_double_annotation_failure_creates_arbitration_items(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:
     factory, ids = api_db
-    episode_id, second_id, editor, _owner, second, work = _double_work(
-        factory, ids, "double-fail"
-    )
+    episode_id, second_id, editor, _owner, second, work = _double_work(factory, ids, "double-fail")
     second_assignment = _add_assignment(
         editor,
         ids.project_a,
@@ -154,9 +146,7 @@ def test_double_annotation_failure_creates_arbitration_items(
     )
     _claim_and_start(second, ids.project_a, second_assignment)
 
-    first = create_submitted(
-        editor, ids.project_a, work["assignment"]["assignment_id"], episode_id
-    )
+    first = create_submitted(editor, ids.project_a, work["assignment"]["assignment_id"], episode_id)
     second_submission = create_submitted(
         second,
         ids.project_a,
@@ -225,9 +215,7 @@ def test_double_annotation_auto_approve_when_explicitly_enabled(
     )
     _claim_and_start(second, ids.project_a, second_assignment)
 
-    first = create_submitted(
-        editor, ids.project_a, work["assignment"]["assignment_id"], episode_id
-    )
+    first = create_submitted(editor, ids.project_a, work["assignment"]["assignment_id"], episode_id)
     second_submission = create_submitted(
         second, ids.project_a, second_assignment["assignment_id"], episode_id
     )
@@ -240,9 +228,7 @@ def test_double_annotation_auto_approve_when_explicitly_enabled(
         first["submission_id"],
         second_submission["submission_id"],
     ):
-        stored = editor.get(
-            url(ids.project_a, f"/annotation-submissions/{submission_id}")
-        ).json()
+        stored = editor.get(url(ids.project_a, f"/annotation-submissions/{submission_id}")).json()
         assert stored["status"] == "APPROVED"
 
 

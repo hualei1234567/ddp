@@ -2,7 +2,7 @@
 
 - 采集日期：2026-11-18
 - 采集方式：只读命令 + 代码检视；所有数字均可按 §10 复现
-- 事实基线提交：**`2165556`**（P1 批次合并）；P2 批次集成中（0057）
+- 事实基线提交：**`173d594`**（P2 批次合并）；P3 批次集成中（0058→0061）
 - 上游文档：`docs/05-现状审计报告-2026-11-14.md`（含 §12 闭环与勘误）、
   `docs/roadmap/next-stage-v2/audit/N0-N9-项目最终报告-2026-11-17.md`
 - 本文件地位：**V2.1 的唯一事实入口**。与历史报告冲突时，以本文件的命令与
@@ -26,9 +26,9 @@
 
 | 项 | 值 | 证据 |
 |---|---|---|
-| 契约版本 | **1.12.0**（P2 批次新增处理步骤、标注 SLA、审核证据） | `packages/contracts/openapi.yaml:4` |
-| 路径数 | **224** | `grep -c '^  /' packages/contracts/openapi.yaml` |
-| operationId 数 | **302** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
+| 契约版本 | **1.13.0**（P3 批次新增质量引擎、日志分页、失败用例、双标） | `packages/contracts/openapi.yaml:4` |
+| 路径数 | **228** | `grep -c '^  /' packages/contracts/openapi.yaml` |
+| operationId 数 | **306** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
 | 冻结基线 | stage2–stage7 共 6 份 bundle + SHA256 | `packages/contracts/baselines/` |
 | 一致性检查 | 通过；**基线内已接受 61 项差异**（含 9 条生效契约超前错误码、1 条映射表无产生点） | `python3 scripts/check_contract_parity.py --strict` |
 | Lint | Redocly `@redocly/cli@1.34.24`（CI job） | `.github/workflows/ci.yml` |
@@ -37,14 +37,14 @@
 
 | 层 | 文件数 | 行数 | 证据 |
 |---|---:|---:|---|
-| 后端 `backend/app`（Python） | 536 | 123,409 | `find backend/app -name '*.py'` |
-| 前端 `apps/web/src`（TS/TSX） | 413 | 80,737 | `find apps/web/src \( -name '*.ts' -o -name '*.tsx' \)` |
+| 后端 `backend/app`（Python） | 562 | 127,816 | `find backend/app -name '*.py'` |
+| 前端 `apps/web/src`（TS/TSX） | 420 | 81,783 | `find apps/web/src \( -name '*.ts' -o -name '*.tsx' \)` |
 | 前端页面文件 | 92 | — | `find apps/web/src/pages -name '*.tsx' \| grep -v test` |
-| 后端路由模块 | 41 | 318 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
+| 后端路由模块 | 42 | 322 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
 | 后端 Worker | 8 | — | `backend/app/workers/*.py` |
-| Alembic 迁移 | 52 | 单头 `0057`（0057 处理步骤表） | `alembic heads` |
+| Alembic 迁移 | 55 | 单头 `0061`（0058 质量引擎 / 0059 训练血缘 / 0061 失败用例；0060 未使用） | `alembic heads` |
 | ORM 表 | 84 | PostgreSQL 实表 85 | `__tablename__` 去重 / `information_schema` |
-| ADR | 35 | — | `docs/adr/*.md` |
+| ADR | 36 | — | `docs/adr/*.md` |
 
 端点方法分布：GET 140、POST 144、PATCH 21、DELETE 5、PUT 1。
 
@@ -88,7 +88,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 | `web` | Nginx 静态站点 |
 | `postgres` / `redis` / `minio` | 依赖 |
 
-数据库实际版本：`0057`（本地真实 PG 已升级）。
+数据库实际版本：`0061`（本地真实 PG 已升级）。
 
 ## 6. 测试基线（本轮实测）
 
@@ -103,12 +103,12 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 ### 6.1 后端全量结果
 
 ```
-2549 passed, 18 skipped（含真实 PostgreSQL，P2 批次后，489.34s）
+2634 passed, 18 skipped（含真实 PostgreSQL，P3 批次后，553.21s）
 ```
 
 - 命令：`cd backend && .venv/bin/python -m pytest -o addopts="" -q`
-- 集合 2567 = 2549 passed + 18 skipped（PostgreSQL 验收环境）；skip 为 PostgreSQL 专属用例（未设 `DDP_TEST_POSTGRES_URL`）与平台条件用例。
-- 前端：`793 passed / 19 skipped`（105 文件，P2 批次后）（`cd apps/web && npm test`）。
+- 集合 2652 = 2634 passed + 18 skipped（PostgreSQL 验收环境）；skip 为 PostgreSQL 专属用例（未设 `DDP_TEST_POSTGRES_URL`）与平台条件用例。
+- 前端：`807 passed / 19 skipped`（108 文件，P3 批次后）（`cd apps/web && npm test`）。
 - 结论：SQLite 全绿；**PostgreSQL 路径本轮未重跑**，按仓库 CI 的 PG 迁移 job 与历史证据为准，N0 不据此升级 PG 状态。
 
 ## 7. 数据事实（本地 PostgreSQL，非生产）

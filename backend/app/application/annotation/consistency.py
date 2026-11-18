@@ -342,9 +342,7 @@ class AnnotationConsistencyUseCases:
         if candidates:
             return tuple(candidates)
         # 没有可用的 OWNER 时才退回其他成员，避免自动仲裁在只有编辑者的项目里失效。
-        return tuple(
-            item for item in self._members.list_member_ids(scope) if item not in excluded
-        )
+        return tuple(item for item in self._members.list_member_ids(scope) if item not in excluded)
 
     def _auto_approve(
         self,
@@ -360,9 +358,7 @@ class AnnotationConsistencyUseCases:
             limit=500,
         )
         pending = [
-            item
-            for item in submissions
-            if item.status is AnnotationSubmissionStatus.SUBMITTED
+            item for item in submissions if item.status is AnnotationSubmissionStatus.SUBMITTED
         ]
         if not pending:
             return False, "一致性达标，但没有待自动通过的提交"

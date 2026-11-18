@@ -369,8 +369,7 @@ def create_submitted(
         json={
             "assignment_id": str(assignment_id),
             "records": [
-                record_payload(item, action=action, segment=segment)
-                for item in target_ids
+                record_payload(item, action=action, segment=segment) for item in target_ids
             ],
             "data_source": "REAL",
         },

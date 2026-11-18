@@ -1,7 +1,7 @@
 """N7-003：evaluations.failure_cases —— 结构化失败用例
 
 Revision ID: 0061
-Revises: 0057
+Revises: 0059
 Create Date: 2026-11-18
 
 为什么是 JSON 列而不是独立表
@@ -52,7 +52,8 @@ Create Date: 2026-11-18
 
 编号说明
 --------
-任务预留编号为 0061；本分支基线到 0057。``down_revision`` 先指向 0057，
+任务预留编号为 0061（0060 未被使用：N6-003 复用既有 JSON 列、无迁移）。
+集成时本迁移串在 0059 之后。``down_revision`` 指向 0059，
 0058–0060 由并行任务占用，合并时按实际链头线性化，避免在本分支引用尚未存在
 的迁移文件导致 ``alembic upgrade head`` 无法解析。
 """
@@ -68,7 +69,7 @@ from app.infrastructure.db.modelops_guards import (
 from sqlalchemy.dialects.postgresql import JSONB
 
 revision = "0061"
-down_revision = "0057"
+down_revision = "0059"
 branch_labels = None
 depends_on = None
 

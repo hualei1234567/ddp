@@ -1,7 +1,7 @@
 """N5-005：``data_lineage_edges.relation`` 增加 ``TRAINED_ON``
 
 Revision ID: 0059
-Revises: 0057
+Revises: 0058
 Create Date: 2026-11-18
 
 为什么需要这次迁移
@@ -42,7 +42,7 @@ from app.infrastructure.db.episode_guards import (
 revision = "0059"
 # 当前主线迁移头是 0057；0058 由并行批次预留，尚未合入。这里直接接 0057，
 # 保证本分支单头可升级；合并时若 0058 先落地，再由集成方重排为 0059 之后。
-down_revision = "0057"
+down_revision = "0058"
 branch_labels = None
 depends_on = None
 

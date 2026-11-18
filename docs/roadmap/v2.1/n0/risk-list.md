@@ -37,6 +37,8 @@
 | RK-16 | 未脱敏历史/文档可能含真实邮箱、内网 IP | 用户约束 | 低 | P1 | 提交前扫描；证据只留摘要 | 全体 |
 | RK-17 | 依赖告警积压：14 个 Dependabot PR 未处理（fastapi/alembic/pytest 等大版本） | `gh pr list` | 高 | P2 | 按季度集中升级；先补兼容性测试再合并 | 后端 / 用户 |
 
+| RK-29 | 并行 worktree 共用同一个 PostgreSQL 测试库，互相推进 `alembic_version`，导致迁移测试假失败 | 本轮 3 个任务均命中 `Can't locate revision` | 高 | P2 | 每个并行任务使用独立测试库或隔离 schema；CI 用一次性实例 | QA |
+
 ## 4. 工程与交付
 
 | ID | 风险 | 证据 | 概率 | 影响 | 缓解 | 责任 |

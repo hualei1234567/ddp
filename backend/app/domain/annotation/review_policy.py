@@ -85,9 +85,7 @@ class ReviewPolicy:
             except ValueError as exc:
                 raise DomainValidationError("iaa_policy.agreement_metric 取值非法") from exc
         if metric not in SUPPORTED_CONSISTENCY_METRICS:
-            raise DomainValidationError(
-                "iaa_policy.agreement_metric 不支持用于双标一致性判定"
-            )
+            raise DomainValidationError("iaa_policy.agreement_metric 不支持用于双标一致性判定")
 
         raw_auto = policy.get("auto_approve", False)
         if not isinstance(raw_auto, bool):
