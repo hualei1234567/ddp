@@ -21,6 +21,7 @@ from app.domain.identity.models import ProjectScope
 from app.domain.processing.enums import ProcessingRunStatus
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.models.collection import OutboxEvent
+from app.infrastructure.db.models.quality import QualityRunModel
 from app.infrastructure.db.session import create_db_engine, create_session_factory
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
@@ -39,6 +40,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import seed_identity
+from tests.api.dataset_support import seed_dataset_episodes
 
 
 class FakeInspector:
@@ -291,3 +293,53 @@ def test_missing_run_goes_to_dead_letter(env) -> None:
 
     assert result["status"] == RunProcessingStatus.DEAD_LETTER.value
     assert _event_status(factory) == [("FAILED", 1)]
+
+
+def test_worker_runs_quality_stage_for_episode_manifest(env) -> None:
+    """QUALITY 阶段真的调用质量引擎，并把规则集版本与 quality-run 引用落库。"""
+    factory, ids = env
+    episode_id = seed_dataset_episodes(
+        factory,
+        ids.project_a,
+        ids.editor_a,
+        count=1,
+        record_labels=[
+            {
+                "label_key": "action",
+                "value": "PICK",
+                "source": "HUMAN",
+                "label_status": "CONFIRMED",
+            }
+        ],
+    )[0]
+    ref = f"canonical/{ids.project_a}/{episode_id}/1/manifest.json"
+    run_id = _create_run(factory, ids, input_refs=(ref,))
+    worker = ProcessingRunWorker(
+        factory,
+        _settings(),
+        inspector=FakeInspector({ref: 42}),
+    )
+
+    result = worker.process_once(now=_now())
+
+    assert result["status"] == RunProcessingStatus.PUBLISHED.value
+    run = _run(factory, ids, run_id)
+    assert run is not None
+    assert run.status == ProcessingRunStatus.SUCCEEDED.value
+    quality_step = next(
+        step for step in _steps(factory, ids, run_id) if step.stage == "QUALITY_PRE_CHECK"
+    )
+    assert quality_step.status == "SUCCEEDED"
+    assert "规则集 sha256:" in (quality_step.log_summary or "")
+
+    with factory() as session:
+        rows = list(
+            session.scalars(
+                select(QualityRunModel).where(QualityRunModel.project_id == ids.project_a)
+            )
+        )
+    assert len(rows) == 1
+    assert rows[0].subject_type == "EPISODE"
+    assert rows[0].subject_id == episode_id
+    assert rows[0].rule_set_version in (quality_step.log_summary or "")
+    assert run.output_refs == (f"quality-run/{rows[0].id}",)

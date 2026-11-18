@@ -36,10 +36,14 @@ from app.application.processing.pipeline import (
     default_handlers,
 )
 from app.application.processing.ports import InputObjectInspector
+from app.application.processing.quality_stage import QualityCheckHandler
 from app.application.processing.use_cases import (
     PROCESSING_RUN_REQUESTED_EVENT,
     ProcessingWorkerUseCases,
 )
+from app.application.quality.episode_checks import EpisodeQualityChecks
+from app.application.quality.registry import default_registry
+from app.application.quality.use_cases import QualityRunUseCases
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
 from app.domain.identity.models import ProjectScope
@@ -50,11 +54,34 @@ from app.domain.processing.errors import (
 )
 from app.domain.processing.models import ERROR_SUMMARY_MAX_LENGTH
 from app.infrastructure.db.session import create_session_factory, get_engine
+from app.infrastructure.repositories.annotation_results import (
+    SqlAnnotationRecordRepository,
+)
+from app.infrastructure.repositories.annotation_schemas import (
+    SqlAnnotationSchemaRepository,
+)
+from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRepository
+from app.infrastructure.repositories.collection_audit import (
+    SqlAuditRepository,
+    SqlOutboxRepository,
+)
+from app.infrastructure.repositories.dataset_policy_repositories import (
+    SqlDatasetReportRepository,
+)
+from app.infrastructure.repositories.datasources import (
+    SqlDataSourceImportRepository,
+    SqlMediaAssetRepository,
+)
+from app.infrastructure.repositories.episodes import (
+    SqlEpisodeRawAssetRepository,
+    SqlEpisodeRepository,
+)
 from app.infrastructure.repositories.outbox_validation import SqlOutboxValidationQueue
 from app.infrastructure.repositories.processing import (
     SqlProcessingRunRepository,
     SqlProcessingRunStepRepository,
 )
+from app.infrastructure.repositories.quality import SqlQualityRunRepository
 from app.infrastructure.storage.processing_objects import S3InputObjectInspector
 from app.infrastructure.storage.s3 import S3MultipartStorage
 
@@ -193,11 +220,32 @@ class ProcessingRunWorker:
 
     def _build_pipeline(self, session: Session) -> ProcessingPipeline:
         runs = SqlProcessingRunRepository(session)
+        # QUALITY 阶段复用统一质量引擎：规则源、六类聚合与规则集版本都由
+        # N4-004 的实现提供，本 Worker 只做装配，不复制任何规则。
+        quality_runs = QualityRunUseCases(
+            runs=SqlQualityRunRepository(session),
+            imports=SqlDataSourceImportRepository(session),
+            assets=SqlMediaAssetRepository(session),
+            episodes=SqlEpisodeRepository(session),
+            episode_assets=SqlEpisodeRawAssetRepository(session),
+            annotation_records=SqlAnnotationRecordRepository(session),
+            schemas=SqlAnnotationSchemaRepository(session),
+            tasks=SqlAnnotationTaskRepository(session),
+            registry=default_registry(SqlDatasetReportRepository(session)),
+            audit=SqlAuditRepository(session),
+            outbox=SqlOutboxRepository(session),
+            uow=session,
+        )
+        quality_check = QualityCheckHandler(
+            episode_assets=SqlEpisodeRawAssetRepository(session),
+            quality=EpisodeQualityChecks(quality_runs),
+            uow=session,
+        )
         return ProcessingPipeline(
             runs,
             SqlProcessingRunStepRepository(session),
             ProcessingWorkerUseCases(runs, session),
-            default_handlers(self._inspector),
+            default_handlers(self._inspector, quality_check=quality_check),
             session,
         )
 
