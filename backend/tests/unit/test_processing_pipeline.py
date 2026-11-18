@@ -90,7 +90,16 @@ def _session_services(
         audit=SqlAuditRepository(session),
         outbox=SqlOutboxRepository(session),
     )
-    return session, use_cases, ProcessingWorkerUseCases(runs, session)
+    return (
+        session,
+        use_cases,
+        ProcessingWorkerUseCases(
+            runs,
+            session,
+            audit=SqlAuditRepository(session),
+            outbox=SqlOutboxRepository(session),
+        ),
+    )
 
 
 def _pipeline(
@@ -103,7 +112,12 @@ def _pipeline(
     return ProcessingPipeline(
         runs,
         SqlProcessingRunStepRepository(session),
-        ProcessingWorkerUseCases(runs, session),
+        ProcessingWorkerUseCases(
+            runs,
+            session,
+            audit=SqlAuditRepository(session),
+            outbox=SqlOutboxRepository(session),
+        ),
         handlers
         or default_handlers(
             inspector or FakeInspector(),

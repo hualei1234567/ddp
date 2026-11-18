@@ -123,6 +123,7 @@ def list_processing_run_steps(
 def act_on_processing_run(
     run_id: UUID,
     action: str,
+    request: Request,
     response: Response,
     scope: WriteScope,
     services: ProcessingServicesDep,
@@ -134,6 +135,7 @@ def act_on_processing_run(
         run_id,
         action,
         expected_version=expected_version,
+        request_id=request_id(request),
         now=None,
     )
     response.headers["ETag"] = f'"{run.row_version}"'

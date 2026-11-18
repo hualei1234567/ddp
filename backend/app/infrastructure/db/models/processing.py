@@ -86,6 +86,9 @@ class ProcessingRunModel(Base):
     error_summary: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: N4-006：失败收口时间。为 NULL 表示 FAILED 仍可被 Worker 重试；
+    #: 非 NULL 表示已保留错误原因地收口，不再允许任何出边。
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     version: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
