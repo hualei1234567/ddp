@@ -14,7 +14,13 @@ from app.application.datasources.verification import (
 from app.domain.datasources.enums import ImportLogLevel, ImportStage
 from app.domain.datasources.models import DataSourceImportLog
 from app.domain.identity.models import ProjectScope
-from app.infrastructure.repositories.datasources import SqlDataSourceImportLogRepository
+from app.infrastructure.db.models.collection import AuditLog
+from app.infrastructure.db.models.datasources import DataReviewModel
+from app.infrastructure.repositories.datasources import (
+    SqlDataReviewRepository,
+    SqlDataSourceImportLogRepository,
+)
+from sqlalchemy import select, update
 
 from tests.api.conftest import make_client
 
@@ -757,6 +763,101 @@ def test_review_evidence_is_project_scoped(api_db) -> None:
     assert cross_read.status_code == 404
     assert "项目 A 的证据" not in cross_read.text
     assert cross_write.status_code == 404
+
+
+def test_review_evidence_is_stored_in_dedicated_column_and_audit(api_db) -> None:
+    """N2-009：新决定同时写审核表 evidence 列与审计详情，读取命中列。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    editor.post(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+
+    evidence = {"timestamp_seconds": 12.5, "camera": "main", "note": "列内证据"}
+    decided = owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "ACCEPT", "evidence": evidence},
+    )
+    assert decided.status_code == 200, decided.text
+    review_id = UUID(decided.json()["review_id"])
+
+    with factory() as session:
+        row = session.get(DataReviewModel, review_id)
+        assert row is not None
+        # 证据独立成列：不再只寄存在审计里。
+        assert row.evidence == evidence
+        audit_actions = session.scalars(
+            select(AuditLog).where(
+                AuditLog.project_id == ids.project_a,
+                AuditLog.resource_id == review_id,
+            )
+        ).all()
+        assert any(
+            action.action == "decide:ACCEPT" and dict(action.details).get("evidence") == evidence
+            for action in audit_actions
+        )
+
+    fetched = owner.get(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+    assert fetched.status_code == 200, fetched.text
+    # 响应形状不变：契约字段齐全（未提供的键回显 None）。
+    assert fetched.json()["evidence"] == {**evidence, "episode_key": None}
+
+
+def test_legacy_review_without_column_falls_back_to_audit(api_db) -> None:
+    """迁移前的存量行（evidence 列 NULL）仍从审计留痕回读，行为不变。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    editor.post(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+
+    evidence = {"note": "仅存于审计的历史证据"}
+    decided = owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "ACCEPT", "evidence": evidence},
+    )
+    assert decided.status_code == 200, decided.text
+    review_id = UUID(decided.json()["review_id"])
+
+    # 模拟迁移前的行：列尚未有值，证据只在 audit_logs.details。
+    with factory() as session:
+        session.execute(
+            update(DataReviewModel).where(DataReviewModel.id == review_id).values(evidence=None)
+        )
+        session.commit()
+
+    fetched = owner.get(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["evidence"] == {
+        "timestamp_seconds": None,
+        "camera": None,
+        **evidence,
+        "episode_key": None,
+    }
+
+
+def test_review_evidence_column_is_project_scoped(api_db) -> None:
+    """仓储层同样以服务端项目作用域取证据，跨项目读返回 None。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    editor.post(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+    owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "ACCEPT", "evidence": {"note": "项目 A 列内证据"}},
+    )
+
+    with factory() as session:
+        repo = SqlDataReviewRepository(session)
+        foreign = repo.get_by_import(
+            ProjectScope(project_id=ids.project_b, actor_id=ids.owner_a), UUID(import_id)
+        )
+
+    assert foreign is None
 
 
 def test_quality_report_on_real_assets(api_db) -> None:

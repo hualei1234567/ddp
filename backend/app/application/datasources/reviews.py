@@ -34,8 +34,9 @@ from app.domain.datasources.errors import (
 from app.domain.datasources.review import DataReview, QualityReport, ReviewDecision
 from app.domain.identity.models import ProjectScope
 
-#: 审核证据存放在审计留痕的 ``details`` 里（现有 JSON 列，无新增迁移）。
-#: 读取时按资源时间线取最近一条决策记录回填。
+#: 迁移 0062 起，审核证据持久化在 ``data_source_reviews.evidence`` 列，
+#: 不再只寄存在 ``audit_logs.details``。列值为 NULL 且已裁决的记录
+#: （迁移前的存量行）读取时回退审计留痕，兼容历史；新决定同时写列与审计。
 _EVIDENCE_RESOURCE_TYPE = "data_source_review"
 _EVIDENCE_AUDIT_ACTION_PREFIX = "decide:"
 
@@ -64,13 +65,17 @@ class DataReviewUseCases:
         self._audit_query = audit_query
 
     def _with_evidence(self, scope: ProjectScope, review: DataReview | None) -> DataReview | None:
-        """从审计留痕回填审核证据。
+        """读取审核证据：优先审核表列，空列回退审计留痕。
 
-        evidence 持久化在 ``audit_logs.details``（现有 JSON 列）。审核结论是
-        终态，因此只需取该资源最近一条 ``decide:*`` 记录。未注入查询仓储
-        （例如纯领域单测）时原样返回，不伪造空证据。
+        - ``data_source_reviews.evidence`` 非空：直接返回，证据生命周期
+          与审计保留策略解耦（迁移 0062 的主路径）；
+        - 列为 NULL 且已裁决：迁移前的历史行，证据只存在于
+          ``audit_logs.details``，取该资源最近一条 ``decide:*`` 记录回填；
+        - 未注入审计查询仓储（纯领域单测）或未裁决：原样返回，不伪造证据。
         """
-        if review is None or review.decision is None or self._audit_query is None:
+        if review is None or review.evidence is not None:
+            return review
+        if review.decision is None or self._audit_query is None:
             return review
         entries = list_audit_logs(
             self._audit_query,
@@ -168,7 +173,8 @@ class DataReviewUseCases:
             "reviewer_id": str(scope.actor_id),
         }
         if saved.evidence is not None:
-            # 审核证据与结论同事务落库到审计留痕；不新增审核表列。
+            # 证据已由仓储写入审核表列；审计详情同时留一份，便于按时间线
+            # 追溯"当时凭什么判定"，也让本迁移前的历史读取路径保持同形。
             details["evidence"] = dict(saved.evidence)
         record_change(
             self._audit,

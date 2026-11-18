@@ -119,8 +119,9 @@ class DataReview:
     created_at: datetime
     decided_at: datetime | None = None
     row_version: int = 1
-    #: 审核依据（时间点 / 机位 / 备注等）。持久化在既有 audit_logs.details，
-    #: 不新增列；读取审核记录时由用例回填。旧记录为 None。
+    #: 审核依据（时间点 / 机位 / 备注等）。迁移 0062 起持久化在
+    #: ``data_source_reviews.evidence``。历史行该列为 NULL 时由用例回退
+    #: 审计留痕读取；未记录证据的记录保持 None。
     evidence: Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
