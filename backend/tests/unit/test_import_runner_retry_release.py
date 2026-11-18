@@ -201,3 +201,73 @@ def _replace_status(item: DataSourceImport) -> DataSourceImport:
     from dataclasses import replace
 
     return replace(item, status=ImportStatus.PENDING, error_message=None, finished_at=None)
+
+
+def test_import_records_real_duration(env) -> None:
+    """开始与结束时间必须分别取时钟：否则导入耗时恒为 0。
+
+    此前整个 ``execute`` 只在入口取一次 ``moment``，``started_at`` 与
+    ``finished_at`` 写的是同一个值，运维无法判断一次导入是大文件慢还是卡死。
+    ``clock`` 是注入点：开始时刻用 ``now``，结束时重新取时钟。
+    """
+    factory, scope = env
+    import_id = _seed_failed_import(factory, scope)
+    with factory() as session:
+        assert _runner(session).release_for_retry(scope, import_id, moment=NOW) is True
+
+    started = NOW
+    finished = NOW + __import__("datetime").timedelta(seconds=42)
+
+    def _fetch(**kwargs: object) -> object:
+        raise RuntimeError("网络不可用")
+
+    with factory() as session:
+        with pytest.raises(RuntimeError):
+            _runner(session).execute(
+                scope,
+                import_id,
+                fetch=_fetch,  # type: ignore[arg-type]
+                parse_metadata=lambda data: [],
+                parse_episodes=lambda rows: (),
+                now=started,
+                clock=lambda: finished,
+            )
+
+    with factory() as session:
+        saved = SqlDataSourceImportRepository(session).get(scope, import_id)
+    assert saved is not None
+    assert saved.status is ImportStatus.FAILED
+    assert saved.started_at == started
+    assert saved.finished_at == finished
+    assert saved.finished_at > saved.started_at
+
+
+def test_import_finish_time_never_precedes_start(env) -> None:
+    """注入的未来开始时间不得让结束时间倒挂（max(时钟, 开始) 兜底）。"""
+    factory, scope = env
+    import_id = _seed_failed_import(factory, scope)
+    with factory() as session:
+        assert _runner(session).release_for_retry(scope, import_id, moment=NOW) is True
+
+    future_start = NOW + __import__("datetime").timedelta(minutes=5)
+
+    def _fetch(**kwargs: object) -> object:
+        raise RuntimeError("网络不可用")
+
+    with factory() as session:
+        with pytest.raises(RuntimeError):
+            _runner(session).execute(
+                scope,
+                import_id,
+                fetch=_fetch,  # type: ignore[arg-type]
+                parse_metadata=lambda data: [],
+                parse_episodes=lambda rows: (),
+                now=future_start,
+                clock=lambda: NOW,
+            )
+
+    with factory() as session:
+        saved = SqlDataSourceImportRepository(session).get(scope, import_id)
+    assert saved is not None
+    assert saved.started_at == future_start
+    assert saved.finished_at == future_start
