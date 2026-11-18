@@ -358,3 +358,37 @@ def test_device_idempotency_key_reuse_with_different_body_is_rejected(api_db) ->
 
     assert conflict.status_code == 409
     assert conflict.json()["error"]["code"] == "idempotency_key_reused"
+
+
+def test_suspend_and_retire_require_reason(api_db) -> None:
+    """契约 §8.1：任意非终态 → SUSPENDED / RETIRED 必须带原因。
+
+    此前只有 enter-maintenance / report-fault 被校验，停用与退役可以不带任何
+    说明执行，审计里只剩动作名，事后无法回答"为什么下线"。
+    """
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device = client.post(_device_url(ids.project_a), json=device_payload()).json()
+    device = _activate(client, ids.project_a, device).json()
+
+    no_reason = client.post(
+        _device_url(ids.project_a, f"/{device['device_id']}/suspend"),
+        headers={"If-Match": f'"{device["version"]}"'},
+        json={},
+    )
+    assert no_reason.status_code == 422, no_reason.text
+    assert no_reason.json()["error"]["details"]["missing_fields"] == ["reason"]
+
+    suspended = client.post(
+        _device_url(ids.project_a, f"/{device['device_id']}/suspend"),
+        headers={"If-Match": f'"{device["version"]}"'},
+        json={"reason": "等待固件升级"},
+    )
+    assert suspended.status_code == 200, suspended.text
+
+    no_reason_retire = client.post(
+        _device_url(ids.project_a, f"/{device['device_id']}/retire"),
+        headers={"If-Match": f'"{suspended.json()["version"]}"'},
+        json={},
+    )
+    assert no_reason_retire.status_code == 422, no_reason_retire.text
