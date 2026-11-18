@@ -10,6 +10,7 @@ from app.application.annotation.commands import (
     NewAnnotationTask,
 )
 from app.application.annotation.sample_sets import AnnotationSampleSetUseCases
+from app.application.annotation.schema_presets import SchemaPresetCatalog
 from app.application.annotation.schemas import AnnotationSchemaUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
 
@@ -18,6 +19,7 @@ __all__ = [
     "AnnotationBatchUseCases",
     "AnnotationSampleSetUseCases",
     "AnnotationSchemaUseCases",
+    "SchemaPresetCatalog",
     "AnnotationTaskUseCases",
     "NewAnnotationAssignment",
     "NewAnnotationBatch",
