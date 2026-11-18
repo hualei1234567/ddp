@@ -59,7 +59,6 @@ def _close_managed_clients() -> Iterator[None]:
         _OPEN_CLIENTS.pop().__exit__(None, None, None)
 
 
-
 @dataclass(frozen=True)
 class ApiIds:
     project_a: UUID
