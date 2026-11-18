@@ -882,3 +882,276 @@ def test_second_task_batch_does_not_collide(api_db) -> None:
 
     # create_ready_work 内部建批次；两次都成功即证明未撞车。
     assert len(codes) == 2
+
+
+def test_task_progress_and_batch_counts_follow_submissions(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """任务 ``approved_items`` 与批次计数必须由提交事实写入。
+
+    此前两处计数永远为 0：任务验收只能靠豁免说明，批次进度条与实际提交无关。
+    """
+    factory, ids = api_db
+    episode_id = seed_episode(factory, ids.project_a, ids.editor_a, "EP-PROGRESS")
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-progress")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-progress")
+    work = create_ready_work(
+        editor,
+        owner,
+        ids.project_a,
+        schema,
+        sample_set,
+        episode_id,
+        ids.editor_a,
+        "task-progress",
+    )
+    task_id = work["task"]["task_id"]
+    batch_id = work["batch"]["batch_id"]
+
+    submission = create_submitted(
+        editor, ids.project_a, work["assignment"]["assignment_id"], episode_id
+    )
+    task = editor.get(url(ids.project_a, f"/annotation-tasks/{task_id}")).json()
+    assert task["progress"]["submitted_items"] == 1, task["progress"]
+    assert task["progress"]["approved_items"] == 0, task["progress"]
+    batch = editor.get(url(ids.project_a, f"/annotation-batches/{batch_id}")).json()
+    assert batch["submitted_item_count"] == 1, batch
+    assert batch["approved_item_count"] == 0, batch
+
+    review = owner.post(
+        url(ids.project_a, f"/annotation-submissions/{submission['submission_id']}/reviews"),
+        json={"reviewer_id": str(ids.owner_a)},
+    )
+    assert review.status_code == 201, review.text
+    review_id = review.json()["review_id"]
+    claimed = owner.post(
+        url(ids.project_a, f"/annotation-reviews/{review_id}/actions/claim"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    assert claimed.status_code == 200, claimed.text
+    approved = owner.post(
+        url(ids.project_a, f"/annotation-reviews/{review_id}/actions/approve"),
+        headers={"If-Match": '"2"'},
+        json={"checklist": [{"key": "labels_complete", "passed": True}]},
+    )
+    assert approved.status_code == 200, approved.text
+
+    task = editor.get(url(ids.project_a, f"/annotation-tasks/{task_id}")).json()
+    assert task["progress"]["approved_items"] == 1, task["progress"]
+    assert task["progress"]["submitted_items"] == 1, task["progress"]
+    batch = editor.get(url(ids.project_a, f"/annotation-batches/{batch_id}")).json()
+    assert batch["approved_item_count"] == 1, batch
+    assert batch["rejected_item_count"] == 0, batch
+
+
+def test_submit_task_with_cancelled_batch_is_allowed(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """已取消的批次不该把任务提交永久锁死（DB 守卫与应用层口径必须一致）。
+
+    守卫 SQL 的 SUBMITTED 分支此前把 ``CANCELLED`` 当成"未提交批次"，于是
+    只要历史上取消过一个批次，任务就再也提交不了——而且报错是泛化的状态冲突，
+    看不出原因。应用层 ``list_non_terminal`` 本来就不返回取消批次，两边口径
+    不一致。
+    """
+    factory, ids = api_db
+    episode_id = seed_episode(factory, ids.project_a, ids.editor_a, "EP-CANCELLED-BATCH")
+    owner = make_client(factory, ids.owner_a)
+    editor = make_client(factory, ids.editor_a)
+
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-cancel-batch")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-cancel-batch")
+    work = create_ready_work(
+        editor,
+        owner,
+        ids.project_a,
+        schema,
+        sample_set,
+        episode_id,
+        ids.editor_a,
+        "task-cancel-batch",
+    )
+    task_id = work["task"]["task_id"]
+
+    # 第二个批次：建好立刻取消，制造"任务下存在 CANCELLED 批次"。
+    # 计划量 0：任务目标只有 1 件，第二个批次不占计划量，只为制造
+    # "任务下存在已取消批次"这个前置状态。
+    extra = editor.post(
+        url(ids.project_a, f"/annotation-tasks/{task_id}/batches"),
+        json={"planned_item_count": 0, "item_refs": [], "sequence_no": 2},
+    )
+    assert extra.status_code == 201, extra.text
+    cancelled = editor.post(
+        url(ids.project_a, f"/annotation-batches/{extra.json()['batch_id']}/actions/cancel"),
+        headers={"If-Match": '"1"'},
+        json={"reason": "合并到首批次执行"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "CANCELLED"
+
+    create_submitted(editor, ids.project_a, work["assignment"]["assignment_id"], episode_id)
+    batch_submitted = editor.post(
+        url(ids.project_a, f"/annotation-batches/{work['batch']['batch_id']}/actions/submit"),
+        headers={"If-Match": '"4"'},
+        json={},
+    )
+    assert batch_submitted.status_code == 200, batch_submitted.text
+
+    task = editor.get(url(ids.project_a, f"/annotation-tasks/{task_id}")).json()
+    submitted = editor.post(
+        url(ids.project_a, f"/annotation-tasks/{task_id}/actions/submit"),
+        headers={"If-Match": f'"{task["version"]}"'},
+        json={},
+    )
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "SUBMITTED"
+
+
+def test_second_review_can_claim_same_submission(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """双人复核：第二条复核 claim 不得被提交状态机拒绝。
+
+    提交只该被推进一次（SUBMITTED → IN_REVIEW）；此前每次 claim 都无条件推进，
+    第二条复核永远领不了，双人复核形同虚设。
+    """
+    factory, ids = api_db
+    episode_id = seed_episode(factory, ids.project_a, ids.editor_a, "EP-DOUBLE-REVIEW")
+    owner = make_client(factory, ids.owner_a)
+    editor = make_client(factory, ids.editor_a)
+    second_reviewer_id = seed_arbiter(factory, ids.project_a)
+    second = make_client(factory, second_reviewer_id)
+
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-double-review")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-double-review")
+    work = create_ready_work(
+        editor,
+        owner,
+        ids.project_a,
+        schema,
+        sample_set,
+        episode_id,
+        ids.editor_a,
+        "task-double-review",
+    )
+    submission = create_submitted(
+        editor, ids.project_a, work["assignment"]["assignment_id"], episode_id
+    )
+
+    first = owner.post(
+        url(ids.project_a, f"/annotation-submissions/{submission['submission_id']}/reviews"),
+        json={"reviewer_id": str(ids.owner_a)},
+    )
+    assert first.status_code == 201, first.text
+    second_review = second.post(
+        url(ids.project_a, f"/annotation-submissions/{submission['submission_id']}/reviews"),
+        json={"reviewer_id": str(second_reviewer_id)},
+    )
+    assert second_review.status_code == 201, second_review.text
+
+    claimed = owner.post(
+        url(ids.project_a, f"/annotation-reviews/{first.json()['review_id']}/actions/claim"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    assert claimed.status_code == 200, claimed.text
+    claimed_second = second.post(
+        url(
+            ids.project_a,
+            f"/annotation-reviews/{second_review.json()['review_id']}/actions/claim",
+        ),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    assert claimed_second.status_code == 200, claimed_second.text
+    assert claimed_second.json()["status"] == "IN_REVIEW"
+
+
+def test_arbitration_can_be_reclaimed_after_recuse(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """仲裁人回避后，同一仲裁必须能被重新受理。
+
+    ``recuse`` 会把仲裁退回 PENDING，但提交在第一次受理时已进入 ARBITRATING；
+    此前再次 ``claim`` 会重复推进提交状态而被状态机拒绝，结果"退出了就接不回来"。
+    """
+    factory, ids = api_db
+    episode_id = seed_episode(factory, ids.project_a, ids.editor_a, "EP-ARB-RECUSE")
+    arbiter_id = seed_arbiter(factory, ids.project_a)
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    arbiter = make_client(factory, arbiter_id)
+
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-arb-recuse")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-arb-recuse")
+    work = create_ready_work(
+        editor,
+        owner,
+        ids.project_a,
+        schema,
+        sample_set,
+        episode_id,
+        ids.editor_a,
+        "task-arb-recuse",
+    )
+    submission = create_submitted(
+        editor, ids.project_a, work["assignment"]["assignment_id"], episode_id
+    )
+    review = owner.post(
+        url(ids.project_a, f"/annotation-submissions/{submission['submission_id']}/reviews"),
+        json={"reviewer_id": str(ids.owner_a)},
+    )
+    assert review.status_code == 201, review.text
+    review_id = review.json()["review_id"]
+    owner.post(
+        url(ids.project_a, f"/annotation-reviews/{review_id}/actions/claim"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    escalated = owner.post(
+        url(ids.project_a, f"/annotation-reviews/{review_id}/actions/escalate"),
+        headers={"If-Match": '"2"'},
+        json={"reason": "复核意见不一致"},
+    )
+    assert escalated.status_code == 200, escalated.text
+
+    arbitration = editor.post(
+        url(
+            ids.project_a,
+            f"/annotation-submissions/{submission['submission_id']}/arbitrations",
+        ),
+        json={
+            "review_id": review_id,
+            "arbiter_ids": [str(arbiter_id)],
+            "quorum": 1,
+            "trigger": "REVIEWER_DISAGREEMENT",
+        },
+    )
+    assert arbitration.status_code == 201, arbitration.text
+    arbitration_id = arbitration.json()["arbitration_id"]
+
+    first = arbiter.post(
+        url(ids.project_a, f"/annotation-arbitrations/{arbitration_id}/actions/claim"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    assert first.status_code == 200, first.text
+    recused = arbiter.post(
+        url(ids.project_a, f"/annotation-arbitrations/{arbitration_id}/actions/recuse"),
+        headers={"If-Match": f'"{first.json()["version"]}"'},
+        json={"reason": "与标注人存在利益关系"},
+    )
+    assert recused.status_code == 200, recused.text
+    assert recused.json()["status"] == "PENDING"
+
+    reclaimed = arbiter.post(
+        url(ids.project_a, f"/annotation-arbitrations/{arbitration_id}/actions/claim"),
+        headers={"If-Match": f'"{recused.json()["version"]}"'},
+        json={},
+    )
+    assert reclaimed.status_code == 200, reclaimed.text
+    assert reclaimed.json()["status"] == "IN_ARBITRATION"

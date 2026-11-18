@@ -17,6 +17,7 @@ from app.application.annotation.assignments import AnnotationAssignmentUseCases
 from app.application.annotation.batches import AnnotationBatchUseCases
 from app.application.annotation.gold_sets import GoldSetUseCases
 from app.application.annotation.iaa import IAAUseCases
+from app.application.annotation.progress import AnnotationProgressRefresher
 from app.application.annotation.quality_checks import QualityCheckUseCases
 from app.application.annotation.quality_samples import QualitySampleUseCases
 from app.application.annotation.reviews import AnnotationReviewUseCases
@@ -114,6 +115,10 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
         session,
     )
 
+    # 任务进度与批次计数只在这里接线一次：提交/复核/仲裁三个推进点共用
+    # 同一个 refresher，避免各写一份统计口径。
+    progress = AnnotationProgressRefresher(tasks_repo, batches_repo, submissions_repo)
+
     return AnnotationUseCases(
         schemas=AnnotationSchemaUseCases(
             schemas_repo,
@@ -180,6 +185,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             idempotency,
             session,
             quality_checks,
+            progress=progress,
         ),
         reviews=AnnotationReviewUseCases(
             reviews_repo,
@@ -192,6 +198,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             idempotency,
             session,
             episodes=episodes,
+            progress=progress,
         ),
         arbitrations=AnnotationArbitrationUseCases(
             arbitrations_repo,
@@ -204,6 +211,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             idempotency,
             session,
             episodes=episodes,
+            progress=progress,
         ),
         gold_sets=GoldSetUseCases(
             gold_sets_repo,

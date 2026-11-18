@@ -168,6 +168,15 @@ class AnnotationTaskRepository(Protocol):
         expected_version: int,
     ) -> AnnotationTask: ...
 
+    def update_progress(
+        self,
+        scope: ProjectScope,
+        task_id: UUID,
+        progress: dict[str, int],
+    ) -> None:
+        """写入派生的进度；不推进乐观锁版本。"""
+        ...
+
     def list_for_sample_set(
         self,
         scope: ProjectScope,
@@ -205,6 +214,15 @@ class AnnotationBatchRepository(Protocol):
         *,
         task_id: UUID,
     ) -> list[AnnotationBatch]: ...
+
+    def update_counts(
+        self,
+        scope: ProjectScope,
+        batch_id: UUID,
+        counts: dict[str, int],
+    ) -> None:
+        """写入派生的提交/通过/驳回计数；不推进乐观锁版本。"""
+        ...
 
     def next_sequence_no(self, scope: ProjectScope, task_id: UUID) -> int: ...
 
@@ -463,6 +481,15 @@ class AnnotationSubmissionRepository(Protocol):
         *,
         assignment_id: UUID,
     ) -> list[AnnotationSubmission]: ...
+
+    def list_for_batch(
+        self,
+        scope: ProjectScope,
+        *,
+        batch_id: UUID,
+    ) -> list[AnnotationSubmission]:
+        """批次下全部提交（进度投影按批次汇总计数用）。"""
+        ...
 
     def latest_for_assignment(
         self,

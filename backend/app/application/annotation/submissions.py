@@ -6,7 +6,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
@@ -70,6 +70,9 @@ from app.domain.annotation.submission import (
 )
 from app.domain.identity.models import ProjectScope
 
+if TYPE_CHECKING:
+    from app.application.annotation.progress import AnnotationProgressRefresher
+
 logger = logging.getLogger(__name__)
 
 
@@ -130,6 +133,7 @@ class AnnotationSubmissionUseCases:
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
         quality_checks: QualityCheckRunner | None = None,
+        progress: AnnotationProgressRefresher | None = None,
     ) -> None:
         self._submissions = submissions
         self._records = records
@@ -142,6 +146,9 @@ class AnnotationSubmissionUseCases:
         self._sample_sets = sample_sets
         self._schemas = schemas
         self._episodes = episodes
+        # 进度投影：任务 approved_items 与批次计数都从提交事实重算。
+        # None 只在纯领域测试装配里出现；生产装配必须传入。
+        self._progress = progress
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
@@ -381,6 +388,8 @@ class AnnotationSubmissionUseCases:
             episode_ids=self._episode_ids_of(scope, saved.submission_id),
             now=now,
         )
+        if self._progress is not None:
+            self._progress.refresh_for_submission(scope, saved, now=now)
         self._record(
             scope,
             saved,

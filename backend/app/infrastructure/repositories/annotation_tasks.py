@@ -106,6 +106,29 @@ class SqlAnnotationTaskRepository:
         statement = statement.order_by(AnnotationTaskModel.id).limit(limit)
         return [self._from_row(row) for row in self._session.scalars(statement)]
 
+    def update_progress(
+        self,
+        scope: ProjectScope,
+        task_id: UUID,
+        progress: dict[str, int],
+    ) -> None:
+        """只写派生的 ``progress`` 列，**不推进乐观锁版本**。
+
+        进度是从提交事实重算出来的投影，不属于"用户对任务的修改"。若它推进
+        version，客户端每次提交后都会因为持有旧 version 而在下一个动作上 409
+        ——把统计变成一次隐式的并发冲突源。这里不加 version 条件：并发下最后
+        一次重算覆盖前一次，而重算依据的是同一批提交事实，收敛结果一致。
+        """
+        self._session.execute(
+            update(AnnotationTaskModel)
+            .where(
+                AnnotationTaskModel.id == task_id,
+                AnnotationTaskModel.project_id == scope.project_id,
+            )
+            .values(progress=dict(progress))
+            .execution_options(synchronize_session=False)
+        )
+
     def save(
         self,
         scope: ProjectScope,

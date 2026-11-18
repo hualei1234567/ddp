@@ -162,6 +162,19 @@ class SqlAnnotationSubmissionRepository:
         statement = statement.order_by(AnnotationSubmissionModel.id).limit(limit)
         return [self._from_row(row) for row in self._session.scalars(statement)]
 
+    def list_for_batch(
+        self,
+        scope: ProjectScope,
+        *,
+        batch_id: UUID,
+    ) -> list[AnnotationSubmission]:
+        rows = self._session.scalars(
+            scoped_select(AnnotationSubmissionModel, scope)
+            .where(AnnotationSubmissionModel.batch_id == batch_id)
+            .order_by(AnnotationSubmissionModel.id)
+        )
+        return [self._from_row(row) for row in rows]
+
     def list_for_assignment(
         self,
         scope: ProjectScope,
