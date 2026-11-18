@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.17.0
+  version: 1.18.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -162,6 +162,13 @@ info:
       404，避免用状态码差异探测其他项目对象。未知 `subject_type` 返回 422。
       本操作不触发检查、不改变历史结论。全部为增量：仅新增路径操作、
       query 参数与 `QualityRunPage` schema，无既有路径/字段变更。
+    - `1.18.0` **统一资产目录只读检索（N5-001）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/assets/search`，按资源标识前缀跨
+      RawAsset / Episode / Dataset / DatasetVersion / 媒体资产检索，返回统一
+      最小条目（`kind` / `id` / `display_name` / `updated_at`）与复合键集游标。
+      检索条件全部下推 SQL，使用既有索引前缀（不做 `%关键词%` 无界扫描），
+      服务端强制项目隔离；不建宽表、不新增表、不引入搜索引擎或全文索引。
+      全部为增量：仅新增路径与 schema，无既有路径/字段变更，无数据库迁移。
     - `1.17.0` **普通复核盲审选项（N6-004）**：任务 `iaa_policy` 增加可选布尔键
       `blind_review`（默认 `false`，无数据库迁移，策略继续存放在既有
       `iaa_policy` JSON 中）。开启后，服务端在读取该任务的标注提交与标注记录时，
@@ -189,7 +196,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.17.0
+  version: 1.18.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -467,6 +474,8 @@ paths:
     $ref: "./fragments/paths.stage2.yaml#/uploadComplete"
   /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}/abort:
     $ref: "./fragments/paths.stage2.yaml#/uploadAbort"
+  /api/v1/projects/{project_id}/assets/search:
+    $ref: "./fragments/paths.asset_catalog.yaml#/assetCatalogSearch"
   /api/v1/projects/{project_id}/raw-assets:
     $ref: "./fragments/paths.stage2.yaml#/rawAssets"
   /api/v1/projects/{project_id}/raw-assets/{asset_id}:
@@ -1348,6 +1357,9 @@ components:
     QualityRun: {$ref: "./fragments/schemas.quality.yaml#/QualityRun"}
     QualityRunFindingPage: {$ref: "./fragments/schemas.quality.yaml#/QualityRunFindingPage"}
     QualityRunPage: {$ref: "./fragments/schemas.quality.yaml#/QualityRunPage"}
+    AssetKind: {$ref: "./fragments/schemas.asset_catalog.yaml#/AssetKind"}
+    AssetCatalogEntry: {$ref: "./fragments/schemas.asset_catalog.yaml#/AssetCatalogEntry"}
+    AssetCatalogEntryPage: {$ref: "./fragments/schemas.asset_catalog.yaml#/AssetCatalogEntryPage"}
     ResourceKind: {$ref: "./fragments/schemas.governance.yaml#/ResourceKind"}
     QuotaStatus: {$ref: "./fragments/schemas.governance.yaml#/QuotaStatus"}
     Quota: {$ref: "./fragments/schemas.governance.yaml#/Quota"}

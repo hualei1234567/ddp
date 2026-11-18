@@ -30,6 +30,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.errors import AppError
 from app.domain.annotation.errors import AnnotationDomainError
 from app.domain.audit.errors import AuditDomainError
+from app.domain.catalog.errors import CatalogDomainError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.datasets.errors import DatasetDomainError
 from app.domain.datasources.errors import DataSourceDomainError
@@ -190,6 +191,23 @@ def audit_error_to_app(exc: AuditDomainError) -> AppError:
         status_by_code=_AUDIT_STATUS_BY_CODE,
         messages=_AUDIT_MESSAGES,
         fallback=_AUDIT_FALLBACK,
+    )
+
+
+# 资产目录域只有只读检索，唯一错误码是检索/分页参数非法。
+_CATALOG_STATUS_BY_CODE = {"validation_failed": 422}
+
+_CATALOG_MESSAGES = {"validation_failed": "资产目录检索参数或分页条件不合法"}
+
+_CATALOG_FALLBACK = "资产目录检索参数或分页条件不合法"
+
+
+def catalog_error_to_app(exc: CatalogDomainError) -> AppError:
+    return _mapped(
+        exc,
+        status_by_code=_CATALOG_STATUS_BY_CODE,
+        messages=_CATALOG_MESSAGES,
+        fallback=_CATALOG_FALLBACK,
     )
 
 
