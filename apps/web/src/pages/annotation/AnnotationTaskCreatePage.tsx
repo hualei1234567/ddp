@@ -5,6 +5,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
   Select,
   Space,
   Typography,
@@ -13,6 +14,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import AnnotationFeedbackAlert from "../../components/annotation/AnnotationFeedbackAlert";
+import ReviewPolicySection from "../../components/annotation/ReviewPolicySection";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
@@ -27,59 +29,42 @@ import {
   type AnnotationFeedback,
 } from "../../services/annotationPresentation";
 import {
+  buildAnnotationTaskCreateInput,
+  canEnableAutoApprove,
+  type AnnotationTaskFormValues,
+} from "../../services/annotationTaskForm";
+import {
   buildAnnotationTaskDetailPath,
   buildAnnotationTaskListPath,
 } from "../../services/annotationUrl";
+import { ApiError } from "../../services/api";
+import { projectManagementApi } from "../../services/projectManagement";
 import type {
   AnnotationSampleSet,
   AnnotationSchema,
-  AnnotationTaskCreateInput,
-  TaskPriority,
+  ReviewMode,
 } from "../../types/annotation";
 import { TASK_PRIORITY_VALUES } from "../../types/annotation";
 
-interface CreateFormValues {
-  code: string;
-  name: string;
-  description?: string;
-  sample_set_id: string;
-  schema_id: string;
-  target_item_count: number;
-  target_episode_count: number;
-  priority: TaskPriority;
-  assignment_mode: string;
-  due_at?: string;
-}
-
-function toIsoOrNull(value: string | undefined): string | null {
-  const text = value?.trim() ?? "";
-  if (text === "") {
-    return null;
-  }
-  const parsed = Date.parse(text);
-  if (Number.isNaN(parsed)) {
-    throw new Error("截止时间不是合法的日期时间");
-  }
-  return new Date(parsed).toISOString();
-}
-
 function TaskCreateContent({ projectId }: { projectId: string }) {
   const navigate = useNavigate();
-  const [form] = Form.useForm<CreateFormValues>();
+  const [form] = Form.useForm<AnnotationTaskFormValues>();
   const [feedback, setFeedback] = useState<AnnotationFeedback | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const loadOptions = useCallback(
     async (signal: AbortSignal) => {
-      const [schemas, sampleSets] = await Promise.all([
+      const [schemas, sampleSets, project] = await Promise.all([
         annotationApi.listSchemas(projectId, { signal }),
         annotationApi.listSampleSets(projectId, { signal }),
+        projectManagementApi.getProject(projectId, { signal }),
       ]);
       return {
         schemas: schemas.items.filter((item) => item.status === "PUBLISHED"),
         sampleSets: sampleSets.items.filter(
           (item) => item.status === "SNAPSHOTTED",
         ),
+        project,
       };
     },
     [projectId],
@@ -95,6 +80,12 @@ function TaskCreateContent({ projectId }: { projectId: string }) {
     () => data?.sampleSets ?? [],
     [data],
   );
+  const canAutoApprove = data
+    ? canEnableAutoApprove(data.project.membership_role)
+    : false;
+  const reviewMode: ReviewMode =
+    Form.useWatch("review_mode", form) ?? "SINGLE";
+  const autoApprove = Form.useWatch("auto_approve", form) ?? false;
   const cannotCreateReason =
     data && schemas.length === 0
       ? "没有可用的已发布 Schema；请先发布 Schema 后再创建任务。"
@@ -102,35 +93,62 @@ function TaskCreateContent({ projectId }: { projectId: string }) {
         ? "没有已快照的样本集；请先完成样本集快照。"
         : null;
 
+  /**
+   * 自动通过会以项目负责人身份留下审批记录，开启前做二次确认。
+   * 取消时保持未勾选；真正的权限裁决仍由服务端完成。
+   */
+  const handleAutoApproveChange = useCallback(
+    (checked: boolean) => {
+      if (!checked) {
+        form.setFieldValue("auto_approve", false);
+        return;
+      }
+      Modal.confirm({
+        title: "确认开启双标自动通过？",
+        content:
+          "开启后，一致性达标的提交将以项目负责人身份自动通过审批并写入审计；未达标仍会升级仲裁。该开关默认关闭，可在创建后由负责人调整策略。",
+        okText: "确认开启",
+        okType: "danger",
+        cancelText: "取消",
+        onOk: () => {
+          form.setFieldValue("auto_approve", true);
+        },
+      });
+    },
+    [form],
+  );
+
   const handleSubmit = useCallback(
-    async (values: CreateFormValues) => {
+    async (values: AnnotationTaskFormValues) => {
       setSubmitting(true);
       setFeedback(null);
       try {
         const schema = schemas.find((item) => item.schema_id === values.schema_id);
-        const input: AnnotationTaskCreateInput = {
-          code: values.code.trim(),
-          name: values.name.trim(),
-          description: values.description?.trim() || null,
-          sample_set_id: values.sample_set_id,
-          schema_id: values.schema_id,
-          schema_version: schema?.schema_version ?? null,
-          target_item_count: values.target_item_count,
-          target_episode_count: values.target_episode_count,
-          due_at: toIsoOrNull(values.due_at),
-          priority: values.priority,
-          assignment_mode: values.assignment_mode,
-        };
+        const input = buildAnnotationTaskCreateInput(values, {
+          schemaVersion: schema?.schema_version ?? null,
+          canAutoApprove,
+        });
         const task = await annotationApi.createTask(projectId, input);
         setFeedback(annotationSuccess("任务已创建，当前为 DRAFT。"));
         navigate(buildAnnotationTaskDetailPath(projectId, task.task_id));
       } catch (caught) {
-        setFeedback(describeAnnotationActionError(caught));
+        setFeedback(
+          caught instanceof ApiError
+            ? describeAnnotationActionError(caught)
+            : {
+                kind: "error",
+                title: "表单配置不合法",
+                description:
+                  caught instanceof Error
+                    ? caught.message
+                    : "请检查双标配置后重试。",
+              },
+        );
       } finally {
         setSubmitting(false);
       }
     },
-    [navigate, projectId, schemas],
+    [canAutoApprove, navigate, projectId, schemas],
   );
 
   const extra = (
@@ -180,7 +198,7 @@ function TaskCreateContent({ projectId }: { projectId: string }) {
         {cannotCreateReason ? (
           <Alert type="warning" showIcon message="暂不可创建任务" description={cannotCreateReason} />
         ) : null}
-        <Form<CreateFormValues>
+        <Form<AnnotationTaskFormValues>
           form={form}
           layout="vertical"
           initialValues={{
@@ -188,6 +206,15 @@ function TaskCreateContent({ projectId }: { projectId: string }) {
             assignment_mode: "MANUAL",
             target_item_count: 1,
             target_episode_count: 1,
+            review_mode: "SINGLE",
+            auto_approve: false,
+            agreement_threshold_percent: null,
+          }}
+          onValuesChange={(changed) => {
+            // 切回单人模式时清掉双标专属值，避免界面留下无效配置。
+            if ("review_mode" in changed && changed.review_mode !== "DOUBLE") {
+              form.setFieldValue("auto_approve", false);
+            }
           }}
           onFinish={(values) => void handleSubmit(values)}
         >
@@ -279,6 +306,12 @@ function TaskCreateContent({ projectId }: { projectId: string }) {
               />
             </Form.Item>
           </Space>
+          <ReviewPolicySection
+            reviewMode={reviewMode}
+            autoApprove={autoApprove}
+            canAutoApprove={canAutoApprove}
+            onAutoApproveChange={handleAutoApproveChange}
+          />
           <Form.Item
             label="截止时间"
             name="due_at"
