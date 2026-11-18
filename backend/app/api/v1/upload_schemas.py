@@ -238,6 +238,8 @@ class RawAssetOut(BaseModel):
     updated_at: datetime | None
     created_by: UUID | None
     updated_by: UUID | None
+    # 动作按钮只按服务端下发的集合渲染：前端不自己推断"隔离资产能不能放行"。
+    allowed_actions: list[str]
 
     @classmethod
     def from_domain(cls, asset: RawAsset) -> RawAssetOut:
@@ -282,7 +284,17 @@ class RawAssetOut(BaseModel):
             updated_at=asset.updated_at,
             created_by=asset.created_by,
             updated_by=asset.updated_by,
+            allowed_actions=sorted(asset.allowed_actions),
         )
+
+
+class RawAssetActionRequest(BaseModel):
+    """原始资产动作载荷：原因与隔离码；其余字段一律 ``extra="forbid"``。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=1000)
+    quarantine_codes: list[str] | None = None
 
 
 class CompleteUploadResponse(BaseModel):

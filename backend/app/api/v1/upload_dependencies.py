@@ -94,7 +94,13 @@ def get_upload_use_cases(
             uow=session,
             policy=policy,
         ),
-        assets=RawAssetUseCases(assets),
+        assets=RawAssetUseCases(
+            assets,
+            audit=SqlAuditRepository(session),
+            outbox=SqlOutboxRepository(session),
+            idempotency=SqlIdempotencyRepository(session),
+            uow=session,
+        ),
     )
 
 
