@@ -14,6 +14,10 @@ from app.domain.datasets.training_references import ExternalTrainingReference
 from app.domain.datasets.training_requests import TrainingRequest, TrainingRequestRevision
 from app.domain.identity.models import ProjectScope
 
+# 补偿扫描的批大小上限：用例与仓储共用同一权威阈值，避免两处各写一个数字。
+DEFAULT_BATCH_LIMIT = 200
+MAX_BATCH_LIMIT = 1000
+
 
 class TrainingRequestRepository(Protocol):
     def add(self, scope: ProjectScope, request: TrainingRequest) -> TrainingRequest: ...
@@ -156,6 +160,43 @@ class ExternalReferenceRepository(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class LineageBackfillCandidate:
+    """一条"已登记但没有 TRAINED_ON 边"的外部训练引用。
+
+    只读投影：全部字段来自 ``external_training_references`` 行本身。补偿任务
+    用它重建边，**不**重新提交训练、不改引用状态。``created_at`` 是引用的原始
+    创建时间，回填的新边沿用这个时间，保证血缘时间线与真实训练事件一致。
+    """
+
+    project_id: UUID
+    external_ref_id: UUID
+    dataset_version_id: UUID
+    training_delivery_id: UUID
+    training_request_revision_id: UUID
+    adapter_id: str
+    external_run_id: str
+    execution_mode: str
+    created_at: datetime
+    created_by: UUID
+
+
+class TrainingLineageBackfillSource(Protocol):
+    """系统补偿扫描端口：跨项目列出缺失 ``TRAINED_ON`` 边的引用。
+
+    返回的是**系统级**结果（无 ``ProjectScope`` 入参），但每条候选自带
+    ``project_id``，写入时必须用该项目的 ``ProjectScope`` 重新校验各自的
+    源版本，隔离仍由仓储与用例共同强制。
+    """
+
+    def list_missing_trained_on(
+        self,
+        *,
+        after_id: UUID | None = None,
+        limit: int = DEFAULT_BATCH_LIMIT,
+    ) -> list[LineageBackfillCandidate]: ...
+
+
 class GrantRepository(Protocol):
     def add(self, scope: ProjectScope, grant: DatasetGrant) -> DatasetGrant: ...
 
@@ -274,10 +315,14 @@ __all__ = [
     "AdapterRunStatus",
     "CallbackRecord",
     "CallbackRepository",
+    "DEFAULT_BATCH_LIMIT",
     "ExternalReferenceRepository",
     "GrantRepository",
+    "LineageBackfillCandidate",
+    "MAX_BATCH_LIMIT",
     "TrainingAdapterGateway",
     "TrainingDeliveryRepository",
+    "TrainingLineageBackfillSource",
     "TrainingRequestRepository",
     "TrainingRequestRevisionRepository",
 ]

@@ -234,16 +234,21 @@ function ImportListContent({
     stale,
     reload,
     loadMore,
+    refreshInPlace,
   } = useCursorPage(load, (item) => item.import_id);
   const phase = resolvePagePhase({ hasData: items.length > 0, loading, error });
 
   // 有 RUNNING 任务时自动刷新列表；进入终态（或无运行中任务）后
   // enabled 变 false，effect 清理会取消已排队的定时器。
+  //
+  // 自动轮询走 refreshInPlace：只拉第一页并原地合并，用户已加载的后续页
+  // 和翻页位置不会被重置（TD-29）。手动「刷新」与写操作后仍用 reload
+  // 做权威全量重置。
   const autoRefreshing = hasRunningImport(items);
   usePolling({
     enabled: autoRefreshing,
     intervalMs: IMPORT_POLL_INTERVAL_MS,
-    tick: reload,
+    tick: refreshInPlace,
   });
 
   const runAction = async (item: DataSourceImport, action: ImportAction) => {
@@ -443,7 +448,8 @@ function ImportListContent({
       ) : null}
       {autoRefreshing ? (
         <Typography.Text type="secondary">
-          有运行中的导入任务，每 {IMPORT_POLL_INTERVAL_MS / 1000} 秒自动刷新。
+          有运行中的导入任务，每 {IMPORT_POLL_INTERVAL_MS / 1000} 秒自动刷新；
+          已加载的分页与滚动位置保持不变。
         </Typography.Text>
       ) : null}
       <Table<DataSourceImport>

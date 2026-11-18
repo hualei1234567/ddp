@@ -1,12 +1,14 @@
-"""处理阶段处理器（N4-002）。
+"""处理阶段处理器（N4-002 / N4-005）。
 
 从编排器中拆出，保持"编排"与"阶段能力"两块各自小于评审阈值：
 
 - ``FILE_VALIDATION`` 有真实落点：只用对象存储的标量元数据（``object_size``）
   校验 ``input_refs`` 指向的对象存在，不把对象本体读进内存；
-- 其余七个阶段在 N4-002 **没有真实实现**，一律由 :class:`SkippedStage`
-  显式 SKIPPED 并写明原因——把未实现写成 ``SUCCEEDED`` 会让"处理完成"
-  变成谎话，也会让下游误以为已有产物。
+- ``QUALITY_PRE_CHECK`` 由 :mod:`app.application.processing.quality_stage` 实现，
+  对本次运行关联的 Episode 逐个执行既有统一质量引擎；
+- 其余六个阶段仍**没有真实实现**，一律由 :class:`SkippedStage` 显式 SKIPPED
+  并写明原因——把未实现写成 ``SUCCEEDED`` 会让"处理完成"变成谎话，也会让
+  下游误以为已有产物。
 
 阶段处理器是纯函数式对象：输入 :class:`StageContext`，返回
 :class:`StageOutcome`；可预期失败抛 :class:`StageFailure`，由编排器脱敏落库。
@@ -144,17 +146,22 @@ STAGE_SKIP_REASONS: Mapping[ProcessingStage, str] = {
         "切片入口在导入链路（POST /data-source-imports/{id}/episodes），本阶段尚未接线"
     ),
     ProcessingStage.DATA_CLEANING: "清洗规则尚未接入处理运行，本阶段没有真实实现",
-    ProcessingStage.QUALITY_PRE_CHECK: (
-        "现有质量规则 evaluate_import_quality 依赖导入导出的 MediaAsset/Episode 产物，"
-        "ProcessingRun 尚无对应产物，不伪造检查结果"
-    ),
 }
 
 
-def default_handlers(inspector: InputObjectInspector) -> dict[ProcessingStage, StageHandler]:
-    """默认阶段表：FILE_VALIDATION 有真实落点，其余显式 SKIPPED。"""
+def default_handlers(
+    inspector: InputObjectInspector,
+    *,
+    quality_check: StageHandler,
+) -> dict[ProcessingStage, StageHandler]:
+    """默认阶段表：``FILE_VALIDATION`` 与 ``QUALITY_PRE_CHECK`` 有真实落点。
+
+    ``quality_check`` 必须由组合根显式注入：静默回退到 SKIPPED 会让"自动质检
+    没接线"在生产里看起来像"没有需要检查的 Episode"。
+    """
     handlers: dict[ProcessingStage, StageHandler] = {
         ProcessingStage.FILE_VALIDATION: FileValidationHandler(inspector),
+        ProcessingStage.QUALITY_PRE_CHECK: quality_check,
     }
     for stage, reason in STAGE_SKIP_REASONS.items():
         handlers[stage] = SkippedStage(reason)
