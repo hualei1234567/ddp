@@ -174,6 +174,15 @@ class LabelValue:
             payload["comment"] = self.comment
         return payload
 
+    def redacted_payload(self) -> dict[str, object]:
+        """盲审脱敏视图：保留标签键，不返回值、来源、置信度与备注。
+
+        键本身属于 Schema 定义，复核人需要它才能独立标注；值、来源与备注
+        都可能泄露原标注人的结论，一律不返回。``redacted`` 明确标记该条
+        并非"没有标签"，避免客户端把脱敏误读成空值。
+        """
+        return {"label_key": self.label_key, "value": None, "redacted": True}
+
 
 @dataclass(frozen=True, slots=True)
 class EvidenceRef:

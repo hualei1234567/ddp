@@ -63,8 +63,13 @@ def record_ai_suggestions(
         path=request.url.path,
         request_id=request_id(request),
     )
+    submission = use_cases.submissions.get(scope, submission_id)
+    redact_human_value = use_cases.submissions.should_redact_labels(scope, submission)
     return PageOut(
-        items=[AiSuggestionOut.from_domain(item) for item in suggestions],
+        items=[
+            AiSuggestionOut.from_domain(item, redact_human_value=redact_human_value)
+            for item in suggestions
+        ],
         next_cursor=None,
     )
 
@@ -79,8 +84,13 @@ def list_ai_suggestions(
     use_cases: AnnotationUseCasesDep,
 ) -> PageOut[AiSuggestionOut]:
     suggestions = use_cases.ai_suggestions.list_for_submission(scope, submission_id)
+    submission = use_cases.submissions.get(scope, submission_id)
+    redact_human_value = use_cases.submissions.should_redact_labels(scope, submission)
     return PageOut(
-        items=[AiSuggestionOut.from_domain(item) for item in suggestions],
+        items=[
+            AiSuggestionOut.from_domain(item, redact_human_value=redact_human_value)
+            for item in suggestions
+        ],
         next_cursor=None,
     )
 

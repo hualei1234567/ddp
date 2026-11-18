@@ -56,6 +56,7 @@ from app.domain.annotation.errors import (
     SubmissionSchemaMismatchError,
     VersionConflictError,
 )
+from app.domain.annotation.review_policy import ReviewPolicy
 from app.domain.annotation.schema import AnnotationSchema, compute_schema_sha256
 from app.domain.annotation.state_machines import (
     allowed_submission_actions,
@@ -167,6 +168,26 @@ class AnnotationSubmissionUseCases:
         if records:
             return replace(submission, records=tuple(records))
         return submission
+
+    def review_policy_for_task(self, scope: ProjectScope, task_id: UUID) -> ReviewPolicy:
+        """任务级复核策略（含 ``blind_review``）。"""
+        return self._get_task(scope, task_id).review_policy
+
+    def should_redact_labels(
+        self,
+        scope: ProjectScope,
+        submission: AnnotationSubmission,
+    ) -> bool:
+        """盲审任务下，非标注人读取该提交/记录时必须隐藏标签值。
+
+        策略权威来源是任务 ``iaa_policy.blind_review``；判定逻辑在领域
+        ``ReviewPolicy.hides_labels_from``，这里只负责取任务。
+        """
+        policy = self.review_policy_for_task(scope, submission.task_id)
+        return policy.hides_labels_from(
+            actor_id=scope.actor_id,
+            annotator_id=submission.annotator_id,
+        )
 
     def allowed_actions(
         self,

@@ -1,11 +1,13 @@
-"""双标任务与一致性门槛策略。
+"""双标与盲审策略。
 
 策略存放在任务既有的 ``iaa_policy`` JSON 列中，不新增表或列：
 
 - ``review_mode``：``SINGLE``（默认）或 ``DOUBLE``；
 - ``agreement_threshold``：一致性阈值（0–1，默认 0.8）；
 - ``agreement_metric``：判定指标，默认 ``PERCENT_AGREEMENT``；
-- ``auto_approve``：达标后是否自动通过提交（默认关闭，必须显式开启）。
+- ``auto_approve``：达标后是否自动通过提交（默认关闭，必须显式开启）；
+- ``blind_review``：盲审开关（默认关闭）；开启后，标注人之外的人读取
+  该任务的提交/标注记录时，服务端隐藏标签值。
 
 这里只做**策略解析与校验**，不实现任何 IAA 指标；指标计算唯一来源是
 :mod:`app.domain.annotation.iaa`。
@@ -16,6 +18,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from uuid import UUID
 
 from app.domain.annotation.enums import IAAMetric
 from app.domain.annotation.errors import DomainValidationError
@@ -46,6 +49,7 @@ class ReviewPolicy:
     agreement_threshold: float = DEFAULT_AGREEMENT_THRESHOLD
     agreement_metric: IAAMetric = IAAMetric.PERCENT_AGREEMENT
     auto_approve: bool = False
+    blind_review: bool = False
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, object] | None) -> ReviewPolicy:
@@ -93,16 +97,29 @@ class ReviewPolicy:
         if raw_auto and mode is not ReviewMode.DOUBLE:
             raise DomainValidationError("auto_approve 仅适用于 review_mode=DOUBLE 的任务")
 
+        raw_blind = policy.get("blind_review", False)
+        if not isinstance(raw_blind, bool):
+            raise DomainValidationError("iaa_policy.blind_review 必须是布尔值")
+
         return cls(
             review_mode=mode,
             agreement_threshold=threshold,
             agreement_metric=metric,
             auto_approve=raw_auto,
+            blind_review=raw_blind,
         )
 
     @property
     def is_double(self) -> bool:
         return self.review_mode is ReviewMode.DOUBLE
+
+    def hides_labels_from(self, *, actor_id: UUID, annotator_id: UUID) -> bool:
+        """读取某条记录时是否隐藏标签值。
+
+        规则：任务开启盲审且读取人不是标注人时隐藏；标注人读取自己的记录
+        始终可见。规则只在这里定义一次，API 与用例不得各写一份判断。
+        """
+        return self.blind_review and actor_id != annotator_id
 
 
 def validate_review_policy(value: Mapping[str, object] | None) -> None:
