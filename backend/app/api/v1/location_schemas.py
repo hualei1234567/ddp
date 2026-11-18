@@ -4,9 +4,9 @@
 审计字段等服务端权威值。``kind`` 用枚举字面量做校验，非法取值由 Pydantic
 直接拒绝（422），不进入领域层。
 
-响应字段是本轮**新增端点**的对外形状；契约文件
-``packages/contracts/openapi.yaml`` 尚未声明这两个路径（按任务要求不改契约），
-缺口已写入交付报告，待 System Architect 走契约变更流程。
+响应字段是场地端点（1.15.0 起已声明）与多基地概览端点的对外形状；
+契约版本见 ``packages/contracts/openapi.yaml``。概览的派生计数只读，
+不参与任何写路径。
 """
 
 from __future__ import annotations
@@ -17,6 +17,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.application.locations.overview import SiteOverviewEntry
 from app.domain.locations.models import Location
 from app.domain.locations.validation import (
     ADDRESS_MAX_LENGTH,
@@ -83,4 +84,37 @@ class LocationOut(BaseModel):
         )
 
 
-__all__ = ["LocationCreate", "LocationOut", "LocationPatch"]
+class SiteOverviewOut(BaseModel):
+    """多基地资源概览的单行响应。
+
+    只有派生计数，不展开设备/传感器/任务实体：概览端点的授权范围是
+    "看到每个基地有多少资源"，不是"看到资源本身"。
+    """
+
+    location_id: UUID
+    code: str
+    name: str
+    kind: str
+    device_count: int
+    sensor_count: int
+    collection_task_count: int
+
+    @classmethod
+    def from_domain(cls, entry: SiteOverviewEntry) -> SiteOverviewOut:
+        return cls(
+            location_id=entry.location.location_id,
+            code=entry.location.code,
+            name=entry.location.name,
+            kind=entry.location.kind.value,
+            device_count=entry.resources.device_count,
+            sensor_count=entry.resources.sensor_count,
+            collection_task_count=entry.resources.collection_task_count,
+        )
+
+
+__all__ = [
+    "LocationCreate",
+    "LocationOut",
+    "LocationPatch",
+    "SiteOverviewOut",
+]

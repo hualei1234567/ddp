@@ -63,6 +63,7 @@ from app.domain.locations.validation import (
     CODE_MAX_LENGTH,
     NAME_MAX_LENGTH,
     NOTES_MAX_LENGTH,
+    non_negative_int,
     normalized_text,
     optional_text,
     positive_int,
@@ -141,4 +142,44 @@ def _kind(value: object) -> LocationKind:
         raise DomainValidationError(f"kind 取值非法，允许值：{allowed}") from exc
 
 
-__all__ = ["PATCHABLE_FIELDS", "Location"]
+@dataclass(frozen=True, slots=True)
+class LocationResourceCounts:
+    """某场地在当前项目内的只读资源计数。
+
+    这是**派生读数**，不是主数据：不落库、不参与状态机、不做计费。
+    三个计数都允许 0——空基地必须如实返回 0，调用方才能区分
+    "这个基地确实没有设备"与"服务端没返回这个基地"。
+    """
+
+    device_count: int = 0
+    sensor_count: int = 0
+    collection_task_count: int = 0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "device_count",
+            non_negative_int(self.device_count, "device_count"),
+        )
+        object.__setattr__(
+            self,
+            "sensor_count",
+            non_negative_int(self.sensor_count, "sensor_count"),
+        )
+        object.__setattr__(
+            self,
+            "collection_task_count",
+            non_negative_int(self.collection_task_count, "collection_task_count"),
+        )
+
+
+# 单例空读数：调用方对没有资源的场地统一回落到它，避免每次 new 一个对象。
+EMPTY_RESOURCE_COUNTS = LocationResourceCounts()
+
+
+__all__ = [
+    "EMPTY_RESOURCE_COUNTS",
+    "PATCHABLE_FIELDS",
+    "Location",
+    "LocationResourceCounts",
+]

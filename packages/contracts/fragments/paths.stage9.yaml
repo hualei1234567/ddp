@@ -114,3 +114,43 @@ locationDetail:
       "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
       "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+
+siteOverview:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listSiteOverview
+    tags: [locations]
+    summary: 多基地资源只读概览
+    description: |
+      按场地聚合当前项目内的设备数、传感器数与采集任务数。
+
+      - 服务端强制项目隔离：路径 `project_id` 的成员资格由鉴权依赖校验，
+        不读取任何客户端声明的项目归属；
+      - 与 `/locations` 共用游标分页与 `kind` 过滤口径，`kind` 非法取值
+        返回 422，不静默忽略；
+      - 空基地**如实返回 0**（不是省略该场地）；
+      - 只统计 `location_id` 已归属场地的资源：未指定场地的设备/任务、
+        仅挂在机器人上的传感器不计入任何基地；
+      - 只读端点：无写操作、无调度、无计费。
+    parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          type: string
+          enum: [SITE, ROOM, LAB]
+        description: 非法取值返回 422，不静默忽略。
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Stage4Limit"
+    responses:
+      "200":
+        description: 场地资源概览分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SiteOverviewPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
