@@ -234,7 +234,19 @@ def data_chain(chain: Chain, stamp: str, *, data_only: bool = False) -> dict[str
         usable = [item for item in items if item.get("raw_asset_id")]
         if not usable:
             raise SeedFailure("导入的媒体资产尚未关联 RawAsset（历史行）")
-        first = usable[0]
+        # 只挑真正的视频：导入批次里还包含 JSON 元数据文件，它们没有机位与
+        # 帧率，拿它们建 Episode 会在就绪门禁处被判"流不完整"——那是数据的
+        # 真实属性，不是要绕过的限制。
+        videos = [
+            item
+            for item in usable
+            if str(item.get("content_type") or "").startswith("video/")
+            and item.get("camera")
+            and item.get("source_fps")
+        ]
+        if not videos:
+            raise SeedFailure("导入的资产里没有声明机位与帧率的视频，无法构造可就绪的 Episode")
+        first = videos[0]
         # 契约字段（canonical_schema_version / pipeline_id / pipeline_version）取
         # 项目内既有 Episode 的真实值，不在脚本里硬编码版本号。
         existing = chain.must(chain.client, "GET", f"{chain.base}/episodes?limit=1", 200, "读既有 Episode")

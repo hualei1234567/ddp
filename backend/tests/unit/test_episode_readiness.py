@@ -226,17 +226,24 @@ def test_invalid_time_base_blocks() -> None:
     assert _codes(decision) == {ReadinessBlockerCode.TIME_BASE_INVALID}
 
 
-def test_multi_camera_without_calibration_blocks() -> None:
-    """多机位缺标定：没有机位间几何关系，多路流无法构成可融合的样本。"""
+def test_multi_camera_without_calibration_is_notice_not_blocker() -> None:
+    """多机位缺标定：就绪放行但必须留痕，可训练性由数据集准入判断。
+
+    2026-11-18 调整：公开第一人称数据集普遍多机位且不带标定，把它当就绪阻塞
+    会让这些数据永远停在 PENDING，只能靠 HTTP ready 绕过门禁。标定是否可接受
+    由数据集选择器的 ``CALIBRATION_MISSING`` / ``allow_missing_calibration``
+    判定——那里才是权威口径。
+    """
     episode = facts(calibration_snapshot=())
     decision = evaluate_readiness(
         episode,
         (stream(camera="main"), stream(camera="wrist")),
         provenance_source="import",
     )
-    assert not decision.is_ready
-    assert _codes(decision) == {ReadinessBlockerCode.CALIBRATION_MISSING}
-    assert decision.blockers[0].detail["stream_count"] == 2
+    assert decision.is_ready
+    assert [notice.code for notice in decision.notices] == [
+        ReadinessNoticeCode.MULTI_STREAM_CALIBRATION_ABSENT
+    ]
 
 
 def test_single_camera_without_calibration_is_not_blocking_but_is_recorded() -> None:

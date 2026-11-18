@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from app.application.collection.audit import record_change
@@ -40,6 +41,7 @@ from app.domain.episodes.enums import EpisodeStatus, LineageNodeType, LineageRel
 from app.domain.episodes.errors import (
     ConflictError,
     DomainValidationError,
+    EpisodeNotReadyError,
     EpisodeOverlapConflictError,
     ResourceNotFoundError,
     VersionConflictError,
@@ -53,6 +55,9 @@ from app.domain.episodes.segmentation_rules import (
 )
 from app.domain.episodes.validation import build_manifest_key
 from app.domain.identity.models import ProjectScope
+
+if TYPE_CHECKING:
+    from app.application.episodes.readiness import EpisodeReadinessService
 from app.domain.ingestion.enums import RawAssetStatus
 from app.domain.ingestion.errors import AssetNotUsableError
 
@@ -95,6 +100,7 @@ class EpisodeService:
         *,
         idempotency: IdempotencyRepository | None = None,
         segmentation_rules: SegmentationRuleRegistry | None = None,
+        readiness: EpisodeReadinessService | None = None,
     ) -> None:
         self._episodes = episodes
         self._episode_assets = episode_assets
@@ -112,6 +118,10 @@ class EpisodeService:
         self._segmentation_rules = (
             build_segmentation_rule_registry() if segmentation_rules is None else segmentation_rules
         )
+        # 就绪门禁：HTTP ready 必须与自动就绪用同一套判定，否则调用方可以
+        # 提交一份"结构合法"的 Manifest 绕过帧率/标定/时间同步检查。
+        # None 只在纯领域测试装配里出现；生产装配必须传入。
+        self._readiness = readiness
         # 幂等重放标记供 API 设置响应头；服务实例按请求装配，不跨请求共享。
         self.last_replayed = False
 
@@ -485,6 +495,19 @@ class EpisodeService:
         episode = self._load(scope, episode_id)
         if episode.version != expected_version:
             raise VersionConflictError("Episode")
+        if self._readiness is not None:
+            decision = self._readiness.evaluate(scope, episode_id)
+            if not decision.is_ready:
+                raise EpisodeNotReadyError(
+                    "Episode 数据事实不足，不能置为就绪",
+                    details={
+                        "blockers": [blocker.as_dict() for blocker in decision.blockers],
+                        "notices": [
+                            {"code": str(notice.code), "message": notice.message}
+                            for notice in decision.notices
+                        ],
+                    },
+                )
         if episode.status is EpisodeStatus.PENDING:
             started = episode.start_processing(now)
             saved_start = self._episodes.save(

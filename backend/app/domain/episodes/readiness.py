@@ -280,24 +280,36 @@ def _check_calibration(
     blockers: list[ReadinessBlocker],
     notices: list[ReadinessNotice],
 ) -> None:
-    """多机位必须有标定快照；单机位缺失只记 notice（口径见模块文档）。"""
-    if len(streams) < MULTI_STREAM_THRESHOLD:
-        if not facts.calibration_snapshot and streams:
-            notices.append(
-                ReadinessNotice(
-                    ReadinessNoticeCode.SINGLE_STREAM_CALIBRATION_ABSENT,
-                    "单机位 Episode 没有标定快照：单路流无需跨机位几何关系，"
-                    "标定是否可接受由数据集准入（CALIBRATION_MISSING）判断",
-                )
-            )
-        return
+    """缺标定只记 notice，不阻塞就绪——**能否用于训练由数据集准入判断**。
+
+    这条口径在 2026-11-18 调整。原实现要求"多机位必须有标定快照"，看似更严，
+    实际效果是：公开第一人称数据集（多机位、不带标定）永远无法进入 READY，
+    整条链路停在 PENDING，只能靠 HTTP ``ready`` 绕过——而那正是"ready 不检查
+    就绪门禁"这个缺陷的成因。
+
+    标定是否可接受本来就有权威判定：数据集选择器的 ``CALIBRATION_MISSING``
+    排除码与 ``allow_missing_calibration`` 显式确认。就绪的职责是"能否构造出
+    可信的 Canonical Manifest"，不是"这份数据能否用于训练"。两件事分开，
+    既不伪造标定，也不让缺失的标定悄悄通过。
+    """
     if facts.calibration_snapshot:
         return
-    blockers.append(
-        ReadinessBlocker(
-            ReadinessBlockerCode.CALIBRATION_MISSING,
-            "多机位 Episode 缺少标定快照，无法确定机位间几何关系",
-            {"stream_count": len(streams)},
+    if not streams:
+        return
+    single = len(streams) < MULTI_STREAM_THRESHOLD
+    notices.append(
+        ReadinessNotice(
+            (
+                ReadinessNoticeCode.SINGLE_STREAM_CALIBRATION_ABSENT
+                if single
+                else ReadinessNoticeCode.MULTI_STREAM_CALIBRATION_ABSENT
+            ),
+            (
+                "单机位 Episode 没有标定快照：单路流无需跨机位几何关系，"
+                if single
+                else "多机位 Episode 没有标定快照：机位间几何关系未声明，"
+            )
+            + "标定是否可接受由数据集准入（CALIBRATION_MISSING）判断",
         )
     )
 

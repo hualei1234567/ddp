@@ -39,6 +39,10 @@ class ReadinessNoticeCode(StrEnum):
     """不阻塞就绪、但必须留痕的事实。"""
 
     SINGLE_STREAM_CALIBRATION_ABSENT = "SINGLE_STREAM_CALIBRATION_ABSENT"
+    # 多机位缺标定同样不阻塞"就绪"，但必须留痕：能否用于训练由数据集准入
+    # （CALIBRATION_MISSING / allow_missing_calibration）判断，而不是在这里
+    # 把整份公开数据集永远挡在 READY 之外。
+    MULTI_STREAM_CALIBRATION_ABSENT = "MULTI_STREAM_CALIBRATION_ABSENT"
 
 
 @dataclass(frozen=True, slots=True)

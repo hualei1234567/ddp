@@ -22,6 +22,7 @@ API 层是唯一把领域错误转换为 HTTP 语义的位置；领域与用例�
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 
 from sqlalchemy.exc import IntegrityError
@@ -280,6 +281,7 @@ _EPISODE_STATUS_BY_CODE = {
     "calibration_not_active": 422,
     "episode_time_base_invalid": 422,
     "lineage_conflict": 409,
+    "episode_not_ready": 409,
 }
 
 _EPISODE_MESSAGES = {
@@ -296,6 +298,7 @@ _EPISODE_MESSAGES = {
     "calibration_not_active": "引用的标定记录未激活",
     "episode_time_base_invalid": "时间基准不合法",
     "lineage_conflict": "血缘边重复、跨项目或成环",
+    "episode_not_ready": "Episode 数据事实不足，不能置为就绪",
 }
 
 
@@ -710,6 +713,18 @@ def integrity_error_to_app(exc: IntegrityError) -> AppError:
     """不把驱动 SQL、表名或参数回显给客户端。"""
     if _is_unique_violation(exc):
         return AppError("duplicate_resource", _MESSAGES["duplicate_resource"], 409)
+    if _is_foreign_key_violation(exc):
+        # 删除仍被业务数据引用的成员/设备时，驱动只给一句"完整性冲突"。
+        # 客户端据此无法判断"是暂时冲突可以重试"还是"这个对象根本删不掉"。
+        # 这里把原因与（PostgreSQL 能给到的）约束名回显，details 只含约束标识，
+        # 不含表数据、跨项目对象名或存在性信息。
+        constraint = _foreign_key_constraint(exc)
+        return AppError(
+            "conflict",
+            "该记录仍被其它业务数据引用，不能删除或修改",
+            409,
+            details={"reason": "foreign_key_violation", "constraint": constraint},
+        )
     if _is_ledger_append_only_violation(exc):
         # 契约 §8 明列 `ledger_immutable`(409)：验收账本只允许追加。
         # 守卫在数据库层（`suppliers_guards.py`），不动它——但客户端要能区分
@@ -728,6 +743,18 @@ def _is_ledger_append_only_violation(exc: IntegrityError) -> bool:
     否则普通 CHECK 违反也会被误判成账本冲突。
     """
     return "append-only" in str(exc.orig).lower()
+
+
+def _is_foreign_key_violation(exc: IntegrityError) -> bool:
+    """识别外键违反（SQLite 只给 'FOREIGN KEY constraint failed'）。"""
+    message = str(exc.orig).lower()
+    return "foreign key" in message or "violates foreign key constraint" in message
+
+
+def _foreign_key_constraint(exc: IntegrityError) -> str | None:
+    """从驱动消息里取约束名；取不到返回 None（SQLite 不提供）。"""
+    match = re.search(r'constraint "([^"]+)"', str(exc.orig))
+    return match.group(1) if match else None
 
 
 def _is_unique_violation(exc: IntegrityError) -> bool:

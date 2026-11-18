@@ -122,13 +122,11 @@ def test_import_then_materialize_auto_readies_episodes(
     """导入 → 物化 → Episode 自动就绪：Manifest 由平台生成，不由人补。
 
     这是主链唯一断点（``docs/testing/主链端到端与可追溯性验收-2026-11-17.md``
-    §6.2：Canonical Manifest 生成器 ``MISSING``）的回归用例。同时覆盖两种结果
-    必须可区分：**导入成功** 与 **Episode 未就绪**。
+    §6.2：Canonical Manifest 生成器 ``MISSING``）的回归用例。
 
-    - 单机位 + 已声明帧率：物化后立刻 ``READY``，落 ``manifest_sha256`` 与
-      ``frame_count``；
-    - 多机位（``demo_001``）+ 源数据不含标定：``PENDING``，原因
-      ``CALIBRATION_MISSING`` 可查询，导入任务仍是 ``SUCCEEDED``。
+    两种机位形态都必须能就绪：单机位与多机位（``demo_001``）都声明了帧率，
+    缺标定只记 notice（能否训练由数据集准入判断），因此物化后全部 ``READY``，
+    落 ``manifest_sha256`` 与 ``frame_count``。
     """
     factory, ids = api_db
     editor = make_client(factory, ids.editor_a)
@@ -156,16 +154,10 @@ def test_import_then_materialize_auto_readies_episodes(
         ).json()
         for item in created["episodes"]
     }
-    blocked = episodes["EP-demo_001"]
-    assert blocked["status"] == "PENDING", blocked
-    assert {item["code"] for item in blocked["readiness_blockers"]} == {"CALIBRATION_MISSING"}
-    assert blocked["readiness_blockers"][0]["message"], blocked
-    assert blocked["manifest_key"] is None, blocked
-
     for episode_code, episode in episodes.items():
-        if episode_code == "EP-demo_001":
-            continue
-        assert episode["status"] == "READY", episode
+        assert episode["status"] == "READY", (episode_code, episode)
+        assert episode["manifest_sha256"], episode
+        assert episode["readiness_blockers"] == [], episode
         assert str(episode["manifest_sha256"]).startswith("sha256:"), episode
         assert episode["manifest_key"], episode
         assert episode["readiness_blockers"] == [], episode
