@@ -166,7 +166,8 @@ function RunHeader({ run }: { run: QualityRun }) {
  * 关键事实必须如实呈现：
  * 1. `INCOMPLETE` / `NOT_APPLICABLE` 都不是通过；
  * 2. 六类聚合与每条结论都来自服务端，本组件不重新判定；
- * 3. 服务端没有"按导入列举运行"的接口，页面只能展示链接指定或本次触发的运行。
+ * 3. 页面自动展示该对象最近一次运行；历史运行可换运行 ID 回看，
+ *    展示层本身不推断"哪次运行代表当前状态"。
  */
 export default function QualityRunReport({
   phase,
@@ -225,7 +226,7 @@ export default function QualityRunReport({
             执行一次新的质量检查
           </Button>
           <Typography.Text type="secondary">
-            当前运行 ID 无法读取；执行新检查会追加一条运行并更新本页链接。
+            本次质量运行无法读取；执行新检查会追加一条运行并更新本页链接。
           </Typography.Text>
         </Space>
       </Space>
@@ -239,7 +240,7 @@ export default function QualityRunReport({
         <PageState
           variant="empty"
           title="尚未质检"
-          description="该导入还没有可展示的统一质量运行。点击下方按钮会追加一次新的运行（只追加，不覆盖历史结论）；服务端尚未提供按导入列举运行记录的接口，历史运行需通过运行 ID 链接回看。"
+          description="该导入还没有统一质量运行记录。点击下方按钮会追加一次新的运行（只追加，不覆盖历史结论）；已有历史运行时会自动展示最近一次。"
           action={
             <Button
               type="primary"

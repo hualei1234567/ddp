@@ -32,6 +32,22 @@ class QualityRunRepository(Protocol):
 
     def get(self, scope: ProjectScope, run_id: UUID) -> QualityRun | None: ...
 
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        subject_type: QualitySubjectType,
+        subject_id: UUID,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[QualityRun]:
+        """按对象列出历史运行：创建时间/ID 倒序，游标为上一页最后一条 ID。
+
+        ``after_id`` 必须与本查询同项目、同对象；仓储只按 (created_at, id)
+        定位键集位置，不做跨对象的存在性校验。
+        """
+        ...
+
     def list_findings(
         self,
         scope: ProjectScope,

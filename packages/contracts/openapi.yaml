@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.15.0
+  version: 1.16.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -156,6 +156,12 @@ info:
       项目隔离；游标分页与 `kind` 过滤复用 `/locations` 口径；空基地如实
       返回 0。**不做调度、不做计费、不提供任何写操作**。
       全部为增量：仅新增路径与 schema，无既有路径/字段变更。
+    - `1.16.0` **质量运行按对象列举（N4-008）**：`GET /quality-runs` 新增
+      只读操作，按 `subject_type` + `subject_id` 列举历史运行，创建时间/ID
+      倒序游标分页。服务端强制项目隔离；对象不存在或跨项目返回空页而不是
+      404，避免用状态码差异探测其他项目对象。未知 `subject_type` 返回 422。
+      本操作不触发检查、不改变历史结论。全部为增量：仅新增路径操作、
+      query 参数与 `QualityRunPage` schema，无既有路径/字段变更。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -173,7 +179,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.15.0
+  version: 1.16.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -1331,6 +1337,7 @@ components:
     QualityRunFinding: {$ref: "./fragments/schemas.quality.yaml#/QualityRunFinding"}
     QualityRun: {$ref: "./fragments/schemas.quality.yaml#/QualityRun"}
     QualityRunFindingPage: {$ref: "./fragments/schemas.quality.yaml#/QualityRunFindingPage"}
+    QualityRunPage: {$ref: "./fragments/schemas.quality.yaml#/QualityRunPage"}
     ResourceKind: {$ref: "./fragments/schemas.governance.yaml#/ResourceKind"}
     QuotaStatus: {$ref: "./fragments/schemas.governance.yaml#/QuotaStatus"}
     Quota: {$ref: "./fragments/schemas.governance.yaml#/Quota"}

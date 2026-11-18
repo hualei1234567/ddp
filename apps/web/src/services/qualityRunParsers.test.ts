@@ -11,6 +11,7 @@ import {
   parseQualityRun,
   parseQualityRunFinding,
   parseQualityRunFindingPage,
+  parseQualityRunPage,
 } from "./qualityRunParsers";
 import { ContractValidationError } from "./validation";
 import { QUALITY_CATEGORY_VALUES } from "../types/qualityRun";
@@ -143,5 +144,31 @@ describe("统一质量结论解析", () => {
     expect(page.items).toHaveLength(1);
     expect(page.items[0]?.run_id).toBe(QUALITY_RUN_ID);
     expect(page.next_cursor).toBe("cursor-1");
+  });
+
+  it("历史运行分页复用单条校验并保留 next_cursor", () => {
+    const page = parseQualityRunPage({
+      items: [qualityRunFixture()],
+      next_cursor: "cursor-2",
+    });
+
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]?.run_id).toBe(QUALITY_RUN_ID);
+    expect(page.next_cursor).toBe("cursor-2");
+  });
+
+  it("历史运行分页中任一条非法时拒绝整页（不跳过坏条目）", () => {
+    const payload = {
+      items: [{ ...qualityRunFixture(), status: "RUNNING" }],
+      next_cursor: null,
+    };
+
+    expect(() => parseQualityRunPage(payload)).toThrow(/status 必须是以下枚举之一/);
+  });
+
+  it("历史运行分页的 next_cursor 类型非法时拒绝", () => {
+    expect(() =>
+      parseQualityRunPage({ items: [], next_cursor: 42 }),
+    ).toThrow(/next_cursor/);
   });
 });
