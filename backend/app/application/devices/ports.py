@@ -143,6 +143,15 @@ class CalibrationRecordRepository(Protocol):
         calibration_id: UUID,
     ) -> CalibrationRecord | None: ...
 
+    def find_successor(
+        self,
+        scope: ProjectScope,
+        *,
+        previous_id: UUID,
+    ) -> CalibrationRecord | None:
+        """返回 ``supersedes_id == previous_id`` 的记录（用于拦截修订链分叉）。"""
+        ...
+
     def list(
         self,
         scope: ProjectScope,

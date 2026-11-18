@@ -19,7 +19,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.application.identity.ports import ProjectMembershipRepository
-from app.domain.devices.calibration import CalibrationProfile, CalibrationRecord
+from app.domain.devices.calibration import (
+    CalibrationProfile,
+    CalibrationRecord,
+    validate_supersedes_link,
+)
 from app.domain.devices.enums import (
     CalibrationStatus,
     CalibrationTargetType,
@@ -690,13 +694,30 @@ class SqlCalibrationRecordRepository:
         _, current = self._load_for_command(scope, record, expected_version)
         return self._apply_transition(scope, current, current.expire(), expected_version)
 
-    def _find_active_id(
+    def find_successor(
+        self,
+        scope: ProjectScope,
+        *,
+        previous_id: UUID,
+    ) -> CalibrationRecord | None:
+        """返回 ``supersedes_id == previous_id`` 的记录（G-16：拦截修订链分叉）。"""
+        row = self._session.scalar(
+            select(CalibrationRecordModel)
+            .where(
+                CalibrationRecordModel.project_id == scope.project_id,
+                CalibrationRecordModel.supersedes_id == previous_id,
+            )
+            .limit(1)
+        )
+        return _record_from_row(row) if row is not None else None
+
+    def _find_active(
         self,
         scope: ProjectScope,
         current: CalibrationRecord,
-    ) -> UUID | None:
-        return self._session.scalar(
-            select(CalibrationRecordModel.id)
+    ) -> CalibrationRecord | None:
+        row = self._session.scalar(
+            select(CalibrationRecordModel)
             .where(
                 CalibrationRecordModel.project_id == scope.project_id,
                 CalibrationRecordModel.scope == enum_value(current.scope),
@@ -708,6 +729,7 @@ class SqlCalibrationRecordRepository:
             )
             .limit(1)
         )
+        return _record_from_row(row) if row is not None else None
 
     def _supersede_active(
         self,
@@ -792,18 +814,42 @@ class SqlCalibrationRecordRepository:
         )
         activated = current.activate(now=now)
 
-        old_active_id: UUID | None = None
+        old_active: CalibrationRecord | None = None
         try:
             with self._session.begin_nested():
-                old_active_id = self._find_active_id(scope, current)
-                if old_active_id is not None:
-                    self._supersede_active(scope, old_active_id, expected_version)
-                self._activate_current(scope, activated, old_active_id, expected_version)
+                old_active = self._find_active(scope, current)
+                if old_active is not None:
+                    # G-16：赋 supersedes_id 前先做唯一权威校验——
+                    # 没有分叉/自引用/跨项目才允许把旧 ACTIVE 转 SUPERSEDED。
+                    validate_supersedes_link(
+                        successor_id=current.calibration_id,
+                        project_id=scope.project_id,
+                        supersedes_id=old_active.calibration_id,
+                        predecessor=old_active,
+                        existing_successor=self.find_successor(
+                            scope,
+                            previous_id=old_active.calibration_id,
+                        ),
+                    )
+                    self._supersede_active(
+                        scope,
+                        old_active.calibration_id,
+                        expected_version,
+                    )
+                self._activate_current(
+                    scope,
+                    activated,
+                    old_active.calibration_id if old_active is not None else None,
+                    expected_version,
+                )
         except IntegrityError as exc:
             # 契约 §8.6：同目标已有 ACTIVE **且无法原子替代** 才是
             # ``calibration_active_conflict``。能替代的情形在上面 savepoint 内
             # 正常完成，走不到这里；到这里说明并发让我们没能把旧 ACTIVE
-            # 转成 SUPERSEDED，被部分唯一索引挡住——这是冲突，不是业务键重复。
+            # 转成 SUPERSEDED——可能被 ``uq_calibration_records_active_target``
+            # 挡住，也可能两条并发激活同时想继承同一个前驱、被
+            # ``uq_calibration_records_project_supersedes`` 挡住（G-16）。
+            # 两种都是"激活冲突"，不是业务键重复。
             if is_unique_violation(exc):
                 raise CalibrationActiveConflictError(
                     "同一标定目标已有 ACTIVE 记录，且无法原子替代",
@@ -817,5 +863,7 @@ class SqlCalibrationRecordRepository:
         return replace(
             activated,
             version=expected_version + 1,
-            supersedes_id=old_active_id or current.supersedes_id,
+            supersedes_id=(
+                old_active.calibration_id if old_active is not None else current.supersedes_id
+            ),
         )
