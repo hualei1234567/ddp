@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from uuid import uuid4
+
+from app.api.v1.datasource_routes import get_remote_source_verifier
+from app.application.datasources.verification import (
+    RemoteCheckError,
+    RemoteCheckResult,
+)
 
 from tests.api.conftest import make_client
 
 _SHA = "0123456789abcdef0123456789abcdef01234567"
+_OTHER_SHA = "fedcba9876543210fedcba9876543210fedcba98"
 
 
 def _url(project_id: object, suffix: str = "") -> str:
@@ -87,6 +95,182 @@ def test_outsider_cannot_read_data_source(api_db) -> None:
     response = outsider.get(_url(ids.project_a, f"/{created['data_source_id']}"))
 
     assert response.status_code in {403, 404}
+
+
+# --- 远端校验接线 ------------------------------------------------------------
+
+
+class _FakeVerifier:
+    """测试替身：禁止任何用例真连外网。"""
+
+    def __init__(
+        self,
+        result: RemoteCheckResult | None = None,
+        error: Exception | None = None,
+    ) -> None:
+        self.result = result
+        self.error = error
+        self.calls: list[tuple[str, str]] = []
+
+    def describe(self, repo_id: str, *, revision: str) -> RemoteCheckResult:
+        self.calls.append((repo_id, revision))
+        if self.error is not None:
+            raise self.error
+        assert self.result is not None
+        return self.result
+
+
+def _remote_result(**overrides: object) -> RemoteCheckResult:
+    base: dict[str, object] = {
+        "repo_id": "lerobot/aloha_sim_insertion_human",
+        "resolved_revision": _SHA,
+        "license": "Apache-2.0",
+        "is_gated": False,
+        "dataset_card_url": "https://huggingface.co/datasets/lerobot/aloha_sim_insertion_human",
+    }
+    base.update(overrides)
+    return RemoteCheckResult(**base)  # type: ignore[arg-type]
+
+
+def _override_verifier(client, verifier: _FakeVerifier) -> None:
+    client.app.dependency_overrides[get_remote_source_verifier] = lambda: verifier
+
+
+def test_register_with_remote_verification_records_summary(api_db) -> None:
+    """显式 verify_remote 时记录规范化结论；不落远端原始字段。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    verifier = _FakeVerifier(_remote_result())
+    _override_verifier(client, verifier)
+
+    created = client.post(_url(ids.project_a), json=_payload(verify_remote=True))
+
+    assert created.status_code == 201, created.text
+    assert verifier.calls == [("lerobot/aloha_sim_insertion_human", _SHA)]
+    body = created.json()
+    check = body["metadata"]["remote_check"]
+    assert check["status"] == "VERIFIED"
+    assert check["resolved_revision"] == _SHA
+    assert check["license"] == "Apache-2.0"
+    assert check["is_gated"] is False
+    assert datetime.fromisoformat(check["checked_at"]).tzinfo is not None
+
+    detail = client.get(_url(ids.project_a, f"/{body['data_source_id']}/detail"))
+    assert detail.status_code == 200, detail.text
+    payload = detail.json()
+    assert payload["data_source"]["data_source_id"] == body["data_source_id"]
+    assert payload["imports"] == []
+    assert payload["remote_check"]["resolved_revision"] == _SHA
+    assert payload["remote_check"]["status"] == "VERIFIED"
+
+
+def test_register_without_verify_remote_never_calls_remote(api_db) -> None:
+    """默认不校验：避免每次登记都访问外网。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    verifier = _FakeVerifier(_remote_result())
+    _override_verifier(client, verifier)
+
+    created = client.post(_url(ids.project_a), json=_payload())
+
+    assert created.status_code == 201, created.text
+    assert verifier.calls == []
+    assert "remote_check" not in created.json()["metadata"]
+
+
+def test_remote_gated_mismatch_rejects_registration(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    _override_verifier(
+        client,
+        _FakeVerifier(_remote_result(is_gated=True)),
+    )
+
+    response = client.post(
+        _url(ids.project_a),
+        json=_payload(verify_remote=True, access_condition="PUBLIC", is_gated=False),
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "validation_failed"
+    listed = client.get(_url(ids.project_a)).json()["items"]
+    assert listed == []
+
+
+def test_remote_timeout_rejects_registration(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    _override_verifier(
+        client,
+        _FakeVerifier(error=RemoteCheckError("读取元信息超时")),
+    )
+
+    response = client.post(_url(ids.project_a), json=_payload(verify_remote=True))
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "validation_failed"
+
+
+def test_remote_revision_mismatch_rejects_registration(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    _override_verifier(
+        client,
+        _FakeVerifier(_remote_result(resolved_revision=_OTHER_SHA)),
+    )
+
+    response = client.post(_url(ids.project_a), json=_payload(verify_remote=True))
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "validation_failed"
+
+
+def test_client_cannot_spoof_remote_check_metadata(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+
+    response = client.post(
+        _url(ids.project_a),
+        json=_payload(metadata={"remote_check": {"status": "VERIFIED"}}),
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "validation_failed"
+
+
+def test_detail_lists_recent_imports(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source = client.post(_url(ids.project_a), json=_payload()).json()
+    job = client.post(
+        _url(ids.project_a, f"/{source['data_source_id']}/imports"),
+        json={
+            "scope": "SAMPLE",
+            "tool_name": "huggingface_hub",
+            "tool_version": "0.27.1",
+            "sample_limit": 5,
+        },
+    )
+    assert job.status_code == 201, job.text
+
+    detail = client.get(_url(ids.project_a, f"/{source['data_source_id']}/detail"))
+
+    assert detail.status_code == 200, detail.text
+    imports = detail.json()["imports"]
+    assert [item["import_id"] for item in imports] == [job.json()["import_id"]]
+
+
+def test_detail_is_project_scoped_and_missing_is_404(api_db) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    outsider = make_client(factory, ids.outsider)
+    created = editor.post(_url(ids.project_a), json=_payload()).json()
+
+    outsider_response = outsider.get(_url(ids.project_a, f"/{created['data_source_id']}/detail"))
+    assert outsider_response.status_code in {403, 404}
+
+    missing = editor.get(_url(ids.project_a, f"/{uuid4()}/detail"))
+    assert missing.status_code == 404
 
 
 def test_create_is_idempotent_on_same_key(api_db) -> None:

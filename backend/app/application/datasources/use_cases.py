@@ -27,6 +27,15 @@ from app.application.datasources.ports import (
     OutboxRepository,
     UnitOfWork,
 )
+from app.application.datasources.verification import (
+    REMOTE_CHECK_METADATA_KEY,
+    DataSourceDetail,
+    RemoteCheckError,
+    RemoteCheckResult,
+    RemoteSourceVerifier,
+    build_remote_check_metadata,
+    read_remote_check,
+)
 from app.domain.datasources.enums import ImportStatus
 from app.domain.datasources.errors import (
     DomainValidationError,
@@ -60,6 +69,7 @@ class DataSourceUseCases:
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
         logs: DataSourceImportLogRepository,
+        verifier: RemoteSourceVerifier | None = None,
     ) -> None:
         self._sources = sources
         self._imports = imports
@@ -68,6 +78,9 @@ class DataSourceUseCases:
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
         self._logs = logs
+        # 远端校验是**显式可选**能力：未配置时 verify_remote=true 必须失败，
+        # 不能悄悄当作"校验通过"。
+        self._verifier = verifier
 
     # ---------- 数据源 ----------
 
@@ -86,6 +99,30 @@ class DataSourceUseCases:
         if item is None:
             raise ResourceNotFoundError("数据源", data_source_id)
         return item
+
+    def get_source_detail(
+        self,
+        scope: ProjectScope,
+        data_source_id: UUID,
+        *,
+        import_limit: int = 20,
+    ) -> DataSourceDetail:
+        """详情聚合：登记信息、导入任务与服务端记录的校验结论。
+
+        校验结论只从 ``metadata`` 的服务端保留键读取；缺失或形状不合法一律
+        返回 ``None``（未校验），不把坏值渲染成"已校验"。
+        """
+        source = self.get_source(scope, data_source_id)
+        imports = self._imports.list(
+            scope,
+            data_source_id=data_source_id,
+            limit=import_limit,
+        )
+        return DataSourceDetail(
+            source=source,
+            imports=imports,
+            remote_check=read_remote_check(source.metadata),
+        )
 
     def create_source(
         self,
@@ -119,6 +156,19 @@ class DataSourceUseCases:
         ):
             raise DuplicateResourceError("同一 repo/revision/config/split 已登记")
 
+        # 本地规则先判：重复登记不必访问外网。远端校验是显式可选步骤。
+        metadata = dict(command.metadata or {})
+        if REMOTE_CHECK_METADATA_KEY in metadata:
+            raise DomainValidationError(
+                f"metadata.{REMOTE_CHECK_METADATA_KEY} 为服务端保留字段，客户端不得写入"
+            )
+        if command.verify_remote:
+            remote_check = self._verify_remote(command)
+            metadata[REMOTE_CHECK_METADATA_KEY] = build_remote_check_metadata(
+                remote_check,
+                checked_at=now,
+            )
+
         item = DataSource(
             data_source_id=uuid4(),
             project_id=scope.project_id,
@@ -134,7 +184,7 @@ class DataSourceUseCases:
             split=command.split,
             dataset_card_url=command.dataset_card_url,
             notes=command.notes,
-            metadata=dict(command.metadata or {}),
+            metadata=metadata,
         )
         created = self._sources.add(scope, item)
         record_change(
@@ -155,6 +205,7 @@ class DataSourceUseCases:
                 "license": created.license,
                 "access_condition": str(created.access_condition),
                 "is_gated": created.is_gated,
+                "remote_verified": command.verify_remote,
             },
             event_type="datasource.registered",
             event_payload={
@@ -176,6 +227,34 @@ class DataSourceUseCases:
         )
         self._uow.commit()
         return created
+
+    def _verify_remote(self, command: NewDataSource) -> RemoteCheckResult:
+        """显式远端校验：失败一律拒绝登记，不降级为"未校验但继续"。"""
+        if self._verifier is None:
+            raise DomainValidationError("服务端未配置远端校验器，无法执行 verify_remote")
+        try:
+            result = self._verifier.describe(
+                command.repo_id,
+                revision=command.revision,
+            )
+        except RemoteCheckError as exc:
+            # 外部异常原文只进服务端日志（领域异常处理器会记录 message），
+            # 对外由统一错误映射给出固定文案，不回显远端返回。
+            raise DomainValidationError(f"远端校验失败，数据源未登记：{exc}") from exc
+
+        if result.repo_id != command.repo_id.strip():
+            raise DomainValidationError("远端返回的 repo_id 与登记值不一致")
+        # 登记 revision 本身就是 commit sha；远端解析结果必须与它一致，
+        # 否则说明远端忽略了 revision 或数据集已不可复现。
+        if result.resolved_revision != command.revision:
+            raise DomainValidationError("远端解析的 commit sha 与登记 revision 不一致")
+        # gated 是合规事实，不能只看声明。两个方向的不一致都必须拒绝：
+        # 声明 gated 实际公开 = 过度限制；声明公开实际 gated = 合规误判。
+        if result.is_gated != command.is_gated:
+            raise DomainValidationError("远端 gated 标记与 is_gated 声明不一致")
+        if result.is_gated and command.access_condition == "PUBLIC":
+            raise DomainValidationError("远端数据集为 gated，不能登记为 PUBLIC")
+        return result
 
     def update_source(
         self,

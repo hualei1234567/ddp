@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from ddp_data.huggingface import (
     DatasetCardInfo,
@@ -135,3 +137,23 @@ def test_invalid_repo_ids(value: str) -> None:
 )
 def test_resolve_license(raw: dict[str, object], expected: str | None) -> None:
     assert resolve_license(raw) == expected
+
+
+@pytest.mark.manual
+def test_real_huggingface_metadata_manual() -> None:
+    """可选的真实调用：默认跳过，只有显式开启才访问外网。
+
+    常规测试一律用 fake 客户端；这条用例用于人工确认 ``huggingface_hub``
+    版本升级或网络策略变化后生产客户端仍能读取元信息。
+    """
+    if os.environ.get("DDP_RUN_REMOTE_VERIFY") != "1":
+        pytest.skip("手动用例：设置 DDP_RUN_REMOTE_VERIFY=1 才会真实访问 huggingface.co")
+    pytest.importorskip("huggingface_hub")
+    from ddp_data.huggingface.hub_client import HuggingFaceHubClient
+
+    ref = HuggingFaceAdapter(HuggingFaceHubClient(timeout_seconds=10.0)).describe(
+        "lerobot/aloha_sim_insertion_human"
+    )
+
+    assert len(ref.revision) == 40
+    assert ref.is_gated is False

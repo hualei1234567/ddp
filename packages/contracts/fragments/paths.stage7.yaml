@@ -102,6 +102,36 @@ dataSourceDetail:
       "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+dataSourceDetailOverview:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: data_source_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: getDataSourceDetail
+    tags: [datasources]
+    summary: 数据源详情聚合
+    description: |
+      一次返回登记信息、导入任务与最近远端校验结论，供详情页使用。
+      `remote_check=null` 表示从未校验或摘要损坏，前端必须显示"未校验"。
+    parameters:
+      - name: import_limit
+        in: query
+        description: 返回的导入任务数量上限。
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    responses:
+      "200":
+        description: 数据源详情聚合
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DataSourceDetail" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 dataSourceImports:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"

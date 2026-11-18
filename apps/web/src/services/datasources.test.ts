@@ -209,6 +209,90 @@ describe("createDataSourceApi", () => {
       /不符合契约|项目/,
     );
   });
+
+  it("登记时可显式请求远端校验", async () => {
+    const { api, fetchImpl } = client(() => jsonResponse(sourceBody, 201));
+
+    await api.createDataSource(PROJECT, {
+      code: "hf-demo",
+      name: "示例数据集",
+      repo_id: "lerobot/aloha_sim_insertion_human",
+      revision: SHA,
+      license: "Apache-2.0",
+      access_condition: "PUBLIC",
+      verify_remote: true,
+    });
+
+    const [, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body)).verify_remote).toBe(true);
+  });
+
+  it("详情路径带 import_limit 并解析校验结论", async () => {
+    const detailBody = {
+      data_source: sourceBody,
+      imports: [importBody],
+      remote_check: {
+        status: "VERIFIED",
+        checked_at: "2026-11-18T00:00:00Z",
+        resolved_revision: SHA,
+        license: "Apache-2.0",
+        is_gated: false,
+        dataset_card_url:
+          "https://huggingface.co/datasets/lerobot/aloha_sim_insertion_human",
+      },
+    };
+    const { api, fetchImpl } = client(() => jsonResponse(detailBody));
+
+    const detail = await api.getDataSourceDetail(PROJECT, SOURCE_ID, {
+      importLimit: 5,
+    });
+
+    expect(detail.remote_check?.resolved_revision).toBe(SHA);
+    expect(detail.imports).toHaveLength(1);
+    const [url] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(`/data-sources/${SOURCE_ID}/detail`);
+    expect(url).toContain("import_limit=5");
+  });
+
+  it("详情中不属于该数据源的导入任务被拒绝", async () => {
+    const { api } = client(() =>
+      jsonResponse({
+        data_source: sourceBody,
+        imports: [
+          {
+            ...importBody,
+            data_source_id: "99999999-9999-9999-9999-999999999999",
+          },
+        ],
+        remote_check: null,
+      }),
+    );
+
+    await expect(api.getDataSourceDetail(PROJECT, SOURCE_ID)).rejects.toThrow(
+      /不符合契约/,
+    );
+  });
+
+  it("详情中的校验摘要 revision 非 sha 时被拒绝", async () => {
+    const { api } = client(() =>
+      jsonResponse({
+        data_source: sourceBody,
+        imports: [],
+        remote_check: {
+          status: "VERIFIED",
+          checked_at: "2026-11-18T00:00:00Z",
+          resolved_revision: "main",
+          license: null,
+          is_gated: false,
+          dataset_card_url: null,
+        },
+      }),
+    );
+
+    await expect(api.getDataSourceDetail(PROJECT, SOURCE_ID)).rejects.toThrow(
+      /不符合契约/,
+    );
+  });
 });
 
 // --- 媒体资产与播放 ---------------------------------------------------------

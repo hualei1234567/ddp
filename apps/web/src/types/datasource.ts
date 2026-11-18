@@ -39,8 +39,27 @@ export interface DataSource {
   version: number;
 }
 
-export interface DataSourceImport {
-  import_id: string;
+/** 服务端记录的一次远端校验结论；只含 Adapter 已规范化的字段。 */
+export interface RemoteCheck {
+  status: "VERIFIED";
+  checked_at: string;
+  /** 远端解析出的不可变 commit sha。 */
+  resolved_revision: string;
+  /** Dataset Card 声明的许可证；null 表示远端未声明，不是"无限制"。 */
+  license: string | null;
+  is_gated: boolean;
+  dataset_card_url: string | null;
+}
+
+/** 数据源详情聚合：登记信息 + 导入任务 + 最近校验结论。 */
+export interface DataSourceDetail {
+  data_source: DataSource;
+  imports: DataSourceImport[];
+  /** null 表示从未校验或摘要损坏；界面必须显示"未校验"。 */
+  remote_check: RemoteCheck | null;
+}
+
+export interface DataSourceImport {  import_id: string;
   project_id: string;
   data_source_id: string;
   status: ImportStatus;
