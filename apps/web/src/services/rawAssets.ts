@@ -2,9 +2,11 @@ import type {
   AssetFormat,
   DownloadUrl,
   RawAsset,
+  RawAssetAction,
   RawAssetPage,
   RawAssetStatus,
 } from "../types/collection";
+import { createIdempotencyKey, formatIfMatch } from "./idempotency";
 import { apiClient, type ApiClient } from "./api";
 import {
   assertPageScope,
@@ -42,6 +44,26 @@ export interface RawAssetsApi {
     assetId: string,
     options?: Pick<PageRequestOptions, "signal">,
   ) => Promise<DownloadUrl>;
+  /**
+   * 执行状态动作（隔离放行/驳回、事后隔离、归档、墓碑）。
+   *
+   * 动作集合由服务端 `allowed_actions` 决定；本方法不按状态自行判断。
+   */
+  applyAction: (
+    projectId: string,
+    assetId: string,
+    action: RawAssetAction,
+    options: RawAssetActionOptions,
+  ) => Promise<RawAsset>;
+}
+
+export interface RawAssetActionOptions {
+  /** 当前版本，作为 `If-Match`；与服务端乐观锁对齐。 */
+  version: number;
+  reason?: string | null;
+  /** 仅 `post-hoc-quarantine` 使用。 */
+  quarantineCodes?: readonly string[];
+  idempotencyKey?: string;
 }
 
 /**
@@ -78,6 +100,31 @@ export function createRawAssetsApi(client: ApiClient): RawAssetsApi {
         ),
         {
           signal: options?.signal,
+          validate: (value) =>
+            assertProjectScope(parseRawAsset(value), projectId, "原始资产"),
+        },
+      );
+    },
+
+    async applyAction(projectId, assetId, action, options) {
+      return client.request(
+        projectPath(
+          projectId,
+          `/raw-assets/${requireIdentifier(assetId, "asset_id")}/actions/${requireIdentifier(action, "action")}`,
+        ),
+        {
+          method: "POST",
+          headers: {
+            "If-Match": formatIfMatch(options.version),
+            "Idempotency-Key":
+              options.idempotencyKey ?? createIdempotencyKey(),
+          },
+          body: {
+            reason: options.reason ?? null,
+            quarantine_codes: options.quarantineCodes
+              ? [...options.quarantineCodes]
+              : null,
+          },
           validate: (value) =>
             assertProjectScope(parseRawAsset(value), projectId, "原始资产"),
         },

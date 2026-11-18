@@ -236,6 +236,7 @@ describe("上传响应解析", () => {
         updated_at: "2026-11-08T03:00:00Z",
         created_by: USER_ID,
         updated_by: null,
+        allowed_actions: ["tombstone"],
       },
       deduplicated: false,
       validation_job_id: JOB_ID,

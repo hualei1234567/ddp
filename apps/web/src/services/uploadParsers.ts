@@ -27,6 +27,7 @@ import {
   readPositiveInteger,
   readSha256Checksum,
   readString,
+  readStringArray,
   readUuid,
   readUuidArray,
   parseCursorPage,
@@ -454,6 +455,8 @@ export function parseRawAsset(value: unknown, path = "原始资产"): RawAsset {
     ),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
+    // 契约要求服务端下发；缺失即视为响应不可信，而不是静默当成"无动作"。
+    allowed_actions: readStringArray(record, "allowed_actions", `${path}.allowed_actions`),
   };
 }
 

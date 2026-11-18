@@ -348,7 +348,35 @@ export interface RawAsset {
   updated_at: string | null;
   created_by: string | null;
   updated_by: string | null;
+  /** 服务端按状态下发；前端不得自行推断可执行动作。 */
+  allowed_actions: string[];
 }
+
+export const RAW_ASSET_ACTION_VALUES = [
+  "release-quarantine-or-revalidate",
+  "reject-quarantined",
+  "post-hoc-quarantine",
+  "archive",
+  "tombstone",
+] as const;
+
+export type RawAssetAction = (typeof RAW_ASSET_ACTION_VALUES)[number];
+
+/** 与服务端 `RawAssetQuarantineCode` 保持一致；未知码由服务端拒绝。 */
+export const RAW_ASSET_QUARANTINE_CODE_VALUES = [
+  "malware_suspected",
+  "malware_scanner_unavailable",
+  "signature_ambiguous",
+  "unsupported_format",
+  "metadata_conflict",
+  "parse_failed",
+  "hash_mismatch",
+  "size_mismatch",
+  "object_missing",
+] as const;
+
+export type RawAssetQuarantineCode =
+  (typeof RAW_ASSET_QUARANTINE_CODE_VALUES)[number];
 
 export interface CompleteUploadResponse {
   upload_session: UploadSession;
