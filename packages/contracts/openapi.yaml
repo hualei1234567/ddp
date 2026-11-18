@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.18.0
+  version: 1.19.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -187,6 +187,15 @@ info:
       （后者是 `{}`）。`code_version` / `model_version` 由发起方在提交时声明，
       未知留空，服务端不从远端状态推断，提交后不可修改。全部为增量：
       无路径删除、无字段删除、无必填性收紧、无既有字段语义变更。
+    - `1.19.0` **Schema Registry 七类预设模板（N6-001）**：新增两个只读端点
+      `GET /annotation-schema-presets` 与 `GET /annotation-schema-presets/{preset_key}`，
+      返回代码级权威的七类常用模板（action / segment / object / attributes /
+      quality / scene / robot-state）及其标签定义与必填性。预设不落库、不属于
+      任何项目，响应在项目之间一致；服务端仍强制成员资格。创建 Schema 时由
+      客户端复制模板定义、覆盖字段后走既有 `POST /annotation-schemas`，服务端
+      按既有 Schema 校验规则重新校验，预设不绕过任何规则。模板与目录均带
+      版本（目录为内容寻址摘要）。全部为增量：仅新增只读路径与 schema，
+      无数据库迁移，无既有路径/字段变更。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -204,7 +213,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.18.0
+  version: 1.19.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -510,6 +519,10 @@ paths:
     $ref: "./fragments/paths.stage2.yaml#/ingestionJobDetail"
   /api/v1/projects/{project_id}/ingestion-jobs/{job_id}/actions/{action}:
     $ref: "./fragments/paths.stage2.yaml#/ingestionJobActions"
+  /api/v1/projects/{project_id}/annotation-schema-presets:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSchemaPresets"
+  /api/v1/projects/{project_id}/annotation-schema-presets/{preset_key}:
+    $ref: "./fragments/paths.stage3.yaml#/annotationSchemaPresetDetail"
   /api/v1/projects/{project_id}/annotation-schemas:
     $ref: "./fragments/paths.stage3.yaml#/annotationSchemas"
   /api/v1/projects/{project_id}/annotation-schemas/{schema_id}:
@@ -894,6 +907,7 @@ components:
     LineageDepth: {$ref: "./fragments/components.yaml#/parameters/LineageDepth"}
     LineageLimit: {$ref: "./fragments/components.yaml#/parameters/LineageLimit"}
     SchemaId: {$ref: "./fragments/components.stage3.yaml#/parameters/SchemaId"}
+    PresetKey: {$ref: "./fragments/components.stage3.yaml#/parameters/PresetKey"}
     SampleSetId: {$ref: "./fragments/components.stage3.yaml#/parameters/SampleSetId"}
     AssignmentId: {$ref: "./fragments/components.stage3.yaml#/parameters/AssignmentId"}
     SubmissionId: {$ref: "./fragments/components.stage3.yaml#/parameters/SubmissionId"}
@@ -1092,6 +1106,8 @@ components:
     GoldSetStatus: {$ref: "./fragments/schemas.stage3.yaml#/GoldSetStatus"}
     QualitySampleStatus: {$ref: "./fragments/schemas.stage3.yaml#/QualitySampleStatus"}
     IAAReportStatus: {$ref: "./fragments/schemas.stage3.yaml#/IAAReportStatus"}
+    SchemaPreset: {$ref: "./fragments/schemas.stage3.yaml#/SchemaPreset"}
+    SchemaPresetCatalog: {$ref: "./fragments/schemas.stage3.yaml#/SchemaPresetCatalog"}
     AnnotationSchema: {$ref: "./schemas/annotation-schema.v1.schema.json"}
     AnnotationSampleSet: {$ref: "./schemas/annotation-sample-set.v1.schema.json"}
     AnnotationTask: {$ref: "./schemas/annotation-task.v1.schema.json"}

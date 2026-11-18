@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Path, Query, Request
 
 from app.api.v1.annotation_catalog_models import (
     AnnotationSampleSetOut,
@@ -15,6 +15,8 @@ from app.api.v1.annotation_catalog_models import (
     AnnotationSchemaPatch,
     SampleSetActionRequest,
     SampleSetCreate,
+    SchemaPresetCatalogOut,
+    SchemaPresetOut,
 )
 from app.api.v1.annotation_common import (
     ActionName,
@@ -36,6 +38,38 @@ from app.core.errors import ValidationFailedError
 router = APIRouter(prefix="/projects/{project_id}", tags=["annotation-schemas"])
 
 _SAMPLE_SET_ACTIONS = frozenset({"preview", "snapshot", "consume", "cancel"})
+PresetKey = Annotated[str, Path(min_length=1, max_length=64)]
+
+
+@router.get("/annotation-schema-presets", response_model=SchemaPresetCatalogOut)
+def list_schema_presets(
+    scope: ReadScope,
+    use_cases: AnnotationUseCasesDep,
+) -> SchemaPresetCatalogOut:
+    """只读预设目录；返回创建 Schema 的起始定义。
+
+    目录是静态代码资产，不随项目变化。``ReadScope`` 仍强制成员资格，
+    避免把未授权主体带到标注配置入口。项目可在模板基础上覆盖字段后，
+    走既有的 ``POST /annotation-schemas`` 创建。
+    """
+    catalog = use_cases.schema_presets
+    return SchemaPresetCatalogOut(
+        catalog_version=catalog.version,
+        items=[SchemaPresetOut.from_domain(item) for item in catalog.list()],
+    )
+
+
+@router.get(
+    "/annotation-schema-presets/{preset_key}",
+    response_model=SchemaPresetOut,
+)
+def get_schema_preset(
+    preset_key: PresetKey,
+    scope: ReadScope,
+    use_cases: AnnotationUseCasesDep,
+) -> SchemaPresetOut:
+    """单个预设模板；未注册的 key 返回 404，不回退到任意默认模板。"""
+    return SchemaPresetOut.from_domain(use_cases.schema_presets.get(preset_key))
 
 
 @router.get("/annotation-schemas", response_model=PageOut[AnnotationSchemaOut])

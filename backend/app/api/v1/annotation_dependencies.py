@@ -23,6 +23,7 @@ from app.application.annotation.quality_checks import QualityCheckUseCases
 from app.application.annotation.quality_samples import QualitySampleUseCases
 from app.application.annotation.reviews import AnnotationReviewUseCases
 from app.application.annotation.sample_sets import AnnotationSampleSetUseCases
+from app.application.annotation.schema_presets import SchemaPresetCatalog
 from app.application.annotation.schemas import AnnotationSchemaUseCases
 from app.application.annotation.submissions import AnnotationSubmissionUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
@@ -68,6 +69,7 @@ from app.infrastructure.repositories.lineage import SqlLineageRepository
 @dataclass(frozen=True, slots=True)
 class AnnotationUseCases:
     schemas: AnnotationSchemaUseCases
+    schema_presets: SchemaPresetCatalog
     sample_sets: AnnotationSampleSetUseCases
     tasks: AnnotationTaskUseCases
     batches: AnnotationBatchUseCases
@@ -173,6 +175,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             idempotency,
             session,
         ),
+        schema_presets=SchemaPresetCatalog(),
         sample_sets=AnnotationSampleSetUseCases(
             sample_sets_repo,
             tasks_repo,

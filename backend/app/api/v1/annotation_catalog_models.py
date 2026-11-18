@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.annotation.sample_set import AnnotationSampleSet
 from app.domain.annotation.schema import AnnotationSchema
+from app.domain.annotation.schema_presets import SchemaPreset
 
 
 class AnnotationSchemaCreate(BaseModel):
@@ -139,6 +140,36 @@ class AnnotationSchemaOut(BaseModel):
             created_by=schema.created_by,
             updated_by=schema.updated_by,
         )
+
+
+
+class SchemaPresetOut(BaseModel):
+    """预设模板：只含创建 Schema 所需的可编辑定义，不含项目/ID 等权威字段。"""
+
+    preset_key: str
+    name: str
+    description: str
+    version: str
+    annotation_levels: list[str]
+    labels: list[LabelDefinitionOut]
+
+    @classmethod
+    def from_domain(cls, preset: SchemaPreset) -> SchemaPresetOut:
+        return cls(
+            preset_key=preset.key,
+            name=preset.name,
+            description=preset.description,
+            version=preset.version,
+            annotation_levels=[_value(item) for item in preset.annotation_levels],
+            labels=[LabelDefinitionOut(**item.to_payload()) for item in preset.labels],
+        )
+
+
+class SchemaPresetCatalogOut(BaseModel):
+    """只读预设目录；``catalog_version`` 是目录内容摘要。"""
+
+    catalog_version: str
+    items: list[SchemaPresetOut]
 
 
 class SampleEpisodeRefOut(BaseModel):
