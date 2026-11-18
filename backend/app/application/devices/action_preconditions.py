@@ -26,8 +26,8 @@
 | 任意非终态→RETIRED | ``reason`` |
 
 当前实现无法区分"从哪个状态来"（``apply_action`` 拿到的只是动作名），
-因此按**动作级**的最严口径校验：``enter-maintenance`` 要求 ``reason``，
-``report-fault`` 要求 ``fault_code`` 与 ``occurred_at``。
+因此按**动作级**的最严口径校验：``enter-maintenance`` / ``suspend`` /
+``retire`` 要求 ``reason``，``report-fault`` 要求 ``fault_code``。
 ``maintenance_record_id`` 在 ``enter-maintenance`` 上要求——它既覆盖
 ``FAULT→IN_MAINTENANCE``（契约必填），也覆盖 ``ACTIVE→IN_MAINTENANCE``
 （契约未强制，但维修工单是留痕必需，收紧不会拒绝契约允许的合法请求）。
@@ -47,6 +47,11 @@ _REQUIRED_FIELDS: dict[str, tuple[str, ...]] = {
     # 服务端用当前时间填充更合理——强迫客户端生成时间戳只会带来时钟偏差，
     # 而"故障何时被发现"服务端本来就知道。真正的必填是 fault_code。
     "report-fault": ("fault_code",),
+    # 契约 §8.1：任意非终态 → SUSPENDED / RETIRED 都要求 reason。此前只登记了
+    # enter-maintenance 与 report-fault，停用/退役可以不带任何说明就执行，
+    # 审计里只剩一个动作名，事后无法回答"为什么下线"。
+    "suspend": ("reason",),
+    "retire": ("reason",),
 }
 
 

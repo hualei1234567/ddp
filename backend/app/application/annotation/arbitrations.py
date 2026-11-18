@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
@@ -48,6 +49,9 @@ from app.domain.annotation.state_machines import (
 from app.domain.annotation.submission import submission_already_decided
 from app.domain.identity.models import ProjectScope
 
+if TYPE_CHECKING:
+    from app.application.annotation.progress import AnnotationProgressRefresher
+
 _RESOURCE_TYPE = "ANNOTATION_ARBITRATION"
 
 
@@ -65,6 +69,7 @@ class AnnotationArbitrationUseCases:
         uow: UnitOfWork,
         *,
         episodes: EpisodeDirectory | None = None,
+        progress: AnnotationProgressRefresher | None = None,
     ) -> None:
         self._arbitrations = arbitrations
         self._submissions = submissions
@@ -76,6 +81,7 @@ class AnnotationArbitrationUseCases:
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
         self._episodes = episodes
+        self._progress = progress
 
     def get(self, scope: ProjectScope, arbitration_id: UUID) -> AnnotationArbitration:
         arbitration = self._arbitrations.get(scope, arbitration_id)
@@ -220,12 +226,16 @@ class AnnotationArbitrationUseCases:
         saved = self._arbitrations.save(scope, updated, expected_version=expected_version)
         submission = self._get_submission(scope, current.submission_id)
         if action_name == AnnotationArbitrationAction.CLAIM.value:
-            self._transition_submission(
-                scope,
-                submission,
-                AnnotationSubmissionAction.ARBITRATE_START.value,
-                now=now,
-            )
+            # recuse 会把仲裁退回 PENDING，同一仲裁可以被再次受理；但提交在
+            # 第一次受理时已经进入 ARBITRATING，重复推进会被状态机拒绝，
+            # 结果就是"退出了就再也接不回来"。按提交当前状态决定是否推进。
+            if submission.status is AnnotationSubmissionStatus.ESCALATED:
+                self._transition_submission(
+                    scope,
+                    submission,
+                    AnnotationSubmissionAction.ARBITRATE_START.value,
+                    now=now,
+                )
         elif action_name in {
             AnnotationArbitrationAction.RESOLVE_APPROVED.value,
             AnnotationArbitrationAction.RESOLVE_REJECTED.value,
@@ -238,6 +248,8 @@ class AnnotationArbitrationUseCases:
                 reason=reason,
                 now=now,
             )
+        if self._progress is not None:
+            self._progress.refresh_for_submission(scope, submission, now=now)
         self._record(
             scope,
             saved,

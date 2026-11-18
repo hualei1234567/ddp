@@ -131,6 +131,23 @@ class SqlAnnotationBatchRepository:
         )
         return int(total or 0)
 
+    def update_counts(
+        self,
+        scope: ProjectScope,
+        batch_id: UUID,
+        counts: dict[str, int],
+    ) -> None:
+        """只写派生的计数字段，不推进乐观锁版本（理由同任务 ``update_progress``）。"""
+        self._session.execute(
+            update(AnnotationBatchModel)
+            .where(
+                AnnotationBatchModel.id == batch_id,
+                AnnotationBatchModel.project_id == scope.project_id,
+            )
+            .values(**counts)
+            .execution_options(synchronize_session=False)
+        )
+
     def save(
         self,
         scope: ProjectScope,

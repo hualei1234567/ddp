@@ -133,6 +133,7 @@ CalibrationProfile:
     required_types: {type: array, items: {$ref: "#/CalibrationType"}}
     selection_rule: {type: object, additionalProperties: true}
     target_id: {type: [string, "null"], format: uuid}
+    supersedes_id: {type: [string, "null"], format: uuid, description: "本版替代的上一版；首版为 null。同一父版本只能有一个后继（禁止版本链分叉）。"}
 CalibrationProfileCreate:
   type: object
   required: [name, scope, target_type, schema_version]

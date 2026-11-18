@@ -119,6 +119,7 @@ def _profile_from_row(row: CalibrationProfileModel) -> CalibrationProfile:
         required_types=tuple(row.required_types or ()),
         selection_rule=row.selection_rule or {},
         target_id=row.target_id,
+        supersedes_id=row.supersedes_id,
     )
 
 
@@ -151,6 +152,7 @@ class SqlCalibrationProfileRepository:
             schema_version=profile.schema_version,
             required_types=[enum_value(item) for item in profile.required_types],
             selection_rule=dict(profile.selection_rule),
+            supersedes_id=profile.supersedes_id,
             created_by=scope.actor_id,
             updated_by=scope.actor_id,
         )
@@ -166,6 +168,20 @@ class SqlCalibrationProfileRepository:
         row = self._session.scalar(
             select(CalibrationProfileModel).where(
                 CalibrationProfileModel.id == profile_id,
+                CalibrationProfileModel.project_id == scope.project_id,
+            )
+        )
+        return _profile_from_row(row) if row is not None else None
+
+    def find_successor(
+        self,
+        scope: ProjectScope,
+        *,
+        previous_id: UUID,
+    ) -> CalibrationProfile | None:
+        row = self._session.scalar(
+            select(CalibrationProfileModel).where(
+                CalibrationProfileModel.supersedes_id == previous_id,
                 CalibrationProfileModel.project_id == scope.project_id,
             )
         )

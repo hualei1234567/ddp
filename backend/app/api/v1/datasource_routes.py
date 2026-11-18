@@ -355,11 +355,11 @@ def get_import(
 def act_on_import(
     import_id: UUID,
     action: str,
-    payload: ImportActionRequest | None,
     request: Request,
     scope: WriteScope,
     use_cases: DataSourceServicesDep,
     expected_version: ExpectedVersion,
+    payload: ImportActionRequest | None = None,
 ) -> dict[str, Any]:
     body = payload or ImportActionRequest()
     updated = use_cases.apply_import_action(

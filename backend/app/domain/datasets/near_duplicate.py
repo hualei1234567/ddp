@@ -46,6 +46,27 @@ class NearDuplicateMethod:
     SUPPORTED = frozenset({TEMPORAL_OVERLAP})
 
 
+def ensure_supported_method(method: str) -> None:
+    """校验近重复方法是否已实现；创建策略与真正构建时共用这一份规则。
+
+    创建策略时就要拒（fail-fast），否则非法方法会先被存进策略表，等到构建
+    数据集才炸——那时错误离提交已经隔了一次配置、一次构建。
+    """
+    if method in NearDuplicateMethod.SUPPORTED:
+        return
+    # 带上 details：契约里该字段是自由字符串，调用方只能从响应知道
+    # "哪个值不可用、可用值是什么"。没有它，422 只有一句「校验失败」，
+    # 只能靠猜或翻代码。
+    raise DomainValidationError(
+        f"未实现的近重复方法：{method!r}；已实现：{sorted(NearDuplicateMethod.SUPPORTED)}",
+        details={
+            "field": "similarity_method",
+            "provided": str(method),
+            "supported": sorted(NearDuplicateMethod.SUPPORTED),
+        },
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class NearDuplicatePair:
     """一对疑似近重复的 Episode 及判定依据。"""
@@ -101,18 +122,7 @@ def detect_near_duplicates(
     判定条件（三条同时满足）：时间重叠率达标、时长相对差达标、场景标签一致。
     场景标签缺失的候选**不参与判定**——没有依据时不做断言。
     """
-    if method not in NearDuplicateMethod.SUPPORTED:
-        # 带上 details：契约里该字段是自由字符串，调用方只能从响应知道
-        # "哪个值不可用、可用值是什么"。没有它，422 只有一句「校验失败」，
-        # 只能靠猜或翻代码。
-        raise DomainValidationError(
-            f"未实现的近重复方法：{method!r}；已实现：{sorted(NearDuplicateMethod.SUPPORTED)}",
-            details={
-                "field": "similarity_method",
-                "provided": str(method),
-                "supported": sorted(NearDuplicateMethod.SUPPORTED),
-            },
-        )
+    ensure_supported_method(method)
     if not 0.0 < overlap_ratio <= 1.0:
         raise DomainValidationError("overlap_ratio 必须在 (0, 1] 之间")
     if not 0.0 <= duration_tolerance < 1.0:

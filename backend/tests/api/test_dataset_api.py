@@ -385,3 +385,45 @@ def test_create_version_with_build_now_does_not_crash(
     body = response.json()
     # build 由 create 内部触发，返回的是推进后的版本：状态不再是 DRAFT。
     assert body["status"] in {"BUILDING", "READY", "VALIDATING"}
+
+
+def test_dedup_similarity_method_rejects_unsupported_value_with_supported_list(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """不支持的近重复方法必须 422 并回显 ``supported``，不静默降级。
+
+    契约刻意保留自由字符串（收窄已发布请求字段属破坏性变更），因此"只支持
+    ``TEMPORAL_OVERLAP_V1``"这条约束必须由响应表达清楚：客户端要知道哪个值
+    不可用、能用什么，而不是收到一句泛化的校验失败。
+    """
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    dataset = create_dataset(editor, ids.project_a, ids.owner_a, f"ds-{uuid4().hex[:8]}")
+
+    rejected = editor.post(
+        url(ids.project_a, f"/datasets/{dataset['dataset_id']}/dedup-policies"),
+        json={
+            "exact_keys": ["EPISODE_LINEAGE"],
+            "near_duplicate_enabled": True,
+            "similarity_method": "PERCEPTUAL_HASH_V9",
+        },
+    )
+    assert rejected.status_code == 422, rejected.text
+    body = rejected.json()["error"]
+    assert body["code"] == "validation_failed"
+    assert body["details"] == {
+        "field": "similarity_method",
+        "provided": "PERCEPTUAL_HASH_V9",
+        "supported": ["TEMPORAL_OVERLAP_V1"],
+    }
+
+    accepted = editor.post(
+        url(ids.project_a, f"/datasets/{dataset['dataset_id']}/dedup-policies"),
+        json={
+            "exact_keys": ["EPISODE_LINEAGE"],
+            "near_duplicate_enabled": True,
+            "similarity_method": "TEMPORAL_OVERLAP_V1",
+        },
+    )
+    assert accepted.status_code == 201, accepted.text
+    assert accepted.json()["similarity_method"] == "TEMPORAL_OVERLAP_V1"

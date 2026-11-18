@@ -116,7 +116,7 @@ _TASK_TRANSITION_CHECK = f"""
         OR EXISTS (
             SELECT 1 FROM annotation_batches
             WHERE project_id = NEW.project_id AND task_id = NEW.id
-              AND status NOT IN ('SUBMITTED', 'REVIEWING', 'ACCEPTED')
+              AND status NOT IN ('SUBMITTED', 'REVIEWING', 'ACCEPTED', 'CANCELLED')
         )
     ))
     OR (NEW.status = 'COMPLETED' AND EXISTS (

@@ -6,6 +6,8 @@ from typing import Any
 from uuid import UUID
 
 import pytest
+from app.infrastructure.db.models.ingestion import RawAssetModel
+from sqlalchemy import update
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import ApiIds, make_client
@@ -28,7 +30,13 @@ def episode_api(
         ids.editor_a,
         object_storage=FakeMultipartStorage(),
     )
-    asset_id = seed_valid_asset(factory, ids.project_a, ids.editor_a, label="a")
+    asset_id = seed_valid_asset(
+        factory,
+        ids.project_a,
+        ids.editor_a,
+        label="a",
+        metadata={"camera": "front", "source_fps": 30.0},
+    )
     return client, ids, asset_id, factory
 
 
@@ -205,7 +213,17 @@ def test_actions_ready_quality_accept_complete_and_revise(
 ) -> None:
     client, ids, asset_id, factory = episode_api
     project = ids.project_a
-    episode = _create(client, project, asset_id, code="EP-API-FLOW", key="episode-flow-0001")
+    # 1 秒区间 + 声明 30fps：就绪门禁会按事实推导帧数，微秒级区间必然被判
+    # "无法确定帧数"（那是对数据的正确判断，不是测试该绕过的限制）。
+    episode = _create(
+        client,
+        project,
+        asset_id,
+        code="EP-API-FLOW",
+        key="episode-flow-0001",
+        start_time_ns=1_000_000_000,
+        end_time_ns=2_000_000_000,
+    )
     episode_id = episode["episode_id"]
     base = project_url(project, f"/episodes/{episode_id}")
 
@@ -290,7 +308,15 @@ def test_reject_and_invalidate_require_reason(
     client, ids, asset_id, factory = episode_api
     project = ids.project_a
 
-    episode = _create(client, project, asset_id, code="EP-API-REJECT", key="episode-reject-0001")
+    episode = _create(
+        client,
+        project,
+        asset_id,
+        code="EP-API-REJECT",
+        key="episode-reject-0001",
+        start_time_ns=1_000_000_000,
+        end_time_ns=2_000_000_000,
+    )
     base = project_url(project, f"/episodes/{episode['episode_id']}")
     ready = client.post(
         f"{base}/actions/ready",
@@ -362,3 +388,47 @@ def test_episode_exposes_allowed_actions(
         "complete",
         "invalidate",
     }
+
+
+def test_ready_is_gated_by_readiness_facts(
+    episode_api: tuple[Any, ApiIds, UUID, sessionmaker[Session]],
+) -> None:
+    """HTTP ready 不能绕过就绪门禁：事实不足必须 409 并给出可读原因。
+
+    与自动就绪用同一套判定（``EpisodeReadinessService.evaluate``）。此前
+    ready 只校验 Manifest 结构，调用方提交一份"格式正确"的 Manifest 就能
+    把缺帧率/缺标定的 Episode 推进 READY。
+    """
+    client, ids, asset_id, factory = episode_api
+    project = ids.project_a
+    episode = _create(
+        client,
+        project,
+        asset_id,
+        code="EP-API-GATED",
+        key="episode-gated-0001",
+        start_time_ns=1_000_000_000,
+        end_time_ns=2_000_000_000,
+    )
+    # 把资产元数据清空，模拟"机位与帧率都没声明"的真实脏数据。
+    with factory() as session:
+        session.execute(
+            update(RawAssetModel)
+            .where(RawAssetModel.id == asset_id)
+            .values(raw_metadata={})
+            .execution_options(synchronize_session=False)
+        )
+        session.commit()
+
+    response = client.post(
+        project_url(project, f"/episodes/{episode['episode_id']}") + "/actions/ready",
+        json={"manifest": manifest_for_episode(episode), "frame_count": 30},
+        headers={"If-Match": '"1"', "Idempotency-Key": "episode-gated-ready-0001"},
+    )
+    assert response.status_code == 409, response.text
+    body = response.json()["error"]
+    assert body["code"] == "episode_not_ready"
+    blockers = body["details"]["blockers"]
+    # 机位和帧率都没声明时，流本身就不完整（STREAM_INCOMPLETE）；判定不会
+    # 再对一个"没有有效流"的 Episode 补报帧率缺失——一条事实只报一次。
+    assert {item["code"] for item in blockers} >= {"STREAM_INCOMPLETE"}

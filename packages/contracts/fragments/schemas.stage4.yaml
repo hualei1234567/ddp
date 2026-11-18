@@ -207,8 +207,12 @@ DedupPolicyCreate:
       default: TEMPORAL_OVERLAP_V1
       description: |
         近重复判定方法。当前唯一实现为 `TEMPORAL_OVERLAP_V1`（按时间重叠率、
-        时长差与场景标签判定）。传入其他值时返回 422，details 里会带
-        `supported` 列表，不会静默降级。
+        时长差与场景标签判定）。
+
+        这里**故意保留自由字符串**而不是 enum：收窄已发布请求字段的类型属于
+        破坏性变更（oasdiff `request-property-became-enum`），而未来新增方法
+        本来就要扩展取值集合。约束由服务端表达——传入其他值返回 422，details
+        带 `field` / `provided` / `supported`，不静默降级。
     similarity_threshold: { type: [number, "null"], minimum: 0, maximum: 1 }
     similarity_min_cluster_size: { type: [integer, "null"], minimum: 2 }
     grouping_keys: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }

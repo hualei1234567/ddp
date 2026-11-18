@@ -26,6 +26,7 @@ from app.domain.ingestion.enums import RawAssetFormat, RawAssetSourceType, RawAs
 from app.domain.ingestion.models import RawAsset
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.models.identity import Project, ProjectMember, User
+from app.infrastructure.db.models.ingestion import RawAssetModel
 from app.infrastructure.db.session import create_db_engine, create_session_factory
 from app.infrastructure.repositories.datasources import (
     SqlDataSourceImportRepository,
@@ -299,13 +300,12 @@ def test_materialize_auto_readies_single_camera_episode(env) -> None:
         result = _materializer(session).materialize(scope, import_id)
 
     by_key = {item.episode_key: item for item in result.created}
-    assert by_key["demo_002"].readiness is not None
-    assert by_key["demo_002"].readiness.status is ReadinessStatus.READY
-    # 多机位且源数据无标定：按领域规则拒绝，但导入本身成功。
-    assert by_key["demo_001"].readiness is not None
-    assert by_key["demo_001"].readiness.status is ReadinessStatus.BLOCKED
-    assert result.ready_count == 1
-    assert result.blocked_count == 1
+    # 单机位与多机位都能就绪：缺标定只记 notice，能否训练由数据集准入判断。
+    for key in ("demo_001", "demo_002"):
+        assert by_key[key].readiness is not None
+        assert by_key[key].readiness.status is ReadinessStatus.READY
+    assert result.ready_count == 2
+    assert result.blocked_count == 0
 
     with factory() as session:
         rows = _episode_rows(session, scope)
@@ -317,25 +317,41 @@ def test_materialize_auto_readies_single_camera_episode(env) -> None:
     assert ready.frame_count == 150
     assert list(ready.readiness_blockers) == []
 
-    blocked = rows["EP-demo_001"]
-    assert blocked.status == "PENDING"
-    assert blocked.manifest_key is None
-    assert blocked.manifest_sha256 is None
-    codes = [item["code"] for item in blocked.readiness_blockers]
-    assert codes == ["CALIBRATION_MISSING"]
-    assert blocked.readiness_blockers[0]["message"]
+    multi = rows["EP-demo_001"]
+    assert multi.status == "READY"
+    assert multi.manifest_key is not None
+    assert list(multi.readiness_blockers) == []
 
 
 def test_blocked_readiness_does_not_fail_the_import(env) -> None:
-    """「导入成功」与「Episode 就绪」是两个结果：后者被拒不得回滚前者。"""
-    factory, scope, import_id, _ = env
+    """「导入成功」与「Episode 就绪」是两个结果：后者被拒不得回滚前者。
+
+    制造一个真正判不了的事实：抹掉 demo_001 某个机位的帧率声明（模拟源数据
+    没声明 fps）。该 Episode 被判 BLOCKED 并写明原因，导入任务仍是 SUCCEEDED。
+    """
+    factory, scope, import_id, raw_assets = env
+    with factory() as session:
+        row = session.get(RawAssetModel, raw_assets[1].asset_id)
+        assert row is not None
+        metadata = dict(row.raw_metadata or {})
+        metadata.pop("source_fps", None)
+        row.raw_metadata = metadata
+        session.commit()
+
     with factory() as session:
         result = _materializer(session).materialize(scope, import_id)
         job = SqlDataSourceImportRepository(session).get(scope, import_id)
+        rows = _episode_rows(session, scope)
+
     assert job is not None
     assert job.status.value == "SUCCEEDED"
     assert result.episode_count == 2
     assert result.blocked_count == 1
+    blocked = rows["EP-demo_001"]
+    assert blocked.status == "PENDING"
+    assert blocked.manifest_key is None
+    assert [item["code"] for item in blocked.readiness_blockers] == ["FRAME_RATE_UNKNOWN"]
+    assert blocked.readiness_blockers[0]["message"]
 
 
 def test_repeat_materialize_retries_readiness_without_duplicate_writes(env) -> None:
@@ -353,13 +369,14 @@ def test_repeat_materialize_retries_readiness_without_duplicate_writes(env) -> N
     assert set(second.skipped_episode_keys) == {"demo_001", "demo_002"}
     refreshed = {item.episode_key: item.readiness for item in second.refreshed}
     assert refreshed["demo_002"] is not None
+    # 已就绪：不再重写（SKIPPED）。
     assert refreshed["demo_002"].status is ReadinessStatus.SKIPPED
     assert refreshed["demo_001"] is not None
-    assert refreshed["demo_001"].status is ReadinessStatus.BLOCKED
+    assert refreshed["demo_001"].status is ReadinessStatus.SKIPPED
 
     with factory() as session:
         rows = _episode_rows(session, scope)
     # 已就绪的 Episode 一次都没有被再次写入（版本号不变）。
     assert rows["EP-demo_002"].version == ready_version
     assert rows["EP-demo_002"].status == "READY"
-    assert rows["EP-demo_001"].status == "PENDING"
+    assert rows["EP-demo_001"].status == "READY"

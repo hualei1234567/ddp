@@ -100,11 +100,11 @@ def get_batch(batch_id: UUID, scope: ReadScope, services: SupplierServicesDep) -
 def act_on_batch(
     batch_id: UUID,
     action: str,
-    payload: BatchActionRequest | None,
     request: Request,
     scope: WriteScope,
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
+    payload: BatchActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> DeliveryBatchOut:
     batch = services.batches.apply_action(
@@ -124,11 +124,11 @@ def act_on_batch(
 @router.post("/inbound-batches/{batch_id}/finalize", response_model=DeliveryBatchOut)
 def finalize_batch(
     batch_id: UUID,
-    payload: BatchActionRequest | None,
     request: Request,
     scope: OwnerScope,
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
+    payload: BatchActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> DeliveryBatchOut:
     """终审属于高风险放行：要求项目 Owner；结果由片段统计决定。"""

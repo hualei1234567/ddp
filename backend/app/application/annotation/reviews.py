@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, replace
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
@@ -50,6 +51,9 @@ from app.domain.annotation.state_machines import (
 from app.domain.annotation.submission import submission_already_decided
 from app.domain.identity.models import ProjectScope
 
+if TYPE_CHECKING:
+    from app.application.annotation.progress import AnnotationProgressRefresher
+
 _RESOURCE_TYPE = "ANNOTATION_REVIEW"
 
 
@@ -67,6 +71,7 @@ class AnnotationReviewUseCases:
         uow: UnitOfWork,
         *,
         episodes: EpisodeDirectory | None = None,
+        progress: AnnotationProgressRefresher | None = None,
     ) -> None:
         self._reviews = reviews
         self._submissions = submissions
@@ -78,6 +83,7 @@ class AnnotationReviewUseCases:
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
         self._episodes = episodes
+        self._progress = progress
 
     def get(self, scope: ProjectScope, review_id: UUID) -> AnnotationReview:
         review = self._reviews.get(scope, review_id)
@@ -231,12 +237,18 @@ class AnnotationReviewUseCases:
         submission = self._get_submission(scope, current.submission_id)
         saved.assert_not_self_review(submission.annotator_id)
         if action_name == AnnotationReviewAction.CLAIM.value:
-            self._transition_submission(
-                scope,
-                submission,
-                AnnotationSubmissionAction.SYSTEM_REVIEW_START.value,
-                now=now,
-            )
+            # 双人复核时会有第二条复核指向同一提交。提交只该被推进一次
+            # （SUBMITTED → IN_REVIEW），第二条复核 claim 时它已经在
+            # IN_REVIEW，再推进会被状态机拒绝，导致第二条复核永远领不了。
+            # 这里按提交当前状态决定是否推进：不推进不是错误，第一条复核
+            # 已经完成了这次迁移。
+            if submission.status is AnnotationSubmissionStatus.SUBMITTED:
+                self._transition_submission(
+                    scope,
+                    submission,
+                    AnnotationSubmissionAction.SYSTEM_REVIEW_START.value,
+                    now=now,
+                )
         elif action_name in {
             AnnotationReviewAction.APPROVE.value,
             AnnotationReviewAction.REJECT.value,
@@ -249,6 +261,8 @@ class AnnotationReviewUseCases:
                 reason=reason,
                 now=now,
             )
+        if self._progress is not None:
+            self._progress.refresh_for_submission(scope, submission, now=now)
         self._record(
             scope,
             saved,

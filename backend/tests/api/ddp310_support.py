@@ -21,6 +21,7 @@ def seed_valid_asset(
     label: str | None = None,
     size_bytes: int = 1024,
     status: str = "VALID",
+    metadata: dict[str, object] | None = None,
 ) -> UUID:
     asset_id = uuid4()
     label = label or asset_id.hex[:8]
@@ -42,6 +43,9 @@ def seed_valid_asset(
                 ingested_at=_NOW,
                 storage_class="STANDARD",
                 quarantine_codes=[],
+                # 就绪判定读的是 RawAsset.raw_metadata 里的 camera / source_fps；
+                # 需要走 ready 门禁的用例必须如实声明，否则判定会按"缺事实"拒绝。
+                raw_metadata=dict(metadata or {}),
                 uploaded_by=actor_id,
                 version=1,
                 created_at=_NOW,

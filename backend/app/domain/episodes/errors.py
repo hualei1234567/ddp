@@ -81,6 +81,16 @@ class LineageConflictError(EpisodeDomainError):
     code = "lineage_conflict"
 
 
+class EpisodeNotReadyError(EpisodeDomainError):
+    """Episode 的已落库事实不足以判定就绪（缺帧率、多机位缺标定、时间基准非法…）。
+
+    与 ``validation_failed`` 的区别：请求体可能完全合法，问题在数据本身。
+    返回 409，details 里逐条列出 ``blockers``，客户端据此知道要补什么。
+    """
+
+    code = "episode_not_ready"
+
+
 class ConflictError(EpisodeDomainError):
     code = "conflict"
 

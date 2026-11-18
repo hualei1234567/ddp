@@ -58,6 +58,9 @@ def build_episode_service(
         SqlOutboxRepository(session),
         session,
         idempotency=SqlIdempotencyRepository(session) if with_idempotency else None,
+        # 同一个 readiness 服务同时供 HTTP ready 的门禁使用：两条路径共用
+        # 一套判定，避免"自动就绪被拒、手工 ready 放行"的口径分裂。
+        readiness=build_readiness_service(session),
     )
 
 

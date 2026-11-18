@@ -75,6 +75,8 @@ class DedupPolicyCreate(BaseModel):
     exact_keys: list[str] = Field(min_length=1)
     near_duplicate_enabled: bool = False
     near_duplicate_enforcement: str = "WARN_ONLY"
+    # 契约保留自由字符串（避免破坏性收窄，见 schemas.stage4.yaml 的说明）；
+    # 取值是否受支持由领域校验并返回 422 + details.supported。
     similarity_method: str | None = Field(default=None, max_length=100)
     similarity_threshold: float | None = Field(default=None, ge=0, le=1)
     similarity_min_cluster_size: int | None = Field(default=None, ge=2)

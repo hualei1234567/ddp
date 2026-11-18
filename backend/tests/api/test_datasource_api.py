@@ -534,3 +534,30 @@ def test_import_rejects_unknown_ownership_field(api_db) -> None:
         },
     )
     assert created.status_code == 422
+
+
+def test_import_action_body_is_optional(api_db) -> None:
+    """契约 ``requestBody.required: false``：省略请求体必须被接受。
+
+    此前路由参数写成 ``payload: ImportActionRequest | None``（无默认值），
+    FastAPI 仍判为必填，客户端不带 body 会拿到 422「请求参数校验失败」，
+    与契约冲突且无法从错误里看出"其实不用带 body"。
+    """
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source = client.post(_url(ids.project_a), json=_payload()).json()
+    job = client.post(
+        _url(ids.project_a, f"/{source['data_source_id']}/imports"),
+        json={
+            "scope": "SAMPLE",
+            "tool_name": "huggingface_hub",
+            "tool_version": "0.27.1",
+            "sample_limit": 5,
+        },
+    ).json()
+    import_url = f"/api/v1/projects/{ids.project_a}/data-source-imports/{job['import_id']}"
+
+    # 不带请求体：cancel 是合法动作，应该成功而不是 422。
+    cancelled = client.post(f"{import_url}/actions/cancel", headers={"If-Match": '"1"'})
+    assert cancelled.status_code == 200, cancelled.text
+    assert cancelled.json()["status"] == "CANCELLED"

@@ -163,3 +163,38 @@ def test_other_integrity_violation_does_not_become_ledger_immutable() -> None:
 
     assert error.code != "ledger_immutable"
     assert error.code == "conflict"
+
+
+def test_foreign_key_violation_explains_which_constraint() -> None:
+    """外键冲突必须可诊断：通用 409 让客户端无法区分"重试"与"根本删不掉"。
+
+    PostgreSQL 的报错里带约束名，如实回显（只回显约束标识，不含表数据或
+    跨项目对象名）；SQLite 不提供约束名，此时只给 ``reason``。
+    """
+    from app.api.errors import integrity_error_to_app
+    from sqlalchemy.exc import IntegrityError
+
+    pg = IntegrityError(
+        "DELETE FROM project_members ...",
+        {},
+        Exception(
+            'update or delete on table "users" violates foreign key constraint '
+            '"fk_annotation_assignments_project_assignee" on table "annotation_assignments"'
+        ),
+    )
+    error = integrity_error_to_app(pg)
+    assert error.code == "conflict"
+    assert error.status_code == 409
+    assert error.details == {
+        "reason": "foreign_key_violation",
+        "constraint": "fk_annotation_assignments_project_assignee",
+    }
+    assert "project_members" not in error.message
+
+    sqlite = IntegrityError(
+        "DELETE FROM project_members ...",
+        {},
+        Exception("FOREIGN KEY constraint failed"),
+    )
+    fallback = integrity_error_to_app(sqlite)
+    assert fallback.details == {"reason": "foreign_key_violation", "constraint": None}

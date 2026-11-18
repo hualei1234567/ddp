@@ -99,6 +99,9 @@ class CalibrationProfile:
     # 注意：标定**记录**的 SYSTEM 目标口径相反（``target_id == project_id``），
     # 那是 ``calibration_target_refs`` 复合外键的要求，见 ADR-0020 §2.3。
     target_id: UUID | None = None
+    # 配置版本链：新版本指向它替代的那一版。只校验不落库时，"谁替代了谁"
+    # 在库里不存在，既画不出链路，也拦不住同一父版本被两条分支各自继承（分叉）。
+    supersedes_id: UUID | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -116,6 +119,11 @@ class CalibrationProfile:
             "target_type",
             coerce_enum(self.target_type, CalibrationTargetType, "target_type"),
         )
+        if self.supersedes_id is not None:
+            if not isinstance(self.supersedes_id, UUID):
+                raise DomainValidationError("supersedes_id 必须是 UUID")
+            if self.supersedes_id == self.profile_id:
+                raise DomainValidationError("supersedes_id 不能指向自身")
         object.__setattr__(
             self,
             "schema_version",

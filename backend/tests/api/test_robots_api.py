@@ -309,3 +309,40 @@ def test_patch_capability_profile_null_means_leave_unchanged(
     assert patched.json()["capability_profile"] == {
         "gripper": "two_finger"
     }, "null 不应清空已有能力声明"
+
+
+def test_profile_supersedes_is_persisted_and_chain_cannot_fork(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """版本链必须落库，且同一父版本只能有一个后继。
+
+    此前 ``supersedes_id`` 只参与校验、从不写入，库里查不到"谁替代了谁"，
+    也拦不住两条分支各自继承同一个版本（链分叉后无法判断记录归属哪一支）。
+    """
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    base = {
+        "name": "机器人标定模板",
+        "scope": "ROBOT",
+        "target_type": "ROBOT",
+        "schema_version": "ddp.device.calibration-parameters/1.0.0",
+    }
+    first = editor.post(f"/api/v1/projects/{ids.project_a}/calibration-profiles", json=base)
+    assert first.status_code == 201, first.text
+    first_id = first.json()["profile_id"]
+    assert first.json()["supersedes_id"] is None
+
+    second = editor.post(
+        f"/api/v1/projects/{ids.project_a}/calibration-profiles",
+        json={**base, "profile_version": 2, "supersedes_id": first_id},
+    )
+    assert second.status_code == 201, second.text
+    assert second.json()["supersedes_id"] == first_id
+
+    # 同一父版本的第二个后继：拒绝，而不是悄悄形成两条分支。
+    fork = editor.post(
+        f"/api/v1/projects/{ids.project_a}/calibration-profiles",
+        json={**base, "profile_version": 2, "supersedes_id": first_id, "name": "另一条分支"},
+    )
+    assert fork.status_code == 422, fork.text
+    assert fork.json()["error"]["code"] == "validation_failed"

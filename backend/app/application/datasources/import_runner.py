@@ -211,8 +211,13 @@ class ImportRunner:
         parse_metadata: Callable[[bytes], list[dict[str, object]]],
         parse_episodes: MetadataParser,
         now: datetime | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> ImportOutcome:
-        moment = now or _utcnow()
+        # ``now`` 是**开始**时刻（可注入，便于确定性测试）；结束时刻必须重新
+        # 取一次时钟，否则 started_at 与 finished_at 永远相等，导入耗时恒为 0。
+        # ``clock`` 让测试能验证"两次取时间确实不同"，而不必依赖真实等待。
+        tick = clock or _utcnow
+        moment = now or tick()
         job = self._imports.get(scope, import_id)
         if job is None:
             raise DomainValidationError("导入任务不存在或不属于当前项目")
@@ -226,7 +231,7 @@ class ImportRunner:
 
         source = self._sources.get(scope, running.data_source_id)
         if source is None:
-            self._fail(scope, running, "数据源已被删除", moment)
+            self._fail(scope, running, "数据源已被删除", max(tick(), moment))
             raise DomainValidationError("数据源不存在")
 
         total_bytes = 0
@@ -293,7 +298,7 @@ class ImportRunner:
                 scope,
                 running,
                 "succeed",
-                moment,
+                max(tick(), moment),
                 row_count=len(episodes),
                 file_count=asset_count,
             )
@@ -306,7 +311,7 @@ class ImportRunner:
         except Exception as exc:  # noqa: BLE001 - 任何失败都必须落库留痕
             latest = self._imports.get(scope, import_id)
             if latest is not None and latest.status is ImportStatus.RUNNING:
-                self._fail(scope, latest, str(exc)[:2000], moment)
+                self._fail(scope, latest, str(exc)[:2000], max(tick(), moment))
             raise
 
     def release_for_retry(

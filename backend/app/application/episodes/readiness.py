@@ -58,7 +58,11 @@ from app.domain.episodes.errors import ResourceNotFoundError, VersionConflictErr
 from app.domain.episodes.models import Episode, EpisodeRawAsset
 from app.domain.episodes.readiness import evaluate_readiness
 from app.domain.episodes.readiness_facts import EpisodeManifestFacts, EpisodeStream
-from app.domain.episodes.readiness_result import ReadinessBlocker, ReadinessNotice
+from app.domain.episodes.readiness_result import (
+    ReadinessBlocker,
+    ReadinessDecision,
+    ReadinessNotice,
+)
 from app.domain.episodes.validation import build_manifest_key
 from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.models import RawAsset
@@ -130,6 +134,25 @@ class EpisodeReadinessService:
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
+
+    def evaluate(
+        self,
+        scope: ProjectScope,
+        episode_id: UUID,
+    ) -> ReadinessDecision:
+        """只读判定：按已落库事实算能不能就绪，不写任何状态。
+
+        HTTP ``ready`` 动作复用它做门禁——调用方提交的 Manifest 再完整，也不能
+        绕过"库内事实是否足够"这一关（帧率、多机位标定、时间基准）。
+        """
+        episode = self._episodes.get(scope, episode_id)
+        if episode is None:
+            raise ResourceNotFoundError("Episode", episode_id)
+        return evaluate_readiness(
+            EpisodeManifestFacts.from_episode(episode),
+            self._streams(scope, episode_id),
+            provenance_source="episode_ready_action",
+        )
 
     def auto_ready(
         self,

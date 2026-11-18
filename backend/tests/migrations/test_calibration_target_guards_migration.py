@@ -152,6 +152,8 @@ def _add_post_0003_columns(db_path: Path) -> None:
     try:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE calibration_profiles ADD COLUMN target_id CHAR(32)"))
+            # 迁移 0052：标定配置版本链。ORM 现在会写这一列。
+            conn.execute(text("ALTER TABLE calibration_profiles ADD COLUMN supersedes_id CHAR(32)"))
             # ADR-0032 / 迁移 0032：ORM 现在写 profile_version，0003 里叫 version。
             # 本测试只升到 0003 后手工补列，不经过 0032，故这里自行改名
             # （SQLite 3.25+ 支持原生 RENAME COLUMN）。

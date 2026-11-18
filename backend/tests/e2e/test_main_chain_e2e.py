@@ -153,14 +153,9 @@ def chain(e2e_env: E2EEnv) -> Iterator[dict[str, Any]]:
         key: editor.get(url(ids.project_a, f"/episodes/{UUID(item['episode_id'])}")).json()
         for key, item in episodes_by_key.items()
     }
-    for key, body in ready_bodies.items():
-        if key == "demo_001":
-            # 多机位 + 源数据不含标定：按领域规则必须保持 PENDING，并写明原因。
-            assert body["status"] == "PENDING", body
-            code_set = {item["code"] for item in body["readiness_blockers"]}
-            assert "CALIBRATION_MISSING" in code_set, body
-            assert body["manifest_key"] is None, body
-            continue
+    for body in ready_bodies.values():
+        # demo_001 是多机位且源数据不含标定：就绪放行（缺标定只记 notice，
+        # 能否训练由数据集准入判断），因此这里与其余 Episode 同样是 READY。
         assert body["status"] == "READY", body
         assert body["manifest_key"] and body["manifest_sha256"], body
         assert body["frame_count"] > 0, body
@@ -168,13 +163,7 @@ def chain(e2e_env: E2EEnv) -> Iterator[dict[str, Any]]:
         # 帧数按「Episode 时长 × 声明帧率」推导：0.0–5.0s / 30fps -> 150 帧起。
         assert body["frame_count"] >= 150, body
     accepted = [
-        advance_episode_to_accepted(
-            editor,
-            ids.project_a,
-            episode_id,
-            manual_override=episode_id == UUID(episodes_by_key["demo_001"]["episode_id"]),
-        )
-        for episode_id in episode_ids
+        advance_episode_to_accepted(editor, ids.project_a, episode_id) for episode_id in episode_ids
     ]
     assert all(item["status"] == "ACCEPTED" for item in accepted), accepted
     assert all(item["quality_status"] == "PASS" for item in accepted), accepted

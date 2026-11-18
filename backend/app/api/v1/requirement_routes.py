@@ -96,12 +96,12 @@ def get_requirement(
 def act_on_requirement(
     requirement_id: UUID,
     action: str,
-    payload: RequirementActionRequest | None,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
     context: Annotated[ProjectContext, Depends(get_project_context)],
+    payload: RequirementActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> DataRequirementOut:
     if (
