@@ -38,6 +38,12 @@ export interface EpisodeListOptions extends PageRequestOptions {
   status?: string;
   collectionTaskId?: string;
   batchId?: string;
+  robotId?: string;
+  qualityStatus?: string;
+  annotationStatus?: string;
+  camera?: string;
+  capturedFrom?: string;
+  capturedTo?: string;
 }
 
 /** Episode 写动作与修订都需要当前 version（If-Match）与幂等键。 */
@@ -284,6 +290,12 @@ export function createCollectionsApi(client: ApiClient): CollectionsApi {
           // 真后端参数为 task_id；collection_task_id 会被忽略。
           task_id: options?.collectionTaskId,
           batch_id: options?.batchId,
+          quality_status: options?.qualityStatus,
+          annotation_status: options?.annotationStatus,
+          robot_id: options?.robotId,
+          camera: options?.camera,
+          captured_from: options?.capturedFrom,
+          captured_to: options?.capturedTo,
           ...pageQuery(options),
         },
         validate: (value) =>

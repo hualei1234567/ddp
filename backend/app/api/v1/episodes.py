@@ -112,6 +112,7 @@ def list_episodes(
     scene_label: Annotated[list[str] | None, Query(max_length=20)] = None,
     device_id: UUID | None = None,
     robot_id: UUID | None = None,
+    camera: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
     captured_from: Annotated[datetime | None, Query()] = None,
     captured_to: Annotated[datetime | None, Query()] = None,
     cursor: str | None = None,
@@ -120,8 +121,8 @@ def list_episodes(
     """Episode 分页检索。
 
     ``scene_label`` 可重复传参（``?scene_label=kitchen&scene_label=street``），
-    语义是"任一命中"；其余条件为等值或闭区间。所有条件在仓储层下推为 SQL，
-    不在 HTTP 层取回后过滤。
+    语义是"任一命中"。``camera`` 按 Episode 关联原始资产的机位标识精确匹配。
+    其余条件为等值或闭区间。所有条件在仓储层下推为 SQL，不在 HTTP 层取回后过滤。
     """
     page = use_cases.episodes.list_episodes(
         scope,
@@ -134,6 +135,7 @@ def list_episodes(
             scene_labels=tuple(scene_label) if scene_label else None,
             device_id=device_id,
             robot_id=robot_id,
+            camera=camera,
             captured_from=captured_from,
             captured_to=captured_to,
         ),

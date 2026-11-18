@@ -2,6 +2,7 @@ import { ReloadOutlined } from "@ant-design/icons";
 import {
   Button,
   Card,
+  DatePicker,
   Descriptions,
   Grid,
   Input,
@@ -12,6 +13,8 @@ import {
   Typography,
 } from "antd";
 import type { TableColumnsType } from "antd";
+import dayjs from "dayjs";
+import type { Dayjs } from "dayjs";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -27,21 +30,27 @@ import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
 import type { ApiError } from "../../services/api";
 import {
+  applyEpisodeListFilterPatch,
   buildEpisodeDetailPath,
   buildTaskDetailPath,
+  episodeServerFilterKey,
   hasEpisodeListFilters,
   readEpisodeListFilters,
   type EpisodeListFilters,
 } from "../../services/collectionUrl";
 import {
   formatNanoseconds,
+  getAnnotationStatus,
   getEpisodeStatus,
+  getQualityStatus,
 } from "../../services/collectionPresentation";
 import { collectionsApi } from "../../services/collections";
 import { formatDateTime, formatTimestamp } from "../../services/format";
 import { resolvePagePhase } from "../../services/pagePhase";
 import type { PagePhase } from "../../services/pagePhase";
 import {
+  EPISODE_ANNOTATION_STATUS_VALUES,
+  EPISODE_QUALITY_STATUS_VALUES,
   EPISODE_STATUS_VALUES,
   type Episode,
 } from "../../types/collection";
@@ -49,6 +58,16 @@ import {
 const STATUS_OPTIONS = EPISODE_STATUS_VALUES.map((value) => ({
   value,
   label: getEpisodeStatus(value).label,
+}));
+
+const QUALITY_OPTIONS = EPISODE_QUALITY_STATUS_VALUES.map((value) => ({
+  value,
+  label: getQualityStatus(value).label,
+}));
+
+const ANNOTATION_OPTIONS = EPISODE_ANNOTATION_STATUS_VALUES.map((value) => ({
+  value,
+  label: getAnnotationStatus(value).label,
 }));
 
 function filterEpisodes(
@@ -400,7 +419,16 @@ export function EpisodeListBody({
   return <>{body}</>;
 }
 
-function EpisodeFilters({
+function capturedRange(filters: EpisodeListFilters): [Dayjs, Dayjs] | null {
+  if (!filters.capturedFrom || !filters.capturedTo) {
+    return null;
+  }
+  const start = dayjs(filters.capturedFrom);
+  const end = dayjs(filters.capturedTo);
+  return start.isValid() && end.isValid() ? [start, end] : null;
+}
+
+export function EpisodeFilters({
   filters,
   loadedCount,
   hasMore,
@@ -413,15 +441,21 @@ function EpisodeFilters({
   loadedCount: number;
   hasMore: boolean;
   disabled: boolean;
-  onChange: (key: keyof EpisodeListFilters, value: string) => void;
+  onChange: (patch: Partial<EpisodeListFilters>) => void;
   onReset: () => void;
   stacked: boolean;
 }) {
   const [keyword, setKeyword] = useState(filters.keyword);
   const [taskId, setTaskId] = useState(filters.taskId);
+  const [robotId, setRobotId] = useState(filters.robotId);
+  const [camera, setCamera] = useState(filters.camera);
 
   useEffect(() => setKeyword(filters.keyword), [filters.keyword]);
   useEffect(() => setTaskId(filters.taskId), [filters.taskId]);
+  useEffect(() => setRobotId(filters.robotId), [filters.robotId]);
+  useEffect(() => setCamera(filters.camera), [filters.camera]);
+
+  const fullWidth = stacked ? { width: "100%" } : undefined;
 
   return (
     <div className={stacked ? "ddp-filters ddp-filters-stacked" : "ddp-filters"}>
@@ -429,35 +463,92 @@ function EpisodeFilters({
         allowClear
         value={keyword}
         placeholder="搜索已加载 Episode（编号、ID、Manifest Key）"
-        style={stacked ? { width: "100%" } : { width: 300, maxWidth: "100%" }}
+        style={fullWidth ?? { width: 300, maxWidth: "100%" }}
         onChange={(event) => setKeyword(event.target.value)}
-        onSearch={(value) => onChange("keyword", value.trim())}
+        onSearch={(value) => onChange({ keyword: value.trim() })}
       />
       <Select
         allowClear
         showSearch
         optionFilterProp="label"
         placeholder="Episode 状态（服务端筛选）"
-        style={stacked ? { width: "100%" } : { width: 190 }}
+        style={fullWidth ?? { width: 190 }}
         value={filters.status || undefined}
         options={STATUS_OPTIONS}
         disabled={disabled}
-        onChange={(value) => onChange("status", value ?? "")}
+        onChange={(value) => onChange({ status: value ?? "" })}
+      />
+      <Select
+        allowClear
+        showSearch
+        optionFilterProp="label"
+        placeholder="质量状态（服务端筛选）"
+        style={fullWidth ?? { width: 170 }}
+        value={filters.qualityStatus || undefined}
+        options={QUALITY_OPTIONS}
+        disabled={disabled}
+        onChange={(value) => onChange({ qualityStatus: value ?? "" })}
+      />
+      <Select
+        allowClear
+        showSearch
+        optionFilterProp="label"
+        placeholder="标注状态（服务端筛选）"
+        style={fullWidth ?? { width: 170 }}
+        value={filters.annotationStatus || undefined}
+        options={ANNOTATION_OPTIONS}
+        disabled={disabled}
+        onChange={(value) => onChange({ annotationStatus: value ?? "" })}
       />
       <Input.Search
         allowClear
         value={taskId}
         placeholder="采集任务 ID（服务端筛选）"
-        style={stacked ? { width: "100%" } : { width: 300, maxWidth: "100%" }}
+        style={fullWidth ?? { width: 300, maxWidth: "100%" }}
         onChange={(event) => setTaskId(event.target.value)}
-        onSearch={(value) => onChange("taskId", value.trim())}
+        onSearch={(value) => onChange({ taskId: value.trim() })}
+      />
+      <Input.Search
+        allowClear
+        value={robotId}
+        placeholder="机器人 ID（服务端筛选）"
+        style={fullWidth ?? { width: 300, maxWidth: "100%" }}
+        onChange={(event) => setRobotId(event.target.value)}
+        onSearch={(value) => onChange({ robotId: value.trim() })}
+      />
+      <Input.Search
+        allowClear
+        value={camera}
+        placeholder="机位标识，如 main（服务端筛选）"
+        style={fullWidth ?? { width: 260, maxWidth: "100%" }}
+        onChange={(event) => setCamera(event.target.value)}
+        onSearch={(value) => onChange({ camera: value.trim() })}
+      />
+      <DatePicker.RangePicker
+        allowClear
+        showTime
+        value={capturedRange(filters)}
+        style={fullWidth}
+        disabled={disabled}
+        placeholder={["捕获开始时间", "捕获结束时间"]}
+        onChange={(value) => {
+          if (!value || !value[0] || !value[1]) {
+            onChange({ capturedFrom: "", capturedTo: "" });
+            return;
+          }
+          // 区间按用户选择的时刻闭区间提交；ISO 串即 UTC，服务端要求带时区。
+          onChange({
+            capturedFrom: value[0].toISOString(),
+            capturedTo: value[1].toISOString(),
+          });
+        }}
       />
       <Button block={stacked} onClick={onReset}>
-        清空筛选
+        重置
       </Button>
       <Typography.Text type="secondary" className="ddp-filter-scope">
-        关键词作用于已加载的 {loadedCount} 条 Episode
-        {hasMore ? "；状态与任务 ID 由服务端筛选，可继续加载更多" : ""}
+        关键词作用于已加载的 {loadedCount} 条 Episode；其余维度由服务端筛选
+        {hasMore ? "（可继续加载更多）" : ""}
       </Typography.Text>
     </div>
   );
@@ -481,8 +572,24 @@ function EpisodeListContent({
         signal: options.signal,
         status: filters.status || undefined,
         collectionTaskId: filters.taskId || undefined,
+        robotId: filters.robotId || undefined,
+        qualityStatus: filters.qualityStatus || undefined,
+        annotationStatus: filters.annotationStatus || undefined,
+        camera: filters.camera || undefined,
+        capturedFrom: filters.capturedFrom || undefined,
+        capturedTo: filters.capturedTo || undefined,
       }),
-    [projectId, filters.status, filters.taskId],
+    [
+      projectId,
+      filters.status,
+      filters.taskId,
+      filters.robotId,
+      filters.qualityStatus,
+      filters.annotationStatus,
+      filters.camera,
+      filters.capturedFrom,
+      filters.capturedTo,
+    ],
   );
 
   const {
@@ -511,15 +618,8 @@ function EpisodeListContent({
   const isMobile = screens.md === false;
 
   const updateFilter = useCallback(
-    (key: keyof EpisodeListFilters, value: string) => {
-      const params = new URLSearchParams(searchParams);
-      const paramKey =
-        key === "keyword" ? "q" : key === "taskId" ? "task_id" : "status";
-      if (value) {
-        params.set(paramKey, value);
-      } else {
-        params.delete(paramKey);
-      }
+    (patch: Partial<EpisodeListFilters>) => {
+      const params = applyEpisodeListFilterPatch(searchParams, patch);
       const query = params.toString();
       navigate(
         {
@@ -624,7 +724,7 @@ export default function EpisodeListPage() {
 
   return (
     <EpisodeListContent
-      key={`${projectId}:${filters.status}:${filters.taskId}`}
+      key={`${projectId}:${episodeServerFilterKey(filters)}`}
       projectId={projectId}
       filters={filters}
     />

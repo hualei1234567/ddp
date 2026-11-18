@@ -155,6 +155,32 @@ describe("阶段 2 采集 API client", () => {
     );
   });
 
+  it("Episode 列表把质量/标注/机器人/机位/捕获区间下发为服务端参数", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [], next_cursor: null }));
+    const api = createCollectionsApi(clientWith(fetchImpl as typeof fetch));
+    const robotId = "33333333-3333-7333-8333-333333333333";
+
+    await api.listEpisodes(PROJECT_ID, {
+      qualityStatus: "PASS",
+      annotationStatus: "APPROVED",
+      robotId,
+      camera: "main",
+      capturedFrom: "2026-11-09T00:00:00.000Z",
+      capturedTo: "2026-11-10T00:00:00.000Z",
+    });
+
+    const url = String(fetchImpl.mock.calls[0]?.[0]);
+    const params = new URLSearchParams(url.split("?")[1] ?? "");
+    expect(params.get("quality_status")).toBe("PASS");
+    expect(params.get("annotation_status")).toBe("APPROVED");
+    expect(params.get("robot_id")).toBe(robotId);
+    expect(params.get("camera")).toBe("main");
+    expect(params.get("captured_from")).toBe("2026-11-09T00:00:00.000Z");
+    expect(params.get("captured_to")).toBe("2026-11-10T00:00:00.000Z");
+  });
+
   it("Episode 详情、动作与修订使用真实路径、If-Match 与幂等键", async () => {
     const fetchImpl = vi
       .fn()

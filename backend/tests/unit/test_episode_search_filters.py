@@ -57,6 +57,23 @@ def test_uuid_fields_normalize_from_strings() -> None:
         EpisodeListFilters(device_id="not-a-uuid")
 
 
+def test_camera_is_trimmed_validated_and_counted_as_filter() -> None:
+    assert EpisodeListFilters().is_empty
+    assert EpisodeListFilters(camera="  main  ").camera == "main"
+    # 大小写是机位标识本身的一部分，不做静默折叠。
+    assert EpisodeListFilters(camera="Main").camera == "Main"
+    assert not EpisodeListFilters(camera="main").is_empty
+
+    with pytest.raises(DomainValidationError):
+        EpisodeListFilters(camera="")
+    with pytest.raises(DomainValidationError):
+        EpisodeListFilters(camera="   ")
+    with pytest.raises(DomainValidationError):
+        EpisodeListFilters(camera="x" * 65)
+    with pytest.raises(DomainValidationError):
+        EpisodeListFilters(camera=1)  # type: ignore[arg-type]
+
+
 def test_captured_range_requires_timezone_and_ordered_bounds() -> None:
     naive = datetime(2026, 11, 16, 12, 0)
     with pytest.raises(DomainValidationError):
