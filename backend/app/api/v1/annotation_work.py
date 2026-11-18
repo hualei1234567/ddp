@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
 
+from app.api.deps import get_project_context
 from app.api.v1.annotation_common import (
     ActionName,
     ExpectedVersion,
@@ -40,9 +42,27 @@ from app.application.annotation.commands import (
     NewAnnotationTask,
 )
 from app.core.config import Settings, get_settings
+from app.core.errors import ForbiddenError
 from app.domain.annotation.workload import CapacityPolicy
+from app.domain.identity.models import ProjectContext, ProjectRole
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["annotation-tasks"])
+
+
+def _assert_auto_approve_allowed(
+    iaa_policy: Mapping[str, object] | None,
+    context: ProjectContext,
+) -> None:
+    """自动通过会以 OWNER 身份留下"人工审批"记录，开启权限必须同级。
+
+    创建与修改都必须走这道闸口：只在创建时校验，EDITOR 可以先用普通策略建
+    DRAFT 任务、再 PATCH 打开 auto_approve。
+    """
+    if not iaa_policy or not iaa_policy.get("auto_approve"):
+        return
+    if context.is_platform_admin or context.role is ProjectRole.OWNER:
+        return
+    raise ForbiddenError("只有项目负责人可以开启双标自动通过")
 
 
 @router.get("/annotation-tasks", response_model=PageOut[AnnotationTaskOut])
@@ -76,8 +96,11 @@ def create_task(
     request: Request,
     scope: WriteScope,
     use_cases: AnnotationUseCasesDep,
+    context: Annotated[ProjectContext, Depends(get_project_context)],
     idempotency_key: IdempotencyKey = None,
 ) -> AnnotationTaskOut:
+    policy = payload.merged_iaa_policy()
+    _assert_auto_approve_allowed(policy, context)
     task = use_cases.tasks.create(
         scope,
         NewAnnotationTask(
@@ -92,7 +115,7 @@ def create_task(
             due_at=payload.due_at,
             priority=payload.priority,
             assignment_mode=payload.assignment_mode,
-            iaa_policy=payload.merged_iaa_policy(),
+            iaa_policy=policy,
             quality_policy=payload.quality_policy,
         ),
         idempotency_key=idempotency_key,
@@ -134,13 +157,17 @@ def update_task(
     request: Request,
     scope: WriteScope,
     use_cases: AnnotationUseCasesDep,
+    context: Annotated[ProjectContext, Depends(get_project_context)],
     expected_version: ExpectedVersion,
 ) -> AnnotationTaskOut:
+    changes = payload.model_dump(exclude_unset=True)
+    if "iaa_policy" in changes:
+        _assert_auto_approve_allowed(payload.iaa_policy, context)
     task = use_cases.tasks.update(
         scope,
         task_id,
         expected_version=expected_version,
-        changes=payload.model_dump(exclude_unset=True),
+        changes=changes,
         request_id=request_id(request),
     )
     return AnnotationTaskOut.from_domain(task)

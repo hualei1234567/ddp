@@ -26,6 +26,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from typing import Final
 from uuid import UUID
@@ -56,6 +57,10 @@ def _json_bytes(value: object) -> bytes:
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
+            # NaN/Infinity 不是合法 JSON：客户端解析会失败，且 ``NaN != NaN``
+            # 会让"同一份证据"失去可比性。序列化阶段兜底拒绝，而不是写出
+            # 一个只有 Python 能读的文档。
+            allow_nan=False,
         ).encode("utf-8")
     except (TypeError, ValueError) as exc:
         raise DomainValidationError("failure_cases 必须是可 JSON 序列化的值") from exc
@@ -88,7 +93,12 @@ def _optional_scalar(value: object, field: str) -> float | str | None:
     if isinstance(value, bool):
         raise DomainValidationError(f"{field} 必须是数字或字符串")
     if isinstance(value, int | float):
-        return float(value)
+        number = float(value)
+        # ``int | float`` 包含 ``float('nan')`` / ``inf``；它们既不能写进合法
+        # JSON，也无法参与 Data Gap 的阈值比较，必须在入口就拒绝。
+        if not math.isfinite(number):
+            raise DomainValidationError(f"{field} 必须是有限数字")
+        return number
     if isinstance(value, str):
         return text_value(value, field, max_length=MAX_SCALAR_TEXT_LENGTH)
     raise DomainValidationError(f"{field} 必须是数字或字符串")

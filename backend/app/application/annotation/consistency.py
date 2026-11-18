@@ -341,8 +341,10 @@ class AnnotationConsistencyUseCases:
         candidates = [item for item in owners if item not in excluded]
         if candidates:
             return tuple(candidates)
-        # 没有可用的 OWNER 时才退回其他成员，避免自动仲裁在只有编辑者的项目里失效。
-        return tuple(item for item in self._members.list_member_ids(scope) if item not in excluded)
+        # 没有可用的 OWNER 时才退回 EDITOR：VIEWER 只有只读权限，被自动指派
+        # 仲裁后连提交动作都会 403，等于制造一个必然失败的分配。
+        editors = self._members.list_member_ids(scope, role=ProjectRole.EDITOR.value)
+        return tuple(item for item in editors if item not in excluded)
 
     def _auto_approve(
         self,

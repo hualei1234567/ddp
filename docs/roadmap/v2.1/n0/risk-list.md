@@ -50,6 +50,7 @@
 | RK-22 | **前端无 jsdom 交互测试 / 无 E2E**，页面行为回归靠静态断言 | 前端 101 文件均为静态/纯函数测试 | 高 | P2 | 引入 Testing Library + 关键路径 Playwright；先补上传/审核/动作条 | 前端 |
 | RK-23 | **无性能基线**（100/1K/10K episodes），规模化能力未知 | TD/agent：无压测脚本 | 高 | P1 | N8-03 建脚本与阈值；先测只读列表与视频 Range | QA |
 | RK-24 | 备份只做本机 PG+MinIO，无异地/加密/RTO 指标 | `docs/operations/备份与恢复演练记录-2026-11-17.md` | 中 | P1 | 增加异地副本与恢复时长目标；每季度演练 | 运维 |
+| RK-30 | 评测列表复用详情响应，每条最多内联 64 KiB `failure_cases`；一页 100 条最坏约 6.4 MB | `fragments/schemas.stage5.yaml` 的 `Evaluation`；契约明确"上限即分页" | 中 | P2 | 列表页保持小 `limit`；后续评估独立 `failure-cases` 子资源端点 | 后端 / 前端 |
 
 ## 5. 产品与验收口径
 

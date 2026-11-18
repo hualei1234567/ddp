@@ -469,11 +469,16 @@ class AnnotationAssignmentUseCases:
 
         同批次重复已由 :meth:`_assert_not_already_assigned` 挡住；这里补的是
         "跨批次同一 Episode 同一人"，否则所谓双标会退化成同一人提交两份。
+
+        查**全部历史分配**（含已提交/已完成/已撤回），不是只看活动分配：
+        已结束的分配同样证明该人已经标注过这批 Episode，漏掉终态会让"先完成
+        一份、再领第二份"绕过独立性。引用的批次读不到时拒绝而不是跳过——
+        数据不一致时无法证明独立性，fail-closed 比放行安全。
         """
         current_items = set(batch.item_refs)
         if not current_items:
             return
-        for existing in self._assignments.list_active_for_task(scope, task_id=task_id):
+        for existing in self._assignments.list_for_task(scope, task_id=task_id):
             if (
                 existing.assignee_id != assignee_id
                 or existing.assignment_role is not AssignmentRole.ANNOTATOR
@@ -482,7 +487,7 @@ class AnnotationAssignmentUseCases:
                 continue
             other_batch = self._batches.get(scope, existing.batch_id)
             if other_batch is None:
-                continue
+                raise DomainValidationError("双标任务存在无法读取的历史批次，不能确认标注者独立性")
             overlap = current_items & set(other_batch.item_refs)
             if overlap:
                 raise ItemAlreadyAssignedError(

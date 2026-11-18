@@ -196,3 +196,40 @@ def test_failure_cases_do_not_leak_across_projects(api_db) -> None:
     forbidden = outsider.get(url(ids.project_a, f"/evaluations/{evaluation['evaluation_id']}"))
     assert forbidden.status_code in {403, 404}
     assert "failure_cases" not in forbidden.text
+
+
+def test_failure_cases_are_not_overwritten_after_success(api_db) -> None:
+    """成功评测是终态：再次回调按幂等处理，已落库的 failure_cases 不得被覆盖。"""
+    factory, ids = api_db
+    editor = _client(factory, ids.editor_a, FakeInspector(128))
+    evaluation = _create_evaluation(factory, editor, ids)
+    evaluation_id = evaluation["evaluation_id"]
+
+    original = [
+        {
+            "id": "fc-keep",
+            "category": "PERCEPTION",
+            "severity": "MAJOR",
+            "observed": 0,
+            "expected": 1,
+        }
+    ]
+    first = _callback(editor, _completion(evaluation_id, ids, original))
+    assert first.status_code == 204, first.text
+
+    replacement = [
+        {
+            "id": "fc-new",
+            "category": "CONTROL",
+            "severity": "MINOR",
+            "observed": 1,
+            "expected": 1,
+        }
+    ]
+    again = _callback(editor, _completion(evaluation_id, ids, replacement))
+    assert again.status_code == 204, again.text
+
+    stored = editor.get(url(ids.project_a, f"/evaluations/{evaluation_id}")).json()
+    assert stored["status"] == "SUCCEEDED"
+    assert [item["id"] for item in stored["failure_cases"]] == ["fc-keep"]
+    assert stored["failure_cases"][0]["category"] == "PERCEPTION"

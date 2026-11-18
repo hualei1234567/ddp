@@ -16,6 +16,7 @@ from app.infrastructure.db.models.datasources import (
     MediaAssetModel,
 )
 
+from tests.api.annotation_support import seed_episode
 from tests.api.conftest import make_client
 from tests.api.dataset_support import seed_dataset_episodes, url
 
@@ -370,3 +371,25 @@ def test_unknown_subject_id_returns_resource_not_found(api_db) -> None:
 
     assert response.status_code == 404
     assert response.json()["error"]["code"] == "resource_not_found"
+
+
+def test_episode_without_any_evaluable_fact_is_incomplete_not_passed(api_db) -> None:
+    """没有任何可判定事实时必须是 INCOMPLETE：把"没检查"说成"通过"会放行脏数据。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    # 用既有标注夹具直接种一个 ACCEPTED Episode：没有媒体资产，也没有标注提交。
+    episode_id = seed_episode(factory, ids.project_a, ids.editor_a, "EP-quality-empty")
+
+    response = _create(editor, ids.project_a, "EPISODE", episode_id)
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["status"] == "INCOMPLETE"
+    assert body["score"] is None
+    assert body["finding_count"] > 0
+    assert body["error_count"] == 0
+    categories = _by_category(body)
+    assert categories["INTEGRITY"]["status"] == "NOT_APPLICABLE"
+    assert categories["ANNOTATION"]["status"] == "NOT_APPLICABLE"
+    assert categories["OVERALL"]["status"] == "NOT_APPLICABLE"
+    assert categories["OVERALL"]["score"] is None

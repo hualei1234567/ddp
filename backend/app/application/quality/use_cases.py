@@ -40,6 +40,7 @@ from app.application.quality.ports import (
     RuleSourceRegistry,
     UnitOfWork,
 )
+from app.domain.annotation.enums import AnnotationRecordStatus
 from app.domain.annotation.schema import AnnotationSchema
 from app.domain.common.ids import new_id
 from app.domain.identity.models import ProjectScope
@@ -214,6 +215,12 @@ class QualityRunUseCases:
             self._records.list_for_episode(
                 scope,
                 episode_id,
+                statuses=frozenset(
+                    {
+                        AnnotationRecordStatus.SUBMITTED.value,
+                        AnnotationRecordStatus.APPROVED.value,
+                    }
+                ),
                 limit=MAX_SUBJECT_RECORDS + 1,
             )
         )
@@ -221,6 +228,8 @@ class QualityRunUseCases:
             raise DomainValidationError(
                 f"Episode 标注记录超过 {MAX_SUBJECT_RECORDS} 条，统一质检暂不支持"
             )
+        # Schema 按版本独立成行（schema_id 指向具体版本），因此按记录上的
+        # schema_id 读取就是"标注当时的定义"，不会被后续升级改写。
         schemas: dict[UUID, AnnotationSchema] = {}
         for record in records:
             if record.schema_id in schemas:

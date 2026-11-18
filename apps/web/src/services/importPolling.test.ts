@@ -18,8 +18,12 @@ describe("导入轮询口径", () => {
     expect(hasRunningImport(items(["SUCCEEDED", "RUNNING"]))).toBe(true);
   });
 
-  it("PENDING 与所有终态都不触发轮询", () => {
-    expect(hasRunningImport(items(["PENDING"]))).toBe(false);
+  it("PENDING 也要轮询（Worker 领取后会自动转 RUNNING）", () => {
+    expect(hasRunningImport(items(["PENDING"]))).toBe(true);
+    expect(hasRunningImport(items(["PENDING", "RUNNING"]))).toBe(true);
+  });
+
+  it("所有终态都不触发轮询，空列表也不触发", () => {
     expect(
       hasRunningImport(items(["SUCCEEDED", "FAILED", "CANCELLED"])),
     ).toBe(false);

@@ -322,6 +322,15 @@ class AnnotationAssignmentRepository(Protocol):
         task_id: UUID,
     ) -> list[AnnotationAssignment]: ...
 
+    def list_for_task(
+        self,
+        scope: ProjectScope,
+        *,
+        task_id: UUID,
+    ) -> list[AnnotationAssignment]:
+        """返回任务下**全部**分配（含已结束），双标独立性检查必须看历史。"""
+        ...
+
     def has_conflicting_role(
         self,
         scope: ProjectScope,
@@ -567,6 +576,7 @@ class AnnotationRecordRepository(Protocol):
         scope: ProjectScope,
         episode_id: UUID,
         *,
+        statuses: frozenset[str] | None = None,
         limit: int = 2000,
     ) -> list[AnnotationRecord]:
         """该 Episode 的标注记录（跨提交/跨任务），有界只读查询。

@@ -82,7 +82,12 @@ QualityCategorySummary:
     pass_count: { type: integer, minimum: 0 }
     fail_count: { type: integer, minimum: 0 }
     not_applicable_count: { type: integer, minimum: 0 }
-    error_count: { type: integer, minimum: 0 }
+    error_count:
+      type: integer
+      minimum: 0
+      description: |
+        该类别中**规则执行失败**（finding.status=ERROR）的条数，与运行级
+        `error_count`（FAIL 且 severity=ERROR 的阻断条数）口径不同。
     score:
       type: [number, "null"]
       minimum: 0

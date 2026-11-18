@@ -27,6 +27,7 @@ import {
   presentImportProgress,
   presentImportStage,
 } from "../../services/importProgress";
+import { sortImportLogsNewestFirst } from "../../services/importLogs";
 import { IMPORT_POLL_INTERVAL_MS } from "../../services/importPolling";
 import type {
   DataSourceImport,
@@ -119,9 +120,8 @@ function ImportLogContent({ target }: { target: DataSourceImport }) {
     loadMore,
   } = useCursorPage(loadLogs, (log) => log.log_id);
 
-  // 服务端按时间正序返回。最新一页放最上面，加载更早时追加在底部，
-  // 视觉顺序始终是「新 → 旧」，也让「加载更多」出现在自然的位置。
-  const rows = useMemo(() => [...items].reverse(), [items]);
+  // 与分页返回顺序解耦的「新 → 旧」排序，规则集中在 sortImportLogsNewestFirst。
+  const rows = useMemo(() => sortImportLogsNewestFirst(items), [items]);
 
   const progress = presentImportProgress(
     detail.processed_items,

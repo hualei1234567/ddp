@@ -109,3 +109,18 @@ def test_unknown_fields_and_bool_scalars_are_rejected() -> None:
         parse_failure_cases([_case(observed=True)])
     with pytest.raises(DomainValidationError):
         parse_failure_cases([_case(episode_id="not-a-uuid")])
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_scalars_are_rejected(value: float) -> None:
+    """NaN/Inf 既不是合法 JSON，也无法参与阈值比较，必须在入口拒绝。"""
+    with pytest.raises(DomainValidationError):
+        parse_failure_cases([_case(observed=value)])
+    with pytest.raises(DomainValidationError):
+        parse_failure_cases([_case(expected=value)])
+
+
+def test_non_finite_values_inside_evidence_are_rejected() -> None:
+    """证据是自由 JSON，但同样不能写出 Python 专有的 NaN/Infinity 字面量。"""
+    with pytest.raises(DomainValidationError):
+        parse_failure_cases([_case(evidence={"confidence": float("nan")})])

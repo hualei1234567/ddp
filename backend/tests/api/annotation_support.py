@@ -192,6 +192,7 @@ def create_ready_work(
     quality_policy: dict[str, object] | None = None,
     iaa_policy: dict[str, object] | None = None,
     *,
+    creator: TestClient | None = None,
     episode_ids: list[UUID] | None = None,
     planned_item_count: int | None = None,
     target_item_count: int | None = None,
@@ -222,7 +223,8 @@ def create_ready_work(
         payload["quality_policy"] = quality_policy
     if iaa_policy is not None:
         payload["iaa_policy"] = iaa_policy
-    created = editor.post(url(project_id, "/annotation-tasks"), json=payload)
+    # 任务创建人决定能否开启高风险策略（如双标自动通过）；其余步骤仍由 operator 执行。
+    created = (creator or editor).post(url(project_id, "/annotation-tasks"), json=payload)
     assert created.status_code == 201, created.text
     task_id = created.json()["task_id"]
     submitted = editor.post(

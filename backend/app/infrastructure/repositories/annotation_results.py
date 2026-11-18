@@ -345,14 +345,17 @@ class SqlAnnotationRecordRepository:
         scope: ProjectScope,
         episode_id: UUID,
         *,
+        statuses: frozenset[str] | None = None,
         limit: int = 2000,
     ) -> list[AnnotationRecord]:
-        rows = self._session.scalars(
-            scoped_select(AnnotationRecordModel, scope)
-            .where(AnnotationRecordModel.episode_id == episode_id)
-            .order_by(AnnotationRecordModel.id)
-            .limit(limit)
+        statement = scoped_select(AnnotationRecordModel, scope).where(
+            AnnotationRecordModel.episode_id == episode_id
         )
+        if statuses is not None:
+            # 质量聚合只应看当前有效的标注事实；DRAFT/REJECTED/SUPERSEDED
+            # 既不代表已提交结论，也不该在 finding 里暴露他人的草稿 ID。
+            statement = statement.where(AnnotationRecordModel.status.in_(statuses))
+        rows = self._session.scalars(statement.order_by(AnnotationRecordModel.id).limit(limit))
         return [self._from_row(row) for row in rows]
 
     def get(self, scope: ProjectScope, annotation_id: UUID) -> AnnotationRecord | None:

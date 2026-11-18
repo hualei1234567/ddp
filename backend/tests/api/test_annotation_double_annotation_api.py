@@ -20,6 +20,7 @@ from tests.api.annotation_support import (
     url,
 )
 from tests.api.conftest import ApiIds, make_client
+from tests.api.training_support import add_member
 
 DOUBLE_POLICY = {
     "review_mode": "DOUBLE",
@@ -79,9 +80,15 @@ def _double_work(factory, ids: ApiIds, code: str, iaa_policy: dict[str, object] 
     second = make_client(factory, second_annotator_id)
     schema = create_published_schema(editor, owner, ids.project_a, f"schema-{code}")
     sample_set = create_snapshot_set(editor, ids.project_a, f"sample-{code}")
+    # 自动通过会以 OWNER 身份留痕，只有 OWNER 能开启；任务创建人不能审批
+    # 自己的任务，因此自动通过场景由 OWNER 创建、另一个 OWNER 审批。
+    auto = bool((iaa_policy or {}).get("auto_approve"))
+    approver = (
+        make_client(factory, add_member(factory, ids.project_a, role="owner")) if auto else owner
+    )
     work = create_ready_work(
         editor,
-        owner,
+        approver,
         ids.project_a,
         schema,
         sample_set,
@@ -89,6 +96,7 @@ def _double_work(factory, ids: ApiIds, code: str, iaa_policy: dict[str, object] 
         ids.editor_a,
         f"task-{code}",
         iaa_policy=iaa_policy or dict(DOUBLE_POLICY),
+        creator=owner if auto else None,
     )
     return episode_id, second_annotator_id, editor, owner, second, work
 
@@ -232,6 +240,31 @@ def test_double_annotation_auto_approve_when_explicitly_enabled(
         assert stored["status"] == "APPROVED"
 
 
+def test_editor_cannot_enable_auto_approve(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """EDITOR 不能开启 auto_approve：自动通过会冒用 OWNER 身份写"人工审批"。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    code = f"auto-forbidden-{UUID(int=0).hex[:6]}"
+    seed_episode(factory, ids.project_a, ids.editor_a, f"EP-{code}")
+    schema = create_published_schema(editor, owner, ids.project_a, f"schema-{code}")
+    sample_set = create_snapshot_set(editor, ids.project_a, f"sample-{code}")
+    payload = {
+        "code": f"t-{code}",
+        "name": "越权自动通过",
+        "sample_set_id": sample_set["sample_set_id"],
+        "schema_id": schema["schema_id"],
+        "schema_version": schema["schema_version"],
+        "target_item_count": 1,
+        "target_episode_count": 1,
+        "iaa_policy": {**DOUBLE_POLICY, "auto_approve": True},
+    }
+    response = editor.post(url(ids.project_a, "/annotation-tasks"), json=payload)
+    assert response.status_code == 403, response.text
+
+
 def test_double_annotation_consistency_is_project_isolated(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:
@@ -303,3 +336,46 @@ def test_double_annotation_rejects_same_annotator_on_same_episode_across_batches
         second_id,
     )
     assert distinct["assignee_id"] == str(second_id)
+
+
+def test_editor_cannot_enable_auto_approve_via_patch(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """创建闸口之外，PATCH 也不能被用来补开自动通过。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    code = f"auto-patch-{UUID(int=1).hex[:6]}"
+    seed_episode(factory, ids.project_a, ids.editor_a, f"EP-{code}")
+    schema = create_published_schema(editor, owner, ids.project_a, f"schema-{code}")
+    sample_set = create_snapshot_set(editor, ids.project_a, f"sample-{code}")
+    created = editor.post(
+        url(ids.project_a, "/annotation-tasks"),
+        json={
+            "code": f"t-{code}",
+            "name": "PATCH 越权自动通过",
+            "sample_set_id": sample_set["sample_set_id"],
+            "schema_id": schema["schema_id"],
+            "schema_version": schema["schema_version"],
+            "target_item_count": 1,
+            "target_episode_count": 1,
+            "iaa_policy": dict(DOUBLE_POLICY),
+        },
+    )
+    assert created.status_code == 201, created.text
+    task_id = created.json()["task_id"]
+
+    denied = editor.patch(
+        url(ids.project_a, f"/annotation-tasks/{task_id}"),
+        headers={"If-Match": '"1"'},
+        json={"iaa_policy": {**DOUBLE_POLICY, "auto_approve": True}},
+    )
+    assert denied.status_code == 403, denied.text
+
+    allowed = owner.patch(
+        url(ids.project_a, f"/annotation-tasks/{task_id}"),
+        headers={"If-Match": '"1"'},
+        json={"iaa_policy": {**DOUBLE_POLICY, "auto_approve": True}},
+    )
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["iaa_policy"]["auto_approve"] is True
