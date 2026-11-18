@@ -13,8 +13,8 @@
 
 | 状态 | 数量 |
 |---|---:|
-| VERIFIED | 16 |
-| PARTIAL | 27 |
+| VERIFIED | 18 |
+| PARTIAL | 25 |
 | MISSING | 3 |
 | BLOCKED | 1 |
 | **合计** | **47** |
@@ -39,11 +39,11 @@
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
-| DDP-V21-N2-01 | 数据源中心（HF/URL/本地/S3） | **PARTIAL** | `api/v1/datasource_routes.py:185`；`application/datasources/use_cases.py:105`；`HuggingFaceAdapter` | 只做本地格式校验；HF 远端仓库存在性未校验；无 URL/本地/S3 源；前端无详情页 |
+| DDP-V21-N2-01 | 数据源中心（HF/URL/本地/S3） | **PARTIAL** | N2-003：登记可显式 `verify_remote` 调用 `HuggingFaceAdapter.describe()`（默认关闭、超时 10s）+ 详情页/详情 API | 仍只支持 Hugging Face；URL/本地/S3 源未实现 |
 | DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **PARTIAL** | 状态机 + Worker + API + 列表页；`validate_import_action` 已在 HTTP 用例入口拒绝系统动作（N2-001） | N2-002 已补阶段/进度/步骤日志与只读端点；仍为手动刷新，无自动轮询 |
 | DDP-V21-N2-03 | Raw Asset 字段、状态机、动作、去重 | **VERIFIED** | `domain/ingestion/models.py:332`；`state_machines.py:65`；`uploads.py:234-267`；`test_raw_asset_actions_api.py`；`scripts/qa/raw_asset_lifecycle_smoke.py` | — |
 | DDP-V21-N2-04 | Episode Explorer（时间/任务/机器人/相机/质量/状态） | **VERIFIED** | N2-004：camera 过滤（`EXISTS` 下推）+ 前端质量/标注/机器人/机位/时间筛选，全部写入 URL；契约补齐 11 个 query 参数 | `EpisodeListPage.tsx` 729 行，后续评估拆分 |
-| DDP-V21-N2-05 | 人工审看（播放/倍速/Range/时间轴/导航/多视角/decision+reason+evidence） | **PARTIAL** | `AssetReviewPage.tsx`、`ImportReviewPage.tsx`；预签名 URL + 206 Range 实测；hls.js | 无倍速、无自定义时间轴、无多视角同屏；审核无 evidence 附件字段 |
+| DDP-V21-N2-05 | 人工审看（播放/倍速/Range/时间轴/导航/多视角/decision+reason+evidence） | **PARTIAL** | N2-005：倍速/时间轴/2 机位同屏/结构化 evidence；预签名 URL + 206 Range 已实测 | 审看绑定导入任务，无 Episode 级导航；多机位为独立播放（不保证音画同步） |
 | DDP-V21-N2-06 | 六类质量报告 UI（Integrity/Temporal/Visual/Metadata/Annotation/Overall） | **MISSING** | 现有为扁平 7 条 rule findings；`application/datasources/quality.py` | 六类分层不存在；不可点击下钻 |
 
 ## 3. N3 Canonical + Adapter
@@ -58,7 +58,7 @@
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
-| DDP-V21-N4-01 | Processing Run 实体与状态机（CREATED/QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED/RETRYING） | **PARTIAL** | N4-001：`domain/processing/` 七态状态机 + 迁移 0056 + 4 个 API + 契约 1.11.0；Worker enqueue/claim/advance 最小方法 | 八阶段编排、worker 消费循环、超时/租约、阶段日志与前端页面属 N4-002 |
+| DDP-V21-N4-01 | Processing Run 实体与状态机（CREATED/QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED/RETRYING） | **VERIFIED** | N4-001 + N4-002：七态状态机、迁移 0056/0057、`processing.run.requested` 投递与 `processing-worker` 消费、阶段步骤表与 `GET /steps`；FILE_VALIDATION 真实执行，其余七阶段显式 SKIPPED | 真实解析/切片/质检处理器属后续增量；前端 `/processing` 页面仍 PLANNED |
 | DDP-V21-N4-02 | 时间同步（timestamp/frame index/offset/drift） | **PARTIAL** | `domain/episodes/sync_drift.py:110`；导入质量 `stream_sync_aligned` | 只检测 start/duration 偏移；无帧索引、无校正、drift 不落库 |
 | DDP-V21-N4-03 | Episode 切分（metadata/time range/manual/task boundary） | **PARTIAL** | `domain/episodes/segmentation_rules.py:235,317,409`；`episode_materialization.py:131` | 只有 MANUAL_TIME_RANGE / fixed-window / episode-boundary；无 task-boundary、无帧级切片 |
 | DDP-V21-N4-04 | 质量引擎（checksum/decode/fps/resolution/duration/timestamp/missing frame/metadata/annotation） | **PARTIAL** | 导入规则 `datasources/quality.py`（v1.1.0）；标注规则 `annotation/quality_rules.py`；资产 hash/size | decode、resolution、missing-frame 规则不存在；Episode 级自动质检缺失；无统一规则注册表 |
@@ -70,14 +70,14 @@
 | DDP-V21-N5-01 | Asset Catalog 跨资源检索 | **PARTIAL** | 各资源列表 API（raw-assets / episodes / datasets / annotation tasks） | 无统一目录与联合检索；Annotation/Quality 维度未接入 |
 | DDP-V21-N5-02 | Dataset Version 生命周期（DRAFT→…→FROZEN→DEPRECATED） | **VERIFIED** | `domain/datasets/{enums,state_machines,models}.py`；`validity_status` 子轴；冻结后 DB 触发器不可变；`test_dataset_validity_api.py` | 实际用 `SUPERSEDED` 表达弃用，与任务书 `DEPRECATED` 命名不同（语义等价，需在契约说明） |
 | DDP-V21-N5-03 | Manifest 字段完整性与固定 | **VERIFIED** | `domain/datasets/manifest.py:33-153`；`test_dataset_domain.py:442` | files 以 raw_asset_ids + item_sha256 表达，无独立文件清单（可接受） |
-| DDP-V21-N5-04 | Lineage 全链 | **PARTIAL** | `application/datasets/lineage.py:79`；`application/episodes/provenance.py:337`；`api/v1/lineage.py` | Episode→Annotation、Episode→Quality、DatasetVersion→TrainingRequest 无边；无通用图查询 API |
+| DDP-V21-N5-04 | Lineage 全链 | **PARTIAL** | N5-002：Episode→Annotation（复核/仲裁通过）与 Episode→Quality（质量检查运行）同事务写边、幂等 | DatasetVersion→TrainingRun 缺关系枚举与 DB CHECK，需独立 ADR + 迁移；无通用图查询 API |
 
 ## 6. N6 标注治理
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N6-01 | Schema Registry（action/skill/language/contact/object/failure/temporal） | **PARTIAL** | `domain/annotation/schema.py:226`；10 种 label type / 6 层 level | 无七类预设注册表；项目自建；种子仅 4 个标签 |
-| DDP-V21-N6-02 | 标注任务（batch/assignment/priority/SLA/reviewer/status） | **PARTIAL** | `domain/annotation/{task,batch,assignment}.py`；`annotation_work.py` | SLA 未实现：只有 `due_at`，无到期判定/超时状态/提醒 |
+| DDP-V21-N6-02 | 标注任务（batch/assignment/priority/SLA/reviewer/status） | **VERIFIED** | N6-002：纯函数 `is_overdue` + 列表 `overdue` 下推过滤 + 派生字段 `is_overdue` + 巡检计数 + 前端逾期标签/汇总 | 无自动改派/关闭（刻意）；全局逾期卡片需独立汇总端点 |
 | DDP-V21-N6-03 | AI 辅助标注（suggestion/confidence/human confirmation） | **VERIFIED** | `ai_suggestion.py:113-235`；`annotation_ai.py`；AI 值单独存储、`AI_ASSISTED` 标记、人工确认强一致 | — |
 | DDP-V21-N6-04 | QA：抽检/盲审/双标/IAA/仲裁 | **PARTIAL** | `quality_sample.py`、`gold_set.py`（blind 强制）、`iaa.py:420`、`arbitration.py:92` | 普通复核非盲审；无双标任务实体与一致性门槛；双标靠重复分配 |
 | DDP-V21-N6-05 | 返工闭环 Reject→Reason→Rework→Review→Pass | **VERIFIED** | `state_rules.py:159-162,284-295`；`review.py:241`；`submissions.py:113` 轮次上限；API 用例 | — |

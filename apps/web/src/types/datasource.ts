@@ -39,8 +39,27 @@ export interface DataSource {
   version: number;
 }
 
-export interface DataSourceImport {
-  import_id: string;
+/** 服务端记录的一次远端校验结论；只含 Adapter 已规范化的字段。 */
+export interface RemoteCheck {
+  status: "VERIFIED";
+  checked_at: string;
+  /** 远端解析出的不可变 commit sha。 */
+  resolved_revision: string;
+  /** Dataset Card 声明的许可证；null 表示远端未声明，不是"无限制"。 */
+  license: string | null;
+  is_gated: boolean;
+  dataset_card_url: string | null;
+}
+
+/** 数据源详情聚合：登记信息 + 导入任务 + 最近校验结论。 */
+export interface DataSourceDetail {
+  data_source: DataSource;
+  imports: DataSourceImport[];
+  /** null 表示从未校验或摘要损坏；界面必须显示"未校验"。 */
+  remote_check: RemoteCheck | null;
+}
+
+export interface DataSourceImport {  import_id: string;
   project_id: string;
   data_source_id: string;
   status: ImportStatus;
@@ -119,6 +138,17 @@ export type ReviewStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type ReviewDecision = "ACCEPT" | "REJECT" | "NEEDS_FIX";
 
 /**
+ * 结构化审核依据：时间点、机位、备注与片段键。
+ * 服务端只接受白名单键并限制总字节数；前端表单只生成这四类字段。
+ */
+export interface ReviewEvidence {
+  timestamp_seconds?: number | null;
+  camera?: string | null;
+  note?: string | null;
+  episode_key?: string | null;
+}
+
+/**
  * 导入结果的人工审核记录。
  *
  * `reviewer_id` 与 `submitted_by` 分开返回，是为了让前端能显示"谁提交、谁审核"——
@@ -136,6 +166,8 @@ export interface DataReview {
   created_at: string;
   decided_at: string | null;
   version: number;
+  /** 旧审核记录为 null；服务端只接受白名单键的结构化对象。 */
+  evidence: ReviewEvidence | null;
 }
 
 /** 单条质量规则的结果；`passed=false` 时 `detail` 说明原因。 */

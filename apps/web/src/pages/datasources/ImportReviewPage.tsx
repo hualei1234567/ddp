@@ -6,12 +6,13 @@ import {
   Descriptions,
   Form,
   Input,
+  InputNumber,
   Space,
   Tag,
   Typography,
   message,
 } from "antd";
-import { useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 
 import PageContainer from "../../components/ui/PageContainer";
@@ -20,12 +21,15 @@ import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useProjectId } from "../../hooks/useProjectId";
 import { ApiError } from "../../services/api";
 import { dataSourceApi } from "../../services/datasources";
+import { presentCamera } from "../../services/datasourceParsers";
 import { formatDateTime } from "../../services/format";
 import type {
   DataReview,
   QualityReport,
   ReviewDecision,
+  ReviewEvidence,
 } from "../../types/datasource";
+import { buildReviewEvidence, type ReviewFormValues } from "./reviewEvidence";
 
 /**
  * 导入结果的质量报告与人工审核页。
@@ -53,6 +57,57 @@ const REVIEW_STATUS_COLORS: Record<DataReview["status"], string> = {
   APPROVED: "green",
   REJECTED: "red",
 };
+
+export interface ReviewEvidenceDisplayProps {
+  evidence: ReviewEvidence | null;
+}
+
+/** 只展示服务端实际返回的证据字段；旧记录没有证据就不渲染空表。 */
+export function ReviewEvidenceDetails({ evidence }: ReviewEvidenceDisplayProps) {
+  if (!evidence) {
+    return null;
+  }
+  const items: ReactNode[] = [];
+  if (
+    typeof evidence.timestamp_seconds === "number" &&
+    Number.isFinite(evidence.timestamp_seconds)
+  ) {
+    items.push(
+      <Descriptions.Item key="timestamp" label="关注时间点">
+        {evidence.timestamp_seconds} 秒
+      </Descriptions.Item>,
+    );
+  }
+  if (evidence.camera) {
+    items.push(
+      <Descriptions.Item key="camera" label="机位">
+        {presentCamera(evidence.camera)}
+      </Descriptions.Item>,
+    );
+  }
+  if (evidence.episode_key) {
+    items.push(
+      <Descriptions.Item key="episode" label="片段">
+        {evidence.episode_key}
+      </Descriptions.Item>,
+    );
+  }
+  if (evidence.note) {
+    items.push(
+      <Descriptions.Item key="note" label="证据备注">
+        {evidence.note}
+      </Descriptions.Item>,
+    );
+  }
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <Descriptions size="small" column={1} bordered title="审核证据">
+      {items}
+    </Descriptions>
+  );
+}
 
 export function QualitySection({
   report,
@@ -157,20 +212,24 @@ export function ReviewSection({
   onReload: () => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
-  const [form] = Form.useForm<{ decision: ReviewDecision; reason?: string }>();
+  const [form] = Form.useForm<ReviewFormValues>();
 
   const submit = useCallback(
     async (decision: ReviewDecision) => {
       if (!review) {
         return;
       }
-      const reason = form.getFieldValue("reason") as string | undefined;
+      const values = form.getFieldsValue();
       setSubmitting(true);
       try {
         await dataSourceApi.decideReview(
           projectId,
           importId,
-          { decision, reason: reason ?? null },
+          {
+            decision,
+            reason: values.reason ?? null,
+            evidence: buildReviewEvidence(values),
+          },
           { version: review.version },
         );
         message.success(`已提交审核结论：${DECISION_LABELS[decision]}`);
@@ -242,6 +301,7 @@ export function ReviewSection({
       {review.reason ? (
         <Alert type="info" showIcon message="审核说明" description={review.reason} />
       ) : null}
+      <ReviewEvidenceDetails evidence={review.evidence} />
       {decided ? (
         <Typography.Text type="secondary">
           该审核已有结论；如需重新审核，需由服务端开启新的审核轮次。
@@ -262,6 +322,49 @@ export function ReviewSection({
           >
             <Input.TextArea rows={3} placeholder="记录判断依据，便于事后追溯" />
           </Form.Item>
+          <Typography.Text strong>审核证据（可选）</Typography.Text>
+          <Space wrap align="start">
+            <Form.Item
+              name="evidence_timestamp"
+              label="时间点（秒）"
+              rules={[
+                { type: "number", min: 0, message: "时间点必须是非负数" },
+              ]}
+            >
+              <InputNumber
+                min={0}
+                step={0.1}
+                style={{ width: 180 }}
+                aria-label="审核证据时间点（秒）"
+                placeholder="如 69"
+              />
+            </Form.Item>
+            <Form.Item
+              name="evidence_camera"
+              label="机位"
+              rules={[{ max: 64, message: "机位标识不得超过 64 字符" }]}
+            >
+              <Input
+                maxLength={64}
+                style={{ width: 180 }}
+                aria-label="审核证据机位"
+                placeholder="如 main / right"
+              />
+            </Form.Item>
+            <Form.Item
+              name="evidence_note"
+              label="证据备注"
+              rules={[{ max: 500, message: "证据备注不得超过 500 字" }]}
+            >
+              <Input.TextArea
+                rows={2}
+                maxLength={500}
+                style={{ width: 320 }}
+                aria-label="审核证据备注"
+                placeholder="记录具体画面、异常点等可核对的事实"
+              />
+            </Form.Item>
+          </Space>
           <Space wrap>
             <Button
               type="primary"

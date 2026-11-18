@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,7 +20,7 @@ from app.domain.annotation.state_machines import (
     allowed_batch_actions,
     allowed_task_actions,
 )
-from app.domain.annotation.task import AnnotationTask
+from app.domain.annotation.task import AnnotationTask, is_overdue
 from app.domain.annotation.workload import WorkloadSummary
 
 
@@ -142,6 +142,8 @@ class AnnotationTaskOut(BaseModel):
     progress: dict[str, object]
     quality_summary: dict[str, object]
     due_at: datetime | None
+    # 派生事实：由服务端按当前时刻计算，不在库中落状态、不触发改派。
+    is_overdue: bool
     accepted_at: datetime | None
     completed_at: datetime | None
     gold_set_id: UUID | None
@@ -155,7 +157,12 @@ class AnnotationTaskOut(BaseModel):
     updated_by: UUID | None
 
     @classmethod
-    def from_domain(cls, task: AnnotationTask) -> AnnotationTaskOut:
+    def from_domain(
+        cls,
+        task: AnnotationTask,
+        *,
+        now: datetime | None = None,
+    ) -> AnnotationTaskOut:
         return cls(
             task_id=task.task_id,
             project_id=task.project_id,
@@ -179,6 +186,7 @@ class AnnotationTaskOut(BaseModel):
             progress=dict(task.progress),
             quality_summary=dict(task.quality_summary),
             due_at=task.due_at,
+            is_overdue=is_overdue(task, now or datetime.now(UTC)),
             accepted_at=task.accepted_at,
             completed_at=task.completed_at,
             gold_set_id=task.gold_set_id,

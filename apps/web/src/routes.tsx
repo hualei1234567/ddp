@@ -26,6 +26,7 @@ import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPag
 import CollectionAssetDetailPage from "./pages/collectionAssets/AssetDetailPage";
 import CollectionAssetListPage from "./pages/collectionAssets/AssetListPage";
 import AssetReviewPage from "./pages/datasources/AssetReviewPage";
+import DataSourceDetailPage from "./pages/datasources/DataSourceDetailPage";
 import DataSourceListPage from "./pages/datasources/DataSourceListPage";
 import ImportListPage from "./pages/datasources/ImportListPage";
 import ImportReviewPage from "./pages/datasources/ImportReviewPage";
@@ -266,6 +267,10 @@ export default function AppRoutes() {
           }
         />
         <Route path="ingestion" element={<DataSourceListPage />} />
+        <Route
+          path="ingestion/:dataSourceId"
+          element={<DataSourceDetailPage />}
+        />
         <Route path="data-source-imports" element={<ImportListPage />} />
         <Route
           path="data-source-imports/:importId/assets"

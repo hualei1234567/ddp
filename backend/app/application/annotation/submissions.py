@@ -16,6 +16,7 @@ from app.application.annotation.episode_status_projection import (
     project_submission_status,
 )
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
+from app.application.annotation.lineage import AnnotationLineageWriteError
 from app.application.annotation.ports import (
     AnnotationArbitrationRepository,
     AnnotationAssignmentRepository,
@@ -471,6 +472,11 @@ class AnnotationSubmissionUseCases:
                 request_id=request_id,
                 now=now,
             )
+        except AnnotationLineageWriteError:
+            # 血缘写失败不属于"质检规则/配置问题"，不能像规则失败那样放行：
+            # 否则会留下"提交已冻结、质量运行已存在、却查不到溯源"的数据。
+            # 让异常冒泡，请求事务整体回滚，调用方显式看到失败并重试。
+            raise
         except Exception:  # noqa: BLE001 - 质量门禁失败不得否决已完成的标注提交
             logger.warning(
                 "提交后自动质量检查失败；提交本身已保留",

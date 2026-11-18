@@ -61,6 +61,7 @@ from app.infrastructure.repositories.annotation_sample_sets import (
 )
 from app.infrastructure.repositories.annotation_schemas import SqlAnnotationSchemaRepository
 from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRepository
+from app.infrastructure.repositories.lineage import SqlLineageRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +101,8 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
     idempotency = SqlAnnotationIdempotencyRepository(session)
     episodes = SqlEpisodeDirectory(session)
     members = SqlMemberDirectory(session)
+    # 标注通过/质量检查写血缘边：与业务写入共用请求级 Session，同事务提交。
+    lineage = SqlLineageRepository(session)
 
     # 先构造质量检查用例：提交用例要在提交成功后立刻跑一次检查，因此需要
     # 持有它。两者不互相持有（检查用例不依赖提交用例），先建无顺序问题。
@@ -113,6 +116,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
         audit,
         outbox,
         session,
+        lineage=lineage,
     )
 
     # 任务进度与批次计数只在这里接线一次：提交/复核/仲裁三个推进点共用
@@ -199,6 +203,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             session,
             episodes=episodes,
             progress=progress,
+            lineage=lineage,
         ),
         arbitrations=AnnotationArbitrationUseCases(
             arbitrations_repo,
@@ -212,6 +217,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             session,
             episodes=episodes,
             progress=progress,
+            lineage=lineage,
         ),
         gold_sets=GoldSetUseCases(
             gold_sets_repo,

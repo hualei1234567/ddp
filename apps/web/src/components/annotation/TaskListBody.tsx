@@ -1,9 +1,12 @@
-import { Card, Descriptions, Space, Table, Typography } from "antd";
+import { Card, Descriptions, Space, Table, Tag, Typography } from "antd";
 import type { TableColumnsType } from "antd";
 import { Link } from "react-router-dom";
 
 import type { ApiError } from "../../services/api";
-import { presentProgress } from "../../services/annotationPresentation";
+import {
+  describeDueDistance,
+  presentProgress,
+} from "../../services/annotationPresentation";
 import { buildAnnotationTaskDetailPath } from "../../services/annotationUrl";
 import { formatDateTime } from "../../services/format";
 import type { AnnotationTask } from "../../types/annotation";
@@ -82,8 +85,23 @@ function columns(projectId: string): TableColumnsType<AnnotationTask> {
     {
       title: "截止时间",
       dataIndex: "due_at",
-      width: 170,
-      render: (value: string | null) => formatDateTime(value),
+      width: 210,
+      render: (value: string | null, task) => {
+        const distance = describeDueDistance(value, task.is_overdue);
+        return (
+          <Space direction="vertical" size={0}>
+            <Space size={4} wrap>
+              <span>{formatDateTime(value)}</span>
+              {task.is_overdue ? <Tag color="red">已逾期</Tag> : null}
+            </Space>
+            {distance ? (
+              <Typography.Text type={task.is_overdue ? "danger" : "secondary"}>
+                {distance}
+              </Typography.Text>
+            ) : null}
+          </Space>
+        );
+      },
     },
     {
       title: "更新时间",
@@ -145,6 +163,8 @@ export default function TaskListBody({
     );
   }
 
+  const overdueCount = items.filter((task) => task.is_overdue).length;
+
   return (
     <Space direction="vertical" size={12} className="ddp-stack">
       {stale ? (
@@ -187,7 +207,19 @@ export default function TaskListBody({
                   {presentProgress(task.progress, "approved_items")}
                 </Descriptions.Item>
                 <Descriptions.Item label="截止时间">
-                  {formatDateTime(task.due_at)}
+                  <Space direction="vertical" size={0}>
+                    <Space size={4} wrap>
+                      <span>{formatDateTime(task.due_at)}</span>
+                      {task.is_overdue ? <Tag color="red">已逾期</Tag> : null}
+                    </Space>
+                    {describeDueDistance(task.due_at, task.is_overdue) ? (
+                      <Typography.Text
+                        type={task.is_overdue ? "danger" : "secondary"}
+                      >
+                        {describeDueDistance(task.due_at, task.is_overdue)}
+                      </Typography.Text>
+                    ) : null}
+                  </Space>
                 </Descriptions.Item>
               </Descriptions>
             </Card>
@@ -202,10 +234,14 @@ export default function TaskListBody({
           scroll={{ x: 1400 }}
         />
       )}
-      <Space wrap>
-        <Typography.Text type="secondary">
-          已加载 {items.length} 条任务；统计口径为当前已加载范围。
-        </Typography.Text>
+      <Space wrap size={12}>
+        <Space size={4}>
+          <Typography.Text strong>逾期任务数</Typography.Text>
+          <Tag color={overdueCount > 0 ? "red" : "default"}>{overdueCount}</Tag>
+          <Typography.Text type="secondary">
+            / 已加载 {items.length} 条（当前已加载范围的汇总）
+          </Typography.Text>
+        </Space>
       </Space>
       <LoadMoreBar
         loadedCount={items.length}

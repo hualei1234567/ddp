@@ -4,6 +4,7 @@ import type {
   AccessCondition,
   DataReview,
   DataSource,
+  DataSourceDetail,
   DataSourceImport,
   DataSourceKind,
   ImportLog,
@@ -16,7 +17,9 @@ import type {
   MediaPlayback,
   QualityFinding,
   QualityReport,
+  RemoteCheck,
   ReviewDecision,
+  ReviewEvidence,
   ReviewStatus,
 } from "../types/datasource";
 import {
@@ -194,6 +197,68 @@ export function parseDataSourceImport(value: unknown): DataSourceImport {
   return result;
 }
 
+const REMOTE_CHECK_STATUSES = ["VERIFIED"] as const;
+
+export function parseRemoteCheck(value: unknown, path = "远端校验"): RemoteCheck {
+  const record = asRecord(value, path);
+  const checkedAt = readString(record, "checked_at", `${path}.checked_at`);
+  if (Number.isNaN(Date.parse(checkedAt))) {
+    throw new Error(`${path}.checked_at 必须是可解析的时间`);
+  }
+  const resolvedRevision = readString(
+    record,
+    "resolved_revision",
+    `${path}.resolved_revision`,
+  );
+  if (!/^[0-9a-f]{40}$/.test(resolvedRevision)) {
+    throw new Error(`${path}.resolved_revision 必须是 40 位 commit sha`);
+  }
+  return {
+    status: readEnum(record, "status", `${path}.status`, REMOTE_CHECK_STATUSES),
+    checked_at: checkedAt,
+    resolved_revision: resolvedRevision,
+    license: readOptionalString(record, "license", `${path}.license`),
+    is_gated: readBoolean(record, "is_gated", `${path}.is_gated`),
+    dataset_card_url: readOptionalString(
+      record,
+      "dataset_card_url",
+      `${path}.dataset_card_url`,
+    ),
+  };
+}
+
+/**
+ * 数据源详情聚合。
+ *
+ * 严格校验导入任务确实属于该数据源：服务端若把跨数据源的任务混进详情，
+ * 前端必须拒绝渲染，而不是把错配数据当成本次导入历史展示。
+ */
+export function parseDataSourceDetail(value: unknown): DataSourceDetail {
+  const record = asRecord(value, "数据源详情");
+  const dataSource = parseDataSource(record.data_source);
+  if (!Array.isArray(record.imports)) {
+    throw new Error("数据源详情.imports 必须是数组");
+  }
+  const imports = record.imports.map((item, index) => {
+    const parsed = parseDataSourceImport(item);
+    if (parsed.data_source_id !== dataSource.data_source_id) {
+      throw new Error(
+        `数据源详情.imports[${index}].data_source_id 与数据源不一致`,
+      );
+    }
+    return parsed;
+  });
+  const rawRemoteCheck = record.remote_check;
+  return {
+    data_source: dataSource,
+    imports,
+    remote_check:
+      rawRemoteCheck === null || rawRemoteCheck === undefined
+        ? null
+        : parseRemoteCheck(rawRemoteCheck, "数据源详情.remote_check"),
+  };
+}
+
 function parseImportLog(value: unknown, path: string): ImportLog {
   const record = asRecord(value, path);
   const message = readString(record, "message", `${path}.message`);
@@ -324,6 +389,47 @@ export function presentCamera(camera: string): string {
   return labels[camera] ?? camera;
 }
 
+const REVIEW_EVIDENCE_KEYS = new Set([
+  "timestamp_seconds",
+  "camera",
+  "note",
+  "episode_key",
+]);
+
+/** 服务端只写白名单键；未知键说明契约漂移，按校验失败处理而不是静默丢弃。 */
+export function parseReviewEvidence(
+  value: unknown,
+  path: string,
+): ReviewEvidence | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const record = asRecord(value, path);
+  for (const key of Object.keys(record)) {
+    if (!REVIEW_EVIDENCE_KEYS.has(key)) {
+      throw new Error(`${path}.${key} 不是允许的审核证据键`);
+    }
+  }
+  const timestamp = readOptionalNumber(
+    record,
+    "timestamp_seconds",
+    `${path}.timestamp_seconds`,
+  );
+  if (timestamp !== null && timestamp < 0) {
+    throw new Error(`${path}.timestamp_seconds 必须是非负数`);
+  }
+  return {
+    timestamp_seconds: timestamp,
+    camera: readOptionalString(record, "camera", `${path}.camera`),
+    note: readOptionalString(record, "note", `${path}.note`),
+    episode_key: readOptionalString(
+      record,
+      "episode_key",
+      `${path}.episode_key`,
+    ),
+  };
+}
+
 /** 服务端保证职责分离：审核人不会等于提交人，前端只如实呈现。 */
 export function parseDataReview(value: unknown): DataReview {
   const record = asRecord(value, "审核记录");
@@ -355,6 +461,7 @@ export function parseDataReview(value: unknown): DataReview {
       "审核记录.decided_at",
     ),
     version: readPositiveInteger(record, "version", "审核记录.version"),
+    evidence: parseReviewEvidence(record.evidence, "审核记录.evidence"),
   };
 }
 

@@ -20,6 +20,7 @@ from app.api.v1.dataset_dependencies import (
 from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.datasource_schemas import (
     DataSourceCreate,
+    DataSourceDetailOut,
     DataSourceImportCreate,
     DataSourceImportOut,
     DataSourceOut,
@@ -34,12 +35,14 @@ from app.api.v1.datasource_schemas import (
     MediaAssetOut,
     MediaAssetPlaybackOut,
     QualityReportOut,
+    RemoteCheckOut,
     ReviewCreateOut,
     ReviewDecisionRequest,
 )
 from app.api.v1.episode_dependencies import build_episode_service, build_readiness_service
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.schemas import PageOut
+from app.api.v1.upload_dependencies import SettingsDep
 from app.application.datasources import (
     DataSourcePatch as DataSourcePatchCmd,
 )
@@ -63,9 +66,15 @@ from app.application.datasources.ports import (
     UnitOfWork,
 )
 from app.application.datasources.reviews import DataReviewUseCases
+from app.application.datasources.verification import (
+    REMOTE_CHECK_STATUS_VERIFIED,
+    RemoteSourceVerifier,
+)
 from app.core.config import get_settings
 from app.domain.datasources.enums import ImportStatus
 from app.domain.datasources.errors import DomainValidationError, ResourceNotFoundError
+from app.infrastructure.huggingface import HuggingFaceRemoteVerifier
+from app.infrastructure.repositories.audit_logs import SqlAuditLogQueryRepository
 from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
     SqlDatasetOutboxRepository,
@@ -87,7 +96,21 @@ router = APIRouter(prefix="/projects/{project_id}", tags=["datasources"])
 ExpectedVersion = Annotated[int, Depends(require_expected_version)]
 
 
-def get_data_source_use_cases(session: DbSession) -> DataSourceUseCases:
+def get_remote_source_verifier(settings: SettingsDep) -> RemoteSourceVerifier:
+    """远端校验器的生产装配；测试通过依赖覆盖注入 fake，禁止真连外网。"""
+    return HuggingFaceRemoteVerifier(
+        token=settings.huggingface_token,
+        timeout_seconds=settings.huggingface_remote_check_timeout_seconds,
+    )
+
+
+RemoteVerifierDep = Annotated[RemoteSourceVerifier, Depends(get_remote_source_verifier)]
+
+
+def get_data_source_use_cases(
+    session: DbSession,
+    verifier: RemoteVerifierDep,
+) -> DataSourceUseCases:
     return DataSourceUseCases(
         sources=_cast_source(SqlDataSourceRepository(session)),
         imports=_cast_import(SqlDataSourceImportRepository(session)),
@@ -96,6 +119,7 @@ def get_data_source_use_cases(session: DbSession) -> DataSourceUseCases:
         idempotency=_cast_idem(SqlIdempotencyRepository(session)),
         uow=_cast_uow(session),
         logs=_cast_logs(SqlDataSourceImportLogRepository(session)),
+        verifier=verifier,
     )
 
 
@@ -139,6 +163,8 @@ def get_review_use_cases(session: DbSession) -> DataReviewUseCases:
         audit=_cast_audit(SqlDatasetAuditRepository(session)),
         outbox=_cast_outbox(SqlDatasetOutboxRepository(session)),
         uow=_cast_uow(session),
+        # evidence 复用既有 audit_logs.details；读取审核记录时从审计留痕回填。
+        audit_query=SqlAuditLogQueryRepository(session),
     )
 
 
@@ -215,6 +241,7 @@ def create_data_source(
             dataset_card_url=payload.dataset_card_url,
             notes=payload.notes,
             metadata=payload.metadata,
+            verify_remote=payload.verify_remote,
         ),
         idempotency_key=idempotency_key,
         method=request.method,
@@ -230,6 +257,42 @@ def get_data_source(
 ) -> dict[str, Any]:
     item = use_cases.get_source(scope, data_source_id)
     return DataSourceOut.from_domain(item).model_dump(mode="json")
+
+
+@router.get("/data-sources/{data_source_id}/detail", response_model=DataSourceDetailOut)
+def get_data_source_detail(
+    data_source_id: UUID,
+    scope: ReadScope,
+    use_cases: DataSourceServicesDep,
+    import_limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> dict[str, Any]:
+    """数据源详情聚合：登记信息、导入任务与服务端记录的校验结论。
+
+    校验结论来自登记的 ``metadata`` 保留键；未校验时为 ``null``，前端必须显示
+    "未校验"而不是"通过"。
+    """
+    detail = use_cases.get_source_detail(
+        scope,
+        data_source_id,
+        import_limit=import_limit,
+    )
+    remote_check = detail.remote_check
+    return DataSourceDetailOut(
+        data_source=DataSourceOut.from_domain(detail.source),
+        imports=[DataSourceImportOut.from_domain(item) for item in detail.imports],
+        remote_check=(
+            RemoteCheckOut(
+                status=REMOTE_CHECK_STATUS_VERIFIED,
+                checked_at=remote_check.checked_at,
+                resolved_revision=remote_check.resolved_revision,
+                license=remote_check.license,
+                is_gated=remote_check.is_gated,
+                dataset_card_url=remote_check.dataset_card_url,
+            )
+            if remote_check is not None
+            else None
+        ),
+    ).model_dump(mode="json")
 
 
 @router.patch("/data-sources/{data_source_id}", response_model=DataSourceOut)
@@ -452,6 +515,7 @@ def decide_review(
         reason=payload.reason,
         expected_version=expected_version,
         request_id=request_id(request),
+        evidence=(payload.evidence.model_dump(exclude_none=True) if payload.evidence else None),
     )
     return ReviewCreateOut.from_domain(decided).model_dump(mode="json")
 

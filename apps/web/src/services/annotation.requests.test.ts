@@ -85,9 +85,10 @@ describe("标注列表与详情请求", () => {
     },
     {
       name: "listTasks",
-      call: (api) => api.listTasks(PROJECT, { status: "RUNNING" }),
+      call: (api) =>
+        api.listTasks(PROJECT, { status: "RUNNING", overdue: true }),
       path: `/annotation-tasks`,
-      query: { status: "RUNNING" },
+      query: { status: "RUNNING", overdue: "true" },
     },
     {
       name: "listBatches",

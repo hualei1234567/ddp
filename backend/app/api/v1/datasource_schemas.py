@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -35,6 +35,8 @@ class DataSourceCreate(BaseModel):
     dataset_card_url: str | None = Field(default=None, max_length=2048)
     notes: str | None = Field(default=None, max_length=2000)
     metadata: dict[str, Any] | None = None
+    # 显式请求远端校验；默认关闭，避免每次登记都访问外网。
+    verify_remote: bool = False
 
 
 class DataSourcePatch(BaseModel):
@@ -256,6 +258,17 @@ class MediaAssetPlaybackOut(BaseModel):
     size_bytes: int
 
 
+class ReviewEvidence(BaseModel):
+    """审核依据：结构化的小对象，落库前由领域层再做一次白名单与字节数校验。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    timestamp_seconds: float | None = Field(default=None, ge=0)
+    camera: str | None = Field(default=None, max_length=64)
+    note: str | None = Field(default=None, max_length=500)
+    episode_key: str | None = Field(default=None, max_length=128)
+
+
 class ReviewCreateOut(BaseModel):
     review_id: UUID
     project_id: UUID
@@ -268,9 +281,11 @@ class ReviewCreateOut(BaseModel):
     created_at: datetime
     decided_at: datetime | None
     version: int
+    evidence: ReviewEvidence | None = None
 
     @classmethod
     def from_domain(cls, item: DataReviewT) -> ReviewCreateOut:
+        evidence = ReviewEvidence(**dict(item.evidence)) if item.evidence is not None else None
         return cls(
             review_id=item.review_id,
             project_id=item.project_id,
@@ -283,6 +298,7 @@ class ReviewCreateOut(BaseModel):
             created_at=item.created_at,
             decided_at=item.decided_at,
             version=item.row_version,
+            evidence=evidence,
         )
 
 
@@ -291,6 +307,7 @@ class ReviewDecisionRequest(BaseModel):
 
     decision: str = Field(pattern="^(ACCEPT|REJECT|NEEDS_FIX)$")
     reason: str | None = Field(default=None, max_length=2000)
+    evidence: ReviewEvidence | None = None
 
 
 class QualityFindingOut(BaseModel):
@@ -329,3 +346,22 @@ class ImportEpisodeMaterializeResultOut(BaseModel):
     episode_count: int
     episodes: list[MaterializedEpisodeOut]
     skipped_episode_keys: list[str]
+
+
+class RemoteCheckOut(BaseModel):
+    """服务端记录的最近一次远端校验结论（不含远端原始返回）。"""
+
+    status: Literal["VERIFIED"]
+    checked_at: datetime
+    resolved_revision: str
+    license: str | None
+    is_gated: bool
+    dataset_card_url: str | None
+
+
+class DataSourceDetailOut(BaseModel):
+    """数据源详情聚合：登记信息 + 导入任务 + 最近校验结论。"""
+
+    data_source: DataSourceOut
+    imports: list[DataSourceImportOut]
+    remote_check: RemoteCheckOut | None

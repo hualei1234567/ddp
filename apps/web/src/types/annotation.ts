@@ -444,6 +444,7 @@ export interface AnnotationTask {
   progress: Record<string, unknown>;
   quality_summary: Record<string, unknown>;
   due_at: string | null;
+  is_overdue: boolean;
   accepted_at: string | null;
   completed_at: string | null;
   gold_set_id: string | null;

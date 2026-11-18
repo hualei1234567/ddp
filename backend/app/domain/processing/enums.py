@@ -48,6 +48,30 @@ class ProcessingRunAction(StrEnum):
     CANCEL = "cancel"
 
 
+class ProcessingStepStatus(StrEnum):
+    """单个阶段的执行结果（N4-002）。
+
+    ``SKIPPED`` 是一等状态，不是"成功"的别名：它表示该阶段在**当前流水线
+    版本下没有真实实现**，必须同时记录原因（``log_summary``），数据库 CHECK
+    也要求它非空。把未实现阶段写成 ``SUCCEEDED`` 会让"处理完成"变成谎话。
+    """
+
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+
+
+#: 终态步骤：不再变化，重试会以新的 ``attempt`` 另起一行。
+PROCESSING_STEP_TERMINAL_STATUSES: frozenset[str] = frozenset(
+    {
+        ProcessingStepStatus.SUCCEEDED.value,
+        ProcessingStepStatus.FAILED.value,
+        ProcessingStepStatus.SKIPPED.value,
+    }
+)
+
+
 class ProcessingStage(StrEnum):
     FILE_VALIDATION = "FILE_VALIDATION"
     METADATA_EXTRACTION = "METADATA_EXTRACTION"
@@ -76,9 +100,11 @@ PUBLIC_PROCESSING_ACTIONS: frozenset[str] = frozenset({ProcessingRunAction.CANCE
 
 __all__ = [
     "PROCESSING_RUN_TERMINAL_STATUSES",
+    "PROCESSING_STEP_TERMINAL_STATUSES",
     "PUBLIC_PROCESSING_ACTIONS",
     "STAGE_SEQUENCE",
     "ProcessingRunAction",
     "ProcessingRunStatus",
     "ProcessingStage",
+    "ProcessingStepStatus",
 ]

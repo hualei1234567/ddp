@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { DataReview, QualityReport } from "../../types/datasource";
-import { QualitySection, ReviewSection } from "./ImportReviewPage";
+import {
+  QualitySection,
+  ReviewEvidenceDetails,
+  ReviewSection,
+} from "./ImportReviewPage";
+import { buildReviewEvidence } from "./reviewEvidence";
 
 const PROJECT = "11111111-1111-1111-1111-111111111111";
 const IMPORT = "22222222-2222-2222-2222-222222222222";
@@ -52,6 +57,7 @@ const pendingReview: DataReview = {
   created_at: "2026-11-15T00:00:00Z",
   decided_at: null,
   version: 1,
+  evidence: null,
 };
 
 function renderQuality(report: QualityReport | null, error: string | null = null) {
@@ -159,5 +165,67 @@ describe("人工审核区", () => {
 
   it("尚未创建审核记录时显示空态", () => {
     expect(renderReview(null)).toContain("尚未创建审核记录");
+  });
+
+  it("待审核时提供时间点、机位与备注证据输入", () => {
+    const html = renderReview(pendingReview);
+
+    expect(html).toContain("审核证据");
+    expect(html).toContain('aria-label="审核证据时间点（秒）"');
+    expect(html).toContain('aria-label="审核证据机位"');
+    expect(html).toContain('aria-label="审核证据备注"');
+  });
+});
+
+describe("审核证据展示", () => {
+  it("有证据时展示时间点、机位与备注", () => {
+    const html = renderToStaticMarkup(
+      <ReviewEvidenceDetails
+        evidence={{
+          timestamp_seconds: 69,
+          camera: "main",
+          note: "第 69 秒画面正常",
+          episode_key: null,
+        }}
+      />,
+    );
+
+    expect(html).toContain("审核证据");
+    expect(html).toContain("69 秒");
+    expect(html).toContain("主视角");
+    expect(html).toContain("第 69 秒画面正常");
+  });
+
+  it("没有证据时不渲染空表", () => {
+    expect(
+      renderToStaticMarkup(<ReviewEvidenceDetails evidence={null} />),
+    ).toBe("");
+  });
+});
+
+describe("审核证据表单转换", () => {
+  it("空表单不提交证据对象", () => {
+    expect(buildReviewEvidence({})).toBeNull();
+    expect(
+      buildReviewEvidence({
+        evidence_camera: "   ",
+        evidence_note: "",
+        evidence_timestamp: null,
+      }),
+    ).toBeNull();
+  });
+
+  it("去空白并保留 0 秒这一合法时间点", () => {
+    expect(
+      buildReviewEvidence({
+        evidence_timestamp: 0,
+        evidence_camera: " main ",
+        evidence_note: " 画面正常 ",
+      }),
+    ).toEqual({
+      timestamp_seconds: 0,
+      camera: "main",
+      note: "画面正常",
+    });
   });
 });

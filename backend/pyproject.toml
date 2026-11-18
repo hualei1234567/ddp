@@ -17,6 +17,9 @@ ignore = ["S101"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+  "manual: 手动用例，默认跳过；需显式环境变量或外部依赖才会执行",
+]
 filterwarnings = [
   "error",
   "ignore:.*anyio.abc.BlockingPortal.*:DeprecationWarning",

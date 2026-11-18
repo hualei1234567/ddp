@@ -213,6 +213,31 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  processing-worker:
+    # 处理运行 Worker（N4-002）：消费 processing.run.requested（投递类），
+    # 按八阶段逐段推进并写 processing_run_steps。
+    #
+    # 没有这个服务时，创建出来的 ProcessRun 只会停在 CREATED、事件永久 PENDING——
+    # 与 N2-002 之前的导入 Worker 同一种缺陷形态。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-processing-worker
+    command: ["python", "-m", "app.workers.processing"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+      DDP_S3_ENDPOINT: http://minio:9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
   export-worker:
     # 导出 Job 常驻 Worker：消费 dataset.export.requested 事件并写入对象存储。
     profiles: ["app"]

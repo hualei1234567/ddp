@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
 
@@ -48,18 +49,22 @@ def list_tasks(
     scope: ReadScope,
     use_cases: AnnotationUseCasesDep,
     status: str | None = None,
+    overdue: bool | None = None,
     cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PageOut[AnnotationTaskOut]:
     items = use_cases.tasks.list(
         scope,
         status=status,
+        overdue=overdue,
         after_id=decode_cursor(cursor),
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.task_id)
+    # 同一页用同一个"现在"计算逾期，避免边界时刻前后两行口径不一致。
+    moment = datetime.now(UTC)
     return PageOut(
-        items=[AnnotationTaskOut.from_domain(item) for item in page.items],
+        items=[AnnotationTaskOut.from_domain(item, now=moment) for item in page.items],
         next_cursor=page.next_cursor,
     )
 

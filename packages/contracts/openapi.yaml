@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.11.0
+  version: 1.12.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -87,6 +87,28 @@ info:
       与八个执行阶段的封闭枚举。客户端只能看到服务端 `allowed_actions`；
       `system-*` / `worker-*` 内部动作不对外暴露。本版本**不包含**八阶段编排、
       Worker claim/advance 的触发入口与前端页面（N4-002 及后续）。
+    - `1.12.0` **新增数据源远端校验与详情聚合**：`DataSourceCreate` 新增可选
+      `verify_remote`（默认 `false`，不访问外网）；开启后超时、仓库不存在/无权限、
+      gated 与声明不一致均以 `validation_failed` 拒绝登记。校验结论只以规范化摘要
+      写入服务端保留的 `metadata.remote_check`，远端返回的其他字段不落库。
+      新增 `GET .../data-sources/{data_source_id}/detail`，返回 `DataSourceDetail`
+      （登记信息 + 导入任务 + `RemoteSourceCheck`）。全部为增量：无路径删除、
+      无字段删除、未收窄既有字段取值。
+    - `1.12.0` 在 `1.11.0` 基础上**新增 N4-002 八阶段编排可观测性**：
+      创建处理运行时同事务写入投递类事件 `processing.run.requested`，由
+      `app.workers.processing` 逐阶段执行；新增步骤记录
+      （`PROCESSING_RUN_STEP`：`(run_id, stage, attempt)` 唯一，`SKIPPED` 必带
+      跳过原因，`FAILED` 必带错误码与摘要）、详情响应内联有界 `steps`
+      （列表响应为 `null`）与只读端点 `GET .../processing-runs/{id}/steps`
+      （游标分页）。FILE_VALIDATION 校验输入对象存在；其余七个阶段在
+      当前版本无真实实现，一律显式 `SKIPPED` 并记录原因，**不冒充成功**。
+      全部为增量：无路径删除、无字段删除、未收窄既有字段取值。
+    - `1.12.0` **新增标注任务 SLA 逾期可见性**：`AnnotationTask` 响应新增必填
+      派生字段 `is_overdue`（无 `due_at` 或已终态恒为 false），`GET /annotation-tasks`
+      新增可选 `overdue=true|false` 过滤。逾期不新增状态、不写库、不自动改派。
+    - `1.12.0` **新增人工审核证据**：`DataReview` 与审核决定请求新增可选
+      `evidence`（键白名单 timestamp_seconds / camera / note / episode_key，
+      ≤4 键、序列化 ≤2000 字节），与审核结论同事务写入审计留痕。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -104,7 +126,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.11.0
+  version: 1.12.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -648,6 +670,8 @@ paths:
     $ref: "./fragments/paths.stage7.yaml#/dataSources"
   /api/v1/projects/{project_id}/data-sources/{data_source_id}:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceDetail"
+  /api/v1/projects/{project_id}/data-sources/{data_source_id}/detail:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceDetailOverview"
   /api/v1/projects/{project_id}/data-sources/{data_source_id}/imports:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImports"
   /api/v1/projects/{project_id}/data-source-imports:
@@ -726,6 +750,8 @@ paths:
     $ref: "./fragments/paths.processing.yaml#/processingRuns"
   /api/v1/projects/{project_id}/processing-runs/{run_id}:
     $ref: "./fragments/paths.processing.yaml#/processingRunDetail"
+  /api/v1/projects/{project_id}/processing-runs/{run_id}/steps:
+    $ref: "./fragments/paths.processing.yaml#/processingRunSteps"
   /api/v1/projects/{project_id}/processing-runs/{run_id}/actions/{action}:
     $ref: "./fragments/paths.processing.yaml#/processingRunActions"
   # --- 审计日志只读查询（owner / 平台管理员）---
@@ -1182,6 +1208,8 @@ components:
     DataSourcePatch: {$ref: "./fragments/schemas.stage7.yaml#/DataSourcePatch"}
     DataSource: {$ref: "./fragments/schemas.stage7.yaml#/DataSource"}
     DataSourcePage: {$ref: "./fragments/schemas.stage7.yaml#/DataSourcePage"}
+    RemoteSourceCheck: {$ref: "./fragments/schemas.stage7.yaml#/RemoteSourceCheck"}
+    DataSourceDetail: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceDetail"}
     DataSourceImportCreate: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceImportCreate"}
     ImportActionRequest: {$ref: "./fragments/schemas.stage7.yaml#/ImportActionRequest"}
     DataSourceImport: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceImport"}
@@ -1190,6 +1218,7 @@ components:
     MediaAssetList: {$ref: "./fragments/schemas.stage7.yaml#/MediaAssetList"}
     MediaAssetPlayback: {$ref: "./fragments/schemas.stage7.yaml#/MediaAssetPlayback"}
     DataReview: {$ref: "./fragments/schemas.stage7.yaml#/DataReview"}
+    ReviewEvidence: {$ref: "./fragments/schemas.stage7.yaml#/ReviewEvidence"}
     ReviewDecisionRequest: {$ref: "./fragments/schemas.stage7.yaml#/ReviewDecisionRequest"}
     ImportQualityFinding: {$ref: "./fragments/schemas.stage7.yaml#/ImportQualityFinding"}
     ImportQualityReport: {$ref: "./fragments/schemas.stage7.yaml#/ImportQualityReport"}
@@ -1221,6 +1250,9 @@ components:
     ProcessingRunCreate: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunCreate"}
     ProcessingRun: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRun"}
     ProcessingRunPage: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunPage"}
+    ProcessingStepStatus: {$ref: "./fragments/schemas.processing.yaml#/ProcessingStepStatus"}
+    ProcessingRunStep: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunStep"}
+    ProcessingRunStepPage: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunStepPage"}
     ResourceKind: {$ref: "./fragments/schemas.governance.yaml#/ResourceKind"}
     QuotaStatus: {$ref: "./fragments/schemas.governance.yaml#/QuotaStatus"}
     Quota: {$ref: "./fragments/schemas.governance.yaml#/Quota"}
