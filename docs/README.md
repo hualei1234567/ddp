@@ -1,9 +1,17 @@
 # DDP 文档索引
 
 > 项目：DDP（Embodied AI Data Platform）
-> 更新：2026-11-17
+> 更新：2026-11-18
 > 建设基线：`docs/DDP_具身智能数据闭环平台建设总规范_V1.0_FINAL.md`
 > 治理基线：`docs/ddp/00–09`、`prompts/ddp/01–04`、`templates/ddp/*`
+
+## V2.1 执行基线（2026-11-18 起）
+
+| 文档 | 内容 | 状态 |
+|---|---|---|
+| **[roadmap/v2.1/README.md](roadmap/v2.1/README.md)** | **V2.1 建设路线入口**：N0 基线、能力矩阵、复用矩阵、技术债、Backlog、DAG、风险、No-Go | **现行执行基线** |
+| [roadmap/v2.1/n0/current-system-baseline.md](roadmap/v2.1/n0/current-system-baseline.md) | 当前系统事实：`7a9bb4b`、契约 1.9.0、迁移 0052、后端 2240 passed、前端 739 passed | **现行** |
+| [roadmap/v2.1/n0/capability-matrix.md](roadmap/v2.1/n0/capability-matrix.md) | N1–N9 共 47 项能力唯一状态（12 VERIFIED / 30 PARTIAL / 4 MISSING / 1 BLOCKED） | **现行** |
 
 ## 最新审计（先读）
 
