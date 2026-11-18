@@ -24,7 +24,7 @@ from app.api.v1.processing_dependencies import (
     ReadScope,
     WriteScope,
 )
-from app.api.v1.processing_response_models import ProcessingRunOut
+from app.api.v1.processing_response_models import ProcessingRunOut, ProcessingRunStepOut
 from app.api.v1.processing_schemas import ProcessingRunCreate
 from app.api.v1.schemas import PageOut
 from app.application.processing.commands import NewProcessingRun
@@ -65,8 +65,9 @@ def create_processing_run(
 ) -> ProcessingRunOut:
     """创建运行，初始状态固定为 ``CREATED``。
 
-    创建本身不触发执行：排队由 Worker/调度器调用 ``system-queue`` 完成，
-    因此 HTTP 线程不会因为一次大文件处理而阻塞。
+    创建只落一行运行 + 一条投递类 outbox 事件（``processing.run.requested``），
+    真正的八阶段执行由 ``app.workers.processing`` 异步完成；HTTP 线程不会
+    因为一次大文件处理而阻塞。
     """
     run = services.runs.create(
         scope,
@@ -87,8 +88,31 @@ def get_processing_run(
     services: ProcessingServicesDep,
 ) -> ProcessingRunOut:
     run = services.runs.get(scope, run_id)
+    steps = services.runs.detail_steps(scope, run_id)
     response.headers["ETag"] = f'"{run.row_version}"'
-    return ProcessingRunOut.from_domain(run)
+    return ProcessingRunOut.from_domain(run, steps=steps)
+
+
+@router.get("/{run_id}/steps", response_model=PageOut[ProcessingRunStepOut])
+def list_processing_run_steps(
+    run_id: UUID,
+    scope: ReadScope,
+    services: ProcessingServicesDep,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> PageOut[ProcessingRunStepOut]:
+    """按游标分页列出步骤；运行不存在或跨项目一律 404（不泄露存在性）。"""
+    items = services.runs.list_steps(
+        scope,
+        run_id,
+        after_id=decode_cursor(cursor),
+        limit=fetch_limit(limit),
+    )
+    page = build_page(items, limit=limit, id_of=lambda item: item.step_id)
+    return PageOut(
+        items=[ProcessingRunStepOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.post("/{run_id}/actions/{action}", response_model=ProcessingRunOut)

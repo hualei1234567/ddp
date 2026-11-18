@@ -88,7 +88,10 @@ from app.infrastructure.db.models.ingestion import (
 )
 from app.infrastructure.db.models.jobs import IngestionJobModel
 from app.infrastructure.db.models.locations import LocationModel
-from app.infrastructure.db.models.processing import ProcessingRunModel
+from app.infrastructure.db.models.processing import (
+    ProcessingRunModel,
+    ProcessingRunStepModel,
+)
 from app.infrastructure.db.models.suppliers import (
     AcceptanceLedgerModel,
     DeliveryBatchModel,
@@ -160,6 +163,7 @@ __all__ = [
     "LocationModel",
     "OutboxEvent",
     "ProcessingRunModel",
+    "ProcessingRunStepModel",
     "Project",
     "ProjectMember",
     "QualitySample",

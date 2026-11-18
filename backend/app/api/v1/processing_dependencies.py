@@ -14,7 +14,14 @@ from app.application.processing.use_cases import (
     ProcessingWorkerUseCases,
 )
 from app.domain.identity.models import ProjectScope
-from app.infrastructure.repositories.processing import SqlProcessingRunRepository
+from app.infrastructure.repositories.collection_audit import (
+    SqlAuditRepository,
+    SqlOutboxRepository,
+)
+from app.infrastructure.repositories.processing import (
+    SqlProcessingRunRepository,
+    SqlProcessingRunStepRepository,
+)
 
 ReadScope = Annotated[ProjectScope, Depends(get_project_scope)]
 WriteScope = Annotated[ProjectScope, Depends(get_write_scope)]
@@ -30,7 +37,15 @@ class ProcessingServices:
 def get_processing_services(session: DbSession) -> ProcessingServices:
     runs = SqlProcessingRunRepository(session)
     return ProcessingServices(
-        runs=ProcessingRunUseCases(runs, session),
+        runs=ProcessingRunUseCases(
+            runs,
+            SqlProcessingRunStepRepository(session),
+            session,
+            # 创建时必须同事务写审计 + 投递类事件：缺任一依赖会静默留下
+            # "永远不会被执行"的运行，因此这里显式装配，不提供默认值。
+            audit=SqlAuditRepository(session),
+            outbox=SqlOutboxRepository(session),
+        ),
         worker=ProcessingWorkerUseCases(runs, session),
     )
 

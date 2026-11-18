@@ -41,6 +41,8 @@ DISPATCH_EVENTS = {
     "dataset.export.requested": "backend/app/workers/exports.py",
     "datasource.import_requested": "backend/app/workers/datasources.py",
     "ingestion.job.created": "backend/app/workers/ingestion_jobs.py",
+    # N4-002：创建处理运行即投递，由八阶段编排 Worker 消费。
+    "processing.run.requested": "backend/app/workers/processing.py",
 }
 
 # 事件名允许段内连字符：设备域生命周期动作名沿用 API 路径写法
@@ -126,6 +128,9 @@ _EVENT_DOMAINS = frozenset(
         "leakage_policy",
         "location",
         "modelops",
+        # N4 处理运行：processing.run.requested 是投递类，首段必须在这里
+        # 否则会被"看起来像事件"守卫静默过滤。
+        "processing",
         # 阶段 8 项目管理（project.created / updated / member_*）：
         # 首段不在此表中时归类校验会静默跳过，等于五个新事件不受守卫。
         "project",

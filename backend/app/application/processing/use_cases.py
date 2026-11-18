@@ -15,8 +15,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID
 
+from app.application.audit import (
+    AuditRepository,
+    OutboxRepository,
+    record_change,
+)
 from app.application.processing.commands import NewProcessingRun
-from app.application.processing.ports import ProcessingRunRepository, UnitOfWork
+from app.application.processing.ports import (
+    ProcessingRunRepository,
+    ProcessingStepRepository,
+    UnitOfWork,
+)
 from app.domain.common.ids import new_id
 from app.domain.identity.models import ProjectScope
 from app.domain.processing.enums import (
@@ -32,8 +41,18 @@ from app.domain.processing.errors import (
 )
 from app.domain.processing.models import ProcessingRun
 from app.domain.processing.state_machines import validate_action_name
+from app.domain.processing.steps import ProcessingStep
 
 _NOT_FOUND_MESSAGE = "处理运行不存在或不属于当前项目"
+
+#: 投递类事件：创建运行后由 ``app.workers.processing`` 消费并执行八阶段。
+#: 常量写在这里而不是 Worker 里，是因为**生产点**才是语义来源；消费者
+#: import 同一常量，避免两边各写一份字符串后悄然失配。
+PROCESSING_RUN_REQUESTED_EVENT = "processing.run.requested"
+
+#: 详情响应内联步骤的上限。八阶段 × 有限重试，正常远小于该值；
+#: 超限时详情会截断，完整历史走 ``GET .../steps`` 分页。
+DETAIL_STEP_LIMIT = 200
 
 
 def _utcnow() -> datetime:
@@ -43,9 +62,20 @@ def _utcnow() -> datetime:
 class ProcessingRunUseCases:
     """客户端可见用例。"""
 
-    def __init__(self, runs: ProcessingRunRepository, uow: UnitOfWork) -> None:
+    def __init__(
+        self,
+        runs: ProcessingRunRepository,
+        steps: ProcessingStepRepository,
+        uow: UnitOfWork,
+        *,
+        audit: AuditRepository,
+        outbox: OutboxRepository,
+    ) -> None:
         self._runs = runs
+        self._steps = steps
         self._uow = uow
+        self._audit = audit
+        self._outbox = outbox
 
     def create(
         self,
@@ -67,6 +97,31 @@ class ProcessingRunUseCases:
             updated_by=scope.actor_id,
         )
         created = self._runs.add(scope, run)
+        # 投递类事件：HTTP 线程只落一行运行 + 一条 outbox，真正的八阶段
+        # 处理由 Worker 异步完成。审计与事件同事务写入，任一失败整体回滚。
+        record_change(
+            self._audit,
+            self._outbox,
+            scope,
+            resource_type="PROCESSING_RUN",
+            resource_id=created.run_id,
+            action="create",
+            from_status=None,
+            to_status=created.status,
+            reason=None,
+            request_id=None,
+            details={
+                "pipeline_version": created.pipeline_version,
+                "input_ref_count": len(created.input_refs),
+            },
+            event_type=PROCESSING_RUN_REQUESTED_EVENT,
+            event_payload={
+                "run_id": str(created.run_id),
+                "pipeline_version": created.pipeline_version,
+            },
+            occurred_at=moment,
+            dispatch=True,
+        )
         self._uow.commit()
         return created
 
@@ -92,6 +147,27 @@ class ProcessingRunUseCases:
         if run is None:
             raise ResourceNotFoundError(_NOT_FOUND_MESSAGE)
         return run
+
+    def list_steps(
+        self,
+        scope: ProjectScope,
+        run_id: UUID,
+        *,
+        after_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[ProcessingStep]:
+        """按项目作用域列出一个运行的步骤记录；运行不存在即 404。"""
+        self.get(scope, run_id)
+        return self._steps.list(
+            scope,
+            run_id=run_id,
+            after_id=after_id,
+            limit=limit,
+        )
+
+    def detail_steps(self, scope: ProjectScope, run_id: UUID) -> list[ProcessingStep]:
+        """详情响应内联步骤（有界）；完整历史走 :meth:`list_steps` 分页。"""
+        return self.list_steps(scope, run_id, limit=DETAIL_STEP_LIMIT)
 
     def act(
         self,
@@ -297,4 +373,9 @@ class ProcessingWorkerUseCases:
         return saved
 
 
-__all__ = ["ProcessingRunUseCases", "ProcessingWorkerUseCases"]
+__all__ = [
+    "DETAIL_STEP_LIMIT",
+    "PROCESSING_RUN_REQUESTED_EVENT",
+    "ProcessingRunUseCases",
+    "ProcessingWorkerUseCases",
+]

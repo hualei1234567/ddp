@@ -24,7 +24,14 @@ from app.domain.processing.errors import (
 from app.domain.processing.state_machines import first_stage
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.session import create_db_engine, create_session_factory
-from app.infrastructure.repositories.processing import SqlProcessingRunRepository
+from app.infrastructure.repositories.collection_audit import (
+    SqlAuditRepository,
+    SqlOutboxRepository,
+)
+from app.infrastructure.repositories.processing import (
+    SqlProcessingRunRepository,
+    SqlProcessingRunStepRepository,
+)
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import seed_identity
@@ -53,7 +60,13 @@ def _services(
     session = factory()
     repository = SqlProcessingRunRepository(session)
     return (
-        ProcessingRunUseCases(repository, session),
+        ProcessingRunUseCases(
+            repository,
+            SqlProcessingRunStepRepository(session),
+            session,
+            audit=SqlAuditRepository(session),
+            outbox=SqlOutboxRepository(session),
+        ),
         ProcessingWorkerUseCases(repository, session),
         session,
     )
