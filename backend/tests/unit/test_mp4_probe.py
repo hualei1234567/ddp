@@ -58,6 +58,21 @@ _PROBE_JSON = json.dumps(
 ).encode()
 
 
+@pytest.fixture(autouse=True)
+def _resolve_ffprobe_to_python(monkeypatch: pytest.MonkeyPatch) -> None:
+    """默认把 ffprobe 解析成一个可执行路径，具体行为由各用例 mock subprocess。
+
+    CI 镜像不保证安装 FFmpeg。除“显式缺 ffprobe”用例会在测试体内覆盖本 patch
+    外，其余用例都不应因环境缺少外部可执行文件而失败；真实 ffprobe 样例用例
+    继续用 ``skipif`` 显式跳过。
+    """
+    monkeypatch.setattr(
+        mp4_module.shutil,
+        "which",
+        lambda name: sys.executable if name == "ffprobe" else None,
+    )
+
+
 def _mp4_file(tmp_path: Path, name: str = "sample.mp4") -> Path:
     path = tmp_path / name
     path.write_bytes(FTYP_HEADER + b"\x00" * 64)
