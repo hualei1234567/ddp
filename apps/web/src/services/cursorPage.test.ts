@@ -5,6 +5,7 @@ import {
   CursorPageOverflowError,
   fetchAllCursorPages,
   mergeCursorPageItems,
+  mergeCursorPageRefresh,
 } from "./cursorPage";
 
 interface Row {
@@ -73,6 +74,161 @@ describe("游标分页合并", () => {
 
     expect(existing).toEqual([{ id: "a", value: 1 }]);
     expect(incoming).toEqual([{ id: "b", value: 2 }]);
+  });
+});
+
+describe("原地合并刷新", () => {
+  it("保留已加载的后续页，不把列表重置为第一页", () => {
+    const existing: Row[] = [
+      { id: "a", value: 1 },
+      { id: "b", value: 1 },
+      { id: "c", value: 1 },
+      { id: "d", value: 1 },
+    ];
+
+    const result = mergeCursorPageRefresh(
+      existing,
+      [
+        { id: "a", value: 1 },
+        { id: "b", value: 1 },
+      ],
+      getKey,
+    );
+
+    expect(result.items).toEqual(existing);
+    expect(result.removedKeys).toEqual([]);
+  });
+
+  it("同主键用新对象就地替换，位置不变", () => {
+    const result = mergeCursorPageRefresh(
+      [
+        { id: "a", value: 1 },
+        { id: "b", value: 1 },
+        { id: "c", value: 1 },
+      ],
+      [
+        { id: "a", value: 2 },
+        { id: "b", value: 3 },
+      ],
+      getKey,
+    );
+
+    expect(result.items).toEqual([
+      { id: "a", value: 2 },
+      { id: "b", value: 3 },
+      { id: "c", value: 1 },
+    ]);
+    expect(result.removedKeys).toEqual([]);
+  });
+
+  it("观察窗口内已不存在的条目被移除", () => {
+    const result = mergeCursorPageRefresh(
+      [
+        { id: "a", value: 1 },
+        { id: "b", value: 1 },
+        { id: "c", value: 1 },
+      ],
+      [
+        { id: "a", value: 1 },
+        { id: "c", value: 1 },
+      ],
+      getKey,
+    );
+
+    expect(result.items.map(getKey)).toEqual(["a", "c"]);
+    expect(result.removedKeys).toEqual(["b"]);
+  });
+
+  it("窗口之外的尾部条目即使不在本页也保留", () => {
+    // 服务端第一页只有 a、b；c、d 已加载但本次未被观察，不能假定已删除。
+    const result = mergeCursorPageRefresh(
+      [
+        { id: "a", value: 1 },
+        { id: "b", value: 1 },
+        { id: "c", value: 1 },
+        { id: "d", value: 1 },
+      ],
+      [
+        { id: "a", value: 1 },
+        { id: "b", value: 1 },
+      ],
+      getKey,
+    );
+
+    expect(result.items.map(getKey)).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("新增条目按服务端当前顺序插入", () => {
+    const result = mergeCursorPageRefresh(
+      [
+        { id: "a", value: 1 },
+        { id: "b", value: 1 },
+        { id: "c", value: 1 },
+      ],
+      [
+        { id: "x", value: 1 },
+        { id: "a", value: 1 },
+        { id: "b", value: 1 },
+      ],
+      getKey,
+    );
+
+    expect(result.items.map(getKey)).toEqual(["x", "a", "b", "c"]);
+  });
+
+  it("本页全是新条目时按服务端顺序插到最前", () => {
+    const result = mergeCursorPageRefresh(
+      [{ id: "a", value: 1 }],
+      [
+        { id: "x", value: 1 },
+        { id: "y", value: 1 },
+      ],
+      getKey,
+    );
+
+    expect(result.items.map(getKey)).toEqual(["x", "y", "a"]);
+  });
+
+  it("空页保留现有数据，不做全量删除", () => {
+    const existing: Row[] = [{ id: "a", value: 1 }];
+
+    const result = mergeCursorPageRefresh(existing, [], getKey);
+
+    expect(result.items).toEqual(existing);
+    expect(result.removedKeys).toEqual([]);
+  });
+
+  it("已加载为空时直接采用本页顺序，同页重复主键只保留第一项", () => {
+    const result = mergeCursorPageRefresh(
+      [],
+      [
+        { id: "a", value: 1 },
+        { id: "a", value: 2 },
+        { id: "b", value: 3 },
+      ],
+      getKey,
+    );
+
+    expect(result.items).toEqual([
+      { id: "a", value: 1 },
+      { id: "b", value: 3 },
+    ]);
+  });
+
+  it("不修改入参数组", () => {
+    const existing: Row[] = [{ id: "a", value: 1 }];
+    const incoming: Row[] = [
+      { id: "x", value: 2 },
+      { id: "a", value: 3 },
+    ];
+
+    mergeCursorPageRefresh(existing, incoming, getKey);
+
+    expect(existing).toEqual([{ id: "a", value: 1 }]);
+    expect(incoming).toEqual([
+      { id: "x", value: 2 },
+      { id: "a", value: 3 },
+    ]);
   });
 });
 
