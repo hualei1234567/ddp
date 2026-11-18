@@ -19,6 +19,7 @@ import {
   DATA_SOURCE_VALUES,
   DEDUP_KEY_VALUES,
   LABEL_VISIBILITY_VALUES,
+  REVIEW_MODE_VALUES,
   SAMPLE_ROLE_VALUES,
   SAMPLE_SET_STATUS_VALUES,
   SAMPLE_TIME_DOMAIN_VALUES,
@@ -444,6 +445,12 @@ export function parseAnnotationTask(
       record,
       "assignment_mode",
       `${path}.assignment_mode`,
+    ),
+    review_mode: readEnum(
+      record,
+      "review_mode",
+      `${path}.review_mode`,
+      REVIEW_MODE_VALUES,
     ),
     iaa_policy: readRecord(record, "iaa_policy", `${path}.iaa_policy`),
     quality_policy: readRecord(

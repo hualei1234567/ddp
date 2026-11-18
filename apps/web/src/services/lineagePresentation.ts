@@ -35,6 +35,7 @@ export const LINEAGE_RELATION_LABELS: Record<LineageRelation, string> = {
   EVALUATED_BY: "被质检",
   ANNOTATED_BY: "被标注",
   INCLUDED_IN: "纳入数据集",
+  TRAINED_ON: "用于训练",
 };
 
 export const LINEAGE_DIRECTION_LABELS: Record<LineageDirection, string> = {

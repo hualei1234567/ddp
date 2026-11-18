@@ -5,8 +5,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 from app.api.v1.training_dependencies import get_training_adapter_gateway
-from app.application.datasets.training_ports import AdapterRunRef, AdapterRunStatus
-from app.domain.datasets.training_enums import ExecutionMode
 from app.infrastructure.db.models.collection import OutboxEvent
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -15,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from tests.api.conftest import ApiIds, make_client
 from tests.api.dataset_support import url
 from tests.api.training_support import (
+    FakeTrainingGateway,
     add_member,
     approved_request,
     build_deliverable,
@@ -350,28 +349,6 @@ def test_delivery_requires_frozen_version_and_approved_revision(
     assert mismatched.status_code == 404
 
 
-class _FakeTrainingGateway:
-    """测试用 Adapter 网关：不触网，只回报固定执行方式和 run。"""
-
-    def __init__(self, execution_mode: str | None) -> None:
-        self._execution_mode = execution_mode
-
-    def capabilities(self, adapter_id: str) -> frozenset[str]:
-        return frozenset({"submit", "status", "cancel"})
-
-    def execution_mode(self, adapter_id: str) -> ExecutionMode | None:
-        return ExecutionMode(self._execution_mode) if self._execution_mode else None
-
-    def submit(self, **kwargs: object) -> AdapterRunRef:
-        return AdapterRunRef(external_run_id=f"run-{uuid4().hex[:8]}")
-
-    def get_status(self, **kwargs: object) -> AdapterRunStatus:
-        raise AssertionError("本测试不查询状态")
-
-    def cancel(self, **kwargs: object) -> AdapterRunStatus:
-        raise AssertionError("本测试不取消训练")
-
-
 def _delivered_delivery(
     api_db: tuple[sessionmaker[Session], ApiIds], *, execution_mode: str | None
 ) -> tuple[TestClient, dict[str, object]]:
@@ -382,7 +359,7 @@ def _delivered_delivery(
     ctx = build_deliverable(factory, ids)
     request_body = approved_request(editor, approver, ids.project_a, ids.owner_a)
     editor = ctx["editor"]
-    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: _FakeTrainingGateway(
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: FakeTrainingGateway(
         execution_mode
     )
     created = editor.post(
@@ -466,7 +443,7 @@ def test_external_reference_replay_survives_execution_mode_config_change(
     assert first.json()["execution_mode"] == "MOCK"
 
     # 部署侧移除了执行方式声明。
-    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: _FakeTrainingGateway(
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: FakeTrainingGateway(
         None
     )
     replay = editor.post(
@@ -513,7 +490,7 @@ def test_external_reference_rejects_missing_or_conflicting_execution_mode(
     assert unknown.json()["error"]["code"] == "validation_failed"
 
     # Adapter 配置了 LOCAL，请求声称 REMOTE：不是同一次提交，必须拒绝。
-    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: _FakeTrainingGateway(
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: FakeTrainingGateway(
         "LOCAL"
     )
     conflict = editor.post(

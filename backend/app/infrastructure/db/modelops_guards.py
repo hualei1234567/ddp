@@ -21,6 +21,7 @@ _JSON_COLUMNS = frozenset(
         "metrics",
         "thresholds",
         "report_ref",
+        "failure_cases",
         "result_ref",
         "dimensions",
         "evidence_refs",
@@ -157,6 +158,9 @@ _IMMUTABLE_WHEN = {
             # 建出的列，重建会失败（见 training_guards 的同款处理）。
             "baseline_evaluation_id",
             "baseline_dataset_version_id",
+            # 失败明细是 Data Gap 的事实来源（N7-003）。评测成功后再改它，
+            # 等于事后篡改证据；迁移 0061 负责在存量库上重装触发器。
+            "failure_cases",
         ),
     ),
     "model_feedback": (

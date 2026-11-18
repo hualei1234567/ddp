@@ -121,6 +121,8 @@ export type AnnotationTaskStatus =
 export const TASK_PRIORITY_VALUES = ["P0", "P1", "P2", "P3"] as const;
 export type TaskPriority = (typeof TASK_PRIORITY_VALUES)[number];
 
+export const REVIEW_MODE_VALUES = ["SINGLE", "DOUBLE"] as const;
+
 export const ASSIGNMENT_MODE_VALUES = ["MANUAL", "CLAIM", "MIXED"] as const;
 
 export const ANNOTATION_BATCH_STATUS_VALUES = [
@@ -424,6 +426,31 @@ export interface AnnotationSampleSet {
   updated_by: string | null;
 }
 
+export type ReviewMode = "SINGLE" | "DOUBLE";
+
+export interface DoubleAnnotationConsistency {
+  task_id: string;
+  project_id: string;
+  review_mode: ReviewMode;
+  status: string;
+  metric: string | null;
+  threshold: number | null;
+  value: number | null;
+  passed: boolean | null;
+  sample_size: number;
+  episode_count: number;
+  double_episode_count: number;
+  annotator_count: number;
+  missing_episode_ids: string[];
+  auto_approve_enabled: boolean;
+  auto_approved: boolean;
+  arbitration_required: boolean;
+  arbitration_ids: string[];
+  details: Record<string, unknown>[];
+  evaluated_at: string;
+  message: string | null;
+}
+
 export interface AnnotationTask {
   task_id: string;
   project_id: string;
@@ -439,6 +466,7 @@ export interface AnnotationTask {
   target_episode_count: number;
   priority: TaskPriority;
   assignment_mode: string;
+  review_mode: ReviewMode;
   iaa_policy: Record<string, unknown>;
   quality_policy: Record<string, unknown>;
   progress: Record<string, unknown>;
@@ -582,6 +610,7 @@ export interface AnnotationSubmission {
   updated_at: string | null;
   created_by: string | null;
   updated_by: string | null;
+  consistency?: DoubleAnnotationConsistency | null;
 }
 
 export interface ReviewIssue {
@@ -752,6 +781,9 @@ export interface AnnotationTaskCreateInput {
   due_at?: string | null;
   priority?: TaskPriority;
   assignment_mode?: string;
+  review_mode?: ReviewMode;
+  agreement_threshold?: number | null;
+  auto_approve?: boolean;
   iaa_policy?: Record<string, unknown>;
   quality_policy?: Record<string, unknown>;
 }

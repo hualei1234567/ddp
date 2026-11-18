@@ -71,9 +71,11 @@ fi
 # 分区策略）的新增值仍然会被拦截。
 #
 # 清单必须显式列出并且逐个写明理由——不允许用通配或「全部枚举」开关。
+# LineageRelation：血缘关系随接入方增长（最近新增 TRAINED_ON），契约已用
+# x-extensible-enum 明示客户端必须容忍未知关系；新增取值不是破坏性变更。
 # 说明：oasdiff 的 `--err-ignore` 在 `breaking` 子命令下实测无效（连 `.*` 都不忽略），
 # 因此用预处理而不是忽略规则。1.37.0 与 CI 的 1.38.0 行为一致。
-OPEN_ENUMS="ErrorCode LineageNodeType"
+OPEN_ENUMS="ErrorCode LineageNodeType LineageRelation"
 prepare_open_enums() {
   local root="$1"
   python3 - "$root" "$OPEN_ENUMS" <<'PYEOF'

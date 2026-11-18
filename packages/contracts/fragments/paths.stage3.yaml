@@ -218,6 +218,21 @@ annotationTaskDetail:
       "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
 
+annotationTaskConsistency:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/TaskId"
+  get:
+    operationId: getAnnotationTaskConsistency
+    tags: [annotation-tasks]
+    summary: 双标任务一致性结论（只读）
+    responses:
+      "200": {description: 一致性结论, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/DoubleAnnotationConsistency"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
 annotationTaskActions:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"

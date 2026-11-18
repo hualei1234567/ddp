@@ -384,7 +384,11 @@ LineageNodeType:
   enum: [RAW_ASSET, UPLOAD_SESSION, COLLECTION_TASK, COLLECTION_BATCH, INGESTION_JOB, EPISODE, QUALITY_RUN, ANNOTATION, DATASET_VERSION, TRAINING_RUN, DATA_SOURCE, DATA_SOURCE_IMPORT]
 LineageRelation:
   type: string
-  enum: [UPLOADED_BY, PRODUCED_BY, USED_AS_INPUT, PRODUCED, SEGMENTED_INTO, SUPERSEDES, INVALIDATES, EVALUATED_BY, ANNOTATED_BY, INCLUDED_IN]
+  # 关系集合**明确可增长**：每新增一类血缘（最近的 TRAINED_ON）都是向后兼容的
+  # 增量，但 oasdiff 会把"响应枚举新增取值"判为 breaking。按 oasdiff 的建议
+  # 用 x-extensible-enum 声明这一意图，客户端必须容忍未知关系值。
+  x-extensible-enum: [UPLOADED_BY, PRODUCED_BY, USED_AS_INPUT, PRODUCED, SEGMENTED_INTO, SUPERSEDES, INVALIDATES, EVALUATED_BY, ANNOTATED_BY, INCLUDED_IN, TRAINED_ON]
+  enum: [UPLOADED_BY, PRODUCED_BY, USED_AS_INPUT, PRODUCED, SEGMENTED_INTO, SUPERSEDES, INVALIDATES, EVALUATED_BY, ANNOTATED_BY, INCLUDED_IN, TRAINED_ON]
 LineageEdge:
   type: object
   required: [edge_id, project_id, from_node_type, from_node_id, to_node_type, to_node_id, relation, metadata, created_by, created_at]

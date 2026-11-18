@@ -134,6 +134,8 @@ _EVENT_DOMAINS = frozenset(
         # 阶段 8 项目管理（project.created / updated / member_*）：
         # 首段不在此表中时归类校验会静默跳过，等于五个新事件不受守卫。
         "project",
+        # N4-004 统一质量引擎：quality.run.completed 是留痕类事件。
+        "quality",
         "quality_policy",
         "robot",
         "sensor",

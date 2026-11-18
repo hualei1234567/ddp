@@ -500,6 +500,157 @@ def compute_iaa(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class DoubleAnnotationEvaluation:
+    """双标任务的一致性门槛结论。
+
+    ``status`` 是门槛结论而非状态机状态：
+
+    - ``PENDING_SECOND_ANNOTATOR``：还没有任何 Episode 出现第二名标注者；
+    - ``PARTIAL``：部分 Episode 只有一人，不能判定通过；
+    - ``INSUFFICIENT_DATA``：有重叠但所选指标无法计算（例如只有 N/A）；
+    - ``PASSED`` / ``FAILED``：全部 Episode 均有至少两人，且指标达标/不达标。
+    """
+
+    status: str
+    metric: IAAMetric
+    threshold: float
+    value: float | None
+    sample_size: int
+    episode_count: int
+    double_episode_count: int
+    annotator_count: int
+    missing_episode_ids: tuple[UUID, ...]
+    metrics: tuple[IAAMetricResult, ...]
+
+    @property
+    def passed(self) -> bool | None:
+        if self.status in {"PASSED", "FAILED"}:
+            return self.status == "PASSED"
+        return None
+
+
+def evaluate_double_annotation(
+    observations: Sequence[IAAObservation],
+    *,
+    metric: IAAMetric = IAAMetric.PERCENT_AGREEMENT,
+    threshold: float = 0.8,
+    iou_threshold: float = DEFAULT_IOU_THRESHOLD,
+) -> DoubleAnnotationEvaluation:
+    """按所选 IAA 指标判定双标一致性。
+
+    与 :func:`compute_iaa` 共用同一批指标实现，不复制算法。区别只在**充分性
+    口径**：本函数面向单 Episode 双标场景，只要某个 Episode 有两名标注者即可
+    计算指标，不要求至少两个重叠 Episode。
+    """
+    if metric not in {
+        IAAMetric.PERCENT_AGREEMENT,
+        IAAMetric.COHEN_KAPPA,
+        IAAMetric.FLEISS_KAPPA,
+        IAAMetric.KRIPPENDORFF_ALPHA,
+        IAAMetric.SPAN_F1,
+    }:
+        raise DomainValidationError("双标一致性不支持的指标")
+    if (
+        not isinstance(threshold, int | float)
+        or isinstance(threshold, bool)
+        or not 0 <= float(threshold) <= 1
+    ):
+        raise DomainValidationError("threshold 必须在 0 到 1 之间")
+    if not 0 <= iou_threshold <= 1:
+        raise DomainValidationError("iou_threshold 必须在 0 到 1 之间")
+    for observation in observations:
+        if observation.source is not IAAObservationSource.SUBMISSION:
+            raise IAASourceForbiddenError("双标一致性只能基于真实提交重叠计算，不得使用黄金集")
+
+    by_item: dict[UUID, dict[UUID, IAAObservation]] = defaultdict(dict)
+    annotators: set[UUID] = set()
+    for observation in observations:
+        annotators.add(observation.annotator_id)
+        by_item[observation.episode_id][observation.annotator_id] = observation
+
+    episode_ids = sorted(by_item, key=str)
+    overlap = {
+        episode_id: per_annotator
+        for episode_id, per_annotator in by_item.items()
+        if len(per_annotator) >= 2
+    }
+    missing = tuple(episode_id for episode_id in episode_ids if episode_id not in overlap)
+    label_keys = sorted(
+        {
+            key
+            for per_annotator in overlap.values()
+            for observation in per_annotator.values()
+            for key in observation.label_values
+        }
+        | {
+            span.label_key
+            for per_annotator in overlap.values()
+            for observation in per_annotator.values()
+            for span in observation.spans
+        }
+    )
+
+    metrics: list[IAAMetricResult] = []
+    selected_values: list[float] = []
+    selected_sample_size = 0
+    for label_key in label_keys:
+        units = [
+            [
+                _categorical(observation.label_values[label_key])
+                for observation in per_annotator.values()
+            ]
+            for per_annotator in overlap.values()
+            if any(label_key in observation.label_values for observation in per_annotator.values())
+        ]
+        units = [ratings for ratings in units if len(ratings) >= 2]
+        percent = _percent_agreement(units, label_key)
+        cohen = _cohen_kappa(units, label_key)
+        fleiss = _fleiss_kappa(units, label_key)
+        krippendorff = _krippendorff_alpha(units, label_key)
+        span_f1, boundary_mae = _span_metrics(overlap, label_key, iou_threshold)
+        row = {
+            IAAMetric.PERCENT_AGREEMENT: percent,
+            IAAMetric.COHEN_KAPPA: cohen,
+            IAAMetric.FLEISS_KAPPA: fleiss,
+            IAAMetric.KRIPPENDORFF_ALPHA: krippendorff,
+            IAAMetric.SPAN_F1: span_f1,
+        }
+        metrics.extend((percent, cohen, fleiss, krippendorff, span_f1, boundary_mae))
+        chosen = row.get(metric)
+        if chosen is not None and chosen.value is not None:
+            selected_values.append(chosen.value)
+            selected_sample_size += chosen.sample_size
+
+    if not overlap:
+        status = "PENDING_SECOND_ANNOTATOR"
+        value = None
+    elif not selected_values:
+        status = "INSUFFICIENT_DATA"
+        value = None
+    else:
+        # 任一标签字段低于阈值即视为不达标：双标门槛不能只看平均。
+        value = min(selected_values)
+        if value < float(threshold):
+            status = "FAILED"
+        elif missing:
+            status = "PARTIAL"
+        else:
+            status = "PASSED"
+    return DoubleAnnotationEvaluation(
+        status=status,
+        metric=metric,
+        threshold=float(threshold),
+        value=value,
+        sample_size=selected_sample_size,
+        episode_count=len(by_item),
+        double_episode_count=len(overlap),
+        annotator_count=len(annotators),
+        missing_episode_ids=missing,
+        metrics=tuple(metrics),
+    )
+
+
 def _empty_metrics(
     observations: Sequence[IAAObservation],
     *,
@@ -543,9 +694,11 @@ def _empty_metrics(
 __all__ = [
     "DEFAULT_IOU_THRESHOLD",
     "DEFAULT_METRIC_DEFINITIONS_VERSION",
+    "DoubleAnnotationEvaluation",
     "IAAComputation",
     "IAAMetricResult",
     "IAAObservation",
     "Span",
     "compute_iaa",
+    "evaluate_double_annotation",
 ]

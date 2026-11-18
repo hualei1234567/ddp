@@ -29,6 +29,7 @@ from app.application.datasets.dataset_grants import (
     DatasetGrantUseCases,
     GrantDecision,
 )
+from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.training_deliveries import TrainingDeliveryUseCases
 from app.application.datasets.training_ports import TrainingAdapterGateway
 from app.application.datasets.training_references import (
@@ -53,6 +54,7 @@ from app.infrastructure.repositories.dataset_repositories import (
 )
 from app.infrastructure.repositories.export_jobs import SqlExportJobRepository
 from app.infrastructure.repositories.identity import SqlProjectRepository
+from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.training_delivery_repositories import (
     SqlExternalReferenceRepository,
     SqlTrainingCallbackRepository,
@@ -107,6 +109,7 @@ def get_training_services(
     audit = SqlDatasetAuditRepository(session)
     outbox = SqlDatasetOutboxRepository(session)
     idempotency = SqlDatasetIdempotencyRepository(session)
+    lineage = DatasetVersionLineageRecorder(SqlLineageRepository(session))
     return TrainingServices(
         requests=TrainingRequestUseCases(
             requests_repo,
@@ -144,6 +147,7 @@ def get_training_services(
             outbox=outbox,
             idempotency=idempotency,
             uow=session,
+            lineage=lineage,
         ),
         callbacks=AdapterCallbackUseCases(
             references=references_repo,

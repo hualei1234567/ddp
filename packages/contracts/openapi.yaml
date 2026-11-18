@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.12.0
+  version: 1.13.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -109,6 +109,39 @@ info:
     - `1.12.0` **新增人工审核证据**：`DataReview` 与审核决定请求新增可选
       `evidence`（键白名单 timestamp_seconds / camera / note / episode_key，
       ≤4 键、序列化 ≤2000 字节），与审核结论同事务写入审计留痕。
+    - `1.13.0` **导入步骤日志改为游标分页**：`GET .../data-source-imports/{import_id}/logs`
+      新增可选 `cursor` 查询参数，响应新增必填 `next_cursor`（可为 null）。
+      不带 `cursor` 时仍返回最近 `limit` 条（默认 100、上限 500），行为向后兼容；
+      带 `next_cursor` 时返回严格更早的一页，顺序与时间一致。`truncated` 语义
+      收敛为"还有更早日志未返回"，与 `next_cursor !== null` 严格等价。
+      全部为增量：无路径删除、无字段删除、未收窄既有字段取值。
+    - `1.13.0` **新增 N4-004 统一质量引擎**：`quality-runs` 的创建 / 详情 /
+      结论明细三个只读追加型操作。规则实现仍留在导入、标注、数据集三处既有
+      模块；本版本只做统一编排、六类分层（INTEGRITY / TEMPORAL / VISUAL /
+      METADATA / ANNOTATION / OVERALL）与结果持久化。`rule_set_version` 为
+      适用规则声明的内容 SHA，运行创建时固化；每条 finding 另带
+      `rule_version`，规则升级不回写历史。`NOT_APPLICABLE` 与 `PASS` 严格
+      区分（前者 `score` 为 null），整体状态新增 `INCOMPLETE`。本批次 POST
+      只接受单个 Episode 或导入任务；批量/自动质检留给后续批次，
+      `DATASET_VERSION` 规则源已注册但入口未开放。全部为增量：无路径删除、
+      无字段删除、无既有字段语义变更。
+    - `1.13.0` **新增 N5-005 训练血缘关系 `TRAINED_ON`**：
+      `LineageRelation` 枚举追加 `TRAINED_ON`（训练引用 → 数据版本），
+      用于回答"这个模型版本用了哪份数据训练"。血缘查询响应形状不变；
+      新关系只在训练 run 创建成功时追加，历史数据不回填。
+    - `1.13.0` **标注双标一致性**：任务创建/详情新增可选 `review_mode`
+      （`SINGLE` / `DOUBLE`，默认 `SINGLE`）；标注提交详情新增可选
+      `consistency` 结果（判定、一致性分数、冲突点），任务级结论通过下述
+      只读端点查询。
+      新增只读端点 `GET .../annotation-tasks/{task_id}/consistency`，返回
+      任务当前一致性结论与逐项冲突；未开启双标时返回空结果而非报错。
+      一致性不达标时标注提交进入 `ESCALATED` 并生成 `IAA_CONFLICT` 仲裁，
+      `auto_approve` 默认关闭且仅项目负责人可开启。
+    - `1.13.0` **评测失败用例结构化**：评测完成回调与评测详情新增可选
+      `failure_cases`（最多 200 条、序列化后 64 KiB 上限），每条含类别、
+      严重度、Episode 引用、证据与观测/期望值；数值只接受有限数，`NaN` /
+      `Infinity` 一律 422。成功提交后不可变更，供 N7-004 Data Gap 聚合使用。
+      全部为增量：无路径删除、无字段删除、无既有字段语义变更。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -126,7 +159,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.12.0
+  version: 1.13.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -446,6 +479,8 @@ paths:
     $ref: "./fragments/paths.stage3.yaml#/annotationTasks"
   /api/v1/projects/{project_id}/annotation-tasks/{task_id}:
     $ref: "./fragments/paths.stage3.yaml#/annotationTaskDetail"
+  /api/v1/projects/{project_id}/annotation-tasks/{task_id}/consistency:
+    $ref: "./fragments/paths.stage3.yaml#/annotationTaskConsistency"
   /api/v1/projects/{project_id}/annotation-tasks/{task_id}/actions/{action}:
     $ref: "./fragments/paths.stage3.yaml#/annotationTaskActions"
   /api/v1/projects/{project_id}/annotation-tasks/{task_id}/batches:
@@ -754,6 +789,13 @@ paths:
     $ref: "./fragments/paths.processing.yaml#/processingRunSteps"
   /api/v1/projects/{project_id}/processing-runs/{run_id}/actions/{action}:
     $ref: "./fragments/paths.processing.yaml#/processingRunActions"
+  # --- N4-004 统一质量引擎 ---
+  /api/v1/projects/{project_id}/quality-runs:
+    $ref: "./fragments/paths.quality.yaml#/qualityRuns"
+  /api/v1/projects/{project_id}/quality-runs/{run_id}:
+    $ref: "./fragments/paths.quality.yaml#/qualityRunDetail"
+  /api/v1/projects/{project_id}/quality-runs/{run_id}/findings:
+    $ref: "./fragments/paths.quality.yaml#/qualityRunFindings"
   # --- 审计日志只读查询（owner / 平台管理员）---
   /api/v1/projects/{project_id}/audit-logs:
     $ref: "./fragments/paths.audit.yaml#/auditLogs"
@@ -1004,6 +1046,7 @@ components:
     AnnotationSchema: {$ref: "./schemas/annotation-schema.v1.schema.json"}
     AnnotationSampleSet: {$ref: "./schemas/annotation-sample-set.v1.schema.json"}
     AnnotationTask: {$ref: "./schemas/annotation-task.v1.schema.json"}
+    DoubleAnnotationConsistency: {$ref: "./schemas/double-annotation-consistency.v1.schema.json"}
     AnnotationBatch: {$ref: "./schemas/annotation-batch.v1.schema.json"}
     AnnotationAssignment: {$ref: "./schemas/annotation-assignment.v1.schema.json"}
     AnnotationSubmission: {$ref: "./schemas/annotation-submission.v1.schema.json"}
@@ -1132,6 +1175,8 @@ components:
     ModelVersionStatus: {$ref: "./fragments/schemas.stage5.yaml#/ModelVersionStatus"}
     EvaluationStatus: {$ref: "./fragments/schemas.stage5.yaml#/EvaluationStatus"}
     EvaluationVerdict: {$ref: "./fragments/schemas.stage5.yaml#/EvaluationVerdict"}
+    FailureCaseCategory: {$ref: "./fragments/schemas.stage5.yaml#/FailureCaseCategory"}
+    FailureCase: {$ref: "./fragments/schemas.stage5.yaml#/FailureCase"}
     InferenceServiceStatus: {$ref: "./fragments/schemas.stage5.yaml#/InferenceServiceStatus"}
     InferenceServiceEnvironment: {$ref: "./fragments/schemas.stage5.yaml#/InferenceServiceEnvironment"}
     InferenceTaskStatus: {$ref: "./fragments/schemas.stage5.yaml#/InferenceTaskStatus"}
@@ -1253,6 +1298,17 @@ components:
     ProcessingStepStatus: {$ref: "./fragments/schemas.processing.yaml#/ProcessingStepStatus"}
     ProcessingRunStep: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunStep"}
     ProcessingRunStepPage: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunStepPage"}
+    QualityCategory: {$ref: "./fragments/schemas.quality.yaml#/QualityCategory"}
+    QualityCategoryStatus: {$ref: "./fragments/schemas.quality.yaml#/QualityCategoryStatus"}
+    QualityFindingStatus: {$ref: "./fragments/schemas.quality.yaml#/QualityFindingStatus"}
+    QualitySeverity: {$ref: "./fragments/schemas.quality.yaml#/QualitySeverity"}
+    QualityRunStatus: {$ref: "./fragments/schemas.quality.yaml#/QualityRunStatus"}
+    QualitySubjectType: {$ref: "./fragments/schemas.quality.yaml#/QualitySubjectType"}
+    QualityRunCreate: {$ref: "./fragments/schemas.quality.yaml#/QualityRunCreate"}
+    QualityCategorySummary: {$ref: "./fragments/schemas.quality.yaml#/QualityCategorySummary"}
+    QualityRunFinding: {$ref: "./fragments/schemas.quality.yaml#/QualityRunFinding"}
+    QualityRun: {$ref: "./fragments/schemas.quality.yaml#/QualityRun"}
+    QualityRunFindingPage: {$ref: "./fragments/schemas.quality.yaml#/QualityRunFindingPage"}
     ResourceKind: {$ref: "./fragments/schemas.governance.yaml#/ResourceKind"}
     QuotaStatus: {$ref: "./fragments/schemas.governance.yaml#/QuotaStatus"}
     Quota: {$ref: "./fragments/schemas.governance.yaml#/Quota"}

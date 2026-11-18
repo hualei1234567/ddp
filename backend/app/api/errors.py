@@ -40,6 +40,7 @@ from app.domain.ingestion.errors import IngestionDomainError
 from app.domain.locations.errors import LocationDomainError
 from app.domain.modelops.errors import ModelOpsDomainError
 from app.domain.processing.errors import ProcessingDomainError
+from app.domain.quality.errors import QualityDomainError
 
 
 def _mapped(
@@ -902,4 +903,27 @@ def processing_error_to_app(exc: ProcessingDomainError) -> AppError:
         status_by_code=_PROCESSING_STATUS_BY_CODE,
         messages=_PROCESSING_MESSAGES,
         fallback=_PROCESSING_FALLBACK,
+    )
+
+
+# 质量引擎不新增错误码：对象不存在/跨项目用 resource_not_found，参数与
+# 未知类别等输入错误用 validation_failed。
+_QUALITY_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "resource_not_found": 404,
+}
+
+_QUALITY_MESSAGES = {
+    "validation_failed": "质量检查请求或领域规则校验失败",
+    "resource_not_found": "质量检查对象或运行不存在、不属于当前项目",
+}
+_QUALITY_FALLBACK = "质量引擎规则校验失败"
+
+
+def quality_error_to_app(exc: QualityDomainError) -> AppError:
+    return _mapped(
+        exc,
+        status_by_code=_QUALITY_STATUS_BY_CODE,
+        messages=_QUALITY_MESSAGES,
+        fallback=_QUALITY_FALLBACK,
     )

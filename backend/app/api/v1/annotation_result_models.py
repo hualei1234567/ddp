@@ -8,6 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.v1.annotation_common import public_actions
+from app.api.v1.annotation_consistency_models import DoubleAnnotationConsistencyOut
 from app.domain.annotation.arbitration import AnnotationArbitration
 from app.domain.annotation.enums import (
     AnnotationArbitrationStatus,
@@ -179,9 +180,16 @@ class AnnotationSubmissionOut(BaseModel):
     updated_at: datetime | None
     created_by: UUID | None
     updated_by: UUID | None
+    # 仅提交动作返回：双标任务的门槛结论；非双标任务为 null。
+    consistency: DoubleAnnotationConsistencyOut | None = None
 
     @classmethod
-    def from_domain(cls, submission: AnnotationSubmission) -> AnnotationSubmissionOut:
+    def from_domain(
+        cls,
+        submission: AnnotationSubmission,
+        *,
+        consistency: DoubleAnnotationConsistencyOut | None = None,
+    ) -> AnnotationSubmissionOut:
         return cls(
             submission_id=submission.submission_id,
             project_id=submission.project_id,
@@ -214,6 +222,7 @@ class AnnotationSubmissionOut(BaseModel):
             updated_at=submission.updated_at,
             created_by=submission.created_by,
             updated_by=submission.updated_by,
+            consistency=consistency,
         )
 
 

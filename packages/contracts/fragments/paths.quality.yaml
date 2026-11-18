@@ -1,0 +1,101 @@
+# N4-004：统一 Quality Engine 路径。
+# 对应 backend/app/api/v1/quality_routes.py。
+#
+# 一次 POST 同步执行适用的既有规则（导入 / 标注；数据集规则源已注册但
+# 本批次不开放入口），落一条只追加的运行与结论明细。规则实现不在这里，
+# 也不在 application/quality 里重写——本模块只编排与分层。
+
+qualityRuns:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: createQualityRun
+    tags: [quality]
+    summary: 对 Episode 或导入任务执行统一质量检查
+    description: |
+      服务端解析对象并强制项目隔离：对象不存在或跨项目返回 404
+      `resource_not_found`；未知类别/对象类型返回 422 `validation_failed`。
+
+      运行只追加：重复调用产生新的 run，不覆盖历史结论。响应中的
+      `rule_set_version` 是本次适用规则声明的内容 SHA；每条 finding 另带
+      `rule_version`，用于解释"当时用的是哪一版规则"。
+
+      批量/自动的 Episode 质检不在本批次范围，客户端需显式指定单个对象。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/QualityRunCreate" }
+    responses:
+      "201":
+        description: 已完成的质量运行
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+qualityRunDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: getQualityRun
+    tags: [quality]
+    summary: 质量运行详情（六类聚合）
+    description: |
+      运行不存在或跨项目返回 404。`categories` 六类始终齐全；没有结论的
+      类别为 `NOT_APPLICABLE`，`score` 为 null，客户端不得渲染成通过。
+    responses:
+      "200":
+        description: 质量运行
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+qualityRunFindings:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: listQualityFindings
+    tags: [quality]
+    summary: 质量运行结论明细
+    description: |
+      按游标分页；可按 `category` / `status` 过滤。`category=OVERALL` 返回空
+      列表（OVERALL 是聚合结果，不是落库结论）。运行不存在或跨项目返回 404。
+    parameters:
+      - name: category
+        in: query
+        required: false
+        schema: { $ref: "../openapi.yaml#/components/schemas/QualityCategory" }
+      - name: status
+        in: query
+        required: false
+        schema: { $ref: "../openapi.yaml#/components/schemas/QualityFindingStatus" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: 结论明细分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityRunFindingPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

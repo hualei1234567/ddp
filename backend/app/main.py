@@ -27,6 +27,7 @@ from app.api.errors import (
     integrity_error_to_app,
     location_error_to_app,
     processing_error_to_app,
+    quality_error_to_app,
     supplier_error_to_app,
 )
 from app.api.middleware.metrics import MetricsMiddleware
@@ -53,6 +54,7 @@ from app.domain.ingestion.errors import IngestionDomainError
 from app.domain.locations.errors import LocationDomainError
 from app.domain.modelops.errors import ModelOpsDomainError
 from app.domain.processing.errors import ProcessingDomainError
+from app.domain.quality.errors import QualityDomainError
 from app.domain.suppliers.errors import SupplierDomainError
 from app.infrastructure.db.session import get_session_factory
 from app.infrastructure.rate_limit import RateLimiter, build_rate_limiter
@@ -308,6 +310,18 @@ def create_app() -> FastAPI:
         exc: ProcessingDomainError,
     ) -> JSONResponse:
         error = processing_error_to_app(exc)
+        _log_domain_error(request, exc, error)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(QualityDomainError)
+    async def handle_quality_domain_error(
+        request: Request,
+        exc: QualityDomainError,
+    ) -> JSONResponse:
+        error = quality_error_to_app(exc)
         _log_domain_error(request, exc, error)
         return JSONResponse(
             status_code=error.status_code,

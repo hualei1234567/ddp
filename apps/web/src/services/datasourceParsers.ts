@@ -283,11 +283,25 @@ export function parseImportLogList(value: unknown): ImportLogList {
   if (!Array.isArray(record.items)) {
     throw new Error("导入日志列表.items 必须是数组");
   }
+  const truncated = readBoolean(record, "truncated", "导入日志列表.truncated");
+  const nextCursor = readOptionalString(
+    record,
+    "next_cursor",
+    "导入日志列表.next_cursor",
+  );
+  // 契约规定两个字段表达同一事实；不一致说明服务端语义漂移，
+  // 继续渲染会让"加载更多"按钮的状态与 truncated 提示互相矛盾。
+  if (truncated !== (nextCursor !== null)) {
+    throw new Error(
+      "导入日志列表.truncated 与 next_cursor 语义不一致：truncated 必须等价于 next_cursor !== null",
+    );
+  }
   return {
     items: record.items.map((item, index) =>
       parseImportLog(item, `导入日志列表.items[${index}]`),
     ),
-    truncated: readBoolean(record, "truncated", "导入日志列表.truncated"),
+    truncated,
+    next_cursor: nextCursor,
   };
 }
 

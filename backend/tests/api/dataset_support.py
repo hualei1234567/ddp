@@ -5,6 +5,18 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from app.domain.annotation.schema import (
+    AnnotationSchema as AnnotationSchemaDomain,
+)
+from app.domain.annotation.schema import (
+    LabelDefinition,
+)
+from app.domain.annotation.submission import (
+    AnnotationRecord as AnnotationRecordDomain,
+)
+from app.domain.annotation.submission import (
+    LabelValue,
+)
 from app.infrastructure.db.models.annotation_catalog import AnnotationSampleSet, AnnotationSchema
 from app.infrastructure.db.models.annotation_results import AnnotationRecord, AnnotationSubmission
 from app.infrastructure.db.models.annotation_work import (
@@ -43,6 +55,7 @@ def seed_dataset_episodes(
     lineage_ids: list[UUID] | None = None,
     manifest_shas: list[str] | None = None,
     raw_hashes: list[str] | None = None,
+    record_labels: list[dict[str, object]] | None = None,
 ) -> list[UUID]:
     """创建 count 个 ACCEPTED/PASS/已批准标注 Episode，返回 Episode ID 列表。"""
     episode_ids: list[UUID] = []
@@ -53,29 +66,46 @@ def seed_dataset_episodes(
         batch_id = uuid4()
         assignment_id = uuid4()
         submission_id = uuid4()
+        schema_lineage_id = uuid4()
+        schema_code = f"schema-{uuid4().hex[:8]}"
+        schema_labels = (
+            LabelDefinition(
+                label_key="action",
+                label_type="ENUM",
+                required=False,
+                level="EPISODE",
+                visibility="ANNOTATOR",
+                value_spec={"enum_values": ["PICK"]},
+            ),
+        )
+        # Schema 摘要必须与标签定义一致：统一质检读取 Schema 时会按领域规则
+        # 重算并校验，不能沿用固定的假 Hash。
+        domain_schema = AnnotationSchemaDomain(
+            schema_id=schema_id,
+            project_id=project_id,
+            schema_lineage_id=schema_lineage_id,
+            schema_version=1,
+            code=schema_code,
+            name="数据集测试 Schema",
+            description=None,
+            annotation_levels=("EPISODE",),
+            labels=schema_labels,
+            compatibility="BACKWARD_COMPATIBLE",
+        )
         session.add(
             AnnotationSchema(
                 id=schema_id,
                 project_id=project_id,
-                schema_lineage_id=uuid4(),
+                schema_lineage_id=schema_lineage_id,
                 schema_version=1,
-                code=f"schema-{uuid4().hex[:8]}",
+                code=schema_code,
                 name="数据集测试 Schema",
                 description=None,
                 status="DRAFT",
                 annotation_levels=["EPISODE"],
-                labels=[
-                    {
-                        "label_key": "action",
-                        "label_type": "ENUM",
-                        "required": False,
-                        "level": "EPISODE",
-                        "visibility": "ANNOTATOR",
-                        "value_spec": {"enum_values": ["PICK"]},
-                    }
-                ],
+                labels=[item.to_payload() for item in schema_labels],
                 compatibility="BACKWARD_COMPATIBLE",
-                schema_sha256=SCHEMA_SHA,
+                schema_sha256=domain_schema.schema_sha256,
                 version=1,
                 created_at=NOW,
                 updated_at=NOW,
@@ -149,7 +179,7 @@ def seed_dataset_episodes(
                 sample_set_id=sample_set_id,
                 schema_id=schema_id,
                 schema_version=1,
-                schema_sha256=SCHEMA_SHA,
+                schema_sha256=domain_schema.schema_sha256,
                 gold_set_id=None,
                 iaa_policy={},
                 quality_policy={},
@@ -244,7 +274,7 @@ def seed_dataset_episodes(
                 status="DRAFT",
                 schema_id=schema_id,
                 schema_version=1,
-                schema_sha256=SCHEMA_SHA,
+                schema_sha256=domain_schema.schema_sha256,
                 item_count=count,
                 records_digest=SUBMISSION_DIGEST,
                 data_source="REAL",
@@ -415,23 +445,44 @@ def seed_dataset_episodes(
             session.execute(
                 update(EpisodeModel).where(EpisodeModel.id == episode_id).values(status="ACCEPTED")
             )
+            record_id = uuid4()
+            record_lineage_id = uuid4()
+            labels_payload = list(record_labels or [])
+            if labels_payload:
+                # 有标签时必须落真实摘要：统一质检会按领域规则重算并校验。
+                domain_record = AnnotationRecordDomain(
+                    annotation_id=record_id,
+                    annotation_lineage_id=record_lineage_id,
+                    annotation_version=1,
+                    project_id=project_id,
+                    submission_id=submission_id,
+                    episode_id=episode_id,
+                    episode_version=episode_version,
+                    task_id=task_id,
+                    schema_id=schema_id,
+                    schema_version=1,
+                    labels=tuple(LabelValue(**item) for item in labels_payload),
+                )
+                record_digest = domain_record.record_sha256
+            else:
+                record_digest = RECORD_SHA
             session.add(
                 AnnotationRecord(
-                    id=uuid4(),
+                    id=record_id,
                     project_id=project_id,
                     submission_id=submission_id,
                     task_id=task_id,
                     episode_id=episode_id,
                     episode_version=episode_version,
-                    annotation_lineage_id=uuid4(),
+                    annotation_lineage_id=record_lineage_id,
                     annotation_version=1,
                     schema_id=schema_id,
                     schema_version=1,
                     status="DRAFT",
                     time_range=None,
-                    labels=[],
+                    labels=labels_payload,
                     evidence_refs=[],
-                    record_sha256=RECORD_SHA,
+                    record_sha256=record_digest,
                     supersedes_id=None,
                     approved_by=None,
                     approved_at=None,

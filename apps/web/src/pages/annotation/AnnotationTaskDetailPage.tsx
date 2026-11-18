@@ -12,6 +12,7 @@ import AssignmentTable from "../../components/annotation/AssignmentTable";
 import BatchCreateDrawer from "../../components/annotation/BatchCreateDrawer";
 import BatchTable from "../../components/annotation/BatchTable";
 import TaskOverview from "../../components/annotation/TaskOverview";
+import TaskConsistencyPanel from "../../components/annotation/TaskConsistencyPanel";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
@@ -316,6 +317,11 @@ function TaskDetailContent({
         ) : null}
         <AnnotationFeedbackAlert feedback={feedback} />
         <TaskOverview projectId={projectId} task={task} />
+        <TaskConsistencyPanel
+          projectId={projectId}
+          taskId={taskId}
+          reviewMode={task.review_mode}
+        />
         <Space direction="vertical" size={8} className="ddp-stack">
           <Typography.Text strong>任务动作</Typography.Text>
           <ActionButtons

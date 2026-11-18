@@ -37,6 +37,8 @@
 | RK-16 | 未脱敏历史/文档可能含真实邮箱、内网 IP | 用户约束 | 低 | P1 | 提交前扫描；证据只留摘要 | 全体 |
 | RK-17 | 依赖告警积压：14 个 Dependabot PR 未处理（fastapi/alembic/pytest 等大版本） | `gh pr list` | 高 | P2 | 按季度集中升级；先补兼容性测试再合并 | 后端 / 用户 |
 
+| RK-29 | 并行 worktree 共用同一个 PostgreSQL 测试库，互相推进 `alembic_version`，导致迁移测试假失败 | 本轮 3 个任务均命中 `Can't locate revision` | 高 | P2 | 每个并行任务使用独立测试库或隔离 schema；CI 用一次性实例 | QA |
+
 ## 4. 工程与交付
 
 | ID | 风险 | 证据 | 概率 | 影响 | 缓解 | 责任 |
@@ -48,6 +50,7 @@
 | RK-22 | **前端无 jsdom 交互测试 / 无 E2E**，页面行为回归靠静态断言 | 前端 101 文件均为静态/纯函数测试 | 高 | P2 | 引入 Testing Library + 关键路径 Playwright；先补上传/审核/动作条 | 前端 |
 | RK-23 | **无性能基线**（100/1K/10K episodes），规模化能力未知 | TD/agent：无压测脚本 | 高 | P1 | N8-03 建脚本与阈值；先测只读列表与视频 Range | QA |
 | RK-24 | 备份只做本机 PG+MinIO，无异地/加密/RTO 指标 | `docs/operations/备份与恢复演练记录-2026-11-17.md` | 中 | P1 | 增加异地副本与恢复时长目标；每季度演练 | 运维 |
+| RK-30 | 评测列表复用详情响应，每条最多内联 64 KiB `failure_cases`；一页 100 条最坏约 6.4 MB | `fragments/schemas.stage5.yaml` 的 `Evaluation`；契约明确"上限即分页" | 中 | P2 | 列表页保持小 `limit`；后续评估独立 `failure-cases` 子资源端点 | 后端 / 前端 |
 
 ## 5. 产品与验收口径
 

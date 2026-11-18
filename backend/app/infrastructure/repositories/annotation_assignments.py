@@ -218,6 +218,19 @@ class SqlAnnotationAssignmentRepository:
         )
         return [self._from_row(row) for row in rows]
 
+    def list_for_task(
+        self,
+        scope: ProjectScope,
+        *,
+        task_id: UUID,
+    ) -> list[AnnotationAssignment]:
+        rows = self._session.scalars(
+            scoped_select(AnnotationAssignmentModel, scope)
+            .where(AnnotationAssignmentModel.task_id == task_id)
+            .order_by(AnnotationAssignmentModel.id)
+        )
+        return [self._from_row(row) for row in rows]
+
     def has_conflicting_role(
         self,
         scope: ProjectScope,

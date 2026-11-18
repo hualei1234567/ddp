@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -398,27 +398,62 @@ class SqlDataSourceImportLogRepository:
         import_id: UUID,
         *,
         limit: int = 100,
+        before_log_id: UUID | None = None,
     ) -> tuple[list[DataSourceImportLog], bool]:
-        """取最近 ``limit`` 条（时间正序返回），并如实报告是否截断。
+        """取最近 ``limit`` 条（时间正序返回），并如实报告是否还有更早日志。
 
-        查询按时间倒序多取一条判断截断，再把结果反转成正序：运维要看的
-        通常是"最近发生了什么"，而界面上按时间线阅读最自然。
+        查询按 ``(occurred_at, attempt, sequence_no, id)`` 倒序多取一条判断
+        是否还有更早的日志，再把结果反转成正序：运维要看的通常是"最近发生了
+        什么"，而界面上按时间线阅读最自然。四个字段共同构成全序，避免时间戳
+        或序号相同导致翻页丢行/重复。
+
+        ``before_log_id`` 用于加载更早的历史：先取出该日志的排序键，再查严格
+        早于它的记录。游标行不存在（跨导入、已删除）时返回空页，避免把另一
+        个导入的日志通过游标读出来。
         """
-        statement = (
-            scoped_select(DataSourceImportLogModel, scope)
-            .where(DataSourceImportLogModel.import_id == import_id)
-            .order_by(
-                DataSourceImportLogModel.occurred_at.desc(),
-                DataSourceImportLogModel.attempt.desc(),
-                DataSourceImportLogModel.sequence_no.desc(),
-            )
-            .limit(bounded_limit(limit + 1, maximum=501))
+        statement = scoped_select(DataSourceImportLogModel, scope).where(
+            DataSourceImportLogModel.import_id == import_id
         )
+        if before_log_id is not None:
+            anchor = self._session.execute(
+                select(
+                    DataSourceImportLogModel.occurred_at,
+                    DataSourceImportLogModel.attempt,
+                    DataSourceImportLogModel.sequence_no,
+                ).where(
+                    DataSourceImportLogModel.project_id == scope.project_id,
+                    DataSourceImportLogModel.import_id == import_id,
+                    DataSourceImportLogModel.id == before_log_id,
+                )
+            ).first()
+            if anchor is None:
+                return [], False
+            statement = statement.where(
+                tuple_(
+                    DataSourceImportLogModel.occurred_at,
+                    DataSourceImportLogModel.attempt,
+                    DataSourceImportLogModel.sequence_no,
+                    DataSourceImportLogModel.id,
+                )
+                < tuple_(
+                    anchor.occurred_at,
+                    anchor.attempt,
+                    anchor.sequence_no,
+                    before_log_id,
+                )
+            )
+
+        statement = statement.order_by(
+            DataSourceImportLogModel.occurred_at.desc(),
+            DataSourceImportLogModel.attempt.desc(),
+            DataSourceImportLogModel.sequence_no.desc(),
+            DataSourceImportLogModel.id.desc(),
+        ).limit(bounded_limit(limit + 1, maximum=501))
         rows = list(self._session.scalars(statement))
-        truncated = len(rows) > limit
+        has_older = len(rows) > limit
         rows = rows[:limit]
         rows.reverse()
-        return [_log_from_row(row) for row in rows], truncated
+        return [_log_from_row(row) for row in rows], has_older
 
 
 def _asset_from_row(row: MediaAssetModel) -> MediaAsset:
@@ -499,6 +534,36 @@ class SqlMediaAssetRepository:
             .where(MediaAssetModel.import_id == import_id)
             .order_by(MediaAssetModel.episode_key, MediaAssetModel.camera)
             .limit(bounded_limit(limit, maximum=1000))
+        )
+        return [_asset_from_row(row) for row in self._session.scalars(statement)]
+
+    def count_by_import(self, scope: ProjectScope, import_id: UUID) -> int:
+        return int(
+            self._session.scalar(
+                select(func.count())
+                .select_from(MediaAssetModel)
+                .where(
+                    MediaAssetModel.project_id == scope.project_id,
+                    MediaAssetModel.import_id == import_id,
+                )
+            )
+            or 0
+        )
+
+    def list_by_raw_asset_ids(
+        self, scope: ProjectScope, raw_asset_ids: tuple[UUID, ...]
+    ) -> list[MediaAsset]:
+        if not raw_asset_ids:
+            return []
+        # 去重后作为 IN 条件；同一 RawAsset 若被多次导入，会返回多条资产，
+        # 这是事实（不同导入各自产出了媒体文件），不做合并。
+        ids = tuple(dict.fromkeys(raw_asset_ids))
+        statement = (
+            scoped_select(MediaAssetModel, scope)
+            .where(MediaAssetModel.raw_asset_id.in_(ids))
+            .order_by(MediaAssetModel.raw_asset_id, MediaAssetModel.camera)
+            # 多取一条用于上层判断"是否超过检查上限"；截断本身不静默通过。
+            .limit(bounded_limit(len(ids) + 1, maximum=1001))
         )
         return [_asset_from_row(row) for row in self._session.scalars(statement)]
 

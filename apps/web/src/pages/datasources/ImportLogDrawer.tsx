@@ -1,7 +1,9 @@
-/** 导入步骤日志抽屉：只读、可重试、三态齐全（Loading / Empty / Error）。 */
+/** 导入步骤日志抽屉：只读、可翻更早、RUNNING 时自动刷新详情。 */
 
+import { ReloadOutlined } from "@ant-design/icons";
 import {
   Alert,
+  Button,
   Drawer,
   Empty,
   Progress,
@@ -12,8 +14,12 @@ import {
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { useCallback, useMemo } from "react";
 
 import ApiErrorState from "../../components/ui/ApiErrorState";
+import { useCursorPage } from "../../hooks/useCursorPage";
+import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
+import { usePolling } from "../../hooks/usePolling";
 import { useRequest } from "../../hooks/useRequest";
 import { dataSourceApi } from "../../services/datasources";
 import { formatDateTime } from "../../services/format";
@@ -21,11 +27,15 @@ import {
   presentImportProgress,
   presentImportStage,
 } from "../../services/importProgress";
+import { sortImportLogsNewestFirst } from "../../services/importLogs";
+import { IMPORT_POLL_INTERVAL_MS } from "../../services/importPolling";
 import type {
   DataSourceImport,
   ImportLog,
   ImportLogLevel,
 } from "../../types/datasource";
+
+const LOG_PAGE_SIZE = 100;
 
 const LEVEL_COLORS: Record<ImportLogLevel, string> = {
   INFO: "blue",
@@ -69,21 +79,59 @@ const LOG_COLUMNS: ColumnsType<ImportLog> = [
 ];
 
 function ImportLogContent({ target }: { target: DataSourceImport }) {
-  const { data, error, loading, stale, reload } = useRequest((signal) =>
-    dataSourceApi.listImportLogs(target.project_id, target.import_id, {
-      signal,
-      limit: 200,
-    }),
+  // 列表页传来的 target 可能是挂载前的快照；抽屉内重新取一次详情，
+  // 并在 RUNNING 时按固定间隔刷新进度，终态自动停止。
+  const detailRequest = useRequest((signal) =>
+    dataSourceApi.getImport(target.project_id, target.import_id, { signal }),
   );
+  const detail = detailRequest.data ?? target;
+  const running = detail.status === "RUNNING";
+
+  usePolling({
+    enabled: running,
+    intervalMs: IMPORT_POLL_INTERVAL_MS,
+    tick: detailRequest.reload,
+  });
+
+  const loadLogs = useCallback(
+    (options: CursorPageRequestOptions) =>
+      dataSourceApi
+        .listImportLogs(target.project_id, target.import_id, {
+          cursor: options.cursor,
+          signal: options.signal,
+          limit: LOG_PAGE_SIZE,
+        })
+        .then((page) => ({
+          items: page.items,
+          next_cursor: page.next_cursor,
+        })),
+    [target.project_id, target.import_id],
+  );
+  const {
+    items,
+    hasMore,
+    loading: logsLoading,
+    refreshing: logsRefreshing,
+    loadingMore,
+    error: logsError,
+    loadMoreError,
+    stale: logsStale,
+    reload: reloadLogs,
+    loadMore,
+  } = useCursorPage(loadLogs, (log) => log.log_id);
+
+  // 与分页返回顺序解耦的「新 → 旧」排序，规则集中在 sortImportLogsNewestFirst。
+  const rows = useMemo(() => sortImportLogsNewestFirst(items), [items]);
+
   const progress = presentImportProgress(
-    target.processed_items,
-    target.total_items,
+    detail.processed_items,
+    detail.total_items,
   );
 
   return (
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
       <Space wrap>
-        <Tag>{presentImportStage(target.stage)}</Tag>
+        <Tag>{presentImportStage(detail.stage)}</Tag>
         {progress.measured ? (
           <Progress
             percent={progress.percent ?? 0}
@@ -94,57 +142,78 @@ function ImportLogContent({ target }: { target: DataSourceImport }) {
         ) : (
           <Typography.Text type="secondary">进度：未测量</Typography.Text>
         )}
-        <Typography.Text type="secondary">状态：{target.status}</Typography.Text>
+        <Typography.Text type="secondary">状态：{detail.status}</Typography.Text>
+        {running ? (
+          <Typography.Text type="secondary">
+            每 {IMPORT_POLL_INTERVAL_MS / 1000} 秒自动刷新进度
+          </Typography.Text>
+        ) : null}
+        <Button
+          size="small"
+          icon={<ReloadOutlined />}
+          loading={logsRefreshing}
+          onClick={reloadLogs}
+        >
+          刷新日志
+        </Button>
       </Space>
 
-      {target.error_message ? (
+      {detail.error_message ? (
         <Alert
           type="error"
           showIcon
           message="错误详情"
-          description={target.error_message}
+          description={detail.error_message}
         />
       ) : null}
 
-      {stale ? (
+      {detailRequest.error ? (
+        <Typography.Text type="warning">
+          详情刷新失败，展示的是打开抽屉时的快照。
+        </Typography.Text>
+      ) : null}
+
+      {logsStale ? (
         <Typography.Text type="warning">
           最近一次刷新失败，展示的是上次成功获取的日志。
         </Typography.Text>
       ) : null}
 
-      {loading && data === null ? (
+      {logsLoading && items.length === 0 ? (
         <Spin tip="正在加载日志…">
           <div style={{ minHeight: 120 }} />
         </Spin>
       ) : null}
 
-      {error && data === null ? (
-        <ApiErrorState compact error={error} onRetry={reload} />
+      {logsError && items.length === 0 ? (
+        <ApiErrorState compact error={logsError} onRetry={reloadLogs} />
       ) : null}
 
-      {data !== null ? (
+      {items.length === 0 && !logsLoading && !logsError ? (
+        <Empty description="暂无步骤日志" />
+      ) : null}
+
+      {rows.length > 0 ? (
         <>
-          {data.truncated ? (
-            <Alert
-              type="warning"
-              showIcon
-              message="日志超过展示上限"
-              description="仅返回最近的 200 条步骤日志，更早的日志未展示。"
-            />
+          <Table<ImportLog>
+            rowKey="log_id"
+            size="small"
+            loading={logsLoading}
+            columns={LOG_COLUMNS}
+            dataSource={rows}
+            pagination={false}
+            scroll={{ x: 640 }}
+          />
+          {hasMore ? (
+            <Button block loading={loadingMore} onClick={loadMore}>
+              加载更多
+            </Button>
           ) : null}
-          {data.items.length === 0 ? (
-            <Empty description="暂无步骤日志" />
-          ) : (
-            <Table<ImportLog>
-              rowKey="log_id"
-              size="small"
-              loading={loading}
-              columns={LOG_COLUMNS}
-              dataSource={data.items}
-              pagination={false}
-              scroll={{ x: 640 }}
-            />
-          )}
+          {loadMoreError ? (
+            <Typography.Text type="danger">
+              加载更多失败：{loadMoreError.message}
+            </Typography.Text>
+          ) : null}
         </>
       ) : null}
     </Space>

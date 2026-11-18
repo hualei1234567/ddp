@@ -101,8 +101,13 @@ export interface ImportLog {
 
 export interface ImportLogList {
   items: ImportLog[];
-  /** true 表示只返回了最近 N 条，更早的步骤因上限未返回。 */
+  /**
+   * true 当且仅当还有更早的日志未返回（等价于 `next_cursor !== null`）。
+   * 不表示消息体被截断——消息脱敏长度是独立规则。
+   */
   truncated: boolean;
+  /** 下一页（更早日志）的游标；null 表示已经到最早一条。 */
+  next_cursor: string | null;
 }
 
 /** 导入产出的一个机位视频。 */

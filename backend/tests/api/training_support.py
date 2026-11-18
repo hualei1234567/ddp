@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+from app.application.datasets.training_ports import AdapterRunRef, AdapterRunStatus
+from app.domain.datasets.training_enums import ExecutionMode
 from app.domain.identity.models import ProjectRole
 from app.infrastructure.db.models.identity import ProjectMember, User
 from sqlalchemy.orm import Session, sessionmaker
@@ -186,3 +188,29 @@ def delivery_payload(
         "recipient_team": "算法组",
         "delivery_note_no": note_no or f"DN-{uuid4().hex[:8]}",
     }
+
+
+class FakeTrainingGateway:
+    """测试用 Adapter 网关：不触网，只回报固定执行方式和 run。
+
+    原先定义在 ``test_training_api.py``；N5-005 的训练血缘用例也要用，故提到
+    公共夹具，避免复制一份会漂移的假网关。
+    """
+
+    def __init__(self, execution_mode: str | None) -> None:
+        self._execution_mode = execution_mode
+
+    def capabilities(self, adapter_id: str) -> frozenset[str]:
+        return frozenset({"submit", "status", "cancel"})
+
+    def execution_mode(self, adapter_id: str) -> ExecutionMode | None:
+        return ExecutionMode(self._execution_mode) if self._execution_mode else None
+
+    def submit(self, **kwargs: object) -> AdapterRunRef:
+        return AdapterRunRef(external_run_id=f"run-{uuid4().hex[:8]}")
+
+    def get_status(self, **kwargs: object) -> AdapterRunStatus:
+        raise AssertionError("本测试不查询状态")
+
+    def cancel(self, **kwargs: object) -> AdapterRunStatus:
+        raise AssertionError("本测试不取消训练")

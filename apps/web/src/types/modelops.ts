@@ -58,6 +58,29 @@ export interface ModelVersion {
   updated_at: string;
 }
 
+export type FailureCaseCategory =
+  | "PERCEPTION"
+  | "PLANNING"
+  | "CONTROL"
+  | "LANGUAGE"
+  | "OTHER";
+
+export type FailureCaseSeverity = "BLOCKER" | "MAJOR" | "MINOR";
+
+/** 评测失败用例：平台只记录事实，不在此推断 Data Gap。 */
+export interface FailureCase {
+  id: string;
+  category: FailureCaseCategory;
+  severity: FailureCaseSeverity;
+  episode_key: string | null;
+  episode_id: string | null;
+  evidence: Record<string, unknown> | string | null;
+  metric: string | null;
+  observed: number | string | null;
+  expected: number | string | null;
+  suggested_gap: string | null;
+}
+
 export interface Evaluation {
   evaluation_id: string;
   project_id: string;
@@ -69,6 +92,7 @@ export interface Evaluation {
   thresholds: Record<string, { min?: number | null; max?: number | null }>;
   verdict: string;
   report_ref: Record<string, unknown> | null;
+  failure_cases: FailureCase[];
   error_code: string | null;
   error_summary: string | null;
   started_at: string | null;

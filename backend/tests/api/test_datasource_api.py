@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from uuid import uuid4
+from datetime import UTC, datetime, timedelta
+from uuid import UUID, uuid4
 
+from app.api.v1.dataset_pagination import encode_cursor
 from app.api.v1.datasource_routes import get_remote_source_verifier
 from app.application.datasources.verification import (
     RemoteCheckError,
     RemoteCheckResult,
 )
+from app.domain.datasources.enums import ImportLogLevel, ImportStage
+from app.domain.datasources.models import DataSourceImportLog
+from app.domain.identity.models import ProjectScope
+from app.infrastructure.repositories.datasources import SqlDataSourceImportLogRepository
 
 from tests.api.conftest import make_client
 
@@ -901,6 +906,41 @@ def _create_import_for_logs(client, project_id, *, sample_limit: int = 5) -> dic
     return created.json()
 
 
+def _seed_import_logs(
+    factory,
+    *,
+    project_id: UUID,
+    actor_id: UUID,
+    import_id: UUID,
+    count: int,
+    step_seconds: int = 60,
+) -> None:
+    """直接写入步骤日志，验证只读端点的游标行为（不依赖 worker 执行）。"""
+    scope = ProjectScope(project_id=project_id, actor_id=actor_id)
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    with factory() as session:
+        repository = SqlDataSourceImportLogRepository(session)
+        for index in range(count):
+            repository.add(
+                scope,
+                DataSourceImportLog(
+                    log_id=uuid4(),
+                    project_id=project_id,
+                    import_id=import_id,
+                    stage=ImportStage.DOWNLOAD,
+                    level=ImportLogLevel.INFO,
+                    message=f"步骤 {index}",
+                    occurred_at=base + timedelta(seconds=index * step_seconds),
+                    sequence_no=index + 1,
+                ),
+            )
+        session.commit()
+
+
+def _logs_url(project_id: object, import_id: object) -> str:
+    return f"/api/v1/projects/{project_id}/data-source-imports/{import_id}/logs"
+
+
 def test_import_progress_is_unmeasured_before_worker_runs(api_db) -> None:
     """新建导入的进度必须是 null（未测量），不是 0。
 
@@ -929,7 +969,121 @@ def test_import_progress_is_unmeasured_before_worker_runs(api_db) -> None:
         f"/api/v1/projects/{ids.project_a}/data-source-imports/{job['import_id']}/logs"
     )
     assert logs.status_code == 200, logs.text
-    assert logs.json() == {"items": [], "truncated": False}, logs.json()
+    assert logs.json() == {"items": [], "truncated": False, "next_cursor": None}, logs.json()
+
+
+def test_import_logs_cursor_pagination_round_trip(api_db) -> None:
+    """游标往返：不带 cursor 取最近一页，带 cursor 继续向更早翻，顺序一致。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    job = _create_import_for_logs(client, ids.project_a)
+    import_id = UUID(job["import_id"])
+    _seed_import_logs(
+        factory,
+        project_id=ids.project_a,
+        actor_id=ids.editor_a,
+        import_id=import_id,
+        count=5,
+    )
+    url = _logs_url(ids.project_a, import_id)
+
+    first = client.get(url, params={"limit": 2})
+    assert first.status_code == 200, first.text
+    first_body = first.json()
+    # 最近两条仍按时间正序返回；truncated 表示"还有更早的"。
+    assert [item["message"] for item in first_body["items"]] == ["步骤 3", "步骤 4"]
+    assert first_body["truncated"] is True
+    first_cursor = first_body["next_cursor"]
+    assert isinstance(first_cursor, str) and first_cursor
+
+    second = client.get(url, params={"limit": 2, "cursor": first_cursor})
+    assert second.status_code == 200, second.text
+    second_body = second.json()
+    assert [item["message"] for item in second_body["items"]] == ["步骤 1", "步骤 2"]
+    assert second_body["truncated"] is True
+    second_cursor = second_body["next_cursor"]
+    assert isinstance(second_cursor, str) and second_cursor != first_cursor
+
+    last = client.get(url, params={"limit": 2, "cursor": second_cursor})
+    assert last.status_code == 200, last.text
+    assert [item["message"] for item in last.json()["items"]] == ["步骤 0"]
+    assert last.json()["truncated"] is False
+    assert last.json()["next_cursor"] is None
+
+
+def test_import_logs_exactly_one_page_has_no_cursor(api_db) -> None:
+    """刚好整页不是截断：没有更早日志时 next_cursor 必须为 null。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    job = _create_import_for_logs(client, ids.project_a)
+    import_id = UUID(job["import_id"])
+    _seed_import_logs(
+        factory,
+        project_id=ids.project_a,
+        actor_id=ids.editor_a,
+        import_id=import_id,
+        count=2,
+    )
+
+    response = client.get(_logs_url(ids.project_a, import_id), params={"limit": 2})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [item["message"] for item in body["items"]] == ["步骤 0", "步骤 1"]
+    assert body["truncated"] is False
+    assert body["next_cursor"] is None
+
+
+def test_import_logs_cursor_paginates_same_timestamp_without_gaps(api_db) -> None:
+    """时间戳相同的日志依靠序号形成全序，翻页不得丢行或重复。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    job = _create_import_for_logs(client, ids.project_a)
+    import_id = UUID(job["import_id"])
+    _seed_import_logs(
+        factory,
+        project_id=ids.project_a,
+        actor_id=ids.editor_a,
+        import_id=import_id,
+        count=3,
+        step_seconds=0,
+    )
+    url = _logs_url(ids.project_a, import_id)
+
+    first = client.get(url, params={"limit": 2}).json()
+    assert [item["message"] for item in first["items"]] == ["步骤 1", "步骤 2"]
+    second = client.get(url, params={"limit": 2, "cursor": first["next_cursor"]}).json()
+
+    assert [item["message"] for item in second["items"]] == ["步骤 0"]
+    assert second["truncated"] is False
+
+
+def test_import_logs_reject_malformed_cursor(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    job = _create_import_for_logs(client, ids.project_a)
+
+    response = client.get(
+        _logs_url(ids.project_a, job["import_id"]), params={"cursor": "not-a-cursor"}
+    )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "validation_failed"
+
+
+def test_import_logs_cursor_from_elsewhere_returns_empty_page(api_db) -> None:
+    """合法格式但不属于本次导入的游标返回空页，不泄露其他导入的日志。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    job = _create_import_for_logs(client, ids.project_a)
+
+    response = client.get(
+        _logs_url(ids.project_a, job["import_id"]),
+        params={"cursor": encode_cursor(uuid4())},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {"items": [], "truncated": False, "next_cursor": None}
 
 
 def test_import_logs_are_project_scoped_and_missing_import_is_404(api_db) -> None:

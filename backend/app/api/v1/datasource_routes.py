@@ -17,7 +17,12 @@ from app.api.v1.dataset_dependencies import (
     WriteScope,
     request_id,
 )
-from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
+from app.api.v1.dataset_pagination import (
+    build_page,
+    decode_cursor,
+    encode_cursor,
+    fetch_limit,
+)
 from app.api.v1.datasource_schemas import (
     DataSourceCreate,
     DataSourceDetailOut,
@@ -428,17 +433,30 @@ def list_import_logs(
     import_id: UUID,
     scope: ReadScope,
     use_cases: DataSourceServicesDep,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> dict[str, Any]:
     """只读步骤日志：时间、阶段、等级、脱敏后的消息。
 
-    只返回最近 ``limit`` 条（默认 100、上限 500），``truncated`` 如实说明
-    是否截断；不提供任何写入/修改入口。消息已在写入与读取两侧脱敏。
+    不带 ``cursor`` 时返回最近 ``limit`` 条（默认 100、上限 500），仍按时间
+    正序，向后兼容既有调用。带 ``cursor``（上一页的 ``next_cursor``）时返回
+    严格更早的一页，顺序不变；``next_cursor`` 为空表示没有更早的日志。
+
+    ``truncated`` 与 ``next_cursor !== null`` 严格等价：只表示"还有更早的
+    日志未返回"，不表示消息体被截断（消息脱敏长度是另一回事）。端点只读，
+    不提供任何写入/修改入口；消息已在写入与读取两侧脱敏。
     """
-    items, truncated = use_cases.list_import_logs(scope, import_id, limit=limit)
+    items, has_older = use_cases.list_import_logs(
+        scope,
+        import_id,
+        limit=limit,
+        before_log_id=decode_cursor(cursor),
+    )
     return ImportLogListOut(
         items=[ImportLogOut.from_domain(item) for item in items],
-        truncated=truncated,
+        truncated=has_older,
+        # 时间正序下 items[0] 是本页最旧一条，下一页从它继续往更早翻。
+        next_cursor=encode_cursor(items[0].log_id) if has_older else None,
     ).model_dump(mode="json")
 
 

@@ -195,6 +195,9 @@ AnnotationTaskCreate:
     assignment_mode: {type: string, enum: [MANUAL, CLAIM, MIXED], default: MANUAL}
     iaa_policy: {type: object, additionalProperties: true, default: {}}
     quality_policy: {type: object, additionalProperties: true, default: {}}
+    review_mode: {type: string, enum: [SINGLE, DOUBLE], default: SINGLE}
+    agreement_threshold: {type: [number, "null"], minimum: 0, maximum: 1}
+    auto_approve: {type: boolean, default: false}
 
 AnnotationTaskPatch:
   type: object

@@ -15,6 +15,7 @@ from app.application.annotation.ai_suggestions import AnnotationAiSuggestionUseC
 from app.application.annotation.arbitrations import AnnotationArbitrationUseCases
 from app.application.annotation.assignments import AnnotationAssignmentUseCases
 from app.application.annotation.batches import AnnotationBatchUseCases
+from app.application.annotation.consistency import AnnotationConsistencyUseCases
 from app.application.annotation.gold_sets import GoldSetUseCases
 from app.application.annotation.iaa import IAAUseCases
 from app.application.annotation.progress import AnnotationProgressRefresher
@@ -79,6 +80,7 @@ class AnnotationUseCases:
     quality_checks: QualityCheckUseCases
     iaa: IAAUseCases
     ai_suggestions: AnnotationAiSuggestionUseCases
+    consistency: AnnotationConsistencyUseCases
 
 
 def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
@@ -122,6 +124,46 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
     # 任务进度与批次计数只在这里接线一次：提交/复核/仲裁三个推进点共用
     # 同一个 refresher，避免各写一份统计口径。
     progress = AnnotationProgressRefresher(tasks_repo, batches_repo, submissions_repo)
+
+    reviews_use_cases = AnnotationReviewUseCases(
+        reviews_repo,
+        submissions_repo,
+        records_repo,
+        tasks_repo,
+        members,
+        audit,
+        outbox,
+        idempotency,
+        session,
+        episodes=episodes,
+        progress=progress,
+        lineage=lineage,
+    )
+    arbitrations_use_cases = AnnotationArbitrationUseCases(
+        arbitrations_repo,
+        submissions_repo,
+        records_repo,
+        reviews_repo,
+        members,
+        audit,
+        outbox,
+        idempotency,
+        session,
+        episodes=episodes,
+        progress=progress,
+        lineage=lineage,
+    )
+    consistency_use_cases = AnnotationConsistencyUseCases(
+        tasks_repo,
+        records_repo,
+        submissions_repo,
+        reviews_repo,
+        arbitrations_repo,
+        members,
+        arbitrations_use_cases,
+        reviews_use_cases,
+        session,
+    )
 
     return AnnotationUseCases(
         schemas=AnnotationSchemaUseCases(
@@ -191,34 +233,9 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             quality_checks,
             progress=progress,
         ),
-        reviews=AnnotationReviewUseCases(
-            reviews_repo,
-            submissions_repo,
-            records_repo,
-            tasks_repo,
-            members,
-            audit,
-            outbox,
-            idempotency,
-            session,
-            episodes=episodes,
-            progress=progress,
-            lineage=lineage,
-        ),
-        arbitrations=AnnotationArbitrationUseCases(
-            arbitrations_repo,
-            submissions_repo,
-            records_repo,
-            reviews_repo,
-            members,
-            audit,
-            outbox,
-            idempotency,
-            session,
-            episodes=episodes,
-            progress=progress,
-            lineage=lineage,
-        ),
+        reviews=reviews_use_cases,
+        arbitrations=arbitrations_use_cases,
+        consistency=consistency_use_cases,
         gold_sets=GoldSetUseCases(
             gold_sets_repo,
             schemas_repo,

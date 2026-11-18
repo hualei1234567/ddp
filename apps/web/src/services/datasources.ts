@@ -163,7 +163,7 @@ export interface DataSourceApi {
   listImportLogs(
     projectId: string,
     importId: string,
-    options?: { signal?: AbortSignal; limit?: number },
+    options?: PageRequestOptions,
   ): Promise<ImportLogList>;
   actImport(
     projectId: string,
@@ -312,7 +312,7 @@ export function createDataSourceApi(client: ApiClient): DataSourceApi {
     async listImportLogs(projectId, importId, options) {
       return client.get(importOf(projectId, importId, "/logs"), {
         signal: options?.signal,
-        query: { limit: options?.limit },
+        query: { cursor: options?.cursor, limit: options?.limit },
         validate: (value) => {
           const page = parseImportLogList(value);
           page.items.forEach((item, index) => {

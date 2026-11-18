@@ -192,10 +192,14 @@ class ImportLogOut(BaseModel):
 
 
 class ImportLogListOut(BaseModel):
-    """最近 N 条步骤日志；``truncated`` 如实说明是否被上限截断。"""
+    """步骤日志页；``truncated`` 与 ``next_cursor`` 表达同一事实。"""
 
     items: list[ImportLogOut]
+    # 语义固定：true 当且仅当还有更早的日志未返回（即 next_cursor 非空）。
+    # 不表示消息长度被截断——消息脱敏上限是另一条独立规则。
     truncated: bool
+    # 下一页（更早日志）的游标；null 表示已经到最早一条。
+    next_cursor: str | None
 
 
 class MediaAssetOut(BaseModel):

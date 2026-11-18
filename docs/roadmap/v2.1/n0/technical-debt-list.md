@@ -39,6 +39,11 @@
 | 两套规则会漂移；引号值只截到空格 | 收敛为单一实现并补引号/多词用例 |
 | TD-25 | `application/datasources/import_runner.py` 724 行（>500 评审线） | 文件规模 |
 | 进度/日志上报与 RawAsset 登记混杂 | 拆为协作者，先补重试一致性用例 |
+| TD-29 | 导入列表轮询调用 `reload` 会重置已加载分页 | `apps/web/src/pages/datasources/ImportListPage.tsx` |
+| RUNNING 期间用户翻页位置丢失 | 给 `useCursorPage` 增加原地合并刷新（N2-010） |
+| TD-30 | ~~Episode 质量求值包含 DRAFT 标注记录~~ **已闭环**（N4-004：求值只取 `SUBMITTED`/`APPROVED`，见 `application/quality/use_cases.py`；`test_quality_runs_api.py` 覆盖） | — | — | — | — |
+| TD-31 | 并行 worktree 共用同一个 PG 测试库，会互相推进 `alembic_version` | `DDP_TEST_POSTGRES_URL` 用法 |
+| 出现 `Can't locate revision` 的假失败 | 每个并行任务使用独立测试库/隔离 schema |
 | TD-27 | `/data-sources/{id}/detail` 与既有 `GET /data-sources/{id}` 字段重叠 | `api/v1/datasource_routes.py` |
 | 两套详情类型长期易漂移 | 收敛为 `GET /data-sources/{id}?include=imports,check` 或把 `/detail` 定为唯一聚合入口 |
 | TD-28 | 审看页同一机位的多个片段只显示首个 | `apps/web/src/pages/datasources/AssetReviewPage.tsx` |

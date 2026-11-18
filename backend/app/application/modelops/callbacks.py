@@ -19,6 +19,7 @@ from app.domain.modelops.errors import (
     ModelCallbackReplayedError,
     ResourceNotFoundError,
 )
+from app.domain.modelops.failure_cases import parse_failure_cases
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +60,7 @@ class ModelCallbackUseCases:
         task_id: UUID | None,
         metrics: dict[str, float] | None,
         report_ref: dict[str, object] | None,
+        failure_cases: list[dict[str, object]] | None,
         result_ref: dict[str, object] | None,
         log_ref: str | None,
         error_code: str | None,
@@ -74,12 +76,16 @@ class ModelCallbackUseCases:
                 "task_id": str(task_id) if task_id else None,
                 "metrics": metrics,
                 "report_ref": report_ref,
+                "failure_cases": failure_cases,
                 "result_ref": result_ref,
                 "log_ref": log_ref,
                 "error_code": error_code,
                 "error_summary": error_summary,
             }
         )
+        # 先校验失败明细再登记回调记录：非法类别/超限时不能把 nonce 消耗掉，
+        # 否则适配器修正后重试会被当作重放拒绝。校验只抛既有 validation_failed。
+        parsed_failure_cases = parse_failure_cases(failure_cases)
         existing = self._callbacks.get_by_event(adapter_id, event_id)
         if existing is not None:
             if existing.payload_sha256 != payload_sha:
@@ -106,6 +112,7 @@ class ModelCallbackUseCases:
                 evaluation_id=evaluation_id,
                 metrics=metrics or {},
                 report_ref=report_ref,
+                failure_cases=[case.to_dict() for case in parsed_failure_cases],
                 error_code=error_code
                 or ("adapter_reported_failure" if event_type.endswith("failed") else None),
                 error_summary=error_summary,

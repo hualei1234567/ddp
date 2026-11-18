@@ -322,6 +322,15 @@ class AnnotationAssignmentRepository(Protocol):
         task_id: UUID,
     ) -> list[AnnotationAssignment]: ...
 
+    def list_for_task(
+        self,
+        scope: ProjectScope,
+        *,
+        task_id: UUID,
+    ) -> list[AnnotationAssignment]:
+        """返回任务下**全部**分配（含已结束），双标独立性检查必须看历史。"""
+        ...
+
     def has_conflicting_role(
         self,
         scope: ProjectScope,
@@ -562,6 +571,21 @@ class AnnotationRecordRepository(Protocol):
         submission_id: UUID,
     ) -> list[AnnotationRecord]: ...
 
+    def list_for_episode(
+        self,
+        scope: ProjectScope,
+        episode_id: UUID,
+        *,
+        statuses: frozenset[str] | None = None,
+        limit: int = 2000,
+    ) -> list[AnnotationRecord]:
+        """该 Episode 的标注记录（跨提交/跨任务），有界只读查询。
+
+        统一质量引擎按 Episode 汇总标注规则；``limit`` 是硬上限，调用方
+        多取一条即可判断是否超限，避免 HTTP 线程处理无界记录集。
+        """
+        ...
+
     def list_for_task(
         self,
         scope: ProjectScope,
@@ -787,6 +811,15 @@ class MemberDirectory(Protocol):
     def user_is_member(self, scope: ProjectScope, user_id: UUID) -> bool: ...
 
     def user_role(self, scope: ProjectScope, user_id: UUID) -> str | None: ...
+
+    def list_member_ids(
+        self,
+        scope: ProjectScope,
+        *,
+        role: str | None = None,
+    ) -> list[UUID]:
+        """按角色列出项目成员；用于自动仲裁时挑选仲裁人。"""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
