@@ -35,6 +35,7 @@ from app.api.v1 import (
     platform,
     processing_routes,
     project_routes,
+    quality_routes,
     requirement_routes,
     robots,
     sensors,
@@ -84,3 +85,4 @@ api_router.include_router(audit_log_routes.router)
 api_router.include_router(governance_routes.router)
 # 数据处理运行（N4-001）：实体与状态机；八阶段编排在 N4-002。
 api_router.include_router(processing_routes.router)
+api_router.include_router(quality_routes.router)

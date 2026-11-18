@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import replace
 from uuid import UUID
 
-from sqlalchemy import select, tuple_, update
+from sqlalchemy import func, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -534,6 +534,36 @@ class SqlMediaAssetRepository:
             .where(MediaAssetModel.import_id == import_id)
             .order_by(MediaAssetModel.episode_key, MediaAssetModel.camera)
             .limit(bounded_limit(limit, maximum=1000))
+        )
+        return [_asset_from_row(row) for row in self._session.scalars(statement)]
+
+    def count_by_import(self, scope: ProjectScope, import_id: UUID) -> int:
+        return int(
+            self._session.scalar(
+                select(func.count())
+                .select_from(MediaAssetModel)
+                .where(
+                    MediaAssetModel.project_id == scope.project_id,
+                    MediaAssetModel.import_id == import_id,
+                )
+            )
+            or 0
+        )
+
+    def list_by_raw_asset_ids(
+        self, scope: ProjectScope, raw_asset_ids: tuple[UUID, ...]
+    ) -> list[MediaAsset]:
+        if not raw_asset_ids:
+            return []
+        # 去重后作为 IN 条件；同一 RawAsset 若被多次导入，会返回多条资产，
+        # 这是事实（不同导入各自产出了媒体文件），不做合并。
+        ids = tuple(dict.fromkeys(raw_asset_ids))
+        statement = (
+            scoped_select(MediaAssetModel, scope)
+            .where(MediaAssetModel.raw_asset_id.in_(ids))
+            .order_by(MediaAssetModel.raw_asset_id, MediaAssetModel.camera)
+            # 多取一条用于上层判断"是否超过检查上限"；截断本身不静默通过。
+            .limit(bounded_limit(len(ids) + 1, maximum=1001))
         )
         return [_asset_from_row(row) for row in self._session.scalars(statement)]
 

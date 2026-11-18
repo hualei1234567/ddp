@@ -340,6 +340,21 @@ class SqlAnnotationRecordRepository:
         )
         return [self._from_row(row) for row in rows]
 
+    def list_for_episode(
+        self,
+        scope: ProjectScope,
+        episode_id: UUID,
+        *,
+        limit: int = 2000,
+    ) -> list[AnnotationRecord]:
+        rows = self._session.scalars(
+            scoped_select(AnnotationRecordModel, scope)
+            .where(AnnotationRecordModel.episode_id == episode_id)
+            .order_by(AnnotationRecordModel.id)
+            .limit(limit)
+        )
+        return [self._from_row(row) for row in rows]
+
     def get(self, scope: ProjectScope, annotation_id: UUID) -> AnnotationRecord | None:
         """按 ID 取记录：项目过滤由 ``scoped_select`` 强制，跨项目返回 ``None``。"""
         row = self._session.scalar(
