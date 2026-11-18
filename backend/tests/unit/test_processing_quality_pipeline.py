@@ -192,9 +192,7 @@ def _manifest(project_id: UUID, episode_id: UUID) -> str:
 def _quality_rows(factory: sessionmaker[Session], project_id: UUID) -> list[QualityRunModel]:
     with factory() as session:
         return list(
-            session.scalars(
-                select(QualityRunModel).where(QualityRunModel.project_id == project_id)
-            )
+            session.scalars(select(QualityRunModel).where(QualityRunModel.project_id == project_id))
         )
 
 

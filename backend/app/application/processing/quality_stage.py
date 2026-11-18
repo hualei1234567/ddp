@@ -261,13 +261,9 @@ def _summarize(runs: Sequence[QualityRun]) -> tuple[str, tuple[str, ...]]:
     if failed:
         shown = failed[:MAX_FAILED_EPISODES_IN_SUMMARY]
         suffix = (
-            f" 等 {len(failed)} 个（全部见 quality-run 引用）"
-            if len(failed) > len(shown)
-            else ""
+            f" 等 {len(failed)} 个（全部见 quality-run 引用）" if len(failed) > len(shown) else ""
         )
-        parts.append(
-            "失败 Episode：" + "、".join(str(run.subject_id) for run in shown) + suffix
-        )
+        parts.append("失败 Episode：" + "、".join(str(run.subject_id) for run in shown) + suffix)
     return "；".join(parts), tuple(f"quality-run/{run.run_id}" for run in runs)
 
 

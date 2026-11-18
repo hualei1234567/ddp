@@ -283,9 +283,7 @@ def test_stage_reports_counts_rule_version_and_quality_run_refs() -> None:
     assert "通过 1、失败 1、未完成 0" in outcome.log_summary
     assert f"规则集 {quality._rule_set_version}" in outcome.log_summary
     assert str(failed) in outcome.log_summary
-    assert outcome.output_refs == tuple(
-        f"quality-run/{run.run_id}" for run in quality.persisted[0]
-    )
+    assert outcome.output_refs == tuple(f"quality-run/{run.run_id}" for run in quality.persisted[0])
     assert uow.rollbacks == 0
 
 
