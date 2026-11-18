@@ -25,10 +25,17 @@ from sqlalchemy import (
     Uuid,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.models.devices import LockVersionMixin, ProjectScopedMixin
+
+# ``none_as_null=True`` 是必需的：本列的空值语义是"没有记录证据"，读取侧
+# 靠 ``evidence IS NULL`` 判定是否需要回退到历史审计留痕。SQLAlchemy 的
+# ``JSON`` 默认把 Python ``None`` 序列化成 JSON 字面量 ``null``，会让该判定
+# 失效（与 ``annotation_ai.human_value`` 同一处理）。
+_REVIEW_EVIDENCE_JSON = JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql")
 
 
 class DataSourceModel(Base, ProjectScopedMixin, LockVersionMixin):
@@ -251,6 +258,10 @@ class DataReviewModel(Base, ProjectScopedMixin, LockVersionMixin):
     reviewer_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     submitted_by: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 审核证据（时间点/机位/备注等结构化小对象）。迁移 0062 起独立成列，
+    # 不再只寄存在 ``audit_logs.details``：证据的生命周期不应被审计保留策略
+    # 绑定。NULL 表示历史上没有记录证据，不回填空对象冒充"无证据"。
+    evidence: Mapped[dict[str, Any] | None] = mapped_column(_REVIEW_EVIDENCE_JSON, nullable=True)
 
     __table_args__ = (
         # 一个导入只有一个审核记录：重复创建会让"审核通过"的语义含糊。

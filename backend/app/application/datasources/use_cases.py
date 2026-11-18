@@ -428,6 +428,8 @@ class DataSourceUseCases:
                 "revision": source.revision,
                 "scope": created.scope.value,
                 "sample_limit": created.sample_limit,
+                # 让导入 Worker 沿用发起请求的 trace_id；附加字段。
+                **({"request_id": request_id} if request_id is not None else {}),
             },
             occurred_at=now,
             # 投递类：worker 据此事真的去下载并解析（R-13 / T-1）。

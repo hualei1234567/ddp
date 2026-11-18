@@ -168,7 +168,7 @@ def get_review_use_cases(session: DbSession) -> DataReviewUseCases:
         audit=_cast_audit(SqlDatasetAuditRepository(session)),
         outbox=_cast_outbox(SqlDatasetOutboxRepository(session)),
         uow=_cast_uow(session),
-        # evidence 复用既有 audit_logs.details；读取审核记录时从审计留痕回填。
+        # 证据落审核表 ``evidence`` 列；迁移前的存量行仍从审计留痕回退读取。
         audit_query=SqlAuditLogQueryRepository(session),
     )
 

@@ -218,6 +218,9 @@ class RawAssetValidationService:
         }
         if validation_job_id is not None:
             payload["validation_job_id"] = str(validation_job_id)
+        if request_id is not None:
+            # 后续同链路事件沿用同一 trace_id；附加字段，既有字段语义不变。
+            payload["request_id"] = request_id
         self._outbox.enqueue(
             scope,
             OutboxEvent(

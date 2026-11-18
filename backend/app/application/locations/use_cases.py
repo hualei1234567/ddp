@@ -29,6 +29,7 @@ from uuid import UUID, uuid4
 from app.application.audit import record_change
 from app.application.idempotency import IdempotencyGuard
 from app.application.locations.commands import NewLocation
+from app.application.locations.overview import SiteOverviewEntry
 from app.application.locations.pagination import (
     Page,
     build_page,
@@ -40,6 +41,7 @@ from app.application.locations.ports import (
     IdempotencyRepository,
     LocationRepository,
     OutboxRepository,
+    SiteResourceSummaryRepository,
     UnitOfWork,
 )
 from app.domain.identity.models import ProjectScope
@@ -51,7 +53,11 @@ from app.domain.locations.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
-from app.domain.locations.models import PATCHABLE_FIELDS, Location
+from app.domain.locations.models import (
+    EMPTY_RESOURCE_COUNTS,
+    PATCHABLE_FIELDS,
+    Location,
+)
 
 _LOCATION_RESOURCE_TYPE = "LOCATION"
 _LOCATION_LABEL = "采集场地"
@@ -67,12 +73,14 @@ class LocationUseCases:
     def __init__(
         self,
         locations: LocationRepository,
+        site_resources: SiteResourceSummaryRepository,
         audit: AuditRepository,
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
     ) -> None:
         self._locations = locations
+        self._site_resources = site_resources
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(
@@ -98,6 +106,45 @@ class LocationUseCases:
             limit=bounded + 1,
         )
         return build_page(items, limit=bounded, id_of=lambda item: item.location_id)
+
+    def list_site_overview(
+        self,
+        scope: ProjectScope,
+        *,
+        kind: str | None = None,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> Page[SiteOverviewEntry]:
+        """多基地资源只读概览：场地分页 + 三个 SQL 聚合计数。
+
+        与 ``list_locations`` 共用同一套游标/上限和 ``kind`` 校验，避免出现
+        "列表接受 SITE、概览接受 site"这类两套口径。计数只针对本页场地，
+        查询规模被 ``limit``（≤100）约束，不做全项目扫描。
+
+        计数为 0 是合法值：空基地必须出现在结果里并如实返回 0。
+        """
+        bounded = normalize_limit(limit)
+        items = self._locations.list(
+            scope,
+            kind=_kind_filter(kind),
+            after_id=decode_cursor(cursor),
+            limit=bounded + 1,
+        )
+        page = build_page(items, limit=bounded, id_of=lambda item: item.location_id)
+        counts = self._site_resources.count_by_location(
+            scope,
+            location_ids=[item.location_id for item in page.items],
+        )
+        return Page(
+            items=[
+                SiteOverviewEntry(
+                    location=item,
+                    resources=counts.get(item.location_id, EMPTY_RESOURCE_COUNTS),
+                )
+                for item in page.items
+            ],
+            next_cursor=page.next_cursor,
+        )
 
     def get_location(self, scope: ProjectScope, location_id: UUID) -> Location:
         location = self._locations.get(scope, location_id)

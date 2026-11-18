@@ -40,7 +40,7 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N2-01 | 数据源中心（HF/URL/本地/S3） | **PARTIAL** | N2-003：登记可显式 `verify_remote` 调用 `HuggingFaceAdapter.describe()`（默认关闭、超时 10s）+ 详情页/详情 API | 仍只支持 Hugging Face；URL/本地/S3 源未实现 |
-| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **VERIFIED** | 状态机 + Worker + API + 列表页；阶段/进度/步骤日志（cursor 分页）；PENDING/RUNNING 时 7s 自动轮询、终态停止；N2-010 自动轮询原地合并刷新，已加载分页与位置保持（TD-29 闭环） | 手动刷新仍全量重置；筛选切换需刷新才重取（TD-32） |
+| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **VERIFIED** | 状态机 + Worker + API + 列表页；阶段/进度/步骤日志（cursor 分页）；PENDING/RUNNING 时 7s 自动轮询、终态停止；N2-010 原地合并刷新（TD-29 闭环）；N2-006 导入审看页展示统一质量六类结论与下钻 | 手动刷新仍全量重置；筛选切换需刷新才重取（TD-32）；质量运行无按对象列举接口（N4-008） |
 | DDP-V21-N2-03 | Raw Asset 字段、状态机、动作、去重 | **VERIFIED** | `domain/ingestion/models.py:332`；`state_machines.py:65`；`uploads.py:234-267`；`test_raw_asset_actions_api.py`；`scripts/qa/raw_asset_lifecycle_smoke.py` | — |
 | DDP-V21-N2-04 | Episode Explorer（时间/任务/机器人/相机/质量/状态） | **VERIFIED** | N2-004：camera 过滤（`EXISTS` 下推）+ 前端质量/标注/机器人/机位/时间筛选，全部写入 URL；契约补齐 11 个 query 参数 | `EpisodeListPage.tsx` 729 行，后续评估拆分 |
 | DDP-V21-N2-05 | 人工审看（播放/倍速/Range/时间轴/导航/多视角/decision+reason+evidence） | **PARTIAL** | N2-005：倍速/时间轴/2 机位同屏/结构化 evidence；预签名 URL + 206 Range 已实测 | 审看绑定导入任务，无 Episode 级导航；多机位为独立播放（不保证音画同步） |
@@ -90,7 +90,7 @@
 | DDP-V21-N7-02 | Training Adapter（Local/Mock/Dry Run） | **PARTIAL** | `ExecutionMode`（LOCAL/MOCK/DRY_RUN/REMOTE/UNKNOWN）+ 迁移 0054 + 部署声明 `DDP_TRAINING_ADAPTER_EXECUTION_MODES` + 前端显著标注；`local-adapter` 真实执行 | MOCK/DRY_RUN 目前是**显式标记**而非独立执行器；未配置模式时提交 422（fail-closed，刻意） |
 | DDP-V21-N7-03 | Training Run 记录 | **PARTIAL** | `domain/datasets/training_references.py:114`；`training_delivery_routes.py` | 无独立 TrainingRun；config 不落库；无 code_version/model_version；无 worker 轮询 |
 | DDP-V21-N7-04 | Evaluation（model/dataset/config/metrics/artifacts/failure cases） | **VERIFIED** | N7-003：`FailureCase` 领域值对象 + 迁移 0061 + 回调校验（类别/重复/4KiB/200 条/64KiB）+ 响应与前端详情展示；成功评测后不可变 | 列表响应可能较大（每评测 ≤64KiB），后续可加独立明细端点 |
-| DDP-V21-N7-05 | Data Gap（多来源、target_count、priority、status） | **PARTIAL** | N7-004：`FEEDBACK / REQUIREMENT / FAILURE_CASE / LOW_SCORE / ANNOTATION_CONFLICT` 五类来源证据、`unmapped`（含原因）与 `truncated_sources`；证据不造维度、不参与覆盖口径；契约 1.14.0 | 低分评测只能作为项目级未映射证据，不能归因到具体维度；缺口项仍无 priority/status；前端尚未展示来源 |
+| DDP-V21-N7-05 | Data Gap（多来源、target_count、priority、status） | **PARTIAL** | N7-004 + N7-008：五类来源证据、`unmapped`（含原因）与 `truncated_sources`；证据不造维度、不参与覆盖口径；前端展示来源徽标、未映射与截断；契约 1.14.0 | 低分评测只能作为项目级未映射证据，不能归因到具体维度；缺口项仍无 priority/status |
 | DDP-V21-N7-06 | 闭环 Evaluation→Failure→Gap→Requirement→New Data | **PARTIAL** | `application/modelops/feedback.py:221,291`；`requirements.py:318`；e2e 主链 | 每步手工触发；无自动「失败→缺口」；新数据回流未验证 |
 
 ## 8. N8 可观测性 / 性能 / 安全 / 部署
@@ -98,7 +98,7 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N8-01 | Metrics（延迟/错误/队列/导入吞吐/处理时长/质量失败/存储） | **PARTIAL** | `core/metrics.py`；`GET /metrics`（Prometheus 文本）；`test_metrics_api.py` | 有 HTTP/ingestion/episode/进程指标；缺队列积压、导入吞吐、处理时长、质量失败、存储 |
-| DDP-V21-N8-02 | Trace（Request→Application→DB→Worker→Storage） | **PARTIAL** | `api/middleware/request_id.py`；audit `request_id`；outbox `correlation_id` | `trace_id=request_id`；Worker 无上下文（`null`）；无 traceparent/OTel |
+| DDP-V21-N8-02 | Trace（Request→Application→DB→Worker→Storage） | **PARTIAL** | `api/middleware/request_id.py`；audit `request_id`；outbox `request_id`；N8-003 Worker 从事件 payload 恢复 trace，缺失/非法时生成并标注 `generated`，上下文按 token 复位 | 无 traceparent/OTel；历史存量事件无 request_id，只能生成本地 trace；日志外的步骤表无 trace 列 |
 | DDP-V21-N8-03 | 性能基线（100/1K/10K episodes、并发导入/审核、Video Range） | **MISSING** | 无压测脚本与记录 | 全部缺失 |
 | DDP-V21-N8-04 | Backup / Restore | **VERIFIED** | `scripts/ops/backup-restore-drill.sh`；`docs/operations/备份与恢复演练记录-2026-11-17.md`（PG+MinIO 全量、抽样 sha256 一致） | 仅本机、无加密/异地/RTO |
 | DDP-V21-N8-05 | Staging 发布链 | **BLOCKED** | CI 无 deploy job；`scripts/deploy-laptop.sh` 仅本机 | 主机不可解析（RK-01） |
@@ -112,7 +112,7 @@
 | DDP-V21-N9-02 | Capture Plan（task/scene/robot/sensor/operator/SOP/target/threshold） | **PARTIAL** | `domain/collection/assets.py:68` CollectionPlan；采集任务/批次 | Plan 是项目级可复用方案，无逐设备执行态；缺 target episode 与质量阈值绑定 |
 | DDP-V21-N9-03 | Capture Session（Plan→Session→Raw→Upload→Validation→Episode） | **MISSING** | 无会话实体 | 全缺 |
 | DDP-V21-N9-04 | 真实设备格式 Adapter（LeRobot/ROS Bag/MCAP/HDF5） | **PARTIAL** | 格式识别 + 魔数（`domain/ingestion/enums.py:85`）；LeRobot preview 解析 | 无字段级解析；无真实设备数据验证（BLOCKED：无硬件） |
-| DDP-V21-N9-05 | 项目隔离与多基地/供应商 | **VERIFIED** | `locations`、`suppliers`、项目成员、跨项目隔离测试 | 无跨基地调度与供应商计费 |
+| DDP-V21-N9-05 | 项目隔离与多基地/供应商 | **VERIFIED** | `locations`、`suppliers`、项目成员、跨项目隔离测试；N9-005 新增 `GET /projects/{id}/sites/overview` 按场地只读聚合设备/传感器/采集任务 | 无跨基地调度与供应商计费；仅挂机器人的传感器不归因到场地 |
 
 ## 10. 状态变更规则
 

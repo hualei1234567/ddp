@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.14.0
+  version: 1.15.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -150,6 +150,12 @@ info:
       维度键上，**不会凭空创建维度**，也**不参与** `current_count` /
       `suggested_episode_count` 计算——"没有证据"不等于"缺口为 0"。
       全部为增量：无路径删除、无字段删除、无既有字段语义变更。
+    - `1.15.0` **多基地资源只读概览（N9-005）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/sites/overview`，按场地聚合
+      `device_count` / `sensor_count` / `collection_task_count`。服务端强制
+      项目隔离；游标分页与 `kind` 过滤复用 `/locations` 口径；空基地如实
+      返回 0。**不做调度、不做计费、不提供任何写操作**。
+      全部为增量：仅新增路径与 schema，无既有路径/字段变更。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -167,7 +173,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.14.0
+  version: 1.15.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -781,6 +787,8 @@ paths:
     $ref: "./fragments/paths.stage9.yaml#/locations"
   /api/v1/projects/{project_id}/locations/{location_id}:
     $ref: "./fragments/paths.stage9.yaml#/locationDetail"
+  /api/v1/projects/{project_id}/sites/overview:
+    $ref: "./fragments/paths.stage9.yaml#/siteOverview"
   # --- N9 规模化运营：资源配额与用量 ---
   /api/v1/projects/{project_id}/quotas:
     $ref: "./fragments/paths.governance.yaml#/quotas"
@@ -1302,6 +1310,8 @@ components:
     LocationCreate: {$ref: "./fragments/schemas.locations.yaml#/LocationCreate"}
     LocationPatch: {$ref: "./fragments/schemas.locations.yaml#/LocationPatch"}
     LocationPage: {$ref: "./fragments/schemas.locations.yaml#/LocationPage"}
+    SiteOverviewEntry: {$ref: "./fragments/schemas.locations.yaml#/SiteOverviewEntry"}
+    SiteOverviewPage: {$ref: "./fragments/schemas.locations.yaml#/SiteOverviewPage"}
     ProcessingRunStatus: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunStatus"}
     ProcessingStage: {$ref: "./fragments/schemas.processing.yaml#/ProcessingStage"}
     ProcessingRunCreate: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunCreate"}

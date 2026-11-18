@@ -56,3 +56,35 @@ LocationPage:
       type: array
       items: { $ref: "../openapi.yaml#/components/schemas/Location" }
     next_cursor: { type: [string, "null"] }
+
+
+SiteOverviewEntry:
+  type: object
+  description: 单个场地的只读资源计数；计数为 0 是合法值。
+  required: [location_id, code, name, kind, device_count, sensor_count, collection_task_count]
+  properties:
+    location_id: { type: string, format: uuid }
+    code: { type: string, minLength: 1, maxLength: 64 }
+    name: { type: string, minLength: 1, maxLength: 200 }
+    kind: { $ref: "../openapi.yaml#/components/schemas/LocationKind" }
+    device_count:
+      type: integer
+      minimum: 0
+      description: 归属该场地的设备数（`devices.location_id`）。
+    sensor_count:
+      type: integer
+      minimum: 0
+      description: 挂在该场地设备上的传感器数；仅挂机器人的传感器不计入。
+    collection_task_count:
+      type: integer
+      minimum: 0
+      description: 执行场地为该场地的采集任务数（`collection_tasks.location_id`）。
+
+SiteOverviewPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/SiteOverviewEntry" }
+    next_cursor: { type: [string, "null"] }

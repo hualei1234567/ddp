@@ -9,7 +9,12 @@ from app.domain.locations.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
-from app.domain.locations.models import PATCHABLE_FIELDS, Location
+from app.domain.locations.models import (
+    EMPTY_RESOURCE_COUNTS,
+    PATCHABLE_FIELDS,
+    Location,
+    LocationResourceCounts,
+)
 from app.domain.locations.validation import (
     ADDRESS_MAX_LENGTH,
     CODE_MAX_LENGTH,
@@ -21,6 +26,7 @@ __all__ = [
     "ADDRESS_MAX_LENGTH",
     "CODE_MAX_LENGTH",
     "DEFAULT_LOCATION_KIND",
+    "EMPTY_RESOURCE_COUNTS",
     "NAME_MAX_LENGTH",
     "NOTES_MAX_LENGTH",
     "PATCHABLE_FIELDS",
@@ -30,6 +36,7 @@ __all__ = [
     "Location",
     "LocationDomainError",
     "LocationKind",
+    "LocationResourceCounts",
     "ResourceNotFoundError",
     "VersionConflictError",
 ]

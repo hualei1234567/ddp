@@ -226,7 +226,11 @@ class ExportJobUseCases:
                 aggregate_type=RESOURCE_TYPE,
                 aggregate_id=created.export_job_id,
                 event_type=EXPORT_REQUESTED_EVENT,
-                payload={"export_job_id": str(created.export_job_id)},
+                payload={
+                    "export_job_id": str(created.export_job_id),
+                    # 供导出 Worker 恢复 trace_id；附加字段，语义不变。
+                    **({"request_id": request_id} if request_id is not None else {}),
+                },
                 occurred_at=now,
                 # 投递类：worker 要据此真的执行导出（R-13 / T-1）。
                 dispatch=True,

@@ -195,6 +195,18 @@ export interface DataRequirement {
   updated_at: string;
 }
 
+export interface GapSourceCount {
+  /** 已知来源来自契约枚举；未知值按原样展示，不静默丢弃。 */
+  source: string;
+  count: number;
+}
+
+export interface GapUnmappedEvidence {
+  source: string;
+  count: number;
+  reason: string;
+}
+
 export interface GapSummaryItem {
   dimension_type: string;
   dimension_value: string;
@@ -203,11 +215,17 @@ export interface GapSummaryItem {
   target_count: number | null;
   suggested_episode_count: number;
   requirement_ids: string[];
+  /** 本次扫描归因到该维度键的来源证据；空数组不等于缺口为 0。 */
+  sources: GapSourceCount[];
 }
 
 export interface GapSummary {
   items: GapSummaryItem[];
   freshness: string;
+  /** 无法归因到既有维度键的证据；不会被静默丢弃。 */
+  unmapped: GapUnmappedEvidence[];
+  /** 因服务端资源上限被截断的来源；非空时"没看到"不能读成"没有"。 */
+  truncated_sources: string[];
 }
 
 export const MODEL_STATUS_VALUES = ["DRAFT", "ACTIVE", "DEPRECATED", "ARCHIVED"] as const;

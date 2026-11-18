@@ -45,8 +45,9 @@ from uuid import UUID
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ingestion.jobs import IngestionJobService
+from app.application.ingestion.ports import ClaimedValidationEvent
 from app.core.config import Settings, get_settings
-from app.core.logging import configure_logging
+from app.core.logging import bind_trace, configure_logging, trace_from_event_payload
 from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.enums import IngestionJobStatus, IngestionJobType
 from app.infrastructure.db.session import create_session_factory, get_engine
@@ -89,103 +90,136 @@ class IngestionJobWorker:
             claimed = queue.claim_next(now=moment, event_type=JOB_CREATED_EVENT)
             if claimed is None:
                 return {"status": JobProcessingStatus.IDLE.value}
-
-            raw_id = claimed.payload.get("job_id")
-            try:
-                job_id = UUID(str(raw_id))
-            except (TypeError, ValueError):
-                queue.mark_dead_letter(
-                    claimed.event_id,
-                    attempts=claimed.attempts + 1,
-                    last_error=f"payload 缺少合法 job_id：{raw_id!r}",
+            # 追踪上下文覆盖处理与结果日志；来源是事件 payload 的 request_id，
+            # 缺失时生成并标注 generated，退出 with 后复位。
+            with bind_trace(trace_from_event_payload(claimed.payload)) as trace:
+                result = self._process_claimed(
+                    session,
+                    queue,
+                    claimed,
+                    moment,
+                    trace_id=trace.trace_id,
                 )
-                session.commit()
-                return {
-                    "status": JobProcessingStatus.DEAD_LETTER.value,
-                    "event_id": str(claimed.event_id),
-                }
+                _log_result(result)
+                if trace.is_generated:
+                    logger.info(
+                        "接入事件缺少可用 request_id，已生成本地 trace_id event_id=%s",
+                        claimed.event_id,
+                    )
+                return result
 
-            service = _build_service(session)
-            # 读只需 project 范围；写需要真实 user（updated_by 有 FK 到 users）。
-            read_scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
-            try:
-                job = service.get(read_scope, job_id)
-            except Exception as exc:  # noqa: BLE001 - 任务丢失也要留痕
+    def _process_claimed(
+        self,
+        session: Session,
+        queue: SqlOutboxValidationQueue,
+        claimed: ClaimedValidationEvent,
+        moment: datetime,
+        *,
+        trace_id: str,
+    ) -> dict[str, object]:
+        raw_id = claimed.payload.get("job_id")
+        try:
+            job_id = UUID(str(raw_id))
+        except (TypeError, ValueError):
+            queue.mark_dead_letter(
+                claimed.event_id,
+                attempts=claimed.attempts + 1,
+                last_error=f"payload 缺少合法 job_id：{raw_id!r}",
+            )
+            session.commit()
+            return {
+                "status": JobProcessingStatus.DEAD_LETTER.value,
+                "event_id": str(claimed.event_id),
+            }
+
+        service = _build_service(session)
+        # 读只需 project 范围；写需要真实 user（updated_by 有 FK 到 users）。
+        read_scope = ProjectScope(claimed.project_id, actor_id=claimed.project_id)
+        try:
+            job = service.get(read_scope, job_id)
+        except Exception as exc:  # noqa: BLE001 - 任务丢失也要留痕
+            queue.mark_dead_letter(
+                claimed.event_id,
+                attempts=claimed.attempts + 1,
+                last_error=f"接入任务不可读：{exc}"[:2000],
+            )
+            session.commit()
+            return {
+                "status": JobProcessingStatus.DEAD_LETTER.value,
+                "job_id": str(job_id),
+            }
+
+        # actor 必须是一个**真实存在**的 user（ingestion_jobs.updated_by 有
+        # FK 到 users）。此前用 project_id 当 actor，任何写操作都会因外键
+        # 失败——表现为"任务一直重试却永不成功"。这里用任务的 creator，
+        # 语义也对：状态变更是因为提交人的任务被系统执行。
+        scope = ProjectScope(claimed.project_id, actor_id=job.created_by or job.updated_by)
+
+        if job.status is not IngestionJobStatus.QUEUED:
+            # 幂等：任务已被别人推进过，不重复执行。
+            queue.mark_published(claimed.event_id, now=moment)
+            session.commit()
+            return {
+                "status": JobProcessingStatus.PUBLISHED.value,
+                "job_id": str(job_id),
+                "skipped": f"任务状态为 {job.status.value}",
+            }
+
+        try:
+            outcome = _execute(service, scope, job, request_id=trace_id)
+            queue.mark_published(claimed.event_id, now=moment)
+            session.commit()
+            return {
+                "status": JobProcessingStatus.PUBLISHED.value,
+                "job_id": str(job_id),
+                "job_type": job.job_type.value,
+                "result": outcome,
+            }
+        except _UnsupportedJobType as exc:
+            # 不支持的类型：明确失败并留原因，不重试（重试也不会成功）。
+            _fail_job(
+                service,
+                scope,
+                job,
+                error_code="job_type_unsupported",
+                summary=str(exc),
+                request_id=trace_id,
+            )
+            queue.mark_dead_letter(
+                claimed.event_id,
+                attempts=claimed.attempts + 1,
+                last_error=str(exc)[:2000],
+            )
+            session.commit()
+            return {
+                "status": JobProcessingStatus.UNSUPPORTED.value,
+                "job_id": str(job_id),
+                "job_type": job.job_type.value,
+                "error": str(exc),
+            }
+        except Exception as exc:  # noqa: BLE001 - 单任务异常不得终止 Worker
+            session.rollback()
+            attempts = claimed.attempts + 1
+            if attempts >= self._settings.validation_max_attempts:
                 queue.mark_dead_letter(
                     claimed.event_id,
-                    attempts=claimed.attempts + 1,
-                    last_error=f"接入任务不可读：{exc}"[:2000],
-                )
-                session.commit()
-                return {
-                    "status": JobProcessingStatus.DEAD_LETTER.value,
-                    "job_id": str(job_id),
-                }
-
-            # actor 必须是一个**真实存在**的 user（ingestion_jobs.updated_by 有
-            # FK 到 users）。此前用 project_id 当 actor，任何写操作都会因外键
-            # 失败——表现为"任务一直重试却永不成功"。这里用任务的 creator，
-            # 语义也对：状态变更是因为提交人的任务被系统执行。
-            scope = ProjectScope(claimed.project_id, actor_id=job.created_by or job.updated_by)
-
-            if job.status is not IngestionJobStatus.QUEUED:
-                # 幂等：任务已被别人推进过，不重复执行。
-                queue.mark_published(claimed.event_id, now=moment)
-                session.commit()
-                return {
-                    "status": JobProcessingStatus.PUBLISHED.value,
-                    "job_id": str(job_id),
-                    "skipped": f"任务状态为 {job.status.value}",
-                }
-
-            try:
-                outcome = _execute(service, scope, job)
-                queue.mark_published(claimed.event_id, now=moment)
-                session.commit()
-                return {
-                    "status": JobProcessingStatus.PUBLISHED.value,
-                    "job_id": str(job_id),
-                    "job_type": job.job_type.value,
-                    "result": outcome,
-                }
-            except _UnsupportedJobType as exc:
-                # 不支持的类型：明确失败并留原因，不重试（重试也不会成功）。
-                _fail_job(service, scope, job, error_code="job_type_unsupported", summary=str(exc))
-                queue.mark_dead_letter(
-                    claimed.event_id,
-                    attempts=claimed.attempts + 1,
+                    attempts=attempts,
                     last_error=str(exc)[:2000],
                 )
-                session.commit()
-                return {
-                    "status": JobProcessingStatus.UNSUPPORTED.value,
-                    "job_id": str(job_id),
-                    "job_type": job.job_type.value,
-                    "error": str(exc),
-                }
-            except Exception as exc:  # noqa: BLE001 - 单任务异常不得终止 Worker
-                session.rollback()
-                attempts = claimed.attempts + 1
-                if attempts >= self._settings.validation_max_attempts:
-                    queue.mark_dead_letter(
-                        claimed.event_id,
-                        attempts=attempts,
-                        last_error=str(exc)[:2000],
-                    )
-                else:
-                    queue.mark_retry(
-                        claimed.event_id,
-                        attempts=attempts,
-                        available_at=moment,
-                        last_error=str(exc)[:2000],
-                    )
-                session.commit()
-                return {
-                    "status": JobProcessingStatus.RETRIED.value,
-                    "job_id": str(job_id),
-                    "attempts": attempts,
-                    "error": str(exc)[:500],
-                }
+            else:
+                queue.mark_retry(
+                    claimed.event_id,
+                    attempts=attempts,
+                    available_at=moment,
+                    last_error=str(exc)[:2000],
+                )
+            session.commit()
+            return {
+                "status": JobProcessingStatus.RETRIED.value,
+                "job_id": str(job_id),
+                "attempts": attempts,
+                "error": str(exc)[:500],
+            }
 
     def run(self, *, stop_event: threading.Event) -> None:
         while not stop_event.is_set():
@@ -196,6 +230,33 @@ class IngestionJobWorker:
 
 class _UnsupportedJobType(Exception):
     """该类任务当前没有真实实现；显式失败而不是伪造成功。"""
+
+
+def _log_result(result: dict[str, object]) -> None:
+    """在已绑定 trace 的上下文内记录非空闲结果。"""
+    status = result.get("status")
+    if status == JobProcessingStatus.RETRIED.value:
+        # 既有实现把「重试」与「超过上限置死信」都归为 RETRIED，这里不改变
+        # 返回语义，日志措辞保持中性，避免把死信写成"将重试"。
+        logger.warning(
+            "接入任务事件未成功 job_id=%s attempts=%s error=%s",
+            result.get("job_id"),
+            result.get("attempts"),
+            result.get("error"),
+        )
+    elif status == JobProcessingStatus.DEAD_LETTER.value:
+        logger.error(
+            "接入任务事件进入死信 job_id=%s error=%s",
+            result.get("job_id"),
+            result.get("last_error") or result.get("error"),
+        )
+    elif status == JobProcessingStatus.UNSUPPORTED.value:
+        logger.warning(
+            "接入任务类型不受支持 job_id=%s job_type=%s error=%s",
+            result.get("job_id"),
+            result.get("job_type"),
+            result.get("error"),
+        )
 
 
 def _build_service(session: Session) -> IngestionJobService:
@@ -215,6 +276,8 @@ def _execute(
     service: IngestionJobService,
     scope: ProjectScope,
     job,
+    *,
+    request_id: str,
 ) -> dict[str, object]:
     """按 job_type 执行；成功则推进到 SUCCEEDED，否则抛异常由调用方处理。"""
     job_type = IngestionJobType(job.job_type)
@@ -225,6 +288,7 @@ def _execute(
         scope,
         job.job_id,
         _action_command("worker-start", job.version),
+        request_id=request_id,
     )
     if job_type in (IngestionJobType.VALIDATE, IngestionJobType.REVALIDATE):
         # 校验由既有 RawAsset 校验链路负责；这里不重复实现，只记录"已转交"。
@@ -236,6 +300,7 @@ def _execute(
                 started.version,
                 metrics={"delegated_to": "raw_asset_validation"},
             ),
+            request_id=request_id,
         )
         return {"delegated": "raw_asset_validation"}
     if job_type is IngestionJobType.PARSE_METADATA:
@@ -265,6 +330,7 @@ def _fail_job(
     *,
     error_code: str,
     summary: str,
+    request_id: str | None = None,
 ) -> None:
     """把任务标为失败；失败留痕本身不允许再抛错掩盖原始问题。"""
     try:
@@ -274,6 +340,7 @@ def _fail_job(
                 scope,
                 job.job_id,
                 _action_command("worker-start", current.version),
+                request_id=request_id,
             )
         service.apply_action(
             scope,
@@ -284,6 +351,7 @@ def _fail_job(
                 error_code=error_code,
                 error_summary=summary[:2000],
             ),
+            request_id=request_id,
         )
     except Exception:  # noqa: BLE001
         logger.exception("标记接入任务失败时出错", extra={"job_id": str(job.job_id)})

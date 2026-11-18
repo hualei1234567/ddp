@@ -30,6 +30,7 @@ import type {
   ReviewEvidence,
 } from "../../types/datasource";
 import { buildReviewEvidence, type ReviewFormValues } from "./reviewEvidence";
+import ImportQualityRunSection from "./ImportQualityRunSection";
 
 /**
  * 导入结果的质量报告与人工审核页。
@@ -456,8 +457,9 @@ function ReviewContent({
 
   return (
     <Space direction="vertical" style={{ width: "100%" }} size="large">
+      <ImportQualityRunSection projectId={projectId} importId={importId} />
       <Card
-          title="质量报告"
+          title="导入质量报告（历史扁平规则）"
           extra={
             <Button
               size="small"
@@ -468,6 +470,10 @@ function ReviewContent({
             </Button>
           }
         >
+          <Typography.Text type="secondary">
+            该区块为导入阶段的历史扁平规则结论，仅用于对照；六类分层结论以上方
+            「统一质量检查」为准。
+          </Typography.Text>
           <QualitySection
             report={report}
             loading={reportLoading}
