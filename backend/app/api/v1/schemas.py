@@ -174,6 +174,8 @@ class CalibrationProfileOut(BaseModel):
     required_types: list[str]
     selection_rule: dict[str, object]
     target_id: UUID | None
+    # 版本链：本版替代的上一版；首版为 null。
+    supersedes_id: UUID | None = None
 
     @classmethod
     def from_domain(cls, profile: CalibrationProfile) -> CalibrationProfileOut:
@@ -188,6 +190,7 @@ class CalibrationProfileOut(BaseModel):
             required_types=[_value(item) for item in profile.required_types],
             selection_rule=dict(profile.selection_rule),
             target_id=profile.target_id,
+            supersedes_id=profile.supersedes_id,
         )
 
 

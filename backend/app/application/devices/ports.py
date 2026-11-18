@@ -120,6 +120,15 @@ class CalibrationProfileRepository(Protocol):
 
     def get(self, scope: ProjectScope, profile_id: UUID) -> CalibrationProfile | None: ...
 
+    def find_successor(
+        self,
+        scope: ProjectScope,
+        *,
+        previous_id: UUID,
+    ) -> CalibrationProfile | None:
+        """返回 ``supersedes_id == previous_id`` 的那一版（用于拦截版本链分叉）。"""
+        ...
+
 
 class CalibrationRecordRepository(Protocol):
     def add(

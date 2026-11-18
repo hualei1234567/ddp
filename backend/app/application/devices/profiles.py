@@ -93,6 +93,7 @@ class CalibrationProfileUseCases:
             required_types=command.required_types,
             selection_rule=command.selection_rule,
             target_id=command.target_id,
+            supersedes_id=command.supersedes_id,
         )
         created = self._profiles.add(scope, profile)
         record_change(
@@ -159,6 +160,10 @@ class CalibrationProfileUseCases:
         )
         if not same_target:
             raise DomainValidationError("supersedes_id 必须指向同作用域、同目标类型的上一版配置")
+        if self._profiles.find_successor(scope, previous_id=command.supersedes_id) is not None:
+            # 同一父版本只能被一条分支继承；否则版本链分叉，后续无法判断
+            # 某条记录到底属于哪一支。
+            raise DomainValidationError("supersedes_id 指向的版本已有后继版本，版本链不能分叉")
         expected = previous.profile_version + 1
         if command.profile_version != expected:
             raise DomainValidationError(f"profile_version 必须为上一版 +1（期望 {expected}）")

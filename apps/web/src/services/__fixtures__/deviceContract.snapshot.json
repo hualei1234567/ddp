@@ -160,7 +160,8 @@
       "INTRINSICS"
     ],
     "selection_rule": {},
-    "target_id": null
+    "target_id": null,
+    "supersedes_id": null
   },
   "sensor_page": {
     "items": [

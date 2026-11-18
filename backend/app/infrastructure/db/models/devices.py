@@ -196,12 +196,19 @@ class CalibrationProfile(Base, ProjectScopedMixin):
     )
     # ADR-0020（G-06）：绑定到具体目标；SYSTEM 作用域必须为空。
     target_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # 版本链：本行替代的那一版。可空——首版没有前驱。
+    supersedes_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
             "project_id",
             "id",
             name="uq_calibration_profiles_project_id",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "supersedes_id"],
+            ["calibration_profiles.project_id", "calibration_profiles.id"],
+            name="fk_calibration_profiles_project_supersedes",
         ),
         # 同一逻辑 Profile 的版本号不可重复：否则"第 2 版"可能有两行。
         UniqueConstraint(
