@@ -244,6 +244,7 @@ class Settings(BaseSettings):
     # ``local-adapter``（服务名或 localhost）落在私有网段，必须显式置 True 才放行。
     # **开启后等同于关闭训练 Adapter 的 SSRF 地址筛查**：本机可被用作访问内网与
     # 云元数据的跳板，只能用于本地开发，不得用于共享或生产环境。
+    # 模型侧是独立开关 ``model_adapter_allow_private``，两者互不影响。
     training_adapter_allow_private: bool = False
     training_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
     training_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
@@ -271,6 +272,15 @@ class Settings(BaseSettings):
     # 未登记的 adapter 仍返回 503 model_adapter_unavailable。
     model_adapter_endpoints: Annotated[dict[str, str], NoDecode] = Field(default_factory=dict)
     model_adapter_timeout_seconds: float = Field(default=10.0, gt=0, le=600)
+    # 模型 Adapter 出站 SSRF 守卫的显式本地例外，**默认 False**。
+    # 与 ``training_adapter_allow_private`` 分开而不是共用：训练与模型是两个独立的
+    # 出站面，共用开关会让"为本地训练 Adapter 放开私网"顺带放开模型网关，违反
+    # 最小授权。两者都不开时，出站前解析 endpoint 主机名并拒绝环回/私网/
+    # 链路本地/云元数据地址（见 ``infrastructure/adapter_url_guard.py``）。
+    # 本地 docker-compose 的 ``local-adapter`` 与训练共用同一服务名，落在私有网段，
+    # 因此本地开发的 .env 必须**同时**显式打开两个开关。开启后等同于关闭模型
+    # Adapter 的 SSRF 地址筛查，只能用于本地开发，不得用于共享或生产环境。
+    model_adapter_allow_private: bool = False
     model_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
     model_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
 

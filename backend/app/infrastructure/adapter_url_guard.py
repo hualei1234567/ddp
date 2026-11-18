@@ -1,9 +1,10 @@
 """出站 Adapter URL 的 SSRF 守卫。
 
-Adapter endpoint 来自部署配置（当前接线范围：``DDP_TRAINING_ADAPTER_ENDPOINTS``；
-模型平台网关尚未调用本守卫），不是用户输入；但配置错误、内网误配或
-部署侧 DNS 被污染时，服务端请求仍可能被引向环回、内网或云元数据地址。
-本模块在**每次**发请求前解析主机名并做地址筛查，失败即拒绝（fail-closed）。
+Adapter endpoint 来自部署配置（当前接线范围：训练网关
+``DDP_TRAINING_ADAPTER_ENDPOINTS`` 与模型平台网关 ``DDP_MODEL_ADAPTER_ENDPOINTS``），
+不是用户输入；但配置错误、内网误配或部署侧 DNS 被污染时，服务端请求仍可能被
+引向环回、内网或云元数据地址。本模块在**每次**发请求前解析主机名并做地址筛查，
+失败即拒绝（fail-closed）。两个网关都调用本函数，规则只有这一处实现。
 
 规则：
 
@@ -39,8 +40,10 @@ DNS 重绑定（TOCTOU）评估
 
 ``allow_private=True`` 会**完全跳过**地址筛查（仅保留 scheme 与凭据校验），
 用于本地 docker-compose 的 ``local-adapter`` 等服务名 endpoint。默认关闭，
-由 ``DDP_TRAINING_ADAPTER_ALLOW_PRIVATE`` 显式开启。开启后本机可被当作
-访问内网与云元数据的跳板，只能用于本地开发，不得用于共享或生产环境。
+由 ``DDP_TRAINING_ADAPTER_ALLOW_PRIVATE`` / ``DDP_MODEL_ADAPTER_ALLOW_PRIVATE``
+**按出站面分别**显式开启（训练与模型不共用开关，避免一处放开连带扩大另一处）。
+开启后本机可被当作访问内网与云元数据的跳板，只能用于本地开发，
+不得用于共享或生产环境。
 """
 
 from __future__ import annotations

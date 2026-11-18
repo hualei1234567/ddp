@@ -11,6 +11,17 @@
 未在配置里登记 endpoint 的 adapter **仍委派给**
 :class:`ConfiguredModelPlatformGateway`——即沿用既有的显式 503，
 行为与接线前完全一致；只有登记了 endpoint 的 adapter 才会真正发出 HTTP 请求。
+
+出站 SSRF 守卫
+--------------
+
+endpoint 来自部署配置，不是用户输入；但配置错误、内网误配或部署侧 DNS 被污染时，
+服务端请求仍可能被引向环回、内网或云元数据地址。本网关在**每次**出站前调用
+:func:`app.infrastructure.adapter_url_guard.ensure_safe_adapter_url`（与训练网关
+同一个实现，规则不在此重复），失败按 ``AdapterHttpFailure`` 经既有的
+:func:`adapter_http.adapter_failure_as` 映射为 ``ModelAdapterUnavailableError``
+（→ 503），**不新增错误码**。本地 ``local-adapter`` 例外由
+``DDP_MODEL_ADAPTER_ALLOW_PRIVATE`` 显式开启（默认 false）。
 """
 
 from __future__ import annotations
@@ -26,6 +37,7 @@ from app.infrastructure.adapter_http import (
     request_ack,
     shared_client,
 )
+from app.infrastructure.adapter_url_guard import ensure_safe_adapter_url
 from app.infrastructure.model_platform import ConfiguredModelPlatformGateway
 
 
@@ -38,6 +50,8 @@ class HttpModelPlatformGateway:
             for adapter_id, endpoint in settings.model_adapter_endpoints.items()
         }
         self._timeout_seconds = settings.model_adapter_timeout_seconds
+        # SSRF 守卫的显式本地例外（默认关闭）；见 ``adapter_url_guard`` docstring。
+        self._allow_private_endpoints = settings.model_adapter_allow_private
         # 注入的 client 由调用方负责关闭；未注入时使用进程内共享连接池。
         self._injected_client = client
         self._fallback = ConfiguredModelPlatformGateway(settings)
@@ -126,6 +140,15 @@ class HttpModelPlatformGateway:
             )
 
     def _post(self, url: str, *, context: str, payload: dict[str, object]) -> None:
+        # 每次出站前做 SSRF 筛查（不缓存解析结果），与训练网关共用同一守卫：
+        # 拒绝环回/私网/链路本地/云元数据等地址。失败抛 ``AdapterHttpFailure``，
+        # 由调用处的 ``adapter_failure_as`` 统一映射为
+        # ``ModelAdapterUnavailableError``（503），不新增错误码。
+        ensure_safe_adapter_url(
+            url,
+            context=context,
+            allow_private=self._allow_private_endpoints,
+        )
         client = self._injected_client or shared_client(self._timeout_seconds)
         request_ack(
             client=client,
