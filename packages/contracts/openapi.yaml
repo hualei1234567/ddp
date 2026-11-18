@@ -162,6 +162,15 @@ info:
       404，避免用状态码差异探测其他项目对象。未知 `subject_type` 返回 422。
       本操作不触发检查、不改变历史结论。全部为增量：仅新增路径操作、
       query 参数与 `QualityRunPage` schema，无既有路径/字段变更。
+    - `1.19.0` **采集方案绑定目标与质量阈值（N9-003）**：`CollectionPlan`
+      响应新增 `target_episode_count`（可空整数）与 `quality_thresholds`
+      （对象），创建与 PATCH 请求同步新增可选字段；PATCH 传 `null` 表示清空
+      （阈值清空为 `{}`）。阈值键只允许复用数据集需求匹配登记的键
+      （`min_selected_count` / `max_duplicated_count` / `min_total_duration_ns` /
+      `max_blocking_issue_count` / `max_warning_count`），值为非负有限数，
+      未知键、非有限数与负数返回 422。两字段都只是**计划值**，不是执行保证，
+      也不构成自动验收依据。数据库迁移 0064 仅新增两列（不重建表）。全部为
+      增量：无路径删除、无字段删除、无必填性收紧、无既有字段语义变更。
     - `1.18.0` **统一资产目录只读检索（N5-001）**：新增只读端点
       `GET /api/v1/projects/{project_id}/assets/search`，按资源标识前缀跨
       RawAsset / Episode / Dataset / DatasetVersion / 媒体资产检索，返回统一

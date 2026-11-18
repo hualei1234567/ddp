@@ -67,6 +67,13 @@ def non_negative_int(value: object, field_name: str) -> int:
     return value
 
 
+def optional_non_negative_int(value: object, field_name: str) -> int | None:
+    """可选非负整数；``None`` 表示"未设定"，与 0 区分。"""
+    if value is None:
+        return None
+    return non_negative_int(value, field_name)
+
+
 def positive_int(value: object, field_name: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         raise DomainValidationError(f"{field_name} 必须是正整数")
