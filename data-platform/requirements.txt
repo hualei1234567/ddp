@@ -1,3 +1,11 @@
 # data-platform 独立依赖：只在这里，不混进 backend/requirements.txt。
 # 版本精确固定；新增需走依赖评估（CLAUDE.md §三）。
 huggingface_hub==0.27.1
+# Parquet footer / schema 只读解析（DDP-V21-N3-003）。
+# 依赖评估：官方 PyArrow 是事实标准（替代方案：自研 Thrift footer 解析，已因
+# “禁止重复造轮子”被否；快速验证还可选 fastparquet，但生态/维护面更小）。
+# 版本固定到 23.0.1；许可证 Apache-2.0；只读取文件元数据，不解码数据页；
+# wheel 体积约 34 MB（macOS arm64），numpy 为传递依赖。
+# 安全公告复核（2026-11-19）：17.0.0 命中 PYSEC-2026-113 / CVE-2026-25087
+# （Arrow IPC pre-buffering 释放后使用），23.0.1 为修复版本，故锁定 23.0.1。
+pyarrow==23.0.1
