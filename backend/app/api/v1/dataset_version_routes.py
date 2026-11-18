@@ -85,8 +85,7 @@ def list_versions(
     page = build_page(items, limit=limit, id_of=lambda item: item.dataset_version_id)
     return {
         "items": [
-            version_out(item, allowed_actions=_public_version_actions(item))
-            for item in page.items
+            version_out(item, allowed_actions=_public_version_actions(item)) for item in page.items
         ],
         "next_cursor": page.next_cursor,
     }

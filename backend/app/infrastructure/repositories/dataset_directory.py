@@ -234,6 +234,7 @@ def _calibration_state(
                 return False, "标定已过期", False
     return True, None, False
 
+
 class SqlDatasetUpstreamDirectory:
     """数据集版本的上游指纹读取（只读）：Episode 状态与 Manifest Hash。
 
@@ -262,7 +263,4 @@ class SqlDatasetUpstreamDirectory:
                 EpisodeModel.id.in_(episode_ids),
             )
         ).all()
-        return {
-            row[0]: (str(row[1]), row[2], int(row[3]))
-            for row in rows
-        }
+        return {row[0]: (str(row[1]), row[2], int(row[3])) for row in rows}
