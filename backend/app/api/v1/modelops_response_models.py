@@ -396,6 +396,21 @@ class DataRequirementOut(BaseModel):
         )
 
 
+class GapSourceCountOut(BaseModel):
+    """某个维度上的一类来源证据条数（N7-004）。"""
+
+    source: str
+    count: int
+
+
+class GapUnmappedEvidenceOut(BaseModel):
+    """无法归因到既有维度键的证据；``reason`` 说明为什么归不上。"""
+
+    source: str
+    count: int
+    reason: str
+
+
 class DataGapSummaryItemOut(BaseModel):
     dimension_type: str
     dimension_value: str
@@ -406,6 +421,9 @@ class DataGapSummaryItemOut(BaseModel):
     requirement_ids: list[str] = Field(default_factory=list)
     # 契约尚未收录（缺口已登记）：实测 MEASURED / 人工 MANUAL / 未知 UNKNOWN。
     coverage_source: str = "UNKNOWN"
+    # 来源证据只说明"这个缺口结论有什么支撑"，不参与 current_count 计算；
+    # 空数组表示本次扫描没有该来源的证据，不代表缺口为 0。
+    sources: list[GapSourceCountOut] = Field(default_factory=list)
 
     @classmethod
     def from_domain(cls, item: GapSummaryItem) -> DataGapSummaryItemOut:
@@ -415,12 +433,16 @@ class DataGapSummaryItemOut(BaseModel):
 class DataGapSummaryOut(BaseModel):
     items: list[DataGapSummaryItemOut]
     freshness: str
+    unmapped: list[GapUnmappedEvidenceOut] = Field(default_factory=list)
+    truncated_sources: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_domain(cls, summary: GapSummary) -> DataGapSummaryOut:
         return cls(
             items=[DataGapSummaryItemOut.from_domain(item) for item in summary.items],
             freshness=summary.freshness,
+            unmapped=[GapUnmappedEvidenceOut(**item.to_payload()) for item in summary.unmapped],
+            truncated_sources=list(summary.truncated_sources),
         )
 
 
@@ -431,6 +453,8 @@ __all__ = [
     "EvaluationOut",
     "FeedbackOut",
     "GapDimensionOut",
+    "GapSourceCountOut",
+    "GapUnmappedEvidenceOut",
     "InferenceServiceOut",
     "InferenceTaskOut",
     "ModelArtifactOut",

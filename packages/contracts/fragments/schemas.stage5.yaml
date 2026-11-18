@@ -1277,6 +1277,61 @@ RequirementActionRequest:
       - string
       - 'null'
       maxLength: 1024
+GapEvidenceSource:
+  type: string
+  enum:
+  - FEEDBACK
+  - REQUIREMENT
+  - FAILURE_CASE
+  - LOW_SCORE
+  - ANNOTATION_CONFLICT
+  description: |
+    缺口来源。`FEEDBACK` 为人工反馈，`REQUIREMENT` 为仍未满足的数据需求，
+    `FAILURE_CASE` 为评测失败用例，`LOW_SCORE` 为低分评测，`ANNOTATION_CONFLICT`
+    为标注一致性分歧（`ESCALATED` 提交）。
+GapEvidenceUnmappedReason:
+  type: string
+  enum:
+  - NO_DIMENSION
+  - VALUE_NOT_FOUND
+  - AMBIGUOUS_VALUE
+  - INVALID_EVIDENCE
+  description: |
+    证据无法归因到既有缺口维度键的原因。`NO_DIMENSION` 表示来源本身没有维度
+    语义（整场评测低分等）；`VALUE_NOT_FOUND` 表示提示值在既有维度里找不到；
+    `AMBIGUOUS_VALUE` 表示同名值同时命中多个维度类型；`INVALID_EVIDENCE`
+    表示存量证据行无法按领域规则解析。未映射不会被静默丢弃。
+GapSourceCount:
+  type: object
+  required:
+  - source
+  - count
+  additionalProperties: false
+  properties:
+    source:
+      $ref: ../openapi.yaml#/components/schemas/GapEvidenceSource
+    count:
+      type: integer
+      minimum: 0
+  description: |
+    某个缺口维度上的一类来源证据条数。空数组含义是"本次扫描没有该来源的
+    证据"，**不是**"缺口为 0"——覆盖口径由 `current_count` 与
+    `coverage_source` 决定，证据不参与覆盖计算。
+GapUnmappedEvidence:
+  type: object
+  required:
+  - source
+  - count
+  - reason
+  additionalProperties: false
+  properties:
+    source:
+      $ref: ../openapi.yaml#/components/schemas/GapEvidenceSource
+    count:
+      type: integer
+      minimum: 0
+    reason:
+      $ref: ../openapi.yaml#/components/schemas/GapEvidenceUnmappedReason
 DataGapSummary:
   type: object
   required:
@@ -1328,12 +1383,35 @@ DataGapSummary:
               `MANUAL` 为人工填写，`UNKNOWN` 表示二者都不可得。
               `current_count=null` 与 `coverage_source=UNKNOWN` 必须一起读：
               **测不到不等于覆盖率为 0，更不等于达标**。
+          sources:
+            type: array
+            items:
+              $ref: ../openapi.yaml#/components/schemas/GapSourceCount
+            description: |
+              该维度上的来源证据（N7-004）。只列出确实归因到该维度的来源与条数；
+              未出现的来源只代表本次扫描没有可归属证据，不参与
+              `current_count` / `suggested_episode_count` 计算。
     freshness:
       type: string
       enum:
       - FRESH
       - STALE
       - UNKNOWN
+    unmapped:
+      type: array
+      items:
+        $ref: ../openapi.yaml#/components/schemas/GapUnmappedEvidence
+      description: |
+        本次扫描范围内无法归因到既有维度键的证据汇总。与服务端项目隔离口径
+        一致：只统计当前项目。证据不会凭空创建维度键。
+    truncated_sources:
+      type: array
+      items:
+        $ref: ../openapi.yaml#/components/schemas/GapEvidenceSource
+      description: |
+        因服务端资源上限被截断的来源。非空时，该来源"没有出现"不能读成
+        "该来源为空"。
+
 ModelAdapterCallback:
   type: object
   required:

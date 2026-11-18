@@ -34,6 +34,7 @@ from app.core.config import Settings
 from app.infrastructure.model_platform import S3ArtifactInspector
 from app.infrastructure.model_platform_http import HttpModelPlatformGateway
 from app.infrastructure.repositories.episode_coverage import SqlEpisodeCoverageDirectory
+from app.infrastructure.repositories.gap_evidence import SqlGapEvidenceDirectory
 from app.infrastructure.repositories.modelops import (
     SqlDatasetGate,
     SqlEvaluationRepository,
@@ -155,6 +156,7 @@ def build_modelops_services(
         uow=session,
         coverage=SqlEpisodeCoverageDirectory(session),
         coverage_stale_after=timedelta(seconds=settings.model_gap_freshness_stale_after_seconds),
+        evidence=SqlGapEvidenceDirectory(session),
     )
     requirements = RequirementUseCases(
         requirements=requirements_repo,

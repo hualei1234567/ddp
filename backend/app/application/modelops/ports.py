@@ -14,6 +14,7 @@ from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
 from app.domain.identity.models import ProjectScope
+from app.domain.modelops.gap_evidence import GapEvidenceFacts
 from app.domain.modelops.gaps import MeasuredCoverage
 from app.domain.modelops.models import (
     DataRequirement,
@@ -235,6 +236,20 @@ class EpisodeCoverageDirectory(Protocol):
     ) -> list[MeasuredCoverage]: ...
 
 
+class GapEvidenceDirectory(Protocol):
+    """缺口视图的多来源证据端口（N7-004）：只读、项目内、有界。
+
+    实现负责从评测失败用例、低分评测、标注分歧与未满足需求等**真实事实**中
+    取出证据，但**不做归因**：返回的 :class:`GapEvidenceFacts` 保留原始维度或
+    提示值，由领域函数 ``attribute_gap_evidence`` 决定挂到哪个既有维度键。
+
+    实现必须以服务端 ``ProjectScope`` 强制 ``project_id`` 隔离；扫描必须有界，
+    触达上限时在 ``truncated_sources`` 里如实声明，绝不静默截断。
+    """
+
+    def evidence(self, scope: ProjectScope) -> GapEvidenceFacts: ...
+
+
 class TrainingSourceGate(Protocol):
     """阶段 4 训练来源门禁：解析同项目的训练需求/交付/外部引用。
 
@@ -314,6 +329,7 @@ __all__ = [
     "EpisodeCoverageDirectory",
     "EvaluationRepository",
     "FeedbackRepository",
+    "GapEvidenceDirectory",
     "IdempotencyRecord",
     "IdempotencyRepository",
     "InferenceServiceRepository",
