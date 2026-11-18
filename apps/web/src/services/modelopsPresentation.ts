@@ -131,6 +131,23 @@ const SOURCE_TYPE: Record<string, string> = {
   OPERATION: "运营提出",
 };
 
+/** N7-004 缺口证据来源；未识别值由 `lookup` 原样展示。 */
+const GAP_EVIDENCE_SOURCE: Record<string, StatusPresentation> = {
+  FEEDBACK: { label: "人工反馈", color: "blue" },
+  REQUIREMENT: { label: "数据需求", color: "purple" },
+  FAILURE_CASE: { label: "评测失败用例", color: "red" },
+  LOW_SCORE: { label: "低分评测", color: "orange" },
+  ANNOTATION_CONFLICT: { label: "标注分歧", color: "gold" },
+};
+
+/** 证据无法归因的原因；未识别值原样展示。 */
+const GAP_UNMAPPED_REASON: Record<string, string> = {
+  NO_DIMENSION: "来源本身没有维度语义",
+  VALUE_NOT_FOUND: "维度值在既有维度键中不存在",
+  AMBIGUOUS_VALUE: "维度值同时命中多个维度类型",
+  INVALID_EVIDENCE: "证据无法按领域规则解析",
+};
+
 function fallback(key: string): StatusPresentation {
   return { label: key, color: "default" };
 }
@@ -169,6 +186,13 @@ export function presentDimensionType(value: string): string {
 
 export function presentSourceType(value: string): string {
   return SOURCE_TYPE[value] ?? value;
+}
+
+export const presentGapEvidenceSource = (value: string): StatusPresentation =>
+  lookup(GAP_EVIDENCE_SOURCE, value);
+
+export function presentGapUnmappedReason(value: string): string {
+  return GAP_UNMAPPED_REASON[value] ?? value;
 }
 
 const ACTION_LABEL: Record<string, string> = {

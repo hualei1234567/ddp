@@ -264,5 +264,105 @@ describe("阶段 5 响应解析", () => {
     });
     expect(summary.items[0]?.suggested_episode_count).toBe(8);
     expect(summary.freshness).toBe("FRESH");
+    // 旧响应没有 N7-004 字段时按空数组兼容，不把"无证据"当成解析失败。
+    expect(summary.items[0]?.sources).toEqual([]);
+    expect(summary.unmapped).toEqual([]);
+    expect(summary.truncated_sources).toEqual([]);
+  });
+
+  it("解析来源证据、未映射与截断来源", () => {
+    const summary = parseGapSummary({
+      items: [
+        {
+          dimension_type: "SCENE",
+          dimension_value: "kitchen",
+          open_feedback_count: 1,
+          current_count: 2,
+          target_count: 10,
+          suggested_episode_count: 8,
+          requirement_ids: [],
+          sources: [
+            { source: "FEEDBACK", count: 2 },
+            { source: "FAILURE_CASE", count: 3 },
+          ],
+        },
+      ],
+      freshness: "FRESH",
+      unmapped: [
+        { source: "LOW_SCORE", count: 3, reason: "NO_DIMENSION" },
+      ],
+      truncated_sources: ["ANNOTATION_CONFLICT"],
+    });
+
+    expect(summary.items[0]?.sources).toEqual([
+      { source: "FEEDBACK", count: 2 },
+      { source: "FAILURE_CASE", count: 3 },
+    ]);
+    expect(summary.unmapped[0]?.reason).toBe("NO_DIMENSION");
+    expect(summary.truncated_sources).toEqual(["ANNOTATION_CONFLICT"]);
+  });
+
+  it("未识别的来源与原因按原值保留，不静默丢弃", () => {
+    const summary = parseGapSummary({
+      items: [
+        {
+          dimension_type: "FUTURE_DIMENSION",
+          dimension_value: "new-value",
+          open_feedback_count: 0,
+          current_count: null,
+          target_count: null,
+          suggested_episode_count: 0,
+          requirement_ids: [],
+          sources: [{ source: "FUTURE_SOURCE", count: 1 }],
+        },
+      ],
+      freshness: "UNKNOWN",
+      unmapped: [{ source: "FUTURE_SOURCE", count: 2, reason: "FUTURE_REASON" }],
+      truncated_sources: ["FUTURE_SOURCE"],
+    });
+
+    expect(summary.items[0]?.sources[0]?.source).toBe("FUTURE_SOURCE");
+    expect(summary.unmapped[0]?.reason).toBe("FUTURE_REASON");
+    expect(summary.truncated_sources).toEqual(["FUTURE_SOURCE"]);
+  });
+
+  it("来源条数必须是非负整数", () => {
+    expect(() =>
+      parseGapSummary({
+        items: [
+          {
+            dimension_type: "SCENE",
+            dimension_value: "kitchen",
+            open_feedback_count: 1,
+            current_count: 2,
+            target_count: 10,
+            suggested_episode_count: 8,
+            requirement_ids: [],
+            sources: [{ source: "FEEDBACK", count: -1 }],
+          },
+        ],
+        freshness: "FRESH",
+      }),
+    ).toThrow(ContractValidationError);
+  });
+
+  it("sources 不是数组时拒绝解析", () => {
+    expect(() =>
+      parseGapSummary({
+        items: [
+          {
+            dimension_type: "SCENE",
+            dimension_value: "kitchen",
+            open_feedback_count: 1,
+            current_count: 2,
+            target_count: 10,
+            suggested_episode_count: 8,
+            requirement_ids: [],
+            sources: "FEEDBACK",
+          },
+        ],
+        freshness: "FRESH",
+      }),
+    ).toThrow(ContractValidationError);
   });
 });
