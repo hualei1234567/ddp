@@ -16,11 +16,16 @@ from app.domain.devices import (
     ResourceNotFoundError,
 )
 from app.domain.identity.models import ProjectScope
+from app.infrastructure.db.models.devices import (
+    CalibrationRecord as CalibrationRecordModel,
+)
 from app.infrastructure.db.models.devices import Sensor as SensorModel
 from app.infrastructure.repositories.devices import (
     SqlCalibrationProfileRepository,
     SqlCalibrationRecordRepository,
 )
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.calibration_fixtures import parameters_for
@@ -777,3 +782,223 @@ def _changed_parameters() -> dict[str, object]:
     changed = _valid_parameters()
     changed["fx"] = 1234.5
     return changed
+
+
+# --- G-16：修订链唯一性、分叉守卫与连续性 -----------------------------------
+
+
+def test_activation_chain_is_linear(
+    device_db: tuple[sessionmaker[Session], DeviceIds],
+) -> None:
+    """正常链：A→B→C 逐条继承，每一步的前驱都是上一条 ACTIVE。"""
+    factory, ids = device_db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    profile = make_profile(ids.project_a)
+    add_profile(factory, scope_a, profile)
+
+    first = seed_active(
+        factory,
+        scope_a,
+        profile,
+        target_id=ids.sensor_a,
+        performer=ids.user_a,
+        validator=ids.user_b,
+    )
+    second = seed_validated(
+        factory,
+        scope_a,
+        profile,
+        target_id=ids.sensor_a,
+        performer=ids.user_a,
+        validator=ids.user_b,
+    )
+    third = seed_validated(
+        factory,
+        scope_a,
+        profile,
+        target_id=ids.sensor_a,
+        performer=ids.user_a,
+        validator=ids.user_b,
+    )
+
+    for pending in (second, third):
+        with factory() as session:
+            repository = SqlCalibrationRecordRepository(session)
+            stored = repository.get(scope_a, pending.calibration_id)
+            assert stored is not None
+            repository.activate(scope_a, stored, expected_version=stored.version, now=NOW)
+            session.commit()
+
+    with factory() as session:
+        repository = SqlCalibrationRecordRepository(session)
+        current = repository.get(scope_a, third.calibration_id)
+        middle = repository.get(scope_a, second.calibration_id)
+        assert current is not None
+        assert middle is not None
+        assert current.status is CalibrationStatus.ACTIVE
+        assert current.supersedes_id == second.calibration_id
+        assert middle.status is CalibrationStatus.SUPERSEDED
+        assert middle.supersedes_id == first.calibration_id
+
+
+def test_activation_rejects_forked_supersedes_chain(
+    device_db: tuple[sessionmaker[Session], DeviceIds],
+) -> None:
+    """同一条前驱只能有一个后继；已有别的记录继承它时必须拒绝（不分叉）。"""
+    factory, ids = device_db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    profile = make_profile(ids.project_a)
+    add_profile(factory, scope_a, profile)
+
+    first = seed_active(
+        factory,
+        scope_a,
+        profile,
+        target_id=ids.sensor_a,
+        performer=ids.user_a,
+        validator=ids.user_b,
+    )
+    pending = seed_validated(
+        factory,
+        scope_a,
+        profile,
+        target_id=ids.sensor_a,
+        performer=ids.user_a,
+        validator=ids.user_b,
+    )
+    # 绕过仓储命令直写一条"已继承"的草稿，制造分叉现场。
+    # 走 DRAFT 是因为触发器只冻结 VALIDATED 之后的状态。
+    forked = draft_record(
+        ids.project_a,
+        profile.profile_id,
+        target_id=ids.sensor_a,
+        performer=ids.user_a,
+    )
+    with factory() as session:
+        SqlCalibrationRecordRepository(session).add(scope_a, forked)
+        session.commit()
+    with factory() as session:
+        session.execute(
+            update(CalibrationRecordModel)
+            .where(CalibrationRecordModel.id == forked.calibration_id)
+            .values(supersedes_id=first.calibration_id)
+        )
+        session.commit()
+
+    with factory() as session:
+        repository = SqlCalibrationRecordRepository(session)
+        stored = repository.get(scope_a, pending.calibration_id)
+        assert stored is not None
+        with pytest.raises(DomainValidationError, match="已有后继记录"):
+            repository.activate(scope_a, stored, expected_version=stored.version, now=NOW)
+        session.rollback()
+
+    with factory() as session:
+        repository = SqlCalibrationRecordRepository(session)
+        old = repository.get(scope_a, first.calibration_id)
+        blocked = repository.get(scope_a, pending.calibration_id)
+        assert old is not None
+        assert blocked is not None
+        assert old.status is CalibrationStatus.ACTIVE
+        assert blocked.status is CalibrationStatus.VALIDATED
+        assert blocked.supersedes_id is None
+
+
+def test_supersedes_unique_index_blocks_second_successor(
+    device_db: tuple[sessionmaker[Session], DeviceIds],
+) -> None:
+    """数据库兜底：两条记录指向同一前驱，第二条必须被部分唯一索引拒绝。"""
+    factory, ids = device_db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    profile = make_profile(ids.project_a)
+    add_profile(factory, scope_a, profile)
+
+    first = seed_active(
+        factory,
+        scope_a,
+        profile,
+        target_id=ids.sensor_a,
+        performer=ids.user_a,
+        validator=ids.user_b,
+    )
+    drafts = [
+        draft_record(
+            ids.project_a,
+            profile.profile_id,
+            target_id=ids.sensor_a,
+            performer=ids.user_a,
+        )
+        for _ in range(2)
+    ]
+    with factory() as session:
+        repository = SqlCalibrationRecordRepository(session)
+        for draft in drafts:
+            repository.add(scope_a, draft)
+        session.commit()
+
+    with factory() as session:
+        session.execute(
+            update(CalibrationRecordModel)
+            .where(CalibrationRecordModel.id == drafts[0].calibration_id)
+            .values(supersedes_id=first.calibration_id)
+        )
+        session.commit()
+
+    with factory() as session:
+        with pytest.raises(IntegrityError):
+            session.execute(
+                update(CalibrationRecordModel)
+                .where(CalibrationRecordModel.id == drafts[1].calibration_id)
+                .values(supersedes_id=first.calibration_id)
+            )
+            session.flush()
+        session.rollback()
+
+    with factory() as session:
+        successor = SqlCalibrationRecordRepository(session).find_successor(
+            scope_a,
+            previous_id=first.calibration_id,
+        )
+        assert successor is not None
+        assert successor.calibration_id == drafts[0].calibration_id
+
+
+def test_supersedes_cannot_point_to_other_project(
+    device_db: tuple[sessionmaker[Session], DeviceIds],
+) -> None:
+    """跨项目前驱必须被 (project_id, supersedes_id) 复合外键拒绝。"""
+    factory, ids = device_db
+    scope_a = ProjectScope(ids.project_a, actor_id=ids.user_a)
+    scope_b = ProjectScope(ids.project_b, actor_id=ids.user_b)
+    profile_a = make_profile(ids.project_a)
+    profile_b = make_profile(ids.project_b)
+    add_profile(factory, scope_a, profile_a)
+    add_profile(factory, scope_b, profile_b)
+
+    foreign = seed_active(
+        factory,
+        scope_b,
+        profile_b,
+        target_id=ids.sensor_b,
+        performer=ids.user_b,
+        validator=ids.user_a,
+    )
+    local = draft_record(
+        ids.project_a,
+        profile_a.profile_id,
+        target_id=ids.sensor_a,
+        performer=ids.user_a,
+    )
+    with factory() as session:
+        SqlCalibrationRecordRepository(session).add(scope_a, local)
+        session.commit()
+
+    with factory() as session:
+        with pytest.raises(IntegrityError):
+            session.execute(
+                update(CalibrationRecordModel)
+                .where(CalibrationRecordModel.id == local.calibration_id)
+                .values(supersedes_id=foreign.calibration_id)
+            )
+            session.flush()
+        session.rollback()
