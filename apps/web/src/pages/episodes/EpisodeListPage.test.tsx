@@ -11,7 +11,7 @@ import {
   EMPTY_EPISODE_LIST_FILTERS,
   type EpisodeListFilters,
 } from "../../services/collectionUrl";
-import { EpisodeListBody } from "./EpisodeListPage";
+import { EpisodeFilters, EpisodeListBody } from "./EpisodeListPage";
 import type { EpisodeListBodyProps } from "./EpisodeListPage";
 
 const baseProps: EpisodeListBodyProps = {
@@ -134,5 +134,57 @@ describe("Episode 列表页面状态", () => {
     expect(html).toContain(
       `/episodes/${episodeFixture.episode_id}?project_id=${PROJECT_ID}`,
     );
+  });
+});
+
+describe("Episode 筛选控件", () => {
+  function renderFilters(
+    filters: EpisodeListFilters = EMPTY_EPISODE_LIST_FILTERS,
+    stacked = false,
+  ): string {
+    return renderToStaticMarkup(
+      <EpisodeFilters
+        filters={filters}
+        loadedCount={0}
+        hasMore={false}
+        disabled={false}
+        onChange={() => undefined}
+        onReset={() => undefined}
+        stacked={stacked}
+      />,
+    );
+  }
+
+  it("暴露全部服务端维度：状态、质量、标注、任务、机器人、机位与捕获时间", () => {
+    const html = renderFilters();
+    for (const label of [
+      "Episode 状态（服务端筛选）",
+      "质量状态（服务端筛选）",
+      "标注状态（服务端筛选）",
+      "采集任务 ID（服务端筛选）",
+      "机器人 ID（服务端筛选）",
+      "机位标识",
+      "捕获开始时间",
+      "捕获结束时间",
+    ]) {
+      expect(html).toContain(label);
+    }
+    // antd 对两个汉字的按钮会插空格（重置 → 重 置）。
+    expect(html.replace(/\s+/g, "")).toContain("重置");
+  });
+
+  it("筛选值来自 URL 恢复的 filters，而非组件内部臆造", () => {
+    const html = renderFilters({
+      ...EMPTY_EPISODE_LIST_FILTERS,
+      camera: "wrist",
+      status: "READY",
+    });
+    expect(html).toContain('value="wrist"');
+    expect(html).toContain("已就绪");
+  });
+
+  it("移动端筛选纵向堆叠", () => {
+    const html = renderFilters(EMPTY_EPISODE_LIST_FILTERS, true);
+    expect(html).toContain("ddp-filters-stacked");
   });
 });

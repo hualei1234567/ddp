@@ -37,13 +37,14 @@ def _episodes(
     asset_id: UUID,
     *,
     count: int = 5,
+    code_prefix: str = "EP-SEARCH",
     **overrides: object,
 ) -> list[dict[str, object]]:
     created: list[dict[str, object]] = []
     for index in range(count):
         payload = episode_payload(
             asset_id,
-            code=f"EP-SEARCH-{index}",
+            code=f"{code_prefix}-{index}",
             start_time_ns=1_000 + index * 10_000,
             end_time_ns=2_000 + index * 10_000,
         )
@@ -51,7 +52,7 @@ def _episodes(
         response = client.post(
             project_url(project_id, "/episodes"),
             json=payload,
-            headers={"Idempotency-Key": f"search-create-{index}"},
+            headers={"Idempotency-Key": f"{code_prefix.lower()}-create-{index}"},
         )
         assert response.status_code == 201, response.text
         created.append(response.json())
@@ -176,6 +177,41 @@ def test_filters_by_scene_label_and_device_id(
     assert _search(client, ids.project_a, device_id=str(uuid4())) == []
 
 
+def test_filters_by_camera(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """机位过滤按 Episode 关联资产 ``raw_metadata.camera`` 下推。
+
+    没有机位事实的资产（如上传资产）不得命中任何机位条件。
+    """
+    factory, ids = api_db
+    main_asset = seed_valid_asset(
+        factory, ids.project_a, ids.editor_a, label="cam-main", metadata={"camera": "main"}
+    )
+    wrist_asset = seed_valid_asset(
+        factory, ids.project_a, ids.editor_a, label="cam-wrist", metadata={"camera": "wrist"}
+    )
+    bare_asset = seed_valid_asset(factory, ids.project_a, ids.editor_a, label="cam-bare")
+    client = make_client(factory, ids.editor_a, object_storage=FakeMultipartStorage())
+    main_episodes = _episodes(client, ids.project_a, main_asset, count=2, code_prefix="EP-CAM-MAIN")
+    wrist_episodes = _episodes(
+        client, ids.project_a, wrist_asset, count=2, code_prefix="EP-CAM-WRIST"
+    )
+    _episodes(client, ids.project_a, bare_asset, count=1, code_prefix="EP-CAM-BARE")
+
+    hits = _search(client, ids.project_a, camera="main")
+    assert {item["episode_id"] for item in hits} == {item["episode_id"] for item in main_episodes}
+
+    wrist = _search(client, ids.project_a, camera="wrist")
+    assert {item["episode_id"] for item in wrist} == {item["episode_id"] for item in wrist_episodes}
+
+    assert _search(client, ids.project_a, camera="overhead_ceiling") == []
+
+    # 空机位与超长机位必须被拒绝，而不是静默返回全部。
+    assert client.get(project_url(ids.project_a, "/episodes?camera=")).status_code == 422
+    assert client.get(project_url(ids.project_a, f"/episodes?camera={'x' * 65}")).status_code == 422
+
+
 def test_filters_by_robot_and_captured_range(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:
@@ -254,20 +290,23 @@ def test_filters_are_pushed_down_to_sql(
         scene_labels=("kitchen",),
         device_id=uuid4(),
         robot_id=uuid4(),
+        camera="main",
         captured_from=NOW,
         captured_to=NOW + timedelta(days=1),
     )
     with factory() as session:
         repository = SqlEpisodeRepository(session)
-        statement = repository._apply_filters(
-            select(EpisodeModel).where(EpisodeModel.project_id == ids.project_a),
-            filters,
+        base = select(EpisodeModel).where(EpisodeModel.project_id == ids.project_a)
+        statement = repository._apply_filters(base, filters)
+        # literal_binds 让 JSON 路径参数展开，才能验证机位事实确实按
+        # ``raw_metadata["camera"]`` 抽取，而不是取回整列。
+        sqlite_sql = str(
+            statement.compile(dialect=sqlite.dialect(), compile_kwargs={"literal_binds": True})
         )
-        sqlite_sql = str(statement.compile(dialect=sqlite.dialect()))
         # 生产方言单独构造一次谓词并编译，确认不是"只在 SQLite 上能用"。
+        # 机位谓词本身与方言无关；JSON 数组展开必须按 PG 方言生成。
         pg_statement = (
-            select(EpisodeModel)
-            .where(EpisodeModel.project_id == ids.project_a)
+            repository._apply_filters(base, EpisodeListFilters(camera="main"))
             .where(json_array_any_of(EpisodeModel.scene_labels, ("kitchen",), dialect="postgresql"))
             .where(
                 json_array_any_of(EpisodeModel.device_ids, (str(uuid4()),), dialect="postgresql")
@@ -286,6 +325,11 @@ def test_filters_are_pushed_down_to_sql(
         "captured_at",
     ):
         assert column in flat, f"{column} 未下推到 SQL"
+    # 机位条件走关联资产的相关 EXISTS，JSON 事实在库内抽取，不取回内存过滤。
+    assert "episode_raw_assets" in flat
+    assert "raw_assets" in flat
+    assert "json_extract" in flat
+    assert "camera" in flat
     # JSON 数组必须走展开子查询，而不是整列取回。
     assert "json_each" in flat
     assert "exists" in flat
@@ -293,6 +337,9 @@ def test_filters_are_pushed_down_to_sql(
     pg_flat = " ".join(pg_sql.split()).lower()
     assert "jsonb_array_elements_text" in pg_flat
     assert "episodes.robot_id" in pg_flat
+    # PostgreSQL 上的 JSON 事实抽取是 ->>，与 SQLite 的 json_extract 不同。
+    assert "raw_metadata" in pg_flat
+    assert "->>" in pg_flat
 
     # 没有任何条件时不应平白多出 WHERE 片段（避免误加恒真/恒假谓词）。
     with factory() as session:
@@ -374,7 +421,13 @@ def test_filters_do_not_leak_across_projects(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:
     factory, ids = api_db
-    asset_a = seed_valid_asset(factory, ids.project_a, ids.editor_a, label="search-a")
+    asset_a = seed_valid_asset(
+        factory,
+        ids.project_a,
+        ids.editor_a,
+        label="search-a",
+        metadata={"camera": "main"},
+    )
     client_a = make_client(factory, ids.editor_a, object_storage=FakeMultipartStorage())
     created = _episodes(client_a, ids.project_a, asset_a, count=2)
     _set_episode_attrs(
@@ -386,9 +439,17 @@ def test_filters_do_not_leak_across_projects(
         device_ids=[str(uuid4())],
     )
 
-    # 项目 B 里造同样标签的数据，用项目 B 的作用域查询不得看到项目 A 的。
+    # 项目 B 里造同样标签与机位的数据，用项目 B 的作用域查询不得看到项目 A 的。
     seed_dataset_episodes(factory, ids.project_b, ids.owner_a, count=2, scene="street")
     owner_b = make_client(factory, ids.owner_a, object_storage=FakeMultipartStorage())
+    asset_b = seed_valid_asset(
+        factory,
+        ids.project_b,
+        ids.owner_a,
+        label="search-b",
+        metadata={"camera": "main"},
+    )
+    b_camera_episode = _episodes(owner_b, ids.project_b, asset_b, count=1, code_prefix="EP-B-CAM")
 
     a_ids = {item["episode_id"] for item in created}
 
@@ -397,6 +458,13 @@ def test_filters_do_not_leak_across_projects(
     b_ids = {item["episode_id"] for item in hits.json()["items"]}
     assert b_ids, "项目 B 自己的数据应当能查到"
     assert b_ids.isdisjoint(a_ids), "查询结果不得包含项目 A 的 Episode"
+
+    # 机位维度同样按项目隔离：两边都有 camera=main，结果不得交叉。
+    a_camera = {item["episode_id"] for item in _search(client_a, ids.project_a, camera="main")}
+    b_camera = {item["episode_id"] for item in _search(owner_b, ids.project_b, camera="main")}
+    assert a_camera == a_ids
+    assert b_camera == {b_camera_episode[0]["episode_id"]}
+    assert a_camera.isdisjoint(b_camera)
 
     scenes = owner_b.get(project_url(ids.project_b, "/episodes?scene_label=kitchen&limit=100"))
     assert scenes.status_code == 200, scenes.text

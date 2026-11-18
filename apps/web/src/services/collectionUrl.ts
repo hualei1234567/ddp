@@ -18,6 +18,12 @@ export interface EpisodeListFilters {
   keyword: string;
   status: string;
   taskId: string;
+  robotId: string;
+  qualityStatus: string;
+  annotationStatus: string;
+  camera: string;
+  capturedFrom: string;
+  capturedTo: string;
 }
 
 export const EMPTY_TASK_LIST_FILTERS: TaskListFilters = {
@@ -31,6 +37,30 @@ export const EMPTY_EPISODE_LIST_FILTERS: EpisodeListFilters = {
   keyword: "",
   status: "",
   taskId: "",
+  robotId: "",
+  qualityStatus: "",
+  annotationStatus: "",
+  camera: "",
+  capturedFrom: "",
+  capturedTo: "",
+};
+
+/**
+ * Episode 筛选字段 → URL 参数的唯一映射。
+ *
+ * 所有维度都必须写进地址栏：页面可分享、刷新与浏览器回退都能恢复现场。
+ * 关键词只在已加载数据上生效，其余维度由服务端下推执行。
+ */
+const EPISODE_FILTER_PARAM_KEYS: Record<keyof EpisodeListFilters, string> = {
+  keyword: "q",
+  status: "status",
+  taskId: "task_id",
+  robotId: "robot_id",
+  qualityStatus: "quality_status",
+  annotationStatus: "annotation_status",
+  camera: "camera",
+  capturedFrom: "captured_from",
+  capturedTo: "captured_to",
 };
 
 export const TASK_DETAIL_TAB_VALUES = [
@@ -83,13 +113,54 @@ export function readEpisodeListFilters(
     keyword: readParam(params, "q"),
     status: readParam(params, "status"),
     taskId: readParam(params, "task_id"),
+    robotId: readParam(params, "robot_id"),
+    qualityStatus: readParam(params, "quality_status"),
+    annotationStatus: readParam(params, "annotation_status"),
+    camera: readParam(params, "camera"),
+    capturedFrom: readParam(params, "captured_from"),
+    capturedTo: readParam(params, "captured_to"),
   };
 }
 
 export function hasEpisodeListFilters(filters: EpisodeListFilters): boolean {
-  return (
-    filters.keyword !== "" || filters.status !== "" || filters.taskId !== ""
-  );
+  return Object.values(filters).some((value) => value !== "");
+}
+
+/** 服务端筛选维度；任一变化都必须重新从第一页加载。 */
+export function episodeServerFilterKey(filters: EpisodeListFilters): string {
+  return [
+    filters.status,
+    filters.taskId,
+    filters.robotId,
+    filters.qualityStatus,
+    filters.annotationStatus,
+    filters.camera,
+    filters.capturedFrom,
+    filters.capturedTo,
+  ].join("|");
+}
+
+/**
+ * 把一组筛选变更写进查询参数：空值删除参数，其余参数保持不变。
+ *
+ * 使用补丁而不是逐字段回调，是为了让时间区间这类一次改两个字段的操作
+ * 只产生一次导航，避免第二次写入用过期的查询串覆盖第一次。
+ */
+export function applyEpisodeListFilterPatch(
+  params: URLSearchParams,
+  patch: Partial<EpisodeListFilters>,
+): URLSearchParams {
+  const next = new URLSearchParams(params);
+  for (const key of Object.keys(patch) as (keyof EpisodeListFilters)[]) {
+    const paramKey = EPISODE_FILTER_PARAM_KEYS[key];
+    const value = patch[key];
+    if (value) {
+      next.set(paramKey, value);
+    } else {
+      next.delete(paramKey);
+    }
+  }
+  return next;
 }
 
 export function resolveTaskDetailTab(
@@ -199,11 +270,12 @@ export function buildEpisodeListSearch(
   projectId: string | null,
   filters: EpisodeListFilters = EMPTY_EPISODE_LIST_FILTERS,
 ): string {
-  return buildSearch(projectId, [
-    ["q", filters.keyword],
-    ["status", filters.status],
-    ["task_id", filters.taskId],
-  ]);
+  const entries = (Object.keys(EPISODE_FILTER_PARAM_KEYS) as (
+    | keyof EpisodeListFilters
+  )[]).map(
+    (key): [string, string] => [EPISODE_FILTER_PARAM_KEYS[key], filters[key]],
+  );
+  return buildSearch(projectId, entries);
 }
 
 export function buildEpisodeListPath(
