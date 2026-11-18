@@ -34,7 +34,24 @@ _SECRET_PATTERN = re.compile(
     r"(?:bearer\s+)?[^\s,;]+"
     r"|\bbearer\s+[^\s,;]+"
 )
+# 键名判定：``\b`` 在 ``_`` 两侧不成立（下划线是词字符），所以 ``hf_token``
+# 用 ``\btoken\b`` 匹配不到。这里显式把 ``_``/``-`` 当作分隔符，同时用
+# 字母数字邻接排除 ``tokenizer`` 这类普通单词。与 ``_SECRET_PATTERN`` 互补：
+# 后者脱敏 ``key=value`` 文本，本规则判断"这个键名是否表示凭据"。
+_SECRET_NAME_PATTERN = re.compile(
+    r"(?i)(?:^|[^a-z0-9])"
+    r"(?:token|secret|password|passwd|api[_-]?key|authorization|credential|private[_-]?key)"
+    r"(?:$|[^a-z0-9])"
+)
 _WHITESPACE_PATTERN = re.compile(r"\s+")
+
+
+def is_secret_name(name: object) -> bool:
+    """键名/字段名是否表示凭据类信息（token、secret、password、api_key 等）。
+
+    ``hf_token`` 命中，``tokenizer`` 不命中。只做名字判断，不读取也不推断值。
+    """
+    return bool(_SECRET_NAME_PATTERN.search(str(name or "")))
 
 
 def sanitize_log_message(
@@ -61,4 +78,8 @@ def sanitize_log_message(
     return text[:limit]
 
 
-__all__ = ["DEFAULT_LOG_MESSAGE_MAX_LENGTH", "sanitize_log_message"]
+__all__ = [
+    "DEFAULT_LOG_MESSAGE_MAX_LENGTH",
+    "is_secret_name",
+    "sanitize_log_message",
+]

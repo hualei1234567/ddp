@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.17.0
+  version: 1.18.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -172,6 +172,14 @@ info:
       （人工最终值），模型输出 `suggested_value` 保持可见。标注人读取自己的
       记录始终可见；黄金集既有强制 `blind=true` 语义不变。脱敏在服务端完成，
       不依赖前端隐藏。全部为增量：无路径删除、无字段删除、无必填性收紧。
+    - `1.18.0` **训练 Run 字段补齐（N7-002）**：外部训练引用新增可选响应字段
+      `config_summary` / `code_version` / `model_version`，创建请求新增可选
+      `code_version` / `model_version`。`config_summary` 是提交配置的**摘要**：
+      服务端在落库前裁剪至 ≤8KiB，并把密钥/凭据/绝对路径替换为占位符；
+      `null` 只表示迁移 0063 之前的存量记录未保存配置，**不等于**"提交时没有配置"
+      （后者是 `{}`）。`code_version` / `model_version` 由发起方在提交时声明，
+      未知留空，服务端不从远端状态推断，提交后不可修改。全部为增量：
+      无路径删除、无字段删除、无必填性收紧、无既有字段语义变更。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -189,7 +197,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.17.0
+  version: 1.18.0
   stages:
     device:
       version: ddp.device/1.0.0

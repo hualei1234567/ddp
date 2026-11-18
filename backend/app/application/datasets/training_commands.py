@@ -41,6 +41,9 @@ class NewExternalTrainingReference:
     model_ref: dict[str, object] | None = None
     evaluation_ref: dict[str, object] | None = None
     config: dict[str, object] = field(default_factory=dict)
+    # 训练代码/镜像版本与 run 级模型版本标识：由发起方声明，未知留空。
+    code_version: str | None = None
+    model_version: str | None = None
     # 显式执行方式（LOCAL/MOCK/DRY_RUN/REMOTE）。与 Adapter 配置同时存在时
     # 必须一致；两者都没有时提交被拒，不默认成 REMOTE。
     execution_mode: str | None = None

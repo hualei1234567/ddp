@@ -98,6 +98,9 @@ class ExternalTrainingReferenceCreate(BaseModel):
     model_ref: dict[str, object] | None = None
     evaluation_ref: dict[str, object] | None = None
     config: dict[str, object] = Field(default_factory=dict)
+    # 训练代码/镜像版本与 run 级模型版本标识；不填表示未知，服务端不推断。
+    code_version: str | None = Field(default=None, min_length=1, max_length=100)
+    model_version: str | None = Field(default=None, min_length=1, max_length=100)
     # 可选显式执行方式。Adapter 配置已声明时以配置为准且必须一致；两边都没有
     # 时服务端拒绝（422），不默认 REMOTE。
     #
@@ -260,6 +263,10 @@ def external_reference_out(reference: ExternalTrainingReference) -> dict[str, An
         # 产物元数据（object_key/sha256/size_bytes）；模型版本登记从这里取，
         # 不再需要回查 Adapter 的运维接口。
         "artifacts": reference.artifacts,
+        # 配置摘要已脱敏、有界；None 只表示迁移前存量记录未保存配置。
+        "config_summary": reference.config_summary,
+        "code_version": reference.code_version,
+        "model_version": reference.model_version,
         "correlation_id": reference.correlation_id,
         "idempotency_key": reference.idempotency_key,
         "error_code": reference.error_code,

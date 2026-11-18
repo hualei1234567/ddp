@@ -37,6 +37,7 @@ from app.domain.datasets.training_errors import (
     TrainingRequestIncompleteError,
 )
 from app.domain.datasets.training_references import (
+    CONFIG_SUMMARY_MAX_BYTES,
     new_external_reference,
     resolve_execution_mode,
 )
@@ -599,25 +600,27 @@ def test_adapter_callback_persists_artifact_metadata() -> None:
     }
 
 
-def _reference_with_mode(mode: object):
-    return new_external_reference(
-        external_ref_id=uuid4(),
-        project_id=uuid4(),
-        adapter_id="adapter-under-test",
-        adapter_version="1.0.0",
-        training_delivery_id=uuid4(),
-        training_request_revision_id=uuid4(),
-        dataset_version_id=uuid4(),
-        external_run_id="run-mode",
-        external_run_url=None,
-        correlation_id="corr-mode",
-        idempotency_key="idem-mode",
-        execution_mode=mode,
-        model_ref=None,
-        evaluation_ref=None,
-        actor_id=uuid4(),
-        now=NOW,
-    )
+def _reference_with_mode(mode: object, **overrides: object):
+    fields: dict[str, object] = {
+        "external_ref_id": uuid4(),
+        "project_id": uuid4(),
+        "adapter_id": "adapter-under-test",
+        "adapter_version": "1.0.0",
+        "training_delivery_id": uuid4(),
+        "training_request_revision_id": uuid4(),
+        "dataset_version_id": uuid4(),
+        "external_run_id": "run-mode",
+        "external_run_url": None,
+        "correlation_id": "corr-mode",
+        "idempotency_key": "idem-mode",
+        "execution_mode": mode,
+        "model_ref": None,
+        "evaluation_ref": None,
+        "actor_id": uuid4(),
+        "now": NOW,
+    }
+    fields.update(overrides)
+    return new_external_reference(**fields)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize("mode", ["LOCAL", "MOCK", "DRY_RUN", "REMOTE"])
@@ -663,3 +666,69 @@ def test_idempotent_reference_rejects_different_execution_mode() -> None:
     assert reference.matches_idempotent_request(same)
     remote = replace(same, execution_mode=ExecutionMode.REMOTE)
     assert not reference.matches_idempotent_request(remote)
+
+
+def test_external_reference_training_run_fields_are_bounded() -> None:
+    reference = _reference_with_mode(
+        "MOCK",
+        config_summary={"learning_rate": 0.001, "batch_size": 32},
+        code_version="  git:abc1234  ",
+        model_version="policy-v3",
+    )
+    assert reference.config_summary == {"learning_rate": 0.001, "batch_size": 32}
+    assert reference.code_version == "git:abc1234"
+    assert reference.model_version == "policy-v3"
+
+    # 未声明版本 / 未保存摘要都保持 None，不折叠成空串或空对象。
+    empty = _reference_with_mode("MOCK")
+    assert empty.config_summary is None
+    assert empty.code_version is None
+    assert empty.model_version is None
+
+    for name in ("code_version", "model_version"):
+        with pytest.raises(DomainValidationError):
+            _reference_with_mode("MOCK", **{name: "v" * 101})
+        with pytest.raises(DomainValidationError):
+            _reference_with_mode("MOCK", **{name: "   "})
+
+    with pytest.raises(DomainValidationError):
+        _reference_with_mode("MOCK", config_summary=["not", "an", "object"])
+    with pytest.raises(DomainValidationError):
+        # 不可 JSON 化的值必须显式拒绝，而不是悄悄落库/落库时报 500。
+        _reference_with_mode("MOCK", config_summary={"when": datetime.now(UTC)})
+    with pytest.raises(DomainValidationError):
+        _reference_with_mode(
+            "MOCK",
+            config_summary={"padding": "x" * (CONFIG_SUMMARY_MAX_BYTES + 1)},
+        )
+
+
+def test_idempotent_reference_rejects_different_training_run_fields() -> None:
+    reference = _reference_with_mode(
+        "MOCK",
+        config_summary={"learning_rate": 0.001},
+        code_version="git:abc1234",
+        model_version="policy-v3",
+    )
+    same = replace(
+        _reference_with_mode(
+            "MOCK",
+            config_summary={"learning_rate": 0.001},
+            code_version="git:abc1234",
+            model_version="policy-v3",
+        ),
+        external_ref_id=reference.external_ref_id,
+        training_delivery_id=reference.training_delivery_id,
+        training_request_revision_id=reference.training_request_revision_id,
+        dataset_version_id=reference.dataset_version_id,
+    )
+    assert reference.matches_idempotent_request(same)
+
+    changed_config = replace(same, config_summary={"learning_rate": 0.002})
+    assert not reference.matches_idempotent_request(changed_config)
+    assert not reference.matches_idempotent_request(replace(same, code_version="git:def5678"))
+    assert not reference.matches_idempotent_request(replace(same, model_version="policy-v4"))
+
+    # 迁移前的存量记录没有摘要：不能因为升级把同一幂等键的合法重放判成冲突。
+    legacy = replace(reference, config_summary=None)
+    assert legacy.matches_idempotent_request(replace(same, config_summary=None))
