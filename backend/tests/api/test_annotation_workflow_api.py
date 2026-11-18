@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
-from app.infrastructure.db.models.annotation_work import AnnotationAssignmentEvent
+from app.infrastructure.db.models.annotation_work import (
+    AnnotationAssignmentEvent,
+)
+from app.infrastructure.db.models.annotation_work import (
+    AnnotationTask as AnnotationTaskModel,
+)
 from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.annotation_support import (
@@ -1155,3 +1161,66 @@ def test_arbitration_can_be_reclaimed_after_recuse(
     )
     assert reclaimed.status_code == 200, reclaimed.text
     assert reclaimed.json()["status"] == "IN_ARBITRATION"
+
+
+def test_task_list_overdue_filter_and_computed_flag(api_db) -> None:
+    """SLA 逾期：列表过滤下推到 SQL，响应字段是服务端计算事实。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    seed_episode(factory, ids.project_a, ids.editor_a, "EP-SLA-001")
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-sla")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-sla")
+
+    now = datetime.now(UTC)
+
+    def create(code: str, due_at: datetime | None) -> dict[str, object]:
+        body: dict[str, object] = {
+            "code": code,
+            "name": f"任务 {code}",
+            "sample_set_id": sample_set["sample_set_id"],
+            "schema_id": schema["schema_id"],
+            "target_item_count": 1,
+            "target_episode_count": 1,
+        }
+        if due_at is not None:
+            body["due_at"] = due_at.isoformat()
+        response = editor.post(url(ids.project_a, "/annotation-tasks"), json=body)
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    overdue = create("task-sla-overdue", now - timedelta(hours=2))
+    cancelled = create("task-sla-cancelled", now - timedelta(hours=1))
+    create("task-sla-future", now + timedelta(hours=2))
+    create("task-sla-no-due", None)
+
+    # 终态任务即使截止时间已过也不算逾期（直接落终态，避免跑完整链路）。
+    with factory() as session:
+        session.execute(
+            update(AnnotationTaskModel)
+            .where(AnnotationTaskModel.id == UUID(str(cancelled["task_id"])))
+            .values(status="CANCELLED")
+            .execution_options(synchronize_session=False)
+        )
+        session.commit()
+
+    assert overdue["is_overdue"] is True
+
+    only_overdue = editor.get(url(ids.project_a, "/annotation-tasks?overdue=true"))
+    assert only_overdue.status_code == 200, only_overdue.text
+    overdue_items = only_overdue.json()["items"]
+    assert [item["task_id"] for item in overdue_items] == [overdue["task_id"]]
+    assert all(item["is_overdue"] is True for item in overdue_items)
+
+    not_overdue = editor.get(url(ids.project_a, "/annotation-tasks?overdue=false"))
+    assert not_overdue.status_code == 200, not_overdue.text
+    not_overdue_items = not_overdue.json()["items"]
+    not_overdue_ids = {item["task_id"] for item in not_overdue_items}
+    assert str(cancelled["task_id"]) in not_overdue_ids
+    assert len(not_overdue_items) == 3
+    assert all(item["is_overdue"] is False for item in not_overdue_items)
+
+    # 终态任务详情同样如实返回 false。
+    cancelled_detail = editor.get(url(ids.project_a, f"/annotation-tasks/{cancelled['task_id']}"))
+    assert cancelled_detail.status_code == 200, cancelled_detail.text
+    assert cancelled_detail.json()["is_overdue"] is False

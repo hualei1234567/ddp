@@ -6,11 +6,11 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.domain.annotation.errors import DomainValidationError
-from app.domain.annotation.task import AnnotationTask
+from app.domain.annotation.task import SLA_CLOSED_STATUSES, AnnotationTask
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.annotation_work import (
     AnnotationTask as AnnotationTaskModel,
@@ -24,6 +24,18 @@ from app.infrastructure.repositories._annotation_sql import (
     raise_update_failure,
     scoped_select,
 )
+
+# 终态任务不再计入逾期；SQL 下推与领域 ``is_overdue`` 共用同一份状态集合。
+_CLOSED_STATUS_VALUES = tuple(status.value for status in SLA_CLOSED_STATUSES)
+
+
+def _overdue_condition(now: datetime):
+    """与 ``domain.annotation.task.is_overdue`` 同口径的 SQL 条件。"""
+    return and_(
+        AnnotationTaskModel.due_at.is_not(None),
+        AnnotationTaskModel.due_at < now,
+        AnnotationTaskModel.status.not_in(_CLOSED_STATUS_VALUES),
+    )
 
 
 class SqlAnnotationTaskRepository:
@@ -93,6 +105,8 @@ class SqlAnnotationTaskRepository:
         scope: ProjectScope,
         *,
         status: str | None = None,
+        overdue: bool | None = None,
+        now: datetime | None = None,
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[AnnotationTask]:
@@ -101,6 +115,19 @@ class SqlAnnotationTaskRepository:
         statement = scoped_select(AnnotationTaskModel, scope)
         if status is not None:
             statement = statement.where(AnnotationTaskModel.status == status)
+        if overdue is not None:
+            moment = now or datetime.now(UTC)
+            if overdue:
+                statement = statement.where(_overdue_condition(moment))
+            else:
+                # false 的语义是"当前不逾期"：无截止、尚未到期、或已进入终态。
+                statement = statement.where(
+                    or_(
+                        AnnotationTaskModel.due_at.is_(None),
+                        AnnotationTaskModel.due_at >= moment,
+                        AnnotationTaskModel.status.in_(_CLOSED_STATUS_VALUES),
+                    )
+                )
         if after_id is not None:
             statement = statement.where(AnnotationTaskModel.id > after_id)
         statement = statement.order_by(AnnotationTaskModel.id).limit(limit)
@@ -214,6 +241,16 @@ class SqlAnnotationTaskRepository:
                 AnnotationTaskModel.sample_set_id == sample_set_id,
                 AnnotationTaskModel.status != "CANCELLED",
             )
+        )
+        return int(total or 0)
+
+    def count_overdue(self, now: datetime) -> int:
+        """跨项目统计逾期任务数；只读，供巡检 worker 观测。
+
+        逾期是派生事实：这里不写库、不推进版本、不自动改派或关闭任务。
+        """
+        total = self._session.scalar(
+            select(func.count()).select_from(AnnotationTaskModel).where(_overdue_condition(now))
         )
         return int(total or 0)
 

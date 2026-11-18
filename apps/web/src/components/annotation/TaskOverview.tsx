@@ -2,6 +2,7 @@ import { Alert, Descriptions, Space, Tag, Typography } from "antd";
 import { Link } from "react-router-dom";
 
 import {
+  describeDueDistance,
   presentMissingSemantics,
   presentProgress,
 } from "../../services/annotationPresentation";
@@ -63,7 +64,17 @@ export default function TaskOverview({ projectId, task }: TaskOverviewProps) {
           {task.target_item_count} / {task.target_episode_count}
         </Descriptions.Item>
         <Descriptions.Item label="截止时间">
-          {formatDateTime(task.due_at)}
+          <Space direction="vertical" size={0}>
+            <Space size={4} wrap>
+              <span>{formatDateTime(task.due_at)}</span>
+              {task.is_overdue ? <Tag color="red">已逾期</Tag> : null}
+            </Space>
+            {describeDueDistance(task.due_at, task.is_overdue) ? (
+              <Typography.Text type={task.is_overdue ? "danger" : "secondary"}>
+                {describeDueDistance(task.due_at, task.is_overdue)}
+              </Typography.Text>
+            ) : null}
+          </Space>
         </Descriptions.Item>
         <Descriptions.Item label="已提交">
           {presentProgress(task.progress, "submitted_items")}

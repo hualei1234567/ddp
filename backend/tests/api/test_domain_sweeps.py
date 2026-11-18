@@ -24,6 +24,7 @@ from tests.api.annotation_support import (
     create_ready_work,
     create_snapshot_set,
     seed_episode,
+    url,
 )
 from tests.api.conftest import ApiIds, make_client
 
@@ -163,12 +164,36 @@ def test_sweep_once_runs_both_sweeps(
         version = int(response.json()["version"])
     assert response.json()["status"] == "SUBMITTED"
 
+    # 3) 一个已过截止时间的标注任务：逾期扫描只读计数，不改派、不关闭。
+    overdue_sample_set = create_snapshot_set(editor, ids.project_a, "sample-sweep-overdue")
+    overdue_created = editor.post(
+        url(ids.project_a, "/annotation-tasks"),
+        json={
+            "code": "sweep-overdue",
+            "name": "逾期巡检任务",
+            "sample_set_id": overdue_sample_set["sample_set_id"],
+            "schema_id": schema["schema_id"],
+            "target_item_count": 1,
+            "target_episode_count": 1,
+            "due_at": (NOW - timedelta(days=1)).isoformat(),
+        },
+    )
+    assert overdue_created.status_code == 201, overdue_created.text
+    overdue_task_id = overdue_created.json()["task_id"]
+    assert overdue_created.json()["is_overdue"] is True
+
     result = DomainSweepWorker(factory).sweep_once(now=NOW)
     assert result == {
         "expired_assignments": 1,
+        "overdue_annotation_tasks": 1,
         "checked_collection_tasks": 1,
         "stale_dataset_versions": 0,
     }
+    # 逾期只是可见事实：任务状态与截止时间都不被巡检改写。
+    overdue_after = editor.get(url(ids.project_a, f"/annotation-tasks/{overdue_task_id}"))
+    assert overdue_after.status_code == 200, overdue_after.text
+    assert overdue_after.json()["status"] == "DRAFT"
+    assert overdue_after.json()["is_overdue"] is True
 
     assert (
         editor.get(

@@ -1,5 +1,5 @@
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
-import { Button, Space, Typography } from "antd";
+import { Button, Space, Tag, Typography } from "antd";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -215,6 +215,7 @@ function WorkbenchContent({
   const title = data ? (
     <Space wrap>
       <span>标注工作台 · {data.task.name}</span>
+      {data.task.is_overdue ? <Tag color="red">任务已逾期</Tag> : null}
     </Space>
   ) : (
     "标注工作台"

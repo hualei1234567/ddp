@@ -119,6 +119,7 @@ class AnnotationTaskUseCases:
         scope: ProjectScope,
         *,
         status: str | None = None,
+        overdue: bool | None = None,
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[AnnotationTask]:
@@ -127,7 +128,16 @@ class AnnotationTaskUseCases:
                 AnnotationTaskStatus(status)
             except ValueError as exc:
                 raise DomainValidationError("status 取值非法") from exc
-        return self._tasks.list(scope, status=status, after_id=after_id, limit=limit)
+        if overdue is not None and not isinstance(overdue, bool):
+            raise DomainValidationError("overdue 必须是布尔值")
+        return self._tasks.list(
+            scope,
+            status=status,
+            overdue=overdue,
+            now=_utcnow() if overdue is not None else None,
+            after_id=after_id,
+            limit=limit,
+        )
 
     def allowed_actions(self, scope: ProjectScope, task_id: UUID) -> frozenset[str]:
         return allowed_task_actions(self.get(scope, task_id).status)
