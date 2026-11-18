@@ -193,6 +193,48 @@ def test_failed_import_requires_error_message(api_db) -> None:
     assert response.status_code == 422
 
 
+def test_import_retry_is_system_only_and_rejected_over_http(api_db) -> None:
+    """``retry`` 是 Worker 的系统动作，HTTP 客户端调用必须 4xx 且状态不变。
+
+    FAILED 对客户端是终态：任何客户端动作都 409/422，不允许借 ``retry``
+    把任务打回 PENDING（那会绕过 Worker 的 ``attempt < max_attempts`` 判断）。
+    """
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source = client.post(_url(ids.project_a), json=_payload()).json()
+    job = client.post(
+        _url(ids.project_a, f"/{source['data_source_id']}/imports"),
+        json={
+            "scope": "SAMPLE",
+            "tool_name": "huggingface_hub",
+            "tool_version": "0.27.1",
+            "sample_limit": 5,
+        },
+    ).json()
+    import_url = f"/api/v1/projects/{ids.project_a}/data-source-imports/{job['import_id']}"
+    client.post(f"{import_url}/actions/start", headers={"If-Match": '"1"'}, json={})
+    failed = client.post(
+        f"{import_url}/actions/fail",
+        headers={"If-Match": '"2"'},
+        json={"error_message": "网络抖动"},
+    )
+    assert failed.status_code == 200, failed.text
+    assert failed.json()["status"] == "FAILED"
+    assert failed.json()["allowed_actions"] == []
+
+    response = client.post(f"{import_url}/actions/retry", headers={"If-Match": '"3"'}, json={})
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "validation_failed"
+
+    unchanged = client.get(import_url)
+    assert unchanged.status_code == 200
+    body = unchanged.json()
+    assert body["status"] == "FAILED"
+    assert body["version"] == 3
+    assert body["allowed_actions"] == []
+
+
 def test_import_writes_audit_and_outbox(api_db) -> None:
     from uuid import UUID
 
