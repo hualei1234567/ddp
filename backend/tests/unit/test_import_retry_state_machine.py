@@ -25,6 +25,7 @@ from app.domain.datasources.state_machines import (
     allowed_import_actions,
     import_target_status,
     is_system_action,
+    validate_import_action,
 )
 
 
@@ -54,6 +55,19 @@ def test_retry_is_not_a_client_action() -> None:
     assert is_system_action("retry") is True
     for status in ImportStatus:
         assert "retry" not in allowed_import_actions(status)
+
+
+def test_validate_import_action_rejects_system_action() -> None:
+    """HTTP 用例入口经 ``validate_import_action`` 过滤：系统动作必须被显式拒绝。
+
+    这是 Worker 重试路径之外的唯一入口；只要这里拒绝，客户端就无权把
+    FAILED 任务打回 PENDING，而 Worker 仍可经 ``import_target_status`` 重试。
+    """
+    with pytest.raises(DomainValidationError) as excinfo:
+        validate_import_action("retry")
+    assert "系统内部使用" in str(excinfo.value)
+    for action in ("start", "succeed", "fail", "cancel"):
+        assert validate_import_action(action) == action
 
 
 def test_client_actions_still_refuse_after_failed() -> None:
