@@ -10,6 +10,7 @@ import type {
   MediaAsset,
   MediaPlayback,
   QualityReport,
+  ReviewEvidence,
 } from "../types/datasource";
 import { ApiError, apiClient, type ApiClient } from "./api";
 import {
@@ -87,6 +88,7 @@ export interface ImportCreateInput {
 export interface ReviewDecisionInput {
   decision: string;
   reason?: string | null;
+  evidence?: ReviewEvidence | null;
 }
 
 export interface ImportActionOptions extends WriteOptions {
@@ -387,7 +389,11 @@ export function createDataSourceApi(client: ApiClient): DataSourceApi {
           "If-Match": formatIfMatch(options.version),
           "Idempotency-Key": options.idempotencyKey ?? createIdempotencyKey(),
         },
-        body: { decision: input.decision, reason: input.reason ?? null },
+        body: {
+          decision: input.decision,
+          reason: input.reason ?? null,
+          evidence: input.evidence ?? null,
+        },
         validate: (value) =>
           assertProjectScope(parseDataReview(value), projectId, "审核记录"),
       });

@@ -404,6 +404,28 @@ DataReview:
     created_at: { type: string, format: date-time }
     decided_at: { type: [string, "null"], format: date-time }
     version: { type: integer, minimum: 1 }
+    evidence:
+      anyOf:
+        - $ref: "../openapi.yaml#/components/schemas/ReviewEvidence"
+        - type: "null"
+      description: |
+        审核依据（可选）。旧审核记录为 null；服务端只接受白名单键，
+        evidence 序列化后不得超过 2000 字节。
+
+ReviewEvidence:
+  type: object
+  additionalProperties: false
+  description: |
+    结构化审核依据：时间点、机位、备注与片段键。最多 4 个键；
+    键与长度限制由服务端领域层与契约双重校验。
+  properties:
+    timestamp_seconds:
+      type: [number, "null"]
+      minimum: 0
+      description: 审核关注的时间点（秒，有限非负数）。
+    camera: { type: [string, "null"], maxLength: 64 }
+    note: { type: [string, "null"], maxLength: 500 }
+    episode_key: { type: [string, "null"], maxLength: 128 }
 
 ReviewDecisionRequest:
   type: object
@@ -414,6 +436,10 @@ ReviewDecisionRequest:
       type: string
       enum: [ACCEPT, REJECT, NEEDS_FIX]
     reason: { type: [string, "null"], maxLength: 2000 }
+    evidence:
+      anyOf:
+        - $ref: "../openapi.yaml#/components/schemas/ReviewEvidence"
+        - type: "null"
 
 ImportQualityFinding:
   type: object

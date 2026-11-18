@@ -6,10 +6,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-from app.application.audit import record_change
+from app.application.audit import (
+    AuditLogQueryRepository,
+    AuditQuery,
+    list_audit_logs,
+    record_change,
+)
 from app.application.datasources.ports import (
     AuditRepository,
     DataReviewRepository,
@@ -27,6 +34,11 @@ from app.domain.datasources.errors import (
 from app.domain.datasources.review import DataReview, QualityReport, ReviewDecision
 from app.domain.identity.models import ProjectScope
 
+#: 审核证据存放在审计留痕的 ``details`` 里（现有 JSON 列，无新增迁移）。
+#: 读取时按资源时间线取最近一条决策记录回填。
+_EVIDENCE_RESOURCE_TYPE = "data_source_review"
+_EVIDENCE_AUDIT_ACTION_PREFIX = "decide:"
+
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
@@ -41,6 +53,7 @@ class DataReviewUseCases:
         audit: AuditRepository,
         outbox: OutboxRepository,
         uow: UnitOfWork,
+        audit_query: AuditLogQueryRepository | None = None,
     ) -> None:
         self._reviews = reviews
         self._imports = imports
@@ -48,9 +61,37 @@ class DataReviewUseCases:
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
+        self._audit_query = audit_query
+
+    def _with_evidence(self, scope: ProjectScope, review: DataReview | None) -> DataReview | None:
+        """从审计留痕回填审核证据。
+
+        evidence 持久化在 ``audit_logs.details``（现有 JSON 列）。审核结论是
+        终态，因此只需取该资源最近一条 ``decide:*`` 记录。未注入查询仓储
+        （例如纯领域单测）时原样返回，不伪造空证据。
+        """
+        if review is None or review.decision is None or self._audit_query is None:
+            return review
+        entries = list_audit_logs(
+            self._audit_query,
+            scope,
+            AuditQuery(resource_type=_EVIDENCE_RESOURCE_TYPE, resource_id=review.review_id),
+            limit=20,
+        )
+        for entry in entries:
+            if not entry.action.startswith(_EVIDENCE_AUDIT_ACTION_PREFIX):
+                continue
+            raw = dict(entry.details).get("evidence")
+            if raw is None:
+                return review
+            if not isinstance(raw, Mapping):
+                # 审计行被外部篡改成非对象：宁可让契约校验拒绝，也不静默当作无证据。
+                raise DomainValidationError("审计留痕中的 evidence 不是对象")
+            return replace(review, evidence=raw)
+        return review
 
     def get_review(self, scope: ProjectScope, import_id: UUID) -> DataReview | None:
-        return self._reviews.get_by_import(scope, import_id)
+        return self._with_evidence(scope, self._reviews.get_by_import(scope, import_id))
 
     def ensure_review(
         self, scope: ProjectScope, import_id: UUID, *, request_id: str | None = None
@@ -58,7 +99,7 @@ class DataReviewUseCases:
         """为导入创建审核记录（幂等：已存在则直接返回）。"""
         existing = self._reviews.get_by_import(scope, import_id)
         if existing is not None:
-            return existing
+            return self._with_evidence(scope, existing) or existing
         job = self._imports.get(scope, import_id)
         if job is None:
             raise ResourceNotFoundError("导入任务", import_id)
@@ -106,6 +147,7 @@ class DataReviewUseCases:
         reason: str | None,
         expected_version: int,
         request_id: str | None = None,
+        evidence: Mapping[str, object] | None = None,
     ) -> DataReview:
         review = self._reviews.get_by_import(scope, import_id)
         if review is None:
@@ -118,20 +160,28 @@ class DataReviewUseCases:
             reviewer_id=scope.actor_id,
             reason=reason,
             now=now,
+            evidence=evidence,
         )
         saved = self._reviews.save(scope, decided, expected_version=expected_version)
+        details: dict[str, object] = {
+            "import_id": str(import_id),
+            "reviewer_id": str(scope.actor_id),
+        }
+        if saved.evidence is not None:
+            # 审核证据与结论同事务落库到审计留痕；不新增审核表列。
+            details["evidence"] = dict(saved.evidence)
         record_change(
             self._audit,
             self._outbox,
             scope,
-            resource_type="data_source_review",
+            resource_type=_EVIDENCE_RESOURCE_TYPE,
             resource_id=saved.review_id,
             action=f"decide:{saved.decision}",
             from_status=review.status.value,
             to_status=saved.status.value,
             reason=reason,
             request_id=request_id,
-            details={"import_id": str(import_id), "reviewer_id": str(scope.actor_id)},
+            details=details,
             event_type="datasource.review.decided",
             event_payload={
                 "review_id": str(saved.review_id),

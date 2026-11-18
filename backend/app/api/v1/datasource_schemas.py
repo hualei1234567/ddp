@@ -258,6 +258,17 @@ class MediaAssetPlaybackOut(BaseModel):
     size_bytes: int
 
 
+class ReviewEvidence(BaseModel):
+    """审核依据：结构化的小对象，落库前由领域层再做一次白名单与字节数校验。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    timestamp_seconds: float | None = Field(default=None, ge=0)
+    camera: str | None = Field(default=None, max_length=64)
+    note: str | None = Field(default=None, max_length=500)
+    episode_key: str | None = Field(default=None, max_length=128)
+
+
 class ReviewCreateOut(BaseModel):
     review_id: UUID
     project_id: UUID
@@ -270,9 +281,11 @@ class ReviewCreateOut(BaseModel):
     created_at: datetime
     decided_at: datetime | None
     version: int
+    evidence: ReviewEvidence | None = None
 
     @classmethod
     def from_domain(cls, item: DataReviewT) -> ReviewCreateOut:
+        evidence = ReviewEvidence(**dict(item.evidence)) if item.evidence is not None else None
         return cls(
             review_id=item.review_id,
             project_id=item.project_id,
@@ -285,6 +298,7 @@ class ReviewCreateOut(BaseModel):
             created_at=item.created_at,
             decided_at=item.decided_at,
             version=item.row_version,
+            evidence=evidence,
         )
 
 
@@ -293,6 +307,7 @@ class ReviewDecisionRequest(BaseModel):
 
     decision: str = Field(pattern="^(ACCEPT|REJECT|NEEDS_FIX)$")
     reason: str | None = Field(default=None, max_length=2000)
+    evidence: ReviewEvidence | None = None
 
 
 class QualityFindingOut(BaseModel):
