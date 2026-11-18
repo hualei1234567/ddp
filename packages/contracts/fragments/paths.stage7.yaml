@@ -229,10 +229,12 @@ dataSourceImportLogs:
     summary: 导入步骤日志（只读）
     description: |
       返回一次导入的执行期步骤日志：时间、阶段、等级与脱敏后的消息。
-      按时间正序展示最近 `limit` 条（默认 100、上限 500），`truncated=true`
-      表示更早的日志因上限未返回。消息不包含密钥、预签名 URL 或绝对路径。
-      本端点只读，不提供任何写入/修改入口。
+      不带 `cursor` 时返回最近 `limit` 条（默认 100、上限 500），按时间正序；
+      `next_cursor` 非空表示还有更早的日志，带该游标可继续向更早翻页，
+      顺序保持一致。`truncated` 与 `next_cursor !== null` 严格等价。
+      消息不包含密钥、预签名 URL 或绝对路径。本端点只读，不提供任何写入/修改入口。
     parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
       - name: limit
         in: query
         required: false

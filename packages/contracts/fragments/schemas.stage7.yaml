@@ -285,7 +285,7 @@ ImportLog:
 ImportLogList:
   type: object
   additionalProperties: false
-  required: [items, truncated]
+  required: [items, truncated, next_cursor]
   properties:
     items:
       type: array
@@ -293,7 +293,14 @@ ImportLogList:
     truncated:
       type: boolean
       description: |
-        是否因上限截断。`true` 表示只返回了最近 N 条，更早的步骤未返回。
+        是否还有更早的日志未返回。语义与 `next_cursor !== null` 严格等价；
+        **不表示**消息体被截断（消息脱敏长度上限是独立规则）。
+    next_cursor:
+      type: [string, "null"]
+      description: |
+        下一页（更早日志）的不透明游标，取自本页最旧一条日志。
+        `null` 表示已经到最早一条，没有更多历史。
+        非法游标返回 `validation_failed`。
 
 # ---------------------------------------------------------------------------
 # 审看与质量报告（阶段 7 第二批：补上前一批漏登记的 6 个端点所需模型）

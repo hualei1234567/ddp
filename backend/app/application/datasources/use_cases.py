@@ -340,14 +340,23 @@ class DataSourceUseCases:
         import_id: UUID,
         *,
         limit: int = 100,
+        before_log_id: UUID | None = None,
     ) -> tuple[list[DataSourceImportLog], bool]:
         """读取一次导入的步骤日志（最近 ``limit`` 条，时间正序）。
 
         先 ``get_import``：跨项目或不存在一律 404，不能靠"空日志列表"泄露
         "该 ID 存在与否"的差异。
+
+        ``before_log_id`` 为上一页最旧一条日志的 ID，用于按游标加载更早的
+        历史；返回值第二项表示是否还有更早的日志（即 ``next_cursor`` 非空）。
         """
         self.get_import(scope, import_id)
-        return self._logs.list_recent(scope, import_id, limit=limit)
+        return self._logs.list_recent(
+            scope,
+            import_id,
+            limit=limit,
+            before_log_id=before_log_id,
+        )
 
     def create_import(
         self,
