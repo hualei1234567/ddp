@@ -291,6 +291,22 @@ class SqlDataSourceImportRepository:
         )
         return [_import_from_row(row) for row in self._session.scalars(statement)]
 
+    def list_for_collection_task(
+        self,
+        scope: ProjectScope,
+        collection_task_id: UUID,
+        *,
+        limit: int = 100,
+    ) -> list[DataSourceImport]:
+        """该采集任务名下的全部导入（迁移 0050 写入的归属）。"""
+        statement = (
+            scoped_select(DataSourceImportModel, scope)
+            .where(DataSourceImportModel.collection_task_id == collection_task_id)
+            .order_by(DataSourceImportModel.id)
+            .limit(bounded_limit(limit, maximum=101))
+        )
+        return [_import_from_row(row) for row in self._session.scalars(statement)]
+
     def save(
         self,
         scope: ProjectScope,

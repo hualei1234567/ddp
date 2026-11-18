@@ -242,6 +242,23 @@ class SqlProjectMemberRepository:
         )
         return result.rowcount > 0
 
+    def first_owner_id(self, project_id: UUID) -> UUID | None:
+        """项目负责人 ID；系统任务（租约过期、数据检查）需要一个可审计的执行人。
+
+        系统动作不是任何一个用户发起的，但 ``ProjectScope.actor_id`` 必填且会写进
+        ``updated_by`` / 审计。选项目负责人而不是随便一个人：出错时能追溯到
+        "这个项目里谁该对这批数据负责"，而不是一个不存在的系统账号。
+        """
+        return self._session.scalar(
+            select(ProjectMemberModel.user_id)
+            .where(
+                ProjectMemberModel.project_id == project_id,
+                ProjectMemberModel.role == ProjectRole.OWNER.value,
+            )
+            .order_by(ProjectMemberModel.user_id)
+            .limit(1)
+        )
+
     def count_owners(self, scope: ProjectScope) -> int:
         return int(
             self._session.scalar(

@@ -54,6 +54,16 @@ describe("导航分区配置", () => {
   it("未知路径返回 null，交给 404 页面处理", () => {
     expect(findNavItem("/unknown-path")).toBeNull();
   });
+
+  it("菜单里只有能真实进入的模块，不留占位项", () => {
+    // 2026-11-18 之前的 /processing、/operations、/settings 是不可进入的
+    // "待开放"占位：后端没有能力，用户点进去只能看到一句说明。产品要求
+    // "不允许展示品"，所以这类项直接从菜单移除。此用例防止它们被加回来。
+    const placeholders = navSections.flatMap((section) =>
+      section.items.filter((item) => item.available === false),
+    );
+    expect(placeholders.map((item) => item.path)).toEqual([]);
+  });
 });
 
 describe("质量管理导航", () => {

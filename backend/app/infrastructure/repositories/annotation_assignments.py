@@ -164,6 +164,31 @@ class SqlAnnotationAssignmentRepository:
             updated_by=scope.actor_id,
         )
 
+    def list_expired_leases(
+        self,
+        now: datetime,
+        *,
+        statuses: tuple[str, ...],
+        after_id: UUID | None = None,
+        limit: int = 200,
+    ) -> list[tuple[UUID, UUID]]:
+        """跨项目列出已到租约的分配 ``(assignment_id, project_id)``，供系统任务扫描。
+
+        只返回 ID；调用方必须用 ``ProjectScope(project_id, ...)`` 重新读取与写入，
+        项目隔离仍由仓储强制。
+        """
+        statement = select(
+            AnnotationAssignmentModel.id, AnnotationAssignmentModel.project_id
+        ).where(
+            AnnotationAssignmentModel.status.in_(statuses),
+            AnnotationAssignmentModel.lease_expires_at.is_not(None),
+            AnnotationAssignmentModel.lease_expires_at <= now,
+        )
+        if after_id is not None:
+            statement = statement.where(AnnotationAssignmentModel.id > after_id)
+        statement = statement.order_by(AnnotationAssignmentModel.id).limit(limit)
+        return [(row[0], row[1]) for row in self._session.execute(statement)]
+
     def list_for_batch(
         self,
         scope: ProjectScope,

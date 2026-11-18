@@ -81,6 +81,16 @@ class DataSourceImportRepository(Protocol):
         expected_version: int,
     ) -> DataSourceImport: ...
 
+    def list_for_collection_task(
+        self,
+        scope: ProjectScope,
+        collection_task_id: UUID,
+        *,
+        limit: int = 100,
+    ) -> list[DataSourceImport]:
+        """该采集任务名下的全部导入（迁移 0050 的归属列）。"""
+        ...
+
 
 class DataReviewRepository(Protocol):
     def add(self, scope: ProjectScope, review: DataReviewT) -> DataReviewT: ...

@@ -54,6 +54,16 @@ class CollectionTaskRepository(Protocol):
         expected_version: int,
     ) -> CollectionTask: ...
 
+    def list_pending_status(
+        self,
+        status: CollectionTaskStatus,
+        *,
+        after_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[tuple[UUID, UUID]]:
+        """跨项目列出某状态任务的 ``(task_id, project_id)``，供系统任务扫描。"""
+        ...
+
 
 class CollectionBatchRepository(Protocol):
     def add(self, scope: ProjectScope, batch: CollectionBatch) -> CollectionBatch: ...

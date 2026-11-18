@@ -114,6 +114,7 @@ export const EPISODE_ACTION_VALUES = [
   "accept",
   "reject",
   "complete",
+  "archive",
   "invalidate",
 ] as const;
 

@@ -248,11 +248,23 @@ def _upload(
     )
     assert isinstance(completed, dict)
     stored = completed["upload_session"]
+    raw_asset = completed.get("raw_asset") or {}
+    if raw_asset.get("object_key"):
+        # 去重命中时（同 sha256 已存在），平台会删掉本次会话的对象并复用既有
+        # RawAsset。此时会话里的 object_key 指向一个**已被清理的副本**，拿它去
+        # 建模型版本，validate 读对象必然 422 `model_artifact_invalid`。
+        # 权威地址只有一个：RawAsset 上的 object_key / sha256 / size_bytes。
+        return {
+            "object_key": str(raw_asset["object_key"]),
+            "sha256": str(raw_asset["sha256"]),
+            "size_bytes": int(raw_asset["size_bytes"]),
+            "raw_asset_id": str(raw_asset["asset_id"]),
+        }
     return {
         "object_key": stored["object_key"],
         "sha256": digest,
         "size_bytes": len(content),
-        "raw_asset_id": (completed.get("raw_asset") or {}).get("asset_id"),
+        "raw_asset_id": None,
     }
 
 

@@ -224,6 +224,29 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  domain-worker:
+    # 领域巡检 Worker：标注租约过期 + 采集任务数据检查。
+    #
+    # 这两件事此前都只有能力没有触发点：分配租约过期没人调度（领了活不干也
+    # 永远占容量），采集任务提交后没有任何组件推进到 DATA_CHECKING（验收/
+    # 完成按钮永远不出现）。它们是业务主流程的一部分，必须常开，所以放在
+    # app profile 而不是默认关闭的 maintenance profile。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-domain-worker
+    command: ["python", "-m", "app.workers.domain_sweeps", "--interval-seconds", "30"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   maintenance-worker:
     # 阶段 8：定时备份 + outbox 归档 + 幂等表清扫。
     # 默认不开；开启前必须同时具备 DDP_MAINTENANCE_ENABLED=true 与

@@ -166,7 +166,7 @@ parameters:
     required: true
     schema:
       type: string
-      enum: [ready, quality-check, quality-result, accept, reject, complete, invalidate]
+      enum: [ready, quality-check, quality-result, accept, reject, complete, archive, invalidate]
   JobAction:
     name: action
     in: path

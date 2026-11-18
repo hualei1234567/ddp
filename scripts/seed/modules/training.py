@@ -13,8 +13,9 @@
   另一条 ``DRAFT → READY → DELIVERED → REJECTED → REWORK → READY → CANCELLED``，
   需求随之 ``REVISION_REQUIRED → CANCELLED``。两条都**仅当**项目里存在 FROZEN
   数据集版本且导出任务成功时执行；
-- 外部训练引用：真实提交一次；默认 Adapter 只声明能力，返回 422
-  ``training_adapter_unsupported`` / 503 ``training_adapter_unavailable``，按 BLOCKED 记录。
+- 外部训练引用：真实提交一次，Adapter 从 ``DDP_TRAINING_ADAPTER_ENDPOINTS`` +
+  ``DDP_TRAINING_ADAPTER_CAPABILITIES`` 里发现（本机是 ``local-training``），
+  由真实 Adapter 执行并回调；配置里一个能 submit 的 Adapter 都没有时才 BLOCKED。
 
 职责分离
 --------
@@ -589,24 +590,61 @@ def _run_rejected_delivery(
     )
 
 
+def _configured_training_adapter() -> tuple[str, str] | None:
+    """从部署配置里发现一个真的能 submit 的训练 Adapter。
+
+    此前这里写死 ``adapter_id="demo-trainer"``，于是即使本地栈已经接了
+    ``local-training``，外部引用也永远返回 422 ``training_adapter_unsupported``，
+    种子只能记一条 BLOCKED——把"配置里有可用 Adapter"误报成"平台没有能力"。
+    这里读 ``DDP_TRAINING_ADAPTER_ENDPOINTS`` 与 ``..._CAPABILITIES``，
+    找不到能 submit 的 Adapter 才如实 BLOCKED。
+    """
+    import json
+
+    from seed.run import _load_env
+
+    env = _load_env()
+    try:
+        endpoints = json.loads(env.get("DDP_TRAINING_ADAPTER_ENDPOINTS") or "{}")
+        capabilities = json.loads(env.get("DDP_TRAINING_ADAPTER_CAPABILITIES") or "{}")
+    except ValueError:
+        return None
+    if not isinstance(endpoints, dict):
+        return None
+    for adapter_id in endpoints:
+        caps = capabilities.get(adapter_id) if isinstance(capabilities, dict) else None
+        if isinstance(caps, list) and "submit" in caps:
+            return str(adapter_id), str(endpoints[adapter_id])
+    return None
+
+
 def _run_external_reference(
     ctx: Context,
     client: Client,
     base: str,
     delivery_id: str | None,
 ) -> None:
-    """外部训练引用：真实提交一次；默认 Adapter 会把「不可用」如实返回 503。"""
+    """外部训练引用：真实提交一次，用部署配置里真的能 submit 的 Adapter。"""
     if delivery_id is None:
         _blocked(
             "external-references",
             "外部引用挂在交付单上（交付单必须处于 DELIVERED/ACCEPTED），本批次没有交付单",
         )
         return
+    adapter = _configured_training_adapter()
+    if adapter is None:
+        _blocked(
+            "external-references",
+            "DDP_TRAINING_ADAPTER_ENDPOINTS 里没有声明 submit 能力的训练 Adapter；"
+            "本机接 local-adapter 时应配置 local-training",
+        )
+        return
+    adapter_id, _endpoint = adapter
     status, payload = client.call(
         "POST",
         f"{base}/training-deliveries/{delivery_id}/external-references",
         body={
-            "adapter_id": "demo-trainer",
+            "adapter_id": adapter_id,
             "adapter_version": "1.0.0",
             "correlation_id": f"corr-{ctx.stamp}",
             "config": {"epochs": 10},

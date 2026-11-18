@@ -46,6 +46,7 @@ EpisodeAction = Literal[
     "accept",
     "reject",
     "complete",
+    "archive",
     "invalidate",
 ]
 

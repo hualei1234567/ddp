@@ -41,7 +41,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-from seed.client import Client, SeedFailure, expect, idempotency_key, if_match  # noqa: E402
+from seed.client import Client, SeedFailure, idempotency_key, if_match  # noqa: E402
 from seed.identity import ensure_reviewer, ensure_second_owner  # noqa: E402
 from seed.run import _load_env, _project, _token, _user  # noqa: E402
 
@@ -171,8 +171,10 @@ def data_chain(chain: Chain, stamp: str, *, data_only: bool = False) -> dict[str
             "code": f"chain-task-{stamp}",
             "name": "全链路演示任务",
             "priority": "P1",
-            "target_episode_count": 20,
-            "target_duration_sec": 3600,
+            # 目标是"本链路真实产出的数据"：1 条 Episode。目标写成 20 会让
+            # complete 永远只能靠豁免通过，那不是闭环。
+            "target_episode_count": 1,
+            "target_duration_sec": 600,
         },
     )
     task_id = str(task["task_id"])
@@ -352,6 +354,37 @@ def data_chain(chain: Chain, stamp: str, *, data_only: bool = False) -> dict[str
     ep = chain.must(chain.client, "POST", f"{ep_path}/actions/quality-result", 200, "记录质检结论", headers=if_match(ep["version"]), body={"quality_status": "PASS", "reason": "全链路演示"})
     ep = chain.must(chain.client, "POST", f"{ep_path}/actions/accept", 200, "Episode 验收", headers=if_match(ep["version"]), body={})
     chain.ok("Episode 质检通过并验收", f"status={ep['status']}")
+
+    print("\n[4b] 采集任务闭环：提交 → 系统数据检查 → 验收 → 完成")
+    # 按状态机真实路径推进，不直接调 submit：DRAFT 没有指向 SUBMITTED 的边。
+    # approve 必须由非创建人执行（创建人不能审批自己的任务）。
+    task = chain.must(chain.client, "POST", f"{chain.base}/collection-tasks/{task_id}/actions/submit-review", 200, "采集任务提交评审", headers=if_match(task["version"]), body={})
+    task = chain.must(chain.reviewer, "POST", f"{chain.base}/collection-tasks/{task_id}/actions/approve", 200, "采集任务审批", headers=if_match(task["version"]), body={})
+    task = chain.must(chain.reviewer, "POST", f"{chain.base}/collection-tasks/{task_id}/actions/ready", 200, "采集任务就绪", headers=if_match(task["version"]), body={})
+    task = chain.must(
+        chain.reviewer, "POST", f"{chain.base}/collection-tasks/{task_id}/actions/assign", 200,
+        "采集任务分配", headers=if_match(task["version"]),
+        body={"assigned_to": chain.user_id},
+    )
+    task = chain.must(chain.client, "POST", f"{chain.base}/collection-tasks/{task_id}/actions/start", 200, "采集任务开始", headers=if_match(task["version"]), body={})
+    task = chain.must(chain.client, "POST", f"{chain.base}/collection-tasks/{task_id}/actions/submit", 200, "采集任务提交", headers=if_match(task["version"]), body={})
+    chain.ok("采集任务已提交", f"status={task['status']}")
+    # 提交后由 domain-worker 扫描并推进到 DATA_CHECKING；这里只等待，不代劳
+    # 系统动作——那正是"系统数据检查"这一步该由系统完成的意义。
+    task = _wait(chain.client, f"{chain.base}/collection-tasks/{task_id}", {"DATA_CHECKING", "REJECTED", "CANCELLED"}, timeout=180, label="等待系统数据检查")
+    if task["status"] != "DATA_CHECKING":
+        raise SeedFailure(f"系统数据检查未完成：{task['status']}")
+    summary = task.get("quality_summary") or {}
+    chain.ok(
+        "系统数据检查完成",
+        f"imports={summary.get('imports')} assets={summary.get('assets')} "
+        f"episodes={summary.get('episodes')} passed={summary.get('passed')}",
+    )
+    if not summary.get("imports") or not summary.get("assets"):
+        raise SeedFailure(f"数据检查没有看到导入/资产：{summary}")
+    task = chain.must(chain.client, "POST", f"{chain.base}/collection-tasks/{task_id}/actions/accept", 200, "采集任务验收", headers=if_match(task["version"]), body={})
+    task = chain.must(chain.client, "POST", f"{chain.base}/collection-tasks/{task_id}/actions/complete", 200, "采集任务完成", headers=if_match(task["version"]), body={})
+    chain.ok("采集任务已完成", f"status={task['status']} accepted_episodes={task['accepted_episode_count']}")
 
     print("\n[5] 标注 Schema 与样本集")
     schema = chain.must(chain.client, "POST", f"{chain.base}/annotation-schemas", 201, "创建 Schema", body={
@@ -939,6 +972,49 @@ def model_chain(
         raise SeedFailure(f"评测未成功：{evaluation['status']} {evaluation.get('error_summary')}")
     chain.ok("评测完成", f"verdict={evaluation['verdict']} metrics={evaluation['metrics']}")
 
+    print("\n[17] 模型反馈 → 数据需求 → 复测 → 关闭")
+    feedback = chain.must(chain.client, "POST", f"{chain.base}/model-feedback", 201, "创建模型反馈", body={
+        "model_version_id": mv_id,
+        "evaluation_id": evaluation_id,
+        # 取值必须命中领域枚举：反馈是"哪类缺口"，不是工单优先级。
+        "issue_type": "SCENE_COVERAGE",
+        "severity": "MINOR",
+        "description": "评测发现抓取场景的样本偏少，需要补充同类数据",
+        "dimensions": [{"dimension_type": "SCENE", "dimension_value": "household"}],
+    })
+    feedback_id = str(feedback["feedback_id"])
+    feedback = chain.must(
+        chain.client, "POST", f"{chain.base}/model-feedback/{feedback_id}/actions/create-requirement",
+        200, "反馈转为数据需求", headers=if_match(feedback["version"]), body={},
+    )
+    requirement_id = str(feedback.get("converted_requirement_id") or "")
+    if not requirement_id:
+        raise SeedFailure("反馈没有转出数据需求")
+    req_path = f"{chain.base}/data-requirements/{requirement_id}"
+    requirement = chain.must(chain.client, "POST", f"{req_path}/actions/submit", 200, "需求提交", headers=if_match(chain.must(chain.client, "GET", req_path, 200, "读需求")["version"]), body={})
+    # 需求创建人不得审批自己建的需求（与采集任务审批同一职责分离口径）。
+    requirement = chain.must(chain.reviewer, "POST", f"{req_path}/actions/approve", 200, "需求审批", headers=if_match(requirement["version"]), body={})
+    # satisfy 必须给出"用哪份数据满足了需求"：关联本链路刚冻结的数据集版本，
+    # 让需求的闭环指向真实产物，而不是一句空话。
+    requirement = chain.must(
+        chain.client, "POST", f"{req_path}/actions/satisfy", 200, "需求满足",
+        headers=if_match(requirement["version"]),
+        body={"dataset_version_ids": [dataset_version_id]},
+    )
+    requirement = chain.must(chain.client, "POST", f"{req_path}/actions/link-retest", 200, "关联复测评测", headers=if_match(requirement["version"]), body={"evaluation_id": evaluation_id})
+    requirement = chain.must(chain.client, "POST", f"{req_path}/actions/close", 200, "需求关闭", headers=if_match(requirement["version"]), body={})
+    chain.ok("数据需求已关闭", f"status={requirement['status']} retests={len(requirement.get('retest_evaluation_ids') or [])}")
+    if requirement["status"] != "CLOSED":
+        raise SeedFailure(f"数据需求未关闭：{requirement['status']}")
+
+    print("\n[18] Episode 生命周期收尾：完成 → 归档")
+    ep_path = f"{chain.base}/episodes/{episode_ids[0]}"
+    ep = chain.must(chain.client, "POST", f"{ep_path}/actions/complete", 200, "Episode 完成", headers=if_match(chain.must(chain.client, "GET", ep_path, 200, "读 Episode")["version"]), body={})
+    ep = chain.must(chain.client, "POST", f"{ep_path}/actions/archive", 200, "Episode 归档", headers=if_match(ep["version"]), body={})
+    if ep["status"] != "ARCHIVED":
+        raise SeedFailure(f"Episode 未归档：{ep['status']}")
+    chain.ok("Episode 已归档", f"status={ep['status']}")
+
     return {
         "model_id": model_id,
         "model_version_id": mv_id,
@@ -946,6 +1022,9 @@ def model_chain(
         "inference_task_id": task_id,
         "evaluation_id": evaluation_id,
         "evaluation_verdict": evaluation["verdict"],
+        "feedback_id": feedback_id,
+        "data_requirement_id": requirement_id,
+        "archive_episode_status": ep["status"],
     }
 
 

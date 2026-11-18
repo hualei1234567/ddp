@@ -120,6 +120,27 @@ class SqlCollectionTaskRepository:
         statement = statement.order_by(CollectionTaskModel.id).limit(limit)
         return [self._from_row(scope, row) for row in self._session.scalars(statement)]
 
+    def list_pending_status(
+        self,
+        status: CollectionTaskStatus,
+        *,
+        after_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[tuple[UUID, UUID]]:
+        """跨项目列出某状态的任务 ``(task_id, project_id)``，供系统任务扫描。
+
+        系统任务（数据检查、租约过期）不属于任何单个项目，无法用
+        ``scoped_select``。这里只返回 ID，不返回业务字段——调用方必须自己用
+        ``ProjectScope(project_id, ...)`` 重新读取，项目隔离仍由仓储强制。
+        """
+        statement = select(CollectionTaskModel.id, CollectionTaskModel.project_id).where(
+            CollectionTaskModel.status == status.value
+        )
+        if after_id is not None:
+            statement = statement.where(CollectionTaskModel.id > after_id)
+        statement = statement.order_by(CollectionTaskModel.id).limit(limit)
+        return [(row[0], row[1]) for row in self._session.execute(statement)]
+
     def save(
         self,
         scope: ProjectScope,
