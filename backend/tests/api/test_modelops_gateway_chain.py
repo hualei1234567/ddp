@@ -45,11 +45,16 @@ def _signed_headers(body: bytes, *, nonce: str) -> dict[str, str]:
 
 
 def _settings(endpoint: str) -> Settings:
+    # 显式钉住安全默认值并忽略开发机的 .env：本用例断言「私网 endpoint 必须
+    # 被拒绝」，不能因为某个开发者本地为 local-adapter 打开了 allow_private
+    # 就变成放行（CI 无 .env，两种环境必须同结论）。
     return Settings(
+        _env_file=None,
         env="local",
         model_adapter_shared_secrets={"mock": SECRET},
         model_adapter_capabilities={"mock": ["evaluate"]},
         model_adapter_endpoints={"mock": endpoint},
+        model_adapter_allow_private=False,
     )
 
 
