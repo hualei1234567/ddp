@@ -21,11 +21,12 @@ SUCCEEDED/FAILED）、重试与超时、`output_refs` / `log_ref` / `metrics` /
 
 - ``VALIDATE`` / ``REVALIDATE``：由既有的 RawAsset 校验链路负责
   （``ingestion.raw_asset.validation_requested``），这里**不重复实现**，
-  直接标记成功并把结果指向既有链路；
-- ``SEGMENT_EPISODE``：调用 ImportEpisodeMaterializer 的既有能力把
-  已导入的 RawAsset 聚合成 Episode（真实可用）；
-- ``PARSE_METADATA``：当前没有独立的元数据解析产物落库语义，
-  **显式标记为不支持并失败**，而不是假装成功。
+  直接标记成功并把结果指向既有链路（``metrics.delegated_to``）；
+- ``SEGMENT_EPISODE``：**当前不支持**。切片来自导入解析的 ``episode_key``
+  分组，入口是 ``POST /data-source-imports/{id}/episodes``；帧级切片属于
+  N3 多模态 Pipeline，尚未实现。此前注释写成"真实可用"，与实现不符，已更正；
+- ``PARSE_METADATA``：**当前不支持**。元数据解析发生在导入链路内，
+  没有独立的解析产物落库语义。
 
 宁可显式失败也不伪造成功：一个声称处理成功但什么都没产出的任务，
 比一个明确报"暂不支持"的任务危险得多。
