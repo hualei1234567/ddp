@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.9.0
+  version: 1.10.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -62,6 +62,13 @@ info:
       `ActionSpec.actions`）任何状态都不开放原地修改——内容变更必须新增版本行，
       否则任务冻结的版本快照会与行内容脱节。全部为增量：无路径删除、无字段删除、
       无必填性收紧。
+    - `1.10.0` 在 `1.9.0` 基础上**新增训练执行方式 `execution_mode`**：
+      外部训练引用响应（LOCAL / MOCK / DRY_RUN / REMOTE / UNKNOWN）与训练交付响应
+      （取最近一次外部引用，尚未提交训练为 UNKNOWN）均声明为 required；
+      外部训练引用创建请求新增可选 `execution_mode`。服务端由 Adapter 配置或请求
+      确定方式，两者都缺失时返回 422，**绝不默认 REMOTE**；存量引用回填
+      UNKNOWN（迁移 0054），不冒充真实训练。该字段为新增响应字段，客户端升级后
+      必须按值区分真实/模拟执行。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -79,7 +86,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.9.0
+  version: 1.10.0
   stages:
     device:
       version: ddp.device/1.0.0

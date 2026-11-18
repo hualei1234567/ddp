@@ -37,6 +37,7 @@ from app.domain.datasources.models import DataSource, DataSourceImport
 from app.domain.datasources.state_machines import (
     allowed_import_actions,
     import_target_status,
+    validate_import_action,
 )
 from app.domain.identity.models import ProjectScope
 
@@ -351,6 +352,10 @@ class DataSourceUseCases:
         error_message: str | None = None,
         request_id: str | None = None,
     ) -> DataSourceImport:
+        # 本方法是 HTTP 用例入口，只接受客户端动作。``retry`` 是 Worker 的
+        # 系统动作，只能经 ``ImportRunner.release_for_retry`` 触发；若在入口
+        # 不拦截，客户端就能把 FAILED 任务打回 PENDING。默认拒绝，无放行开关。
+        action = validate_import_action(action)
         current = self.get_import(scope, import_id)
         if current.row_version != expected_version:
             raise VersionConflictError("导入任务")

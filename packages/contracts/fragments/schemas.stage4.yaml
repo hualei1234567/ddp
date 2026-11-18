@@ -385,6 +385,10 @@ ExternalTrainingReferenceCreate:
     model_ref: { type: [object, "null"], additionalProperties: true }
     evaluation_ref: { type: [object, "null"], additionalProperties: true }
     config: { type: object, additionalProperties: true }
+    execution_mode:
+      type: string
+      enum: [LOCAL, MOCK, DRY_RUN, REMOTE]
+      description: 可选显式执行方式。Adapter 已配置执行方式时以配置为准且两者必须一致；都未提供时返回 422，服务端不会默认成 REMOTE。
 
 AdapterCallbackPayload:
   type: object

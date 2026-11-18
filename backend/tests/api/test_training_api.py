@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+from app.api.v1.training_dependencies import get_training_adapter_gateway
+from app.application.datasets.training_ports import AdapterRunRef, AdapterRunStatus
+from app.domain.datasets.training_enums import ExecutionMode
 from app.infrastructure.db.models.collection import OutboxEvent
+from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -344,3 +348,183 @@ def test_delivery_requires_frozen_version_and_approved_revision(
         headers={"Idempotency-Key": f"delivery-{uuid4().hex[:8]}"},
     )
     assert mismatched.status_code == 404
+
+
+class _FakeTrainingGateway:
+    """测试用 Adapter 网关：不触网，只回报固定执行方式和 run。"""
+
+    def __init__(self, execution_mode: str | None) -> None:
+        self._execution_mode = execution_mode
+
+    def capabilities(self, adapter_id: str) -> frozenset[str]:
+        return frozenset({"submit", "status", "cancel"})
+
+    def execution_mode(self, adapter_id: str) -> ExecutionMode | None:
+        return ExecutionMode(self._execution_mode) if self._execution_mode else None
+
+    def submit(self, **kwargs: object) -> AdapterRunRef:
+        return AdapterRunRef(external_run_id=f"run-{uuid4().hex[:8]}")
+
+    def get_status(self, **kwargs: object) -> AdapterRunStatus:
+        raise AssertionError("本测试不查询状态")
+
+    def cancel(self, **kwargs: object) -> AdapterRunStatus:
+        raise AssertionError("本测试不取消训练")
+
+
+def _delivered_delivery(
+    api_db: tuple[sessionmaker[Session], ApiIds], *, execution_mode: str | None
+) -> tuple[TestClient, dict[str, object]]:
+    factory, ids = api_db
+    approver_id = add_member(factory, ids.project_a, role="owner")
+    editor = make_client(factory, ids.editor_a)
+    approver = make_client(factory, approver_id)
+    ctx = build_deliverable(factory, ids)
+    request_body = approved_request(editor, approver, ids.project_a, ids.owner_a)
+    editor = ctx["editor"]
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: _FakeTrainingGateway(
+        execution_mode
+    )
+    created = editor.post(
+        url(ids.project_a, "/training-deliveries"),
+        json=delivery_payload(request_body, ctx, recipient_id=ids.owner_a),
+        headers={"Idempotency-Key": f"delivery-{uuid4().hex[:8]}"},
+    )
+    assert created.status_code == 201, created.text
+    delivery = created.json()
+    # 尚未提交外部训练时执行方式必须是 UNKNOWN，不能预填成真实训练。
+    assert delivery["execution_mode"] == "UNKNOWN"
+    ready = editor.post(
+        url(
+            ids.project_a, f"/training-deliveries/{delivery['training_delivery_id']}/actions/ready"
+        ),
+        headers={"If-Match": f'"{delivery["version"]}"'},
+        json={},
+    )
+    assert ready.status_code == 200, ready.text
+    delivered = editor.post(
+        url(
+            ids.project_a,
+            f"/training-deliveries/{delivery['training_delivery_id']}/actions/deliver",
+        ),
+        headers={"If-Match": f'"{ready.json()["version"]}"'},
+        json={},
+    )
+    assert delivered.status_code == 200, delivered.text
+    return editor, delivered.json()
+
+
+def test_external_reference_persists_and_exposes_execution_mode(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    editor, delivery = _delivered_delivery(api_db, execution_mode="MOCK")
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+
+    reference = editor.post(
+        url(api_db[1].project_a, base),
+        json={
+            "adapter_id": "mock-training",
+            "adapter_version": "1.0.0",
+            "correlation_id": f"corr-{uuid4().hex[:8]}",
+            "execution_mode": "MOCK",
+        },
+        headers={"Idempotency-Key": f"ext-{uuid4().hex[:8]}"},
+    )
+    assert reference.status_code == 202, reference.text
+    assert reference.json()["execution_mode"] == "MOCK"
+
+    detail = editor.get(
+        url(api_db[1].project_a, f"/training-deliveries/{delivery['training_delivery_id']}")
+    ).json()
+    assert detail["execution_mode"] == "MOCK"
+
+
+def test_external_reference_replay_survives_execution_mode_config_change(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """部署调整/移除执行方式声明后，原样重放同一幂等键仍是合法请求。
+
+    幂等语义要求"同一个键 + 同一个请求"返回原结果；执行方式是**部署配置**，
+    它变化不能把已经成功的提交变成 422/409。只有请求显式声明了不同模式时，
+    才属于"同一幂等键对应不同请求"。
+    """
+    editor, delivery = _delivered_delivery(api_db, execution_mode="MOCK")
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+    key = f"replay-{uuid4().hex[:8]}"
+    payload = {
+        "adapter_id": "mock-training",
+        "adapter_version": "1.0.0",
+        "correlation_id": f"corr-{uuid4().hex[:8]}",
+    }
+
+    first = editor.post(
+        url(api_db[1].project_a, base),
+        json=payload,
+        headers={"Idempotency-Key": key},
+    )
+    assert first.status_code == 202, first.text
+    assert first.json()["execution_mode"] == "MOCK"
+
+    # 部署侧移除了执行方式声明。
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: _FakeTrainingGateway(
+        None
+    )
+    replay = editor.post(
+        url(api_db[1].project_a, base),
+        json=payload,
+        headers={"Idempotency-Key": key},
+    )
+
+    assert replay.status_code == 202, replay.text
+    assert replay.json()["external_ref_id"] == first.json()["external_ref_id"]
+    assert replay.json()["execution_mode"] == "MOCK"
+
+
+def test_external_reference_rejects_missing_or_conflicting_execution_mode(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    editor, delivery = _delivered_delivery(api_db, execution_mode=None)
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+
+    missing = editor.post(
+        url(api_db[1].project_a, base),
+        json={
+            "adapter_id": "unconfigured-training",
+            "adapter_version": "1.0.0",
+            "correlation_id": f"corr-{uuid4().hex[:8]}",
+        },
+        headers={"Idempotency-Key": f"ext-{uuid4().hex[:8]}"},
+    )
+    assert missing.status_code == 422
+    assert missing.json()["error"]["code"] == "validation_failed"
+
+    # UNKNOWN 只描述存量记录，不是客户端可声明的执行方式。
+    unknown = editor.post(
+        url(api_db[1].project_a, base),
+        json={
+            "adapter_id": "unconfigured-training",
+            "adapter_version": "1.0.0",
+            "correlation_id": f"corr-{uuid4().hex[:8]}",
+            "execution_mode": "UNKNOWN",
+        },
+        headers={"Idempotency-Key": f"ext-{uuid4().hex[:8]}"},
+    )
+    assert unknown.status_code == 422
+    assert unknown.json()["error"]["code"] == "validation_failed"
+
+    # Adapter 配置了 LOCAL，请求声称 REMOTE：不是同一次提交，必须拒绝。
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: _FakeTrainingGateway(
+        "LOCAL"
+    )
+    conflict = editor.post(
+        url(api_db[1].project_a, base),
+        json={
+            "adapter_id": "local-training",
+            "adapter_version": "1.0.0",
+            "correlation_id": f"corr-{uuid4().hex[:8]}",
+            "execution_mode": "REMOTE",
+        },
+        headers={"Idempotency-Key": f"ext-{uuid4().hex[:8]}"},
+    )
+    assert conflict.status_code == 422
+    assert conflict.json()["error"]["code"] == "validation_failed"

@@ -19,14 +19,17 @@ import pytest
 from app.api.v1.modelops_dependencies import get_model_gateway
 from app.api.v1.training_dependencies import get_training_adapter_gateway
 from app.core.config import Settings
-from app.domain.datasets.training_enums import ExternalTrainingStatus
+from app.domain.datasets.training_enums import ExecutionMode, ExternalTrainingStatus
 from app.domain.datasets.training_errors import TrainingAdapterUnavailableError
 from app.domain.modelops.errors import ModelAdapterUnavailableError
 from app.infrastructure.model_platform_http import HttpModelPlatformGateway
 from app.infrastructure.training_adapter_http import HttpTrainingAdapterGateway
 from pydantic import ValidationError
 
-_TRAINING_ENDPOINT = "http://training-adapter.test:9100"
+# 训练 endpoint 用公网 IP 字面量：网关的出站 SSRF 守卫会解析主机名并拒绝
+# 环回/私网地址（见 test_adapter_url_guard.py），而 MockTransport 不联网，
+# 因此这里不能再用无法解析的假域名。IP 字面量由 getaddrinfo 本地返回，无 DNS。
+_TRAINING_ENDPOINT = "http://93.184.216.34:9100"
 _MODEL_ENDPOINT = "http://model-adapter.test:9101"
 
 
@@ -496,3 +499,30 @@ def test_dependencies_wire_the_http_gateways() -> None:
 
     assert isinstance(get_training_adapter_gateway(settings), HttpTrainingAdapterGateway)
     assert isinstance(get_model_gateway(settings), HttpModelPlatformGateway)
+
+
+def test_training_execution_modes_accept_json_and_normalize_case(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "DDP_TRAINING_ADAPTER_EXECUTION_MODES",
+        json.dumps({"local-training": "local", "mock-training": "MOCK"}),
+    )
+    settings = Settings(_env_file=None)
+    assert settings.training_adapter_execution_modes == {
+        "local-training": "LOCAL",
+        "mock-training": "MOCK",
+    }
+    gateway = get_training_adapter_gateway(settings)
+    assert gateway.execution_mode("local-training") is ExecutionMode.LOCAL
+    # 未声明的 Adapter 返回 None，由用例要求请求显式声明，而不是默认 REMOTE。
+    assert gateway.execution_mode("unknown-adapter") is None
+
+
+def test_unknown_training_execution_mode_is_rejected_at_startup() -> None:
+    settings = _settings(training_adapter_execution_modes={"mock-training": "UNKNOWN"})
+
+    with pytest.raises(RuntimeError) as excinfo:
+        settings.validate_runtime_security()
+
+    assert "执行方式非法" in str(excinfo.value)

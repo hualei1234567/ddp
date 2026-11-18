@@ -73,7 +73,9 @@ def _send(
         raise AdapterHttpFailure(f"{context} 的地址非法：{url}")
 
     try:
-        response = client.request(method, target, json=payload)
+        # 显式不跟随重定向：重定向目标是新的 URL，会绕过调用方对 endpoint 的
+        # SSRF 校验（把请求引向内网或云元数据）。3xx 一律按非 2xx 处理为不可用。
+        response = client.request(method, target, json=payload, follow_redirects=False)
     except httpx.TimeoutException as exc:
         raise AdapterHttpFailure(f"{context} 超时：{url}（{type(exc).__name__}）") from exc
     except httpx.HTTPError as exc:

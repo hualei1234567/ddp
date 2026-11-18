@@ -91,6 +91,15 @@ const EXTERNAL_STATUS: Record<string, StatusPresentation> = {
   UNAVAILABLE: { label: "平台不可达", color: "orange" },
 };
 
+// 执行方式：MOCK / DRY_RUN / UNKNOWN 用高对比色，避免被误读成真实训练结果。
+const EXECUTION_MODE: Record<string, StatusPresentation> = {
+  LOCAL: { label: "本地执行（真实）", color: "cyan" },
+  MOCK: { label: "模拟训练（MOCK）", color: "orange" },
+  DRY_RUN: { label: "空跑（DRY_RUN）", color: "orange" },
+  REMOTE: { label: "远端真实训练", color: "green" },
+  UNKNOWN: { label: "执行方式未知", color: "red" },
+};
+
 const GRANT_STATUS: Record<string, StatusPresentation> = {
   PENDING_APPROVAL: { label: "待审批", color: "processing" },
   ACTIVE: { label: "生效中", color: "green" },
@@ -142,6 +151,7 @@ export const presentTrainingRequestStatus = (value: string) =>
 export const presentRevisionStatus = (value: string) => present(REVISION_STATUS, value);
 export const presentDeliveryStatus = (value: string) => present(DELIVERY_STATUS, value);
 export const presentExternalStatus = (value: string) => present(EXTERNAL_STATUS, value);
+export const presentExecutionMode = (value: string) => present(EXECUTION_MODE, value);
 export const presentGrantStatus = (value: string) => present(GRANT_STATUS, value);
 export const presentPriority = (value: string) => present(PRIORITY, value);
 export const presentUsagePolicy = (value: string) => present(USAGE_POLICY, value);

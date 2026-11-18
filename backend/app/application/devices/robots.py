@@ -25,6 +25,7 @@ from app.application.devices.calibration_gate import ensure_required_calibration
 from app.application.devices.commands import NewRobot
 from app.application.devices.idempotency import IdempotencyGuard, validate_key
 from app.application.devices.pagination import Page, build_page, decode_cursor, normalize_limit
+from app.application.devices.patch_audit import record_patch
 from app.application.devices.ports import (
     AuditRepository,
     CalibrationProfileRepository,
@@ -80,6 +81,9 @@ ROBOT_ACTION_EVENTS: dict[str, str] = {
     "suspend": "robot.suspend",
     "retire": "robot.retire",
 }
+
+#: PATCH 留痕事件（G-11）；同样用模块级常量而不是 f-string。
+ROBOT_UPDATED_EVENT = "robot.updated"
 
 
 class RobotUseCases:
@@ -209,7 +213,9 @@ class RobotUseCases:
         *,
         expected_version: int,
         changes: Mapping[str, object],
+        request_id: str | None = None,
     ) -> Robot:
+        """编辑档案；只把真正变化的字段写进审计（G-11）。"""
         if set(changes) - _PATCHABLE_FIELDS:
             raise DomainValidationError("请求包含不允许修改的字段")
         # 契约允许 capability_profile 为 null，语义是"本次不改"。
@@ -229,10 +235,25 @@ class RobotUseCases:
             )
         if "location_id" in changes:
             self._validate_location(scope, _optional_uuid(changes["location_id"], "location_id"))
+        candidate = replace(current, **dict(changes))
         updated = self._robots.save(
             scope,
-            replace(current, **dict(changes)),
+            candidate,
             expected_version=expected_version,
+        )
+        record_patch(
+            self._audit,
+            self._outbox,
+            scope,
+            resource_type="robot",
+            resource_id=updated.robot_id,
+            id_field="robot_id",
+            current=current,
+            candidate=candidate,
+            changes=changes,
+            event_type=ROBOT_UPDATED_EVENT,
+            request_id=request_id,
+            occurred_at=datetime.now(UTC),
         )
         self._uow.commit()
         return updated

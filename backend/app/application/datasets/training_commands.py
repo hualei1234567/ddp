@@ -41,6 +41,9 @@ class NewExternalTrainingReference:
     model_ref: dict[str, object] | None = None
     evaluation_ref: dict[str, object] | None = None
     config: dict[str, object] = field(default_factory=dict)
+    # 显式执行方式（LOCAL/MOCK/DRY_RUN/REMOTE）。与 Adapter 配置同时存在时
+    # 必须一致；两者都没有时提交被拒，不默认成 REMOTE。
+    execution_mode: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

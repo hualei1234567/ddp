@@ -565,3 +565,15 @@ Index(
     postgresql_where=text("status = 'ACTIVE'"),
     sqlite_where=text("status = 'ACTIVE'"),
 )
+
+# G-16：一条记录最多只能被一条后继记录继承（修订链不分叉）。
+# 复合外键只保证"指向同项目的真实记录"，分叉要唯一性才能拦住；
+# ``supersedes_id IS NULL`` 的草稿/首版不参与唯一性，因此用部分索引。
+Index(
+    "uq_calibration_records_project_supersedes",
+    CalibrationRecord.project_id,
+    CalibrationRecord.supersedes_id,
+    unique=True,
+    postgresql_where=text("supersedes_id IS NOT NULL"),
+    sqlite_where=text("supersedes_id IS NOT NULL"),
+)

@@ -66,6 +66,11 @@ export interface ExternalReferenceCreateInput {
   model_ref?: Record<string, unknown> | null;
   evaluation_ref?: Record<string, unknown> | null;
   config?: Record<string, unknown>;
+  /**
+   * 可选显式执行方式。Adapter 已配置时以配置为准且必须一致；服务端两边都没有
+   * 时返回 422——前端不得自行补一个默认值，尤其不能默认 REMOTE。
+   */
+  execution_mode?: "LOCAL" | "MOCK" | "DRY_RUN" | "REMOTE";
 }
 
 function createHeaders(options?: CreateOptions): Record<string, string> {

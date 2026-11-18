@@ -20,7 +20,11 @@ from app.api.v1.dataset_response_models import (
     TrainingDeliveryOut,
 )
 from app.api.v1.schemas import PageOut
-from app.api.v1.training_dependencies import ExpectedVersion, TrainingServicesDep
+from app.api.v1.training_dependencies import (
+    ExpectedVersion,
+    TrainingServices,
+    TrainingServicesDep,
+)
 from app.api.v1.training_schemas import (
     ExternalTrainingReferenceCreate,
     TrainingActionRequest,
@@ -33,10 +37,31 @@ from app.application.datasets.training_commands import (
     NewTrainingDelivery,
 )
 from app.core.errors import ForbiddenError, ValidationFailedError
-from app.domain.datasets.training_enums import TrainingDeliveryStatus
-from app.domain.identity.models import ProjectContext, ProjectRole
+from app.domain.datasets.training_deliveries import TrainingDelivery
+from app.domain.datasets.training_enums import ExecutionMode, TrainingDeliveryStatus
+from app.domain.identity.models import ProjectContext, ProjectRole, ProjectScope
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["training-deliveries"])
+
+
+def _delivery_out(
+    delivery: TrainingDelivery,
+    modes: dict[UUID, ExecutionMode],
+) -> dict[str, Any]:
+    return training_delivery_out(
+        delivery,
+        execution_mode=modes.get(delivery.training_delivery_id, ExecutionMode.UNKNOWN),
+    )
+
+
+def _delivery_modes(
+    scope: ProjectScope,
+    services: TrainingServices,
+    deliveries: list[TrainingDelivery],
+) -> dict[UUID, ExecutionMode]:
+    return services.references.latest_execution_modes(
+        scope, [delivery.training_delivery_id for delivery in deliveries]
+    )
 
 
 def _status_filter(value: str | None) -> str | None:
@@ -65,8 +90,9 @@ def list_deliveries(
         limit=fetch_limit(limit),
     )
     page = build_page(items, limit=limit, id_of=lambda item: item.training_delivery_id)
+    modes = _delivery_modes(scope, services, page.items)
     return {
-        "items": [training_delivery_out(item) for item in page.items],
+        "items": [_delivery_out(item, modes) for item in page.items],
         "next_cursor": page.next_cursor,
     }
 
@@ -95,7 +121,7 @@ def create_delivery(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return training_delivery_out(delivery)
+    return _delivery_out(delivery, _delivery_modes(scope, services, [delivery]))
 
 
 @router.get("/training-deliveries/{delivery_id}", response_model=TrainingDeliveryOut)
@@ -104,7 +130,8 @@ def get_delivery(
     scope: ReadScope,
     services: TrainingServicesDep,
 ) -> dict[str, Any]:
-    return training_delivery_out(services.deliveries.get(scope, delivery_id))
+    delivery = services.deliveries.get(scope, delivery_id)
+    return _delivery_out(delivery, _delivery_modes(scope, services, [delivery]))
 
 
 @router.post(
@@ -151,7 +178,7 @@ def act_on_delivery(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return training_delivery_out(delivery)
+    return _delivery_out(delivery, _delivery_modes(scope, services, [delivery]))
 
 
 @router.get(
@@ -201,6 +228,7 @@ def create_external_reference(
             model_ref=payload.model_ref,
             evaluation_ref=payload.evaluation_ref,
             config=payload.config,
+            execution_mode=payload.execution_mode,
         ),
         idempotency_key=idempotency_key,
         method=request.method,

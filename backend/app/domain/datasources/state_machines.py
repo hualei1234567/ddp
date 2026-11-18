@@ -73,8 +73,15 @@ def allowed_import_actions(status: str | ImportStatus) -> frozenset[str]:
 
 
 def validate_import_action(action: str) -> str:
-    """校验**客户端**动作名；系统动作走 ``import_target_status`` 内部校验。"""
+    """校验**客户端**动作名；系统动作走 ``import_target_status`` 内部校验。
+
+    系统动作（``retry``）是已知动作，但客户端调用属于越权：显式报
+    "仅限系统内部使用"，而不是笼统的"未知动作"，便于排障。HTTP 用例入口
+    必须先经本函数过滤，不得把路径参数直接交给 ``import_target_status``。
+    """
     name = (action or "").strip()
+    if name in _SYSTEM_ACTIONS:
+        raise DomainValidationError(f"导入动作 {name!r} 仅限系统内部使用，不能由客户端触发")
     if name not in _IMPORT_ACTIONS:
         raise DomainValidationError(f"未知导入动作：{action!r}")
     return name

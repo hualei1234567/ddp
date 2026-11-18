@@ -258,6 +258,7 @@ class CalibrationRecord:
             object.__setattr__(self, "valid_to", valid_to)
         self._validate_frames()
         self._validate_validator()
+        self._validate_supersedes_ref()
         if self.validated_at is not None:
             object.__setattr__(
                 self,
@@ -317,6 +318,19 @@ class CalibrationRecord:
                 raise DomainValidationError(
                     f"{self.status.value} 状态必须记录 validated_by 与 validated_at"
                 )
+
+    def _validate_supersedes_ref(self) -> None:
+        """``supersedes_id`` 自引用会形成长度为 1 的环，修订链永远收敛不了（G-16）。
+
+        "存在 / 同项目 / 不分叉"需要仓储配合查库，统一在
+        :func:`validate_supersedes_link` 里做；这里只拦不查库就能判定的部分。
+        """
+        if self.supersedes_id is None:
+            return
+        if not isinstance(self.supersedes_id, UUID):
+            raise DomainValidationError("supersedes_id 必须是 UUID")
+        if self.supersedes_id == self.calibration_id:
+            raise DomainValidationError("supersedes_id 不能指向自身")
 
     def _target_status(self, target: CalibrationStatus) -> CalibrationStatus:
         return assert_calibration_transition(self.status, target)
@@ -441,3 +455,31 @@ class CalibrationRecord:
 
     def expire(self) -> Self:
         return replace(self, status=self._target_status(CalibrationStatus.EXPIRED))
+
+
+def validate_supersedes_link(
+    *,
+    successor_id: UUID,
+    project_id: UUID,
+    supersedes_id: UUID,
+    predecessor: CalibrationRecord | None,
+    existing_successor: CalibrationRecord | None,
+) -> None:
+    """标定记录修订链的**唯一权威**校验（G-16）。
+
+    与 Profile 版本链（``CalibrationProfileUseCases._validate_supersedes``）
+    同一套语义，只是记录侧的"被替代者"是激活时自动选出的旧 ACTIVE：
+
+    - ``supersedes_id`` 指向的记录必须存在且同项目（跨项目按不存在处理）；
+    - 禁止自引用；
+    - 一个前驱最多只能有一个后继：已有别的记录继承了它，就是分叉。
+
+    规则只在这里写一次：仓储 ``activate`` 在赋 ``supersedes_id`` 前必须调用它，
+    其它写入路径也不得各自复述。
+    """
+    if supersedes_id == successor_id:
+        raise DomainValidationError("supersedes_id 不能指向自身")
+    if predecessor is None or predecessor.project_id != project_id:
+        raise DomainValidationError("supersedes_id 指向的标定记录不存在或不属于当前项目")
+    if existing_successor is not None and existing_successor.calibration_id != successor_id:
+        raise DomainValidationError("supersedes_id 指向的标定记录已有后继记录，修订链不能分叉")

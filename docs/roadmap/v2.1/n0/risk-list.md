@@ -18,10 +18,10 @@
 
 | ID | 风险 | 证据 | 概率 | 影响 | 缓解 | 责任 |
 |---|---|---|---|---|---|---|
-| RK-05 | **`calibration_records.supersedes_id` 可分叉**，修订链不可信 | TD-02；模型只有 FK | 中 | P1 | 唯一约束（部分索引）+ 连续性校验 + PG 用例 | 后端 |
-| RK-06 | **设备域 PATCH 不写审计**，改了什么不可查 | TD-03；`devices.py:222` 无 record_change | 高（现存） | P1 | 四个聚合 update 接 `record_change` | 后端 |
+| RK-05 | ~~`calibration_records.supersedes_id` 可分叉~~ **已修复**（N1-002：迁移 0053 部分唯一索引 + `validate_supersedes_link` + 存量冲突逐行打印后失败退出） | 领域/仓储/迁移 16 例；全量 2313 passed | 低 | P1 | 剩余：长度 ≥2 的环未检测（Backlog N1-009） | 后端 |
+| RK-06 | ~~设备域 PATCH 不写审计~~ **已修复**（N1-001：`patch_audit.py` + devices/sensors/robots 接入；profiles 无 PATCH） | `tests/api/test_*_api.py` 新增 4 例；定向 49 passed | 低 | P1 | 无 | 后端 |
 | RK-07 | **`validity_status=UNKNOWN` 无写入点**，来源不可达时仍显示有效 | TD-04 | 中 | P1 | 可达性探测；探测失败写 UNKNOWN 并阻断交付 | 后端 / 产品 |
-| RK-08 | **导入 `retry` 是系统动作但 HTTP 未拦截**，客户端可直接调用推进状态机 | `application/datasources/use_cases.py:342` 只校验迁移合法性；`import_actions()` 已排除 retry 但仅用于出口 | 中 | P1 | 应用层显式拒绝 `system-*`/`worker-*` 动作，并补越权用例 | 后端 |
+| RK-08 | ~~导入 `retry` 系统动作未拦截~~ **已修复**（N2-001：`validate_import_action` 在 HTTP 用例入口拒绝系统动作；Worker 走 `ImportRunner.release_for_retry` 不受影响） | API 422 用例 + Worker 重试测试通过 | 低 | P1 | 无 | 后端 |
 | RK-09 | **Atomic 语义缺口**：Episode→Annotation/Quality、DatasetVersion→TrainingRequest 血缘无边 | agent 复核：`ANNOTATED_BY`/`TRAINING_RUN` 只有枚举无写入方 | 高（现存） | P1 | 在 N5-04 补齐写边；缺边期间血缘图不得宣称完整 | 后端 |
 | RK-10 | **json vs jsonb 列类型不一致**，历史已在真实 PG 导致 500 | 报告 §4 #1；TD-08 | 中 | P1 | 统一列类型迁移 + 等价性测试 | 后端 |
 | RK-11 | **上传配额并发窗口**：按声明字节预扣，多会话可各自通过 | 报告 §5 #9 | 中 | P2 | 原子预扣/事务锁；或明确接受并监控 | 后端 |
@@ -32,7 +32,7 @@
 | ID | 风险 | 证据 | 概率 | 影响 | 缓解 | 责任 |
 |---|---|---|---|---|---|---|
 | RK-13 | **无分支保护**（私有仓 API 403），可直推 main | 审计 §12.1 R-3；`docs/operations/main-分支保护与评审纪律.md` | 中 | P1 | CI 必过 + 人工评审纪律；所有变更走 PR（本会话已执行） | 用户 |
-| RK-14 | **SSRF 防护缺失**：训练 Adapter endpoint 由部署配置，未拦截内网/元数据地址 | `training_adapter_http.py` 仅拼接 base；agent 结论 | 低（当前） | P1 | 解析后 IP 黑名单（169.254/10/172.16/192.168/::1）；若未来开放用户配置则必须前置 | 后端 |
+| RK-14 | ~~训练 Adapter SSRF 未防护~~ **已修复**（N8-001：`adapter_url_guard.py` + 禁重定向 + 默认拒绝私网；本地例外显式开关） | `test_adapter_url_guard.py` 38 例；单元 1260 passed | 低 | P1 | 剩余：模型平台网关未接同一守卫（Backlog N8-008） | 后端 |
 | RK-15 | 限流 fail-open：Redis 不可用时退化为单机内存限流 | ADR-0031 | 中 | P2 | 监控降级事件；关键写接口另有配额 | 后端 |
 | RK-16 | 未脱敏历史/文档可能含真实邮箱、内网 IP | 用户约束 | 低 | P1 | 提交前扫描；证据只留摘要 | 全体 |
 | RK-17 | 依赖告警积压：14 个 Dependabot PR 未处理（fastapi/alembic/pytest 等大版本） | `gh pr list` | 高 | P2 | 按季度集中升级；先补兼容性测试再合并 | 后端 / 用户 |
@@ -54,7 +54,7 @@
 | ID | 风险 | 证据 | 概率 | 影响 | 缓解 | 责任 |
 |---|---|---|---|---|---|---|
 | RK-25 | 把 PARTIAL/MISSING 说成已完成，误导后续排期 | 历史多次出现（报告 §4 与 §5） | 中 | P1 | 状态六态唯一口径；交付必须附命令/证据 | 全体 |
-| RK-26 | Mock/Local 训练被误认为真实训练 | `execution_mode` 不存在 | 中 | P1 | N7-02 增加显式 `execution_mode` 字段并在 UI 标注 | 后端 / 前端 |
+| RK-26 | ~~Mock/Local 训练被误认为真实训练~~ **已修复**（N7-001：`ExecutionMode` + 迁移 0054 + 契约 1.10.0 + 前端显著标注；未配置模式提交 422） | 领域/API/迁移/前端解析器用例通过 | 低 | P1 | 剩余：MOCK/DRY_RUN 是标记而非独立执行器（Backlog N7-007） | 后端 / 前端 |
 | RK-27 | 长链（导入→标注→数据集→训练→评测）任一步失败时，用户看不到「下一步做什么」 | UI 蓝图 §3；当前各页独立 | 中 | P2 | 工作台聚合队列；失败项带 retry/logs 入口 | 前端 / 产品 |
 | RK-28 | 质量报告六类分层缺失，业务无法按维度定位问题 | N2-06 MISSING | 高 | P2 | N4-04 统一 Quality Engine 后重做报告 UI | 产品 / 后端 |
 
