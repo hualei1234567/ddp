@@ -286,3 +286,32 @@ def test_export_worker_reuses_request_id_from_event(
     assert all(item["trace_id"] == "req-export-1" for item in handler.payloads)
     assert all(item["trace_source"] == "event" for item in handler.payloads)
     assert trace_id_var.get() is None
+
+
+def test_export_worker_blocks_unknown_validity(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """执行期来源变 UNKNOWN 也要 fail-closed：不能写出任何产物。"""
+    factory, ids = api_db
+    ctx = build_frozen_version(factory, ids)
+    storage = FakeExportStorage()
+    client, job = _create(
+        factory,
+        ids,
+        ctx["version_id"],
+        "export-unknown-version",
+        storage=storage,
+    )
+    with factory() as session:
+        session.execute(
+            update(DatasetVersionModel)
+            .where(DatasetVersionModel.id == UUID(ctx["version_id"]))
+            .values(validity_status="UNKNOWN")
+        )
+        session.commit()
+
+    assert run_export_worker(factory, storage).status == "PUBLISHED"
+    blocked = _detail(client, ids.project_a, job["export_job_id"])
+    assert blocked["status"] == "FAILED"
+    assert blocked["error_code"] == "dataset_upstream_invalidated"
+    assert storage.objects == {}

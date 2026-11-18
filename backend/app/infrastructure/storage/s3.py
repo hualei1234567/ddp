@@ -259,7 +259,7 @@ class S3MultipartStorage:
         try:
             response = self._client.get_object(Bucket=self.bucket, Key=object_key)
         except ClientError as exc:
-            if _is_missing_object(exc):
+            if is_missing_object(exc):
                 raise ObjectNotFoundError("对象不存在") from exc
             raise ObjectStorageUnavailableError("读取对象内容失败") from exc
         except BotoCoreError as exc:
@@ -288,7 +288,7 @@ class S3MultipartStorage:
         try:
             response = self._client.head_object(Bucket=self.bucket, Key=object_key)
         except ClientError as exc:
-            if _is_missing_object(exc):
+            if is_missing_object(exc):
                 return None
             raise ObjectStorageUnavailableError("读取对象元数据失败") from exc
         except BotoCoreError as exc:
@@ -307,7 +307,7 @@ def _error_code(exc: ClientError) -> str:
     return str(exc.response.get("Error", {}).get("Code", ""))
 
 
-def _is_missing_object(exc: ClientError) -> bool:
+def is_missing_object(exc: ClientError) -> bool:
     code = _error_code(exc)
     status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
     return code in {"NoSuchKey", "404", "NotFound"} or status == 404

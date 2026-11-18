@@ -264,3 +264,23 @@ class SqlDatasetUpstreamDirectory:
             )
         ).all()
         return {row[0]: (str(row[1]), row[2], int(row[3])) for row in rows}
+
+    def episode_manifest_keys(
+        self,
+        scope: ProjectScope,
+        episode_ids: list[UUID],
+    ) -> dict[UUID, str | None]:
+        """Episode 当前指向的 Canonical Manifest 对象键（可能未就绪为 None）。
+
+        来源可达性探测只需要这一列；调用方必须先用 ``episode_states`` 排除
+        已失效/已删除的 Episode，再把可探测的键交给对象存储做 HEAD。
+        """
+        if not episode_ids:
+            return {}
+        rows = self._session.execute(
+            select(EpisodeModel.id, EpisodeModel.manifest_key).where(
+                EpisodeModel.project_id == scope.project_id,
+                EpisodeModel.id.in_(episode_ids),
+            )
+        ).all()
+        return {row[0]: row[1] for row in rows}

@@ -355,15 +355,18 @@ class SqlDatasetVersionRepository:
         after_id: UUID | None = None,
         limit: int = 200,
     ) -> list[tuple[UUID, UUID]]:
-        """跨项目列出"有效性=VALID 且仍在活跃生命周期"的版本 (id, project_id)。
+        """跨项目列出"有效性=VALID/UNKNOWN 且仍在活跃生命周期"的版本 (id, project_id)。
 
         只给系统巡检用：返回 ID 不返回业务字段，调用方必须自己用
-        ``ProjectScope`` 重新读取，项目隔离仍由仓储强制。
+        ``ProjectScope`` 重新读取，项目隔离仍由仓储强制。UNKNOWN 必须继续
+        巡检，否则来源恢复可达后没有任何复核入口。
         """
         statement = (
             select(DatasetVersionModel.id, DatasetVersionModel.project_id)
             .where(
-                DatasetVersionModel.validity_status == ValidityStatus.VALID.value,
+                DatasetVersionModel.validity_status.in_(
+                    [ValidityStatus.VALID.value, ValidityStatus.UNKNOWN.value]
+                ),
                 DatasetVersionModel.status.in_(
                     [
                         DatasetVersionStatus.READY.value,

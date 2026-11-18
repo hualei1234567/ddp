@@ -36,11 +36,13 @@ import logging
 import signal
 import threading
 from datetime import UTC, datetime
+from uuid import UUID
 
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.annotation.assignments import AnnotationAssignmentUseCases
 from app.application.collection.data_check import CollectionDataCheckUseCases
+from app.application.datasets.ports import ValiditySourceProbe
 from app.application.datasets.validity import DatasetValiditySweep
 from app.core.config import get_settings
 from app.core.logging import configure_logging
@@ -74,6 +76,7 @@ from app.infrastructure.repositories.datasources import (
     SqlMediaAssetRepository,
 )
 from app.infrastructure.repositories.projects import SqlProjectMemberRepository
+from app.infrastructure.storage.source_probe import S3SourceProbe
 
 logger = logging.getLogger("ddp.worker.domain_sweeps")
 
@@ -88,9 +91,21 @@ class DomainSweepWorker:
         factory: sessionmaker[Session],
         *,
         batch_limit: int = _SWEEP_BATCH_LIMIT,
+        source_probe: ValiditySourceProbe | None = None,
+        probe_attempts: int = 2,
+        max_objects_per_version: int = 200,
+        max_failures_per_run: int = 5,
     ) -> None:
         self._factory = factory
         self._batch_limit = batch_limit
+        # None 表示本进程不做来源可达性探测；生产入口按
+        # ``DDP_DATASET_SOURCE_PROBE_ENABLED`` 注入 S3 适配器。
+        self._source_probe = source_probe
+        self._probe_attempts = probe_attempts
+        self._max_objects_per_version = max_objects_per_version
+        self._max_failures_per_run = max_failures_per_run
+        # 可达的 VALID 版本不会被状态变化移出候选集，需要进程内游标轮转。
+        self._validity_after_id: UUID | None = None
 
     # ---- 标注分配租约 ----
     def expire_assignments(self, *, now: datetime | None = None) -> int:
@@ -174,9 +189,18 @@ class DomainSweepWorker:
                 SqlCollectionAuditRepository(session),
                 SqlCollectionOutboxRepository(session),
                 session,
+                source_probe=self._source_probe,
+                probe_attempts=self._probe_attempts,
+                max_objects_per_version=self._max_objects_per_version,
+                max_failures_per_run=self._max_failures_per_run,
             )
-            outcomes = sweep.run_once(limit=self._batch_limit, now=moment)
-        logger.info("数据集版本有效性巡检完成", extra={"marked_stale": len(outcomes)})
+            outcomes = sweep.run_once(
+                limit=self._batch_limit,
+                now=moment,
+                after_id=self._validity_after_id,
+            )
+            self._validity_after_id = sweep.next_after_id
+        logger.info("数据集版本有效性巡检完成", extra={"validity_changed": len(outcomes)})
         return len(outcomes)
 
     def sweep_once(self, *, now: datetime | None = None) -> dict[str, int]:
@@ -234,9 +258,19 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     configure_logging()
-    get_settings()  # 触发配置校验：配置非法时启动就失败，而不是跑起来才炸
+    settings = get_settings()  # 触发配置校验：配置非法时启动就失败，而不是跑起来才炸
     factory = create_session_factory(get_engine())
-    worker = DomainSweepWorker(factory)
+    worker = DomainSweepWorker(
+        factory,
+        source_probe=(
+            S3SourceProbe(settings)
+            if settings.dataset_source_probe_enabled
+            else None
+        ),
+        probe_attempts=settings.dataset_source_probe_attempts,
+        max_objects_per_version=settings.dataset_source_probe_max_objects_per_version,
+        max_failures_per_run=settings.dataset_source_probe_max_failures_per_run,
+    )
     if args.once:
         worker.sweep_once()
         return 0

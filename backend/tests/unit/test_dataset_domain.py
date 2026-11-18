@@ -434,6 +434,17 @@ def test_state_machines_and_validity_separation() -> None:
     with pytest.raises(InvalidStateTransitionError):
         version_target(DatasetVersionStatus.FROZEN, "build")
     assert validity_target(ValidityStatus.VALID, "system-mark-stale") is ValidityStatus.STALE
+    # 来源不可达只能表达为 UNKNOWN；恢复后先回到 STALE，等人工 revalidate。
+    assert (
+        validity_target(ValidityStatus.VALID, "system-mark-unknown")
+        is ValidityStatus.UNKNOWN
+    )
+    assert (
+        validity_target(ValidityStatus.UNKNOWN, "system-mark-stale")
+        is ValidityStatus.STALE
+    )
+    with pytest.raises(InvalidStateTransitionError):
+        validity_target(ValidityStatus.UNKNOWN, "revalidate")
     assert validity_target(ValidityStatus.STALE, "invalidate") is ValidityStatus.INVALIDATED
     with pytest.raises(InvalidStateTransitionError):
         validity_target(ValidityStatus.INVALIDATED, "revalidate")

@@ -358,6 +358,19 @@ class DatasetVersion:
             if self.train_count < 1 or self.validation_count < 1:
                 raise DomainValidationError("训练与验证划分不得为空")
 
+    @property
+    def validity_block_reason(self) -> str | None:
+        """非 ``VALID`` 时给出可解释的阻断原因；``VALID`` 返回 None。
+
+        导出与训练交付的门禁共用这一处文案，避免 UNKNOWN 被笼统描述成
+        "已失效"——它表达的是"来源不可达、无法确认"，不是已判定失效。
+        """
+        if self.validity_status is ValidityStatus.VALID:
+            return None
+        if self.validity_status is ValidityStatus.UNKNOWN:
+            return "数据集版本有效性未知（来源不可达，无法确认有效）"
+        return "数据集版本有效性不是 VALID"
+
     def is_content_immutable(self) -> bool:
         return self.status in {
             DatasetVersionStatus.FROZEN,
