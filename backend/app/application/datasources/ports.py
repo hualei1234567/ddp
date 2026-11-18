@@ -143,8 +143,14 @@ class DataSourceImportLogRepository(Protocol):
         import_id: UUID,
         *,
         limit: int = 100,
+        before_log_id: UUID | None = None,
     ) -> tuple[list[DataSourceImportLog], bool]:
-        """返回按时间正序的最近 ``limit`` 条，以及是否被上限截断。"""
+        """返回按时间正序的最近 ``limit`` 条，以及是否还有更早的日志。
+
+        ``before_log_id`` 为上一页最旧一条日志的 ID：传入时只返回严格早于
+        该条目的日志（仍按时间正序），用于加载更早的历史。游标不属于本次
+        导入（或已被删除）时返回空页，不泄露其他导入的日志。
+        """
         ...
 
 

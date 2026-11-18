@@ -22,6 +22,7 @@ import PageContainer from "../../components/ui/PageContainer";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useCursorPage } from "../../hooks/useCursorPage";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
+import { usePolling } from "../../hooks/usePolling";
 import { useProjectId } from "../../hooks/useProjectId";
 import { dataSourceApi } from "../../services/datasources";
 import { formatDateTime } from "../../services/format";
@@ -29,6 +30,10 @@ import {
   presentImportProgress,
   presentImportStage,
 } from "../../services/importProgress";
+import {
+  IMPORT_POLL_INTERVAL_MS,
+  hasRunningImport,
+} from "../../services/importPolling";
 import { resolvePagePhase } from "../../services/pagePhase";
 import type { DataSourceImport, ImportAction } from "../../types/datasource";
 import ImportLogDrawer from "./ImportLogDrawer";
@@ -232,6 +237,15 @@ function ImportListContent({
   } = useCursorPage(load, (item) => item.import_id);
   const phase = resolvePagePhase({ hasData: items.length > 0, loading, error });
 
+  // 有 RUNNING 任务时自动刷新列表；进入终态（或无运行中任务）后
+  // enabled 变 false，effect 清理会取消已排队的定时器。
+  const autoRefreshing = hasRunningImport(items);
+  usePolling({
+    enabled: autoRefreshing,
+    intervalMs: IMPORT_POLL_INTERVAL_MS,
+    tick: reload,
+  });
+
   const runAction = async (item: DataSourceImport, action: ImportAction) => {
     try {
       await dataSourceApi.actImport(projectId, item.import_id, action, {
@@ -425,6 +439,11 @@ function ImportListContent({
       {stale ? (
         <Typography.Text type="warning">
           最近一次刷新失败，展示的是上次成功获取的数据。
+        </Typography.Text>
+      ) : null}
+      {autoRefreshing ? (
+        <Typography.Text type="secondary">
+          有运行中的导入任务，每 {IMPORT_POLL_INTERVAL_MS / 1000} 秒自动刷新。
         </Typography.Text>
       ) : null}
       <Table<DataSourceImport>

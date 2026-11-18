@@ -567,20 +567,55 @@ describe("导入可观测性", () => {
     );
   });
 
-  it("读取日志走 /logs 并带 limit，解析 truncated 与条目", async () => {
+  it("读取日志走 /logs 并带 limit，解析 truncated 与 next_cursor", async () => {
     const { api, fetchImpl } = client(() =>
-      jsonResponse({ items: [logBody], truncated: false }),
+      jsonResponse({ items: [logBody], truncated: false, next_cursor: null }),
     );
 
     const result = await api.listImportLogs(PROJECT, IMPORT_ID, { limit: 200 });
 
     expect(result.truncated).toBe(false);
+    expect(result.next_cursor).toBeNull();
     expect(result.items).toHaveLength(1);
     expect(result.items[0]?.stage).toBe("INGEST");
     expect(result.items[0]?.level).toBe("INFO");
     const [url] = fetchImpl.mock.calls[0] as [string, RequestInit];
     expect(url).toContain(`/data-source-imports/${IMPORT_ID}/logs`);
     expect(url).toContain("limit=200");
+  });
+
+  it("加载更早日志时携带 cursor，并解析服务端返回的 next_cursor", async () => {
+    const { api, fetchImpl } = client(() =>
+      jsonResponse({
+        items: [logBody],
+        truncated: true,
+        next_cursor: "older-page",
+      }),
+    );
+
+    const result = await api.listImportLogs(PROJECT, IMPORT_ID, {
+      limit: 100,
+      cursor: "current-page",
+    });
+
+    expect(result.truncated).toBe(true);
+    expect(result.next_cursor).toBe("older-page");
+    const [url] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("cursor=current-page");
+  });
+
+  it("truncated 与 next_cursor 语义不一致时拒绝解析", async () => {
+    const { api } = client(() =>
+      jsonResponse({
+        items: [],
+        truncated: true,
+        next_cursor: null,
+      }),
+    );
+
+    await expect(
+      api.listImportLogs(PROJECT, IMPORT_ID),
+    ).rejects.toMatchObject({ kind: "invalid_response" });
   });
 
   it("日志的 import_id 与请求不一致时拒绝", async () => {
@@ -593,6 +628,7 @@ describe("导入可观测性", () => {
           },
         ],
         truncated: false,
+        next_cursor: null,
       }),
     );
 

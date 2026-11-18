@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.12.0
+  version: 1.13.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -109,6 +109,12 @@ info:
     - `1.12.0` **新增人工审核证据**：`DataReview` 与审核决定请求新增可选
       `evidence`（键白名单 timestamp_seconds / camera / note / episode_key，
       ≤4 键、序列化 ≤2000 字节），与审核结论同事务写入审计留痕。
+    - `1.13.0` **导入步骤日志改为游标分页**：`GET .../data-source-imports/{import_id}/logs`
+      新增可选 `cursor` 查询参数，响应新增必填 `next_cursor`（可为 null）。
+      不带 `cursor` 时仍返回最近 `limit` 条（默认 100、上限 500），行为向后兼容；
+      带 `next_cursor` 时返回严格更早的一页，顺序与时间一致。`truncated` 语义
+      收敛为"还有更早日志未返回"，与 `next_cursor !== null` 严格等价。
+      全部为增量：无路径删除、无字段删除、未收窄既有字段取值。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -126,7 +132,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.12.0
+  version: 1.13.0
   stages:
     device:
       version: ddp.device/1.0.0
