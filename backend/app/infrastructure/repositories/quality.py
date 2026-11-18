@@ -14,13 +14,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.identity.models import ProjectScope
-from app.domain.quality.enums import QualityCategory, QualityFindingStatus
+from app.domain.quality.enums import (
+    QualityCategory,
+    QualityFindingStatus,
+    QualitySubjectType,
+)
 from app.domain.quality.models import QualityFinding, QualityRun
 from app.infrastructure.db.models.quality import (
     QualityFindingModel,
     QualityRunModel,
 )
-from app.infrastructure.repositories._sql_support import as_utc
+from app.infrastructure.repositories._sql_support import as_utc, keyset_after_desc
 
 
 def _finding(row: QualityFindingModel) -> QualityFinding:
@@ -119,6 +123,37 @@ class SqlQualityRunRepository:
             )
         )
         return _run(row) if row is not None else None
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        subject_type: QualitySubjectType,
+        subject_id: UUID,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[QualityRun]:
+        statement = select(QualityRunModel).where(
+            QualityRunModel.project_id == scope.project_id,
+            QualityRunModel.subject_type == subject_type.value,
+            QualityRunModel.subject_id == subject_id,
+        )
+        after_clause = keyset_after_desc(
+            QualityRunModel,
+            QualityRunModel.created_at,
+            QualityRunModel.id,
+            after_id,
+            project_id=scope.project_id,
+        )
+        if after_clause is not None:
+            statement = statement.where(after_clause)
+        rows = self._session.scalars(
+            statement.order_by(
+                QualityRunModel.created_at.desc(),
+                QualityRunModel.id.desc(),
+            ).limit(limit)
+        )
+        return [_run(row) for row in rows]
 
     def list_findings(
         self,

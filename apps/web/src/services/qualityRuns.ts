@@ -1,12 +1,13 @@
 /**
  * N4-004 统一质量引擎 API。
  *
- * 三个只读追加型操作（契约 `fragments/paths.quality.yaml`）：
+ * 四个操作（契约 `fragments/paths.quality.yaml`）：
  * - `POST /quality-runs`：对单个 Episode / 导入执行一次检查，返回新运行；
+ * - `GET /quality-runs?subject_type=&subject_id=`：按对象列举历史运行
+ *   （创建时间/ID 倒序，cursor 分页）；
  * - `GET /quality-runs/{run_id}`：六类聚合详情；
  * - `GET /quality-runs/{run_id}/findings`：结论明细（cursor 分页）。
  *
- * 服务端未提供"按对象列举运行"的接口，因此页面只能通过运行 ID 回看历史。
  * 前端不推断、不复制质量判定，所有结论以服务端返回为准。
  */
 
@@ -17,13 +18,16 @@ import type {
   QualityRun,
   QualityRunCreateInput,
   QualityRunFinding,
+  QualitySubjectType,
 } from "../types/qualityRun";
 import { apiClient, type ApiClient } from "./api";
 import {
   parseQualityRun,
   parseQualityRunFindingPage,
+  parseQualityRunPage,
 } from "./qualityRunParsers";
 import {
+  assertPageScope,
   assertProjectScope,
   pageQuery,
   projectPath,
@@ -34,6 +38,13 @@ import { ContractValidationError } from "./validation";
 
 export interface QualityRunRequestOptions {
   signal?: AbortSignal;
+}
+
+export interface QualityRunListOptions extends PageRequestOptions {
+  /** 检查对象类型；服务端未知类型返回 422。 */
+  subject_type: QualitySubjectType;
+  /** 检查对象 ID；必填，空值在发请求前拒绝。 */
+  subject_id: string;
 }
 
 export interface QualityFindingListOptions extends PageRequestOptions {
@@ -59,6 +70,10 @@ export interface QualityRunApi {
     input: QualityRunCreateInput,
     options?: QualityRunRequestOptions,
   ): Promise<QualityRun>;
+  listRuns(
+    projectId: string,
+    options: QualityRunListOptions,
+  ): Promise<CursorPage<QualityRun>>;
   getRun(
     projectId: string,
     runId: string,
@@ -99,6 +114,40 @@ export function createQualityRunApi(client: ApiClient): QualityRunApi {
             );
           }
           return run;
+        },
+      });
+    },
+    async listRuns(projectId, options) {
+      const subjectId = options.subject_id.trim();
+      if (subjectId === "") {
+        // 空 subject_id 会让服务端拒绝（422）；前端提前拦截，避免把
+        // "参数没填"误当成"该对象没有历史运行"。
+        throw new ContractValidationError("subject_id 不能为空");
+      }
+      return client.get(runPath(projectId), {
+        signal: options.signal,
+        query: {
+          subject_type: options.subject_type,
+          subject_id: subjectId,
+          ...pageQuery(options),
+        },
+        validate: (value) => {
+          const page = assertPageScope(
+            parseQualityRunPage(value),
+            projectId,
+            "质量运行列表",
+          );
+          page.items.forEach((run, index) => {
+            if (
+              run.subject_type !== options.subject_type ||
+              run.subject_id !== subjectId
+            ) {
+              throw new ContractValidationError(
+                `质量运行列表.items[${index}] 与请求的检查对象不一致`,
+              );
+            }
+          });
+          return page;
         },
       });
     },

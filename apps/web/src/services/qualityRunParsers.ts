@@ -212,3 +212,13 @@ export function parseQualityRunFindingPage(
     parseQualityRunFinding(item, itemPath),
   );
 }
+
+/** 历史运行分页；条目复用单条运行解析，保持六类齐全等全部校验。 */
+export function parseQualityRunPage(
+  value: unknown,
+  path = "质量运行列表",
+): CursorPage<QualityRun> {
+  return parseCursorPage(value, path, (item, itemPath) =>
+    parseQualityRun(item, itemPath),
+  );
+}

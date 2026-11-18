@@ -1,7 +1,9 @@
-"""统一质量引擎 HTTP 路由（N4-004）。
+"""统一质量引擎 HTTP 路由（N4-004 / N4-008）。
 
 - ``POST`` 对单个 Episode 或导入任务同步执行规则；运行只追加，重复调用会
   产生多条历史记录，不覆盖旧结论；
+- ``GET`` 列表按对象（``subject_type`` + ``subject_id``）列举历史运行，
+  创建时间/ID 倒序游标分页；对象不存在时返回空页而不是 404；
 - ``GET`` 详情返回六类聚合；结论明细走子资源游标分页；
 - ``project_id`` 只用于定位路径，授权与隔离由服务端 ``ProjectScope`` 强制。
 """
@@ -30,6 +32,35 @@ from app.domain.quality.enums import (
 )
 
 router = APIRouter(prefix="/projects/{project_id}/quality-runs", tags=["quality"])
+
+
+@router.get("", response_model=PageOut[QualityRunOut])
+def list_quality_runs(
+    scope: ReadScope,
+    services: QualityServicesDep,
+    subject_type: QualitySubjectType,
+    subject_id: UUID,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> PageOut[QualityRunOut]:
+    """按对象列举历史质量运行（创建时间/ID 倒序）。
+
+    ``subject_type`` 与 ``subject_id`` 必填：本接口是"某个对象的历史运行"，
+    不支持跨对象全量扫描。对象不存在或跨项目返回空页而不是 404——列表
+    过滤没有可定位的单条资源，也不应通过 404/200 差异泄漏对象存在性。
+    """
+    items = services.runs.list_runs(
+        scope,
+        subject_type=subject_type,
+        subject_id=subject_id,
+        after_id=decode_cursor(cursor),
+        limit=fetch_limit(limit),
+    )
+    page = build_page(items, limit=limit, id_of=lambda item: item.run_id)
+    return PageOut(
+        items=[QualityRunOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.post("", response_model=QualityRunOut, status_code=201)
