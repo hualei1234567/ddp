@@ -1,0 +1,137 @@
+# N4-001：处理运行（ProcessingRun）路径。
+# 对应 backend/app/api/v1/processing_routes.py。
+#
+# 本版只提供实体与状态机：创建 / 列表 / 详情 / 客户端取消。
+# 八阶段编排、Worker claim/advance 的触发入口属于 N4-002，不在此契约内。
+#
+# 客户端只能看到服务端计算的 `allowed_actions`；`system-*` / `worker-*`
+# 永远不出现在响应里，也不能被客户端调用。
+
+processingRuns:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listProcessingRuns
+    tags: [processing]
+    summary: 处理运行列表
+    description: |
+      按游标分页；可按 `status` / `stage` 过滤。排序稳定（按服务端 ID，
+      即创建时间顺序），游标直接取上一页最后一条的 `run_id`。
+    parameters:
+      - name: status
+        in: query
+        required: false
+        schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingRunStatus" }
+      - name: stage
+        in: query
+        required: false
+        schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingStage" }
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: 处理运行分页
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingRunPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createProcessingRun
+    tags: [processing]
+    summary: 创建处理运行
+    description: |
+      初始状态固定为 `CREATED`。创建本身不触发执行：排队由服务端调度器
+      调用内部动作 `system-queue` 完成，HTTP 线程不承担大文件处理。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingRunCreate" }
+    responses:
+      "201":
+        description: 已创建的处理运行
+        headers:
+          ETag:
+            description: 乐观锁版本，格式 `"<version>"`。
+            schema: { type: string }
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+processingRunDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: getProcessingRun
+    tags: [processing]
+    summary: 处理运行详情
+    responses:
+      "200":
+        description: 处理运行
+        headers:
+          ETag:
+            description: 乐观锁版本，格式 `"<version>"`。
+            schema: { type: string }
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+processingRunActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    - name: action
+      in: path
+      required: true
+      description: 客户端可见动作；本版只有 `cancel`。
+      schema:
+        type: string
+        enum: [cancel]
+  post:
+    operationId: actOnProcessingRun
+    tags: [processing]
+    summary: 处理运行客户端动作（当前仅 cancel）
+    description: |
+      必须带 `If-Match: "<version>"`：缺失返回 428，版本不符返回 409。
+      动作是否合法由服务端状态机的 `allowed_actions` 决定；客户端传入
+      `worker-*` / `system-*` 一律拒绝，不得借此推进执行。
+
+      取消是协作式的：`RUNNING` 中的运行被取消后，Worker 后续写入会因
+      版本冲突失败，不会把已取消的运行改回执行中。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+    responses:
+      "200":
+        description: 动作后的处理运行
+        headers:
+          ETag:
+            description: 新版本号，格式 `"<version>"`。
+            schema: { type: string }
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "428": { $ref: "../openapi.yaml#/components/responses/PreconditionRequired" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

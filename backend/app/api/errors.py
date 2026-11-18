@@ -39,6 +39,7 @@ from app.domain.governance.errors import GovernanceDomainError
 from app.domain.ingestion.errors import IngestionDomainError
 from app.domain.locations.errors import LocationDomainError
 from app.domain.modelops.errors import ModelOpsDomainError
+from app.domain.processing.errors import ProcessingDomainError
 
 
 def _mapped(
@@ -874,4 +875,31 @@ def governance_error_to_app(exc: GovernanceDomainError) -> AppError:
         messages=_GOVERNANCE_MESSAGES,
         fallback=_GOVERNANCE_FALLBACK,
         details_codes=_GOVERNANCE_DETAILS_SAFE_CODES,
+    )
+
+
+_PROCESSING_STATUS_BY_CODE = {
+    "validation_failed": 422,
+    "state_transition_invalid": 409,
+    "version_conflict": 409,
+    "resource_not_found": 404,
+    "forbidden": 403,
+}
+
+_PROCESSING_MESSAGES = {
+    "validation_failed": "处理运行请求或领域规则校验失败",
+    "state_transition_invalid": "处理运行当前状态不允许该操作",
+    "version_conflict": "处理运行版本已变化，请重新读取后再试",
+    "resource_not_found": "处理运行不存在或不属于当前项目",
+    "forbidden": "无权执行该操作",
+}
+_PROCESSING_FALLBACK = "处理运行域规则校验失败"
+
+
+def processing_error_to_app(exc: ProcessingDomainError) -> AppError:
+    return _mapped(
+        exc,
+        status_by_code=_PROCESSING_STATUS_BY_CODE,
+        messages=_PROCESSING_MESSAGES,
+        fallback=_PROCESSING_FALLBACK,
     )
