@@ -20,6 +20,7 @@ from app.api.v1.upload_schemas import (
     AbortUploadRequest,
     CompleteUploadRequest,
     CompleteUploadResponse,
+    RawAssetActionRequest,
     RawAssetOut,
     UploadPartAckOut,
     UploadPartAckRequest,
@@ -261,6 +262,34 @@ def get_raw_asset(
     use_cases: UploadUseCasesDep,
 ) -> RawAssetOut:
     return RawAssetOut.from_domain(use_cases.assets.get_asset(scope, asset_id))
+
+
+@router.post("/raw-assets/{asset_id}/actions/{action}", response_model=RawAssetOut)
+def act_on_raw_asset(
+    asset_id: UUID,
+    action: str,
+    request: Request,
+    response: Response,
+    scope: WriteScope,
+    use_cases: UploadUseCasesDep,
+    expected_version: ExpectedVersion,
+    idempotency_key: IdempotencyKey = None,
+    payload: RawAssetActionRequest | None = None,
+) -> RawAssetOut:
+    asset = use_cases.assets.apply_action(
+        scope,
+        asset_id,
+        action,
+        expected_version=expected_version,
+        payload=payload.model_dump(exclude_unset=True) if payload is not None else {},
+        idempotency_key=idempotency_key,
+        method=request.method,
+        path=request.url.path,
+        request_id=_request_id(request),
+    )
+    response.headers["Idempotent-Replayed"] = "true" if use_cases.assets.last_replayed else "false"
+    response.headers["ETag"] = f'"{asset.version}"'
+    return RawAssetOut.from_domain(asset)
 
 
 def _request_id(request: Request) -> str | None:

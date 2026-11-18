@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from app.domain.ingestion.enums import (
+    PUBLIC_RAW_ASSET_ACTIONS,
     RawAssetStatus,
     UploadSessionAction,
     UploadSessionStatus,
@@ -116,6 +117,16 @@ def raw_asset_target_status(
     if target is None:
         raise InvalidStateTransitionError("原始资产", current.value, action)
     return target
+
+
+def allowed_raw_asset_actions(current: RawAssetStatus) -> frozenset[str]:
+    """当前状态下**对外可点**的原始资产动作。
+
+    只返回公开集合内的动作：``validate-success`` / ``validate-quarantine`` /
+    ``validate-reject`` / ``system-fail`` 由应用层自行发起，不该出现在响应里，
+    否则前端会渲染出按了必然 422 的按钮。
+    """
+    return frozenset(_RAW_ASSET_RULES.get(current, {})) & PUBLIC_RAW_ASSET_ACTIONS
 
 
 def allowed_upload_session_actions(current: UploadSessionStatus) -> frozenset[str]:

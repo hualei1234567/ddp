@@ -328,6 +328,49 @@ rawAssetDetail:
       "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
       "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+rawAssetActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AssetId"
+    - name: action
+      in: path
+      required: true
+      schema:
+        type: string
+        enum:
+          - release-quarantine-or-revalidate
+          - reject-quarantined
+          - post-hoc-quarantine
+          - archive
+          - tombstone
+  post:
+    operationId: actOnRawAsset
+    tags: [raw-assets]
+    summary: 原始资产状态动作（隔离放行/驳回、事后隔离、归档、墓碑）
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/RawAssetActionRequest"}
+    responses:
+      "200":
+        description: 动作已执行，返回最新资产
+        headers:
+          ETag: {schema: {type: string}}
+          Idempotent-Replayed: {schema: {type: string, enum: ["true", "false"]}}
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/RawAsset"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
 rawAssetLineage:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/AssetId"

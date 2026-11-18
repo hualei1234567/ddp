@@ -30,13 +30,16 @@
 
 from __future__ import annotations
 
-import hashlib
-import http.client
-import socket
-import urllib.parse
 from typing import Any
 
-from seed.client import Client, Context, SeedFailure, expect, idempotency_key, if_match
+from seed.client import (
+    Client,
+    Context,
+    SeedFailure,
+    expect,
+    if_match,
+    upload_object,
+)
 
 GROUP = "modelops"
 
@@ -87,185 +90,6 @@ def _act(
     )
     assert isinstance(payload, dict)
     return payload
-
-
-def _connect(url: str) -> tuple[http.client.HTTPConnection, str, str]:
-    """把预签名 URL 拆成「可连接的地址 + 保留原 Host 头 + 请求路径」。
-
-    预签名地址里的主机名是容器网络内的服务名（``minio``），宿主机解析不了；
-    但 SigV4 把 Host 算进了签名，不能直接换域名。这里保持 Host 不变、只把 TCP
-    连接指向本机，等价于 ``curl --resolve``。
-    """
-    parts = urllib.parse.urlsplit(url)
-    authority = parts.netloc
-    host = parts.hostname or ""
-    port = parts.port or (443 if parts.scheme == "https" else 80)
-    try:
-        socket.getaddrinfo(host, port)
-        target = host
-    except socket.gaierror:
-        target = "127.0.0.1"
-    path = parts.path + (f"?{parts.query}" if parts.query else "")
-    factory = http.client.HTTPSConnection if parts.scheme == "https" else http.client.HTTPConnection
-    return factory(target, port, timeout=120), authority, path
-
-
-def _put_object(url: str, headers: dict[str, str], data: bytes, label: str) -> str:
-    conn, authority, path = _connect(url)
-    try:
-        conn.request("PUT", path, body=data, headers={**headers, "Host": authority})
-        response = conn.getresponse()
-        response.read()
-        if response.status != 200:
-            raise SeedFailure(f"{label}：上传字节失败，状态 {response.status}")
-        etag = response.getheader("ETag")
-    finally:
-        conn.close()
-    if not etag:
-        raise SeedFailure(f"{label}：对象存储未返回 ETag")
-    return etag.strip('"')
-
-
-def _storage_quota_configured(client: Client, base: str) -> bool:
-    """项目是否配置了对象存储配额（决定上传 422 的归因，不是猜测）。"""
-    quotas = _read(client, f"{base}/quotas", "读取资源配额")
-    return any(
-        str(item.get("resource_kind")) == "OBJECT_STORAGE_BYTES"
-        for item in (quotas.get("items") or [])
-    )
-
-
-def _existing_object(client: Client, base: str) -> dict[str, Any] | None:
-    """取项目内已存在的 RawAsset，作为产物对象的降级来源（取最小的一个）。"""
-    assets = _read(client, f"{base}/raw-assets?limit=100", "读取已有原始资产")
-    candidates = [
-        item
-        for item in (assets.get("items") or [])
-        if int(item.get("size_bytes") or 0) > 0 and item.get("object_key")
-    ]
-    if not candidates:
-        return None
-    item = min(candidates, key=lambda entry: int(entry["size_bytes"]))
-    return {
-        "object_key": str(item["object_key"]),
-        "sha256": str(item["sha256"]),
-        "size_bytes": int(item["size_bytes"]),
-        "raw_asset_id": str(item["asset_id"]),
-    }
-
-
-def _upload(
-    client: Client,
-    ctx: Context,
-    *,
-    filename: str,
-    content: bytes,
-    content_type: str,
-    format_hint: str,
-    label: str,
-) -> dict[str, Any]:
-    """走真实上传会话把字节写进对象存储，返回会话与 RawAsset。
-
-    已知缺陷（backend/app/infrastructure/repositories/governance.py:311-317、
-    backend/app/domain/governance/models.py:120-128）：
-    ``coalesce(sum(raw_assets.size_bytes), 0)`` 在 Postgres 里是 numeric，被
-    ``ResourceUsage`` 判成非整数，于是**只要项目配了 OBJECT_STORAGE_BYTES 配额，
-    所有上传都会 422**。这里显式识别该场景，打印 DEGRADED 并复用项目内已有对象；
-    没有可用对象就如实失败，不伪造 object_key。
-    """
-    base = f"/api/v1/projects/{ctx.project_id}"
-    digest = "sha256:" + hashlib.sha256(content).hexdigest()
-    status, session = client.call(
-        "POST",
-        f"{base}/upload-sessions",
-        body={
-            "original_filename": filename,
-            "declared_content_type": content_type,
-            "declared_size_bytes": len(content),
-            "expected_sha256": digest,
-            "format_hint": format_hint,
-        },
-        headers={"Idempotency-Key": idempotency_key()},
-    )
-    if status != 201:
-        if status == 422 and _storage_quota_configured(client, base):
-            fallback = _existing_object(client, base)
-            if fallback is None:
-                raise SeedFailure(
-                    f"{label}：对象存储配额导致上传 422，且项目内没有可复用的 RawAsset"
-                )
-            print(
-                f"  ! DEGRADED {label}：治理配额缺陷使上传不可用，"
-                f"复用项目内已有对象 {fallback['object_key']}"
-            )
-            return fallback
-        expect(f"{label}创建上传会话", (status, session), 201)
-    assert isinstance(session, dict)
-    session_id = str(session["upload_session_id"])
-    part_path = f"{base}/upload-sessions/{session_id}/parts/1"
-    part = expect(
-        f"{label}申请分片地址",
-        client.call("POST", f"{part_path}/url", body={"sha256": digest}),
-        200,
-    )
-    assert isinstance(part, dict)
-    etag = _put_object(part["url"], dict(part.get("headers") or {}), content, label)
-    expect(
-        f"{label}登记分片",
-        client.call(
-            "POST",
-            f"{part_path}/ack",
-            body={"etag": etag, "size_bytes": len(content), "sha256": digest},
-        ),
-        200,
-    )
-    # 分片登记会推进会话版本；完成前必须读一次拿最新 If-Match。
-    current = _read(client, f"{base}/upload-sessions/{session_id}", f"{label}读取上传会话")
-    completed = expect(
-        f"{label}完成上传",
-        client.call(
-            "POST",
-            f"{base}/upload-sessions/{session_id}/complete",
-            body={
-                "expected_sha256": digest,
-                "expected_size_bytes": len(content),
-                "parts": [
-                    {
-                        "part_number": 1,
-                        "etag": etag,
-                        "size_bytes": len(content),
-                        "sha256": digest,
-                    }
-                ],
-                "metadata": {"seed_stamp": ctx.stamp},
-            },
-            headers={
-                "If-Match": if_match(int(current["version"]))["If-Match"],
-                "Idempotency-Key": idempotency_key(),
-            },
-        ),
-        202,
-    )
-    assert isinstance(completed, dict)
-    stored = completed["upload_session"]
-    raw_asset = completed.get("raw_asset") or {}
-    if raw_asset.get("object_key"):
-        # 去重命中时（同 sha256 已存在），平台会删掉本次会话的对象并复用既有
-        # RawAsset。此时会话里的 object_key 指向一个**已被清理的副本**，拿它去
-        # 建模型版本，validate 读对象必然 422 `model_artifact_invalid`。
-        # 权威地址只有一个：RawAsset 上的 object_key / sha256 / size_bytes。
-        return {
-            "object_key": str(raw_asset["object_key"]),
-            "sha256": str(raw_asset["sha256"]),
-            "size_bytes": int(raw_asset["size_bytes"]),
-            "raw_asset_id": str(raw_asset["asset_id"]),
-        }
-    return {
-        "object_key": stored["object_key"],
-        "sha256": digest,
-        "size_bytes": len(content),
-        "raw_asset_id": None,
-    }
 
 
 def _blocked(label: str, reason: str) -> None:
@@ -370,9 +194,9 @@ def run(ctx: Context, client: Client) -> None:
 
     # --- 模型版本 ---
     # 产物必须先真实存在：validate 会读取对象并核对 size/sha256。
-    artifact = _upload(
-        ctx=ctx,
-        client=client,
+    artifact = upload_object(
+        client,
+        ctx,
         filename=f"act-policy-{stamp}.bin",
         content=_ARTIFACT_BYTES,
         content_type=_ARTIFACT_CONTENT_TYPE,

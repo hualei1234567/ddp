@@ -300,7 +300,7 @@ CompleteUploadRequest:
     metadata: {type: object, additionalProperties: true}
 RawAsset:
   type: object
-  required: [asset_id, project_id, code, source_type, collection_task_id, batch_id, upload_session_id, original_filename, object_key, size_bytes, content_type, format, sha256, status, captured_at, ingested_at, device_ids, sensor_ids, sensor_snapshot, device_time_raw, raw_metadata, storage_class, retention_policy_id, quarantine_reason, quarantine_codes, scan_report_key, verified_at, archived_at, tombstoned_at, duplicate_of_asset_id, uploaded_by, version, created_at, updated_at, created_by, updated_by]
+  required: [asset_id, project_id, code, source_type, collection_task_id, batch_id, upload_session_id, original_filename, object_key, size_bytes, content_type, format, sha256, status, captured_at, ingested_at, device_ids, sensor_ids, sensor_snapshot, device_time_raw, raw_metadata, storage_class, retention_policy_id, quarantine_reason, quarantine_codes, scan_report_key, verified_at, archived_at, tombstoned_at, duplicate_of_asset_id, uploaded_by, version, created_at, updated_at, created_by, updated_by, allowed_actions]
   additionalProperties: false
   properties:
     asset_id: {type: string, format: uuid}
@@ -339,6 +339,17 @@ RawAsset:
     updated_at: {type: [string, "null"], format: date-time}
     created_by: {type: [string, "null"], format: uuid}
     updated_by: {type: [string, "null"], format: uuid}
+    # 服务端按状态下发的动作集合；前端只渲染这里的按钮。
+    allowed_actions: {type: array, items: {type: string}, uniqueItems: true}
+RawAssetActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 1000}
+    quarantine_codes:
+      type: [array, "null"]
+      items: {type: string}
+      uniqueItems: true
 RawAssetPage:
   type: object
   required: [items, next_cursor]

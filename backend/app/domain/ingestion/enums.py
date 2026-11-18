@@ -114,6 +114,25 @@ class RawAssetLinkStatus(StrEnum):
     REVOKED = "REVOKED"
 
 
+class RawAssetAction(StrEnum):
+    """原始资产的公开状态动作。
+
+    这些动作在领域状态机里早就有边，但此前**没有任何 HTTP 入口**：被隔离的
+    资产无法放行或驳回，资产也无法归档或墓碑，界面只能展示"隔离原因""墓碑
+    时间"这些用户永远造不出来的状态。这里把它们收敛成唯一对外集合，
+    系统内部动作（``validate-*`` / ``system-fail``）不在此列。
+    """
+
+    RELEASE_QUARANTINE = "release-quarantine-or-revalidate"
+    REJECT_QUARANTINED = "reject-quarantined"
+    POST_HOC_QUARANTINE = "post-hoc-quarantine"
+    ARCHIVE = "archive"
+    TOMBSTONE = "tombstone"
+
+
+PUBLIC_RAW_ASSET_ACTIONS: frozenset[str] = frozenset(action.value for action in RawAssetAction)
+
+
 class UploadSessionAction(StrEnum):
     BEGIN_UPLOAD = "begin-upload"
     COMPLETE = "complete"

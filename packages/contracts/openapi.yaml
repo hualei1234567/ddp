@@ -359,6 +359,8 @@ paths:
     $ref: "./fragments/paths.stage2.yaml#/rawAssets"
   /api/v1/projects/{project_id}/raw-assets/{asset_id}:
     $ref: "./fragments/paths.stage2.yaml#/rawAssetDetail"
+  /api/v1/projects/{project_id}/raw-assets/{asset_id}/actions/{action}:
+    $ref: "./fragments/paths.stage2.yaml#/rawAssetActions"
   /api/v1/raw-assets/{asset_id}/lineage:
     $ref: "./fragments/paths.stage2.yaml#/rawAssetLineage"
   /api/v1/raw-assets/{asset_id}/download-url:
@@ -898,6 +900,7 @@ components:
     CompleteUploadResponse: {$ref: "./fragments/schemas.stage2.yaml#/CompleteUploadResponse"}
     AbortUploadRequest: {$ref: "./fragments/schemas.stage2.yaml#/AbortUploadRequest"}
     RawAsset: {$ref: "./fragments/schemas.stage2.yaml#/RawAsset"}
+    RawAssetActionRequest: {$ref: "./fragments/schemas.stage2.yaml#/RawAssetActionRequest"}
     RawAssetPage: {$ref: "./fragments/schemas.stage2.yaml#/RawAssetPage"}
     DownloadUrlResponse: {$ref: "./fragments/schemas.stage2.yaml#/DownloadUrlResponse"}
     LineageNodeType: {$ref: "./fragments/schemas.stage2.yaml#/LineageNodeType"}

@@ -131,6 +131,7 @@ export const rawAssetFixture: RawAsset = {
   updated_at: "2026-11-08T03:05:00Z",
   created_by: USER_ID,
   updated_by: USER_ID,
+  allowed_actions: ["tombstone"],
 };
 
 export const uploadSessionFixture: UploadSession = {

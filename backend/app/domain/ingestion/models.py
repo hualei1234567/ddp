@@ -12,6 +12,8 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.domain.ingestion.enums import (
+    PUBLIC_RAW_ASSET_ACTIONS,
+    RawAssetAction,
     RawAssetFormat,
     RawAssetLinkStatus,
     RawAssetLinkType,
@@ -29,6 +31,7 @@ from app.domain.ingestion.errors import (
     UploadSessionExpiredError,
 )
 from app.domain.ingestion.state_machines import (
+    allowed_raw_asset_actions,
     assert_upload_session_action,
     raw_asset_target_status,
 )
@@ -487,6 +490,95 @@ class RawAsset:
         )
         self.assert_content_immutable(updated)
         return updated
+
+    @property
+    def allowed_actions(self) -> frozenset[str]:
+        """当前状态对外可点的动作；系统内部动作不在其中。"""
+        return allowed_raw_asset_actions(self.status)
+
+    def apply_action(
+        self,
+        action: str,
+        payload: Mapping[str, object] | None,
+        *,
+        now: datetime,
+    ) -> RawAsset:
+        """执行一个公开状态动作。
+
+        每个动作的语义都写在这里，是为了让"隔离放行"与"驳回隔离"这类容易
+        混淆的路径只有一处权威实现：
+
+        - ``release-quarantine-or-revalidate``：回到 VALIDATING 重新校验，
+          清空上一轮隔离结论（否则校验 worker 会读到旧结论）；
+        - ``reject-quarantined``：隔离资产判死，原因必填；
+        - ``post-hoc-quarantine``：事后发现内容有问题，原因与稳定码必填；
+        - ``archive``：正常生命周期终点，内容仍可下载；
+        - ``tombstone``：只保留元数据与血缘，下载被拒；原因必填。
+        """
+        if action not in PUBLIC_RAW_ASSET_ACTIONS:
+            raise DomainValidationError("未知原始资产动作")
+        target = raw_asset_target_status(self.status, action)
+        body = dict(payload or {})
+        reason = _action_reason(body)
+
+        if action == RawAssetAction.RELEASE_QUARANTINE.value:
+            updated = replace(
+                self,
+                status=target,
+                quarantine_reason=None,
+                quarantine_codes=(),
+                verified_at=None,
+                updated_at=now,
+            )
+        elif action == RawAssetAction.REJECT_QUARANTINED.value:
+            if reason is None:
+                raise DomainValidationError("驳回隔离资产必须填写原因")
+            updated = replace(
+                self,
+                status=target,
+                quarantine_reason=reason,
+                verified_at=None,
+                updated_at=now,
+            )
+        elif action == RawAssetAction.POST_HOC_QUARANTINE.value:
+            if reason is None:
+                raise DomainValidationError("事后隔离必须填写原因")
+            codes = body.get("quarantine_codes")
+            if not isinstance(codes, list | tuple) or not codes:
+                raise DomainValidationError("事后隔离必须给出至少一个隔离码")
+            updated = replace(
+                self,
+                status=target,
+                quarantine_codes=_quarantine_codes(codes),
+                quarantine_reason=reason,
+                updated_at=now,
+            )
+        elif action == RawAssetAction.ARCHIVE.value:
+            updated = replace(self, status=target, archived_at=now, updated_at=now)
+        else:  # tombstone
+            if reason is None:
+                raise DomainValidationError("墓碑必须填写原因")
+            updated = replace(
+                self,
+                status=target,
+                quarantine_reason=reason,
+                tombstoned_at=now,
+                updated_at=now,
+            )
+        self.assert_content_immutable(updated)
+        return updated
+
+
+def _action_reason(payload: Mapping[str, object]) -> str | None:
+    raw = payload.get("reason")
+    if raw is None:
+        return None
+    if not isinstance(raw, str) or not raw.strip():
+        raise DomainValidationError("reason 必须是非空字符串")
+    cleaned = raw.strip()
+    if len(cleaned) > 1000:
+        raise DomainValidationError("reason 长度不得超过 1000")
+    return cleaned
 
 
 @dataclass(frozen=True, slots=True)

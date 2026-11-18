@@ -45,9 +45,9 @@
 
 走不到的状态
 ------------
-- 分配 ``EXPIRED``：只由 Worker 入口 ``expire_due()`` 推进
-  （``backend/app/application/annotation/assignments.py:318``），HTTP 没有系统
-  触发点；本脚本不伪造系统身份。
+- 分配 ``EXPIRED``：由领域巡检 worker ``app.workers.domain_sweeps`` 按租约
+  推进（随 compose 常开），本脚本不伪造系统身份；真实链路由
+  ``tests/api/test_domain_sweeps.py`` 与全链路脚本按到期租约验证。
 - IAA 的 ``QUEUED/RUNNING/FAILED`` 执行态：用例在一次同步调用内落终态
   （``backend/app/application/annotation/iaa.py:141-176``），客户端看不到中间态。
 - 提交侧的 ``system-review-start / approve / reject / escalate / resolve-* /
@@ -57,10 +57,9 @@
 - 批次的 ``escalate / resolve-accepted / resolve-rejected``：业务上没有"批次级
   升级"入口，升级只在任务维度发生（本脚本覆盖任务级 ARBITRATION /
   resolve-accepted）。
-- 已取消批次会让任务再也无法 ``submit``：数据库守卫把 ``CANCELLED`` 当成
-  "未进入验收的批次"（``annotation_work_guards.py:111-121``），而应用层把
-  ``CANCELLED`` 当终态（``repositories/annotation_batches.py:28``），删除批次又被
-  触发器禁止。本脚本因此把"取消批次"放在不再提交验收的任务上。
+- （已修复）取消批次曾会锁死任务提交：数据库守卫把 ``CANCELLED`` 当成
+  "未进入验收的批次"。现已在守卫的 SUBMITTED 分支排除 ``CANCELLED``，
+  与应用层口径一致；回归用例 ``test_submit_task_with_cancelled_batch_is_allowed``。
 
 前置数据
 --------

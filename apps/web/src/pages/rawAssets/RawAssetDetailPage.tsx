@@ -8,11 +8,12 @@ import {
   Tag,
   Typography,
 } from "antd";
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import DownloadButton from "../../components/rawAssets/DownloadButton";
+import RawAssetActionBar from "../../components/rawAssets/RawAssetActionBar";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
 import PageContainer from "../../components/ui/PageContainer";
@@ -29,7 +30,12 @@ import { formatBytes } from "../../services/uploadQueue";
 import { formatDateTime, formatTimestamp } from "../../services/format";
 import { resolvePagePhase } from "../../services/pagePhase";
 import { rawAssetsApi } from "../../services/rawAssets";
-import type { RawAsset } from "../../types/collection";
+import {
+  RAW_ASSET_ACTION_VALUES,
+  type RawAsset,
+  type RawAssetAction,
+} from "../../types/collection";
+import type { RawAssetActionPayload } from "../../components/rawAssets/RawAssetActionBar";
 
 function statusAlert(asset: RawAsset): ReactNode {
   switch (asset.status) {
@@ -66,7 +72,7 @@ function statusAlert(asset: RawAsset): ReactNode {
           variant="partial"
           compact
           title="资产已墓碑化"
-          description={`墓碑时间：${formatDateTime(asset.tombstoned_at)}；只保留元数据与血缘，下载被拒绝。`}
+          description={`墓碑时间：${formatDateTime(asset.tombstoned_at)}；原因：${asset.quarantine_reason ?? "服务端未返回原因"}。只保留元数据与血缘，下载被拒绝。`}
         />
       );
     default:
@@ -78,10 +84,14 @@ function RawAssetDetailBody({
   projectId,
   asset,
   online,
+  onAction,
+  busyAction,
 }: {
   projectId: string;
   asset: RawAsset;
   online: boolean;
+  onAction: (action: string, payload: RawAssetActionPayload) => Promise<void>;
+  busyAction: string | null;
 }) {
   return (
     <Space direction="vertical" size={16} className="ddp-stack">
@@ -108,6 +118,15 @@ function RawAssetDetailBody({
           assetId={asset.asset_id}
           status={asset.status}
           online={online}
+        />
+      </Card>
+      <Card title="状态操作">
+        {/* 始终渲染：终态资产也明确告诉用户"没有可执行动作"，
+            而不是整块消失、让人以为页面出了问题。 */}
+        <RawAssetActionBar
+          actions={asset.allowed_actions}
+          busyAction={busyAction}
+          onAction={onAction}
         />
       </Card>
       <Card>
@@ -233,7 +252,8 @@ function RawAssetDetailBody({
             },
             {
               key: "quarantine",
-              label: "隔离原因",
+              // 同一列承载"最近一次终止原因"：隔离、驳回与墓碑都写在这里。
+              label: "隔离 / 终态原因",
               children: asset.quarantine_reason ?? "—",
             },
             {
@@ -268,6 +288,29 @@ function RawAssetDetailContent({
   );
   const { data, error, loading, refreshing, stale, updatedAt, reload } =
     useRequest(load);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const runAction = useCallback(
+    async (action: string, payload: RawAssetActionPayload) => {
+      if (!data) {
+        return;
+      }
+      if (!(RAW_ASSET_ACTION_VALUES as readonly string[]).includes(action)) {
+        throw new Error(`未知动作：${action}`);
+      }
+      setBusyAction(action);
+      try {
+        await rawAssetsApi.applyAction(projectId, assetId, action as RawAssetAction, {
+          version: data.version,
+          reason: payload.reason,
+          quarantineCodes: payload.quarantineCodes,
+        });
+        reload();
+      } finally {
+        setBusyAction(null);
+      }
+    },
+    [assetId, data, projectId, reload],
+  );
   const phase = resolvePagePhase({
     hasData: data !== null,
     loading,
@@ -331,6 +374,8 @@ function RawAssetDetailContent({
           projectId={projectId}
           asset={data}
           online={online}
+          onAction={runAction}
+          busyAction={busyAction}
         />
       </Space>
     );
