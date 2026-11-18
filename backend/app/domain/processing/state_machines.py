@@ -40,9 +40,11 @@ _RUN_RULES: _Rules = MappingProxyType(
             ProcessingRunAction.CANCEL.value: ProcessingRunStatus.CANCELLED.value,
         },
         ProcessingRunStatus.FAILED.value: {
+            # 只允许 Worker 重试。**不给客户端 cancel**：CANCELLED 不允许携带
+            # error_*（DB CHECK），从 FAILED 取消会把失败原因永久抹掉，
+            # 与契约「FAILED 不是终态、必须能解释为什么失败」冲突。
+            # 失败运行的终态收口（保留 error 的 system-close）属 N4-002。
             ProcessingRunAction.WORKER_RETRY.value: ProcessingRunStatus.RETRYING.value,
-            # 失败后不重试也要能显式收口，否则 FAILED 永远是非终态。
-            ProcessingRunAction.CANCEL.value: ProcessingRunStatus.CANCELLED.value,
         },
         ProcessingRunStatus.RETRYING.value: {
             ProcessingRunAction.WORKER_CLAIM.value: ProcessingRunStatus.RUNNING.value,

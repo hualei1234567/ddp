@@ -69,7 +69,13 @@ info:
       确定方式，两者都缺失时返回 422，**绝不默认 REMOTE**；存量引用回填
       UNKNOWN（迁移 0054），不冒充真实训练。该字段为新增响应字段，客户端升级后
       必须按值区分真实/模拟执行。
-    - `1.11.0`（本版包含两项独立增量）**新增导入中心可观测性**：
+    - `1.11.0`（本版包含三项独立增量）**新增 Episode 检索参数**：
+      `GET /projects/{project_id}/episodes` 补齐已实现但此前未声明的可选
+      query 参数（status / task_id / batch_id / quality_status /
+      annotation_status / scene_label / device_id / robot_id / camera /
+      captured_from / captured_to），其中 `camera` 为新增能力。全部可选、
+      向后兼容，未收窄既有行为。
+    - `1.11.0` **新增导入中心可观测性**：
       `DataSourceImport` 增加 `stage` / `processed_items` / `total_items`
       （均可空，`null` 明确表示"未测量"，迁移 0055 前的存量不回填 0），并新增
       只读端点 `GET .../data-source-imports/{import_id}/logs` 返回结构化步骤日志

@@ -79,11 +79,6 @@ _ALLOWED_EDGES: frozenset[tuple[str, str, str]] = frozenset(
             ProcessingRunStatus.RETRYING.value,
         ),
         (
-            ProcessingRunStatus.FAILED.value,
-            ProcessingRunAction.CANCEL.value,
-            ProcessingRunStatus.CANCELLED.value,
-        ),
-        (
             ProcessingRunStatus.RETRYING.value,
             ProcessingRunAction.WORKER_CLAIM.value,
             ProcessingRunStatus.RUNNING.value,
@@ -163,7 +158,7 @@ def test_allowed_actions_never_expose_internal_actions() -> None:
         ProcessingRunStatus.CREATED.value: {"cancel"},
         ProcessingRunStatus.QUEUED.value: {"cancel"},
         ProcessingRunStatus.RUNNING.value: {"cancel"},
-        ProcessingRunStatus.FAILED.value: {"cancel"},
+        ProcessingRunStatus.FAILED.value: set(),
         ProcessingRunStatus.RETRYING.value: {"cancel"},
         ProcessingRunStatus.SUCCEEDED.value: set(),
         ProcessingRunStatus.CANCELLED.value: set(),
@@ -277,7 +272,6 @@ def test_cancel_from_each_cancellable_state() -> None:
     for run in (
         _queued(),
         _running(),
-        _failed(),
         _failed().transition(
             ProcessingRunAction.WORKER_RETRY.value,
             now=LATER,
@@ -292,6 +286,15 @@ def test_cancel_from_each_cancellable_state() -> None:
         assert cancelled.status == ProcessingRunStatus.CANCELLED.value
         assert cancelled.finished_at == LATER
         assert cancelled.error_code is None
+
+
+def test_failed_run_cannot_be_cancelled_and_keeps_error() -> None:
+    """FAILED 不允许客户端 cancel：否则 error_* 会被 CANCELLED 的 CHECK 清空。"""
+    failed = _failed()
+    assert failed.error_code is not None
+    with pytest.raises(InvalidStateTransitionError):
+        failed.transition(ProcessingRunAction.CANCEL.value, now=LATER, actor_id=ACTOR)
+    assert allowed_actions(ProcessingRunStatus.FAILED.value) == frozenset()
 
 
 def test_terminal_and_illegal_transitions_are_rejected() -> None:

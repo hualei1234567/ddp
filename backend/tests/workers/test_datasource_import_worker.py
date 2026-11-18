@@ -232,6 +232,39 @@ def test_import_worker_writes_real_stage_progress_and_step_logs(
         ), item
 
 
+def test_dead_letter_keeps_import_failed_instead_of_orphan_pending(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """事件死信时不得先把导入退回 PENDING。
+
+    导入侧 ``max_attempts``（默认 3）与事件侧 ``validation_max_attempts``
+    （可配）不同源。若后者更小，旧顺序会先 release 成 PENDING、再判死信，
+    留下没有事件、没有终态、也没有客户端重试入口的孤儿导入。
+    """
+    from app.core.config import Settings
+
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    code = f"hf-dead-{UUID(int=0).hex[:6]}"
+    _, job = register_import_chain(editor, ids.project_a, code=code)
+
+    install_object_store(monkeypatch, InMemoryObjectStore())
+    dropped = next(iter(expected_media_paths()))
+    settings = Settings(_env_file=None, env="local", validation_max_attempts=1)
+    result: dict[str, Any] = run_import_worker(
+        factory,
+        MediaTransport(drop_paths={f"preview/{dropped}"}),
+        now=datetime.now(UTC) + timedelta(seconds=1),
+        settings=settings,
+    )
+
+    assert result["status"] == "DEAD_LETTER", result
+    latest = editor.get(url(ids.project_a, f"/data-source-imports/{job['import_id']}")).json()
+    assert latest["status"] == "FAILED", latest
+    assert latest["error_message"], latest
+
+
 def test_import_worker_failure_logs_error_without_leaking_url(
     api_db: tuple[sessionmaker[Session], ApiIds],
     monkeypatch: pytest.MonkeyPatch,
