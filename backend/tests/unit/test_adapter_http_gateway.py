@@ -26,7 +26,10 @@ from app.infrastructure.model_platform_http import HttpModelPlatformGateway
 from app.infrastructure.training_adapter_http import HttpTrainingAdapterGateway
 from pydantic import ValidationError
 
-_TRAINING_ENDPOINT = "http://training-adapter.test:9100"
+# 训练 endpoint 用公网 IP 字面量：网关的出站 SSRF 守卫会解析主机名并拒绝
+# 环回/私网地址（见 test_adapter_url_guard.py），而 MockTransport 不联网，
+# 因此这里不能再用无法解析的假域名。IP 字面量由 getaddrinfo 本地返回，无 DNS。
+_TRAINING_ENDPOINT = "http://93.184.216.34:9100"
 _MODEL_ENDPOINT = "http://model-adapter.test:9101"
 
 
