@@ -11,9 +11,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from app.application.collection.data_check import CollectionDataCheckUseCases
 from app.infrastructure.db.models.datasources import (
     DataSourceImportModel,
@@ -51,17 +55,46 @@ def _tasks_url(project_id: object, suffix: str = "") -> str:
     return f"/api/v1/projects/{project_id}/collection-tasks{suffix}"
 
 
-def _data_check_use_cases(factory: sessionmaker[Session]) -> CollectionDataCheckUseCases:
-    session = factory()
-    return CollectionDataCheckUseCases(
-        SqlCollectionTaskRepository(session),
-        SqlDataSourceImportRepository(session),
-        SqlMediaAssetRepository(session),
-        SqlProjectMemberRepository(session),
-        SqlCollectionAuditRepository(session),
-        SqlCollectionOutboxRepository(session),
-        session,
-    )
+@pytest.fixture()
+def loop_clients(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> Iterator[tuple[sessionmaker[Session], ApiIds, Any, Any]]:
+    """受管客户端：测试结束显式关闭。
+
+    ``TestClient`` 内部持有 anyio 流；不关闭时会在 GC 期抛
+    ``PytestUnraisableExceptionWarning``（被 ``filterwarnings=error`` 判成失败）。
+    CI 上已经因此红过一次，这里显式收尾。
+    """
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a, object_storage=FakeMultipartStorage())
+    owner = make_client(factory, ids.owner_a)
+    try:
+        yield factory, ids, editor, owner
+    finally:
+        editor.close()
+        owner.close()
+
+
+@contextmanager
+def _data_check_session(
+    factory: sessionmaker[Session],
+) -> Iterator[CollectionDataCheckUseCases]:
+    """在受管会话里运行数据检查。
+
+    直接 ``factory()`` 后手动 ``_uow.close()`` 依赖私有属性，且会话/连接
+    泄漏会在 CI 上表现为 ``PytestUnraisableExceptionWarning``（被
+    ``filterwarnings=error`` 判成失败）。这里用上下文管理器保证一定关闭。
+    """
+    with factory() as session:
+        yield CollectionDataCheckUseCases(
+            SqlCollectionTaskRepository(session),
+            SqlDataSourceImportRepository(session),
+            SqlMediaAssetRepository(session),
+            SqlProjectMemberRepository(session),
+            SqlCollectionAuditRepository(session),
+            SqlCollectionOutboxRepository(session),
+            session,
+        )
 
 
 def _seed_import_with_asset(
@@ -219,11 +252,9 @@ def _drive_to_submitted(
 
 
 def test_collection_task_data_check_advances_to_data_checking(
-    api_db: tuple[sessionmaker[Session], ApiIds],
+    loop_clients: tuple[sessionmaker[Session], ApiIds, Any, Any],
 ) -> None:
-    factory, ids = api_db
-    client = make_client(factory, ids.editor_a)
-    owner_client = make_client(factory, ids.owner_a)
+    factory, ids, client, owner_client = loop_clients
     task = _create_task(client, ids.project_a, code="loop-task", target=1)
     task_id = UUID(task["task_id"])
     _seed_import_with_asset(factory, ids.project_a, task_id, ids.editor_a)
@@ -231,11 +262,8 @@ def test_collection_task_data_check_advances_to_data_checking(
     submitted = _drive_to_submitted(client, ids, owner_client, task, assignee=ids.editor_a)
     assert submitted["status"] == "SUBMITTED"
 
-    use_cases = _data_check_use_cases(factory)
-    try:
+    with _data_check_session(factory) as use_cases:
         outcomes = use_cases.run_once(limit=10, now=NOW)
-    finally:
-        use_cases._uow.close()  # type: ignore[attr-defined]
 
     assert [item.task_id for item in outcomes] == [task_id]
     assert outcomes[0].passed, outcomes[0].failed_rules
@@ -249,25 +277,20 @@ def test_collection_task_data_check_advances_to_data_checking(
     assert summary["passed"] is True
 
     # 数据检查是幂等的：状态已变，再扫一次不再处理。
-    again_use_cases = _data_check_use_cases(factory)
-    try:
+    with _data_check_session(factory) as again_use_cases:
         again = again_use_cases.run_once(limit=10, now=NOW)
-    finally:
-        again_use_cases._uow.close()  # type: ignore[attr-defined]
     assert again == []
 
 
 def test_collection_task_complete_uses_live_episode_counts(
-    api_db: tuple[sessionmaker[Session], ApiIds],
+    loop_clients: tuple[sessionmaker[Session], ApiIds, Any, Any],
 ) -> None:
     """验收数量从 Episode 事实读取，不依赖没人写过的计数器。
 
     Episode 走真实 HTTP 链路创建并推进到 ACCEPTED；随后任务的 complete
     判定必须看到 1 条已验收片段，无需 waiver。
     """
-    factory, ids = api_db
-    client = make_client(factory, ids.editor_a, object_storage=FakeMultipartStorage())
-    owner_client = make_client(factory, ids.owner_a)
+    factory, ids, client, owner_client = loop_clients
     task = _create_task(client, ids.project_a, code="loop-count", target=1)
     task_id = UUID(task["task_id"])
 
@@ -312,11 +335,8 @@ def test_collection_task_complete_uses_live_episode_counts(
     submitted = _drive_to_submitted(client, ids, owner_client, task, assignee=ids.editor_a)
     assert submitted["status"] == "SUBMITTED"
 
-    use_cases = _data_check_use_cases(factory)
-    try:
+    with _data_check_session(factory) as use_cases:
         outcomes = use_cases.run_once(limit=10, now=NOW)
-    finally:
-        use_cases._uow.close()  # type: ignore[attr-defined]
     assert [item.task_id for item in outcomes] == [task_id]
 
     current = client.get(_tasks_url(ids.project_a, f"/{task_id}")).json()
