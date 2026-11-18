@@ -1,8 +1,9 @@
 """导入可观测性：步骤日志消息脱敏（数据源域薄适配）。
 
-规则本体已上移到 :mod:`app.application.observability_redaction`（N4-002
-的处理运行阶段日志需要同一套规则，而处理运行域不应 import 数据源域）。
-本文件只保留数据源域的默认宽度，既有 ``sanitize_log_message`` 调用点不变。
+规则本体统一在 :mod:`app.core.logging`（TD-24 / N2-008）：导入与处理阶段
+日志共用同一套凭据规则，:mod:`app.application.observability_redaction` 只是
+跨域薄适配。本文件再保留数据源域的默认宽度，既有 ``sanitize_log_message``
+调用点不变。
 
 步骤日志是排障数据，会通过只读端点回给前端，因此**不得携带**密钥、预签名
 URL、绝对路径或对象存储地址。

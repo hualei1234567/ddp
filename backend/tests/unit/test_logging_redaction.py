@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import logging
 
-from app.core.logging import JsonFormatter
+import pytest
+from app.core.logging import JsonFormatter, sanitize_log_message
 
 
 def _format(
@@ -118,3 +119,67 @@ def test_ordinary_text_is_not_over_redacted() -> None:
 
     assert "alice" in payload["message"]
     assert "A-1001" in payload["message"]
+
+
+def test_single_quoted_secret_with_spaces_is_redacted() -> None:
+    """单引号包裹、含空格的凭据同样整体抹掉（与双引号规则一致）。"""
+    payload = _format("failed: %s", ("password='example pass with spaces'",))
+
+    assert "example pass with spaces" not in payload["message"]
+    assert "password='***'" in payload["message"]
+
+
+@pytest.mark.parametrize(
+    ("text", "secret"),
+    [
+        ("access_token=example-access-token", "example-access-token"),
+        ("refresh-token: example-refresh-token", "example-refresh-token"),
+        ("x-api-key: example-api-key", "example-api-key"),
+        ("client_secret='example-client-secret'", "example-client-secret"),
+        ("db_password='example db pass'", "example db pass"),
+        ("secret key: example-secret-key", "example-secret-key"),
+        ("aws_access_key_id=example-access-key-id", "example-access-key-id"),
+    ],
+)
+def test_compound_credential_key_names_are_redacted(text: str, secret: str) -> None:
+    """多段复合键名（access_token、x-api-key、client_secret 等）也要识别。"""
+    payload = _format("%s", (text,))
+
+    assert secret not in payload["message"]
+    assert "***" in payload["message"]
+
+
+def test_counter_and_business_text_are_not_over_redacted() -> None:
+    """后缀白名单只放行凭据段：``token_count`` 这类计数指标不能被误删。"""
+    payload = _format("%s", ("token_count=5 requests=10",))
+
+    assert "token_count=5" in payload["message"]
+    assert "requests=10" in payload["message"]
+
+
+@pytest.mark.parametrize(
+    ("text", "secret"),
+    [
+        ("Authorization: Bearer example-bearer-token", "example-bearer-token"),
+        ("Bearer example-bare-token", "example-bare-token"),
+        ("password='example pass with spaces'", "example pass with spaces"),
+        ('{"api_key": "example-api-key"}', "example-api-key"),
+        ("access_token=example-access-token", "example-access-token"),
+        ("client_secret: example-client-secret", "example-client-secret"),
+        ("[input_value='example-pydantic-input']", "example-pydantic-input"),
+    ],
+)
+def test_both_entry_points_share_the_same_redaction_rules(text: str, secret: str) -> None:
+    """日志格式化与对外回显文本必须用同一份规则（TD-24 收敛验证）。"""
+    log_message = _format("%s", (text,))["message"]
+    external_message = sanitize_log_message(text)
+
+    assert secret not in log_message
+    assert secret not in external_message
+
+
+def test_external_text_keeps_existing_markers() -> None:
+    """对外回显沿用既有中文占位符，不因收敛改变前端可见输出形态。"""
+    assert "[已脱敏凭据]" in sanitize_log_message("token=example-value")
+    assert "[已脱敏地址]" in sanitize_log_message("见 https://example.invalid/a")
+    assert "[已脱敏路径]" in sanitize_log_message("读取 /Users/example/data 失败")
