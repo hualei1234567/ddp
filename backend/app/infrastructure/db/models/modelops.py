@@ -153,6 +153,11 @@ class EvaluationRow(Base):
     thresholds: Mapped[dict] = mapped_column(_JSON_TYPE, nullable=False)
     verdict: Mapped[str] = mapped_column(String(16), nullable=False)
     report_ref: Mapped[dict | None] = mapped_column(_JSON_TYPE, nullable=True)
+    # 结构化失败明细（迁移 0061）。空数组表示"本次评测没有报告任何失败用例"，
+    # 不是"没有测量"；不存 NULL，避免读取方在 NULL 与 [] 之间做两套判断。
+    failure_cases: Mapped[list] = mapped_column(
+        _JSON_TYPE, nullable=False, default=list, server_default=text("'[]'")
+    )
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     error_summary: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

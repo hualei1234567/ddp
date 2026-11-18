@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import json
 from datetime import UTC, datetime
 from uuid import uuid4
@@ -14,32 +12,13 @@ from tests.api.conftest import ApiIds
 from tests.api.dataset_support import url
 from tests.api.export_support import build_frozen_version
 from tests.api.modelops_support import SECRET, SHA, FakeInspector
+from tests.api.modelops_support import callback as _callback
 from tests.api.modelops_support import client as _client
 from tests.api.modelops_support import create_model as _create_model
 from tests.api.modelops_support import feedback_with_dimension as _feedback_with_dimension
 from tests.api.modelops_support import model_payload as _model_payload
 from tests.api.modelops_support import ready_version as _ready_version
 from tests.api.modelops_support import version_payload as _version_payload
-
-
-def _signed_headers(body: bytes, *, nonce: str, timestamp: int | None = None) -> dict[str, str]:
-    ts = timestamp or int(datetime.now(UTC).timestamp())
-    digest = hmac.new(SECRET.encode(), f"{ts}.{nonce}.".encode() + body, hashlib.sha256).hexdigest()
-    return {
-        "X-DDP-Signature": f"sha256={digest}",
-        "X-DDP-Timestamp": str(ts),
-        "X-DDP-Nonce": nonce,
-        "Content-Type": "application/json",
-    }
-
-
-def _callback(client, payload: dict[str, object], *, nonce: str | None = None):
-    body = json.dumps(payload, separators=(",", ":")).encode()
-    return client.post(
-        "/api/v1/integrations/model-adapters/mock/callbacks",
-        content=body,
-        headers=_signed_headers(body, nonce=nonce or f"nonce-{uuid4().hex[:8]}"),
-    )
 
 
 def test_model_version_publish_and_isolation(api_db) -> None:

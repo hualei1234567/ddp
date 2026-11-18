@@ -77,6 +77,14 @@ const SEVERITY: Record<string, StatusPresentation> = {
   MINOR: { label: "轻微", color: "default" },
 };
 
+const FAILURE_CATEGORY: Record<string, string> = {
+  PERCEPTION: "感知",
+  PLANNING: "规划",
+  CONTROL: "控制",
+  LANGUAGE: "语言",
+  OTHER: "其他",
+};
+
 const ISSUE_TYPE: Record<string, string> = {
   ACTION_COVERAGE: "动作覆盖不足",
   SCENE_COVERAGE: "场景覆盖不足",
@@ -145,6 +153,10 @@ export const presentPriority = (value: string) => lookup(PRIORITY, value);
 
 export function presentTaskType(value: string): string {
   return MODEL_TASK_TYPE[value] ?? value;
+}
+
+export function presentFailureCategory(value: string): string {
+  return FAILURE_CATEGORY[value] ?? value;
 }
 
 export function presentIssueType(value: string): string {

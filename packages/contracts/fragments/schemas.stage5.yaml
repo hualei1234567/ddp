@@ -37,6 +37,71 @@ EvaluationVerdict:
   - PASS
   - FAIL
   - UNKNOWN
+FailureCaseCategory:
+  type: string
+  enum:
+  - PERCEPTION
+  - PLANNING
+  - CONTROL
+  - LANGUAGE
+  - OTHER
+FailureCase:
+  type: object
+  required:
+  - id
+  - category
+  - severity
+  additionalProperties: false
+  properties:
+    id:
+      type: string
+      minLength: 1
+      maxLength: 64
+    category:
+      $ref: ../openapi.yaml#/components/schemas/FailureCaseCategory
+    severity:
+      $ref: ../openapi.yaml#/components/schemas/FeedbackSeverity
+    episode_key:
+      type:
+      - string
+      - 'null'
+      maxLength: 200
+      description: 适配器侧 Episode 标识；可与 `episode_id` 同时提供，指标级失败也可都不提供。
+    episode_id:
+      type:
+      - string
+      - 'null'
+      format: uuid
+      description: DDP Episode ID。平台只记录，不回查；是否存在由写入方负责。
+    evidence:
+      type:
+      - object
+      - string
+      - 'null'
+      additionalProperties: true
+      description: 有界证据：对象序列化后不超过 4 KiB，字符串不超过 2000 字符且不超过 4 KiB。
+    metric:
+      type:
+      - string
+      - 'null'
+      maxLength: 100
+    observed:
+      type:
+      - number
+      - string
+      - 'null'
+      description: 实测值；分类结果可用短字符串（不超过 200 字符）。
+    expected:
+      type:
+      - number
+      - string
+      - 'null'
+    suggested_gap:
+      type:
+      - string
+      - 'null'
+      maxLength: 200
+      description: 可选线索（如场景/物体名），供 N7-004 聚合；不是平台权威的缺口定义。
 InferenceServiceStatus:
   type: string
   enum:
@@ -589,6 +654,14 @@ Evaluation:
       - object
       - 'null'
       additionalProperties: true
+    failure_cases:
+      type: array
+      maxItems: 200
+      items:
+        $ref: ../openapi.yaml#/components/schemas/FailureCase
+      description: |
+        结构化失败明细。写入时最多 200 条且序列化后不超过 64 KiB；读取随评测
+        整体返回（上限即分页）。空数组表示适配器未报告失败用例，不是"零失败"。
     error_code:
       type:
       - string
@@ -1315,6 +1388,14 @@ ModelAdapterCallback:
       - object
       - 'null'
       additionalProperties: true
+    failure_cases:
+      type: array
+      maxItems: 200
+      items:
+        $ref: ../openapi.yaml#/components/schemas/FailureCase
+      description: |
+        结构化失败明细。类别/严重度走枚举；超过 200 条或序列化后超过 64 KiB
+        按既有 `validation_failed`（422）拒绝，非法类别在请求体校验阶段拒绝。
     result_ref:
       type:
       - object

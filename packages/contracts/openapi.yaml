@@ -1132,6 +1132,8 @@ components:
     ModelVersionStatus: {$ref: "./fragments/schemas.stage5.yaml#/ModelVersionStatus"}
     EvaluationStatus: {$ref: "./fragments/schemas.stage5.yaml#/EvaluationStatus"}
     EvaluationVerdict: {$ref: "./fragments/schemas.stage5.yaml#/EvaluationVerdict"}
+    FailureCaseCategory: {$ref: "./fragments/schemas.stage5.yaml#/FailureCaseCategory"}
+    FailureCase: {$ref: "./fragments/schemas.stage5.yaml#/FailureCase"}
     InferenceServiceStatus: {$ref: "./fragments/schemas.stage5.yaml#/InferenceServiceStatus"}
     InferenceServiceEnvironment: {$ref: "./fragments/schemas.stage5.yaml#/InferenceServiceEnvironment"}
     InferenceTaskStatus: {$ref: "./fragments/schemas.stage5.yaml#/InferenceTaskStatus"}

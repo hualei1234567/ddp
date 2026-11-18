@@ -14,18 +14,45 @@ import { useRequest } from "../../hooks/useRequest";
 import { modelOpsApi } from "../../services/modelops";
 import {
   presentEvaluationStatus,
+  presentFailureCategory,
+  presentSeverity,
   presentVerdict,
 } from "../../services/modelopsPresentation";
 import { readThresholdNumber } from "../../services/modelopsParsers";
 import { evaluationListPath } from "../../services/modelopsUrl";
 import { formatDateTime, formatIdentifier } from "../../services/format";
 import { resolvePagePhase } from "../../services/pagePhase";
-import type { Evaluation } from "../../types/modelops";
+import type { Evaluation, FailureCase } from "../../types/modelops";
 
 interface MetricRow {
   key: string;
   value: number | null;
   threshold: string;
+}
+
+function formatScalar(value: number | string | null): string {
+  return value === null ? "—" : String(value);
+}
+
+function failureEpisode(item: FailureCase): string {
+  if (item.episode_key) {
+    return item.episode_key;
+  }
+  return item.episode_id ? formatIdentifier(item.episode_id) : "—";
+}
+
+function failureMetric(item: FailureCase): string {
+  const comparison = `${formatScalar(item.observed)} → ${formatScalar(item.expected)}`;
+  return item.metric ? `${item.metric}: ${comparison}` : comparison;
+}
+
+function failureEvidence(item: FailureCase): string {
+  if (item.evidence === null) {
+    return "—";
+  }
+  return typeof item.evidence === "string"
+    ? item.evidence
+    : JSON.stringify(item.evidence);
 }
 
 function metricRows(evaluation: Evaluation): MetricRow[] {
@@ -170,6 +197,63 @@ function EvaluationDetailContent({
         <Typography.Text type="secondary">
           阈值缺失的指标不会被判定为通过；评测完成时服务端按“任一失败即 FAIL，全通过才 PASS”计算结论。
         </Typography.Text>
+        <Divider style={{ margin: "8px 0" }} />
+        <Space direction="vertical" size={4} style={{ width: "100%" }}>
+          <Typography.Title level={5} style={{ margin: 0 }}>
+            失败用例
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            失败用例由适配器回调上报，平台只记录事实；空列表表示本次未报告失败用例，不代表零失败。
+          </Typography.Text>
+        </Space>
+        <Table<FailureCase>
+          rowKey="id"
+          size="small"
+          pagination={false}
+          dataSource={evaluation.failure_cases}
+          locale={{ emptyText: "本次评测未报告失败用例。" }}
+          columns={[
+            {
+              title: "类别",
+              dataIndex: "category",
+              width: 100,
+              render: (value: string) => presentFailureCategory(value),
+            },
+            {
+              title: "严重度",
+              dataIndex: "severity",
+              width: 100,
+              render: (value: string) => (
+                <StatusTag value={value} presentation={presentSeverity} />
+              ),
+            },
+            {
+              title: "Episode",
+              key: "episode",
+              width: 220,
+              render: (_: unknown, item: FailureCase) => failureEpisode(item),
+            },
+            {
+              title: "指标 / 观测 → 期望",
+              key: "metric",
+              width: 200,
+              render: (_: unknown, item: FailureCase) => failureMetric(item),
+            },
+            {
+              title: "证据",
+              key: "evidence",
+              ellipsis: true,
+              render: (_: unknown, item: FailureCase) => failureEvidence(item),
+            },
+            {
+              title: "缺口线索",
+              dataIndex: "suggested_gap",
+              width: 160,
+              ellipsis: true,
+              render: (value: string | null) => value ?? "—",
+            },
+          ]}
+        />
         {evaluation.report_ref ? (
           <>
             <Typography.Title level={5} style={{ margin: 0 }}>

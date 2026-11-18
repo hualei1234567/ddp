@@ -38,6 +38,7 @@ from app.domain.modelops.errors import (
     VersionConflictError,
 )
 from app.domain.modelops.evaluation import compute_verdict, parse_metrics, parse_thresholds
+from app.domain.modelops.failure_cases import parse_failure_cases
 from app.domain.modelops.models import Evaluation, ModelVersion, new_evaluation
 from app.domain.modelops.state_machines import validate_action_name
 
@@ -375,6 +376,7 @@ class EvaluationUseCases:
         evaluation_id: UUID,
         metrics: dict[str, float],
         report_ref: dict[str, object] | None,
+        failure_cases: list[dict[str, object]] | None = None,
         error_code: str | None = None,
         error_summary: str | None = None,
         now: datetime | None = None,
@@ -396,6 +398,7 @@ class EvaluationUseCases:
             updated = replace(
                 evaluation,
                 status=EvaluationStatus.FAILED.value,
+                failure_cases=parse_failure_cases(failure_cases),
                 error_code=error_code,
                 error_summary=error_summary,
                 started_at=evaluation.started_at or now,
@@ -411,6 +414,7 @@ class EvaluationUseCases:
                 metrics=parsed,
                 verdict=verdict,
                 report_ref=report_ref,
+                failure_cases=parse_failure_cases(failure_cases),
                 started_at=evaluation.started_at or now,
                 finished_at=now,
                 updated_at=now,
