@@ -7,10 +7,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.domain.identity.models import ProjectScope
@@ -154,6 +155,50 @@ class SqlQualityRunRepository:
             ).limit(limit)
         )
         return [_run(row) for row in rows]
+
+    def latest_for_subjects(
+        self,
+        scope: ProjectScope,
+        *,
+        subject_type: QualitySubjectType,
+        subject_ids: Sequence[UUID],
+    ) -> tuple[QualityRun, ...]:
+        """每个对象取最新一次运行；一次查询完成，避免逐条 N+1。
+
+        排序口径与 :meth:`list` 一致：``created_at`` 倒序、``id`` 倒序。
+        项目过滤在子查询与外层查询各做一次，跨项目 ID 不会命中。
+        """
+        if not subject_ids:
+            return ()
+        ranked = (
+            select(
+                QualityRunModel.id.label("run_id"),
+                func.row_number()
+                .over(
+                    partition_by=QualityRunModel.subject_id,
+                    order_by=(
+                        QualityRunModel.created_at.desc(),
+                        QualityRunModel.id.desc(),
+                    ),
+                )
+                .label("rank"),
+            )
+            .where(
+                QualityRunModel.project_id == scope.project_id,
+                QualityRunModel.subject_type == subject_type.value,
+                QualityRunModel.subject_id.in_(list(subject_ids)),
+            )
+            .subquery()
+        )
+        rows = self._session.scalars(
+            select(QualityRunModel)
+            .join(ranked, QualityRunModel.id == ranked.c.run_id)
+            .where(
+                QualityRunModel.project_id == scope.project_id,
+                ranked.c.rank == 1,
+            )
+        )
+        return tuple(_run(row) for row in rows)
 
     def list_findings(
         self,

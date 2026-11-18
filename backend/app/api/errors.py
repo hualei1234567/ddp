@@ -611,6 +611,9 @@ _DATASET_DETAILS_SAFE_CODES = frozenset(
         # 回显它才能区分"已失效"与"来源不可达、无法确认"。
         "dataset_upstream_invalidated",
         "training_delivery_not_ready",
+        # 质量门禁：回显阈值、被阻断 Episode 与原因（数量截断 + truncated 标记），
+        # 否则调用方只能按 code 猜"是哪几条、差多少"。details 只含本版本自身条目。
+        "dataset_quality_gate_failed",
     }
 )
 

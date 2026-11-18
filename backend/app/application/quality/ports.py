@@ -7,7 +7,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Protocol
 from uuid import UUID
 
@@ -45,6 +45,20 @@ class QualityRunRepository(Protocol):
 
         ``after_id`` 必须与本查询同项目、同对象；仓储只按 (created_at, id)
         定位键集位置，不做跨对象的存在性校验。
+        """
+        ...
+
+    def latest_for_subjects(
+        self,
+        scope: ProjectScope,
+        *,
+        subject_type: QualitySubjectType,
+        subject_ids: Sequence[UUID],
+    ) -> tuple[QualityRun, ...]:
+        """按对象批量取**最新一次**运行，每个 ``subject_id`` 至多一条。
+
+        最新口径固定为 ``(created_at 倒序, id 倒序)``：同一时刻的多次运行
+        以 ID 顺序稳定决出，不返回并列多条。项目作用域由仓储强制。
         """
         ...
 

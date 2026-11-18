@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime
 from uuid import UUID
@@ -39,6 +40,7 @@ from app.domain.datasets.policies import (
     SplitPolicy,
 )
 from app.domain.datasets.quality import QualityReport, leakage_summary
+from app.domain.datasets.quality_gate import EpisodeQualityVerdict
 from app.domain.datasets.selection import (
     EpisodeCandidate,
     SelectionFilters,
@@ -109,8 +111,14 @@ def run_pipeline(
     waivers: tuple[LeakageWaiver, ...] = (),
     sample_limit: int = 50,
     require_explicit_candidates: bool = False,
+    quality_verdicts: Mapping[UUID, EpisodeQualityVerdict] | None = None,
 ) -> PipelineResult:
-    selection = evaluate_selection(candidates, filters=filters, usage_policy=usage_policy)
+    selection = evaluate_selection(
+        candidates,
+        filters=filters,
+        usage_policy=usage_policy,
+        quality_verdicts=quality_verdicts,
+    )
     if require_explicit_candidates:
         # 显式指名条目（selection_filters.episode_ids 非空）时，"提名即承诺"：
         # 全部被排除说明调用方引用了不合格条目，必须确定性地拒绝，而不是
