@@ -11,8 +11,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.application.datasources.observability import sanitize_log_message
 from app.domain.datasources.media import MediaAsset
-from app.domain.datasources.models import DataSource, DataSourceImport
+from app.domain.datasources.models import DataSource, DataSourceImport, DataSourceImportLog
 from app.domain.datasources.review import DataReview as DataReviewT
 from app.domain.datasources.state_machines import allowed_import_actions
 
@@ -127,6 +128,10 @@ class DataSourceImportOut(BaseModel):
     error_message: str | None
     started_at: datetime | None
     finished_at: datetime | None
+    # 运行期可观测性：null 表示"未测量"（迁移前的存量导入），不是 0%。
+    stage: str | None
+    processed_items: int | None
+    total_items: int | None
     version: int
     allowed_actions: list[str]
 
@@ -149,9 +154,46 @@ class DataSourceImportOut(BaseModel):
             error_message=item.error_message,
             started_at=item.started_at,
             finished_at=item.finished_at,
+            stage=str(item.stage) if item.stage is not None else None,
+            processed_items=item.processed_items,
+            total_items=item.total_items,
             version=item.row_version,
             allowed_actions=sorted(allowed_import_actions(item.status)),
         )
+
+
+class ImportLogOut(BaseModel):
+    """一条导入步骤日志（脱敏后的只读投影）。"""
+
+    log_id: UUID
+    project_id: UUID
+    import_id: UUID
+    stage: str
+    level: str
+    message: str
+    attempt: int
+    occurred_at: datetime
+
+    @classmethod
+    def from_domain(cls, item: DataSourceImportLog) -> ImportLogOut:
+        return cls(
+            log_id=item.log_id,
+            project_id=item.project_id,
+            import_id=item.import_id,
+            stage=str(item.stage),
+            level=str(item.level),
+            # 写入时已脱敏；读取再脱敏一次，防历史行或人工写入绕过。
+            message=sanitize_log_message(item.message),
+            attempt=item.attempt,
+            occurred_at=item.occurred_at,
+        )
+
+
+class ImportLogListOut(BaseModel):
+    """最近 N 条步骤日志；``truncated`` 如实说明是否被上限截断。"""
+
+    items: list[ImportLogOut]
+    truncated: bool
 
 
 class MediaAssetOut(BaseModel):

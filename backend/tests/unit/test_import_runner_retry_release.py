@@ -22,6 +22,7 @@ from app.infrastructure.db.session import create_db_engine, create_session_facto
 from app.infrastructure.repositories.collection_audit import SqlOutboxRepository
 from app.infrastructure.repositories.dataset_audit import SqlDatasetAuditRepository
 from app.infrastructure.repositories.datasources import (
+    SqlDataSourceImportLogRepository,
     SqlDataSourceImportRepository,
     SqlDataSourceRepository,
     SqlMediaAssetRepository,
@@ -72,6 +73,7 @@ def _runner(session: Session) -> ImportRunner:
         outbox=SqlOutboxRepository(session),
         storage=_NoopStorage(),  # type: ignore[arg-type]
         uow=session,
+        logs=SqlDataSourceImportLogRepository(session),
     )
 
 

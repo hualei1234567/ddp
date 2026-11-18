@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.10.0
+  version: 1.11.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -69,6 +69,12 @@ info:
       确定方式，两者都缺失时返回 422，**绝不默认 REMOTE**；存量引用回填
       UNKNOWN（迁移 0054），不冒充真实训练。该字段为新增响应字段，客户端升级后
       必须按值区分真实/模拟执行。
+    - `1.11.0` 在 `1.10.0` 基础上**新增导入中心可观测性**：
+      `DataSourceImport` 增加 `stage` / `processed_items` / `total_items`
+      （均可空，`null` 明确表示"未测量"，迁移 0055 前的存量不回填 0），并新增
+      只读端点 `GET .../data-source-imports/{import_id}/logs` 返回结构化步骤日志
+      （`DataSourceImportLog`，最近 N 条上限截断，消息已脱敏）。全部为增量：
+      无路径删除、无字段删除、未收窄既有字段取值。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -86,7 +92,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.10.0
+  version: 1.11.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -638,6 +644,8 @@ paths:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportActions"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/assets:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportAssets"
+  /api/v1/projects/{project_id}/data-source-imports/{import_id}/logs:
+    $ref: "./fragments/paths.stage7.yaml#/dataSourceImportLogs"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/quality-report:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportQualityReport"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/episodes:
@@ -1145,6 +1153,10 @@ components:
     ImportScope: {$ref: "./fragments/schemas.stage7.yaml#/ImportScope"}
     ImportStatus: {$ref: "./fragments/schemas.stage7.yaml#/ImportStatus"}
     ImportAction: {$ref: "./fragments/schemas.stage7.yaml#/ImportAction"}
+    ImportStage: {$ref: "./fragments/schemas.stage7.yaml#/ImportStage"}
+    ImportLogLevel: {$ref: "./fragments/schemas.stage7.yaml#/ImportLogLevel"}
+    ImportLog: {$ref: "./fragments/schemas.stage7.yaml#/ImportLog"}
+    ImportLogList: {$ref: "./fragments/schemas.stage7.yaml#/ImportLogList"}
     DataSourceCreate: {$ref: "./fragments/schemas.stage7.yaml#/DataSourceCreate"}
     DataSourcePatch: {$ref: "./fragments/schemas.stage7.yaml#/DataSourcePatch"}
     DataSource: {$ref: "./fragments/schemas.stage7.yaml#/DataSource"}

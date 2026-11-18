@@ -50,8 +50,10 @@ from uuid import UUID, uuid4
 
 from app.application.audit import record_change
 from app.application.datasources.events import DATASOURCE_IMPORT_ACTION_EVENTS
+from app.application.datasources.observability import sanitize_log_message
 from app.application.datasources.ports import (
     AuditRepository,
+    DataSourceImportLogRepository,
     DataSourceImportRepository,
     DataSourceRepository,
     MediaAssetRepository,
@@ -60,10 +62,10 @@ from app.application.datasources.ports import (
     UnitOfWork,
 )
 from app.application.ingestion.ports import RawAssetRepository
-from app.domain.datasources.enums import ImportScope, ImportStatus
+from app.domain.datasources.enums import ImportLogLevel, ImportScope, ImportStage, ImportStatus
 from app.domain.datasources.errors import DomainValidationError
 from app.domain.datasources.media import MediaAsset
-from app.domain.datasources.models import DataSourceImport
+from app.domain.datasources.models import DataSourceImport, DataSourceImportLog
 from app.domain.datasources.state_machines import import_target_status
 from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.enums import (
@@ -83,6 +85,11 @@ from app.domain.ingestion.validation import (
 # Human-1M preview 的固定入口。不遍历目录：HF 没有廉价列目录能力，
 # 且遍历会带来"下多少算多少"的不确定行为。
 PREVIEW_METADATA_PATH = "preview/metadata.jsonl"
+
+# 每处理 N 个媒体文件提交一次进度，而不是每个文件一次事务。
+# 进度是给运维看的，10 条的粒度足够；全量导入动辄上千文件，逐条提交会把
+# 一次导入变成上千次事务。阶段切换与结束必定写一次，不依赖这个阈值。
+_PROGRESS_COMMIT_EVERY = 10
 
 # 声明的内容类型 → RawAsset 格式兜底。只覆盖导入链路会遇到的类型；
 # 未登记的类型一律落到 UNKNOWN，不猜。
@@ -192,6 +199,7 @@ class ImportRunner:
         outbox: OutboxRepository,
         storage: ObjectWriter,
         uow: UnitOfWork,
+        logs: DataSourceImportLogRepository,
     ) -> None:
         self._sources = sources
         self._imports = imports
@@ -201,6 +209,7 @@ class ImportRunner:
         self._outbox = outbox
         self._storage = storage
         self._uow = uow
+        self._logs = logs
 
     def execute(
         self,
@@ -229,6 +238,18 @@ class ImportRunner:
         running = self._imports.get(scope, import_id)
         assert running is not None  # 刚写入，必然可见
 
+        # 进入下载阶段：只声明"开始做什么"，不填总条数——元数据还没解析，
+        # total_items 未知就是 NULL（未测量），不伪造分母。
+        running = self._report(
+            scope,
+            running,
+            stage=ImportStage.DOWNLOAD,
+            processed_items=0,
+            total_items=None,
+            message="开始导入：准备下载数据集元数据",
+            moment=moment,
+        )
+
         source = self._sources.get(scope, running.data_source_id)
         if source is None:
             self._fail(scope, running, "数据源已被删除", max(tick(), moment))
@@ -241,64 +262,119 @@ class ImportRunner:
                 revision=source.revision,
                 path=PREVIEW_METADATA_PATH,
             )
-            parsed = parse_episodes(parse_metadata(meta.data))
+            rows = parse_metadata(meta.data)
+            running = self._report(
+                scope,
+                running,
+                stage=ImportStage.VALIDATE,
+                processed_items=0,
+                total_items=None,
+                message=f"元数据校验通过：{len(rows)} 行",
+                moment=max(tick(), moment),
+            )
+            parsed = parse_episodes(rows)
             episodes = select_episodes(
                 parsed,
                 scope=running.scope,
                 sample_limit=running.sample_limit,
             )
+            # 解析完成后才知道总条数：单位是媒体文件（与 imported_file_count 同口径）。
+            total_items = sum(len(episode.media_assets) for episode in episodes)
+            running = self._report(
+                scope,
+                running,
+                stage=ImportStage.PARSE,
+                processed_items=0,
+                total_items=total_items,
+                message=f"解析出 {len(episodes)} 个 episode，共 {total_items} 个媒体文件",
+                moment=max(tick(), moment),
+            )
+            running = self._report(
+                scope,
+                running,
+                stage=ImportStage.INGEST,
+                processed_items=0,
+                total_items=total_items,
+                message=f"开始入库：{total_items} 个媒体文件",
+                moment=max(tick(), moment),
+            )
 
             asset_count = 0
             for episode in episodes:
                 for asset in episode.media_assets:
-                    fetched = fetch(
-                        repo_id=source.repo_id,
-                        revision=source.revision,
-                        path=f"preview/{asset.path}",
-                    )
-                    raw_asset, written = self._register_raw_asset(
-                        scope,
-                        source,
-                        running,
-                        episode,
-                        asset,
-                        fetched,
-                        moment=moment,
-                    )
-                    if written:
-                        total_bytes += fetched.size_bytes
-                    self._assets.add(
-                        scope,
-                        MediaAsset(
-                            asset_id=uuid4(),
-                            project_id=scope.project_id,
-                            data_source_id=source.data_source_id,
-                            import_id=running.import_id,
-                            episode_key=episode.episode_key,
-                            path=asset.path,
-                            camera=asset.camera,
-                            # 内容复用时指向既有对象的键，否则播放会指向不存在的对象。
-                            object_key=raw_asset.object_key,
-                            size_bytes=fetched.size_bytes,
-                            sha256=fetched.sha256,
-                            content_type=fetched.content_type,
-                            task_name=episode.task_name,
-                            raw_asset_id=raw_asset.asset_id,
-                            excerpt_start_seconds=asset.excerpt_start_seconds,
-                            excerpt_seconds=asset.excerpt_seconds,
-                            source_fps=asset.source_fps,
-                            created_at=moment,
-                        ),
-                    )
+                    # 进度提交会把已完成资产一并落库；重试时先查已落库资产，
+                    # 已存在就跳过下载与写入。否则同 (import_id, path) 会撞
+                    # 唯一约束，一次可恢复失败会变成永久失败。
+                    existing = self._assets.get_by_import_path(scope, running.import_id, asset.path)
+                    if existing is None:
+                        fetched = fetch(
+                            repo_id=source.repo_id,
+                            revision=source.revision,
+                            path=f"preview/{asset.path}",
+                        )
+                        raw_asset, written = self._register_raw_asset(
+                            scope,
+                            source,
+                            running,
+                            episode,
+                            asset,
+                            fetched,
+                            moment=moment,
+                        )
+                        if written:
+                            total_bytes += fetched.size_bytes
+                        self._assets.add(
+                            scope,
+                            MediaAsset(
+                                asset_id=uuid4(),
+                                project_id=scope.project_id,
+                                data_source_id=source.data_source_id,
+                                import_id=running.import_id,
+                                episode_key=episode.episode_key,
+                                path=asset.path,
+                                camera=asset.camera,
+                                # 内容复用时指向既有对象的键，否则播放会指向不存在的对象。
+                                object_key=raw_asset.object_key,
+                                size_bytes=fetched.size_bytes,
+                                sha256=fetched.sha256,
+                                content_type=fetched.content_type,
+                                task_name=episode.task_name,
+                                raw_asset_id=raw_asset.asset_id,
+                                excerpt_start_seconds=asset.excerpt_start_seconds,
+                                excerpt_seconds=asset.excerpt_seconds,
+                                source_fps=asset.source_fps,
+                                created_at=moment,
+                            ),
+                        )
                     asset_count += 1
+                    if asset_count % _PROGRESS_COMMIT_EVERY == 0:
+                        running = self._report(
+                            scope,
+                            running,
+                            stage=ImportStage.INGEST,
+                            processed_items=asset_count,
+                            total_items=total_items,
+                            message=f"入库进度：{asset_count}/{total_items}",
+                            moment=max(tick(), moment),
+                        )
 
+            finished = max(tick(), moment)
+            running = self._report(
+                scope,
+                running,
+                stage=ImportStage.COMPLETE,
+                processed_items=asset_count,
+                total_items=total_items,
+                message=f"导入完成：{len(episodes)} 个 episode / {asset_count} 个媒体文件",
+                moment=finished,
+            )
             # row_count 记录**实际导入**的 episode 数（抽样后），
             # 与 imported_file_count（资产数）口径一致，避免"报告 15 实际 10"。
             self._advance(
                 scope,
                 running,
                 "succeed",
-                max(tick(), moment),
+                finished,
                 row_count=len(episodes),
                 file_count=asset_count,
             )
@@ -311,7 +387,7 @@ class ImportRunner:
         except Exception as exc:  # noqa: BLE001 - 任何失败都必须落库留痕
             latest = self._imports.get(scope, import_id)
             if latest is not None and latest.status is ImportStatus.RUNNING:
-                self._fail(scope, latest, str(exc)[:2000], max(tick(), moment))
+                self._fail(scope, latest, str(exc), max(tick(), moment))
             raise
 
     def release_for_retry(
@@ -348,6 +424,11 @@ class ImportRunner:
                 started_at=None,
                 finished_at=None,
                 error_message=None,
+                # 退回待领取后，上一轮的阶段/进度不再代表当前状态：
+                # 清成"未测量"，由下一次 execute 重新写真实阶段。
+                stage=None,
+                processed_items=None,
+                total_items=None,
                 row_version=latest.row_version + 1,
             ),
             expected_version=latest.row_version,
@@ -374,6 +455,57 @@ class ImportRunner:
         )
         self._uow.commit()
         return True
+
+    def _report(
+        self,
+        scope: ProjectScope,
+        job: DataSourceImport,
+        *,
+        stage: ImportStage,
+        processed_items: int | None,
+        total_items: int | None,
+        message: str,
+        moment: datetime,
+        level: ImportLogLevel = ImportLogLevel.INFO,
+    ) -> DataSourceImport:
+        """写一次阶段/进度并追加上一条步骤日志，然后提交。
+
+        为什么不走 ``record_change``：审计记录的是业务变更（谁把状态改成了
+        什么），运行期进度是高频遥测；写进 ``audit_logs`` 会污染变更时间线，
+        也无法表达 ``stage`` / ``level``。因此进度落在导入任务行上，步骤落在
+        ``data_source_import_logs``。
+
+        必须提交：API 用另一个会话读取，未提交的进度前端看不到。提交也会把
+        本轮已完成的媒体资产一并落库，所以 ingest 必须按 ``(import_id, path)``
+        幂等（见 ``execute`` 里的 ``get_by_import_path``）。
+        """
+        saved = self._imports.save(
+            scope,
+            replace(
+                job,
+                stage=stage,
+                processed_items=processed_items,
+                total_items=total_items,
+                row_version=job.row_version + 1,
+            ),
+            expected_version=job.row_version,
+        )
+        self._logs.add(
+            scope,
+            DataSourceImportLog(
+                log_id=uuid4(),
+                project_id=scope.project_id,
+                import_id=saved.import_id,
+                stage=stage,
+                level=level,
+                message=sanitize_log_message(message),
+                occurred_at=moment,
+                sequence_no=saved.row_version,
+                attempt=job.attempt,
+            ),
+        )
+        self._uow.commit()
+        return saved
 
     def _register_raw_asset(
         self,
@@ -492,16 +624,36 @@ class ImportRunner:
         self, scope: ProjectScope, job: DataSourceImport, message: str, moment: datetime
     ) -> None:
         target = import_target_status(job.status, "fail")
+        # 异常文本可能带上游 URL、预签名参数或本机绝对路径；错误详情要展示
+        # 给前端，因此与步骤日志用同一套脱敏，不留后门。
+        safe_message = sanitize_log_message(message, limit=2000)
         saved = self._imports.save(
             scope,
             replace(
                 job,
                 status=target,
-                error_message=message,
+                error_message=safe_message,
                 finished_at=moment,
                 row_version=job.row_version + 1,
             ),
             expected_version=job.row_version,
+        )
+        self._logs.add(
+            scope,
+            DataSourceImportLog(
+                log_id=uuid4(),
+                project_id=scope.project_id,
+                import_id=saved.import_id,
+                # 失败发生在当前阶段；若尚未进入任何阶段（极端情况），
+                # 归到 DOWNLOAD——这是执行前正要做的第一步。
+                stage=job.stage or ImportStage.DOWNLOAD,
+                level=ImportLogLevel.ERROR,
+                # 日志列上限 1000，错误详情列上限 2000；两者分别截断。
+                message=sanitize_log_message(message),
+                occurred_at=moment,
+                sequence_no=saved.row_version,
+                attempt=job.attempt,
+            ),
         )
         record_change(
             self._audit,
@@ -512,11 +664,11 @@ class ImportRunner:
             action="fail",
             from_status=job.status.value,
             to_status=saved.status.value,
-            reason=message,
+            reason=safe_message,
             request_id=None,
             details={},
             event_type="datasource.import.fail",
-            event_payload={"import_id": str(saved.import_id), "error_message": message},
+            event_payload={"import_id": str(saved.import_id), "error_message": safe_message},
             occurred_at=moment,
         )
         self._uow.commit()

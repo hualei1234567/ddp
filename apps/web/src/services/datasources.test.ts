@@ -69,6 +69,9 @@ const importBody: DataSourceImport = {
   error_message: null,
   started_at: null,
   finished_at: null,
+  stage: null,
+  processed_items: null,
+  total_items: null,
   version: 1,
   allowed_actions: ["start", "cancel"],
 };
@@ -420,5 +423,97 @@ describe("导入审核与质量报告", () => {
     expect(report.failures).toHaveLength(1);
     expect(report.failures[0]?.rule_id).toBe("excerpt_within_duration");
     expect(report.failures[0]?.passed).toBe(false);
+  });
+});
+
+// --- 导入阶段/进度与步骤日志 -----------------------------------------------
+
+const logBody = {
+  log_id: "44444444-4444-4444-4444-444444444444",
+  project_id: PROJECT,
+  import_id: IMPORT_ID,
+  stage: "INGEST",
+  level: "INFO",
+  message: "入库进度：3/10",
+  attempt: 1,
+  occurred_at: "2026-11-18T00:00:00Z",
+};
+
+describe("导入可观测性", () => {
+  it("阶段与进度为 null 时保持 null（未测量），不补 0", async () => {
+    const { api } = client(() => jsonResponse(importBody));
+
+    const job = await api.getImport(PROJECT, IMPORT_ID);
+
+    expect(job.stage).toBeNull();
+    expect(job.processed_items).toBeNull();
+    expect(job.total_items).toBeNull();
+  });
+
+  it("解析真实阶段与进度", async () => {
+    const { api } = client(() =>
+      jsonResponse({
+        ...importBody,
+        status: "RUNNING",
+        stage: "INGEST",
+        processed_items: 3,
+        total_items: 10,
+      }),
+    );
+
+    const job = await api.getImport(PROJECT, IMPORT_ID);
+
+    expect(job.stage).toBe("INGEST");
+    expect(job.processed_items).toBe(3);
+    expect(job.total_items).toBe(10);
+  });
+
+  it("processed_items 超过 total_items 时拒绝解析", async () => {
+    const { api } = client(() =>
+      jsonResponse({
+        ...importBody,
+        stage: "INGEST",
+        processed_items: 11,
+        total_items: 10,
+      }),
+    );
+
+    await expect(api.getImport(PROJECT, IMPORT_ID)).rejects.toThrow(
+      /不符合契约/,
+    );
+  });
+
+  it("读取日志走 /logs 并带 limit，解析 truncated 与条目", async () => {
+    const { api, fetchImpl } = client(() =>
+      jsonResponse({ items: [logBody], truncated: false }),
+    );
+
+    const result = await api.listImportLogs(PROJECT, IMPORT_ID, { limit: 200 });
+
+    expect(result.truncated).toBe(false);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.stage).toBe("INGEST");
+    expect(result.items[0]?.level).toBe("INFO");
+    const [url] = fetchImpl.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain(`/data-source-imports/${IMPORT_ID}/logs`);
+    expect(url).toContain("limit=200");
+  });
+
+  it("日志的 import_id 与请求不一致时拒绝", async () => {
+    const { api } = client(() =>
+      jsonResponse({
+        items: [
+          {
+            ...logBody,
+            import_id: "77777777-7777-7777-7777-777777777777",
+          },
+        ],
+        truncated: false,
+      }),
+    );
+
+    await expect(api.listImportLogs(PROJECT, IMPORT_ID)).rejects.toMatchObject({
+      kind: "invalid_response",
+    });
   });
 });

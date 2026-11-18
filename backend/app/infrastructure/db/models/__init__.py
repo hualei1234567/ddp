@@ -181,6 +181,7 @@ __all__ = [
 from app.infrastructure.db.models import modelops  # noqa: F401,E402
 from app.infrastructure.db.models.datasources import (  # noqa: E402
     DataReviewModel,
+    DataSourceImportLogModel,
     DataSourceImportModel,
     DataSourceModel,
     MediaAssetModel,
@@ -188,6 +189,7 @@ from app.infrastructure.db.models.datasources import (  # noqa: E402
 
 __all__ += [
     "DataReviewModel",
+    "DataSourceImportLogModel",
     "DataSourceImportModel",
     "DataSourceModel",
     "MediaAssetModel",

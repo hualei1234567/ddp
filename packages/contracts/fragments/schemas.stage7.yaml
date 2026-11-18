@@ -28,6 +28,17 @@ ImportAction:
     `PENDING -> RUNNING -> {SUCCEEDED, FAILED, CANCELLED}`；终态之后任何动作都返回
     `state_transition_invalid`（409）。
 
+ImportStage:
+  type: string
+  enum: [DOWNLOAD, VALIDATE, PARSE, INGEST, COMPLETE]
+  description: |
+    导入执行阶段（运行期可观测性，不参与状态机）。响应中 `stage=null` 表示
+    **未测量**（迁移 0055 之前的存量导入），不是"已完成 0%"。
+
+ImportLogLevel:
+  type: string
+  enum: [INFO, WARNING, ERROR]
+
 DataSourceCreate:
   type: object
   additionalProperties: false
@@ -152,7 +163,7 @@ DataSourceImport:
   type: object
   required:
     [import_id, project_id, data_source_id, status, scope, tool_name, tool_version,
-     version, allowed_actions]
+     stage, processed_items, total_items, version, allowed_actions]
   properties:
     import_id: { type: string, format: uuid }
     project_id: { type: string, format: uuid }
@@ -170,6 +181,24 @@ DataSourceImport:
     error_message: { type: [string, "null"] }
     started_at: { type: [string, "null"], format: date-time }
     finished_at: { type: [string, "null"], format: date-time }
+    stage:
+      type: [string, "null"]
+      enum: [DOWNLOAD, VALIDATE, PARSE, INGEST, COMPLETE, null]
+      description: |
+        当前/最后进入的执行阶段。`null` = 未测量，前端必须显示"未测量"
+        而不是 0%。
+    processed_items:
+      type: [integer, "null"]
+      minimum: 0
+      description: |
+        已处理的媒体文件数。与 `total_items` 同为 null、或 `total_items=0`
+        时不展示百分比。
+    total_items:
+      type: [integer, "null"]
+      minimum: 0
+      description: |
+        本次导入要处理的媒体文件总数；元数据解析完成后才可知，之前为 null。
+        存量导入为 null（未测量）。
     version: { type: integer, minimum: 1 }
     allowed_actions:
       type: array
@@ -184,6 +213,43 @@ DataSourceImportPage:
       type: array
       items: { $ref: "../openapi.yaml#/components/schemas/DataSourceImport" }
     next_cursor: { type: [string, "null"] }
+
+ImportLog:
+  type: object
+  additionalProperties: false
+  required:
+    [log_id, project_id, import_id, stage, level, message, attempt, occurred_at]
+  properties:
+    log_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    import_id: { type: string, format: uuid }
+    stage: { $ref: "../openapi.yaml#/components/schemas/ImportStage" }
+    level: { $ref: "../openapi.yaml#/components/schemas/ImportLogLevel" }
+    message:
+      type: string
+      minLength: 1
+      maxLength: 1000
+      description: |
+        已脱敏的步骤消息：服务端写入与读取两侧都会替换 URL、预签名参数与
+        绝对路径，客户端不得据此还原存储地址。
+    attempt:
+      type: integer
+      minimum: 1
+      description: 第几次尝试产生的日志；重试后可区分不同轮次。
+    occurred_at: { type: string, format: date-time }
+
+ImportLogList:
+  type: object
+  additionalProperties: false
+  required: [items, truncated]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/ImportLog" }
+    truncated:
+      type: boolean
+      description: |
+        是否因上限截断。`true` 表示只返回了最近 N 条，更早的步骤未返回。
 
 # ---------------------------------------------------------------------------
 # 审看与质量报告（阶段 7 第二批：补上前一批漏登记的 6 个端点所需模型）

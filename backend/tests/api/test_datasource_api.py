@@ -603,3 +603,71 @@ def test_import_action_body_is_optional(api_db) -> None:
     cancelled = client.post(f"{import_url}/actions/cancel", headers={"If-Match": '"1"'})
     assert cancelled.status_code == 200, cancelled.text
     assert cancelled.json()["status"] == "CANCELLED"
+
+
+def _create_import_for_logs(client, project_id, *, sample_limit: int = 5) -> dict:
+    source = client.post(_url(project_id), json=_payload()).json()
+    created = client.post(
+        _url(project_id, f"/{source['data_source_id']}/imports"),
+        json={
+            "scope": "SAMPLE",
+            "tool_name": "huggingface_hub",
+            "tool_version": "0.27.1",
+            "sample_limit": sample_limit,
+        },
+    )
+    assert created.status_code == 201, created.text
+    return created.json()
+
+
+def test_import_progress_is_unmeasured_before_worker_runs(api_db) -> None:
+    """新建导入的进度必须是 null（未测量），不是 0。
+
+    迁移 0055 的语义：NULL = 没测量过。前端据此显示"未测量"；把 0 当作分母
+    会渲染成"已完成 0%"，把"没记录"伪装成"测量过且没进展"。
+    """
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    job = _create_import_for_logs(client, ids.project_a)
+
+    assert job["stage"] is None, job
+    assert job["processed_items"] is None, job
+    assert job["total_items"] is None, job
+
+    detail = client.get(f"/api/v1/projects/{ids.project_a}/data-source-imports/{job['import_id']}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["stage"] is None
+
+    listed = client.get(f"/api/v1/projects/{ids.project_a}/data-source-imports")
+    assert listed.status_code == 200, listed.text
+    row = next(item for item in listed.json()["items"] if item["import_id"] == job["import_id"])
+    assert row["processed_items"] is None, row
+    assert row["total_items"] is None, row
+
+    logs = client.get(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{job['import_id']}/logs"
+    )
+    assert logs.status_code == 200, logs.text
+    assert logs.json() == {"items": [], "truncated": False}, logs.json()
+
+
+def test_import_logs_are_project_scoped_and_missing_import_is_404(api_db) -> None:
+    """日志读取沿用项目隔离：跨项目/不存在一律 4xx，不靠空列表泄露存在性。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    outsider = make_client(factory, ids.outsider)
+    job = _create_import_for_logs(editor, ids.project_a)
+
+    outsider_response = outsider.get(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{job['import_id']}/logs"
+    )
+    assert outsider_response.status_code in {403, 404}, outsider_response.text
+
+    # 同一 import_id 放到另一个项目路径下：同样不可读。
+    cross_project = editor.get(
+        f"/api/v1/projects/{ids.project_b}/data-source-imports/{job['import_id']}/logs"
+    )
+    assert cross_project.status_code in {403, 404}, cross_project.text
+
+    missing = editor.get(f"/api/v1/projects/{ids.project_a}/data-source-imports/{uuid4()}/logs")
+    assert missing.status_code == 404, missing.text

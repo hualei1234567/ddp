@@ -33,6 +33,7 @@ from app.infrastructure.db.session import create_session_factory, get_engine
 from app.infrastructure.repositories.collection_audit import SqlOutboxRepository
 from app.infrastructure.repositories.dataset_audit import SqlDatasetAuditRepository
 from app.infrastructure.repositories.datasources import (
+    SqlDataSourceImportLogRepository,
     SqlDataSourceImportRepository,
     SqlDataSourceRepository,
     SqlMediaAssetRepository,
@@ -114,6 +115,7 @@ def build_runner(session: Session, settings: Settings) -> ImportRunner:
         outbox=SqlOutboxRepository(session),
         storage=DataSourceObjectWriter(S3MultipartStorage(settings)),
         uow=session,
+        logs=SqlDataSourceImportLogRepository(session),
     )
 
 
@@ -287,15 +289,31 @@ def _import_creator(session: Session, import_id: UUID) -> UUID | None:
 
 
 def _import_already_terminal(session: Session, import_id: UUID) -> bool:
-    """任务是否已在终态（不再接受执行）。项目范围由事件本身保证。"""
+    """任务是否已不再接受执行（重复投递，应直接 PUBLISHED）。
+
+    项目范围由事件本身保证。``SUCCEEDED`` / ``CANCELLED`` 是绝对终态。
+    ``FAILED`` 要分开看：**首次/可重试失败必须交给 release_for_retry 退回
+    PENDING**，否则 0034 的重试机制永远不会生效——``_fail`` 刚把任务写成
+    FAILED，这里若直接当成"重复投递"，一次网络抖动就会让导入永久卡死。
+    只有 ``attempt >= max_attempts``（确实不再重试）才按终态处理。
+    """
     from sqlalchemy import select
 
     from app.infrastructure.db.models.datasources import DataSourceImportModel
 
-    status = session.scalar(
-        select(DataSourceImportModel.status).where(DataSourceImportModel.id == import_id)
-    )
-    return status in {"SUCCEEDED", "FAILED", "CANCELLED"}
+    row = session.execute(
+        select(
+            DataSourceImportModel.status,
+            DataSourceImportModel.attempt,
+            DataSourceImportModel.max_attempts,
+        ).where(DataSourceImportModel.id == import_id)
+    ).one_or_none()
+    if row is None:
+        return False
+    status, attempt, max_attempts = row
+    if status in {"SUCCEEDED", "CANCELLED"}:
+        return True
+    return status == "FAILED" and attempt >= max_attempts
 
 
 def _install_signal_handlers(stop_event: threading.Event) -> None:

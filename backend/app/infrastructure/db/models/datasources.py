@@ -117,6 +117,11 @@ class DataSourceImportModel(Base, ProjectScopedMixin, LockVersionMixin):
     error_message: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 运行期可观测性（迁移 0055）。可空：存量导入没有测量过阶段/进度，
+    # NULL 表示"未测量"，不回填 0 冒充完成。
+    stage: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    processed_items: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    total_items: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 尝试次数与上限：与 ingestion_jobs 的 attempt/max_attempts 同语义。
     # 导入任务失败进 FAILED 后按契约不得再接受客户端动作，所以 Worker 的可重试
     # 失败必须走系统动作 retry 退回 PENDING；这两列决定还能退几次。
@@ -142,6 +147,22 @@ class DataSourceImportModel(Base, ProjectScopedMixin, LockVersionMixin):
         CheckConstraint("attempt >= 1", name="import_attempt_positive"),
         CheckConstraint("max_attempts >= 1", name="import_max_attempts_positive"),
         CheckConstraint("attempt <= max_attempts", name="import_attempt_within_max"),
+        CheckConstraint(
+            "stage IS NULL OR stage IN ('DOWNLOAD','VALIDATE','PARSE','INGEST','COMPLETE')",
+            name="import_stage_allowed",
+        ),
+        CheckConstraint(
+            "processed_items IS NULL OR processed_items >= 0",
+            name="import_processed_items_non_negative",
+        ),
+        CheckConstraint(
+            "total_items IS NULL OR total_items >= 0",
+            name="import_total_items_non_negative",
+        ),
+        CheckConstraint(
+            "processed_items IS NULL OR total_items IS NULL " "OR processed_items <= total_items",
+            name="import_progress_within_total",
+        ),
         Index(
             "ix_data_source_imports_task",
             "project_id",
@@ -248,4 +269,55 @@ class DataReviewModel(Base, ProjectScopedMixin, LockVersionMixin):
             name="review_segregation_of_duties",
         ),
         CheckConstraint("version >= 1", name="version_positive"),
+    )
+
+
+class DataSourceImportLogModel(Base):
+    """导入执行期步骤日志：只追加、只读，不参与业务状态。
+
+    与 ``audit_logs`` 的分工：审计记录业务变更（谁改了什么），本表记录运行期
+    遥测（阶段、进度、错误详情）。两者都按 ``project_id`` 隔离；本表随导入
+    任务级联删除，因为它是排障附属数据，不是需要永久留痕的审计事实。
+    """
+
+    __tablename__ = "data_source_import_logs"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    import_id: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("data_source_imports.id", ondelete="CASCADE"), nullable=False
+    )
+    stage: Mapped[str] = mapped_column(String(16), nullable=False)
+    level: Mapped[str] = mapped_column(String(8), nullable=False)
+    message: Mapped[str] = mapped_column(String(1000), nullable=False)
+    # 第几次尝试产生的日志：重试会重复出现"下载中"，没有 attempt 无法区分。
+    attempt: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # 同一导入内的单调序号；时间戳相同（注入时钟/快速写入）时保证顺序确定。
+    sequence_no: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "stage IN ('DOWNLOAD','VALIDATE','PARSE','INGEST','COMPLETE')",
+            name="import_log_stage_allowed",
+        ),
+        CheckConstraint(
+            "level IN ('INFO','WARNING','ERROR')",
+            name="import_log_level_allowed",
+        ),
+        CheckConstraint("length(message) > 0", name="import_log_message_not_empty"),
+        CheckConstraint("attempt >= 1", name="import_log_attempt_positive"),
+        CheckConstraint("sequence_no >= 1", name="import_log_sequence_positive"),
+        # 日志查询固定按 (project, import) 过滤并按时间倒序取最近 N 条。
+        Index(
+            "ix_data_source_import_logs_import",
+            "project_id",
+            "import_id",
+            "occurred_at",
+            "id",
+        ),
     )

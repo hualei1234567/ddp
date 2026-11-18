@@ -186,6 +186,38 @@ dataSourceImportDetail:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+dataSourceImportLogs:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: import_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: listDataSourceImportLogs
+    tags: [datasources]
+    summary: 导入步骤日志（只读）
+    description: |
+      返回一次导入的执行期步骤日志：时间、阶段、等级与脱敏后的消息。
+      按时间正序展示最近 `limit` 条（默认 100、上限 500），`truncated=true`
+      表示更早的日志因上限未返回。消息不包含密钥、预签名 URL 或绝对路径。
+      本端点只读，不提供任何写入/修改入口。
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+    responses:
+      "200":
+        description: 步骤日志
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ImportLogList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 dataSourceImportActions:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"
