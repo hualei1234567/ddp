@@ -8,12 +8,14 @@ from uuid import UUID, uuid4
 
 from app.application.modelops.audit import record_change
 from app.application.modelops.commands import NewFeedback
+from app.application.modelops.gap_assembly import build_gap_view
 from app.application.modelops.idempotency import IdempotencyGuard, validate_key
 from app.application.modelops.ports import (
     AuditRepository,
     EpisodeCoverageDirectory,
     EvaluationRepository,
     FeedbackRepository,
+    GapEvidenceDirectory,
     IdempotencyRepository,
     InferenceTaskRepository,
     ModelVersionRepository,
@@ -32,17 +34,16 @@ from app.domain.modelops.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
-from app.domain.modelops.gaps import (
-    GapSummary,
-    MeasuredCoverage,
-    aggregate_gaps,
-    build_gap_summary,
-)
+from app.domain.modelops.gaps import GapSummary, MeasuredCoverage
 from app.domain.modelops.models import ModelFeedback, new_feedback, new_requirement
 from app.domain.modelops.state_machines import target_status, validate_action_name
 from app.domain.modelops.validation import coerce_enum, optional_aware_datetime, optional_text
 
 _RESOURCE = "MODEL_FEEDBACK"
+
+# 需求侧证据与既有 ``requirement_ids`` 共用一次有界查询；到顶时证据侧显式标记
+# 截断（见 ``gap_summary``），不把"没扫到"读成"没有需求"。
+REQUIREMENT_SCAN_LIMIT = 100
 
 # R-13：事件类型用字面量映射表，禁止 f-string——AST 提取脚本抓不到 f-string，
 # 新增事件会静默逃过 ``scripts/check_outbox_events.py`` 的归类校验。
@@ -74,6 +75,7 @@ class FeedbackUseCases:
         uow: UnitOfWork,
         coverage: EpisodeCoverageDirectory | None = None,
         coverage_stale_after: timedelta | None = None,
+        evidence: GapEvidenceDirectory | None = None,
     ) -> None:
         self._feedback = feedback
         self._requirements = requirements
@@ -88,6 +90,8 @@ class FeedbackUseCases:
         # 与改造前行为一致，不破坏既有调用点与既有测试。
         self._coverage = coverage
         self._coverage_stale_after = coverage_stale_after
+        # 证据端口同样可选：未注入时只统计人工反馈与需求的来源，不查询其他来源。
+        self._evidence = evidence
 
     def get(self, scope: ProjectScope, feedback_id: UUID) -> ModelFeedback:
         item = self._feedback.get(scope, feedback_id)
@@ -380,39 +384,30 @@ class FeedbackUseCases:
         *,
         dimension_type: str | None = None,
     ) -> GapSummary:
-        """数据缺口视图：反馈侧聚合 + 真实 Episode 覆盖。
+        """数据缺口视图：反馈侧聚合 + 真实 Episode 覆盖 + 多来源证据。
 
         ``current_count`` 优先用实测覆盖；实测不可得的维度保留反馈里的人工值并
         标记来源；``freshness`` 由实测数据的最近更新时间与可配阈值计算，
-        不再硬编码。
+        不再硬编码。``sources`` 只挂到既有维度键上，挂不上的进 ``unmapped``，
+        既不影响覆盖口径，也不会凭空造维度。
         """
         feedback_items = self._feedback.list_open_dimensions(scope, dimension_type=dimension_type)
-        requirements = self._requirements.list(scope, limit=100)
-        links: dict[tuple[str, str], list[str]] = {}
-        for requirement in requirements:
-            if requirement.status in {
-                RequirementStatus.CANCELLED.value,
-                RequirementStatus.REJECTED.value,
-            }:
-                continue
-            for dimension in requirement.dimensions:
-                key = (dimension.dimension_type, dimension.dimension_value)
-                links.setdefault(key, []).append(str(requirement.requirement_id))
+        requirements = self._requirements.list(scope, limit=REQUIREMENT_SCAN_LIMIT)
         measured = self._measured_coverage(
             scope,
             dimension_type=dimension_type,
             feedback_items=feedback_items,
         )
-        items = aggregate_gaps(
-            [item.dimensions for item in feedback_items],
-            links,
-            measured_coverage=measured,
-        )
-        return build_gap_summary(
-            items,
-            measured_coverage=measured,
+        facts = self._evidence.evidence(scope) if self._evidence is not None else None
+        return build_gap_view(
+            feedback_items=feedback_items,
+            requirements=requirements,
+            measured=measured,
+            evidence_facts=facts,
+            dimension_type=dimension_type,
             now=_utcnow(),
             stale_after=self._coverage_stale_after,
+            requirement_scan_limit=REQUIREMENT_SCAN_LIMIT,
         )
 
     def _measured_coverage(

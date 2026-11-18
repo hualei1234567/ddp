@@ -15,6 +15,11 @@
 来源 ``MEASURED``、目标未知）。缺口视图同时承担"项目里有哪些数据"的追溯职责；
 若只从人工反馈建桶，零反馈项目会返回空数组，被界面读成"没有任何数据"。
 测不到且无反馈的维度仍然不出现——不凭空造维度。
+
+多来源证据（N7-004）不改变上述覆盖口径：``sources`` 只回答"这个维度的缺口结论
+有哪些真实来源支撑"，未映射证据汇总在 :class:`GapSummary.unmapped`。证据既不
+参与 ``current_count`` 计算，也不会凭空创建维度键（规则见
+:mod:`app.domain.modelops.gap_evidence`）。
 """
 
 from __future__ import annotations
@@ -30,6 +35,11 @@ from app.domain.modelops.enums import (
     GapFreshness,
 )
 from app.domain.modelops.errors import FeedbackDimensionsInvalidError
+from app.domain.modelops.gap_evidence import (
+    GapEvidenceSource,
+    GapSourceCount,
+    GapUnmappedEvidence,
+)
 from app.domain.modelops.validation import coerce_enum, non_negative_int, text_value
 
 
@@ -144,12 +154,23 @@ class GapSummaryItem:
     suggested_episode_count: int
     requirement_ids: tuple[str, ...]
     coverage_source: str = CoverageSource.UNKNOWN.value
+    # 来源证据（N7-004）：只列出确实归因到该维度的来源与条数；空元组表示本次
+    # 聚合没有可用证据，**不表示缺口为 0**（覆盖口径仍由 current_count 决定）。
+    sources: tuple[GapSourceCount, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
             "coverage_source",
             coerce_enum(self.coverage_source, CoverageSource, "coverage_source").value,
+        )
+        object.__setattr__(
+            self,
+            "sources",
+            tuple(
+                item if isinstance(item, GapSourceCount) else GapSourceCount(**item)
+                for item in self.sources
+            ),
         )
 
     def to_payload(self) -> dict[str, object]:
@@ -162,21 +183,45 @@ class GapSummaryItem:
             "suggested_episode_count": self.suggested_episode_count,
             "requirement_ids": list(self.requirement_ids),
             "coverage_source": self.coverage_source,
+            "sources": [item.to_payload() for item in self.sources],
         }
 
 
 @dataclass(frozen=True, slots=True)
 class GapSummary:
-    """缺口摘要：条目 + 由真实覆盖推导出的新鲜度。"""
+    """缺口摘要：条目 + 由真实覆盖推导出的新鲜度 + 未映射证据。
+
+    ``unmapped`` 是**本次扫描范围内**无法归因到既有维度键的来源计数；
+    ``truncated_sources`` 列出因资源上限被截断的来源。二者配合阅读：
+    被截断时"没有出现某来源"不能读成"该来源为空"。
+    """
 
     items: tuple[GapSummaryItem, ...]
     freshness: str = GapFreshness.UNKNOWN.value
+    unmapped: tuple[GapUnmappedEvidence, ...] = ()
+    truncated_sources: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
             self,
             "freshness",
             coerce_enum(self.freshness, GapFreshness, "freshness").value,
+        )
+        object.__setattr__(
+            self,
+            "unmapped",
+            tuple(
+                item if isinstance(item, GapUnmappedEvidence) else GapUnmappedEvidence(**item)
+                for item in self.unmapped
+            ),
+        )
+        object.__setattr__(
+            self,
+            "truncated_sources",
+            tuple(
+                coerce_enum(item, GapEvidenceSource, "truncated_sources").value
+                for item in self.truncated_sources
+            ),
         )
 
 
@@ -323,11 +368,15 @@ def build_gap_summary(
     measured_coverage: Iterable[MeasuredCoverage] | None,
     now: datetime,
     stale_after: timedelta | None,
+    unmapped: Iterable[GapUnmappedEvidence] = (),
+    truncated_sources: Iterable[str] = (),
 ) -> GapSummary:
-    """把聚合结果与实测时间戳合成最终视图（含新鲜度）。
+    """把聚合结果与实测时间戳合成最终视图（含新鲜度与未映射证据）。
 
     只要参与聚合的维度里有一个「有计数、无时间戳」，新鲜度一律 UNKNOWN：
     缺证据时不能报 FRESH（与 ``MeasuredCoverage`` 的文档承诺一致）。
+    ``unmapped`` / ``truncated_sources`` 原样透传，由调用方从来源侧计算；
+    本函数不替来源做归因。
     """
     measured = _measured_index(measured_coverage)
     wanted = frozenset((item.dimension_type, item.dimension_value) for item in items)
@@ -337,4 +386,9 @@ def build_gap_summary(
         if incomplete
         else coverage_freshness(anchor, now=now, stale_after=stale_after)
     )
-    return GapSummary(items=tuple(items), freshness=freshness)
+    return GapSummary(
+        items=tuple(items),
+        freshness=freshness,
+        unmapped=tuple(unmapped),
+        truncated_sources=tuple(truncated_sources),
+    )

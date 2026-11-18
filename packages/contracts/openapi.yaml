@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.13.0
+  version: 1.14.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -142,6 +142,14 @@ info:
       严重度、Episode 引用、证据与观测/期望值；数值只接受有限数，`NaN` /
       `Infinity` 一律 422。成功提交后不可变更，供 N7-004 Data Gap 聚合使用。
       全部为增量：无路径删除、无字段删除、无既有字段语义变更。
+    - `1.14.0` **数据缺口多来源证据（N7-004）**：`DataGapSummary` 的每个条目
+      新增可选 `sources`（来源：`FEEDBACK` / `REQUIREMENT` / `FAILURE_CASE` /
+      `LOW_SCORE` / `ANNOTATION_CONFLICT`），顶层新增可选 `unmapped`
+      （无法归因到既有维度键的证据及原因）与 `truncated_sources`
+      （因服务端资源上限被截断的来源）。证据只挂到已由反馈或实测覆盖建立的
+      维度键上，**不会凭空创建维度**，也**不参与** `current_count` /
+      `suggested_episode_count` 计算——"没有证据"不等于"缺口为 0"。
+      全部为增量：无路径删除、无字段删除、无既有字段语义变更。
     - 本文只声明**已实现行为**；未实现字段不得据此声称可用。
     - 阶段 2 的字段、错误码、`If-Match`、`Idempotency-Key` 与分页 cursor 以
       `docs/architecture/阶段2-契约冻结-v1.0.md` 与 `docs/architecture/阶段2-契约索引.md` 为准。
@@ -159,7 +167,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.13.0
+  version: 1.14.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -1208,6 +1216,10 @@ components:
     DataRequirement: {$ref: "./fragments/schemas.stage5.yaml#/DataRequirement"}
     RequirementActionRequest: {$ref: "./fragments/schemas.stage5.yaml#/RequirementActionRequest"}
     DataGapSummary: {$ref: "./fragments/schemas.stage5.yaml#/DataGapSummary"}
+    GapEvidenceSource: {$ref: "./fragments/schemas.stage5.yaml#/GapEvidenceSource"}
+    GapEvidenceUnmappedReason: {$ref: "./fragments/schemas.stage5.yaml#/GapEvidenceUnmappedReason"}
+    GapSourceCount: {$ref: "./fragments/schemas.stage5.yaml#/GapSourceCount"}
+    GapUnmappedEvidence: {$ref: "./fragments/schemas.stage5.yaml#/GapUnmappedEvidence"}
     ModelAdapterCallback: {$ref: "./fragments/schemas.stage5.yaml#/ModelAdapterCallback"}
     ModelPage: {$ref: "./fragments/schemas.stage5.yaml#/ModelPage"}
     ModelVersionPage: {$ref: "./fragments/schemas.stage5.yaml#/ModelVersionPage"}
