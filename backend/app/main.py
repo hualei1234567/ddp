@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from app.api.errors import (
     annotation_error_to_app,
     audit_error_to_app,
+    catalog_error_to_app,
     collection_error_to_app,
     dataset_error_to_app,
     datasource_error_to_app,
@@ -43,6 +44,7 @@ from app.core.logging import configure_logging
 from app.core.metrics import Metrics, build_metrics
 from app.domain.annotation.errors import AnnotationDomainError
 from app.domain.audit.errors import AuditDomainError
+from app.domain.catalog.errors import CatalogDomainError
 from app.domain.collection.errors import CollectionDomainError
 from app.domain.datasets.errors import DatasetDomainError
 from app.domain.datasources.errors import DataSourceDomainError
@@ -286,6 +288,18 @@ def create_app() -> FastAPI:
         exc: AuditDomainError,
     ) -> JSONResponse:
         error = audit_error_to_app(exc)
+        _log_domain_error(request, exc, error)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(CatalogDomainError)
+    async def handle_catalog_domain_error(
+        request: Request,
+        exc: CatalogDomainError,
+    ) -> JSONResponse:
+        error = catalog_error_to_app(exc)
         _log_domain_error(request, exc, error)
         return JSONResponse(
             status_code=error.status_code,

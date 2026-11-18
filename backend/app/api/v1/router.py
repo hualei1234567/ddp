@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     adapter_callback_routes,
     annotation,
+    asset_catalog_routes,
     audit_log_routes,
     calibration_profiles,
     calibrations,
@@ -64,6 +65,8 @@ api_router.include_router(ingestion_jobs.router)
 api_router.include_router(episodes.router)
 api_router.include_router(lineage.router)
 api_router.include_router(annotation.router)
+# 统一资产目录（N5-001）：只读跨资源检索，不替代各资源列表。
+api_router.include_router(asset_catalog_routes.router)
 api_router.include_router(dataset_routes.router)
 api_router.include_router(dataset_version_routes.router)
 api_router.include_router(export_routes.router)

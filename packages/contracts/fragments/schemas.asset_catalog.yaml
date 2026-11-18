@@ -1,0 +1,42 @@
+# 统一资产目录（N5-001）：跨资源只读检索的最小响应形状。
+#
+# 只暴露定位与展示所需字段：kind / id / display_name / updated_at。
+# 不复制各资源详情字段，避免目录演变成第二份业务真相。
+
+AssetKind:
+  type: string
+  description: |
+    目录可检索的资源类型。与血缘节点类型同名；新增类型必须有权威表与
+    可索引的标识前缀字段。
+  enum: [RAW_ASSET, EPISODE, DATASET, DATASET_VERSION, MEDIA_ASSET]
+
+AssetCatalogEntry:
+  type: object
+  required: [kind, id, display_name, updated_at]
+  properties:
+    kind:
+      $ref: "../openapi.yaml#/components/schemas/AssetKind"
+    id:
+      type: string
+      format: uuid
+      description: 该类型权威表的主键；不同类型之间 id 不保证唯一（需配合 kind）。
+    display_name:
+      type: string
+      minLength: 1
+      maxLength: 1024
+      description: |
+        展示名：RawAsset 为原始文件名，Episode 为 code，Dataset 为 name，
+        DatasetVersion 为 `<dataset code> v<version>`，媒体资产为对象路径。
+    updated_at:
+      type: string
+      format: date-time
+      description: 权威表的最后更新时间（UTC），也是目录排序键。
+
+AssetCatalogEntryPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/AssetCatalogEntry" }
+    next_cursor: { type: [string, "null"] }
