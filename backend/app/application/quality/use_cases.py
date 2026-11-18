@@ -108,6 +108,26 @@ class QualityRunUseCases:
         request_id: str | None = None,
         now: datetime | None = None,
     ) -> QualityRun:
+        """一次性完成"计算 + 落库 + 提交"，供 HTTP 单次质检使用。"""
+        run = self.prepare(scope, command, now=now)
+        created = self.persist(scope, run, request_id=request_id)
+        self._uow.commit()
+        return created
+
+    def prepare(
+        self,
+        scope: ProjectScope,
+        command: NewQualityRun,
+        *,
+        now: datetime | None = None,
+    ) -> QualityRun:
+        """只读取事实并计算结论，**不写库、不提交**。
+
+        处理流水线的 QUALITY 阶段要在同一事务里为多个 Episode 落结论，
+        并把阶段推进一起提交；因此把"计算"与"落库"拆开，由调用方决定
+        事务边界（见 :meth:`persist`）。规则、版本固化与聚合口径与
+        :meth:`run` 完全一致，不存在第二套实现。
+        """
         started_at = now or _utcnow()
         facts = self._load_facts(scope, command.subject_type, command.subject_id)
         rule_set_version, drafts = self._evaluate(scope, facts, command.categories)
@@ -126,7 +146,7 @@ class QualityRunUseCases:
         )
         summary = summarize_findings(findings)
         finished_at = max(created_at, started_at)
-        run = QualityRun(
+        return QualityRun(
             run_id=run_id,
             project_id=scope.project_id,
             subject_type=command.subject_type,
@@ -144,9 +164,22 @@ class QualityRunUseCases:
             created_by=scope.actor_id,
             findings=findings,
         )
+
+    def persist(
+        self,
+        scope: ProjectScope,
+        run: QualityRun,
+        *,
+        request_id: str | None = None,
+    ) -> QualityRun:
+        """落库并写审计/outbox，**不提交事务**。
+
+        SQLAlchemy 的 flush 可能失败；调用方必须把本方法放在自己的事务边界内，
+        失败时回滚整个事务——否则会留下"有运行、没结论"或"部分 Episode 已检查"
+        的半成品。
+        """
         created = self._runs.add(scope, run)
-        self._record(scope, created, request_id=request_id, occurred_at=finished_at)
-        self._uow.commit()
+        self._record(scope, created, request_id=request_id, occurred_at=run.finished_at)
         return created
 
     def get(self, scope: ProjectScope, run_id: UUID) -> QualityRun:

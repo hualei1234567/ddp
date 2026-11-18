@@ -8,6 +8,12 @@ from app.application.processing.pipeline import (
     ProcessingPipeline,
     default_handlers,
 )
+from app.application.processing.quality_stage import (
+    MAX_AUTO_QUALITY_EPISODES,
+    EpisodeQualityGateway,
+    QualityCheckHandler,
+    resolve_episode_ids,
+)
 from app.application.processing.use_cases import (
     PROCESSING_RUN_REQUESTED_EVENT,
     ProcessingRunUseCases,
@@ -15,13 +21,17 @@ from app.application.processing.use_cases import (
 )
 
 __all__ = [
+    "MAX_AUTO_QUALITY_EPISODES",
     "PROCESSING_RUN_REQUESTED_EVENT",
     "ConcurrentRunUpdate",
+    "EpisodeQualityGateway",
     "NewProcessingRun",
     "PipelineOutcome",
     "PipelineOutcomeStatus",
     "ProcessingPipeline",
     "ProcessingRunUseCases",
     "ProcessingWorkerUseCases",
+    "QualityCheckHandler",
     "default_handlers",
+    "resolve_episode_ids",
 ]

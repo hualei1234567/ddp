@@ -17,6 +17,7 @@ from app.application.processing.pipeline import (
     FileValidationHandler,
     PipelineOutcomeStatus,
     ProcessingPipeline,
+    SkippedStage,
     StageContext,
     StageOutcome,
     default_handlers,
@@ -103,7 +104,11 @@ def _pipeline(
         runs,
         SqlProcessingRunStepRepository(session),
         ProcessingWorkerUseCases(runs, session),
-        handlers or default_handlers(inspector or FakeInspector()),
+        handlers
+        or default_handlers(
+            inspector or FakeInspector(),
+            quality_check=SkippedStage("编排测试不装配质量引擎"),
+        ),
         session,
     )
 
@@ -276,7 +281,10 @@ def test_cancel_during_stage_aborts_step_without_leaving_running(
                 pipeline_version="pipeline-v1", input_refs=(f"raw/{ids.project_a}/a",)
             ),
         )
-        handlers = default_handlers(FakeInspector({f"raw/{ids.project_a}/a": 1}))
+        handlers = default_handlers(
+            FakeInspector({f"raw/{ids.project_a}/a": 1}),
+            quality_check=SkippedStage("编排测试不装配质量引擎"),
+        )
         handlers[ProcessingStage.FILE_VALIDATION] = _CancelDuringStage(use_cases)
         pipeline = _pipeline(session, handlers=handlers)
 
@@ -294,9 +302,11 @@ def test_cancel_during_stage_aborts_step_without_leaving_running(
 
 
 def test_default_handlers_cover_every_stage(factory: sessionmaker[Session]) -> None:
-    handlers = default_handlers(FakeInspector())
+    quality_check = SkippedStage("测试占位")
+    handlers = default_handlers(FakeInspector(), quality_check=quality_check)
     assert set(handlers) == set(STAGE_SEQUENCE)
     assert isinstance(handlers[ProcessingStage.FILE_VALIDATION], FileValidationHandler)
+    assert handlers[ProcessingStage.QUALITY_PRE_CHECK] is quality_check
 
 
 def test_terminal_run_is_noop(factory: sessionmaker[Session]) -> None:
