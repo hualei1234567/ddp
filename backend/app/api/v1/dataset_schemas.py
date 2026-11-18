@@ -7,7 +7,7 @@ Hash、审批人等权威字段。
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -75,7 +75,9 @@ class DedupPolicyCreate(BaseModel):
     exact_keys: list[str] = Field(min_length=1)
     near_duplicate_enabled: bool = False
     near_duplicate_enforcement: str = "WARN_ONLY"
-    similarity_method: str | None = Field(default=None, max_length=100)
+    # 契约已把该字段收口成枚举；这里同步，让非法值在请求校验阶段就 422，
+    # 而不是构建数据集时才在领域层报错。
+    similarity_method: Literal["TEMPORAL_OVERLAP_V1"] | None = None
     similarity_threshold: float | None = Field(default=None, ge=0, le=1)
     similarity_min_cluster_size: int | None = Field(default=None, ge=2)
     grouping_keys: list[str] = Field(default_factory=list)

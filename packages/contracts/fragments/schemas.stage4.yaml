@@ -203,12 +203,12 @@ DedupPolicyCreate:
     near_duplicate_enforcement: { type: string, enum: [WARN_ONLY, BLOCK], default: WARN_ONLY }
     similarity_method:
       type: [string, "null"]
-      maxLength: 100
+      enum: [TEMPORAL_OVERLAP_V1, null]
       default: TEMPORAL_OVERLAP_V1
       description: |
         近重复判定方法。当前唯一实现为 `TEMPORAL_OVERLAP_V1`（按时间重叠率、
-        时长差与场景标签判定）。传入其他值时返回 422，details 里会带
-        `supported` 列表，不会静默降级。
+        时长差与场景标签判定）。契约用枚举收口，其他值在请求校验阶段即 422；
+        领域层仍保留一次校验，details 里会带 `supported` 列表，不静默降级。
     similarity_threshold: { type: [number, "null"], minimum: 0, maximum: 1 }
     similarity_min_cluster_size: { type: [integer, "null"], minimum: 2 }
     grouping_keys: { type: array, items: { type: string, maxLength: 100 }, uniqueItems: true }

@@ -385,3 +385,38 @@ def test_create_version_with_build_now_does_not_crash(
     body = response.json()
     # build 由 create 内部触发，返回的是推进后的版本：状态不再是 DRAFT。
     assert body["status"] in {"BUILDING", "READY", "VALIDATING"}
+
+
+def test_dedup_similarity_method_is_enum_validated(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """``similarity_method`` 契约是枚举：非法值必须在请求校验阶段 422。
+
+    此前契约写的是自由字符串、领域只认 ``TEMPORAL_OVERLAP_V1``，非法值要等到
+    真正构建数据集时才在领域层炸，客户端拿到的错误也偏离"哪个字段不合法"。
+    """
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    dataset = create_dataset(editor, ids.project_a, ids.owner_a, f"ds-{uuid4().hex[:8]}")
+
+    rejected = editor.post(
+        url(ids.project_a, f"/datasets/{dataset['dataset_id']}/dedup-policies"),
+        json={
+            "exact_keys": ["EPISODE_LINEAGE"],
+            "near_duplicate_enabled": True,
+            "similarity_method": "PERCEPTUAL_HASH_V9",
+        },
+    )
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "validation_failed"
+
+    accepted = editor.post(
+        url(ids.project_a, f"/datasets/{dataset['dataset_id']}/dedup-policies"),
+        json={
+            "exact_keys": ["EPISODE_LINEAGE"],
+            "near_duplicate_enabled": True,
+            "similarity_method": "TEMPORAL_OVERLAP_V1",
+        },
+    )
+    assert accepted.status_code == 201, accepted.text
+    assert accepted.json()["similarity_method"] == "TEMPORAL_OVERLAP_V1"
