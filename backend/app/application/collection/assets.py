@@ -266,6 +266,8 @@ class CollectionPlanUseCases(_AssetUseCases[CollectionPlan, CollectionPlanReposi
             status=CollectionAssetStatus.DRAFT,
             description=command.description,
             owner_id=command.owner_id,
+            target_episode_count=command.target_episode_count,
+            quality_thresholds=command.quality_thresholds,
             created_at=now,
             updated_at=now,
             created_by=scope.actor_id,

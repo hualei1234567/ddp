@@ -25,8 +25,9 @@ SOP 或动作库后续升版不会改写历史任务，这正是两处都要存"
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
@@ -38,11 +39,14 @@ from app.domain.collection.validation import (
     VERSION_TEXT_MAX_LENGTH,
     coerce_enum,
     frozen_json_array,
+    frozen_mapping,
     normalized_text,
+    optional_non_negative_int,
     optional_text,
     optional_uuid,
     positive_int,
 )
+from app.domain.datasets.requirement_match import QUALITY_THRESHOLD_KEYS
 
 DESCRIPTION_MAX_LENGTH = 2000
 SCENE_LABELS_MAX = 32
@@ -76,6 +80,10 @@ class CollectionPlan:
     status: CollectionAssetStatus | str = CollectionAssetStatus.DRAFT
     description: str | None = None
     owner_id: UUID | None = None
+    # 采集目标与质量阈值只是**计划**，不是执行保证，也不构成自动验收依据；
+    # 实际是否达标由质量运行与人工审核结论判定。
+    target_episode_count: int | None = None
+    quality_thresholds: Mapping[str, object] = field(default_factory=dict)
     version: int = 1
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -105,6 +113,16 @@ class CollectionPlan:
             optional_text(self.description, "description", max_length=DESCRIPTION_MAX_LENGTH),
         )
         object.__setattr__(self, "owner_id", optional_uuid(self.owner_id, "owner_id"))
+        object.__setattr__(
+            self,
+            "target_episode_count",
+            optional_non_negative_int(self.target_episode_count, "target_episode_count"),
+        )
+        object.__setattr__(
+            self,
+            "quality_thresholds",
+            _plan_quality_thresholds(self.quality_thresholds),
+        )
         object.__setattr__(self, "version", positive_int(self.version, "version"))
 
 
@@ -248,6 +266,32 @@ class ActionSpec:
         object.__setattr__(self, "version", positive_int(self.version, "version"))
 
 
+def _plan_quality_thresholds(value: object) -> Mapping[str, object]:
+    """采集方案的质量阈值：有界 JSON + 既有登记键 + 有限非负数值。
+
+    键集合复用 :data:`app.domain.datasets.requirement_match.QUALITY_THRESHOLD_KEYS`，
+    不在这里另立一套质量词汇；未登记的键一律拒绝，避免客户端写入永远不会被
+    任何质量报告核对的"装饰性阈值"。
+
+    这里只做**计划字段**校验：阈值是采集目标，不是执行保证，也不参与自动验收。
+    实际达标与否由质量运行与人工审核结论判定。
+    """
+    if value is None:
+        return frozen_mapping({}, "quality_thresholds")
+    mapping = frozen_mapping(value, "quality_thresholds")
+    unknown = sorted(set(mapping) - QUALITY_THRESHOLD_KEYS)
+    if unknown:
+        raise DomainValidationError("quality_thresholds 包含未登记的阈值键")
+    for key in sorted(mapping):
+        item = mapping[key]
+        if isinstance(item, bool) or not isinstance(item, int | float):
+            raise DomainValidationError(f"quality_thresholds 的 {key} 必须是数字")
+        number = float(item)
+        if not math.isfinite(number) or number < 0:
+            raise DomainValidationError(f"quality_thresholds 的 {key} 必须是有限非负数")
+    return mapping
+
+
 def _scene_labels(value: object) -> tuple[str, ...]:
     """场景标签：去重、保序、非空字符串；拒绝把单个字符串当标签序列。"""
     if value is None:
@@ -269,6 +313,7 @@ def _scene_labels(value: object) -> tuple[str, ...]:
 
 __all__ = [
     "ACTIONS_MAX",
+    "QUALITY_THRESHOLD_KEYS",
     "ActionSpec",
     "DESCRIPTION_MAX_LENGTH",
     "SCENE_LABELS_MAX",

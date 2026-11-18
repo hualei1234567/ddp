@@ -67,7 +67,12 @@ DESCRIPTIVE_FIELDS: frozenset[str] = frozenset({"name", "description"})
 # 四类素材各自允许 PATCH 的字段。
 # 刻意不包含 ``steps`` / ``actions``：执行内容只能通过新增版本行变更，
 # 否则任务冻结的版本快照会与行内容脱节（见模块文档）。
-PLAN_PATCHABLE_FIELDS: frozenset[str] = DESCRIPTIVE_FIELDS
+# 采集目标/质量阈值是计划元数据（不是任务冻结的执行内容），DRAFT / ACTIVE
+# 均可调整；它们不参与执行语义，ARCHIVED 仍按终态规则一律不可改。
+PLAN_PATCHABLE_FIELDS: frozenset[str] = DESCRIPTIVE_FIELDS | {
+    "target_episode_count",
+    "quality_thresholds",
+}
 SOP_PATCHABLE_FIELDS: frozenset[str] = DESCRIPTIVE_FIELDS
 SCENARIO_PATCHABLE_FIELDS: frozenset[str] = DESCRIPTIVE_FIELDS | {"scene_labels"}
 ACTION_SPEC_PATCHABLE_FIELDS: frozenset[str] = DESCRIPTIVE_FIELDS

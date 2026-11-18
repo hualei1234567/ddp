@@ -49,6 +49,9 @@ class CollectionPlanCreate(BaseModel):
     plan_version: int = Field(default=1, ge=1)
     description: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
     owner_id: UUID | None = None
+    # 目标与阈值只是计划值：不构成执行保证，也不作为自动验收依据。
+    target_episode_count: int | None = Field(default=None, ge=0)
+    quality_thresholds: dict[str, float] = Field(default_factory=dict)
 
 
 class CollectionPlanOut(BaseModel):
@@ -60,6 +63,8 @@ class CollectionPlanOut(BaseModel):
     status: str
     description: str | None
     owner_id: UUID | None
+    target_episode_count: int | None
+    quality_thresholds: dict[str, float]
     version: int
     created_at: datetime | None
     updated_at: datetime | None
@@ -78,6 +83,10 @@ class CollectionPlanOut(BaseModel):
             status=_value(plan.status),
             description=plan.description,
             owner_id=plan.owner_id,
+            target_episode_count=plan.target_episode_count,
+            quality_thresholds={
+                key: float(value) for key, value in plan.quality_thresholds.items()
+            },
             version=plan.version,
             created_at=plan.created_at,
             updated_at=plan.updated_at,
@@ -233,12 +242,17 @@ def _value(value: object) -> str:
 # 全部字段可选：PATCH 语义是"只改提交的字段"，因此用 ``exclude_unset`` 取出
 # 真正提交的键。``None`` 是合法值（清空 ``description``），不能与"未提交"混淆。
 class CollectionPlanPatch(BaseModel):
-    """``code`` / ``plan_version`` 不可改：前者是业务标识，后者标识内容版本。"""
+    """``code`` / ``plan_version`` 不可改：前者是业务标识，后者标识内容版本。
+
+    目标与阈值是计划元数据，可改；显式 ``null`` 表示清空（阈值清空为 ``{}``）。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=DESCRIPTION_MAX_LENGTH)
+    target_episode_count: int | None = Field(default=None, ge=0)
+    quality_thresholds: dict[str, float] | None = None
 
 
 class CollectionSopPatch(BaseModel):
