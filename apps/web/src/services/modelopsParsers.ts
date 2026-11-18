@@ -7,7 +7,9 @@ import type {
   FailureCaseCategory,
   FailureCaseSeverity,
   GapDimension,
+  GapSourceCount,
   GapSummary,
+  GapUnmappedEvidence,
   InferenceService,
   InferenceTask,
   Model,
@@ -423,6 +425,47 @@ export function parseRequirementPage(value: unknown) {
   return parseCursorPage(value, "dataRequirements", parseRequirement);
 }
 
+/**
+ * 来源证据只做类型校验，不校验枚举成员：契约升级后的未知来源按原值展示，
+ * 不能因为前端不认识就丢掉证据或报错。
+ */
+function readGapSourceCounts(row: Record<string, unknown>, path: string): GapSourceCount[] {
+  const value = row.sources;
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new ContractValidationError(`${path}.sources 必须是数组`);
+  }
+  return value.map((entry, index) => {
+    const entryPath = `${path}.sources[${index}]`;
+    const record = asRecord(entry, entryPath);
+    return {
+      source: readString(record, "source", entryPath),
+      count: readInteger(record, "count", entryPath),
+    };
+  });
+}
+
+function readGapUnmapped(record: Record<string, unknown>, path: string): GapUnmappedEvidence[] {
+  const value = record.unmapped;
+  if (value === undefined || value === null) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new ContractValidationError(`${path}.unmapped 必须是数组`);
+  }
+  return value.map((entry, index) => {
+    const entryPath = `${path}.unmapped[${index}]`;
+    const row = asRecord(entry, entryPath);
+    return {
+      source: readString(row, "source", entryPath),
+      count: readInteger(row, "count", entryPath),
+      reason: readString(row, "reason", entryPath),
+    };
+  });
+}
+
 export function parseGapSummary(value: unknown): GapSummary {
   const record = asRecord(value, "dataGaps");
   const items = record.items;
@@ -443,9 +486,14 @@ export function parseGapSummary(value: unknown): GapSummary {
         requirement_ids: row.requirement_ids
           ? readStringArray(row, "requirement_ids", path)
           : [],
+        sources: readGapSourceCounts(row, path),
       };
     }),
     freshness: readString(record, "freshness", "dataGaps"),
+    unmapped: readGapUnmapped(record, "dataGaps"),
+    truncated_sources: record.truncated_sources
+      ? readStringArray(record, "truncated_sources", "dataGaps")
+      : [],
   };
 }
 
