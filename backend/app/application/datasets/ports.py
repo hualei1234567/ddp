@@ -96,6 +96,18 @@ class DatasetVersionRepository(Protocol):
 
     def latest_frozen(self, scope: ProjectScope, dataset_id: UUID) -> DatasetVersion | None: ...
 
+    def list_validity_candidates(
+        self,
+        *,
+        after_id: UUID | None = None,
+        limit: int = 200,
+    ) -> list[tuple[UUID, UUID]]:
+        """跨项目列出待做有效性巡检的版本 ``(version_id, project_id)``。
+
+        只返回 ID；调用方必须用 ``ProjectScope`` 重新读取，项目隔离仍由仓储强制。
+        """
+        ...
+
 
 class DatasetItemRepository(Protocol):
     def add_many(

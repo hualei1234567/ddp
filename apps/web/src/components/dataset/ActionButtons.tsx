@@ -10,6 +10,10 @@ const REASON_REQUIRED = new Set([
   "reject",
   "block",
   "close",
+  // 有效性迁移（validity_status 轴）服务端强制要求原因：失效会阻断新导出与
+  // 新交付，恢复也要能追溯到"凭什么确认它又有效了"。
+  "invalidate",
+  "revalidate",
 ]);
 
 export interface ActionPayload {

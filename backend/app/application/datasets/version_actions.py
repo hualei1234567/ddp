@@ -527,6 +527,94 @@ class DatasetVersionActionsMixin:
                 occurred_at=now,
             )
 
+    def _validity_transition(
+        self,
+        scope: ProjectScope,
+        dataset_id: UUID,
+        version_id: UUID,
+        action_name: str,
+        *,
+        expected_version: int,
+        reason: str | None,
+        idempotency_key: str | None,
+        method: str,
+        path: str,
+        request_id: str | None,
+    ) -> DatasetVersion:
+        """有效性迁移：``invalidate``（标记失效）与 ``revalidate``（确认恢复）。
+
+        与生命周期动作共用同一个版本资源与动作端点，但状态机是独立的
+        ``validity_status`` 轴：失效不改版本内容、不改生命周期状态，只阻断
+        新的导出与交付。每次迁移都强制留原因，并写审计与 outbox。
+        """
+        key = validate_key(idempotency_key)
+        body = {"action": action_name, "expected_version": expected_version, "reason": reason}
+        now = _utcnow()
+        replay = self._idempotency.lookup(scope, key, method=method, path=path, body=body, now=now)
+        if replay is not None:
+            return self.get(scope, dataset_id, _uuid(replay.response_ref))
+        current = self.get(scope, dataset_id, version_id)
+        self._ensure_expected(current, expected_version)
+        updated = current.apply_validity_action(
+            action_name,
+            reason=reason,
+            now=now,
+            actor_id=scope.actor_id,
+        )
+        saved = self._versions.save(scope, updated, expected_version=current.row_version)
+        created_edges = 0
+        if saved.validity_status is ValidityStatus.INVALIDATED and self._lineage is not None:
+            # 契约要求失效用血缘边表达而不是改历史：为每个条目写
+            # `Episode --INVALIDATES--> DatasetVersion`，幂等（重复失效已被
+            # 状态机拦住，这里仍用 ensure_edge 兜底）。
+            items = self._items.list_all(scope, version_id)
+            created_edges = self._lineage.record_invalidation(
+                scope,
+                dataset_version_id=version_id,
+                episode_ids=[item.episode_id for item in items],
+                now=now,
+                metadata={"reason": reason, "action": action_name},
+            )
+        record_change(
+            self._audit,
+            self._outbox,
+            scope,
+            resource_type=_VERSION,
+            resource_id=version_id,
+            action=action_name,
+            from_status=current.status.value,
+            to_status=saved.status.value,
+            reason=reason,
+            request_id=request_id,
+            details={
+                "from_validity": current.validity_status.value,
+                "to_validity": saved.validity_status.value,
+                "invalidates_edges": created_edges,
+            },
+            event_type="dataset.version.validity_changed",
+            event_payload={
+                "dataset_version_id": str(version_id),
+                "dataset_id": str(dataset_id),
+                "from_validity": current.validity_status.value,
+                "to_validity": saved.validity_status.value,
+                "action": action_name,
+                "invalidates_edges": created_edges,
+            },
+            occurred_at=now,
+        )
+        self._idempotency.store(
+            scope,
+            key,
+            method=method,
+            path=path,
+            body=body,
+            response_status=200,
+            response_ref=str(saved.dataset_version_id),
+            now=now,
+        )
+        self._uow.commit()
+        return saved
+
     def _simple_transition(
         self,
         scope: ProjectScope,

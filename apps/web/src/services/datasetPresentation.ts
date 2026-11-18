@@ -156,6 +156,8 @@ export const ACTION_LABELS: Record<string, string> = {
   validate: "校验",
   "return-draft": "退回草稿",
   freeze: "冻结",
+  invalidate: "标记失效",
+  revalidate: "确认恢复有效",
   cancel: "取消",
   approve: "批准",
   reject: "驳回",

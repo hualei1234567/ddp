@@ -7,14 +7,17 @@
 
 **为什么必须有它**
 
-两件事此前都只有"能力"没有"触发点"：
+三件事此前都只有"能力"没有"触发点"：
 
 - 标注分配有 ``expire_due``，但没有任何调度在调它。租约过期形同虚设：标注员
   领了活不干，分配永远停在 ``CLAIMED``，容量统计永远认为他手上有活。
 - 采集任务有 ``system-data-check`` 迁移，但全仓没有触发点。任务提交后永久停在
   ``SUBMITTED``，验收/完成按钮永远不出现。
+- 数据集版本有 ``validity_status`` 子状态机（``VALID→STALE``），但没有任何
+  检测器写入它；``invalidate`` / ``revalidate`` 因此永远不可达，失效版本
+  仍然可以继续导出与交付。
 
-本 worker 按固定周期跑这两类巡检。每类都是**有界批量 + 幂等**（只处理
+本 worker 按固定周期跑这三类巡检。每类都是**有界批量 + 幂等**（只处理
 ``SUBMITTED`` / 已到租约的记录），单条失败只记日志并留待下一轮，不中断整批。
 
 **为什么不塞进 maintenance worker**
@@ -36,6 +39,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.annotation.assignments import AnnotationAssignmentUseCases
 from app.application.collection.data_check import CollectionDataCheckUseCases
+from app.application.datasets.validity import DatasetValiditySweep
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.domain.identity.models import ProjectScope
@@ -58,6 +62,11 @@ from app.infrastructure.repositories.collection_audit import (
     SqlOutboxRepository as SqlCollectionOutboxRepository,
 )
 from app.infrastructure.repositories.collection_tasks import SqlCollectionTaskRepository
+from app.infrastructure.repositories.dataset_directory import SqlDatasetUpstreamDirectory
+from app.infrastructure.repositories.dataset_repositories import (
+    SqlDatasetItemRepository,
+    SqlDatasetVersionRepository,
+)
 from app.infrastructure.repositories.datasources import (
     SqlDataSourceImportRepository,
     SqlMediaAssetRepository,
@@ -143,9 +152,30 @@ class DomainSweepWorker:
         )
         return len(outcomes)
 
+    # ---- 数据集版本有效性 ----
+    def check_dataset_validity(self, *, now: datetime | None = None) -> int:
+        moment = now or datetime.now(UTC)
+        with self._factory() as session:
+            sweep = DatasetValiditySweep(
+                SqlDatasetVersionRepository(session),
+                SqlDatasetItemRepository(session),
+                SqlDatasetUpstreamDirectory(session),
+                SqlProjectMemberRepository(session),
+                SqlCollectionAuditRepository(session),
+                SqlCollectionOutboxRepository(session),
+                session,
+            )
+            outcomes = sweep.run_once(limit=self._batch_limit, now=moment)
+        logger.info("数据集版本有效性巡检完成", extra={"marked_stale": len(outcomes)})
+        return len(outcomes)
+
     def sweep_once(self, *, now: datetime | None = None) -> dict[str, int]:
         moment = now or datetime.now(UTC)
-        result = {"expired_assignments": 0, "checked_collection_tasks": 0}
+        result = {
+            "expired_assignments": 0,
+            "checked_collection_tasks": 0,
+            "stale_dataset_versions": 0,
+        }
         # 两类巡检互相独立：一类失败不阻止另一类（失败会在下一轮重试）。
         try:
             result["expired_assignments"] = self.expire_assignments(now=moment)
@@ -155,6 +185,10 @@ class DomainSweepWorker:
             result["checked_collection_tasks"] = self.check_collection_tasks(now=moment)
         except Exception:  # noqa: BLE001
             logger.exception("采集任务数据检查失败，下一轮重试")
+        try:
+            result["stale_dataset_versions"] = self.check_dataset_validity(now=moment)
+        except Exception:  # noqa: BLE001
+            logger.exception("数据集版本有效性巡检失败，下一轮重试")
         return result
 
     def run(self, *, stop_event: threading.Event, interval_seconds: float) -> None:

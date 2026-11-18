@@ -136,7 +136,8 @@ def test_export_job_lifecycle_retry_cancel_and_partial() -> None:
     assert job.attempt == 0
     assert job.config_sha256.startswith("sha256:")
     assert job.verification_status is ExportVerificationStatus.UNVERIFIED
-    assert job.allowed_actions == frozenset({"worker-start", "cancel"})
+    # 对外动作只含用户能执行的：worker-* 是后台推进用的系统动作。
+    assert job.allowed_actions == frozenset({"cancel"})
 
     started = job.start(NOW + timedelta(seconds=1))
     assert started.status is ExportJobStatus.RUNNING

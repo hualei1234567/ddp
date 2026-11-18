@@ -246,7 +246,17 @@ class ExportJob:
 
     @property
     def allowed_actions(self) -> frozenset[str]:
-        return allowed_export_actions(ExportJobStatus(self.status))
+        """对外可点的导出动作。
+
+        ``worker-*`` 是后台 Worker 推进任务用的系统动作：应用层不接受用户
+        调用（会 409），下发到界面只会渲染出按了必然失败的按钮。这里只保留
+        ``cancel`` / ``retry`` 两个用户动作。
+        """
+        return frozenset(
+            action
+            for action in allowed_export_actions(ExportJobStatus(self.status))
+            if not action.startswith("worker-")
+        )
 
     def start(self, now: datetime) -> ExportJob:
         target = export_target(ExportJobStatus(self.status), "worker-start")

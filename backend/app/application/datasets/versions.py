@@ -49,6 +49,8 @@ from app.domain.datasets.state_machines import (
 from app.domain.identity.models import ProjectScope
 
 _VERSION = "DATASET_VERSION"
+# 有效性轴动作；与 `_VERSION_RULES` 的动作集合不重叠。
+_VALIDITY_ACTIONS = frozenset({"invalidate", "revalidate"})
 
 
 class DatasetVersionUseCases(DatasetVersionActionsMixin):
@@ -354,6 +356,22 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         path: str,
         request_id: str | None = None,
     ) -> DatasetVersion:
+        # 有效性轴与生命周期轴共用同一个动作端点：两个状态机的动作名互不重叠
+        # （invalidate / revalidate 只属于 validity），按名字分派即可，避免为
+        # "同一条资源、另一根轴"再开一套路由。
+        if isinstance(action, str) and action.strip() in _VALIDITY_ACTIONS:
+            return self._validity_transition(
+                scope,
+                dataset_id,
+                version_id,
+                action.strip(),
+                expected_version=expected_version,
+                reason=reason,
+                idempotency_key=idempotency_key,
+                method=method,
+                path=path,
+                request_id=request_id,
+            )
         action_name = validate_action_name(action, family="version")
         if action_name == "build":
             return self._build(
