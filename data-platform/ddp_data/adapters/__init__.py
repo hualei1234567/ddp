@@ -1,4 +1,4 @@
-"""Canonical Adapter：注册、发现与字段映射声明（N2）。"""
+"""Canonical Adapter：注册、发现、字段映射与可选能力声明（N2 / N3-002）。"""
 
 from ddp_data.adapters.builtin import (
     GenericJsonlParseError,
@@ -10,23 +10,33 @@ from ddp_data.adapters.builtin import (
 )
 from ddp_data.adapters.registry import (
     CANONICAL_EPISODE_FIELDS,
+    AdapterCapability,
+    AdapterCapabilityError,
     AdapterNotFoundError,
     AdapterRegistrationError,
     AdapterRegistry,
     AdapterSpec,
     CanonicalField,
+    Fetcher,
     Parser,
+    Verifier,
+    Writer,
 )
 
 __all__ = [
     "CANONICAL_EPISODE_FIELDS",
+    "AdapterCapability",
+    "AdapterCapabilityError",
     "AdapterNotFoundError",
     "AdapterRegistrationError",
     "AdapterRegistry",
     "AdapterSpec",
     "CanonicalField",
+    "Fetcher",
     "GenericJsonlParseError",
     "Parser",
+    "Verifier",
+    "Writer",
     "build_default_registry",
     "parse_generic_jsonl",
     "parse_human1m_preview",
