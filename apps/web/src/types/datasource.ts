@@ -10,6 +10,14 @@ export type ImportStatus =
   | "FAILED"
   | "CANCELLED";
 export type ImportAction = "start" | "succeed" | "fail" | "cancel";
+/** 导入执行阶段；`null`（不是空字符串）表示未测量。 */
+export type ImportStage =
+  | "DOWNLOAD"
+  | "VALIDATE"
+  | "PARSE"
+  | "INGEST"
+  | "COMPLETE";
+export type ImportLogLevel = "INFO" | "WARNING" | "ERROR";
 
 export interface DataSource {
   data_source_id: string;
@@ -46,9 +54,36 @@ export interface DataSourceImport {
   error_message: string | null;
   started_at: string | null;
   finished_at: string | null;
+  /**
+   * 执行阶段。`null` = 未测量（迁移 0055 前的存量导入），
+   * 前端必须显示"未测量"而不是默认成 DOWNLOAD 或 0%。
+   */
+  stage: ImportStage | null;
+  /** 已处理的媒体文件数；与 `total_items` 同为 null 时不展示百分比。 */
+  processed_items: number | null;
+  total_items: number | null;
   version: number;
   /** 服务端计算的可执行动作；前端只按此渲染按钮，不自行推断。 */
   allowed_actions: ImportAction[];
+}
+
+/** 一条导入步骤日志（消息已由服务端脱敏）。 */
+export interface ImportLog {
+  log_id: string;
+  project_id: string;
+  import_id: string;
+  stage: ImportStage;
+  level: ImportLogLevel;
+  message: string;
+  /** 第几次尝试产生的日志；重试后可区分轮次。 */
+  attempt: number;
+  occurred_at: string;
+}
+
+export interface ImportLogList {
+  items: ImportLog[];
+  /** true 表示只返回了最近 N 条，更早的步骤因上限未返回。 */
+  truncated: boolean;
 }
 
 /** 导入产出的一个机位视频。 */

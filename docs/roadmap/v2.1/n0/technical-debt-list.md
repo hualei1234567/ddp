@@ -35,6 +35,10 @@
 | TD-19 | `_dataset_sql.ensure_expected_version` docstring 与函数体矛盾（写「严格相等」，实传 `accept_candidate=True`） | `_dataset_sql.py` | 审计 §12.7 C.1 | 后续维护者按注释理解会错 | 改注释或统一语义；补回归用例 |
 | TD-20 | 镜像未推 registry / 无 HTTPS | `docker-compose.yml`、部署文档 | 报告 §9 #5 | 生产部署前置不成立 | N8-05 一起解决 |
 | TD-21 | `annotation_quality_checks` 等表增长到百万级需评估分区 | — | 报告 §9 #6 | 长期运维风险 | 数据量到阈值再评估，先留监控 |
+| TD-24 | 导入可观测性脱敏与 `core/logging._redact_text` 重复实现 | `application/datasources/observability.py` |
+| 两套规则会漂移；引号值只截到空格 | 收敛为单一实现并补引号/多词用例 |
+| TD-25 | `application/datasources/import_runner.py` 724 行（>500 评审线） | 文件规模 |
+| 进度/日志上报与 RawAsset 登记混杂 | 拆为协作者，先补重试一致性用例 |
 | TD-23 | `infrastructure/repositories/calibration_records.py` 869 行（>800），本次 N1-002 继续增长 | 文件规模 |
 | 违反 CLAUDE.md §五；activate 链路与本文件职责混杂 | 拆出 activate/状态迁移到独立模块，先补仓储测试锁定语义 |
 | TD-22 | V2.1 蓝图与仓库文档并存，缺少单一入口 | `docs/roadmap/next-stage-v2/`、`docs/roadmap/v2.1/` | 本轮新建 | 新人/Agent 读错基线 | 本目录 README 声明：V2.1 为实施基线，V2.0 为历史蓝图 |

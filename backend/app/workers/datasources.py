@@ -33,6 +33,7 @@ from app.infrastructure.db.session import create_session_factory, get_engine
 from app.infrastructure.repositories.collection_audit import SqlOutboxRepository
 from app.infrastructure.repositories.dataset_audit import SqlDatasetAuditRepository
 from app.infrastructure.repositories.datasources import (
+    SqlDataSourceImportLogRepository,
     SqlDataSourceImportRepository,
     SqlDataSourceRepository,
     SqlMediaAssetRepository,
@@ -114,6 +115,7 @@ def build_runner(session: Session, settings: Settings) -> ImportRunner:
         outbox=SqlOutboxRepository(session),
         storage=DataSourceObjectWriter(S3MultipartStorage(settings)),
         uow=session,
+        logs=SqlDataSourceImportLogRepository(session),
     )
 
 
@@ -209,9 +211,31 @@ class DataSourceImportWorker:
                         "import_id": str(import_id),
                         "skipped": "导入任务已在终态，事件为重复投递",
                     }
-                # 先把**可重试**的失败从 FAILED 退回 PENDING，再决定事件怎么办。
+                # **先判死信，再决定是否退回 PENDING**。顺序反了会留下
+                # 「导入 PENDING、事件已死信」的永久孤儿：导入侧
+                # ``max_attempts``（默认 3）与事件侧
+                # ``validation_max_attempts``（默认 5、可配）不同源，后者更小
+                # 时最后一次失败会先退回 PENDING，再把事件判死信——没有事件、
+                # 没有终态、也没有客户端重试入口。死信时保持 FAILED，错误摘要
+                # 与步骤日志都留在导入上，人工可查。
+                attempts = claimed.attempts + 1
+                if attempts >= self._settings.validation_max_attempts:
+                    queue.mark_dead_letter(
+                        claimed.event_id,
+                        attempts=attempts,
+                        last_error=str(exc)[:2000],
+                    )
+                    session.commit()
+                    return {
+                        "status": ImportProcessingStatus.DEAD_LETTER.value,
+                        "import_id": str(import_id),
+                        "attempts": attempts,
+                        "released_for_retry": False,
+                        "error": str(exc)[:500],
+                    }
+                # 还有重试机会：把**可重试**的失败从 FAILED 退回 PENDING。
                 #
-                # 不这么做的话：本次已把任务写成 FAILED（终态），而下面又会
+                # 不这么做的话：本次已把任务写成 FAILED，而下面又会
                 # mark_retry 让事件下一轮再来；下一轮 execute 要求 PENDING，
                 # 状态机也拒绝 FAILED->RUNNING，于是每次重试都必然再失败，
                 # 直到死信——一次网络抖动就永久丢掉这条导入。
@@ -230,21 +254,6 @@ class DataSourceImportWorker:
                 except Exception:  # noqa: BLE001 - 退回失败不得掩盖原始异常
                     session.rollback()
                     logger.exception("导入任务退回重试失败", extra={"import_id": str(import_id)})
-                attempts = claimed.attempts + 1
-                if attempts >= self._settings.validation_max_attempts:
-                    queue.mark_dead_letter(
-                        claimed.event_id,
-                        attempts=attempts,
-                        last_error=str(exc)[:2000],
-                    )
-                    session.commit()
-                    return {
-                        "status": ImportProcessingStatus.DEAD_LETTER.value,
-                        "import_id": str(import_id),
-                        "attempts": attempts,
-                        "released_for_retry": released,
-                        "error": str(exc)[:500],
-                    }
                 delay = min(
                     self._settings.validation_retry_max_seconds,
                     self._settings.validation_retry_base_seconds * (2 ** (attempts - 1)),
@@ -287,15 +296,31 @@ def _import_creator(session: Session, import_id: UUID) -> UUID | None:
 
 
 def _import_already_terminal(session: Session, import_id: UUID) -> bool:
-    """任务是否已在终态（不再接受执行）。项目范围由事件本身保证。"""
+    """任务是否已不再接受执行（重复投递，应直接 PUBLISHED）。
+
+    项目范围由事件本身保证。``SUCCEEDED`` / ``CANCELLED`` 是绝对终态。
+    ``FAILED`` 要分开看：**首次/可重试失败必须交给 release_for_retry 退回
+    PENDING**，否则 0034 的重试机制永远不会生效——``_fail`` 刚把任务写成
+    FAILED，这里若直接当成"重复投递"，一次网络抖动就会让导入永久卡死。
+    只有 ``attempt >= max_attempts``（确实不再重试）才按终态处理。
+    """
     from sqlalchemy import select
 
     from app.infrastructure.db.models.datasources import DataSourceImportModel
 
-    status = session.scalar(
-        select(DataSourceImportModel.status).where(DataSourceImportModel.id == import_id)
-    )
-    return status in {"SUCCEEDED", "FAILED", "CANCELLED"}
+    row = session.execute(
+        select(
+            DataSourceImportModel.status,
+            DataSourceImportModel.attempt,
+            DataSourceImportModel.max_attempts,
+        ).where(DataSourceImportModel.id == import_id)
+    ).one_or_none()
+    if row is None:
+        return False
+    status, attempt, max_attempts = row
+    if status in {"SUCCEEDED", "CANCELLED"}:
+        return True
+    return status == "FAILED" and attempt >= max_attempts
 
 
 def _install_signal_handlers(stop_event: threading.Event) -> None:

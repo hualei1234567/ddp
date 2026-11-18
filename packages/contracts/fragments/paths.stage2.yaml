@@ -415,6 +415,24 @@ episodes:
       - {name: status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/EpisodeStatus"}}
       - {name: task_id, in: query, required: false, schema: {type: string, format: uuid}}
       - {name: batch_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - {name: quality_status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/EpisodeQualityStatus"}}
+      - {name: annotation_status, in: query, required: false, schema: {$ref: "../openapi.yaml#/components/schemas/EpisodeAnnotationStatus"}}
+      - name: scene_label
+        in: query
+        required: false
+        description: 可重复传参，任一命中即可。
+        style: form
+        explode: true
+        schema: {type: array, maxItems: 20, items: {type: string, minLength: 1, maxLength: 100}}
+      - {name: device_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - {name: robot_id, in: query, required: false, schema: {type: string, format: uuid}}
+      - name: camera
+        in: query
+        required: false
+        description: Episode 关联原始资产的机位标识，精确匹配；无该事实的资产不命中。
+        schema: {type: string, minLength: 1, maxLength: 64}
+      - {name: captured_from, in: query, required: false, schema: {type: string, format: date-time}}
+      - {name: captured_to, in: query, required: false, schema: {type: string, format: date-time}}
       - $ref: "../openapi.yaml#/components/parameters/Cursor"
       - $ref: "../openapi.yaml#/components/parameters/Limit"
     responses:

@@ -5,6 +5,7 @@ import type {
   DataReview,
   DataSource,
   DataSourceImport,
+  ImportLogList,
   MediaAsset,
   MediaPlayback,
   QualityReport,
@@ -14,6 +15,7 @@ import {
   parseDataReview,
   parseDataSource,
   parseDataSourceImport,
+  parseImportLogList,
   parseMediaAsset,
   parseMediaPlayback,
   parseQualityReport,
@@ -142,6 +144,11 @@ export interface DataSourceApi {
     importId: string,
     options?: { signal?: AbortSignal },
   ): Promise<DataSourceImport>;
+  listImportLogs(
+    projectId: string,
+    importId: string,
+    options?: { signal?: AbortSignal; limit?: number },
+  ): Promise<ImportLogList>;
   actImport(
     projectId: string,
     importId: string,
@@ -270,6 +277,25 @@ export function createDataSourceApi(client: ApiClient): DataSourceApi {
             projectId,
             "导入任务",
           ),
+      });
+    },
+    async listImportLogs(projectId, importId, options) {
+      return client.get(importOf(projectId, importId, "/logs"), {
+        signal: options?.signal,
+        query: { limit: options?.limit },
+        validate: (value) => {
+          const page = parseImportLogList(value);
+          page.items.forEach((item, index) => {
+            assertProjectScope(item, projectId, `导入日志列表.items[${index}]`);
+            if (item.import_id !== importId) {
+              throw new ApiError({
+                kind: "invalid_response",
+                message: `导入日志列表.items[${index}].import_id 与请求不一致`,
+              });
+            }
+          });
+          return page;
+        },
       });
     },
     async listImportAssets(projectId, importId, options) {

@@ -8,6 +8,9 @@
 
 - ``scene_labels``：任一命中即可（Episode 的 ``scene_labels`` 与条件求交集非空）；
 - ``device_id``：Episode 的 ``device_ids`` 必须包含该设备；
+- ``camera``：任一关联原始资产的来源事实 ``raw_metadata.camera`` 精确命中即可；
+  机位标识是导入链写入的 Canonical 事实（``import_runner._import_metadata``），
+  与自动就绪判定同源。上传类资产没有该事实，因此不会命中任何机位条件；
 - ``captured_from`` / ``captured_to``：闭区间，按 Episode 所关联原始资产
   ``captured_at`` 的**最早值**判定；无捕获时间的 Episode 不满足任何时间条件。
 """
@@ -23,6 +26,10 @@ from app.domain.episodes.errors import DomainValidationError
 
 _MAX_SCENE_LABELS = 20
 _MAX_SCENE_LABEL_LENGTH = 100
+# 与 ``MediaAsset.camera`` 的列宽一致（``app/domain/datasources/media.py`` 的
+# ``CAMERA_MAX``）。这里不复用那个常量：Episode 检索只依赖已落库事实，
+# 不应把数据源域的实现细节带进检索语义。
+_MAX_CAMERA_LENGTH = 64
 
 
 def _enum(value: object, enum_type: type, field_name: str) -> object:
@@ -83,6 +90,24 @@ def _uuid(value: object, field_name: str) -> UUID | None:
     raise DomainValidationError(f"{field_name} 必须是 UUID")
 
 
+def _camera(value: object) -> str | None:
+    """机位标识归一：去空白、拒绝空串与超长；不做大小写折叠。
+
+    camera 是外部数据集声明的机位名（如 ``main`` / ``wrist``），大小写属于
+    标识本身，静默改写会让筛选条件永远查不到数据。
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise DomainValidationError("camera 必须是字符串")
+    text = value.strip()
+    if not text:
+        raise DomainValidationError("camera 不得为空串")
+    if len(text) > _MAX_CAMERA_LENGTH:
+        raise DomainValidationError(f"camera 长度不得超过 {_MAX_CAMERA_LENGTH} 个字符")
+    return text
+
+
 @dataclass(frozen=True, slots=True)
 class EpisodeListFilters:
     """Episode 列表的多维过滤条件；全部为空表示不做额外限制。"""
@@ -92,6 +117,7 @@ class EpisodeListFilters:
     scene_labels: tuple[str, ...] | list[str] | str | None = None
     device_id: UUID | str | None = None
     robot_id: UUID | str | None = None
+    camera: str | None = None
     captured_from: datetime | None = None
     captured_to: datetime | None = None
 
@@ -109,6 +135,7 @@ class EpisodeListFilters:
         object.__setattr__(self, "scene_labels", _labels(self.scene_labels))
         object.__setattr__(self, "device_id", _uuid(self.device_id, "device_id"))
         object.__setattr__(self, "robot_id", _uuid(self.robot_id, "robot_id"))
+        object.__setattr__(self, "camera", _camera(self.camera))
         captured_from = _aware(self.captured_from, "captured_from")
         captured_to = _aware(self.captured_to, "captured_to")
         object.__setattr__(self, "captured_from", captured_from)
@@ -127,6 +154,7 @@ class EpisodeListFilters:
                 self.scene_labels,
                 self.device_id,
                 self.robot_id,
+                self.camera,
                 self.captured_from,
                 self.captured_to,
             )

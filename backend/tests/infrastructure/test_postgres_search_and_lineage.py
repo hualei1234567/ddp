@@ -86,6 +86,7 @@ def _insert_episode(
     scene_labels: list[str],
     device_ids: list[str],
     quality_status: str = "NOT_CHECKED",
+    camera: str | None = None,
 ) -> UUID:
     from app.infrastructure.db.models.episodes import EpisodeModel
 
@@ -138,6 +139,51 @@ def _insert_episode(
                 updated_by=user_id,
             )
         )
+        if camera is not None:
+            from app.infrastructure.db.models.episodes import EpisodeRawAssetModel
+            from app.infrastructure.db.models.ingestion import RawAssetModel
+
+            asset_id = uuid4()
+            session.add(
+                RawAssetModel(
+                    id=asset_id,
+                    project_id=project_id,
+                    code=f"RAW-PG-{index}",
+                    source_type="IMPORT",
+                    original_filename=f"episode-{index}.mp4",
+                    object_key=f"raw/{project_id}/2026/11/16/{asset_id}/content.mp4",
+                    size_bytes=1024,
+                    content_type="video/mp4",
+                    format="MP4",
+                    sha256="sha256:" + "a" * 64,
+                    # 守卫要求原始资产以 VALIDATING 创建；机位过滤只读
+                    # raw_metadata，不看状态，这里无需再推进到 VALID。
+                    status="VALIDATING",
+                    raw_metadata={"camera": camera},
+                    ingested_at=_NOW,
+                    storage_class="STANDARD",
+                    uploaded_by=user_id,
+                    version=1,
+                    created_at=_NOW,
+                    updated_at=_NOW,
+                    created_by=user_id,
+                    updated_by=user_id,
+                )
+            )
+            # 两个模型之间没有 ORM relationship，SQLAlchemy 不会保证
+            # raw_assets 先于 episode_raw_assets 写入；显式 flush 一次，
+            # 否则复合外键在 PostgreSQL 上直接拒绝。
+            session.flush()
+            session.add(
+                EpisodeRawAssetModel(
+                    project_id=project_id,
+                    episode_id=episode_id,
+                    asset_id=asset_id,
+                    role="PRIMARY",
+                    sha256_snapshot="sha256:" + "a" * 64,
+                    size_bytes_snapshot=1024,
+                )
+            )
         session.commit()
     return episode_id
 
@@ -178,6 +224,53 @@ def test_pg_scene_and_device_filters_execute(
     assert [row.episode_id for row in by_scene] == [kitchen]
     assert [row.episode_id for row in by_device] == [kitchen]
     assert none == []
+
+
+def test_pg_camera_filter_executes(
+    postgres_factory: tuple[sessionmaker[Session], dict[str, UUID]],
+) -> None:
+    """PostgreSQL 上的 JSON 事实抽取是 ``->>``，必须真跑一次而不只编译。"""
+    factory, ids = postgres_factory
+    project_id = ids["project_id"]
+    main = _insert_episode(
+        factory,
+        project_id,
+        ids["user_id"],
+        index=10,
+        scene_labels=[],
+        device_ids=[],
+        camera="main",
+    )
+    wrist = _insert_episode(
+        factory,
+        project_id,
+        ids["user_id"],
+        index=11,
+        scene_labels=[],
+        device_ids=[],
+        camera="wrist",
+    )
+    # 无来源事实的 Episode（例如上传资产）不命中任何机位。
+    _insert_episode(
+        factory,
+        project_id,
+        ids["user_id"],
+        index=12,
+        scene_labels=[],
+        device_ids=[],
+    )
+
+    scope = ProjectScope(project_id, actor_id=ids["user_id"])
+    with factory() as session:
+        repository = SqlEpisodeRepository(session)
+        by_main = repository.list(scope, filters=EpisodeListFilters(camera="main"), limit=10)
+        by_wrist = repository.list(scope, filters=EpisodeListFilters(camera="wrist"), limit=10)
+        unknown = repository.list(
+            scope, filters=EpisodeListFilters(camera="overhead_ceiling"), limit=10
+        )
+    assert [row.episode_id for row in by_main] == [main]
+    assert [row.episode_id for row in by_wrist] == [wrist]
+    assert unknown == []
 
 
 def test_pg_included_in_edges_are_written_and_idempotent(

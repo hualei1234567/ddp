@@ -29,6 +29,7 @@ from tests.e2e.support import (
     EXPECTED_EPISODES,
     InMemoryObjectStore,
     MediaTransport,
+    expected_media_paths,
     install_object_store,
     register_import_chain,
     run_import_worker,
@@ -182,3 +183,120 @@ def test_import_then_materialize_auto_readies_episodes(
     assert still_ready.json()["status"] == "READY", still_ready.text
     # 已就绪的 Episode 一次都没有被再次写入（版本号不变）。
     assert still_ready.json()["version"] == demo_002["version"], still_ready.text
+
+
+def test_import_worker_writes_real_stage_progress_and_step_logs(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """阶段与进度必须来自真实执行，不是预设百分比。
+
+    - 成功导入：``stage=COMPLETE``，``processed_items == total_items == 实际资产数``；
+    - 日志按阶段顺序覆盖 DOWNLOAD/VALIDATE/PARSE/INGEST/COMPLETE；
+    - 日志消息不携带 URL 或绝对路径（脱敏在写入与读取两侧都做）。
+    """
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    code = f"hf-progress-{UUID(int=0).hex[:6]}"
+    _, job = register_import_chain(editor, ids.project_a, code=code)
+
+    install_object_store(monkeypatch, InMemoryObjectStore())
+    result: dict[str, Any] = run_import_worker(
+        factory, MediaTransport(), now=datetime.now(UTC) + timedelta(seconds=1)
+    )
+    assert result["status"] == "PUBLISHED", result
+
+    imported = editor.get(url(ids.project_a, f"/data-source-imports/{job['import_id']}"))
+    assert imported.status_code == 200, imported.text
+    body = imported.json()
+    assert body["stage"] == "COMPLETE", body
+    assert body["processed_items"] == EXPECTED_ASSETS, body
+    assert body["total_items"] == EXPECTED_ASSETS, body
+    assert body["processed_items"] == body["total_items"]
+
+    logs_response = editor.get(url(ids.project_a, f"/data-source-imports/{job['import_id']}/logs"))
+    assert logs_response.status_code == 200, logs_response.text
+    logs = logs_response.json()
+    assert logs["truncated"] is False, logs
+    stages = [item["stage"] for item in logs["items"]]
+    assert stages[0] == "DOWNLOAD", stages
+    assert {"VALIDATE", "PARSE", "INGEST", "COMPLETE"} <= set(stages), stages
+    assert stages[-1] == "COMPLETE", stages
+    assert {item["attempt"] for item in logs["items"]} == {1}, logs["items"]
+    for item in logs["items"]:
+        assert item["level"] == "INFO", item
+        assert "://" not in item["message"], item
+        # 单独的 " / " 是分隔符；以 "/" 开头的多字符 token 才是绝对路径。
+        assert not any(
+            len(token) > 1 and token.startswith("/") for token in item["message"].split()
+        ), item
+
+
+def test_dead_letter_keeps_import_failed_instead_of_orphan_pending(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """事件死信时不得先把导入退回 PENDING。
+
+    导入侧 ``max_attempts``（默认 3）与事件侧 ``validation_max_attempts``
+    （可配）不同源。若后者更小，旧顺序会先 release 成 PENDING、再判死信，
+    留下没有事件、没有终态、也没有客户端重试入口的孤儿导入。
+    """
+    from app.core.config import Settings
+
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    code = f"hf-dead-{UUID(int=0).hex[:6]}"
+    _, job = register_import_chain(editor, ids.project_a, code=code)
+
+    install_object_store(monkeypatch, InMemoryObjectStore())
+    dropped = next(iter(expected_media_paths()))
+    settings = Settings(_env_file=None, env="local", validation_max_attempts=1)
+    result: dict[str, Any] = run_import_worker(
+        factory,
+        MediaTransport(drop_paths={f"preview/{dropped}"}),
+        now=datetime.now(UTC) + timedelta(seconds=1),
+        settings=settings,
+    )
+
+    assert result["status"] == "DEAD_LETTER", result
+    latest = editor.get(url(ids.project_a, f"/data-source-imports/{job['import_id']}")).json()
+    assert latest["status"] == "FAILED", latest
+    assert latest["error_message"], latest
+
+
+def test_import_worker_failure_logs_error_without_leaking_url(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """下载失败必须留下 ERROR 步骤日志，且消息已脱敏、阶段被退回为未测量。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    code = f"hf-fail-log-{UUID(int=0).hex[:6]}"
+    _, job = register_import_chain(editor, ids.project_a, code=code)
+
+    install_object_store(monkeypatch, InMemoryObjectStore())
+    dropped = next(iter(expected_media_paths()))
+    result: dict[str, Any] = run_import_worker(
+        factory,
+        MediaTransport(drop_paths={f"preview/{dropped}"}),
+        now=datetime.now(UTC) + timedelta(seconds=1),
+    )
+    # 第一次失败是可重试的：事件进入 RETRIED，任务被退回 PENDING。
+    assert result["status"] == "RETRIED", result
+
+    latest = editor.get(url(ids.project_a, f"/data-source-imports/{job['import_id']}")).json()
+    assert latest["status"] == "PENDING", latest
+    # 退回待领取后阶段清空：上一轮的 INGEST 不再代表当前状态。
+    assert latest["stage"] is None, latest
+    assert latest["processed_items"] is None, latest
+
+    logs = editor.get(url(ids.project_a, f"/data-source-imports/{job['import_id']}/logs")).json()
+    errors = [item for item in logs["items"] if item["level"] == "ERROR"]
+    assert errors, logs["items"]
+    for item in errors:
+        assert "://" not in item["message"], item
+        # 单独的 " / " 是分隔符；以 "/" 开头的多字符 token 才是绝对路径。
+        assert not any(
+            len(token) > 1 and token.startswith("/") for token in item["message"].split()
+        ), item

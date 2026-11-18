@@ -13,9 +13,9 @@
 
 | 状态 | 数量 |
 |---|---:|
-| VERIFIED | 14 |
-| PARTIAL | 28 |
-| MISSING | 4 |
+| VERIFIED | 16 |
+| PARTIAL | 27 |
+| MISSING | 3 |
 | BLOCKED | 1 |
 | **合计** | **47** |
 
@@ -40,9 +40,9 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N2-01 | 数据源中心（HF/URL/本地/S3） | **PARTIAL** | `api/v1/datasource_routes.py:185`；`application/datasources/use_cases.py:105`；`HuggingFaceAdapter` | 只做本地格式校验；HF 远端仓库存在性未校验；无 URL/本地/S3 源；前端无详情页 |
-| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **PARTIAL** | 状态机 + Worker + API + 列表页；`validate_import_action` 已在 HTTP 用例入口拒绝系统动作（N2-001） | 无进度百分比/阶段；无日志端点 |
+| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **PARTIAL** | 状态机 + Worker + API + 列表页；`validate_import_action` 已在 HTTP 用例入口拒绝系统动作（N2-001） | N2-002 已补阶段/进度/步骤日志与只读端点；仍为手动刷新，无自动轮询 |
 | DDP-V21-N2-03 | Raw Asset 字段、状态机、动作、去重 | **VERIFIED** | `domain/ingestion/models.py:332`；`state_machines.py:65`；`uploads.py:234-267`；`test_raw_asset_actions_api.py`；`scripts/qa/raw_asset_lifecycle_smoke.py` | — |
-| DDP-V21-N2-04 | Episode Explorer（时间/任务/机器人/相机/质量/状态） | **PARTIAL** | `api/v1/episodes.py:103`；`domain/episodes/filters.py:87`；`EpisodeListPage.tsx` | 后端无 camera 过滤；前端只暴露 keyword/status/task |
+| DDP-V21-N2-04 | Episode Explorer（时间/任务/机器人/相机/质量/状态） | **VERIFIED** | N2-004：camera 过滤（`EXISTS` 下推）+ 前端质量/标注/机器人/机位/时间筛选，全部写入 URL；契约补齐 11 个 query 参数 | `EpisodeListPage.tsx` 729 行，后续评估拆分 |
 | DDP-V21-N2-05 | 人工审看（播放/倍速/Range/时间轴/导航/多视角/decision+reason+evidence） | **PARTIAL** | `AssetReviewPage.tsx`、`ImportReviewPage.tsx`；预签名 URL + 206 Range 实测；hls.js | 无倍速、无自定义时间轴、无多视角同屏；审核无 evidence 附件字段 |
 | DDP-V21-N2-06 | 六类质量报告 UI（Integrity/Temporal/Visual/Metadata/Annotation/Overall） | **MISSING** | 现有为扁平 7 条 rule findings；`application/datasources/quality.py` | 六类分层不存在；不可点击下钻 |
 
@@ -50,7 +50,7 @@
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
-| DDP-V21-N3-01 | Canonical 实体 12 类 | **PARTIAL** | 已有 DataSource/Dataset/DatasetVersion/RawAsset/Episode/Annotation（`domain/datasources/models.py:52`、`datasets/models.py:48,132`、`ingestion/models.py:332`、`episodes/models.py:167`） | Frame、VideoStream、SensorStream、Action（序列）、Observation、统一 QualityResult 不存在 |
+| DDP-V21-N3-01 | Canonical 实体 12 类 | **PARTIAL** | N3-001：`data-platform/ddp_data/canonical/` 定义 Frame / VideoStream / SensorStream / Action / Observation / Episode（`ddp.canonical/1.0.0`，只读契约 + LeRobot 投影） | 统一 QualityResult 仍无跨域实体；Frame/Stream 尚无生产者与持久化（ADR-0035 有意不建表） |
 | DDP-V21-N3-02 | Adapter 接口与注册发现 | **PARTIAL** | `data-platform/ddp_data/adapters/registry.py:76-162`；`builtin.py:226,252`；`adapter_resolver.py:32` | `AdapterSpec` 只有 detect/parse；fetch/verify/write 散在 `import_runner.py` 等，不在接口内 |
 | DDP-V21-N3-03 | 多格式 Adapter 优先级（LeRobot/Parquet/MP4/MCAP/ROS/HDF5） | **PARTIAL** | LeRobot preview：`lerobot/parser.py:104`；JSONL：`builtin.py` | 完整 LeRobot Parquet、Parquet、MP4 metadata、MCAP、ROS Bag、HDF5 均无字段级解析；仅魔数识别 |
 
@@ -58,7 +58,7 @@
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
-| DDP-V21-N4-01 | Processing Run 实体与状态机（CREATED/QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED/RETRYING） | **MISSING** | 仅 `ingestion_jobs`（`domain/ingestion/enums.py:155`、`job_state_machines.py:20`） | 无 ProcessingRun 表/API；无阶段、产物、重试计数 |
+| DDP-V21-N4-01 | Processing Run 实体与状态机（CREATED/QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED/RETRYING） | **PARTIAL** | N4-001：`domain/processing/` 七态状态机 + 迁移 0056 + 4 个 API + 契约 1.11.0；Worker enqueue/claim/advance 最小方法 | 八阶段编排、worker 消费循环、超时/租约、阶段日志与前端页面属 N4-002 |
 | DDP-V21-N4-02 | 时间同步（timestamp/frame index/offset/drift） | **PARTIAL** | `domain/episodes/sync_drift.py:110`；导入质量 `stream_sync_aligned` | 只检测 start/duration 偏移；无帧索引、无校正、drift 不落库 |
 | DDP-V21-N4-03 | Episode 切分（metadata/time range/manual/task boundary） | **PARTIAL** | `domain/episodes/segmentation_rules.py:235,317,409`；`episode_materialization.py:131` | 只有 MANUAL_TIME_RANGE / fixed-window / episode-boundary；无 task-boundary、无帧级切片 |
 | DDP-V21-N4-04 | 质量引擎（checksum/decode/fps/resolution/duration/timestamp/missing frame/metadata/annotation） | **PARTIAL** | 导入规则 `datasources/quality.py`（v1.1.0）；标注规则 `annotation/quality_rules.py`；资产 hash/size | decode、resolution、missing-frame 规则不存在；Episode 级自动质检缺失；无统一规则注册表 |
@@ -102,7 +102,7 @@
 | DDP-V21-N8-03 | 性能基线（100/1K/10K episodes、并发导入/审核、Video Range） | **MISSING** | 无压测脚本与记录 | 全部缺失 |
 | DDP-V21-N8-04 | Backup / Restore | **VERIFIED** | `scripts/ops/backup-restore-drill.sh`；`docs/operations/备份与恢复演练记录-2026-11-17.md`（PG+MinIO 全量、抽样 sha256 一致） | 仅本机、无加密/异地/RTO |
 | DDP-V21-N8-05 | Staging 发布链 | **BLOCKED** | CI 无 deploy job；`scripts/deploy-laptop.sh` 仅本机 | 主机不可解析（RK-01） |
-| DDP-V21-N8-06 | Security（JWT/RBAC/scope/signed URL/SSRF/path traversal/secret） | **PARTIAL** | 训练 Adapter：`adapter_url_guard.py`（每次请求解析全部 A/AAAA，拒私网/环回/链路本地/元数据；禁重定向）+ 显式本地开关；JWT/RBAC/scope/signed URL/secret 均有用例 | 模型平台网关未接同一守卫；限流 Redis 不可用时 fail-open |
+| DDP-V21-N8-06 | Security（JWT/RBAC/scope/signed URL/SSRF/path traversal/secret） | **VERIFIED** | N8-001 + N8-008：训练与模型网关共用 `adapter_url_guard.py`，两个独立 allow_private 开关默认 false；JWT/RBAC/scope/signed URL/path traversal/secret 均有用例 | 限流 Redis 不可用时 fail-open（ADR-0031 已接受） |
 
 ## 9. N9 真实机器人 / 规模化
 

@@ -6,7 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Select, and_, func, select, update
+from sqlalchemy import ColumnElement, Select, and_, exists, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -235,11 +235,38 @@ class SqlEpisodeRepository:
             )
         if filters.robot_id is not None:
             statement = statement.where(EpisodeModel.robot_id == filters.robot_id)
+        if filters.camera is not None:
+            statement = statement.where(self._camera_predicate(filters.camera))
         if filters.captured_from is not None or filters.captured_to is not None:
             statement = statement.where(
                 self._captured_at_predicate(filters.captured_from, filters.captured_to)
             )
         return statement
+
+    def _camera_predicate(self, camera: str) -> ColumnElement[bool]:
+        """机位条件：任一关联原始资产的来源事实 ``raw_metadata.camera`` 命中。
+
+        机位事实由导入链写入 ``RawAsset.raw_metadata``（
+        ``import_runner._import_metadata``），与自动就绪判定读取的是同一份
+        Canonical 事实。用相关 ``EXISTS`` 表达，条件留在 SQL 里；没有该事实的
+        资产（例如上传类）自然不命中，不会被当成任何机位。
+        """
+        return exists(
+            select(1)
+            .select_from(EpisodeRawAssetModel)
+            .join(
+                RawAssetModel,
+                and_(
+                    RawAssetModel.project_id == EpisodeRawAssetModel.project_id,
+                    RawAssetModel.id == EpisodeRawAssetModel.asset_id,
+                ),
+            )
+            .where(
+                EpisodeRawAssetModel.project_id == EpisodeModel.project_id,
+                EpisodeRawAssetModel.episode_id == EpisodeModel.id,
+                RawAssetModel.raw_metadata["camera"].as_string() == camera,
+            )
+        ).correlate(EpisodeModel)
 
     def _captured_at_predicate(
         self,

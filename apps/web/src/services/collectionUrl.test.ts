@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyEpisodeListFilterPatch,
   buildEpisodeListPath,
   buildEpisodeListSearch,
   buildTaskDetailPath,
@@ -10,6 +11,7 @@ import {
   buildWorkbenchSearch,
   EMPTY_EPISODE_LIST_FILTERS,
   EMPTY_TASK_LIST_FILTERS,
+  episodeServerFilterKey,
   hasEpisodeListFilters,
   hasTaskListFilters,
   readEpisodeListFilters,
@@ -20,6 +22,7 @@ import {
 
 const PROJECT_ID = "11111111-1111-7111-8111-111111111111";
 const TASK_ID = "22222222-2222-7222-8222-222222222222";
+const ROBOT_ID = "33333333-3333-7333-8333-333333333333";
 
 describe("采集任务 URL 状态", () => {
   it("筛选写入地址栏并可完整恢复", () => {
@@ -74,18 +77,36 @@ describe("采集任务 URL 状态", () => {
 });
 
 describe("Episode URL 状态", () => {
-  it("Episode 筛选写入地址栏并可恢复", () => {
-    const filters = {
-      keyword: "EP-0001",
-      status: "READY",
-      taskId: TASK_ID,
-    };
-    expect(readEpisodeListFilters(new URLSearchParams(
-      buildEpisodeListSearch(PROJECT_ID, filters),
-    ))).toEqual(filters);
+  const filters = {
+    keyword: "EP-0001",
+    status: "READY",
+    taskId: TASK_ID,
+    robotId: ROBOT_ID,
+    qualityStatus: "PASS",
+    annotationStatus: "APPROVED",
+    camera: "main",
+    capturedFrom: "2026-11-09T00:00:00.000Z",
+    capturedTo: "2026-11-10T00:00:00.000Z",
+  };
+
+  it("Episode 全部筛选维度写入地址栏并可完整恢复", () => {
+    const search = buildEpisodeListSearch(PROJECT_ID, filters);
+    expect(readEpisodeListFilters(new URLSearchParams(search))).toEqual(filters);
     expect(hasEpisodeListFilters(filters)).toBe(true);
+
+    const params = new URLSearchParams(search);
+    expect(params.get("q")).toBe("EP-0001");
+    expect(params.get("status")).toBe("READY");
+    expect(params.get("task_id")).toBe(TASK_ID);
+    expect(params.get("robot_id")).toBe(ROBOT_ID);
+    expect(params.get("quality_status")).toBe("PASS");
+    expect(params.get("annotation_status")).toBe("APPROVED");
+    expect(params.get("camera")).toBe("main");
+    expect(params.get("captured_from")).toBe(filters.capturedFrom);
+    expect(params.get("captured_to")).toBe(filters.capturedTo);
+
     expect(buildEpisodeListPath(PROJECT_ID, filters)).toBe(
-      `/episodes?project_id=${PROJECT_ID}&q=EP-0001&status=READY&task_id=${TASK_ID}`,
+      `/episodes${search}`,
     );
   });
 
@@ -94,5 +115,35 @@ describe("Episode URL 状态", () => {
       buildEpisodeListSearch(PROJECT_ID, EMPTY_EPISODE_LIST_FILTERS),
     ).toBe(`?project_id=${PROJECT_ID}`);
     expect(hasEpisodeListFilters(EMPTY_EPISODE_LIST_FILTERS)).toBe(false);
+  });
+
+  it("时间区间一次写两个参数，空值删除且保留项目上下文", () => {
+    const base = new URLSearchParams(`project_id=${PROJECT_ID}&status=READY`);
+    const ranged = applyEpisodeListFilterPatch(base, {
+      capturedFrom: filters.capturedFrom,
+      capturedTo: filters.capturedTo,
+    });
+    expect(ranged.get("project_id")).toBe(PROJECT_ID);
+    expect(ranged.get("status")).toBe("READY");
+    expect(ranged.get("captured_from")).toBe(filters.capturedFrom);
+    expect(ranged.get("captured_to")).toBe(filters.capturedTo);
+
+    const cleared = applyEpisodeListFilterPatch(ranged, {
+      capturedFrom: "",
+      capturedTo: "",
+    });
+    expect(cleared.get("captured_from")).toBeNull();
+    expect(cleared.get("captured_to")).toBeNull();
+    expect(cleared.get("status")).toBe("READY");
+  });
+
+  it("服务端筛选键不含仅作用于已加载数据的关键词", () => {
+    const keywordOnly = { ...EMPTY_EPISODE_LIST_FILTERS, keyword: "EP-1" };
+    expect(episodeServerFilterKey(keywordOnly)).toBe(
+      episodeServerFilterKey(EMPTY_EPISODE_LIST_FILTERS),
+    );
+    expect(
+      episodeServerFilterKey({ ...keywordOnly, camera: "main" }),
+    ).not.toBe(episodeServerFilterKey(keywordOnly));
   });
 });

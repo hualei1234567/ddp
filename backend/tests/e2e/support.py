@@ -172,12 +172,13 @@ def run_import_worker(
     transport: MediaTransport,
     *,
     now: datetime | None = None,
+    settings: Any = None,
 ) -> dict[str, object]:
     """跑一次真实 ``DataSourceImportWorker.process_once``。"""
     from app.core.config import Settings
     from app.workers.datasources import DataSourceImportWorker
 
-    settings = Settings(env="local")
+    settings = settings or Settings(env="local")
     client = transport.client()
     try:
         worker = DataSourceImportWorker(factory, settings, client)

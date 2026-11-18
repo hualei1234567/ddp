@@ -50,3 +50,25 @@ class ImportStatus(StrEnum):
 IMPORT_TERMINAL: frozenset[ImportStatus] = frozenset(
     {ImportStatus.SUCCEEDED, ImportStatus.FAILED, ImportStatus.CANCELLED}
 )
+
+
+class ImportStage(StrEnum):
+    """导入执行阶段（可观测性，不参与状态机）。
+
+    ``NULL`` 表示"未测量"：迁移 0055 之前的存量导入没有阶段信息，不能把
+    "没记录"伪装成"已完成 0%"。新导入从 ``DOWNLOAD`` 开始写真实阶段。
+    """
+
+    DOWNLOAD = "DOWNLOAD"
+    VALIDATE = "VALIDATE"
+    PARSE = "PARSE"
+    INGEST = "INGEST"
+    COMPLETE = "COMPLETE"
+
+
+class ImportLogLevel(StrEnum):
+    """步骤日志等级。只用于运行期排障，不是业务状态。"""
+
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
