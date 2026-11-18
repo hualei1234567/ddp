@@ -17,6 +17,7 @@ import type {
   QualityFinding,
   QualityReport,
   ReviewDecision,
+  ReviewEvidence,
   ReviewStatus,
 } from "../types/datasource";
 import {
@@ -324,6 +325,47 @@ export function presentCamera(camera: string): string {
   return labels[camera] ?? camera;
 }
 
+const REVIEW_EVIDENCE_KEYS = new Set([
+  "timestamp_seconds",
+  "camera",
+  "note",
+  "episode_key",
+]);
+
+/** 服务端只写白名单键；未知键说明契约漂移，按校验失败处理而不是静默丢弃。 */
+export function parseReviewEvidence(
+  value: unknown,
+  path: string,
+): ReviewEvidence | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const record = asRecord(value, path);
+  for (const key of Object.keys(record)) {
+    if (!REVIEW_EVIDENCE_KEYS.has(key)) {
+      throw new Error(`${path}.${key} 不是允许的审核证据键`);
+    }
+  }
+  const timestamp = readOptionalNumber(
+    record,
+    "timestamp_seconds",
+    `${path}.timestamp_seconds`,
+  );
+  if (timestamp !== null && timestamp < 0) {
+    throw new Error(`${path}.timestamp_seconds 必须是非负数`);
+  }
+  return {
+    timestamp_seconds: timestamp,
+    camera: readOptionalString(record, "camera", `${path}.camera`),
+    note: readOptionalString(record, "note", `${path}.note`),
+    episode_key: readOptionalString(
+      record,
+      "episode_key",
+      `${path}.episode_key`,
+    ),
+  };
+}
+
 /** 服务端保证职责分离：审核人不会等于提交人，前端只如实呈现。 */
 export function parseDataReview(value: unknown): DataReview {
   const record = asRecord(value, "审核记录");
@@ -355,6 +397,7 @@ export function parseDataReview(value: unknown): DataReview {
       "审核记录.decided_at",
     ),
     version: readPositiveInteger(record, "version", "审核记录.version"),
+    evidence: parseReviewEvidence(record.evidence, "审核记录.evidence"),
   };
 }
 

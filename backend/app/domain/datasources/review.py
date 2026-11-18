@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import json
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -29,7 +31,77 @@ class ReviewStatus(StrEnum):
 
 
 REVIEW_REASON_MAX = 2000
+
+#: 审核证据是**结构化**的少量字段，不是自由 JSON 垃圾桶。
+#: 键白名单、键数上限与总字节上限三处同时限制：客户端可以传备注，
+#: 但不能借此把任意大对象写进审核留痕。
+EVIDENCE_ALLOWED_KEYS = frozenset({"timestamp_seconds", "camera", "note", "episode_key"})
+EVIDENCE_MAX_KEYS = len(EVIDENCE_ALLOWED_KEYS)
+EVIDENCE_MAX_BYTES = 2000
+EVIDENCE_CAMERA_MAX = 64
+EVIDENCE_NOTE_MAX = 500
+EVIDENCE_EPISODE_KEY_MAX = 128
+
 _TERMINAL = frozenset({ReviewStatus.APPROVED, ReviewStatus.REJECTED})
+
+
+def validate_review_evidence(
+    evidence: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    """校验并归一化审核证据。
+
+    规则（与前端表单和 OpenAPI 契约保持一致）：
+    - 只能是对象；键必须来自白名单，且最多 ``EVIDENCE_MAX_KEYS`` 个；
+    - ``timestamp_seconds`` 为有限非负数；``camera`` / ``note`` /
+      ``episode_key`` 为受限长度的字符串；
+    - 归一化后的 JSON 序列化不得超过 ``EVIDENCE_MAX_BYTES``。
+
+    返回新 dict（只含显式提供的键）；``None`` 原样返回。
+    """
+    if evidence is None:
+        return None
+    if not isinstance(evidence, Mapping):
+        raise DomainValidationError("evidence 必须是 JSON 对象")
+    if not evidence:
+        return None
+    if len(evidence) > EVIDENCE_MAX_KEYS:
+        raise DomainValidationError(f"evidence 最多允许 {EVIDENCE_MAX_KEYS} 个键")
+
+    unknown = set(evidence) - EVIDENCE_ALLOWED_KEYS
+    if unknown:
+        allowed = "、".join(sorted(EVIDENCE_ALLOWED_KEYS))
+        raise DomainValidationError(
+            f"evidence 含不允许的键：{'、'.join(sorted(map(str, unknown)))}（允许：{allowed}）"
+        )
+
+    normalized: dict[str, object] = {}
+    if "timestamp_seconds" in evidence:
+        raw_ts = evidence["timestamp_seconds"]
+        if isinstance(raw_ts, bool) or not isinstance(raw_ts, int | float):
+            raise DomainValidationError("evidence.timestamp_seconds 必须是数字")
+        timestamp = float(raw_ts)
+        if not math.isfinite(timestamp) or timestamp < 0:
+            raise DomainValidationError("evidence.timestamp_seconds 必须是有限非负数")
+        normalized["timestamp_seconds"] = timestamp
+
+    for key, limit in (
+        ("camera", EVIDENCE_CAMERA_MAX),
+        ("note", EVIDENCE_NOTE_MAX),
+        ("episode_key", EVIDENCE_EPISODE_KEY_MAX),
+    ):
+        if key not in evidence:
+            continue
+        value = evidence[key]
+        if not isinstance(value, str):
+            raise DomainValidationError(f"evidence.{key} 必须是字符串")
+        if len(value) > limit:
+            raise DomainValidationError(f"evidence.{key} 超过 {limit} 字符")
+        normalized[key] = value
+
+    serialized = json.dumps(normalized, ensure_ascii=False, separators=(",", ":"))
+    if len(serialized.encode("utf-8")) > EVIDENCE_MAX_BYTES:
+        raise DomainValidationError(f"evidence 序列化后超过 {EVIDENCE_MAX_BYTES} 字节")
+    return normalized
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +119,9 @@ class DataReview:
     created_at: datetime
     decided_at: datetime | None = None
     row_version: int = 1
+    #: 审核依据（时间点 / 机位 / 备注等）。持久化在既有 audit_logs.details，
+    #: 不新增列；读取审核记录时由用例回填。旧记录为 None。
+    evidence: Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -68,6 +143,7 @@ class DataReview:
             raise DomainValidationError(f"reason 超过 {REVIEW_REASON_MAX} 字符")
         if self.row_version < 1:
             raise DomainValidationError("row_version 必须大于等于 1")
+        object.__setattr__(self, "evidence", validate_review_evidence(self.evidence))
 
     @property
     def is_terminal(self) -> bool:
@@ -80,13 +156,15 @@ class DataReview:
         reviewer_id: UUID,
         reason: str | None,
         now: datetime,
+        evidence: Mapping[str, object] | None = None,
     ) -> DataReview:
         """给出审核结论。
 
-        三条硬规则：
+        四条硬规则：
         1. 终态不可再次裁决；
         2. **审核人不得是提交人**（职责分离，与标注域同一原则）；
-        3. REJECT / NEEDS_FIX 必须写原因——否则被拒方不知道改什么。
+        3. REJECT / NEEDS_FIX 必须写原因——否则被拒方不知道改什么；
+        4. evidence 必须是白名单内的结构化小对象，非法键/超限直接拒绝。
         """
         from dataclasses import replace
 
@@ -97,6 +175,7 @@ class DataReview:
         target = ReviewDecision(decision)
         if target is not ReviewDecision.ACCEPT and not (reason or "").strip():
             raise DomainValidationError("拒绝或要求修复必须填写原因")
+        validated_evidence = validate_review_evidence(evidence)
         status = ReviewStatus.APPROVED if target is ReviewDecision.ACCEPT else ReviewStatus.REJECTED
         return replace(
             self,
@@ -106,6 +185,7 @@ class DataReview:
             reviewer_id=reviewer_id,
             decided_at=now,
             row_version=self.row_version + 1,
+            evidence=validated_evidence,
         )
 
 

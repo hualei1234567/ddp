@@ -66,6 +66,7 @@ from app.application.datasources.reviews import DataReviewUseCases
 from app.core.config import get_settings
 from app.domain.datasources.enums import ImportStatus
 from app.domain.datasources.errors import DomainValidationError, ResourceNotFoundError
+from app.infrastructure.repositories.audit_logs import SqlAuditLogQueryRepository
 from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
     SqlDatasetOutboxRepository,
@@ -139,6 +140,8 @@ def get_review_use_cases(session: DbSession) -> DataReviewUseCases:
         audit=_cast_audit(SqlDatasetAuditRepository(session)),
         outbox=_cast_outbox(SqlDatasetOutboxRepository(session)),
         uow=_cast_uow(session),
+        # evidence 复用既有 audit_logs.details；读取审核记录时从审计留痕回填。
+        audit_query=SqlAuditLogQueryRepository(session),
     )
 
 
@@ -452,6 +455,7 @@ def decide_review(
         reason=payload.reason,
         expected_version=expected_version,
         request_id=request_id(request),
+        evidence=(payload.evidence.model_dump(exclude_none=True) if payload.evidence else None),
     )
     return ReviewCreateOut.from_domain(decided).model_dump(mode="json")
 

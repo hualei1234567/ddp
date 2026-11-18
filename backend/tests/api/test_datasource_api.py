@@ -473,6 +473,103 @@ def test_reject_requires_reason(api_db) -> None:
     assert response.status_code == 422
 
 
+def test_review_evidence_is_persisted_and_returned(api_db) -> None:
+    """evidence 与审核结论同事务落库，并在审核记录响应中回读。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    editor.post(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+
+    evidence = {
+        "timestamp_seconds": 69.0,
+        "camera": "main",
+        "note": "抽查画面正常",
+        "episode_key": "demo_001",
+    }
+    decided = owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "ACCEPT", "reason": "抽查通过", "evidence": evidence},
+    )
+
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["evidence"] == evidence
+
+    fetched = owner.get(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["evidence"] == evidence
+
+
+def test_review_evidence_rejects_unknown_key(api_db) -> None:
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    editor.post(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+
+    response = owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "ACCEPT", "evidence": {"arbitrary": "payload"}},
+    )
+
+    assert response.status_code == 422
+
+
+def test_review_evidence_rejects_oversized_payload(api_db) -> None:
+    """Pydantic 只限单字段长度；整体字节上限由领域层兜底。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    editor.post(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+
+    response = owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={
+            "decision": "ACCEPT",
+            "evidence": {
+                "timestamp_seconds": 1.0,
+                "camera": "机" * 64,
+                "episode_key": "片" * 128,
+                "note": "审" * 500,
+            },
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_review_evidence_is_project_scoped(api_db) -> None:
+    """跨项目路径不得读到或改写别家的审核证据。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    source_id, import_id = _an_import_id(factory, ids)
+    editor.post(f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review")
+    owner.post(
+        f"/api/v1/projects/{ids.project_a}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "ACCEPT", "evidence": {"note": "项目 A 的证据"}},
+    )
+
+    # owner_a 是项目 B 的负责人，但 import 属于项目 A。
+    cross_read = owner.get(
+        f"/api/v1/projects/{ids.project_b}/data-source-imports/{import_id}/review"
+    )
+    cross_write = owner.post(
+        f"/api/v1/projects/{ids.project_b}/data-source-imports/{import_id}/review/decisions",
+        headers={"If-Match": '"1"'},
+        json={"decision": "ACCEPT", "evidence": {"note": "越权"}},
+    )
+
+    assert cross_read.status_code == 404
+    assert "项目 A 的证据" not in cross_read.text
+    assert cross_write.status_code == 404
+
+
 def test_quality_report_on_real_assets(api_db) -> None:
     factory, ids = api_db
     client = make_client(factory, ids.editor_a)

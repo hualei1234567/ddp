@@ -1190,6 +1190,7 @@ components:
     MediaAssetList: {$ref: "./fragments/schemas.stage7.yaml#/MediaAssetList"}
     MediaAssetPlayback: {$ref: "./fragments/schemas.stage7.yaml#/MediaAssetPlayback"}
     DataReview: {$ref: "./fragments/schemas.stage7.yaml#/DataReview"}
+    ReviewEvidence: {$ref: "./fragments/schemas.stage7.yaml#/ReviewEvidence"}
     ReviewDecisionRequest: {$ref: "./fragments/schemas.stage7.yaml#/ReviewDecisionRequest"}
     ImportQualityFinding: {$ref: "./fragments/schemas.stage7.yaml#/ImportQualityFinding"}
     ImportQualityReport: {$ref: "./fragments/schemas.stage7.yaml#/ImportQualityReport"}
