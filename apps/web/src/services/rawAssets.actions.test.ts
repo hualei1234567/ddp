@@ -76,7 +76,8 @@ describe("原始资产动作请求", () => {
   });
 
   it("返回体缺少 allowed_actions 时视为契约不满足", async () => {
-    const { allowed_actions: _omit, ...withoutActions } = rawAssetFixture;
+    const withoutActions: Record<string, unknown> = { ...rawAssetFixture };
+    delete withoutActions.allowed_actions;
     const fetchImpl = vi.fn(async () => jsonResponse(withoutActions));
     const api = createRawAssetsApi(
       new ApiClient({ fetchImpl: fetchImpl as unknown as typeof fetch }),
