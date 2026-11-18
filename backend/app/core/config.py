@@ -225,6 +225,13 @@ class Settings(BaseSettings):
     # 单次 Adapter 调用超时。必须显式设置：没有超时的外部调用会把 API 线程
     # 挂在不可达的平台上一整个 TCP 超时周期。超时按不可用处理（503），不重试。
     training_adapter_timeout_seconds: float = Field(default=10.0, gt=0, le=600)
+    # SSRF 守卫的显式本地例外，**默认 False**。训练 Adapter 的出站请求会解析
+    # endpoint 主机名，并拒绝环回/私网/链路本地/云元数据等地址
+    # （见 ``infrastructure/adapter_url_guard.py``）。本地 docker-compose 的
+    # ``local-adapter``（服务名或 localhost）落在私有网段，必须显式置 True 才放行。
+    # **开启后等同于关闭训练 Adapter 的 SSRF 地址筛查**：本机可被用作访问内网与
+    # 云元数据的跳板，只能用于本地开发，不得用于共享或生产环境。
+    training_adapter_allow_private: bool = False
     training_callback_time_window_seconds: int = Field(default=300, ge=1, le=3600)
     training_callback_nonce_ttl_seconds: int = Field(default=600, ge=1)
 

@@ -117,6 +117,9 @@ services:
       # （空串由 Settings 解析为「未配置」，不会让启动自检失败）。
       DDP_TRAINING_ADAPTER_ENDPOINTS: ${DDP_TRAINING_ADAPTER_ENDPOINTS:-}
       DDP_MODEL_ADAPTER_ENDPOINTS: ${DDP_MODEL_ADAPTER_ENDPOINTS:-}
+      # SSRF 守卫例外（默认 false）。本地 `local-adapter` 服务名落在私有网段，
+      # 需要在 .env 中显式置 true 才放行；共享/生产环境必须保持 false。
+      DDP_TRAINING_ADAPTER_ALLOW_PRIVATE: ${DDP_TRAINING_ADAPTER_ALLOW_PRIVATE:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -148,6 +151,7 @@ services:
       # 训练与模型平台，配置口径必须与 api 一致，否则两侧行为不同。
       DDP_TRAINING_ADAPTER_ENDPOINTS: ${DDP_TRAINING_ADAPTER_ENDPOINTS:-}
       DDP_MODEL_ADAPTER_ENDPOINTS: ${DDP_MODEL_ADAPTER_ENDPOINTS:-}
+      DDP_TRAINING_ADAPTER_ALLOW_PRIVATE: ${DDP_TRAINING_ADAPTER_ALLOW_PRIVATE:-false}
     depends_on:
       postgres:
         condition: service_healthy

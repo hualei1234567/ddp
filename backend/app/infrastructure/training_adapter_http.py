@@ -32,6 +32,7 @@ from app.infrastructure.adapter_http import (
     request_json,
     shared_client,
 )
+from app.infrastructure.adapter_url_guard import ensure_safe_adapter_url
 from app.infrastructure.training_adapters import ConfiguredTrainingAdapterGateway
 
 _STATUS_VALUES = frozenset(item.value for item in ExternalTrainingStatus)
@@ -46,6 +47,8 @@ class HttpTrainingAdapterGateway:
             for adapter_id, endpoint in settings.training_adapter_endpoints.items()
         }
         self._timeout_seconds = settings.training_adapter_timeout_seconds
+        # SSRF 守卫的显式本地例外（默认关闭）；见 ``adapter_url_guard`` docstring。
+        self._allow_private_endpoints = settings.training_adapter_allow_private
         # 注入的 client 由调用方负责关闭；未注入时使用进程内共享连接池。
         self._injected_client = client
         self._fallback = ConfiguredTrainingAdapterGateway(settings)
@@ -154,6 +157,14 @@ class HttpTrainingAdapterGateway:
         context: str,
         payload: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
+        # 每次请求前做 SSRF 筛查（不缓存解析结果）：拒绝环回/私网/链路本地/
+        # 云元数据等地址。失败抛 ``AdapterHttpFailure``，由调用处的
+        # ``adapter_failure_as`` 统一映射为 ``TrainingAdapterUnavailableError``。
+        ensure_safe_adapter_url(
+            url,
+            context=context,
+            allow_private=self._allow_private_endpoints,
+        )
         client = self._injected_client or shared_client(self._timeout_seconds)
         return request_json(
             client=client,
