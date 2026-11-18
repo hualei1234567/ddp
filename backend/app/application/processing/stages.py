@@ -32,10 +32,13 @@ from app.domain.processing.models import ProcessingRun
 class StageFailure(Exception):
     """阶段的可预期失败；消息会脱敏后落库。"""
 
-    def __init__(self, error_code: str, summary: str) -> None:
+    def __init__(self, error_code: str, summary: str, *, retryable: bool = True) -> None:
         super().__init__(summary)
         self.error_code = error_code
         self.summary = summary
+        # 永久性失败（输入引用越界、对象不存在）重试只会重复同一结果，
+        # 让运行停在 RETRYING 并烧掉事件 attempts 是纯粹的噪声。
+        self.retryable = retryable
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,6 +108,7 @@ class FileValidationHandler:
                 raise StageFailure(
                     "input_ref_not_project_scoped",
                     "输入引用必须属于当前项目",
+                    retryable=False,
                 )
             try:
                 size = self._inspector.object_size(ref)

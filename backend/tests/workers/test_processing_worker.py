@@ -154,6 +154,25 @@ def test_event_type_is_the_documented_dispatch_contract() -> None:
     assert PROCESSING_RUN_REQUESTED_EVENT == RUN_REQUESTED_EVENT
 
 
+def test_permanent_failure_is_not_retried(api_db) -> None:
+    """跨项目输入引用是永久性失败：事件 PUBLISHED、运行 FAILED，不烧 attempts。"""
+    factory, ids = api_db
+    run_id = _create_run(
+        factory,
+        ids,
+        input_refs=(f"raw/{ids.project_b}/secret",),
+    )
+    worker = ProcessingRunWorker(factory, _settings(), inspector=FakeInspector({}))
+
+    result = worker.process_once(now=_now())
+
+    assert result["status"] == RunProcessingStatus.PUBLISHED.value, result
+    run = _run(factory, ids, run_id)
+    assert run.status == ProcessingRunStatus.FAILED.value
+    assert run.error_code == "input_ref_not_project_scoped"
+    assert _event_status(factory) == [("PUBLISHED", 0)]
+
+
 def test_worker_consumes_requested_event_and_runs_all_stages(env) -> None:
     factory, ids = env
     run_id = _create_run(factory, ids)

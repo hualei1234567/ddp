@@ -91,6 +91,7 @@ class PipelineOutcome:
     error_code: str | None = None
     error_summary: str | None = None
     reason: str | None = None
+    retryable: bool = True
 
 
 class ProcessingPipeline:
@@ -156,6 +157,7 @@ class ProcessingPipeline:
                     stage,
                     error_code=failure.error_code,
                     summary=failure.summary,
+                    retryable=failure.retryable,
                     now=moment,
                 )
             except Exception as exc:  # noqa: BLE001 - 阶段边界：记录后失败，不吞
@@ -309,6 +311,7 @@ class ProcessingPipeline:
         *,
         error_code: str,
         summary: str,
+        retryable: bool = True,
         now: datetime,
     ) -> PipelineOutcome:
         safe_summary = sanitize_log_message(
@@ -351,6 +354,7 @@ class ProcessingPipeline:
             failed_stage=stage.value,
             error_code=error_code,
             error_summary=safe_summary,
+            retryable=retryable,
         )
 
     def _abort_step(

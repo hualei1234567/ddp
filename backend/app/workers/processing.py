@@ -179,6 +179,7 @@ class ProcessingRunWorker:
                     run_id=run_id,
                     moment=moment,
                     last_error=outcome.error_summary or outcome.error_code or "阶段失败",
+                    retryable=outcome.retryable,
                 )
 
             queue.mark_published(claimed.event_id, now=moment)
@@ -252,9 +253,22 @@ class ProcessingRunWorker:
         run_id: UUID,
         moment: datetime,
         last_error: str,
+        retryable: bool = True,
     ) -> dict[str, object]:
         """按"先判死信、再退回 RETRYING"的顺序收口失败事件与运行。"""
         attempts = claimed.attempts + 1
+        if not retryable:
+            # 永久性失败：运行已由 pipeline 落 FAILED，事件正常投递完成即可。
+            # 不重试、不记死信噪声；错误码与步骤日志留在运行与步骤上。
+            queue.mark_published(claimed.event_id, now=moment)
+            session.commit()
+            return {
+                "status": RunProcessingStatus.PUBLISHED.value,
+                "run_id": str(run_id),
+                "attempts": attempts,
+                "note": "永久性失败，不重试",
+                "error": sanitize_log_message(last_error, limit=500),
+            }
         safe_error = sanitize_log_message(last_error, limit=ERROR_SUMMARY_MAX_LENGTH)
         if attempts >= self._settings.validation_max_attempts:
             # 死信时运行保持 FAILED：错误码与步骤日志都留在运行/步骤上，人工可查。
