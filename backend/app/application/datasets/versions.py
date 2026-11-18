@@ -26,6 +26,7 @@ from app.application.datasets.ports import (
     OutboxRepository,
     UnitOfWork,
 )
+from app.application.datasets.quality_gate import EpisodeQualityGate
 from app.application.datasets.version_actions import DatasetVersionActionsMixin
 from app.application.datasets.version_common import _utcnow, _uuid
 from app.domain.datasets.enums import (
@@ -67,6 +68,7 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
         lineage: DatasetVersionLineageRecorder | None = None,
+        quality_gate: EpisodeQualityGate | None = None,
     ) -> None:
         self._datasets = datasets
         self._versions = versions
@@ -82,6 +84,8 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         # 允许为 None 是为了保持既有纯读/纯策略用例的构造签名兼容；
         # 生产装配一定注入，见 ``api/v1/dataset_dependencies.py``。
         self._lineage = lineage
+        # Episode 统一质量门禁读取器；``min_quality_score`` 启用时才真正查询。
+        self._quality_gate = quality_gate
 
     # ---- 读取 ----
     def get_dataset(self, scope: ProjectScope, dataset_id: UUID) -> Dataset:
@@ -322,9 +326,10 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
             leakage_policy_ref=leakage.ref,
             quality_policy_ref=quality.ref,
         )
+        candidates = self._episodes.list_candidates(scope, filters)
         result = run_pipeline(
             base_version=preview_base,
-            candidates=self._episodes.list_candidates(scope, filters),
+            candidates=candidates,
             filters=filters,
             usage_policy=self.get_dataset(scope, dataset_id).usage_policy,
             dedup_policy=dedup,
@@ -336,6 +341,7 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
             now=now,
             source_snapshot_at=now,
             sample_limit=command.sample_limit,
+            quality_verdicts=self._quality_verdicts(scope, filters, candidates),
         )
         return result.preview
 

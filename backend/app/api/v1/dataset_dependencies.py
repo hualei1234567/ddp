@@ -21,6 +21,7 @@ from app.api.v1.preconditions import require_expected_version
 from app.application.datasets.datasets import DatasetUseCases as DatasetCrudUseCases
 from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.policies import DatasetPolicyUseCases
+from app.application.datasets.quality_gate import EpisodeQualityGate
 from app.application.datasets.versions import DatasetVersionUseCases
 from app.application.episodes.lineage import LineageService
 from app.application.episodes.provenance import SourceProvenanceResolver
@@ -44,6 +45,7 @@ from app.infrastructure.repositories.datasource_provenance import (
     SqlSourceProvenanceRepository,
 )
 from app.infrastructure.repositories.lineage import SqlLineageRepository
+from app.infrastructure.repositories.quality import SqlQualityRunRepository
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 
 ReadScope = Annotated[ProjectScope, Depends(get_project_scope)]
@@ -80,6 +82,7 @@ def get_dataset_use_cases(session: DbSession) -> DatasetServices:
     outbox = SqlDatasetOutboxRepository(session)
     idempotency = SqlDatasetIdempotencyRepository(session)
     lineage = DatasetVersionLineageRecorder(SqlLineageRepository(session))
+    quality_gate = EpisodeQualityGate(SqlQualityRunRepository(session))
     return DatasetServices(
         datasets=DatasetCrudUseCases(
             datasets_repo,
@@ -108,6 +111,7 @@ def get_dataset_use_cases(session: DbSession) -> DatasetServices:
             idempotency,
             session,
             lineage=lineage,
+            quality_gate=quality_gate,
         ),
         lineage=LineageService(
             SqlLineageRepository(session),
