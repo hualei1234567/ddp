@@ -247,6 +247,29 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  usage-snapshot-worker:
+    # 用量快照 Worker：把每个项目的核心资源用量定时聚合进 usage_snapshots，
+    # 供 `GET /projects/{id}/usage-report`（经营报表 / 分析页）读取。
+    #
+    # 此前它只在代码里存在：compose 没有部署，快照表永远是空的，报表所有
+    # 指标都是 UNMEASURED（used=null）——界面上整页「—」，等于没有能力。
+    # 报表是业务主流程的一部分，放在 app profile 常开；间隔与代码默认一致。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-usage-snapshot-worker
+    command: ["python", "-m", "app.workers.usage_snapshots", "--interval-seconds", "300"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   maintenance-worker:
     # 阶段 8：定时备份 + outbox 归档 + 幂等表清扫。
     # 默认不开；开启前必须同时具备 DDP_MAINTENANCE_ENABLED=true 与
