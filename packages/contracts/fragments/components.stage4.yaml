@@ -124,7 +124,10 @@ parameters:
     required: true
     description: |
       DatasetVersion 动作白名单。`system-*` 为后台构建/校验流程使用，客户端不得主动调用；
-      普通用户动作：build、cancel、validate、return-draft、freeze、archive。
+      普通用户动作：build、cancel、validate、return-draft、freeze、archive、
+      invalidate（标记版本失效，要求负责人）、revalidate（确认恢复有效）。
+      `invalidate` / `revalidate` 属于独立的 `validity_status` 轴，与生命周期
+      动作共用本端点（动作名互不重叠）。
     schema:
       type: string
       enum:
@@ -133,6 +136,9 @@ parameters:
         - validate
         - return-draft
         - freeze
+        - archive
+        - invalidate
+        - revalidate
         - archive
         - system-build-complete
         - system-build-fail

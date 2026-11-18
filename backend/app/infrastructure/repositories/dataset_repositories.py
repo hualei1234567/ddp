@@ -349,6 +349,35 @@ class SqlDatasetVersionRepository:
         statement = statement.order_by(DatasetVersionModel.id).limit(limit)
         return [self._from_row(row) for row in self._session.scalars(statement)]
 
+    def list_validity_candidates(
+        self,
+        *,
+        after_id: UUID | None = None,
+        limit: int = 200,
+    ) -> list[tuple[UUID, UUID]]:
+        """跨项目列出"有效性=VALID 且仍在活跃生命周期"的版本 (id, project_id)。
+
+        只给系统巡检用：返回 ID 不返回业务字段，调用方必须自己用
+        ``ProjectScope`` 重新读取，项目隔离仍由仓储强制。
+        """
+        statement = (
+            select(DatasetVersionModel.id, DatasetVersionModel.project_id)
+            .where(
+                DatasetVersionModel.validity_status == ValidityStatus.VALID.value,
+                DatasetVersionModel.status.in_(
+                    [
+                        DatasetVersionStatus.READY.value,
+                        DatasetVersionStatus.FROZEN.value,
+                    ]
+                ),
+            )
+            .order_by(DatasetVersionModel.id)
+            .limit(limit)
+        )
+        if after_id is not None:
+            statement = statement.where(DatasetVersionModel.id > after_id)
+        return [(row[0], row[1]) for row in self._session.execute(statement)]
+
     def save(
         self,
         scope: ProjectScope,

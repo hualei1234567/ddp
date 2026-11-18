@@ -50,7 +50,16 @@ RELATION_ENDPOINTS: Mapping[
         ),
         LineageRelation.INVALIDATES: (
             frozenset({LineageNodeType.EPISODE}),
-            frozenset({LineageNodeType.EPISODE, LineageNodeType.RAW_ASSET}),
+            # 上游 Episode 失效会让引用它的数据集版本失效（validity_status
+            # STALE→INVALIDATED），契约要求这条失效必须用血缘边表达而不是
+            # 改历史：`Episode --INVALIDATES--> DatasetVersion`。
+            frozenset(
+                {
+                    LineageNodeType.EPISODE,
+                    LineageNodeType.RAW_ASSET,
+                    LineageNodeType.DATASET_VERSION,
+                }
+            ),
         ),
         LineageRelation.EVALUATED_BY: (
             frozenset({LineageNodeType.EPISODE}),

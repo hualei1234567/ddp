@@ -233,3 +233,36 @@ def _calibration_state(
             if expiry <= now:
                 return False, "标定已过期", False
     return True, None, False
+
+class SqlDatasetUpstreamDirectory:
+    """数据集版本的上游指纹读取（只读）：Episode 状态与 Manifest Hash。
+
+    有效性巡检只需要"这个 Episode 现在是什么状态、Manifest 是否变了"，
+    不读业务实体，避免把整条 Episode 聚合拉进巡检循环。
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def episode_states(
+        self,
+        scope: ProjectScope,
+        episode_ids: list[UUID],
+    ) -> dict[UUID, tuple[str, str | None, int]]:
+        if not episode_ids:
+            return {}
+        rows = self._session.execute(
+            select(
+                EpisodeModel.id,
+                EpisodeModel.status,
+                EpisodeModel.manifest_sha256,
+                EpisodeModel.episode_version,
+            ).where(
+                EpisodeModel.project_id == scope.project_id,
+                EpisodeModel.id.in_(episode_ids),
+            )
+        ).all()
+        return {
+            row[0]: (str(row[1]), row[2], int(row[3]))
+            for row in rows
+        }

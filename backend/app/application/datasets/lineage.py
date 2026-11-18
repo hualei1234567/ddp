@@ -32,6 +32,50 @@ class DatasetVersionLineageRecorder:
     def __init__(self, lineage: LineageRecorder) -> None:
         self._lineage = lineage
 
+    def record_invalidation(
+        self,
+        scope: ProjectScope,
+        *,
+        dataset_version_id: UUID,
+        episode_ids: Iterable[UUID],
+        now: datetime,
+        metadata: Mapping[str, object] | None = None,
+    ) -> int:
+        """登记 ``Episode --INVALIDATES--> DatasetVersion`` 失效边。
+
+        数据集版本被人工标记失效时，契约要求"失效必须通过追加血缘边表达，
+        不删除历史"。方向取"上游 Episode → 下游 DatasetVersion"：失效的
+        原因在上游，被阻断的是数据集版本。
+        """
+        unique_episodes = tuple(dict.fromkeys(episode_ids))
+        self._lineage.ensure_node(
+            scope,
+            node_type=LineageNodeType.DATASET_VERSION,
+            node_id=dataset_version_id,
+            now=now,
+        )
+        edge_metadata: dict[str, object] = dict(metadata or {})
+        created = 0
+        for episode_id in unique_episodes:
+            self._lineage.ensure_node(
+                scope,
+                node_type=LineageNodeType.EPISODE,
+                node_id=episode_id,
+                now=now,
+            )
+            if self._lineage.ensure_edge(
+                scope,
+                from_node_type=LineageNodeType.EPISODE,
+                from_node_id=episode_id,
+                to_node_type=LineageNodeType.DATASET_VERSION,
+                to_node_id=dataset_version_id,
+                relation=LineageRelation.INVALIDATES,
+                metadata=edge_metadata,
+                now=now,
+            ):
+                created += 1
+        return created
+
     def record_inclusion(
         self,
         scope: ProjectScope,

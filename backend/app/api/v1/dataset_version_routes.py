@@ -85,7 +85,7 @@ def list_versions(
     page = build_page(items, limit=limit, id_of=lambda item: item.dataset_version_id)
     return {
         "items": [
-            version_out(item, allowed_actions=allowed_version_actions(item.status))
+            version_out(item, allowed_actions=_public_version_actions(item))
             for item in page.items
         ],
         "next_cursor": page.next_cursor,
@@ -124,7 +124,7 @@ def create_version(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return version_out(version, allowed_actions=allowed_version_actions(version.status))
+    return version_out(version, allowed_actions=_public_version_actions(version))
 
 
 @router.get("/{dataset_id}/versions/{version_id}", response_model=DatasetVersionOut)
@@ -135,7 +135,7 @@ def get_version(
     use_cases: DatasetUseCasesDep,
 ) -> dict[str, Any]:
     version = use_cases.versions.get(scope, dataset_id, version_id)
-    return version_out(version, allowed_actions=allowed_version_actions(version.status))
+    return version_out(version, allowed_actions=_public_version_actions(version))
 
 
 @router.get(
@@ -203,6 +203,12 @@ def act_on_version(
         context.is_platform_admin or context.role is not None and context.role.value == "owner"
     ):
         raise ForbiddenError("归档要求项目负责人权限")
+    # 契约里 `invalidate` 的角色是 PO/SYSTEM：标记失效会阻断该版本的新导出与
+    # 新交付，属于负责人权限，不能由普通编辑者单方面执行。
+    if action == "invalidate" and not (
+        context.is_platform_admin or context.role is not None and context.role.value == "owner"
+    ):
+        raise ForbiddenError("标记版本失效要求项目负责人权限")
     body = payload or VersionActionRequest()
     version = use_cases.versions.apply_action(
         scope,
@@ -231,7 +237,7 @@ def act_on_version(
         path=request.url.path,
         request_id=request_id(request),
     )
-    return version_out(version, allowed_actions=allowed_version_actions(version.status))
+    return version_out(version, allowed_actions=_public_version_actions(version))
 
 
 @router.post(
@@ -339,3 +345,19 @@ def get_manifest(
     manifest = use_cases.versions.manifest(scope, dataset_id, version_id)
     # 当前阶段对象存储适配未接入：始终内联返回，并明确 hash 供客户端校验。
     return manifest_out(manifest, inline=inline, download_url=None)
+
+
+def _public_version_actions(version: Any) -> frozenset[str]:
+    """版本上对外可点的动作 = 生命周期动作 ∪ 有效性动作。
+
+    两根轴共用一个动作端点（动作名互不重叠），响应里合并下发；前端只按
+    服务端集合渲染，不自己推断哪根轴现在能点。
+    """
+    actions = allowed_version_actions(version.status) | version.allowed_validity_actions
+    # 系统动作（构建/校验/接替由后台推进）与内部失败标记不是用户按钮：
+    # 下发出去前端就会渲染出按了必然 409 的按钮。
+    return frozenset(
+        action
+        for action in actions
+        if not action.startswith("system-") and action != "validate-fail"
+    )

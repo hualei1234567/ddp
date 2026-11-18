@@ -164,7 +164,11 @@ def test_sweep_once_runs_both_sweeps(
     assert response.json()["status"] == "SUBMITTED"
 
     result = DomainSweepWorker(factory).sweep_once(now=NOW)
-    assert result == {"expired_assignments": 1, "checked_collection_tasks": 1}
+    assert result == {
+        "expired_assignments": 1,
+        "checked_collection_tasks": 1,
+        "stale_dataset_versions": 0,
+    }
 
     assert (
         editor.get(

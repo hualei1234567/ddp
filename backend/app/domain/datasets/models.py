@@ -21,8 +21,12 @@ from app.domain.datasets.enums import (
     Split,
     ValidityStatus,
 )
-from app.domain.datasets.errors import DomainValidationError
+from app.domain.datasets.errors import DomainValidationError, InvalidStateTransitionError
 from app.domain.datasets.policies import PolicyRef
+from app.domain.datasets.state_machines import (
+    allowed_validity_actions,
+    validity_target,
+)
 from app.domain.datasets.validation import (
     aware_datetime,
     coerce_enum,
@@ -285,6 +289,52 @@ class DatasetVersion:
         for name in ("created_by", "updated_by"):
             object.__setattr__(self, name, optional_uuid(getattr(self, name), name))
         self._assert_invariants()
+
+    @property
+    def allowed_validity_actions(self) -> frozenset[str]:
+        """有效性轴的**对外**动作。
+
+        ``system-mark-stale`` / ``system-mark-unknown`` 由后台巡检在检测到上游
+        变化时发起，不是用户按钮；人工可点的只有「标记失效」与「重新确认有效」。
+        """
+        return frozenset(
+            action
+            for action in allowed_validity_actions(self.validity_status)
+            if not action.startswith("system-")
+        )
+
+    def apply_validity_action(
+        self,
+        action: str,
+        *,
+        reason: str | None,
+        now: datetime,
+        actor_id: UUID,
+    ) -> DatasetVersion:
+        """有效性状态迁移（``STALE → INVALIDATED`` / ``STALE → VALID``）。
+
+        与生命周期状态分离：失效不改变版本内容与生命周期状态，只影响下游
+        （导出/训练）能否继续引用。契约要求每次迁移都留下原因——包括系统巡检
+        发起的 ``system-mark-stale``——这里统一强制。
+        """
+        if action not in allowed_validity_actions(self.validity_status):
+            # 非法迁移是 409（state_transition_invalid），不是参数错误。
+            raise InvalidStateTransitionError(
+                "数据集版本有效性", self.validity_status.value, action
+            )
+        cleaned = (reason or "").strip()
+        if not cleaned:
+            raise DomainValidationError("有效性迁移必须填写原因")
+        if len(cleaned) > 2000:
+            raise DomainValidationError("原因长度不得超过 2000")
+        target = validity_target(self.validity_status, action)
+        return replace(
+            self,
+            validity_status=target,
+            updated_at=now,
+            updated_by=actor_id,
+            row_version=self.row_version + 1,
+        )
 
     def _assert_invariants(self) -> None:
         if self.item_count != self.train_count + self.validation_count + self.test_count:
