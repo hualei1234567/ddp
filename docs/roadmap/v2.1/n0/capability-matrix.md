@@ -13,8 +13,8 @@
 
 | 状态 | 数量 |
 |---|---:|
-| VERIFIED | 12 |
-| PARTIAL | 30 |
+| VERIFIED | 14 |
+| PARTIAL | 28 |
 | MISSING | 4 |
 | BLOCKED | 1 |
 | **合计** | **47** |
@@ -30,8 +30,8 @@
 | DDP-V21-N1-02 | G-05 Profile 快照：DRAFT 改 `profile_id` 后重写快照 | **VERIFIED** | `application/devices/calibrations.py:264-267`；`with_profile_snapshot`；快照三字段 | — |
 | DDP-V21-N1-03 | G-08 Sensor Frame：`frame_id` / `frame_convention` 全链路 | **VERIFIED** | `application/devices/sensors.py:70-72,192-193`（写入 + PATCH 白名单）；`api/v1/schemas.py` | — |
 | DDP-V21-N1-04 | G-09 状态语义字段统一 | **VERIFIED** | `schemas.py:342-373`（Device）、`:408-413`（Sensor）；契约 `schemas.stage1.yaml`；前端 `types/device.ts` | — |
-| DDP-V21-N1-05 | G-11 标定审计（CREATE/PATCH/Outbox/actor/时间戳/request id） | **PARTIAL** | `application/devices/calibrations.py` 已接 `record_change`（创建 + 状态动作） | devices/sensors/robots/profile 的 **PATCH 不写审计**（TD-03） |
-| DDP-V21-N1-06 | G-16 `supersedes` 链：唯一、禁分叉、连续性 | **PARTIAL** | `application/devices/profiles.py:146-163` 有连续性 + `find_successor` 分叉校验；Profile 唯一键 | `calibration_records.supersedes_id` 只有外键，无唯一约束/分叉守卫（TD-02） |
+| DDP-V21-N1-05 | G-11 标定审计（CREATE/PATCH/Outbox/actor/时间戳/request id） | **VERIFIED** | 创建/状态动作 + `application/devices/patch_audit.py`（devices/sensors/robots 的 PATCH 变更留痕，同事务）；`calibration_profiles` 按 ADR-0020 不可变、无 PATCH 入口；`test_devices_api.py` 等 4 例 | 无（calibration_profiles 的「改配置」= 登记新版本，create 已审计） |
+| DDP-V21-N1-06 | G-16 `supersedes` 链：唯一、禁分叉、连续性 | **VERIFIED** | Profile 侧 `_validate_supersedes`；记录侧 `validate_supersedes_link`（存在/同项目/自引用/分叉）+ `find_successor` + 迁移 0053 部分唯一索引；领域/仓储/迁移共 16 例 | 长度 ≥2 的环（A→B→A）未检测（已知限制，见 Backlog N1-009） |
 | DDP-V21-N1-07 | G-19/G-20 统一错误体与字段路径 | **PARTIAL** | `main.py:87-97` `{"error": {code,message,request_id,details}}`；`errors.py:113` `details_codes` 白名单（G-19） | 字段名为 `code` 而非任务书的 `error_code`；无 `field_path` / `trace_id` 独立字段；错误码差异 61 项仍在 parity 基线内 |
 | DDP-V21-N1-08 | 横切治理：Outbox / 幂等 / 乐观锁 / 错误映射 / 审计统一 | **PARTIAL** | `application/{audit,idempotency}.py`、`preconditions.py` 已收敛 | outbox 事件归类盲区（f-string）；无通用投递器；设备域 f-string 事件（TD-13） |
 
@@ -40,7 +40,7 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N2-01 | 数据源中心（HF/URL/本地/S3） | **PARTIAL** | `api/v1/datasource_routes.py:185`；`application/datasources/use_cases.py:105`；`HuggingFaceAdapter` | 只做本地格式校验；HF 远端仓库存在性未校验；无 URL/本地/S3 源；前端无详情页 |
-| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **PARTIAL** | `domain/datasources/state_machines.py:18`；`workers/datasources.py`；API + 列表页 | 无进度百分比/阶段；无日志端点；`retry` 是系统动作但 HTTP 未拒绝（RK-08） |
+| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **PARTIAL** | 状态机 + Worker + API + 列表页；`validate_import_action` 已在 HTTP 用例入口拒绝系统动作（N2-001） | 无进度百分比/阶段；无日志端点 |
 | DDP-V21-N2-03 | Raw Asset 字段、状态机、动作、去重 | **VERIFIED** | `domain/ingestion/models.py:332`；`state_machines.py:65`；`uploads.py:234-267`；`test_raw_asset_actions_api.py`；`scripts/qa/raw_asset_lifecycle_smoke.py` | — |
 | DDP-V21-N2-04 | Episode Explorer（时间/任务/机器人/相机/质量/状态） | **PARTIAL** | `api/v1/episodes.py:103`；`domain/episodes/filters.py:87`；`EpisodeListPage.tsx` | 后端无 camera 过滤；前端只暴露 keyword/status/task |
 | DDP-V21-N2-05 | 人工审看（播放/倍速/Range/时间轴/导航/多视角/decision+reason+evidence） | **PARTIAL** | `AssetReviewPage.tsx`、`ImportReviewPage.tsx`；预签名 URL + 206 Range 实测；hls.js | 无倍速、无自定义时间轴、无多视角同屏；审核无 evidence 附件字段 |
@@ -87,7 +87,7 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N7-01 | Training Dataset Grant | **VERIFIED** | `domain/datasets/dataset_grants.py:48`；`dataset_grant_routes.py`；`test_dataset_grant_api.py` | 无独立 requester/purpose（`created_by` + reason 兼任） |
-| DDP-V21-N7-02 | Training Adapter（Local/Mock/Dry Run） | **PARTIAL** | `infrastructure/{training_adapters,training_adapter_http}.py`；`local-adapter` 容器 | 无 `execution_mode`；Mock/DryRun 无显式模式与 UI 标注（RK-26） |
+| DDP-V21-N7-02 | Training Adapter（Local/Mock/Dry Run） | **PARTIAL** | `ExecutionMode`（LOCAL/MOCK/DRY_RUN/REMOTE/UNKNOWN）+ 迁移 0054 + 部署声明 `DDP_TRAINING_ADAPTER_EXECUTION_MODES` + 前端显著标注；`local-adapter` 真实执行 | MOCK/DRY_RUN 目前是**显式标记**而非独立执行器；未配置模式时提交 422（fail-closed，刻意） |
 | DDP-V21-N7-03 | Training Run 记录 | **PARTIAL** | `domain/datasets/training_references.py:114`；`training_delivery_routes.py` | 无独立 TrainingRun；config 不落库；无 code_version/model_version；无 worker 轮询 |
 | DDP-V21-N7-04 | Evaluation（model/dataset/config/metrics/artifacts/failure cases） | **PARTIAL** | `domain/modelops/models.py:243`；`evaluation_routes.py`；HMAC 回调 | 无 failure_cases 结构，失败明细只能塞自由 JSON |
 | DDP-V21-N7-05 | Data Gap（多来源、target_count、priority、status） | **PARTIAL** | `domain/modelops/gaps.py`；`feedback_routes.py:116` | 来源仅人工反馈 + Episode 覆盖；无 failed task/low score/标注分歧/缺失技能 |
@@ -102,7 +102,7 @@
 | DDP-V21-N8-03 | 性能基线（100/1K/10K episodes、并发导入/审核、Video Range） | **MISSING** | 无压测脚本与记录 | 全部缺失 |
 | DDP-V21-N8-04 | Backup / Restore | **VERIFIED** | `scripts/ops/backup-restore-drill.sh`；`docs/operations/备份与恢复演练记录-2026-11-17.md`（PG+MinIO 全量、抽样 sha256 一致） | 仅本机、无加密/异地/RTO |
 | DDP-V21-N8-05 | Staging 发布链 | **BLOCKED** | CI 无 deploy job；`scripts/deploy-laptop.sh` 仅本机 | 主机不可解析（RK-01） |
-| DDP-V21-N8-06 | Security（JWT/RBAC/scope/signed URL/SSRF/path traversal/secret） | **PARTIAL** | PyJWT + 33 用例；RBAC/scope 测试；signed URL；路径校验；secret 扫描入 CI | **SSRF 未防护**（RK-14）；限流 Redis 不可用时 fail-open |
+| DDP-V21-N8-06 | Security（JWT/RBAC/scope/signed URL/SSRF/path traversal/secret） | **PARTIAL** | 训练 Adapter：`adapter_url_guard.py`（每次请求解析全部 A/AAAA，拒私网/环回/链路本地/元数据；禁重定向）+ 显式本地开关；JWT/RBAC/scope/signed URL/secret 均有用例 | 模型平台网关未接同一守卫；限流 Redis 不可用时 fail-open |
 
 ## 9. N9 真实机器人 / 规模化
 

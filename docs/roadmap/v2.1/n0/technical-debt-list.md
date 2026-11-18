@@ -12,8 +12,6 @@
 | ID | 债务 | 位置 | 证据 / 复核结论 | 影响 | 修复建议 |
 |---|---|---|---|---|---|
 | TD-01 | **6 个文件 >800 行**：`annotation/submissions.py` 908、`api/errors.py` 877、`episodes/episodes.py` 850、`repositories/calibration_records.py` 821、`annotation/ports.py` 809、`datasets/version_actions.py` 803 | 见左 | `find backend/app apps/web/src (...)-exec wc -l {} + \| awk '$1>800'` | 违反 CLAUDE.md §五与 V2.1 门禁 §3；修改成本与缺陷概率上升 | 按职责拆分并补测试；不得为拆而拆，需先补请求层/仓储层测试锁定语义 |
-| TD-02 | **G-16 `calibration_records.supersedes_id` 无唯一约束、无分叉守卫、无修订连续性校验** | `infrastructure/db/models/devices.py:390,424`；`application/devices/calibrations.py` | 模型只有复合外键；`grep -rn "supersedes" migrations` 无 unique；应用层仅把字段列入不可 PATCH 白名单 | 两条记录可指向同一上一版；修订链可分叉，历史不可信 | 新增迁移：`UNIQUE(project_id, supersedes_id)`（部分索引，排除 NULL）+ 应用层连续性校验 + PG 用例 |
-| TD-03 | **G-11 PATCH 不写审计**：`update_device` / `update_sensor` / `update_robot` / Profile PATCH 均无 `record_change` | `application/devices/devices.py:222-250`（无 record_change）；同类在 sensors/robots/profiles | 函数列表 + grep | 「谁改了什么」不可查，与 create/动作审计不对称 | 四个聚合的 update 补审计 + outbox；补 API 用例断言 audit_logs 行 |
 | TD-04 | **`validity_status = UNKNOWN` 无写入点** | `domain/datasets/enums.py`、`application/datasets/validity.py` | N0 复核：巡检只写 VALID/STALE；UNKNOWN 仅在枚举 | 来源不可达时无法表达「不知道是否有效」，只能维持 VALID | 增加来源可达性探测，探测失败写 UNKNOWN；需产品确认语义 |
 | TD-05 | **Episode 级自动质检缺失** | `application/datasources/*`、`domain/episodes/*` | 报告 §5 第 2 项 MISSING；导入级规则有，逐 Episode 结论由外部登记 | 质量中心无法自动回答「哪些 Episode 不合格」 | 在 N4 建设 Quality Engine 时落到 Episode 粒度，规则版本化 |
 | TD-06 | **Processing Pipeline 八阶段无独立实体** | `backend/app/domain` 无 `ProcessingRun` | 复核：仅 `ingestion_jobs`；无 CREATED…RETRYING 状态机 | N4 的「可观察、可重试、可追踪」无法满足 | N4-01 新建 ProcessingRun（复用 ingestion job 与 outbox 模式） |
@@ -50,6 +48,8 @@
 | R-7 redis 未使用 | 已由 ADR-0031 重新引入并有真实使用 | `infrastructure/rate_limit.py` |
 | R-15 platform phase 硬编码 | 已改配置 | `api/v1/platform.py` |
 | R-12 异常原文未落日志 | 已闭环 | `main.py:60-79` `_log_domain_error`（4xx warning / 5xx error+堆栈，响应体仍不回显） |
+| TD-02 G-16 记录侧修订链 | 已闭环（N1-002，迁移 0053） | 部分唯一索引 + `validate_supersedes_link`；全量 2255 passed；真实 PG 升级成功 |
+| TD-03 设备 PATCH 无审计 | 已闭环（N1-001） | `patch_audit.py`；devices/sensors/robots 接入；真实栈 PATCH 后审计 +1 |
 | G-04/G-05/G-08/G-09/G-03 | 已闭环 | ADR-0020/0032；`sensors.py:70-72,192-193`；`schemas.py:408-413`；`calibrations.py:264-267` |
 | G-19 字段路径 | 已按白名单透传 details | `api/errors.py:113` `details_codes` |
 | G-20 错误码可达 | `calibration_*` 均有产生点 | `grep -rl` 命中 domain/application |

@@ -1,7 +1,7 @@
 """外部训练引用记录执行方式
 
 Revision ID: 0054
-Revises: 0052
+Revises: 0053
 Create Date: 2026-11-18
 
 为什么加这一列：此前训练引用只记录"提交给了哪个 Adapter"，不记录"在哪里跑"。
@@ -30,7 +30,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0054"
-down_revision = "0052"
+down_revision = "0053"
 branch_labels = None
 depends_on = None
 
