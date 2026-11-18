@@ -45,10 +45,23 @@ Worker、运维脚本、直接改库的修数流程）都记得更新同一个�
 长期静默偏差，多副本部署时每份进程还各记一份、互相矛盾。采集时 ``GROUP BY``
 则始终与库一致，只有一个事实来源。
 
-代价是每次抓取（默认 15s 一次）产生两条 ``GROUP BY`` 查询，两者都走
-``(project_id, status)`` 类索引的前缀；数据量再大一个量级应先在指标侧改用预聚合
-表，而不是改回主动更新。查询失败时**不输出**业务指标样本（不是输出 0），
-并记 warning：缺失比假零值更诚实。
+代价是每次抓取（默认 15s 一次）按表各产生一条 ``GROUP BY``（outbox 走
+``(status, available_at)`` 索引范围），没有以 ``status`` 为前缀索引的表会随
+数据量线性变慢；数据量再大一个量级应先在指标侧改用预聚合表，而不是改回主动
+更新。查询失败时**不输出**业务指标样本（不是输出 0），并记 warning：缺失比
+假零值更诚实。单组失败的隔离与耗时上限见
+``app.infrastructure.repositories.observability``。
+
+## 业务指标的标签基数与口径
+
+- **状态分族**（接入任务、Episode、数据源导入、处理运行、质量运行）：唯一标签
+  是领域枚举 ``status``，序列数等于枚举取值个数，上限由代码静态决定。
+- **标量指标**（outbox 积压、导入最近成功时间/24h 吞吐、存储缺失）：无标签，
+  每个指标固定 1 条序列。
+- 任何标签都不含 ``project_id`` / ``user_id`` / 文件名 / 原始 URL：``/metrics``
+  是运维视角的全局聚合，跨项目内容不得出现在这里。
+- 状态分族缺某个状态时补 0（仪表盘不断线）；整组采集失败时**整组缺席**，
+  两者语义不同，不能合并。
 """
 
 from __future__ import annotations
@@ -58,8 +71,11 @@ import threading
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
+from app.domain.datasources.enums import ImportStatus
 from app.domain.episodes.enums import EpisodeStatus
 from app.domain.ingestion.enums import IngestionJobStatus
+from app.domain.processing.enums import ProcessingRunStatus
+from app.domain.quality.enums import QualityRunStatus
 from prometheus_client import CollectorRegistry, Counter, Histogram, ProcessCollector
 from prometheus_client.core import GaugeMetricFamily
 from prometheus_client.registry import Collector
@@ -70,6 +86,17 @@ HTTP_REQUESTS_TOTAL = "ddp_http_requests_total"
 HTTP_REQUEST_DURATION_SECONDS = "ddp_http_request_duration_seconds"
 INGESTION_JOBS_GAUGE = "ddp_ingestion_jobs"
 EPISODES_GAUGE = "ddp_episodes"
+IMPORTS_GAUGE = "ddp_data_source_imports"
+PROCESSING_RUNS_GAUGE = "ddp_processing_runs"
+QUALITY_RUNS_GAUGE = "ddp_quality_runs"
+
+# 无标签的标量指标：每个指标只有一条时间序列，基数恒为 1。
+OUTBOX_DUE_GAUGE = "ddp_outbox_due_events"
+OUTBOX_OLDEST_DUE_AGE_GAUGE = "ddp_outbox_oldest_due_age_seconds"
+OUTBOX_FAILED_GAUGE = "ddp_outbox_failed_events"
+IMPORT_LAST_SUCCESS_GAUGE = "ddp_data_source_import_last_success_timestamp_seconds"
+IMPORT_SUCCEEDED_24H_GAUGE = "ddp_data_source_imports_succeeded_24h"
+RAW_ASSETS_OBJECT_MISSING_GAUGE = "ddp_raw_assets_object_missing"
 
 # 未匹配到任何路由（404/被短路）：路径由客户端完全控制，只能折叠成常量。
 UNMATCHED_ROUTE = "__unmatched__"
@@ -112,7 +139,12 @@ class BusinessGaugeSpec:
 
 
 def business_gauge_specs() -> tuple[BusinessGaugeSpec, ...]:
-    """业务指标定义。状态取值直接来自领域枚举，不在此重复维护字符串。"""
+    """按状态分族的业务指标定义。
+
+    状态取值直接来自领域枚举，不在此重复维护字符串；每个分族的序列数等于
+    枚举取值个数（接入 6、Episode 10、导入 5、处理 7、质量 3），上限由代码
+    静态决定，不随项目数或数据量增长。
+    """
     return (
         BusinessGaugeSpec(
             name=INGESTION_JOBS_GAUGE,
@@ -124,37 +156,118 @@ def business_gauge_specs() -> tuple[BusinessGaugeSpec, ...]:
             help_text="按状态的 Episode 数量（采集时查库）",
             statuses=tuple(status.value for status in EpisodeStatus),
         ),
+        BusinessGaugeSpec(
+            name=IMPORTS_GAUGE,
+            help_text="按状态的数据源导入任务数量（采集时查库）",
+            statuses=tuple(status.value for status in ImportStatus),
+        ),
+        BusinessGaugeSpec(
+            name=PROCESSING_RUNS_GAUGE,
+            help_text="按状态的处理运行数量（采集时查库）",
+            statuses=tuple(status.value for status in ProcessingRunStatus),
+        ),
+        BusinessGaugeSpec(
+            name=QUALITY_RUNS_GAUGE,
+            help_text="按结论的质量运行数量（采集时查库；FAILED/INCOMPLETE 即可核算失败与未完成）",
+            statuses=tuple(status.value for status in QualityRunStatus),
+        ),
     )
 
 
-class BusinessStateCollector(Collector):
-    """采集时才查询数据库的业务状态分布。
+@dataclass(frozen=True)
+class BusinessValueSpec:
+    """无标签的业务标量指标：每个指标固定一条时间序列。"""
 
-    ``counts_provider`` 返回 ``{指标名: {状态值: 数量}}``；缺少的状态按 0 输出，
-    这样仪表盘在某个状态从「有」变「无」时不会断线。
+    name: str
+    help_text: str
+
+
+def business_value_specs() -> tuple[BusinessValueSpec, ...]:
+    """标量业务指标定义；口径写进 help，避免仪表盘各自解释。"""
+    return (
+        BusinessValueSpec(
+            name=OUTBOX_DUE_GAUGE,
+            help_text="已到投递时间仍待处理（PENDING 且 available_at <= now）的 outbox 事件数",
+        ),
+        BusinessValueSpec(
+            name=OUTBOX_OLDEST_DUE_AGE_GAUGE,
+            help_text="最早一件到期未投递 outbox 事件已等待的秒数；无积压时为 0",
+        ),
+        BusinessValueSpec(
+            name=OUTBOX_FAILED_GAUGE,
+            help_text="投递失败进入死信（status=FAILED）的 outbox 事件数",
+        ),
+        BusinessValueSpec(
+            name=IMPORT_LAST_SUCCESS_GAUGE,
+            help_text="最近一次成功导入的完成时间（Unix 秒）；从未成功时无样本",
+        ),
+        BusinessValueSpec(
+            name=IMPORT_SUCCEEDED_24H_GAUGE,
+            help_text="最近 24 小时完成的成功导入次数（滑动窗口，采集时计算）",
+        ),
+        BusinessValueSpec(
+            name=RAW_ASSETS_OBJECT_MISSING_GAUGE,
+            help_text="对象存储内容缺失而被隔离的原始资产数（quarantine_codes 含 object_missing）",
+        ),
+    )
+
+
+@dataclass(frozen=True)
+class BusinessSnapshot:
+    """一次抓取内、同一事实来源的业务指标快照。
+
+    - ``status_counts`` 缺少某个指标键表示**该指标组本次采集失败**（不输出样本），
+      而不是"全部为 0"；
+    - ``values`` 中的 ``None`` 表示"尚无样本"（例如从未有成功导入），同样不输出。
+
+    查询失败与"值确实为零"必须可区分：前者输出 0 会把故障伪装成正常。
+    """
+
+    status_counts: Mapping[str, Mapping[str, int]]
+    values: Mapping[str, float | None]
+
+
+class BusinessMetricsCollector(Collector):
+    """采集时才查询数据库的业务指标。
+
+    状态分族缺少某个状态时按 0 输出，避免仪表盘在某状态从"有"变"无"时断线；
+    整个指标组缺失（采集失败）时不输出任何样本。标量指标只在快照里明确给出
+    数值时输出；``None`` 表示"无样本"。
     """
 
     def __init__(
         self,
-        counts_provider: Callable[[], Mapping[str, Mapping[str, int]]],
-        specs: Iterable[BusinessGaugeSpec],
+        snapshot_provider: Callable[[], BusinessSnapshot],
+        gauge_specs: Iterable[BusinessGaugeSpec],
+        value_specs: Iterable[BusinessValueSpec],
     ) -> None:
-        self._counts_provider = counts_provider
-        self._specs = tuple(specs)
+        self._snapshot_provider = snapshot_provider
+        self._gauge_specs = tuple(gauge_specs)
+        self._value_specs = tuple(value_specs)
 
     def collect(self) -> Iterable[GaugeMetricFamily]:
         try:
-            counts = self._counts_provider()
+            snapshot = self._snapshot_provider()
         except Exception:
             # /metrics 不能因为数据库抖动而整体失败：HTTP 指标仍要可抓取。
             # 这里不是吞异常——原文与堆栈落日志，且业务样本整体缺失（不输出假 0）。
             logger.warning("业务指标采集失败，本次不输出业务指标样本", exc_info=True)
             return
-        for spec in self._specs:
-            per_status = counts.get(spec.name, {})
+        for spec in self._gauge_specs:
+            per_status = snapshot.status_counts.get(spec.name)
+            if per_status is None:
+                # 该指标组采集失败：不输出样本，也不补 0。
+                continue
             family = GaugeMetricFamily(spec.name, spec.help_text, labels=("status",))
             for status in spec.statuses:
                 family.add_metric([status], float(per_status.get(status, 0)))
+            yield family
+        for value_spec in self._value_specs:
+            value = snapshot.values.get(value_spec.name)
+            if value is None:
+                continue
+            family = GaugeMetricFamily(value_spec.name, value_spec.help_text)
+            family.add_metric([], float(value))
             yield family
 
 
@@ -217,10 +330,30 @@ class Metrics:
 
 def build_metrics(
     *,
+    snapshot_provider: Callable[[], BusinessSnapshot] | None = None,
     counts_provider: Callable[[], Mapping[str, Mapping[str, int]]] | None = None,
 ) -> Metrics:
-    """装配指标注册表；给了 ``counts_provider`` 才注册业务采集器。"""
+    """装配指标注册表。
+
+    - ``snapshot_provider``：生产装配入口，一次抓取只查一轮库；
+    - ``counts_provider``：仅状态分布的便捷入口，保留给只需要状态族的使用方
+      （测试与嵌入式），内部包装成只有 ``status_counts`` 的快照。
+
+    两者同时给出视为装配错误：两套事实来源会互相覆盖，拒绝静默择一。
+    """
+    if snapshot_provider is not None and counts_provider is not None:
+        raise ValueError("snapshot_provider 与 counts_provider 只能二选一")
     metrics = Metrics()
-    if counts_provider is not None:
-        metrics.registry.register(BusinessStateCollector(counts_provider, business_gauge_specs()))
+    provider = snapshot_provider
+    if provider is None and counts_provider is not None:
+        counts = counts_provider
+
+        def _from_counts() -> BusinessSnapshot:
+            return BusinessSnapshot(status_counts=counts(), values={})
+
+        provider = _from_counts
+    if provider is not None:
+        metrics.registry.register(
+            BusinessMetricsCollector(provider, business_gauge_specs(), business_value_specs())
+        )
     return metrics
