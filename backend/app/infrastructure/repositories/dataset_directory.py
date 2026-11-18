@@ -284,3 +284,22 @@ class SqlDatasetUpstreamDirectory:
             )
         ).all()
         return {row[0]: row[1] for row in rows}
+
+    def episode_raw_asset_keys(
+        self,
+        scope: ProjectScope,
+        episode_ids: list[UUID],
+    ) -> dict[UUID, tuple[str, ...]]:
+        """Episode 通过 ``episode_raw_assets`` 关联的原始资产对象键（批量）。
+
+        复用 :func:`load_episode_assets`——"Episode 指向哪些真实文件"只在
+        那里定义一次，避免巡检另写一份 join 后和选择/导出产生口径差异。
+        一次查询取回全部 Episode 的关联，不做逐 Episode 查询；项目过滤在
+        SQL 里强制，不依赖调用方拼条件。没有关联的 Episode 不出现（"没有
+        引用"不是"对象缺失"）。
+        """
+        grouped = load_episode_assets(self._session, scope, episode_ids)
+        return {
+            episode_id: tuple(sorted({asset.object_key for _link, asset in rows}))
+            for episode_id, rows in grouped.items()
+        }
