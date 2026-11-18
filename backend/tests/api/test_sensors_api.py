@@ -300,3 +300,57 @@ def test_enter_maintenance_requires_reason_and_record(api_db) -> None:
     assert details.get("maintenance_record_id") == str(
         record_id
     ), "维修工单号必须进审计载荷，否则事后无法对应到工单系统"
+
+
+def test_patch_sensor_writes_one_update_audit(api_db) -> None:
+    """G-11 收口：传感器 PATCH 必须留痕，且只记真正变化的字段。"""
+    from uuid import UUID
+
+    from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
+    from sqlalchemy import select
+
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    device_id = _create_device(client, ids.project_a)
+    sensor = client.post(
+        _sensor_url(ids.project_a), json=sensor_payload(device_id=device_id)
+    ).json()
+
+    patched = client.patch(
+        _sensor_url(ids.project_a, f"/{sensor['sensor_id']}"),
+        headers={"If-Match": '"1"'},
+        json={"vendor": "FLIR", "sample_rate_hz": 15.0, "sensor_type": "RGB"},
+    )
+    assert patched.status_code == 200, patched.text
+
+    with factory() as session:
+        audits = list(
+            session.scalars(
+                select(AuditLog).where(
+                    AuditLog.project_id == ids.project_a,
+                    AuditLog.resource_type == "sensor",
+                    AuditLog.resource_id == UUID(sensor["sensor_id"]),
+                    AuditLog.action == "update",
+                )
+            )
+        )
+        events = list(
+            session.scalars(
+                select(OutboxEvent).where(
+                    OutboxEvent.project_id == ids.project_a,
+                    OutboxEvent.aggregate_type == "sensor",
+                    OutboxEvent.aggregate_id == UUID(sensor["sensor_id"]),
+                    OutboxEvent.event_type == "sensor.updated",
+                )
+            )
+        )
+
+    assert len(audits) == 1, "一次 PATCH 只应产生一条 update 审计"
+    audit = audits[0]
+    assert (audit.details or {}).get("changed_fields") == ["sample_rate_hz", "vendor"]
+    assert audit.from_status == audit.to_status == "PROVISIONED"
+    assert audit.actor_user_id == ids.editor_a
+    assert audit.request_id
+    assert [event.event_type for event in events] == ["sensor.updated"]
+    assert events[0].payload["changed_fields"] == ["sample_rate_hz", "vendor"]
+    assert events[0].payload["sensor_id"] == sensor["sensor_id"]

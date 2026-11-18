@@ -20,6 +20,7 @@ from app.application.devices.pagination import (
     decode_cursor,
     normalize_limit,
 )
+from app.application.devices.patch_audit import record_patch
 from app.application.devices.ports import (
     AuditRepository,
     CalibrationProfileRepository,
@@ -95,6 +96,9 @@ SENSOR_ACTION_EVENTS: dict[str, str] = {
     "suspend": "sensor.suspend",
     "retire": "sensor.retire",
 }
+
+#: PATCH 留痕事件（G-11）；同样用模块级常量而不是 f-string。
+SENSOR_UPDATED_EVENT = "sensor.updated"
 
 
 class SensorUseCases:
@@ -250,7 +254,9 @@ class SensorUseCases:
         *,
         expected_version: int,
         changes: Mapping[str, object],
+        request_id: str | None = None,
     ) -> Sensor:
+        """编辑档案；只把真正变化的字段写进审计（G-11）。"""
         _ensure_patchable(changes)
         current = self.get_sensor(scope, sensor_id)
         if current.version != expected_version:
@@ -261,6 +267,20 @@ class SensorUseCases:
             scope,
             candidate,
             expected_version=expected_version,
+        )
+        record_patch(
+            self._audit,
+            self._outbox,
+            scope,
+            resource_type="sensor",
+            resource_id=updated.sensor_id,
+            id_field="sensor_id",
+            current=current,
+            candidate=candidate,
+            changes=changes,
+            event_type=SENSOR_UPDATED_EVENT,
+            request_id=request_id,
+            occurred_at=datetime.now(UTC),
         )
         self._uow.commit()
         return updated

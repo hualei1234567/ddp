@@ -76,6 +76,7 @@ def get_robot(
 def update_robot(
     robot_id: UUID,
     payload: RobotPatch,
+    request: Request,
     scope: WriteScope,
     use_cases: RobotUseCasesDep,
     expected_version: ExpectedVersion,
@@ -85,6 +86,7 @@ def update_robot(
         robot_id,
         expected_version=expected_version,
         changes=payload.model_dump(exclude_unset=True),
+        request_id=request_id(request),
     )
     return RobotOut.from_domain(robot)
 

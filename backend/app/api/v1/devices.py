@@ -81,6 +81,7 @@ def get_device(
 def update_device(
     device_id: UUID,
     payload: DevicePatch,
+    request: Request,
     scope: WriteScope,
     use_cases: DeviceUseCasesDep,
     expected_version: ExpectedVersion,
@@ -90,6 +91,7 @@ def update_device(
         device_id,
         expected_version=expected_version,
         changes=payload.model_dump(exclude_unset=True),
+        request_id=request_id(request),
     )
     return DeviceOut.from_domain(device)
 
