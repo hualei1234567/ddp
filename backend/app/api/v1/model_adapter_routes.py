@@ -55,6 +55,7 @@ async def receive_model_adapter_callback(
         task_id=payload.task_id,
         metrics=payload.metrics,
         report_ref=payload.report_ref,
+        failure_cases=[item.model_dump(mode="json") for item in payload.failure_cases],
         result_ref=payload.result_ref,
         log_ref=payload.log_ref,
         error_code=payload.error_code,

@@ -56,6 +56,21 @@ class EvaluationVerdict(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class FailureCaseCategory(StrEnum):
+    """失败用例的第一层归因。
+
+    只分"能力环节"这一层，不把具体场景/物体塞进枚举：场景维度属于 Data Gap
+    的输入（N7-004），这里只提供稳定、可聚合的事实分类。``OTHER`` 是显式的
+    逃生口，避免适配器把未知类别硬塞进已有桶里。
+    """
+
+    PERCEPTION = "PERCEPTION"
+    PLANNING = "PLANNING"
+    CONTROL = "CONTROL"
+    LANGUAGE = "LANGUAGE"
+    OTHER = "OTHER"
+
+
 class InferenceServiceStatus(StrEnum):
     PENDING = "PENDING"
     DEPLOYING = "DEPLOYING"

@@ -6,6 +6,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+from datetime import UTC, datetime
 from uuid import uuid4
 
 from app.api.v1.modelops_dependencies import get_artifact_inspector
@@ -95,6 +99,26 @@ def ready_version(client, project_id, model_id, size: int = 128) -> dict[str, ob
     return validated.json()
 
 
+def signed_headers(body: bytes, *, nonce: str, timestamp: int | None = None) -> dict[str, str]:
+    ts = timestamp or int(datetime.now(UTC).timestamp())
+    digest = hmac.new(SECRET.encode(), f"{ts}.{nonce}.".encode() + body, hashlib.sha256).hexdigest()
+    return {
+        "X-DDP-Signature": f"sha256={digest}",
+        "X-DDP-Timestamp": str(ts),
+        "X-DDP-Nonce": nonce,
+        "Content-Type": "application/json",
+    }
+
+
+def callback(client, payload: dict[str, object], *, nonce: str | None = None):
+    body = json.dumps(payload, separators=(",", ":")).encode()
+    return client.post(
+        "/api/v1/integrations/model-adapters/mock/callbacks",
+        content=body,
+        headers=signed_headers(body, nonce=nonce or f"nonce-{uuid4().hex[:8]}"),
+    )
+
+
 def feedback_with_dimension(client, project_id, model_version_id, **dimension) -> dict:
     response = client.post(
         url(project_id, "/model-feedback"),
@@ -114,11 +138,13 @@ __all__ = [
     "SECRET",
     "SHA",
     "FakeInspector",
+    "callback",
     "client",
     "create_model",
     "feedback_with_dimension",
     "model_payload",
     "ready_version",
     "settings",
+    "signed_headers",
     "version_payload",
 ]

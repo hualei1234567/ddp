@@ -16,6 +16,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.domain.modelops.failure_cases import FailureCase
 from app.domain.modelops.gaps import GapSummary, GapSummaryItem
 from app.domain.modelops.models import (
     DataRequirement,
@@ -149,6 +150,23 @@ class ModelVersionOut(BaseModel):
         )
 
 
+class FailureCaseOut(BaseModel):
+    id: str
+    category: str
+    severity: str
+    episode_key: str | None = None
+    episode_id: UUID | None = None
+    evidence: dict[str, object] | str | None = None
+    metric: str | None = None
+    observed: float | str | None = None
+    expected: float | str | None = None
+    suggested_gap: str | None = None
+
+    @classmethod
+    def from_domain(cls, case: FailureCase) -> FailureCaseOut:
+        return cls(**case.to_dict())
+
+
 class EvaluationOut(BaseModel):
     evaluation_id: UUID
     project_id: UUID
@@ -161,6 +179,8 @@ class EvaluationOut(BaseModel):
     thresholds: dict[str, dict[str, float | None]]
     verdict: str
     report_ref: dict[str, object] | None = None
+    # 写入上限 200 条 / 64 KiB；读取随评测整体返回（等价于固定上限分页）。
+    failure_cases: list[FailureCaseOut] = Field(default_factory=list)
     error_code: str | None = None
     error_summary: str | None = None
     started_at: datetime | None = None
@@ -184,6 +204,7 @@ class EvaluationOut(BaseModel):
             thresholds=evaluation.thresholds,
             verdict=evaluation.verdict,
             report_ref=evaluation.report_ref,
+            failure_cases=[FailureCaseOut.from_domain(case) for case in evaluation.failure_cases],
             error_code=evaluation.error_code,
             error_summary=evaluation.error_summary,
             started_at=evaluation.started_at,

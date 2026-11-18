@@ -117,6 +117,7 @@ def _evaluation(row: EvaluationRow) -> Evaluation:
         thresholds=dict(row.thresholds or {}),
         verdict=row.verdict,
         report_ref=dict(row.report_ref) if row.report_ref else None,
+        failure_cases=list(row.failure_cases or []),
         error_code=row.error_code,
         error_summary=row.error_summary,
         started_at=_aware(row.started_at),

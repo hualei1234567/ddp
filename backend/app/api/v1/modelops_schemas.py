@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.modelops.enums import FailureCaseCategory, FeedbackSeverity
+from app.domain.modelops.failure_cases import MAX_FAILURE_CASES
 from app.domain.modelops.gaps import GapDimension
 
 
@@ -182,6 +184,28 @@ class RequirementActionRequest(BaseModel):
     satisfaction_evidence_ref: str | None = Field(default=None, max_length=1024)
 
 
+class FailureCasePayload(BaseModel):
+    """回调中的一条失败用例；字段与契约 ``FailureCase`` 一致。
+
+    枚举与条数在 Pydantic 层先拒绝（非法类别/超过条数 → 既有
+    ``validation_failed``）；字节上限与字段细化由领域层
+    ``parse_failure_cases`` 兜底，两处口径同源。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=64)
+    category: FailureCaseCategory
+    severity: FeedbackSeverity
+    episode_key: str | None = Field(default=None, max_length=200)
+    episode_id: UUID | None = None
+    evidence: dict[str, object] | str | None = None
+    metric: str | None = Field(default=None, max_length=100)
+    observed: float | str | None = None
+    expected: float | str | None = None
+    suggested_gap: str | None = Field(default=None, max_length=200)
+
+
 class ModelAdapterCallbackPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -194,6 +218,9 @@ class ModelAdapterCallbackPayload(BaseModel):
     metrics: dict[str, float] = Field(default_factory=dict)
     verdict: str | None = None
     report_ref: dict[str, object] | None = None
+    failure_cases: list[FailureCasePayload] = Field(
+        default_factory=list, max_length=MAX_FAILURE_CASES
+    )
     result_ref: dict[str, object] | None = None
     log_ref: str | None = Field(default=None, max_length=1024)
     error_code: str | None = Field(default=None, max_length=100)
@@ -204,6 +231,7 @@ __all__ = [
     "ActionRequest",
     "ArtifactInput",
     "EvaluationCreate",
+    "FailureCasePayload",
     "FeedbackActionRequest",
     "FeedbackCreate",
     "GapDimensionInput",

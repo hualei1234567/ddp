@@ -109,6 +109,20 @@ describe("阶段 5 响应解析", () => {
       thresholds: { success_rate: { min: 0.9, max: null } },
       verdict: "FAIL",
       report_ref: { object_key: "reports/eval.json" },
+      failure_cases: [
+        {
+          id: "fc-1",
+          category: "PERCEPTION",
+          severity: "MAJOR",
+          episode_key: "ep-001",
+          episode_id: null,
+          evidence: { frame: 42, object: "cup" },
+          metric: "grasp_success",
+          observed: 0,
+          expected: 1,
+          suggested_gap: "kitchen/cup",
+        },
+      ],
       error_code: null,
       error_summary: null,
       started_at: null,
@@ -120,6 +134,52 @@ describe("阶段 5 响应解析", () => {
     });
     expect(evaluation.thresholds.success_rate?.min).toBe(0.9);
     expect(evaluation.verdict).toBe("FAIL");
+    expect(evaluation.failure_cases).toHaveLength(1);
+    expect(evaluation.failure_cases[0]?.category).toBe("PERCEPTION");
+    expect(evaluation.failure_cases[0]?.evidence).toEqual({ frame: 42, object: "cup" });
+  });
+
+  it("失败用例缺省为空数组，非法类别拒绝解析", () => {
+    const base = {
+      evaluation_id: "66666666-6666-4666-8666-666666666666",
+      project_id: PROJECT,
+      model_version_id: VERSION,
+      dataset_version_id: DATASET_VERSION,
+      baseline_evaluation_id: null,
+      status: "QUEUED",
+      metrics: {},
+      thresholds: { success_rate: { min: 0.9, max: null } },
+      verdict: "UNKNOWN",
+      report_ref: null,
+      error_code: null,
+      error_summary: null,
+      started_at: null,
+      finished_at: null,
+      allowed_actions: [],
+      version: 1,
+      created_at: "2026-11-09T00:00:00Z",
+      updated_at: "2026-11-09T00:00:00Z",
+    };
+    expect(parseEvaluation(base).failure_cases).toEqual([]);
+    expect(() =>
+      parseEvaluation({
+        ...base,
+        failure_cases: [
+          {
+            id: "fc-1",
+            category: "UNKNOWN_CATEGORY",
+            severity: "MAJOR",
+            episode_key: null,
+            episode_id: null,
+            evidence: null,
+            metric: null,
+            observed: null,
+            expected: null,
+            suggested_gap: null,
+          },
+        ],
+      }),
+    ).toThrow(ContractValidationError);
   });
 
   it("解析 Feedback 与 Requirement 的缺口维度", () => {

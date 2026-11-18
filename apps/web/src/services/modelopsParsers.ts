@@ -3,6 +3,9 @@
 import type {
   DataRequirement,
   Evaluation,
+  FailureCase,
+  FailureCaseCategory,
+  FailureCaseSeverity,
   GapDimension,
   GapSummary,
   InferenceService,
@@ -18,6 +21,7 @@ import {
   ContractValidationError,
   parseCursorPage,
   readBoolean,
+  readEnum,
   readInteger,
   readOptionalNumber,
   readOptionalString,
@@ -28,6 +32,75 @@ import {
   readStringArray,
   readUuid,
 } from "./validation";
+
+const FAILURE_CASE_CATEGORIES: readonly FailureCaseCategory[] = [
+  "PERCEPTION",
+  "PLANNING",
+  "CONTROL",
+  "LANGUAGE",
+  "OTHER",
+];
+
+const FAILURE_CASE_SEVERITIES: readonly FailureCaseSeverity[] = [
+  "BLOCKER",
+  "MAJOR",
+  "MINOR",
+];
+
+function readOptionalNumberOrString(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): number | string | null {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new ContractValidationError(`${path}.${key} 必须是有限数字`);
+    }
+    return value;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  throw new ContractValidationError(`${path}.${key} 必须是数字、字符串或 null`);
+}
+
+function readEvidence(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): Record<string, unknown> | string | null {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  return asRecord(value, `${path}.${key}`);
+}
+
+export function parseFailureCase(
+  value: unknown,
+  path = "evaluation.failure_cases",
+): FailureCase {
+  const record = asRecord(value, path);
+  return {
+    id: readString(record, "id", `${path}.id`),
+    category: readEnum(record, "category", `${path}.category`, FAILURE_CASE_CATEGORIES),
+    severity: readEnum(record, "severity", `${path}.severity`, FAILURE_CASE_SEVERITIES),
+    episode_key: readOptionalString(record, "episode_key", `${path}.episode_key`),
+    episode_id: readOptionalUuid(record, "episode_id", `${path}.episode_id`),
+    evidence: readEvidence(record, "evidence", path),
+    metric: readOptionalString(record, "metric", `${path}.metric`),
+    observed: readOptionalNumberOrString(record, "observed", `${path}.observed`),
+    expected: readOptionalNumberOrString(record, "expected", `${path}.expected`),
+    suggested_gap: readOptionalString(record, "suggested_gap", `${path}.suggested_gap`),
+  };
+}
 
 function readNumberMap(
   record: Record<string, unknown>,
@@ -171,6 +244,11 @@ export function parseEvaluation(value: unknown): Evaluation {
     report_ref: record.report_ref
       ? asRecord(record.report_ref, "evaluation.report_ref")
       : null,
+    failure_cases: Array.isArray(record.failure_cases)
+      ? record.failure_cases.map((item, index) =>
+          parseFailureCase(item, `evaluation.failure_cases[${index}]`),
+        )
+      : [],
     error_code: readOptionalString(record, "error_code", "evaluation"),
     error_summary: readOptionalString(record, "error_summary", "evaluation"),
     started_at: readOptionalString(record, "started_at", "evaluation"),

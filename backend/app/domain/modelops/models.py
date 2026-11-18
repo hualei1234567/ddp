@@ -32,6 +32,7 @@ from app.domain.modelops.errors import (
     ModelVersionInUseError,
 )
 from app.domain.modelops.evaluation import compute_verdict, parse_metrics, parse_thresholds
+from app.domain.modelops.failure_cases import FailureCase, parse_failure_cases
 from app.domain.modelops.gaps import GapDimension, parse_dimensions
 from app.domain.modelops.state_machines import allowed_actions, target_status
 from app.domain.modelops.validation import (
@@ -261,6 +262,10 @@ class Evaluation:
     metrics: dict[str, float] | None = None
     verdict: str = EvaluationVerdict.UNKNOWN
     report_ref: dict[str, object] | None = None
+    # 结构化失败明细（N7-003）：由回调写入，只记录事实，不生成 Data Gap。
+    # 存量行没有该字段时为 ``None``，统一归一成空列表——"没有报告"不等于
+    # "零失败"，但它确实没有任何可聚合的事实，不能伪造。
+    failure_cases: list[FailureCase] | None = None
     error_code: str | None = None
     error_summary: str | None = None
     started_at: datetime | None = None
@@ -296,6 +301,7 @@ class Evaluation:
         object.__setattr__(
             self, "verdict", coerce_enum(self.verdict, EvaluationVerdict, "verdict").value
         )
+        object.__setattr__(self, "failure_cases", parse_failure_cases(self.failure_cases))
         object.__setattr__(self, "row_version", positive_int(self.row_version, "row_version"))
 
     @property
@@ -307,7 +313,12 @@ class Evaluation:
         return self.status in {EvaluationStatus.SUCCEEDED.value, EvaluationStatus.FAILED.value}
 
     def complete(
-        self, *, metrics: dict[str, float], report_ref: dict[str, object] | None, now: datetime
+        self,
+        *,
+        metrics: dict[str, float],
+        report_ref: dict[str, object] | None,
+        now: datetime,
+        failure_cases: list[FailureCase] | None = None,
     ) -> Evaluation:
         if self.immutable:
             raise EvaluationImmutableError("已完成的评测不可修改")
@@ -319,6 +330,7 @@ class Evaluation:
             metrics=parsed,
             verdict=verdict,
             report_ref=report_ref,
+            failure_cases=parse_failure_cases(failure_cases),
             started_at=self.started_at or now,
             finished_at=now,
             updated_at=now,
