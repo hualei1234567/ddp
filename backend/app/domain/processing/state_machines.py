@@ -4,6 +4,8 @@
 
 - ``system-*`` / ``worker-*`` 是服务端内部动作，不出现在 ``allowed_actions``；
 - ``FAILED → RETRYING → RUNNING`` 是重试链，重试计数在领域层递增；
+- ``FAILED → FAILED`` 的 ``system-close`` 是保留错误的收口自环：状态不变，
+  但写入 ``closed_at`` 后不再允许任何出边（含 Worker 重试）；
 - ``SUCCEEDED`` / ``CANCELLED`` 为终态，没有出边。
 """
 
@@ -43,8 +45,12 @@ _RUN_RULES: _Rules = MappingProxyType(
             # 只允许 Worker 重试。**不给客户端 cancel**：CANCELLED 不允许携带
             # error_*（DB CHECK），从 FAILED 取消会把失败原因永久抹掉，
             # 与契约「FAILED 不是终态、必须能解释为什么失败」冲突。
-            # 失败运行的终态收口（保留 error 的 system-close）属 N4-002。
+            #
+            # ``system-close`` 是状态不变的自环：它保留 error_*，只在运行上
+            # 写入 ``closed_at``，标记为"已收口、不可再操作"。
+            # 收口后的运行连 Worker 重试也拒绝，见 ProcessingRun.transition。
             ProcessingRunAction.WORKER_RETRY.value: ProcessingRunStatus.RETRYING.value,
+            ProcessingRunAction.SYSTEM_CLOSE.value: ProcessingRunStatus.FAILED.value,
         },
         ProcessingRunStatus.RETRYING.value: {
             ProcessingRunAction.WORKER_CLAIM.value: ProcessingRunStatus.RUNNING.value,

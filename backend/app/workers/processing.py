@@ -100,6 +100,25 @@ class RunProcessingStatus(StrEnum):
     DEAD_LETTER = "DEAD_LETTER"
 
 
+def _payload_request_id(claimed: ClaimedValidationEvent) -> str | None:
+    """从事件 payload 取发起请求的 request_id；非法/缺失返回 ``None``。"""
+    value = claimed.payload.get("request_id")
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def _worker_use_cases(
+    session: Session,
+    runs: SqlProcessingRunRepository,
+) -> ProcessingWorkerUseCases:
+    """Worker 状态推进必须与审计/outbox 同事务，装配点集中在这里。"""
+    return ProcessingWorkerUseCases(
+        runs,
+        session,
+        audit=SqlAuditRepository(session),
+        outbox=SqlOutboxRepository(session),
+    )
+
+
 class ProcessingRunWorker:
     def __init__(
         self,
@@ -188,10 +207,12 @@ class ProcessingRunWorker:
             }
 
         scope = ProjectScope(claimed.project_id, actor_id=run.created_by or run.updated_by)
+        # 事件里的 request_id 贯穿运行/审计/outbox，便于把异步链路对回发起请求。
+        request_id = _payload_request_id(claimed)
         pipeline = self._build_pipeline(session)
 
         try:
-            outcome = pipeline.execute(scope, run_id, now=moment)
+            outcome = pipeline.execute(scope, run_id, now=moment, request_id=request_id)
         except ConcurrentRunUpdate as exc:
             # 另一 Worker 已推进或客户端已取消：本事件不需要再投递。
             session.rollback()
@@ -205,7 +226,7 @@ class ProcessingRunWorker:
         except Exception as exc:  # noqa: BLE001 - 单事件异常不得终止 Worker
             logger.exception("处理运行执行异常", extra={"run_id": str(run_id)})
             session.rollback()
-            self._force_fail(session, scope, run_id, moment, exc)
+            self._force_fail(session, scope, run_id, moment, exc, request_id=request_id)
             return self._settle_failure(
                 session,
                 queue,
@@ -263,7 +284,7 @@ class ProcessingRunWorker:
         return ProcessingPipeline(
             runs,
             SqlProcessingRunStepRepository(session),
-            ProcessingWorkerUseCases(runs, session),
+            _worker_use_cases(session, runs),
             default_handlers(self._inspector, quality_check=quality_check),
             session,
         )
@@ -275,12 +296,14 @@ class ProcessingRunWorker:
         run_id: UUID,
         moment: datetime,
         exc: Exception,
+        *,
+        request_id: str | None = None,
     ) -> None:
         """把因 Worker 内部异常而悬停的运行落到 FAILED，避免留下 RUNNING 孤儿。"""
         summary = sanitize_log_message(str(exc), limit=ERROR_SUMMARY_MAX_LENGTH)
         try:
             runs = SqlProcessingRunRepository(session)
-            worker = ProcessingWorkerUseCases(runs, session)
+            worker = _worker_use_cases(session, runs)
             run = runs.get(scope, run_id)
             if run is None or run.is_terminal or run.status == ProcessingRunStatus.FAILED.value:
                 return
@@ -304,6 +327,7 @@ class ProcessingRunWorker:
                     expected_version=run.row_version,
                     error_code="worker_unexpected_error",
                     error_summary=summary,
+                    request_id=request_id,
                     now=moment,
                 )
         except Exception:  # noqa: BLE001 - 收口失败必须留痕，但不能掩盖原始异常
@@ -324,11 +348,21 @@ class ProcessingRunWorker:
     ) -> dict[str, object]:
         """按"先判死信、再退回 RETRYING"的顺序收口失败事件与运行。"""
         attempts = claimed.attempts + 1
+        request_id = _payload_request_id(claimed)
         if not retryable:
             # 永久性失败：运行已由 pipeline 落 FAILED，事件正常投递完成即可。
             # 不重试、不记死信噪声；错误码与步骤日志留在运行与步骤上。
             queue.mark_published(claimed.event_id, now=moment)
             session.commit()
+            # 永久性失败不会再有消费者推进：显式 system-close，保留错误并收口。
+            self._close_final_failure(
+                session,
+                scope,
+                run_id,
+                moment,
+                reason="永久性失败，失败运行系统收口",
+                request_id=request_id,
+            )
             return {
                 "status": RunProcessingStatus.PUBLISHED.value,
                 "run_id": str(run_id),
@@ -345,6 +379,14 @@ class ProcessingRunWorker:
                 last_error=safe_error,
             )
             session.commit()
+            self._close_final_failure(
+                session,
+                scope,
+                run_id,
+                moment,
+                reason="重试次数耗尽进入死信，失败运行系统收口",
+                request_id=request_id,
+            )
             return {
                 "status": RunProcessingStatus.DEAD_LETTER.value,
                 "run_id": str(run_id),
@@ -359,10 +401,11 @@ class ProcessingRunWorker:
             if run is None:
                 raise ResourceNotFoundError("处理运行不存在")
             if run.status == ProcessingRunStatus.FAILED.value:
-                run = ProcessingWorkerUseCases(runs, session).retry(
+                run = _worker_use_cases(session, runs).retry(
                     scope,
                     run_id,
                     expected_version=run.row_version,
+                    request_id=request_id,
                     now=moment,
                 )
             if run.status != ProcessingRunStatus.RETRYING.value:
@@ -393,6 +436,14 @@ class ProcessingRunWorker:
                 last_error=safe_error,
             )
             session.commit()
+            self._close_final_failure(
+                session,
+                scope,
+                run_id,
+                moment,
+                reason="重试次数耗尽进入死信，失败运行系统收口",
+                request_id=request_id,
+            )
             return {
                 "status": RunProcessingStatus.DEAD_LETTER.value,
                 "run_id": str(run_id),
@@ -419,6 +470,39 @@ class ProcessingRunWorker:
             "released_for_retry": True,
             "error": safe_error[:500],
         }
+
+    def _close_final_failure(
+        self,
+        session: Session,
+        scope: ProjectScope,
+        run_id: UUID,
+        moment: datetime,
+        *,
+        reason: str,
+        request_id: str | None = None,
+    ) -> None:
+        """把已经不会再被重试的 FAILED 运行收口为终态（保留 error_*）。
+
+        收口不改变状态，只写一条 ``system-close`` 审计（同事务提交版本推进），
+        仓储读路径据此把 ``closed`` 投影置位；此后 ``worker-retry`` 一律拒绝。
+        收口失败不能掩盖死信/失败的既有结论，因此这里只记日志。
+        """
+        try:
+            runs = SqlProcessingRunRepository(session)
+            run = runs.get(scope, run_id)
+            if run is None or run.is_terminal or run.status != ProcessingRunStatus.FAILED.value:
+                return
+            _worker_use_cases(session, runs).close(
+                scope,
+                run_id,
+                expected_version=run.row_version,
+                reason=reason,
+                request_id=request_id,
+                now=moment,
+            )
+        except Exception:  # noqa: BLE001 - 收口失败必须留痕，但不得改变事件结论
+            session.rollback()
+            logger.exception("失败运行系统收口未完成", extra={"run_id": str(run_id)})
 
     def run(self, *, stop_event: threading.Event) -> None:
         while not stop_event.is_set():

@@ -68,6 +68,7 @@ class ProcessingRunOut(BaseModel):
     error_summary: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    closed_at: datetime | None = None
     allowed_actions: list[str]
     version: int
     created_at: datetime
@@ -95,6 +96,7 @@ class ProcessingRunOut(BaseModel):
             error_summary=run.error_summary,
             started_at=run.started_at,
             finished_at=run.finished_at,
+            closed_at=run.closed_at,
             allowed_actions=sorted(run.allowed_actions),
             version=run.row_version,
             created_at=run.created_at,

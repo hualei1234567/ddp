@@ -2,6 +2,9 @@
 
 所有查询强制项目作用域；``save`` 用 ``WHERE version = expected_version``
 做条件更新，行数为 0 即抛 ``version_conflict``，不做"读后覆盖"。
+
+失败收口状态来自 ``processing_runs.closed_at`` 实体列（0065）；审计表只做
+留痕，仓储不会为了计算状态而读取 ``audit_logs``。
 """
 
 from __future__ import annotations
@@ -45,6 +48,7 @@ def _run(row: ProcessingRunModel) -> ProcessingRun:
         error_summary=row.error_summary,
         started_at=_as_utc(row.started_at),
         finished_at=_as_utc(row.finished_at),
+        closed_at=_as_utc(row.closed_at),
         row_version=row.version,
         created_at=_as_utc(row.created_at),
         updated_at=_as_utc(row.updated_at),
@@ -74,6 +78,7 @@ class SqlProcessingRunRepository:
                 error_summary=run.error_summary,
                 started_at=run.started_at,
                 finished_at=run.finished_at,
+                closed_at=run.closed_at,
                 version=run.row_version,
                 created_at=run.created_at,
                 updated_at=run.updated_at,
@@ -134,6 +139,7 @@ class SqlProcessingRunRepository:
                 error_summary=run.error_summary,
                 started_at=run.started_at,
                 finished_at=run.finished_at,
+                closed_at=run.closed_at,
                 version=expected_version + 1,
                 updated_at=run.updated_at,
                 updated_by=run.updated_by,

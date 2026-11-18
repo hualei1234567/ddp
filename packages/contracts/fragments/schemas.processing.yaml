@@ -109,6 +109,14 @@ ProcessingRun:
       type: [string, "null"]
       format: date-time
       description: 本次尝试/运行结束时间；`FAILED` 也有值（可重试）。
+    closed_at:
+      type: [string, "null"]
+      format: date-time
+      description: |
+        `FAILED` 的失败收口时间。`null` 表示仍可按服务端重试策略拉起；
+        非空表示已由服务端 `system-close` 收口，运行不可再操作，但
+        `error_code` / `error_summary` 完整保留。仅 `FAILED` 允许非空。
+        客户端不能提交该字段，也不能通过动作接口触发收口。
     allowed_actions:
       type: array
       description: |

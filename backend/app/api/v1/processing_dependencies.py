@@ -46,7 +46,12 @@ def get_processing_services(session: DbSession) -> ProcessingServices:
             audit=SqlAuditRepository(session),
             outbox=SqlOutboxRepository(session),
         ),
-        worker=ProcessingWorkerUseCases(runs, session),
+        worker=ProcessingWorkerUseCases(
+            runs,
+            session,
+            audit=SqlAuditRepository(session),
+            outbox=SqlOutboxRepository(session),
+        ),
     )
 
 

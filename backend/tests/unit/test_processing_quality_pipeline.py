@@ -166,7 +166,12 @@ def _pipeline(
     return ProcessingPipeline(
         runs,
         SqlProcessingRunStepRepository(session),
-        ProcessingWorkerUseCases(runs, session),
+        ProcessingWorkerUseCases(
+            runs,
+            session,
+            audit=SqlAuditRepository(session),
+            outbox=SqlOutboxRepository(session),
+        ),
         default_handlers(inspector, quality_check=quality_check),
         session,
     )
