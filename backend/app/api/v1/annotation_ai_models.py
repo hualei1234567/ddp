@@ -66,7 +66,18 @@ class AiSuggestionOut(BaseModel):
     updated_by: UUID | None
 
     @classmethod
-    def from_domain(cls, suggestion: AiSuggestion) -> AiSuggestionOut:
+    def from_domain(
+        cls,
+        suggestion: AiSuggestion,
+        *,
+        redact_human_value: bool = False,
+    ) -> AiSuggestionOut:
+        """构造建议响应；盲审任务的非标注人看不到人工最终值。
+
+        ``suggested_value`` 是模型输出，不属于"他人的标注结果"，保持可见；
+        ``human_value`` 是人工决定，开启盲审后不得下发。``human_confirmed``
+        只说明"有人决定过"，不暴露决定内容。
+        """
         return cls(
             suggestion_id=suggestion.suggestion_id,
             project_id=suggestion.project_id,
@@ -79,7 +90,7 @@ class AiSuggestionOut(BaseModel):
             confidence=suggestion.confidence,
             generated_at=suggestion.generated_at,
             human_confirmed=suggestion.human_confirmed,
-            human_value=suggestion.human_value,
+            human_value=None if redact_human_value else suggestion.human_value,
             decided_by=suggestion.decided_by,
             decided_at=suggestion.decided_at,
             version=suggestion.version,

@@ -193,7 +193,17 @@ AnnotationTaskCreate:
     due_at: {type: [string, "null"], format: date-time}
     priority: {type: string, enum: [P0, P1, P2, P3], default: P1}
     assignment_mode: {type: string, enum: [MANUAL, CLAIM, MIXED], default: MANUAL}
-    iaa_policy: {type: object, additionalProperties: true, default: {}}
+    iaa_policy:
+      type: object
+      additionalProperties: true
+      default: {}
+      description: >-
+        任务级策略。除双标字段（review_mode / agreement_threshold /
+        agreement_metric / auto_approve）外，可选 blind_review（布尔，默认
+        false）。开启后服务端在读取该任务的提交与标注记录时，对标注人之外
+        的读取者隐藏标签值：labels 只返回 label_key 与 redacted=true，
+        不返回值、来源、置信度与备注；record_sha256 / records_digest 返回
+        空串，避免成为枚举标签的校验预言机。
     quality_policy: {type: object, additionalProperties: true, default: {}}
     review_mode: {type: string, enum: [SINGLE, DOUBLE], default: SINGLE}
     agreement_threshold: {type: [number, "null"], minimum: 0, maximum: 1}
@@ -209,7 +219,12 @@ AnnotationTaskPatch:
     due_at: {type: [string, "null"], format: date-time}
     priority: {type: string, enum: [P0, P1, P2, P3]}
     assignment_mode: {type: string, enum: [MANUAL, CLAIM, MIXED]}
-    iaa_policy: {type: [object, "null"], additionalProperties: true}
+    iaa_policy:
+      type: [object, "null"]
+      additionalProperties: true
+      description: >-
+        同创建；blind_review 为可选布尔字段（默认 false），开启后服务端
+        对非标注人隐藏标签值。
     quality_policy: {type: [object, "null"], additionalProperties: true}
 
 AnnotationTaskActionRequest:

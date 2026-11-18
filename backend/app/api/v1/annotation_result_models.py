@@ -123,7 +123,19 @@ class AnnotationRecordOut(BaseModel):
     updated_by: UUID | None
 
     @classmethod
-    def from_domain(cls, record: AnnotationRecord) -> AnnotationRecordOut:
+    def from_domain(
+        cls,
+        record: AnnotationRecord,
+        *,
+        redact_labels: bool = False,
+    ) -> AnnotationRecordOut:
+        """构造记录响应；``redact_labels=True`` 时只保留标签键。
+
+        盲审脱敏是服务端行为：值、来源、置信度与备注一律不下发，客户端无法
+        通过前端隐藏绕过。``record_sha256`` 也置空：它覆盖完整标签内容，
+        保留会变成"可离线枚举低熵标签"的校验预言机。默认关闭，标注人读取
+        自己的记录不受影响。
+        """
         return cls(
             annotation_id=record.annotation_id,
             annotation_lineage_id=record.annotation_lineage_id,
@@ -137,9 +149,12 @@ class AnnotationRecordOut(BaseModel):
             schema_version=record.schema_version,
             status=_value(record.status),
             time_range=dict(record.time_range) if record.time_range is not None else None,
-            labels=[item.to_payload() for item in record.labels],
+            labels=[
+                item.redacted_payload() if redact_labels else item.to_payload()
+                for item in record.labels
+            ],
             evidence_refs=[item.to_payload() for item in record.evidence_refs],
-            record_sha256=record.record_sha256 or "",
+            record_sha256="" if redact_labels else (record.record_sha256 or ""),
             supersedes_id=record.supersedes_id,
             approved_by=record.approved_by,
             approved_at=record.approved_at,
@@ -189,6 +204,7 @@ class AnnotationSubmissionOut(BaseModel):
         submission: AnnotationSubmission,
         *,
         consistency: DoubleAnnotationConsistencyOut | None = None,
+        redact_labels: bool = False,
     ) -> AnnotationSubmissionOut:
         return cls(
             submission_id=submission.submission_id,
@@ -201,7 +217,8 @@ class AnnotationSubmissionOut(BaseModel):
             schema_id=submission.schema_id,
             schema_version=submission.schema_version,
             schema_sha256=submission.schema_sha256,
-            records_digest=submission.records_digest,
+            # 提交级 digest 同样覆盖全部标签值，脱敏视图不返回。
+            records_digest="" if redact_labels else submission.records_digest,
             item_count=submission.item_count,
             status=_value(submission.status),
             allowed_actions=public_actions(
@@ -210,7 +227,10 @@ class AnnotationSubmissionOut(BaseModel):
             ),
             data_source=_value(submission.data_source),
             record_refs=list(submission.record_refs),
-            records=[AnnotationRecordOut.from_domain(item) for item in submission.records],
+            records=[
+                AnnotationRecordOut.from_domain(item, redact_labels=redact_labels)
+                for item in submission.records
+            ],
             review_id=submission.review_id,
             arbitration_id=submission.arbitration_id,
             supersedes_id=submission.supersedes_id,
