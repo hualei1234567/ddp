@@ -20,7 +20,12 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 
 from app.api.deps import get_project_scope, get_write_scope
 from app.api.v1.location_dependencies import LocationServicesDep
-from app.api.v1.location_schemas import LocationCreate, LocationOut, LocationPatch
+from app.api.v1.location_schemas import (
+    LocationCreate,
+    LocationOut,
+    LocationPatch,
+    SiteOverviewOut,
+)
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.schemas import PageOut
 from app.application.locations import NewLocation
@@ -37,6 +42,34 @@ IdempotencyKey = Annotated[
 ]
 CursorQuery = Annotated[str | None, Query(max_length=512)]
 LimitQuery = Annotated[int, Query(ge=1, le=100)]
+
+
+@router.get("/sites/overview", response_model=PageOut[SiteOverviewOut])
+def list_site_overview(
+    scope: ReadScope,
+    services: LocationServicesDep,
+    kind: str | None = None,
+    cursor: CursorQuery = None,
+    limit: LimitQuery = 20,
+) -> PageOut[SiteOverviewOut]:
+    """多基地资源只读概览：按场地聚合设备/传感器/采集任务数。
+
+    路径用 ``sites`` 而不是 ``locations``：这是面向"基地运营"的聚合视图，
+    不是场地档案本身；也避免与 ``/locations/{location_id}`` 的 UUID 路径参数
+    产生匹配歧义。数据源仍是同一张 ``locations`` 表，包含全部 ``kind``。
+
+    只读：没有 POST/PATCH/DELETE，也不做调度与计费。
+    """
+    page = services.locations.list_site_overview(
+        scope,
+        kind=kind,
+        cursor=cursor,
+        limit=limit,
+    )
+    return PageOut(
+        items=[SiteOverviewOut.from_domain(entry) for entry in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.get("/locations", response_model=PageOut[LocationOut])

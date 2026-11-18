@@ -60,11 +60,19 @@ def positive_int(value: object, field_name: str) -> int:
     return value
 
 
+def non_negative_int(value: object, field_name: str) -> int:
+    """只读计数允许 0：空基地必须如实返回 0，而不是用缺失字段掩盖。"""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise DomainValidationError(f"{field_name} 必须是非负整数")
+    return value
+
+
 __all__ = [
     "ADDRESS_MAX_LENGTH",
     "CODE_MAX_LENGTH",
     "NAME_MAX_LENGTH",
     "NOTES_MAX_LENGTH",
+    "non_negative_int",
     "normalized_text",
     "optional_text",
     "positive_int",

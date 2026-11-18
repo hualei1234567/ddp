@@ -14,6 +14,9 @@ from app.infrastructure.repositories.collection_audit import (
     SqlIdempotencyRepository,
     SqlOutboxRepository,
 )
+from app.infrastructure.repositories.location_resources import (
+    SqlSiteResourceSummaryRepository,
+)
 from app.infrastructure.repositories.locations import SqlLocationRepository
 
 
@@ -26,6 +29,8 @@ def get_location_services(session: DbSession) -> LocationServices:
     return LocationServices(
         locations=LocationUseCases(
             locations=SqlLocationRepository(session),
+            # 多基地概览（N9-005）：只读聚合，不写别域表。
+            site_resources=SqlSiteResourceSummaryRepository(session),
             # 复用采集域的审计/outbox/幂等 SQL 适配器：它们只是
             # ``audit_logs`` / ``outbox_events`` / ``idempotency_records``
             # 三张共享表上的薄适配，规则本体在 ``app.application.audit`` 与
