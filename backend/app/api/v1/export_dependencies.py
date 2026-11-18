@@ -17,6 +17,7 @@ from app.api.v1.dataset_dependencies import (
 from app.api.v1.preconditions import require_idempotency_key
 from app.api.v1.upload_dependencies import ObjectStorageDep, SettingsDep
 from app.application.datasets.exports import ExportJobUseCases
+from app.application.datasets.quality_gate import EpisodeQualityGate
 from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
     SqlDatasetIdempotencyRepository,
@@ -28,6 +29,7 @@ from app.infrastructure.repositories.dataset_repositories import (
     SqlDatasetVersionRepository,
 )
 from app.infrastructure.repositories.export_jobs import SqlExportJobRepository
+from app.infrastructure.repositories.quality import SqlQualityRunRepository
 
 RequiredIdempotencyKey = Annotated[str, Depends(require_idempotency_key)]
 
@@ -43,6 +45,7 @@ def get_export_use_cases(
         items=SqlDatasetItemRepository(session),
         jobs=SqlExportJobRepository(session),
         storage=storage,
+        quality_gate=EpisodeQualityGate(SqlQualityRunRepository(session)),
         audit=SqlDatasetAuditRepository(session),
         outbox=SqlDatasetOutboxRepository(session),
         idempotency=SqlDatasetIdempotencyRepository(session),

@@ -6,7 +6,12 @@ from collections.abc import Mapping
 from datetime import datetime
 from uuid import UUID
 
-from app.domain.datasets.canonical import canonical_json, plain, validate_sha256
+from app.domain.datasets.canonical import (
+    CanonicalJSONError,
+    canonical_json,
+    plain,
+    validate_sha256,
+)
 from app.domain.datasets.errors import DomainValidationError
 
 # JSON 载荷上限：防止把不受控大对象写进 JSON 列。报告类载荷远小于此值。
@@ -116,11 +121,17 @@ def coerce_enum(value: object, enum_type: type, field_name: str):
         raise DomainValidationError(f"{field_name} 取值非法") from exc
 
 
-def optional_payload(value: object, field_name: str) -> dict[str, object] | None:
+def optional_payload(
+    value: object,
+    field_name: str,
+    *,
+    max_bytes: int = JSON_PAYLOAD_MAX_BYTES,
+) -> dict[str, object] | None:
     """校验可选 JSON 对象载荷：必须是 Mapping、可规范化且不超过上限。
 
     ``None`` 保留"未记录"语义，不得被折叠成 ``{}``——两者的含义不同
-    （未核对 vs 核对无内容）。
+    （未核对 vs 核对无内容）。``max_bytes`` 让调用方按自己的域收紧上限
+    （训练配置摘要 8KiB），而不是各自再写一遍规范化与大小检查。
     """
     if value is None:
         return None
@@ -131,8 +142,10 @@ def optional_payload(value: object, field_name: str) -> dict[str, object] | None
         raise DomainValidationError(f"{field_name} 必须是对象")
     try:
         encoded = canonical_json(normalized)
-    except TypeError as exc:
+    # ``CanonicalJSONError`` 是 ``ValueError`` 而不是 ``TypeError``：漏接会
+    # 变成 500。这里统一映射成领域校验错误（422）。
+    except (TypeError, CanonicalJSONError) as exc:
         raise DomainValidationError(f"{field_name} 必须是可规范化 JSON") from exc
-    if len(encoded.encode("utf-8")) > JSON_PAYLOAD_MAX_BYTES:
-        raise DomainValidationError(f"{field_name} 超过最大长度 {JSON_PAYLOAD_MAX_BYTES} 字节")
+    if len(encoded.encode("utf-8")) > max_bytes:
+        raise DomainValidationError(f"{field_name} 超过最大长度 {max_bytes} 字节")
     return normalized

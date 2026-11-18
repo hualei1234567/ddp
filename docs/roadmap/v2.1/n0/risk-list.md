@@ -57,6 +57,9 @@
 | RK-34 | `/metrics` 业务指标为拉取式全库聚合，状态表缺 `status` 前缀索引；PG 运行时路径仅编译级验证 | `observability.py`；TD-11 | 中 | P2 | 2s 超时按组降级；数据量上来后预聚合或补索引；PG 环境补一次抓取回归 | 后端 / 运维 |
 | RK-35 | 来源探测只 HEAD Canonical manifest，manifest 存在不代表所有 `raw_assets` 对象都在 | `validity.py`；N5-004 报告 | 中 | P2 | 后续把 `raw_assets.object_key` 纳入第二层探测（N5-007） | 后端 |
 | RK-36 | Adapter 的 fetch/verify/write 能力尚未接入导入链路，当前内置 Adapter 只声明 parse/detect | `registry.py`；N3-002 报告 | 低 | P2 | 后续按格式接入时再启用，避免能力声明与实际执行脱节 | 后端 |
+| RK-37 | 训练状态没有受控轮询；`config_summary` 只是脱敏摘要，权威配置仍在外部平台 | `training_references.py`；N7-002 报告 | 中 | P2 | 复用 domain_sweeps 做受控轮询前先定部署开关与失败语义 | 后端 |
+| RK-38 | MP4 探测已实现但未接入导入链路；后端镜像未安装 ffprobe，接入前需补部署依赖 | `ddp_data/media/mp4.py`；N3-004 报告 | 中 | P2 | 接入 local-adapter 或落盘路径，并在镜像安装 ffmpeg | 后端 / 运维 |
+| RK-39 | Asset Catalog 只按标识前缀检索，不支持名称/文件名；PG `EXPLAIN` 未验收 | `asset_catalog.py`；N5-001 报告 | 中 | P2 | 有名称检索需求时单独评审索引方案；真实 PG 补 EXPLAIN | 后端 |
 
 ## 5. 产品与验收口径
 

@@ -236,6 +236,11 @@ class SqlExternalReferenceRepository:
             model_ref=dict(reference.model_ref) if reference.model_ref else None,
             evaluation_ref=(dict(reference.evaluation_ref) if reference.evaluation_ref else None),
             artifacts=dict(reference.artifacts) if reference.artifacts else None,
+            config_summary=(
+                dict(reference.config_summary) if reference.config_summary is not None else None
+            ),
+            code_version=reference.code_version,
+            model_version=reference.model_version,
             correlation_id=reference.correlation_id,
             idempotency_key=reference.idempotency_key,
             error_code=reference.error_code,
@@ -403,6 +408,9 @@ class SqlExternalReferenceRepository:
             model_ref=dict(row.model_ref) if row.model_ref else None,
             evaluation_ref=dict(row.evaluation_ref) if row.evaluation_ref else None,
             artifacts=dict(row.artifacts) if row.artifacts else None,
+            config_summary=dict(row.config_summary) if row.config_summary is not None else None,
+            code_version=row.code_version,
+            model_version=row.model_version,
             correlation_id=row.correlation_id,
             idempotency_key=row.idempotency_key,
             error_code=row.error_code,

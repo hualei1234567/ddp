@@ -26,6 +26,10 @@ from app.application.datasets.ports import (
     OutboxRepository,
     UnitOfWork,
 )
+from app.application.datasets.quality_gate import (
+    EpisodeQualityGate,
+    export_gate_failure_summary,
+)
 from app.core.logging import current_trace_id
 from app.domain.datasets.canonical import sha256_text
 from app.domain.datasets.enums import (
@@ -38,6 +42,7 @@ from app.domain.datasets.errors import (
     DatasetVersionNotFrozenError,
     ExportArtifactVerifyFailedError,
     ExportOutputConflictError,
+    QualityGateFailedError,
     ResourceNotFoundError,
     UpstreamInvalidatedError,
 )
@@ -51,6 +56,7 @@ from app.domain.datasets.exporting import (
     manifest_bytes,
 )
 from app.domain.datasets.models import DatasetItem, DatasetVersion
+from app.domain.datasets.selection import SelectionFilters
 from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.errors import ObjectNotFoundError, ObjectStorageUnavailableError
 
@@ -83,6 +89,7 @@ class ExportExecutionService:
         jobs: ExportJobRepository,
         storage: ExportObjectStorage,
         episode_sources: ExportEpisodeSourceDirectory,
+        quality_gate: EpisodeQualityGate,
         audit: AuditRepository,
         outbox: OutboxRepository,
         uow: UnitOfWork,
@@ -94,6 +101,7 @@ class ExportExecutionService:
         self._jobs = jobs
         self._storage = storage
         self._episode_sources = episode_sources
+        self._quality_gate = quality_gate
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
@@ -139,6 +147,20 @@ class ExportExecutionService:
                 moment,
                 "export_job_failed",
                 "数据集版本没有可导出的条目",
+            )
+        gate_message = export_gate_failure_summary(
+            self._quality_gate,
+            scope,
+            SelectionFilters.from_mapping(dict(version.selection_filters)),
+            items,
+        )
+        if gate_message is not None:
+            return self._fail(
+                scope,
+                job,
+                moment,
+                QualityGateFailedError.code,
+                gate_message,
             )
         created_at = version.frozen_at or version.source_snapshot_at or moment
         # 媒体位置与已批准标签只在 Worker 内读一次；读失败按任务失败处理，

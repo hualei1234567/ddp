@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import uuid4
 
 from app.api.v1.training_dependencies import get_training_adapter_gateway
@@ -414,6 +415,105 @@ def test_external_reference_persists_and_exposes_execution_mode(
         url(api_db[1].project_a, f"/training-deliveries/{delivery['training_delivery_id']}")
     ).json()
     assert detail["execution_mode"] == "MOCK"
+
+
+def test_external_reference_persists_sanitized_training_run_fields(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """N7-002：配置摘要落库前脱敏、版本标识往返，且响应里不出现秘密原文。"""
+    editor, delivery = _delivered_delivery(api_db, execution_mode="MOCK")
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+    key = f"ext-{uuid4().hex[:8]}"
+    gateway = FakeTrainingGateway("MOCK")
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: gateway
+    payload = {
+        "adapter_id": "mock-training",
+        "adapter_version": "1.0.0",
+        "correlation_id": f"corr-{uuid4().hex[:8]}",
+        "config": {
+            "learning_rate": 0.001,
+            "batch_size": 32,
+            "api_key": "sk-live-should-not-leak",
+            "hf_token": "hf_should-not-leak",
+            "nested": {"password": "p@ss", "max_steps": 1000},
+            "checkpoint_dir": "/home/trainer/checkpoints",
+            "endpoint": "https://internal.example/api",
+            "tag": "ddp.lerobot/1.0.0",
+        },
+        "code_version": "git:abc1234",
+        "model_version": "policy-v3",
+    }
+
+    created = editor.post(
+        url(api_db[1].project_a, base), json=payload, headers={"Idempotency-Key": key}
+    )
+    assert created.status_code == 202, created.text
+    body = created.json()
+    summary = body["config_summary"]
+    assert summary["learning_rate"] == 0.001
+    assert summary["batch_size"] == 32
+    assert summary["api_key"] == "[已脱敏]"
+    assert summary["hf_token"] == "[已脱敏]"
+    assert summary["nested"] == {"password": "[已脱敏]", "max_steps": 1000}
+    assert summary["tag"] == "ddp.lerobot/1.0.0"
+    assert body["code_version"] == "git:abc1234"
+    assert body["model_version"] == "policy-v3"
+
+    serialized = json.dumps(body, ensure_ascii=False)
+    for leaked in (
+        "sk-live-should-not-leak",
+        "hf_should-not-leak",
+        "p@ss",
+        "/home/trainer",
+        "internal.example",
+    ):
+        assert leaked not in serialized
+
+    # Adapter 收到的是完整配置（训练平台需要真实参数），DDP 落库/返回的只是摘要。
+    assert gateway.submitted_configs == [payload["config"]]
+
+    fetched = editor.get(
+        url(api_db[1].project_a, f"/external-training-references/{body['external_ref_id']}")
+    )
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["config_summary"] == summary
+    assert fetched.json()["code_version"] == "git:abc1234"
+    assert fetched.json()["model_version"] == "policy-v3"
+
+    # 同一幂等键 + 同一请求：重放返回同一条引用。
+    replay = editor.post(
+        url(api_db[1].project_a, base), json=payload, headers={"Idempotency-Key": key}
+    )
+    assert replay.status_code == 202, replay.text
+    assert replay.json()["external_ref_id"] == body["external_ref_id"]
+
+    # 同一幂等键 + 不同配置：不是同一次提交，必须冲突而不是悄悄改写摘要。
+    conflict = editor.post(
+        url(api_db[1].project_a, base),
+        json={**payload, "config": {**payload["config"], "learning_rate": 0.002}},
+        headers={"Idempotency-Key": key},
+    )
+    assert conflict.status_code == 409, conflict.text
+    assert conflict.json()["error"]["code"] == "training_external_run_conflict"
+
+
+def test_external_reference_rejects_oversized_config_summary(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    editor, delivery = _delivered_delivery(api_db, execution_mode="MOCK")
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+    response = editor.post(
+        url(api_db[1].project_a, base),
+        json={
+            "adapter_id": "mock-training",
+            "adapter_version": "1.0.0",
+            "correlation_id": f"corr-{uuid4().hex[:8]}",
+            "config": {"padding": "x" * (8 * 1024 + 1)},
+        },
+        headers={"Idempotency-Key": f"ext-{uuid4().hex[:8]}"},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_failed"
 
 
 def test_external_reference_replay_survives_execution_mode_config_change(

@@ -11,7 +11,7 @@
 
 | ID | 债务 | 位置 | 证据 / 复核结论 | 影响 | 修复建议 |
 |---|---|---|---|---|---|
-| TD-01 | **6 个文件 >800 行**：`annotation/submissions.py` 908、`api/errors.py` 877、`episodes/episodes.py` 850、`repositories/calibration_records.py` 821、`annotation/ports.py` 809、`datasets/version_actions.py` 803 | 见左 | `find backend/app apps/web/src (...)-exec wc -l {} + \| awk '$1>800'` | 违反 CLAUDE.md §五与 V2.1 门禁 §3；修改成本与缺陷概率上升 | 按职责拆分并补测试；不得为拆而拆，需先补请求层/仓储层测试锁定语义 |
+| TD-01 | **6 个文件 >800 行**：`api/errors.py` 929、`annotation/submissions.py` 914、`annotation/ports.py` 880、`repositories/calibration_records.py` 869、`episodes/episodes.py` 850、`datasets/version_actions.py` 829 | 见左 | `find backend/app apps/web/src (...)-exec wc -l {} + \| awk '$1>800'` | 违反 CLAUDE.md §五与 V2.1 门禁 §3；修改成本与缺陷概率上升 | 按职责拆分并补测试；不得为拆而拆，需先补请求层/仓储层测试锁定语义 |
 | TD-04 | ~~`validity_status = UNKNOWN` 无写入点~~ **已闭环**（N5-004：巡检探测 Canonical manifest 可达性，明确缺失写 UNKNOWN、超时不下结论；导出/交付/冻结 fail-closed） | — | — | — | — |
 | TD-05 | **Episode 级自动质检缺失** | `application/datasources/*`、`domain/episodes/*` | 报告 §5 第 2 项 MISSING；导入级规则有，逐 Episode 结论由外部登记 | 质量中心无法自动回答「哪些 Episode 不合格」 | 在 N4 建设 Quality Engine 时落到 Episode 粒度，规则版本化 |
 | TD-06 | **Processing Pipeline 八阶段无独立实体** | `backend/app/domain` 无 `ProcessingRun` | 复核：仅 `ingestion_jobs`；无 CREATED…RETRYING 状态机 | N4 的「可观察、可重试、可追踪」无法满足 | N4-01 新建 ProcessingRun（复用 ingestion job 与 outbox 模式） |
@@ -35,8 +35,7 @@
 | TD-19 | `_dataset_sql.ensure_expected_version` docstring 与函数体矛盾（写「严格相等」，实传 `accept_candidate=True`） | `_dataset_sql.py` | 审计 §12.7 C.1 | 后续维护者按注释理解会错 | 改注释或统一语义；补回归用例 |
 | TD-20 | 镜像未推 registry / 无 HTTPS | `docker-compose.yml`、部署文档 | 报告 §9 #5 | 生产部署前置不成立 | N8-05 一起解决 |
 | TD-21 | `annotation_quality_checks` 等表增长到百万级需评估分区 | — | 报告 §9 #6 | 长期运维风险 | 数据量到阈值再评估，先留监控 |
-| TD-24 | 导入可观测性脱敏与 `core/logging._redact_text` 重复实现 | `application/datasources/observability.py` |
-| 两套规则会漂移；引号值只截到空格 | 收敛为单一实现并补引号/多词用例 |
+| TD-24 | ~~导入可观测性脱敏与 `core/logging` 重复实现~~ **已闭环**（N2-008：规则唯一实现 `core/logging.redact_credentials`/`sanitize_log_message`，`observability_redaction` 降为薄适配；补齐引号含空格/复合键用例） | — | — | — | — |
 | TD-25 | `application/datasources/import_runner.py` 724 行（>500 评审线） | 文件规模 |
 | 进度/日志上报与 RawAsset 登记混杂 | 拆为协作者，先补重试一致性用例 |
 | TD-29 | ~~导入列表轮询调用 `reload` 会重置已加载分页~~ **已闭环**（N2-010：`refreshInPlace` 原地合并，`useCursorPage.test.ts` / `cursorPage.test.ts` 覆盖） | — | — | — | — |

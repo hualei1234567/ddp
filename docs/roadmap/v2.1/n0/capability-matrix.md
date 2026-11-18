@@ -52,7 +52,7 @@
 |---|---|---|---|---|
 | DDP-V21-N3-01 | Canonical 实体 12 类 | **PARTIAL** | N3-001：`data-platform/ddp_data/canonical/` 定义 Frame / VideoStream / SensorStream / Action / Observation / Episode（`ddp.canonical/1.0.0`，只读契约 + LeRobot 投影） | 统一 QualityResult 仍无跨域实体；Frame/Stream 尚无生产者与持久化（ADR-0035 有意不建表） |
 | DDP-V21-N3-02 | Adapter 接口与注册发现 | **VERIFIED** | N3-002：`AdapterSpec` 新增可选 `fetch/verify/write`，能力集由实现推导，未实现显式抛 `AdapterCapabilityError`；旧 Adapter 零改动；注册表可按能力检索 | 内置 Adapter 暂只声明 parse/detect；导入链路尚未接线新能力（后续增量） |
-| DDP-V21-N3-03 | 多格式 Adapter 优先级（LeRobot/Parquet/MP4/MCAP/ROS/HDF5） | **PARTIAL** | LeRobot preview：`lerobot/parser.py:104`；JSONL：`builtin.py` | 完整 LeRobot Parquet、Parquet、MP4 metadata、MCAP、ROS Bag、HDF5 均无字段级解析；仅魔数识别 |
+| DDP-V21-N3-03 | 多格式 Adapter 优先级（LeRobot/Parquet/MP4/MCAP/ROS/HDF5） | **PARTIAL** | N3-004：`ddp_data/media/mp4.py` 受控 ffprobe 只读探测 duration/fps/分辨率/编码/帧数，显式错误与输出上限；LeRobot preview + JSONL 既有 | MP4 探测尚未接入导入/后端 worker（后端镜像未装 ffprobe）；Parquet/MCAP/ROS/HDF5 仍无字段级解析 |
 
 ## 4. N4 Processing Pipeline + 质量中心
 
@@ -61,13 +61,13 @@
 | DDP-V21-N4-01 | Processing Run 实体与状态机（CREATED/QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED/RETRYING） | **VERIFIED** | N4-001/002/005：七态状态机、迁移 0056/0057、`processing.run.requested` 投递与 `processing-worker` 消费、阶段步骤表与 `GET /steps`；FILE_VALIDATION 与 QUALITY_PRE_CHECK 真实执行，其余六阶段显式 SKIPPED | 解析/切片/清洗处理器属后续增量；前端 `/processing` 页面仍 PLANNED |
 | DDP-V21-N4-02 | 时间同步（timestamp/frame index/offset/drift） | **PARTIAL** | `domain/episodes/sync_drift.py:110`；导入质量 `stream_sync_aligned` | 只检测 start/duration 偏移；无帧索引、无校正、drift 不落库 |
 | DDP-V21-N4-03 | Episode 切分（metadata/time range/manual/task boundary） | **PARTIAL** | `domain/episodes/segmentation_rules.py:235,317,409`；`episode_materialization.py:131` | 只有 MANUAL_TIME_RANGE / fixed-window / episode-boundary；无 task-boundary、无帧级切片 |
-| DDP-V21-N4-04 | 质量引擎（checksum/decode/fps/resolution/duration/timestamp/missing frame/metadata/annotation） | **PARTIAL** | N4-004/005/008：统一规则注册表 + 六类分层 + 规则集内容 SHA + `quality_runs/quality_findings`（迁移 0058）+ 创建/详情/findings/按对象列举；处理流水线 QUALITY 阶段逐 Episode 自动质检（单次上限 200） | decode/resolution/missing-frame 仍无规则；质量结论尚未接入数据集构造/交付门禁（N4-007）；数据集规则源入口未开放 |
+| DDP-V21-N4-04 | 质量引擎（checksum/decode/fps/resolution/duration/timestamp/missing frame/metadata/annotation） | **PARTIAL** | N4-004/005/007/008：统一规则注册表 + 六类分层 + 规则集内容 SHA + `quality_runs/quality_findings` + 创建/详情/findings/按对象列举；处理流水线 QUALITY 阶段逐 Episode 自动质检；数据集构造/导出按 `min_quality_score` 读取最新结论（无运行/INCOMPLETE/低分阻断） | decode/resolution/missing-frame 仍无规则；数据集规则源入口未开放；门禁阈值暂存 `selection_filters`（非独立契约字段） |
 
 ## 5. N5 数据资产与 Dataset 生命周期
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
-| DDP-V21-N5-01 | Asset Catalog 跨资源检索 | **PARTIAL** | 各资源列表 API（raw-assets / episodes / datasets / annotation tasks） | 无统一目录与联合检索；Annotation/Quality 维度未接入 |
+| DDP-V21-N5-01 | Asset Catalog 跨资源检索 | **PARTIAL** | N5-001：`GET /projects/{id}/assets/search` 跨 RAW_ASSET/EPISODE/DATASET/DATASET_VERSION/MEDIA_ASSET 联合检索；前缀索引下推、项目隔离、复合游标；契约 1.18.0 | 仅匹配既有标识前缀（code/episode_key），不匹配名称/文件名；Annotation/Quality 维度未接入；PG EXPLAIN 未验收 |
 | DDP-V21-N5-02 | Dataset Version 生命周期（DRAFT→…→FROZEN→DEPRECATED） | **VERIFIED** | `domain/datasets/{enums,state_machines,models}.py`；`validity_status` 子轴（N5-004 起巡检可写 UNKNOWN）；冻结后 DB 触发器不可变；导出/交付/冻结对非 VALID fail-closed 且错误可区分 UNKNOWN | 实际用 `SUPERSEDED` 表达弃用，与任务书 `DEPRECATED` 命名不同（语义等价，需在契约说明）；探测只覆盖 manifest（N5-007） |
 | DDP-V21-N5-03 | Manifest 字段完整性与固定 | **VERIFIED** | `domain/datasets/manifest.py:33-153`；`test_dataset_domain.py:442` | files 以 raw_asset_ids + item_sha256 表达，无独立文件清单（可接受） |
 | DDP-V21-N5-04 | Lineage 全链 | **VERIFIED** | N5-002/005/006：Episode→Annotation、Episode→Quality、DatasetVersion→TRAINING_RUN（`TRAINED_ON`，ADR-0036）全部同事务写边、幂等；迁移 0059；存量引用可用 `app.workers.lineage_backfill` 默认 dry-run、显式 `--apply` 回填 | 无通用图查询 API（逐节点遍历） |
@@ -88,7 +88,7 @@
 |---|---|---|---|---|
 | DDP-V21-N7-01 | Training Dataset Grant | **VERIFIED** | `domain/datasets/dataset_grants.py:48`；`dataset_grant_routes.py`；`test_dataset_grant_api.py` | 无独立 requester/purpose（`created_by` + reason 兼任） |
 | DDP-V21-N7-02 | Training Adapter（Local/Mock/Dry Run） | **PARTIAL** | `ExecutionMode`（LOCAL/MOCK/DRY_RUN/REMOTE/UNKNOWN）+ 迁移 0054 + 部署声明 `DDP_TRAINING_ADAPTER_EXECUTION_MODES` + 前端显著标注；`local-adapter` 真实执行 | MOCK/DRY_RUN 目前是**显式标记**而非独立执行器；未配置模式时提交 422（fail-closed，刻意） |
-| DDP-V21-N7-03 | Training Run 记录 | **PARTIAL** | `domain/datasets/training_references.py:114`；`training_delivery_routes.py` | 无独立 TrainingRun；config 不落库；无 code_version/model_version；无 worker 轮询 |
+| DDP-V21-N7-03 | Training Run 记录 | **PARTIAL** | N7-002 + 迁移 0063：既有外部引用上新增 `config_summary`（≤8KiB、脱敏）、`code_version`、`model_version`；存量保持 NULL 不回填；契约 1.18.0 | 无独立 TrainingRun；状态轮询未实现（按需 sync/cancel 仍为权威入口）；DB 层未把三列纳入不可变守卫 |
 | DDP-V21-N7-04 | Evaluation（model/dataset/config/metrics/artifacts/failure cases） | **VERIFIED** | N7-003：`FailureCase` 领域值对象 + 迁移 0061 + 回调校验（类别/重复/4KiB/200 条/64KiB）+ 响应与前端详情展示；成功评测后不可变 | 列表响应可能较大（每评测 ≤64KiB），后续可加独立明细端点 |
 | DDP-V21-N7-05 | Data Gap（多来源、target_count、priority、status） | **PARTIAL** | N7-004 + N7-008：五类来源证据、`unmapped`（含原因）与 `truncated_sources`；证据不造维度、不参与覆盖口径；前端展示来源徽标、未映射与截断；契约 1.14.0 | 低分评测只能作为项目级未映射证据，不能归因到具体维度；缺口项仍无 priority/status |
 | DDP-V21-N7-06 | 闭环 Evaluation→Failure→Gap→Requirement→New Data | **PARTIAL** | `application/modelops/feedback.py:221,291`；`requirements.py:318`；e2e 主链 | 每步手工触发；无自动「失败→缺口」；新数据回流未验证 |

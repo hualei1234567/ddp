@@ -17,6 +17,11 @@ Worker 处理 outbox 事件时没有 HTTP 请求，本模块提供
 
 请求外的日志（启动、Worker 主循环）没有追踪上下文，``trace_id`` 为 ``null``，
 而不是编造一个值。
+
+脱敏规则只在本模块实现一份：日志格式化用 :func:`redact_credentials`，导入/处理
+步骤日志等对外回显文本用 :func:`sanitize_log_message`（在此之上再加协议地址与
+绝对路径清洗）。``application.observability_redaction`` 只是兼容既有导入路径的
+薄适配，不得另起一套正则。
 """
 
 from __future__ import annotations
@@ -54,6 +59,13 @@ _MAX_LOG_EXCEPTION_LENGTH = 4000
 _MAX_LOG_ITEMS = 20
 _MAX_LOG_DEPTH = 4
 
+#: 对外可见文本（步骤日志、失败摘要）的默认列宽；调用方可按列宽覆盖。
+DEFAULT_LOG_MESSAGE_MAX_LENGTH: Final = 1000
+
+#: 对外回显文本使用的凭据占位符。规则本体与日志格式化完全相同，只是展示风格
+#: 不同（日志用 ``***``，回给前端的步骤日志用中文占位符）。
+_EXTERNAL_CREDENTIAL_PLACEHOLDER: Final = "[已脱敏凭据]"
+
 _SENSITIVE_KEY_MARKERS = (
     "password",
     "passwd",
@@ -65,25 +77,59 @@ _SENSITIVE_KEY_MARKERS = (
     "cookie",
     "credential",
 )
-_BEARER_PATTERN = re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/=-]+")
-_ASSIGNMENT_PATTERN = re.compile(
-    r"(?i)\b(password|passwd|secret|token|api[_-]?key|authorization)" r"\s*[=:]\s*\S+"
+
+# 文本里的敏感键名。允许 ``access_token`` / ``refresh-token`` / ``x-api-key`` /
+# ``client_secret`` / ``db_password`` / ``aws_access_key_id`` / ``secret key``
+# 这类多段复合键；后缀只放行少量通用段，避免把 ``token_count=5`` 这类计数
+# 指标误判为凭据——过度脱敏会让日志失去排障价值。
+_SENSITIVE_KEY_NAME = (
+    r"(?:[A-Za-z0-9]+[._ -])*"
+    r"(?:"
+    r"password|passwd|secret|token|authorization|cookie|credential|credentials"
+    r"|api[._ -]?key|apikey"
+    r"|(?:access|refresh|client|session|private|signing|secret)[._ -]?key"
+    r"|(?:access|refresh|client|session)[._ -]?token"
+    r"|client[._ -]?secret"
+    r")"
+    r"(?:[._ -](?:id|key|token|secret|value|hash|file|path))?"
 )
+
+# 键名 + 分隔符 + 可选 Bearer scheme。JSON 形态 ``"api_key": "..."`` 的收尾
+# 引号也在 prefix 内，替换后引号结构保持不变。
+_CREDENTIAL_PREFIX = (
+    r"(?P<prefix>(?<![A-Za-z0-9_])" + _SENSITIVE_KEY_NAME + r"[\"']?\s*[=:]\s*(?:bearer\s+)?)"
+)
+
+# 引号值优先匹配：``password="a b"`` 若先走非引号规则，只会吃掉 ``"a``，
+# 把 ``b"`` 留在日志里。引号内允许空格和另一种引号字符。
+_QUOTED_CREDENTIAL_PATTERN = re.compile(
+    rf"(?i){_CREDENTIAL_PREFIX}(?P<quote>['\"])(?:(?!(?P=quote)).)*?(?P=quote)"
+)
+# 非引号值到空白/逗号/分号/引号为止，不越过行内分隔符。
+_UNQUOTED_CREDENTIAL_PATTERN = re.compile(rf"(?i){_CREDENTIAL_PREFIX}(?!['\"])([^\s,;&\"']+)")
+
 # Pydantic 的校验错误把用户输入原样带进文本：
 #   ``String should have at least 20 characters [type=string_too_short,
 #   input_value='hunter2', input_type=str]``
-# 形如 ``input_value=`` 的键名本身不敏感，真正的值是紧跟在它后面的引号串，
-# 上一行的 ``_ASSIGNMENT_PATTERN`` 只吃 ``\S+``（到空格为止），对带引号且
-# 含空格的输入会漏。因此单独匹配"敏感键名 + 引号包裹的值"两种形态：
-#   1. ``password='...'`` / ``"api_key": "..."``（敏感键名紧跟引号值）
-#   2. ``input_value='...'``（Pydantic 固定格式，值必须整体抹掉）
-# 键名两侧可能带引号（JSON 形态 ``"api_key": "sk-..."``），因此键名表达式
-# 必须把可选的引号算进匹配范围，否则 ``"api_key"`` 与冒号之间的引号会挡住匹配。
-_QUOTED_SECRET_PATTERN = re.compile(
-    r"(?i)((?:password|passwd|secret|token|api[_-]?key|authorization)"
-    r"[\"']?\s*[=:]\s*)(['\"])[^'\"]*\2"
+# 键名本身不敏感，固定格式后面紧跟的引号值必须整体抹掉。
+_PYDANTIC_INPUT_PATTERN = re.compile(
+    r"(?i)(?P<prefix>\binput_value\s*[=:]\s*)" r"(?P<quote>['\"])(?:(?!(?P=quote)).)*?(?P=quote)"
 )
-_PYDANTIC_INPUT_PATTERN = re.compile(r"(?i)(\binput_value\s*[=:]\s*)(['\"])[^'\"]*\2")
+# 裸 Bearer：没有键名时也要抹掉 scheme 后面的令牌。
+_BEARER_PATTERN = re.compile(r"(?i)(?P<prefix>\b(?:bearer\s+))([A-Za-z0-9._~+/=-]+)")
+
+# 对外回显文本额外要求：协议地址、预签名/凭证查询参数、绝对路径不得外发。
+_URL_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+.\-]*://[^\s\"'<>]+")
+# 预签名/凭证查询参数；URL 整体被替换后通常已不存在，单独处理防漏网。
+_CREDENTIAL_QUERY_PATTERN = re.compile(
+    r"(?i)\b(X-Amz-[A-Za-z]+|Signature|Credential|access_token|sig)=[^&\s]+"
+)
+# 绝对路径：POSIX（以 / 开头）与 Windows（C:\ 开头）。前置字符不能是字母
+# 数字或点，避免把 "3/10"、"and/or" 这类普通文本误伤。
+_ABSOLUTE_PATH_PATTERN = re.compile(
+    r"(?<![\w.~])(?:/(?=[^\s\"'<>])[^\s\"'<>]*|[A-Za-z]:\\[^\s\"'<>]*)"
+)
+_WHITESPACE_PATTERN = re.compile(r"\s+")
 
 
 def _truncate(value: str, maximum: int) -> str:
@@ -97,16 +143,87 @@ def _is_sensitive_key(key: object) -> bool:
     return any(marker in lowered for marker in _SENSITIVE_KEY_MARKERS)
 
 
-def _redact_text(value: str) -> str:
-    """抹掉文本里的凭据。
+# 键名判定：``token`` 子串会把 ``tokenizer`` 误判为凭据，因此公开入口用
+# 边界正则；日志参数的宽松子串判定仍保留在 ``_is_sensitive_key`` 内部。
+_SECRET_NAME_PATTERN = re.compile(
+    r"(?i)(?:^|[^a-z0-9])"
+    r"(?:token|secret|password|passwd|api[_-]?key|apikey|authorization|credential|"
+    r"cookie|private[_-]?key)"
+    r"(?:$|[^a-z0-9])"
+)
 
-    覆盖四类形态，顺序有讲究：引号形态先处理，否则 ``password="a b"`` 会被
-    ``_ASSIGNMENT_PATTERN`` 只吃掉 ``"a``，留下 ``b"`` 在日志里。
+
+def is_secret_name(name: object) -> bool:
+    """键名/字段名是否表示凭据类信息。
+
+    ``hf_token`` 命中，``tokenizer``/``token_count`` 不命中。只做名字判断，
+    不读取也不推断值；凭据值仍由 :func:`redact_credentials` 处理。
     """
-    redacted = _BEARER_PATTERN.sub(r"\1***", value)
-    redacted = _QUOTED_SECRET_PATTERN.sub(r"\1\2***\2", redacted)
-    redacted = _PYDANTIC_INPUT_PATTERN.sub(r"\1\2***\2", redacted)
-    return _ASSIGNMENT_PATTERN.sub(r"\1=***", redacted)
+    return bool(_SECRET_NAME_PATTERN.search(str(name or "")))
+
+
+def _redaction_replacement(match: re.Match[str], placeholder: str, keep_key: bool) -> str:
+    """替换策略：默认保留键名与分隔符（日志可读），对外文本整体替换。"""
+    if not keep_key:
+        return placeholder
+    quote = match.groupdict().get("quote") or ""
+    # 引号要成对保留：开引号在 quote 分组里，不在 prefix 内。
+    return f"{match.group('prefix')}{quote}{placeholder}{quote}"
+
+
+def redact_credentials(
+    text: str,
+    *,
+    placeholder: str = "***",
+    keep_key: bool = True,
+) -> str:
+    """抹掉文本里的凭据；日志格式化与对外回显共用这一份规则。
+
+    覆盖：Bearer 令牌、``key=value`` / ``key: value``（含多段复合键名）、
+    单/双引号包裹且含空格的值、Pydantic ``input_value`` 固定格式。
+
+    顺序有讲究：引号值先于非引号值，否则 ``password="a b"`` 会被非引号规则
+    只吃掉 ``"a``。已写入的占位符不会被后续规则二次改写。
+    """
+    if not text:
+        return text
+    result = _QUOTED_CREDENTIAL_PATTERN.sub(
+        lambda match: _redaction_replacement(match, placeholder, keep_key), text
+    )
+    result = _UNQUOTED_CREDENTIAL_PATTERN.sub(
+        lambda match: _redaction_replacement(match, placeholder, keep_key), result
+    )
+    result = _PYDANTIC_INPUT_PATTERN.sub(
+        lambda match: _redaction_replacement(match, placeholder, keep_key), result
+    )
+    return _BEARER_PATTERN.sub(
+        lambda match: _redaction_replacement(match, placeholder, keep_key), result
+    )
+
+
+def sanitize_log_message(
+    message: object,
+    *,
+    limit: int = DEFAULT_LOG_MESSAGE_MAX_LENGTH,
+) -> str:
+    """把任意异常/日志文本压成可安全外发的一行。
+
+    - 协议地址（http/https/s3/hf 等）→ ``[已脱敏地址]``；
+    - 绝对路径（``/...``、``C:\\...``）→ ``[已脱敏路径]``；
+    - 凭据形态（``token=...``、``Bearer ...``、引号包裹的值等）→
+      ``[已脱敏凭据]``；
+    - 所有空白折叠为单个空格，并按列宽截断。
+
+    永不返回空串：脱敏后为空时返回 ``"(无更多信息)"``，避免前端出现空白行。
+    """
+    text = _WHITESPACE_PATTERN.sub(" ", str(message or "")).strip()
+    text = _URL_PATTERN.sub("[已脱敏地址]", text)
+    text = _CREDENTIAL_QUERY_PATTERN.sub(_EXTERNAL_CREDENTIAL_PLACEHOLDER, text)
+    text = _ABSOLUTE_PATH_PATTERN.sub("[已脱敏路径]", text)
+    text = redact_credentials(text, placeholder=_EXTERNAL_CREDENTIAL_PLACEHOLDER, keep_key=False)
+    if not text:
+        return "(无更多信息)"
+    return text[:limit]
 
 
 def _safe_value(value: Any, *, depth: int = 0) -> Any:
@@ -126,10 +243,10 @@ def _safe_value(value: Any, *, depth: int = 0) -> Any:
             items.append(f"<{len(value) - _MAX_LOG_ITEMS} more items>")
         return tuple(items) if isinstance(value, tuple) else items
     if isinstance(value, str):
-        return _truncate(_redact_text(value), _MAX_LOG_ARG_LENGTH)
+        return _truncate(redact_credentials(value), _MAX_LOG_ARG_LENGTH)
     if value is None or isinstance(value, bool | int | float):
         return value
-    return _truncate(_redact_text(str(value)), _MAX_LOG_ARG_LENGTH)
+    return _truncate(redact_credentials(str(value)), _MAX_LOG_ARG_LENGTH)
 
 
 def _safe_args(args: object) -> object:
@@ -154,7 +271,7 @@ def _format_message(record: logging.LogRecord) -> str:
         except (KeyError, TypeError, ValueError):
             # 格式串与参数不匹配时绝不抛异常，退化为安全拼接。
             text = f"{raw} {safe_args}"
-    return _truncate(_redact_text(text), _MAX_LOG_MESSAGE_LENGTH)
+    return _truncate(redact_credentials(text), _MAX_LOG_MESSAGE_LENGTH)
 
 
 def is_safe_trace_id(value: object) -> bool:
@@ -237,7 +354,7 @@ class JsonFormatter(logging.Formatter):
             payload["trace_source"] = source
         if record.exc_info:
             payload["exc"] = _truncate(
-                _redact_text(self.formatException(record.exc_info)),
+                redact_credentials(self.formatException(record.exc_info)),
                 _MAX_LOG_EXCEPTION_LENGTH,
             )
         return json.dumps(payload, ensure_ascii=False, default=str)

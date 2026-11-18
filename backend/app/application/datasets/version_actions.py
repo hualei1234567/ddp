@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, replace
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -44,7 +45,8 @@ from app.domain.datasets.policies import (
     QualityPolicy,
     SplitPolicy,
 )
-from app.domain.datasets.selection import SelectionFilters
+from app.domain.datasets.quality_gate import EpisodeQualityVerdict
+from app.domain.datasets.selection import EpisodeCandidate, SelectionFilters
 from app.domain.datasets.split import SplitStatus
 from app.domain.datasets.state_machines import (
     action_requires_reason,
@@ -117,11 +119,12 @@ class DatasetVersionActionsMixin:
         )
         dedup, split, leakage, quality = self._resolve_all(scope, dataset_id, current)
         filters = SelectionFilters.from_mapping(dict(current.selection_filters))
+        candidates = self._episodes.list_candidates(scope, filters)
         leakage_report_id = uuid4()
         quality_report_id = uuid4()
         result = run_pipeline(
             base_version=building,
-            candidates=self._episodes.list_candidates(scope, filters),
+            candidates=candidates,
             filters=filters,
             usage_policy=dataset.usage_policy,
             dedup_policy=dedup,
@@ -135,6 +138,7 @@ class DatasetVersionActionsMixin:
             waivers=self._waivers(scope, leakage, waivers, now=now, request_id=request_id),
             # 构建是"落地产物"的写路径：点名条目全部不合格必须确定性拒绝。
             require_explicit_candidates=True,
+            quality_verdicts=self._quality_verdicts(scope, filters, candidates),
         )
         if result.split_status is SplitStatus.INSUFFICIENT_DATA:
             raise InsufficientDataError("候选数据低于最小样本/时长，不能构建")
@@ -239,9 +243,10 @@ class DatasetVersionActionsMixin:
             waiver_objects = stored_leakage.waivers
         else:
             waiver_objects = ()
+        candidates = self._episodes.list_candidates(scope, filters)
         result = run_pipeline(
             base_version=current,
-            candidates=self._episodes.list_candidates(scope, filters),
+            candidates=candidates,
             filters=filters,
             usage_policy=self.get_dataset(scope, dataset_id).usage_policy,
             dedup_policy=dedup,
@@ -253,6 +258,7 @@ class DatasetVersionActionsMixin:
             now=checked_at,
             source_snapshot_at=checked_at,
             waivers=waiver_objects,
+            quality_verdicts=self._quality_verdicts(scope, filters, candidates),
         )
         computed_manifest_sha = (
             result.manifest.manifest_sha256 if result.manifest is not None else None
@@ -738,6 +744,22 @@ class DatasetVersionActionsMixin:
         if policy is None:
             raise ResourceNotFoundError("泄漏策略", policy_id)
         return policy
+
+    def _quality_verdicts(
+        self,
+        scope: ProjectScope,
+        filters: SelectionFilters,
+        candidates: Sequence[EpisodeCandidate],
+    ) -> Mapping[UUID, EpisodeQualityVerdict] | None:
+        """仅在 ``min_quality_score`` 启用时批量读取最新 Episode 质量结论。"""
+        if not filters.quality_gate_required:
+            return None
+        gate = getattr(self, "_quality_gate", None)
+        if gate is None:
+            raise DomainValidationError(
+                "数据集质量门禁未装配，不能使用 selection_filters.min_quality_score"
+            )
+        return gate.verdicts_for_selection(scope, filters, candidates)
 
     def _resolve_quality(self, scope, dataset_id, policy_id, policy_version) -> QualityPolicy:
         policy = self._policies.get_quality_version(

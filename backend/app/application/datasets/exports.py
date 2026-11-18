@@ -23,6 +23,10 @@ from app.application.datasets.ports import (
     OutboxRepository,
     UnitOfWork,
 )
+from app.application.datasets.quality_gate import (
+    EpisodeQualityGate,
+    ensure_export_quality_gate,
+)
 from app.domain.datasets.canonical import sha256_text
 from app.domain.datasets.enums import (
     DatasetStatus,
@@ -48,6 +52,7 @@ from app.domain.datasets.export_jobs import (
     new_export_job,
 )
 from app.domain.datasets.models import DatasetVersion
+from app.domain.datasets.selection import SelectionFilters
 from app.domain.datasets.state_machines import (
     allowed_export_actions,
     validate_action_name,
@@ -75,6 +80,7 @@ class ExportJobUseCases:
         items: DatasetItemRepository,
         jobs: ExportJobRepository,
         storage: ExportObjectStorage,
+        quality_gate: EpisodeQualityGate,
         audit: AuditRepository,
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
@@ -92,6 +98,7 @@ class ExportJobUseCases:
         self._items = items
         self._jobs = jobs
         self._storage = storage
+        self._quality_gate = quality_gate
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
@@ -257,6 +264,14 @@ class ExportJobUseCases:
                 f"{blocked}，禁止导出",
                 details={"validity_status": version.validity_status.value},
             )
+        # 仅当版本显式配置 ``min_quality_score`` 时读取最新 Episode 质量结论；
+        # 未配置时完全不访问 ``quality_runs``，保持既有导出行为不变。
+        ensure_export_quality_gate(
+            self._quality_gate,
+            scope,
+            SelectionFilters.from_mapping(dict(version.selection_filters)),
+            self._items.list_all(scope, version.dataset_version_id),
+        )
 
     # ---- 动作 ----
     def apply_action(

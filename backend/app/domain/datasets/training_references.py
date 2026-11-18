@@ -22,6 +22,7 @@ from app.domain.datasets.validation import (
     aware_datetime,
     coerce_enum,
     optional_aware_datetime,
+    optional_payload,
     optional_text,
     optional_uuid,
     positive_int,
@@ -30,6 +31,12 @@ from app.domain.datasets.validation import (
 )
 
 _ADAPTER_MAX = 100
+# 版本标识（训练代码/镜像版本、run 级模型版本）。上限与 Adapter 版本一致，
+# 只记录标识，不复制代码或权重。
+_VERSION_MAX = 100
+# 训练配置摘要上限：只保留有界、已脱敏的提交参数；超限说明调用方在往引用里塞
+# 大对象，必须显式拒绝而不是悄悄截断（与 artifacts 同一处理方式）。
+CONFIG_SUMMARY_MAX_BYTES = 8 * 1024
 _STATUS_ACTIONS = {
     ExternalTrainingStatus.RUNNING: "sync",
     ExternalTrainingStatus.SUCCEEDED: "system-succeed",
@@ -181,6 +188,13 @@ class ExternalTrainingReference:
     # 外部平台回传的产物元数据（对象键/sha256/大小）。模型版本登记需要它，
     # 此前回调只保留 sha256、丢弃内容，导致训练成功的产物无法在平台内登记。
     artifacts: dict[str, object] | None = None
+    # 提交训练时的配置摘要：有界（≤8KiB）且已脱敏。``None`` 只表示迁移 0063
+    # 之前的记录没有保存配置，**不等于**"提交时没有配置"——后者是 ``{}``。
+    config_summary: dict[str, object] | None = None
+    # 训练代码/镜像版本标识，以及本次 run 的模型版本标识。两者都由发起方在提交时
+    # 声明；不知道就留空，不得从远端状态推断。提交后不可修改。
+    code_version: str | None = None
+    model_version: str | None = None
     error_code: str | None = None
     error_summary: str | None = None
     row_version: int = 1
@@ -244,6 +258,21 @@ class ExternalTrainingReference:
         object.__setattr__(self, "model_ref", _model_ref(self.model_ref))
         object.__setattr__(self, "evaluation_ref", _evaluation_ref(self.evaluation_ref))
         object.__setattr__(self, "artifacts", _artifacts(self.artifacts))
+        object.__setattr__(
+            self,
+            "config_summary",
+            optional_payload(
+                self.config_summary,
+                "config_summary",
+                max_bytes=CONFIG_SUMMARY_MAX_BYTES,
+            ),
+        )
+        for name in ("code_version", "model_version"):
+            object.__setattr__(
+                self,
+                name,
+                optional_text(getattr(self, name), name, max_length=_VERSION_MAX),
+            )
         for name, limit in (("error_code", 100), ("error_summary", 2000)):
             object.__setattr__(
                 self,
@@ -355,6 +384,16 @@ class ExternalTrainingReference:
             return False
         if self.model_ref != other.model_ref or self.evaluation_ref != other.evaluation_ref:
             return False
+        # 配置摘要只在双方都有值时比较：迁移前的记录没有摘要（None），无法回溯
+        # 判断当时提交了什么，不能因为升级把同一幂等键的合法重放变成冲突。
+        if self.config_summary is not None and self.config_summary != other.config_summary:
+            return False
+        # 版本标识是请求显式声明的字段，必须完全一致。
+        if (self.code_version, self.model_version) != (
+            other.code_version,
+            other.model_version,
+        ):
+            return False
         return (
             self.training_delivery_id == other.training_delivery_id
             and self.training_request_revision_id == other.training_request_revision_id
@@ -380,6 +419,9 @@ def new_external_reference(
     evaluation_ref: object,
     actor_id: UUID,
     now: datetime,
+    config_summary: object = None,
+    code_version: str | None = None,
+    model_version: str | None = None,
 ) -> ExternalTrainingReference:
     return ExternalTrainingReference(
         external_ref_id=external_ref_id,
@@ -396,6 +438,9 @@ def new_external_reference(
         execution_mode=execution_mode,
         model_ref=_model_ref(model_ref),
         evaluation_ref=_evaluation_ref(evaluation_ref),
+        config_summary=config_summary,
+        code_version=code_version,
+        model_version=model_version,
         external_status=ExternalTrainingStatus.SUBMITTED,
         submitted_at=now,
         last_synced_at=now,

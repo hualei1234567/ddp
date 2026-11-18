@@ -6,6 +6,8 @@ SELECTED 或带稳定排除码的 EXCLUDED 结论，不允许静默丢弃。
 
 from __future__ import annotations
 
+import math
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -18,6 +20,11 @@ from app.domain.datasets.enums import (
     Split,
 )
 from app.domain.datasets.errors import DomainValidationError
+from app.domain.datasets.quality_gate import (
+    EpisodeQualityVerdict,
+    QualityGateDecision,
+    evaluate_quality_gate,
+)
 
 _NAMESPACE = UUID("6f8d4f1e-0f1a-4f0e-9e9f-2f6d1b7c1a31")
 _ALLOWED_FILTER_KEYS = frozenset(
@@ -37,6 +44,7 @@ _ALLOWED_FILTER_KEYS = frozenset(
         "allow_missing_calibration",
         "missing_calibration_reason",
         "usage_policy_waiver_reason",
+        "min_quality_score",
     }
 )
 _USABLE_ASSET_STATUSES = frozenset({"VALID", "ARCHIVED"})
@@ -76,6 +84,10 @@ class SelectionFilters:
     allow_missing_calibration: bool = False
     missing_calibration_reason: str | None = None
     usage_policy_waiver_reason: str | None = None
+    # 统一质量引擎门禁阈值：仅在显式提供时启用，默认 ``None`` 保持既有行为。
+    # 启用后按 Episode 最新一次 quality_run 的 OVERALL 结论与分数过滤；
+    # 无运行 / INCOMPLETE / 分数缺失 / 低于阈值都不会被当成通过。
+    min_quality_score: float | None = None
     raw: dict[str, object] = field(default_factory=dict)
 
     @classmethod
@@ -129,6 +141,9 @@ class SelectionFilters:
                 "usage_policy_waiver_reason",
                 max_length=2000,
             ),
+            min_quality_score=_optional_unit_score(
+                raw.get("min_quality_score"), "min_quality_score"
+            ),
             raw=raw,
         )
 
@@ -151,6 +166,11 @@ class SelectionFilters:
         if self.captured_to is not None and (captured is None or captured > self.captured_to):
             return False
         return True
+
+    @property
+    def quality_gate_required(self) -> bool:
+        """是否显式启用了统一质量引擎门禁（默认关闭）。"""
+        return self.min_quality_score is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -253,6 +273,7 @@ def evaluate_selection(
     *,
     filters: SelectionFilters,
     usage_policy: DatasetUsagePolicy | str,
+    quality_verdicts: Mapping[UUID, EpisodeQualityVerdict] | None = None,
 ) -> SelectionOutcome:
     usage = (
         usage_policy
@@ -260,6 +281,7 @@ def evaluate_selection(
         else DatasetUsagePolicy(usage_policy)
     )
     matched = tuple(candidate for candidate in candidates if filters.matches(candidate))
+    gate_decisions = _gate_decisions(matched, filters, quality_verdicts)
     selected: list[EpisodeCandidate] = []
     excluded: list[ExcludedCandidate] = []
     warnings: list[str] = []
@@ -278,7 +300,12 @@ def evaluate_selection(
         warnings.append("USAGE_POLICY_WAIVED")
 
     for candidate in matched:
-        exclusion = _check_candidate(candidate, filters=filters, warnings=warnings)
+        exclusion = _check_candidate(
+            candidate,
+            filters=filters,
+            warnings=warnings,
+            gate_decisions=gate_decisions,
+        )
         if exclusion is None:
             selected.append(candidate)
         else:
@@ -291,6 +318,7 @@ def _check_candidate(
     *,
     filters: SelectionFilters,
     warnings: list[str],
+    gate_decisions: Mapping[UUID, QualityGateDecision],
 ) -> ExcludedCandidate | None:
     if candidate.status not in _EPISODE_STATUSES:
         return ExcludedCandidate(
@@ -312,6 +340,20 @@ def _check_candidate(
                 "WARN 未获得确认",
             )
         warnings.append(f"QUALITY_WARN_CONFIRMED:{candidate.episode_id}")
+    if filters.quality_gate_required:
+        decision = gate_decisions.get(candidate.episode_id)
+        if decision is None or not decision.passed:
+            code = (
+                decision.code
+                if decision is not None and decision.code is not None
+                else ExclusionCode.QUALITY_RUN_MISSING
+            )
+            detail = (
+                decision.detail
+                if decision is not None and decision.detail is not None
+                else "缺少统一质量运行结论"
+            )
+            return ExcludedCandidate(candidate.episode_id, code, detail)
     if (
         candidate.annotation_status != "APPROVED"
         or candidate.annotation_submission_id is None
@@ -441,6 +483,42 @@ def _outcome(
     )
 
 
+def _gate_decisions(
+    matched: tuple[EpisodeCandidate, ...],
+    filters: SelectionFilters,
+    quality_verdicts: Mapping[UUID, EpisodeQualityVerdict] | None,
+) -> dict[UUID, QualityGateDecision]:
+    """启用质量门槛时一次性判定全部候选；未启用时完全不读质量结论。"""
+    if not filters.quality_gate_required:
+        return {}
+    if quality_verdicts is None:
+        raise DomainValidationError(
+            "selection_filters.min_quality_score 已启用，但未提供 Episode 质量结论"
+        )
+    threshold = filters.min_quality_score
+    if threshold is None:
+        return {}
+    return {
+        item.episode_id: item
+        for item in evaluate_quality_gate(
+            (candidate.episode_id for candidate in matched),
+            quality_verdicts,
+            min_score=threshold,
+        )
+    }
+
+
+def _optional_unit_score(value: object, field_name: str) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise DomainValidationError(f"{field_name} 必须是 0 到 1 之间的数字")
+    score = float(value)
+    if not math.isfinite(score) or not 0.0 <= score <= 1.0:
+        raise DomainValidationError(f"{field_name} 必须在 0 到 1 之间")
+    return score
+
+
 def _summary(excluded: list[ExcludedCandidate]) -> tuple[dict[str, object], ...]:
     grouped: dict[str, list[UUID]] = {}
     for item in excluded:
@@ -548,6 +626,10 @@ _ITEM_INELIGIBLE_CODES = frozenset(
         ExclusionCode.EPISODE_STATUS_INELIGIBLE,
         ExclusionCode.QUALITY_NOT_PASSED,
         ExclusionCode.QUALITY_WARN_UNCONFIRMED,
+        ExclusionCode.QUALITY_RUN_MISSING,
+        ExclusionCode.QUALITY_RUN_NOT_PASSED,
+        ExclusionCode.QUALITY_SCORE_MISSING,
+        ExclusionCode.QUALITY_SCORE_BELOW_THRESHOLD,
         ExclusionCode.MANIFEST_MISSING,
         ExclusionCode.MANIFEST_HASH_INVALID,
         ExclusionCode.RAW_ASSET_MISSING,

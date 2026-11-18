@@ -16,6 +16,7 @@ from app.application.datasets.ports import (
     UnitOfWork,
 )
 from app.application.datasets.training_commands import NewExternalTrainingReference
+from app.application.datasets.training_config_summary import summarize_training_config
 from app.application.datasets.training_ports import (
     AdapterRunStatus,
     CallbackRecord,
@@ -147,6 +148,9 @@ class ExternalTrainingReferenceUseCases:
         key = validate_key(idempotency_key or command.correlation_id)
         if key is None:
             raise DomainValidationError("外部训练引用必须提供幂等键或 correlation_id")
+        # 配置摘要在落库前统一裁剪与脱敏（有界、不含密钥/绝对路径）。这一步
+        # 先于幂等比对，保证"同一幂等键 + 同一配置"的指纹稳定可比。
+        config_summary = summarize_training_config(command.config)
         # 幂等重放必须先于「解析执行方式」：部署可能在本条引用创建后调整或移除
         # ``DDP_TRAINING_ADAPTER_EXECUTION_MODES``，此时原样重放同一个幂等键仍是
         # 合法请求，不能被新配置变成 422/409。命中既有记录时只用**请求显式声明**
@@ -158,7 +162,14 @@ class ExternalTrainingReferenceUseCases:
             requested = _requested_execution_mode(command.execution_mode)
             if requested is not None and requested is not existing.execution_mode:
                 raise TrainingExternalRunConflictError("同一幂等键携带了不同的 execution_mode")
-            candidate = self._candidate(scope, delivery, command, key, existing.execution_mode)
+            candidate = self._candidate(
+                scope,
+                delivery,
+                command,
+                key,
+                existing.execution_mode,
+                config_summary=config_summary,
+            )
             if not existing.matches_idempotent_request(candidate):
                 raise TrainingExternalRunConflictError("同一幂等键对应不同的外部训练请求")
             return existing
@@ -211,6 +222,9 @@ class ExternalTrainingReferenceUseCases:
             execution_mode=execution_mode,
             model_ref=command.model_ref or run.model_ref,
             evaluation_ref=command.evaluation_ref or run.evaluation_ref,
+            config_summary=config_summary,
+            code_version=command.code_version,
+            model_version=command.model_version,
             actor_id=scope.actor_id,
             now=now,
         )
@@ -247,6 +261,10 @@ class ExternalTrainingReferenceUseCases:
                 "external_run_id": created.external_run_id,
                 "correlation_id": created.correlation_id,
                 "execution_mode": created.execution_mode.value,
+                # 配置摘要可能较大且属于参数明细，不写审计详情；
+                # 版本标识是审计关心的"跑了哪份代码/哪个模型"。
+                "code_version": created.code_version,
+                "model_version": created.model_version,
             },
             event_type="training.external_reference.created",
             event_payload={
@@ -402,6 +420,8 @@ class ExternalTrainingReferenceUseCases:
         command: NewExternalTrainingReference,
         key: str,
         execution_mode: ExecutionMode,
+        *,
+        config_summary: dict[str, object],
     ) -> ExternalTrainingReference:
         now = _utcnow()
         return new_external_reference(
@@ -419,6 +439,9 @@ class ExternalTrainingReferenceUseCases:
             execution_mode=execution_mode,
             model_ref=command.model_ref,
             evaluation_ref=command.evaluation_ref,
+            config_summary=config_summary,
+            code_version=command.code_version,
+            model_version=command.model_version,
             actor_id=scope.actor_id,
             now=now,
         )

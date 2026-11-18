@@ -57,3 +57,45 @@ def test_message_is_truncated_to_column_width() -> None:
 def test_empty_message_never_returns_blank() -> None:
     assert sanitize_log_message("   ") == "(无更多信息)"
     assert sanitize_log_message(None) == "(无更多信息)"
+
+
+def test_password_forms_are_redacted() -> None:
+    """``password`` / ``passwd`` 此前未纳入导入日志规则，收敛后必须覆盖。"""
+    for raw in ("password=example-pass", "passwd: example-pass"):
+        message = sanitize_log_message(raw)
+        assert "example-pass" not in message
+        assert "[已脱敏凭据]" in message
+
+
+def test_quoted_values_with_spaces_are_redacted() -> None:
+    """引号包裹、含空格的值要整体抹掉，不能只吃掉第一个词。"""
+    for raw in (
+        'client_secret="example secret value"',
+        "password='example secret value'",
+    ):
+        message = sanitize_log_message(raw)
+        assert "example secret value" not in message
+        assert "[已脱敏凭据]" in message
+
+
+def test_compound_credential_keys_are_redacted() -> None:
+    for raw, secret in (
+        ("access_token=example-access-token", "example-access-token"),
+        ("x-api-key: example-api-key", "example-api-key"),
+        ("db_password='example db pass'", "example db pass"),
+    ):
+        message = sanitize_log_message(raw)
+        assert secret not in message
+        assert "[已脱敏凭据]" in message
+
+
+def test_bare_bearer_is_redacted() -> None:
+    message = sanitize_log_message("上游返回 Bearer example-bare-token 已失效")
+
+    assert "example-bare-token" not in message
+    assert "[已脱敏凭据]" in message
+
+
+def test_counter_named_key_is_not_over_redacted() -> None:
+    """脱敏只针对凭据；``token_count`` 这类度量键保持原样。"""
+    assert sanitize_log_message("token_count=5") == "token_count=5"

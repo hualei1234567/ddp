@@ -341,6 +341,12 @@ class ExternalTrainingReferenceModel(Base):
     evaluation_ref: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
     # 回调回传的产物元数据：模型版本登记的唯一来源，见迁移 0051。
     artifacts: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
+    # 提交训练时的配置摘要（迁移 0063）：有界（≤8KiB）且已脱敏。NULL 表示
+    # 迁移前的存量记录没有保存配置，不等于"提交时没有配置"（后者是 {}）。
+    config_summary: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
+    # 训练代码/镜像版本与 run 级模型版本标识；由发起方在提交时声明，未知留空。
+    code_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    model_version: Mapped[str | None] = mapped_column(String(100), nullable=True)
     correlation_id: Mapped[str] = mapped_column(String(128), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(100), nullable=True)

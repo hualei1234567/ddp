@@ -110,6 +110,7 @@ def build_frozen_version(
     code: str | None = None,
     seed_prefix: str | None = None,
     seed_salt: str = "",
+    selection_filters: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """通过真实 API 构建并冻结一个数据集版本。
 
@@ -138,7 +139,7 @@ def build_frozen_version(
             _digest(f"{seed_salt}-manifest-{index:02d}") for index in range(10)
         ]
         seed_kwargs["raw_hashes"] = [_digest(f"{seed_salt}-raw-{index:02d}") for index in range(10)]
-    seed_dataset_episodes(factory, ids.project_a, ids.editor_a, count=10, **seed_kwargs)
+    episodes = seed_dataset_episodes(factory, ids.project_a, ids.editor_a, count=10, **seed_kwargs)
     editor = make_client(factory, ids.editor_a)
     owner = make_client(factory, ids.owner_a)
     viewer = make_client(factory, ids.viewer_a)
@@ -147,7 +148,7 @@ def build_frozen_version(
     policies = create_policies(editor, ids.project_a, dataset["dataset_id"])
     created = editor.post(
         url(ids.project_a, f"/datasets/{dataset['dataset_id']}/versions"),
-        json=version_payload(policies),
+        json=version_payload(policies, **(selection_filters or {})),
     )
     assert created.status_code == 201, created.text
     version_id = created.json()["dataset_version_id"]
@@ -182,6 +183,7 @@ def build_frozen_version(
         "dataset": dataset,
         "version": frozen.json(),
         "version_id": version_id,
+        "episodes": episodes,
         "editor": editor,
         "owner": owner,
         "viewer": viewer,
