@@ -34,6 +34,7 @@ from app.domain.datasets.errors import (
 )
 from app.domain.datasets.training_deliveries import TrainingDelivery
 from app.domain.datasets.training_enums import (
+    DECLARED_EXECUTION_MODES,
     AdapterCapability,
     ExecutionMode,
     ExternalTrainingStatus,
@@ -143,19 +144,26 @@ class ExternalTrainingReferenceUseCases:
         key = validate_key(idempotency_key or command.correlation_id)
         if key is None:
             raise DomainValidationError("外部训练引用必须提供幂等键或 correlation_id")
-        # 执行方式先定死再走幂等：同一幂等键携带不同 execution_mode 不是同一次提交。
-        execution_mode = resolve_execution_mode(
-            configured=self._gateway.execution_mode(command.adapter_id),
-            requested=command.execution_mode,
-        )
+        # 幂等重放必须先于「解析执行方式」：部署可能在本条引用创建后调整或移除
+        # ``DDP_TRAINING_ADAPTER_EXECUTION_MODES``，此时原样重放同一个幂等键仍是
+        # 合法请求，不能被新配置变成 422/409。命中既有记录时只用**请求显式声明**
+        # 的模式与已落库值比对；请求没声明就沿用既有值。
         existing = self._references.get_by_idempotency_key(
             scope, adapter_id=command.adapter_id, idempotency_key=key
         )
         if existing is not None:
-            candidate = self._candidate(scope, delivery, command, key, execution_mode)
+            requested = _requested_execution_mode(command.execution_mode)
+            if requested is not None and requested is not existing.execution_mode:
+                raise TrainingExternalRunConflictError("同一幂等键携带了不同的 execution_mode")
+            candidate = self._candidate(scope, delivery, command, key, existing.execution_mode)
             if not existing.matches_idempotent_request(candidate):
                 raise TrainingExternalRunConflictError("同一幂等键对应不同的外部训练请求")
             return existing
+        # 新提交才要求「配置或请求」显式给出执行方式；两者都没有时 fail-closed。
+        execution_mode = resolve_execution_mode(
+            configured=self._gateway.execution_mode(command.adapter_id),
+            requested=command.execution_mode,
+        )
         capabilities = self._gateway.capabilities(command.adapter_id)
         ensure_capabilities(capabilities, AdapterCapability.SUBMIT, adapter_id=command.adapter_id)
         if command.model_ref is not None:
@@ -564,6 +572,20 @@ class AdapterCallbackUseCases:
         self._callbacks.prune_before(received_before=now - timedelta(seconds=self._nonce_ttl))
         self._uow.commit()
         return "UPDATED"
+
+
+def _requested_execution_mode(value: object) -> ExecutionMode | None:
+    """解析请求显式声明的执行方式；未声明返回 None。
+
+    只接受四种真实执行方式：``UNKNOWN`` 是存量标记，不能由客户端写入。
+    """
+    if value is None:
+        return None
+    mode = ExecutionMode(value) if isinstance(value, str) else value
+    if not isinstance(mode, ExecutionMode) or mode not in DECLARED_EXECUTION_MODES:
+        allowed = "/".join(sorted(item.value for item in DECLARED_EXECUTION_MODES))
+        raise DomainValidationError(f"请求的 execution_mode 只能是 {allowed}")
+    return mode
 
 
 __all__ = ["AdapterCallbackUseCases", "ExternalTrainingReferenceUseCases"]

@@ -590,7 +590,7 @@ def _run_rejected_delivery(
     )
 
 
-def _configured_training_adapter() -> tuple[str, str] | None:
+def _configured_training_adapter() -> tuple[str, str, str] | None:
     """从部署配置里发现一个真的能 submit 的训练 Adapter。
 
     此前这里写死 ``adapter_id="demo-trainer"``，于是即使本地栈已经接了
@@ -618,7 +618,9 @@ def _configured_training_adapter() -> tuple[str, str] | None:
         if isinstance(caps, list) and "submit" in caps:
             mode = modes.get(adapter_id) if isinstance(modes, dict) else None
             if not isinstance(mode, str) or not mode:
-                return None
+                # 该 Adapter 没有声明执行方式：继续看下一个，不能因此放弃
+                # 后面已经声明模式的 Adapter（否则种子会误报 BLOCKED）。
+                continue
             return str(adapter_id), str(endpoints[adapter_id]), mode
     return None
 

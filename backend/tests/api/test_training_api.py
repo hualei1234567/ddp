@@ -439,6 +439,47 @@ def test_external_reference_persists_and_exposes_execution_mode(
     assert detail["execution_mode"] == "MOCK"
 
 
+def test_external_reference_replay_survives_execution_mode_config_change(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """部署调整/移除执行方式声明后，原样重放同一幂等键仍是合法请求。
+
+    幂等语义要求"同一个键 + 同一个请求"返回原结果；执行方式是**部署配置**，
+    它变化不能把已经成功的提交变成 422/409。只有请求显式声明了不同模式时，
+    才属于"同一幂等键对应不同请求"。
+    """
+    editor, delivery = _delivered_delivery(api_db, execution_mode="MOCK")
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+    key = f"replay-{uuid4().hex[:8]}"
+    payload = {
+        "adapter_id": "mock-training",
+        "adapter_version": "1.0.0",
+        "correlation_id": f"corr-{uuid4().hex[:8]}",
+    }
+
+    first = editor.post(
+        url(api_db[1].project_a, base),
+        json=payload,
+        headers={"Idempotency-Key": key},
+    )
+    assert first.status_code == 202, first.text
+    assert first.json()["execution_mode"] == "MOCK"
+
+    # 部署侧移除了执行方式声明。
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: _FakeTrainingGateway(
+        None
+    )
+    replay = editor.post(
+        url(api_db[1].project_a, base),
+        json=payload,
+        headers={"Idempotency-Key": key},
+    )
+
+    assert replay.status_code == 202, replay.text
+    assert replay.json()["external_ref_id"] == first.json()["external_ref_id"]
+    assert replay.json()["execution_mode"] == "MOCK"
+
+
 def test_external_reference_rejects_missing_or_conflicting_execution_mode(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:

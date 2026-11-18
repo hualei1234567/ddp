@@ -1,7 +1,7 @@
 """出站 Adapter URL 的 SSRF 守卫。
 
-Adapter endpoint 来自部署配置（``DDP_TRAINING_ADAPTER_ENDPOINTS`` /
-``DDP_MODEL_ADAPTER_ENDPOINTS``），不是用户输入；但配置错误、内网误配或
+Adapter endpoint 来自部署配置（当前接线范围：``DDP_TRAINING_ADAPTER_ENDPOINTS``；
+模型平台网关尚未调用本守卫），不是用户输入；但配置错误、内网误配或
 部署侧 DNS 被污染时，服务端请求仍可能被引向环回、内网或云元数据地址。
 本模块在**每次**发请求前解析主机名并做地址筛查，失败即拒绝（fail-closed）。
 

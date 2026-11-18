@@ -18,7 +18,7 @@
 
 | ID | 风险 | 证据 | 概率 | 影响 | 缓解 | 责任 |
 |---|---|---|---|---|---|---|
-| RK-05 | ~~`calibration_records.supersedes_id` 可分叉~~ **已修复**（N1-002：迁移 0053 部分唯一索引 + `validate_supersedes_link` + 存量冲突逐行打印后失败退出） | 领域/仓储/迁移 16 例；全量 2255 passed | 低 | P1 | 剩余：长度 ≥2 的环未检测（Backlog N1-009） | 后端 |
+| RK-05 | ~~`calibration_records.supersedes_id` 可分叉~~ **已修复**（N1-002：迁移 0053 部分唯一索引 + `validate_supersedes_link` + 存量冲突逐行打印后失败退出） | 领域/仓储/迁移 16 例；全量 2313 passed | 低 | P1 | 剩余：长度 ≥2 的环未检测（Backlog N1-009） | 后端 |
 | RK-06 | ~~设备域 PATCH 不写审计~~ **已修复**（N1-001：`patch_audit.py` + devices/sensors/robots 接入；profiles 无 PATCH） | `tests/api/test_*_api.py` 新增 4 例；定向 49 passed | 低 | P1 | 无 | 后端 |
 | RK-07 | **`validity_status=UNKNOWN` 无写入点**，来源不可达时仍显示有效 | TD-04 | 中 | P1 | 可达性探测；探测失败写 UNKNOWN 并阻断交付 | 后端 / 产品 |
 | RK-08 | ~~导入 `retry` 系统动作未拦截~~ **已修复**（N2-001：`validate_import_action` 在 HTTP 用例入口拒绝系统动作；Worker 走 `ImportRunner.release_for_retry` 不受影响） | API 422 用例 + Worker 重试测试通过 | 低 | P1 | 无 | 后端 |
