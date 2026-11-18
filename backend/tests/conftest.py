@@ -10,6 +10,10 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
+from tests.support_clients import close_open_clients
+
 os.environ["DDP_ENV"] = "local"
 
 # data-platform 是独立的纯数据能力包（不装进 backend 的 venv），
@@ -19,3 +23,10 @@ if _DATA_PLATFORM.is_dir() and str(_DATA_PLATFORM) not in sys.path:
     sys.path.insert(0, str(_DATA_PLATFORM))
 # 本地 Header 认证默认关闭；需要它的用例在自己的 Settings 中显式开启。
 os.environ.pop("DDP_LOCAL_HEADER_AUTH", None)
+
+
+@pytest.fixture(autouse=True)
+def _close_managed_clients() -> None:
+    """受管 TestClient 在用例结束后确定性关闭，不依赖 GC 时机。"""
+    yield
+    close_open_clients()
