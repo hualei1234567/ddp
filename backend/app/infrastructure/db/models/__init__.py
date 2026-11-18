@@ -92,6 +92,10 @@ from app.infrastructure.db.models.processing import (
     ProcessingRunModel,
     ProcessingRunStepModel,
 )
+from app.infrastructure.db.models.quality import (
+    QualityFindingModel,
+    QualityRunModel,
+)
 from app.infrastructure.db.models.suppliers import (
     AcceptanceLedgerModel,
     DeliveryBatchModel,
@@ -166,6 +170,8 @@ __all__ = [
     "ProcessingRunStepModel",
     "Project",
     "ProjectMember",
+    "QualityFindingModel",
+    "QualityRunModel",
     "QualitySample",
     "RawAssetLinkModel",
     "RawAssetModel",

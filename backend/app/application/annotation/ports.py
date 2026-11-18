@@ -562,6 +562,20 @@ class AnnotationRecordRepository(Protocol):
         submission_id: UUID,
     ) -> list[AnnotationRecord]: ...
 
+    def list_for_episode(
+        self,
+        scope: ProjectScope,
+        episode_id: UUID,
+        *,
+        limit: int = 2000,
+    ) -> list[AnnotationRecord]:
+        """该 Episode 的标注记录（跨提交/跨任务），有界只读查询。
+
+        统一质量引擎按 Episode 汇总标注规则；``limit`` 是硬上限，调用方
+        多取一条即可判断是否超限，避免 HTTP 线程处理无界记录集。
+        """
+        ...
+
     def list_for_task(
         self,
         scope: ProjectScope,

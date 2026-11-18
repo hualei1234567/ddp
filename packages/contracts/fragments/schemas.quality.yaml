@@ -1,0 +1,195 @@
+# N4-004：统一 Quality Engine schema。
+# 长度/取值上限取自 backend/app/domain/quality/（唯一权威实现）。
+#
+# 六类分层是封闭枚举：`OVERALL` 是派生类别，由服务端聚合其余五类得到，
+# 规则源不得直接产出。`NOT_APPLICABLE` 与 `PASS` 语义不同——前者没有结论、
+# `score` 必须为 null，客户端不得把它渲染成"通过"。
+
+QualityCategory:
+  type: string
+  enum: [INTEGRITY, TEMPORAL, VISUAL, METADATA, ANNOTATION, OVERALL]
+  description: |
+    质量结论的六层分类。`OVERALL` 为派生类别，始终出现在响应的 `categories`
+    中；其余五类由规则源实际产出。
+
+QualityCategoryStatus:
+  type: string
+  enum: [PASS, FAIL, WARN, ERROR, NOT_APPLICABLE]
+  description: |
+    单类聚合状态。`WARN` 表示只有 WARN 级规则未通过，不阻断整体；
+    `NOT_APPLICABLE` 表示该类没有可判定结论。
+
+QualityFindingStatus:
+  type: string
+  enum: [PASS, FAIL, NOT_APPLICABLE, ERROR]
+  description: |
+    单条规则结果。`NOT_APPLICABLE` / `ERROR` 的 `score` 为 null；
+    `PASS` / `FAIL` 的 `score` 为 0..1 的数字。
+
+QualitySeverity:
+  type: string
+  enum: [ERROR, WARN]
+  description: ERROR 计入阻断，WARN 只提示。
+
+QualityRunStatus:
+  type: string
+  enum: [PASSED, FAILED, INCOMPLETE]
+  description: |
+    运行整体结论。`INCOMPLETE` 表示所有规则都没有结论（例如对象没有任何
+    可评估资产/标注记录），既非通过也非失败，不得当作 PASSED 使用。
+
+QualitySubjectType:
+  type: string
+  enum: [EPISODE, DATASOURCE_IMPORT, DATASET_VERSION]
+  description: |
+    检查对象类型。本批次 POST 只接受 EPISODE / DATASOURCE_IMPORT；
+    DATASET_VERSION 的规则源已注册，入口留给后续批次。
+
+QualityRunCreate:
+  type: object
+  additionalProperties: false
+  required: [subject_type, subject_id]
+  properties:
+    subject_type:
+      type: string
+      enum: [EPISODE, DATASOURCE_IMPORT]
+      description: 本批次开放的检查对象类型。
+    subject_id: { type: string, format: uuid }
+    categories:
+      type: [array, "null"]
+      minItems: 1
+      uniqueItems: true
+      description: |
+        可选类别筛选。未知类别返回 422 `validation_failed`；`OVERALL` 是
+        派生类别，不能用于筛选规则。
+      items: { $ref: "../openapi.yaml#/components/schemas/QualityCategory" }
+
+QualityCategorySummary:
+  type: object
+  additionalProperties: false
+  required:
+    - category
+    - status
+    - finding_count
+    - pass_count
+    - fail_count
+    - not_applicable_count
+    - error_count
+  properties:
+    category: { $ref: "../openapi.yaml#/components/schemas/QualityCategory" }
+    status: { $ref: "../openapi.yaml#/components/schemas/QualityCategoryStatus" }
+    finding_count: { type: integer, minimum: 0 }
+    pass_count: { type: integer, minimum: 0 }
+    fail_count: { type: integer, minimum: 0 }
+    not_applicable_count: { type: integer, minimum: 0 }
+    error_count: { type: integer, minimum: 0 }
+    score:
+      type: [number, "null"]
+      minimum: 0
+      maximum: 1
+      description: 可判定结论的平均分；没有可判定结论时为 null。
+
+QualityRunFinding:
+  type: object
+  additionalProperties: false
+  required:
+    - finding_id
+    - run_id
+    - category
+    - rule_id
+    - rule_version
+    - severity
+    - status
+    - subject_ref
+    - message
+    - created_at
+  properties:
+    finding_id: { type: string, format: uuid }
+    run_id: { type: string, format: uuid }
+    category: { $ref: "../openapi.yaml#/components/schemas/QualityCategory" }
+    rule_id: { type: string, minLength: 1, maxLength: 64 }
+    rule_version:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: 该条规则当时的版本；与运行级规则集版本一起保证历史可解释。
+    severity: { $ref: "../openapi.yaml#/components/schemas/QualitySeverity" }
+    status: { $ref: "../openapi.yaml#/components/schemas/QualityFindingStatus" }
+    subject_ref:
+      type: string
+      maxLength: 128
+      description: 同一规则作用于多个对象时的对象标识；对象级结论为空字符串。
+    message: { type: string, minLength: 1, maxLength: 500 }
+    evidence:
+      type: [object, "null"]
+      additionalProperties: true
+      description: 结构化排障信息（阈值、缺失项、报告摘要等），不含跨项目标识。
+    score:
+      type: [number, "null"]
+      minimum: 0
+      maximum: 1
+      description: PASS=1.0 / FAIL=0.0；NOT_APPLICABLE 与 ERROR 为 null。
+    created_at: { type: string, format: date-time }
+
+QualityRun:
+  type: object
+  additionalProperties: false
+  required:
+    - run_id
+    - project_id
+    - subject_type
+    - subject_id
+    - rule_set_version
+    - status
+    - finding_count
+    - error_count
+    - warn_count
+    - categories
+    - started_at
+    - finished_at
+    - created_at
+    - created_by
+  properties:
+    run_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    subject_type: { $ref: "../openapi.yaml#/components/schemas/QualitySubjectType" }
+    subject_id: { type: string, format: uuid }
+    rule_set_version:
+      type: string
+      pattern: "^sha256:[0-9a-f]{64}$"
+      description: 适用规则声明的内容 SHA；运行创建时固化，后续升级不回写。
+    status: { $ref: "../openapi.yaml#/components/schemas/QualityRunStatus" }
+    score:
+      type: [number, "null"]
+      minimum: 0
+      maximum: 1
+      description: 全部可判定结论的平均分；INCOMPLETE 时为 null。
+    finding_count: { type: integer, minimum: 0 }
+    error_count:
+      type: integer
+      minimum: 0
+      description: ERROR 级未通过规则数（阻断）。
+    warn_count:
+      type: integer
+      minimum: 0
+      description: WARN 级未通过规则数（不阻断）。
+    categories:
+      type: array
+      minItems: 6
+      maxItems: 6
+      description: 六类聚合，顺序固定为枚举声明顺序，含派生 OVERALL。
+      items: { $ref: "../openapi.yaml#/components/schemas/QualityCategorySummary" }
+    started_at: { type: string, format: date-time }
+    finished_at: { type: string, format: date-time }
+    created_at: { type: string, format: date-time }
+    created_by: { type: string, format: uuid }
+
+QualityRunFindingPage:
+  type: object
+  additionalProperties: false
+  required: [items, next_cursor]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/QualityRunFinding" }
+    next_cursor: { type: [string, "null"] }

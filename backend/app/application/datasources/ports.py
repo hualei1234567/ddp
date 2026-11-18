@@ -131,6 +131,24 @@ class MediaAssetRepository(Protocol):
         self, scope: ProjectScope, import_id: UUID, *, limit: int = 200
     ) -> list[MediaAssetT]: ...
 
+    def count_by_import(self, scope: ProjectScope, import_id: UUID) -> int:
+        """按项目统计一次导入的媒体资产数。
+
+        统一质量引擎用它判断是否超过检查上限：只取前 N 条再宣称"全部通过"
+        属于静默截断，必须先知道总数再决定拒绝还是执行。
+        """
+        ...
+
+    def list_by_raw_asset_ids(
+        self, scope: ProjectScope, raw_asset_ids: tuple[UUID, ...]
+    ) -> list[MediaAssetT]:
+        """按 Canonical 层 RawAsset ID 反查导入产出的媒体资产。
+
+        Episode 与导入资产之间没有直接外键：Episode 引用 RawAsset，
+        导入媒体资产再引用同一个 RawAsset。统一质检需要这条只读连接。
+        """
+        ...
+
 
 class DataSourceImportLogRepository(Protocol):
     """导入步骤日志：只追加、按项目隔离、只读列表。"""
