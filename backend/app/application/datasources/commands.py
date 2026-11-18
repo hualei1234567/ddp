@@ -25,6 +25,9 @@ class NewDataSource:
     dataset_card_url: str | None = None
     notes: str | None = None
     metadata: Mapping[str, object] | None = None
+    # 显式请求远端元信息校验；默认关闭，避免每次登记都访问外网。
+    # 开启后超时/不存在/gated 与声明不符都会让登记失败。
+    verify_remote: bool = False
 
 
 @dataclass(frozen=True, slots=True)

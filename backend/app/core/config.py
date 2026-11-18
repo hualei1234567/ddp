@@ -184,6 +184,12 @@ class Settings(BaseSettings):
     annotation_max_open_items: int = Field(default=50, gt=0)
     annotation_max_planned_minutes: int = Field(default=2400, gt=0)
 
+    # Hugging Face 远端校验：仅当登记请求显式 verify_remote=true 时才调用。
+    # token 为空表示匿名只读（公开数据集足够）；GATED 数据集需要配置只读 token。
+    # 超时必须显式设置：同步登记请求不能把 API 线程挂在不可达的外网上。
+    huggingface_token: str = ""
+    huggingface_remote_check_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+
     # RawAsset 异步校验 Worker。所有阈值由部署配置注入，不在用例内硬编码。
     validation_worker_poll_interval_seconds: float = Field(default=1.0, gt=0)
     validation_stream_chunk_size_bytes: int = Field(default=1024 * 1024, gt=0)

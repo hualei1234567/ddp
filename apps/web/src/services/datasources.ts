@@ -4,6 +4,7 @@ import type { CursorPage } from "../types/api";
 import type {
   DataReview,
   DataSource,
+  DataSourceDetail,
   DataSourceImport,
   ImportLogList,
   MediaAsset,
@@ -14,6 +15,7 @@ import { ApiError, apiClient, type ApiClient } from "./api";
 import {
   parseDataReview,
   parseDataSource,
+  parseDataSourceDetail,
   parseDataSourceImport,
   parseImportLogList,
   parseMediaAsset,
@@ -55,6 +57,13 @@ export interface DataSourceCreateInput {
   split?: string | null;
   dataset_card_url?: string | null;
   notes?: string | null;
+  /** 显式请求远端校验；默认 false，不会访问外网。 */
+  verify_remote?: boolean;
+}
+
+export interface DataSourceDetailOptions {
+  signal?: AbortSignal;
+  importLimit?: number;
 }
 
 export interface DataSourcePatchInput {
@@ -120,6 +129,11 @@ export interface DataSourceApi {
     dataSourceId: string,
     options?: { signal?: AbortSignal },
   ): Promise<DataSource>;
+  getDataSourceDetail(
+    projectId: string,
+    dataSourceId: string,
+    options?: DataSourceDetailOptions,
+  ): Promise<DataSourceDetail>;
   updateDataSource(
     projectId: string,
     dataSourceId: string,
@@ -224,6 +238,20 @@ export function createDataSourceApi(client: ApiClient): DataSourceApi {
         signal: options?.signal,
         validate: (value) =>
           assertProjectScope(parseDataSource(value), projectId, "数据源"),
+      });
+    },
+    async getDataSourceDetail(projectId, dataSourceId, options) {
+      return client.get(sourceOf(projectId, dataSourceId, "/detail"), {
+        signal: options?.signal,
+        query: { import_limit: options?.importLimit },
+        validate: (value) => {
+          const detail = parseDataSourceDetail(value);
+          assertProjectScope(detail.data_source, projectId, "数据源");
+          detail.imports.forEach((item, index) => {
+            assertProjectScope(item, projectId, `数据源详情.imports[${index}]`);
+          });
+          return detail;
+        },
       });
     },
     async updateDataSource(projectId, dataSourceId, input, options) {

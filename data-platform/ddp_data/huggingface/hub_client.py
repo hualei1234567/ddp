@@ -17,7 +17,16 @@ class HuggingFaceHubClient:
     只读元信息，不下载任何文件——`docs/ddp/07` 明确"不默认全量下载"。
     """
 
-    def __init__(self, token: str | None = None) -> None:
+    def __init__(
+        self,
+        token: str | None = None,
+        *,
+        timeout_seconds: float | None = None,
+    ) -> None:
+        # 显式超时：登记接口是同步调用，没有超时会把 API 线程挂在不可达的
+        # huggingface.co 上一个完整 TCP 周期。``None`` 保留 SDK 默认（仅供
+        # 导入 Worker 等长任务使用），HTTP 登记路径必须由调用方给值。
+        self._timeout_seconds = timeout_seconds
         try:
             from huggingface_hub import HfApi
         except ImportError as exc:  # pragma: no cover - 依赖缺失时给出可执行提示
@@ -28,7 +37,13 @@ class HuggingFaceHubClient:
 
     def dataset_info(self, repo_id: str, *, revision: str | None = None) -> DatasetCardInfo:
         try:
-            info = self._api.dataset_info(repo_id, revision=revision)
+            # ``timeout`` 是 huggingface_hub 0.27 的公开参数；显式传入而不是
+            # 依赖全局配置，测试与生产的行为才一致。
+            info = self._api.dataset_info(
+                repo_id,
+                revision=revision,
+                timeout=self._timeout_seconds,
+            )
         except Exception as exc:  # noqa: BLE001 - 外部异常类型不稳定
             raise HfAdapterError(f"读取 {repo_id} 元信息失败：{exc}") from exc
 

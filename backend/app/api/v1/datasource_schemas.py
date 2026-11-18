@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -35,6 +35,8 @@ class DataSourceCreate(BaseModel):
     dataset_card_url: str | None = Field(default=None, max_length=2048)
     notes: str | None = Field(default=None, max_length=2000)
     metadata: dict[str, Any] | None = None
+    # 显式请求远端校验；默认关闭，避免每次登记都访问外网。
+    verify_remote: bool = False
 
 
 class DataSourcePatch(BaseModel):
@@ -329,3 +331,22 @@ class ImportEpisodeMaterializeResultOut(BaseModel):
     episode_count: int
     episodes: list[MaterializedEpisodeOut]
     skipped_episode_keys: list[str]
+
+
+class RemoteCheckOut(BaseModel):
+    """服务端记录的最近一次远端校验结论（不含远端原始返回）。"""
+
+    status: Literal["VERIFIED"]
+    checked_at: datetime
+    resolved_revision: str
+    license: str | None
+    is_gated: bool
+    dataset_card_url: str | None
+
+
+class DataSourceDetailOut(BaseModel):
+    """数据源详情聚合：登记信息 + 导入任务 + 最近校验结论。"""
+
+    data_source: DataSourceOut
+    imports: list[DataSourceImportOut]
+    remote_check: RemoteCheckOut | None

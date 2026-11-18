@@ -8,6 +8,7 @@ import {
   Modal,
   Select,
   Space,
+  Switch,
   Table,
   Tag,
   Typography,
@@ -176,6 +177,15 @@ function CreateDataSourceModal({
           <Form.Item name="notes" label="备注">
             <Input.TextArea rows={2} maxLength={2000} />
           </Form.Item>
+          <Form.Item
+            name="verify_remote"
+            label="登记时校验远端元信息"
+            valuePropName="checked"
+            initialValue={false}
+            extra="默认关闭，不访问外网。开启后会读取 Hugging Face 元信息：超时、仓库不存在或 gated 与声明不一致都会让登记失败。"
+          >
+            <Switch checkedChildren="校验" unCheckedChildren="不校验" />
+          </Form.Item>
         </Form>
       </Modal>
     </>
@@ -318,7 +328,9 @@ function DataSourceListContent({ projectId }: { projectId: string }) {
       key: "name",
       render: (_, item) => (
         <Space direction="vertical" size={0}>
-          <Typography.Text strong>{item.name}</Typography.Text>
+          <Link to={`/ingestion/${item.data_source_id}`}>
+            <Typography.Text strong>{item.name}</Typography.Text>
+          </Link>
           <Typography.Text type="secondary">{item.code}</Typography.Text>
         </Space>
       ),

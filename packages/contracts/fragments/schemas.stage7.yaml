@@ -70,6 +70,15 @@ DataSourceCreate:
     dataset_card_url: { type: [string, "null"], maxLength: 2048 }
     notes: { type: [string, "null"], maxLength: 2000 }
     metadata: { type: [object, "null"], additionalProperties: true }
+    verify_remote:
+      type: boolean
+      default: false
+      description: |
+        显式请求在登记前读取 Hugging Face 远端元信息。默认 `false`，避免每次
+        登记都访问外网。开启后，超时、仓库不存在/无权限、gated 与声明不一致
+        都会让登记失败（`validation_failed`，422），不会写入半条记录。
+        校验结论只以规范化摘要写入服务端保留的 `metadata.remote_check`，
+        远端返回的其他字段不会落库。
 
 DataSourcePatch:
   type: object
@@ -213,6 +222,41 @@ DataSourceImportPage:
       type: array
       items: { $ref: "../openapi.yaml#/components/schemas/DataSourceImport" }
     next_cursor: { type: [string, "null"] }
+
+RemoteSourceCheck:
+  type: object
+  additionalProperties: false
+  required:
+    [status, checked_at, resolved_revision, license, is_gated, dataset_card_url]
+  description: |
+    服务端记录的一次远端校验结论，只含 Adapter 已规范化的字段。
+    `license` 是远端 Dataset Card 的值；缺失时为 null，不代表"无限制"。
+  properties:
+    status: { type: string, enum: [VERIFIED] }
+    checked_at: { type: string, format: date-time }
+    resolved_revision:
+      type: string
+      description: 远端解析出的不可变 commit sha。
+    license: { type: [string, "null"] }
+    is_gated: { type: boolean }
+    dataset_card_url: { type: [string, "null"] }
+
+DataSourceDetail:
+  type: object
+  additionalProperties: false
+  required: [data_source, imports, remote_check]
+  description: |
+    数据源详情聚合：登记信息、导入任务与最近一次远端校验结论。
+    从未校验或摘要损坏时 `remote_check=null`，前端必须显示"未校验"。
+  properties:
+    data_source: { $ref: "../openapi.yaml#/components/schemas/DataSource" }
+    imports:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/DataSourceImport" }
+    remote_check:
+      oneOf:
+        - { $ref: "../openapi.yaml#/components/schemas/RemoteSourceCheck" }
+        - { type: "null" }
 
 ImportLog:
   type: object
