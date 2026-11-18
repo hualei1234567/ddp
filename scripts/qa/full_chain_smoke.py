@@ -204,6 +204,46 @@ def data_chain(chain: Chain, stamp: str, *, data_only: bool = False) -> dict[str
         raise SeedFailure(f"导入未成功：{done['status']}")
     chain.ok("导入完成", f"rows={done.get('imported_row_count')} files={done.get('imported_file_count')}")
 
+    print("\n[2b] 接入任务：创建 VALIDATE job → Worker 执行 → SUCCEEDED")
+    # IngestionJob 此前有完整的状态机、7 个动作、Worker 与配额，但全仓没有
+    # 任何创建点，表里一条记录都没有——"接入任务可重试、幂等"这条完成定义
+    # 从未被真实执行验证过。这里创建一个真实的 VALIDATE 任务并等 Worker 推进。
+    assets_page = chain.must(
+        chain.client, "GET",
+        f"{chain.base}/data-source-imports/{import_id}/assets", 200, "列导入资产",
+    )
+    job_asset_ids = [
+        str(item["raw_asset_id"])
+        for item in (assets_page.get("items") or [])
+        if item.get("raw_asset_id")
+    ][:8]
+    if not job_asset_ids:
+        raise SeedFailure("导入没有产出 RawAsset，无法创建接入任务")
+    job = chain.must(
+        chain.client, "POST", f"{chain.base}/ingestion-jobs", 201, "创建接入任务",
+        body={
+            "job_type": "VALIDATE",
+            "timeout_sec": 300,
+            "raw_asset_ids": job_asset_ids,
+            "pipeline_id": "parser",
+            "pipeline_version": "1.0.0",
+        },
+    )
+    job_id = str(job["job_id"])
+    job = _wait(
+        chain.client,
+        f"{chain.base}/ingestion-jobs/{job_id}",
+        {"SUCCEEDED", "FAILED", "CANCELLED"},
+        timeout=300,
+        label="等待接入任务",
+    )
+    if job["status"] != "SUCCEEDED":
+        raise SeedFailure(f"接入任务未成功：{job['status']} {job.get('error_code')}")
+    chain.ok(
+        "接入任务已完成",
+        f"job={job_id} delegated_to={(job.get('metrics') or {}).get('delegated_to')}",
+    )
+
     print("\n[3] 物化 Episode（继承任务归属）")
     status, materialized = chain.client.call(
         "POST", f"{chain.base}/data-source-imports/{import_id}/episodes"
