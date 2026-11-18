@@ -1,0 +1,164 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/annotation/double-annotation-consistency.v1.schema.json",
+  "title": "DoubleAnnotationConsistencyOut",
+  "description": "双标任务一致性门槛结论；指标由 domain.annotation.iaa 计算。",
+  "x-ddp-contract-version": "ddp.stage3/1.0.0",
+  "x-ddp-status": "ACTIVE",
+  "properties": {
+    "task_id": {
+      "format": "uuid",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+    },
+    "review_mode": {
+      "title": "Review Mode",
+      "type": "string"
+    },
+    "status": {
+      "title": "Status",
+      "type": "string"
+    },
+    "metric": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Metric"
+    },
+    "threshold": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Threshold"
+    },
+    "value": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Value"
+    },
+    "passed": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Passed"
+    },
+    "sample_size": {
+      "title": "Sample Size",
+      "type": "integer"
+    },
+    "episode_count": {
+      "title": "Episode Count",
+      "type": "integer"
+    },
+    "double_episode_count": {
+      "title": "Double Episode Count",
+      "type": "integer"
+    },
+    "annotator_count": {
+      "title": "Annotator Count",
+      "type": "integer"
+    },
+    "missing_episode_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Missing Episode Ids",
+      "type": "array"
+    },
+    "auto_approve_enabled": {
+      "title": "Auto Approve Enabled",
+      "type": "boolean"
+    },
+    "auto_approved": {
+      "title": "Auto Approved",
+      "type": "boolean"
+    },
+    "arbitration_required": {
+      "title": "Arbitration Required",
+      "type": "boolean"
+    },
+    "arbitration_ids": {
+      "items": {
+        "format": "uuid",
+        "type": "string"
+      },
+      "title": "Arbitration Ids",
+      "type": "array"
+    },
+    "details": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Details",
+      "type": "array"
+    },
+    "evaluated_at": {
+      "format": "date-time",
+      "title": "Evaluated At",
+      "type": "string"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Message"
+    }
+  },
+  "required": [
+    "task_id",
+    "project_id",
+    "review_mode",
+    "status",
+    "metric",
+    "threshold",
+    "value",
+    "passed",
+    "sample_size",
+    "episode_count",
+    "double_episode_count",
+    "annotator_count",
+    "missing_episode_ids",
+    "auto_approve_enabled",
+    "auto_approved",
+    "arbitration_required",
+    "arbitration_ids",
+    "details",
+    "evaluated_at",
+    "message"
+  ],
+  "type": "object",
+  "additionalProperties": false
+}

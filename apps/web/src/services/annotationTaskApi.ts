@@ -10,9 +10,11 @@ import type {
   AnnotationBatch,
   AnnotationTask,
   AnnotationTaskCreateInput,
+  DoubleAnnotationConsistency,
 } from "../types/annotation";
 import type { WithAllowedActions } from "./annotationAllowedActions";
 import type { ApiClient } from "./api";
+import { parseDoubleAnnotationConsistency } from "./annotationRecordParsers";
 import {
   parseAnnotationAssignment,
   parseAnnotationAssignmentPage,
@@ -83,6 +85,11 @@ export interface AnnotationTaskApi {
     taskId: string,
     options?: DetailRequestOptions,
   ) => Promise<WithAllowedActions<AnnotationTask>>;
+  getTaskConsistency: (
+    projectId: string,
+    taskId: string,
+    options?: DetailRequestOptions,
+  ) => Promise<DoubleAnnotationConsistency>;
   actOnTask: (
     projectId: string,
     taskId: string,
@@ -189,6 +196,18 @@ export function createAnnotationTaskApi(client: ApiClient): AnnotationTaskApi {
         signal: options?.signal,
         validate: (value) =>
           assertProjectScope(parseAnnotationTask(value), projectId, "标注任务"),
+      });
+    },
+
+    async getTaskConsistency(projectId, taskId, options) {
+      return client.get(`${taskPath(projectId, taskId)}/consistency`, {
+        signal: options?.signal,
+        validate: (value) =>
+          assertProjectScope(
+            parseDoubleAnnotationConsistency(value),
+            projectId,
+            "双标一致性",
+          ),
       });
     },
 

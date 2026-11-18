@@ -7,6 +7,7 @@ import type {
   AnnotationSchema,
   AnnotationSubmission,
   AnnotationTask,
+  DoubleAnnotationConsistency,
   GoldSet,
   IAAReport,
   QualitySample,
@@ -154,6 +155,7 @@ export const annotationTaskFixture: AnnotationTask = {
   target_episode_count: 10,
   priority: "P1",
   assignment_mode: "MANUAL",
+  review_mode: "SINGLE",
   iaa_policy: {},
   quality_policy: {},
   progress: {
@@ -181,8 +183,30 @@ export const annotationTaskFixture: AnnotationTask = {
   updated_by: USER_ID,
 };
 
-export const annotationBatchFixture: AnnotationBatch = {
-  batch_id: BATCH_ID,
+export const doubleAnnotationConsistencyFixture: DoubleAnnotationConsistency = {
+  task_id: TASK_ID,
+  project_id: PROJECT_ID,
+  review_mode: "DOUBLE",
+  status: "PASSED",
+  metric: "PERCENT_AGREEMENT",
+  threshold: 0.8,
+  value: 1,
+  passed: true,
+  sample_size: 1,
+  episode_count: 1,
+  double_episode_count: 1,
+  annotator_count: 2,
+  missing_episode_ids: [],
+  auto_approve_enabled: false,
+  auto_approved: false,
+  arbitration_required: false,
+  arbitration_ids: [],
+  details: [],
+  evaluated_at: "2026-11-09T05:00:00Z",
+  message: "一致性达标",
+};
+
+export const annotationBatchFixture: AnnotationBatch = {  batch_id: BATCH_ID,
   project_id: PROJECT_ID,
   task_id: TASK_ID,
   code: "AN-B-01",

@@ -4,11 +4,13 @@ import type { CursorPage } from "../types/api";
 import type {
   AnnotationRecord,
   AnnotationSubmission,
+  DoubleAnnotationConsistency,
 } from "../types/annotation";
 import {
   ANNOTATION_RECORD_STATUS_VALUES,
   ANNOTATION_SUBMISSION_STATUS_VALUES,
   DATA_SOURCE_VALUES,
+  REVIEW_MODE_VALUES,
 } from "../types/annotation";
 import {
   parseEvidenceRef,
@@ -21,11 +23,15 @@ import {
   parseCursorPage,
   readEnum,
   readInteger,
+  readBoolean,
+  readOptionalBoolean,
+  readOptionalNumber,
   readOptionalRecord,
   readOptionalString,
   readOptionalUuid,
   readPositiveInteger,
   readSha256Checksum,
+  readString,
   readUuid,
   readUuidArray,
 } from "./validation";
@@ -112,6 +118,78 @@ export function parseAnnotationRecordPage(
   value: unknown,
 ): CursorPage<AnnotationRecord> {
   return parseCursorPage(value, "标注记录列表", parseAnnotationRecord);
+}
+
+export function parseDoubleAnnotationConsistency(
+  value: unknown,
+  path = "双标一致性",
+): DoubleAnnotationConsistency {
+  const record = asRecord(value, path);
+  return {
+    task_id: readUuid(record, "task_id", `${path}.task_id`),
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    review_mode: readEnum(
+      record,
+      "review_mode",
+      `${path}.review_mode`,
+      REVIEW_MODE_VALUES,
+    ),
+    status: readString(record, "status", `${path}.status`),
+    metric: readOptionalString(record, "metric", `${path}.metric`),
+    threshold: readOptionalNumber(record, "threshold", `${path}.threshold`),
+    value: readOptionalNumber(record, "value", `${path}.value`),
+    passed: readOptionalBoolean(record, "passed", `${path}.passed`),
+    sample_size: readInteger(record, "sample_size", `${path}.sample_size`),
+    episode_count: readInteger(
+      record,
+      "episode_count",
+      `${path}.episode_count`,
+    ),
+    double_episode_count: readInteger(
+      record,
+      "double_episode_count",
+      `${path}.double_episode_count`,
+    ),
+    annotator_count: readInteger(
+      record,
+      "annotator_count",
+      `${path}.annotator_count`,
+    ),
+    missing_episode_ids: readUuidArray(
+      record,
+      "missing_episode_ids",
+      `${path}.missing_episode_ids`,
+    ),
+    auto_approve_enabled: readBoolean(
+      record,
+      "auto_approve_enabled",
+      `${path}.auto_approve_enabled`,
+    ),
+    auto_approved: readBoolean(
+      record,
+      "auto_approved",
+      `${path}.auto_approved`,
+    ),
+    arbitration_required: readBoolean(
+      record,
+      "arbitration_required",
+      `${path}.arbitration_required`,
+    ),
+    arbitration_ids: readUuidArray(
+      record,
+      "arbitration_ids",
+      `${path}.arbitration_ids`,
+    ),
+    details: readArray(record, "details", `${path}.details`, (item, itemPath) =>
+      asRecord(item, itemPath),
+    ),
+    evaluated_at: readString(
+      record,
+      "evaluated_at",
+      `${path}.evaluated_at`,
+    ),
+    message: readOptionalString(record, "message", `${path}.message`),
+  };
 }
 
 export function parseAnnotationSubmission(
@@ -202,6 +280,13 @@ export function parseAnnotationSubmission(
     updated_at: readOptionalString(record, "updated_at", `${path}.updated_at`),
     created_by: readOptionalUuid(record, "created_by", `${path}.created_by`),
     updated_by: readOptionalUuid(record, "updated_by", `${path}.updated_by`),
+    consistency:
+      record.consistency === undefined || record.consistency === null
+        ? null
+        : parseDoubleAnnotationConsistency(
+            record.consistency,
+            `${path}.consistency`,
+          ),
   };
   for (const item of submission.records) {
     if (item.project_id !== submission.project_id) {

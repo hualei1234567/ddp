@@ -37,6 +37,7 @@ from app.domain.annotation.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
+from app.domain.annotation.review_policy import ReviewMode
 from app.domain.annotation.state_machines import (
     allowed_assignment_actions,
     assert_assignment_action,
@@ -169,6 +170,13 @@ class AnnotationAssignmentUseCases:
             assignee_id=command.assignee_id,
             assignment_role=role,
         )
+        if role is AssignmentRole.ANNOTATOR and task.review_mode is ReviewMode.DOUBLE:
+            self._assert_double_annotation_independent(
+                scope,
+                task_id=task.task_id,
+                batch=batch,
+                assignee_id=command.assignee_id,
+            )
         if self._assignments.has_conflicting_role(
             scope,
             batch_id=batch_id,
@@ -448,6 +456,43 @@ class AnnotationAssignmentUseCases:
                     "existing_status": existing.status.value,
                 },
             )
+
+    def _assert_double_annotation_independent(
+        self,
+        scope: ProjectScope,
+        *,
+        task_id: UUID,
+        batch,
+        assignee_id: UUID,
+    ) -> None:
+        """双标任务中，同一 Episode 不能被同一标注者在两个批次重复领取。
+
+        同批次重复已由 :meth:`_assert_not_already_assigned` 挡住；这里补的是
+        "跨批次同一 Episode 同一人"，否则所谓双标会退化成同一人提交两份。
+        """
+        current_items = set(batch.item_refs)
+        if not current_items:
+            return
+        for existing in self._assignments.list_active_for_task(scope, task_id=task_id):
+            if (
+                existing.assignee_id != assignee_id
+                or existing.assignment_role is not AssignmentRole.ANNOTATOR
+                or existing.batch_id == batch.batch_id
+            ):
+                continue
+            other_batch = self._batches.get(scope, existing.batch_id)
+            if other_batch is None:
+                continue
+            overlap = current_items & set(other_batch.item_refs)
+            if overlap:
+                raise ItemAlreadyAssignedError(
+                    "双标任务同一 Episode 不得由同一标注者重复标注",
+                    details={
+                        "task_id": str(task_id),
+                        "assignee_id": str(assignee_id),
+                        "episode_ids": sorted(str(item) for item in overlap),
+                    },
+                )
 
     def _assert_work_state(
         self,

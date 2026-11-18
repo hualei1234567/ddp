@@ -230,6 +230,19 @@ class SqlMemberDirectory:
             )
         )
 
+    def list_member_ids(
+        self,
+        scope: ProjectScope,
+        *,
+        role: str | None = None,
+    ) -> list[UUID]:
+        statement = select(ProjectMember.user_id).where(
+            ProjectMember.project_id == scope.project_id
+        )
+        if role is not None:
+            statement = statement.where(ProjectMember.role == role)
+        return list(self._session.scalars(statement.order_by(ProjectMember.user_id)))
+
 
 class SqlGoldSetAnswerAccessPolicy:
     """黄金集答案访问控制：仅项目 OWNER 可读，其余角色一律拒绝。"""

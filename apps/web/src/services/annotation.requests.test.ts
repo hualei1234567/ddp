@@ -194,6 +194,11 @@ describe("标注列表与详情请求", () => {
       path: `/annotation-tasks/${ID}`,
     },
     {
+      name: "getTaskConsistency",
+      call: (api) => api.getTaskConsistency(PROJECT, ID),
+      path: `/annotation-tasks/${ID}/consistency`,
+    },
+    {
       name: "getBatch",
       call: (api) => api.getBatch(PROJECT, ID),
       path: `/annotation-batches/${ID}`,

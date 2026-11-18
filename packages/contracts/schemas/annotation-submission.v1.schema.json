@@ -417,6 +417,17 @@
         }
       ],
       "title": "Updated By"
+    },
+    "consistency": {
+      "anyOf": [
+        {
+          "$ref": "./double-annotation-consistency.v1.schema.json"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Consistency"
     }
   },
   "required": [
