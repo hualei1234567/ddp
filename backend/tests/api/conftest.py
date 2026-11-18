@@ -36,6 +36,29 @@ from app.main import create_app
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
+# 受管 TestClient：显式进入上下文并登记，测试结束统一 ``__exit__``。
+#
+# Starlette 的 TestClient 在 ``__enter__`` 里创建 anyio 内存流与 portal；不进入
+# 上下文时这些资源只能等 GC 收尾，偶发在别的用例 setup 阶段抛
+# ``PytestUnraisableExceptionWarning``（被 filterwarnings=error 判失败）。
+# 这里统一托管生命周期，关闭是确定性的，不依赖 GC 时机。
+_OPEN_CLIENTS: list[TestClient] = []
+
+
+def _managed_client(app: object) -> TestClient:
+    client = TestClient(app)  # type: ignore[arg-type]
+    client.__enter__()
+    _OPEN_CLIENTS.append(client)
+    return client
+
+
+@pytest.fixture(autouse=True)
+def _close_managed_clients() -> Iterator[None]:
+    yield
+    while _OPEN_CLIENTS:
+        _OPEN_CLIENTS.pop().__exit__(None, None, None)
+
+
 
 @dataclass(frozen=True)
 class ApiIds:
@@ -146,7 +169,7 @@ def make_client(
         app.dependency_overrides[get_object_storage] = lambda: object_storage
     if settings_override is not None:
         app.dependency_overrides[get_settings] = lambda: settings_override
-    return TestClient(app)
+    return _managed_client(app)
 
 
 def device_payload(code: str = "device-1") -> dict[str, object]:
@@ -261,7 +284,7 @@ def metrics_app(
         user_id=ids.editor_a,
         platform_role=PlatformRole.MEMBER,
     )
-    yield TestClient(app), ids
+    yield _managed_client(app), ids
 
 
 @pytest.fixture()
