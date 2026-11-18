@@ -15,8 +15,14 @@ Hash 变化、策略升级或来源不可达时，版本应从 ``VALID`` 转为 
 - 条目引用的 Episode 已不存在 → 上游丢失（``STALE``）；
 - Episode 状态为 ``INVALIDATED`` / ``REJECTED`` / ``FAILED`` → 上游失效（``STALE``）；
 - Episode 当前 ``manifest_sha256`` 与条目快照不一致 → 上游内容变了（``STALE``）；
-- 上游事实都正常、但 Episode 的 Canonical Manifest 在对象存储中**明确不存在**
+- 上游事实都正常、但 Episode 的 Canonical Manifest 或该 Episode 通过
+  ``episode_raw_assets`` 引用的原始资产对象在对象存储中**明确不存在**
   → 来源不可达，无法确认有效性（``UNKNOWN``）。
+
+第二层校验（raw asset）的理由：manifest 只证明 Canonical 清单还在，不能证明
+清单引用的原始文件还在。只探 manifest 会把"原始文件被删、清单仍在"的版本继续
+当作 ``VALID``。两类对象在同一轮、同一预算内做有界 HEAD，并按来源类型分别计数，
+让失败原因能区分"清单缺失"与"原始资产缺失"。
 
 **UNKNOWN 的语义与恢复**
 
@@ -89,6 +95,19 @@ class UpstreamEpisodeDirectory(Protocol):
         """Episode 当前的 Canonical Manifest 对象键；未就绪时为 None。"""
         ...
 
+    def episode_raw_asset_keys(
+        self,
+        scope: ProjectScope,
+        episode_ids: list[UUID],
+    ) -> dict[UUID, tuple[str, ...]]:
+        """Episode 通过 ``episode_raw_assets`` 关联的原始资产对象键（批量）。
+
+        一次查询取回全部 Episode 的关联，禁止逐 Episode 查询。没有关联的
+        Episode 不出现在结果里——"没有引用"不是"对象缺失"，调用方不得据此
+        下结论。实现必须强制服务端 ``scope`` 项目过滤。
+        """
+        ...
+
 
 class OwnerResolver(Protocol):
     def first_owner_id(self, project_id: UUID) -> UUID | None: ...
@@ -120,7 +139,8 @@ class _ProbeBudget:
 @dataclass(frozen=True, slots=True)
 class _SourceOutcome:
     reachability: SourceReachability
-    missing: int
+    missing_manifests: int
+    missing_raw_assets: int
     probed: int
 
 
@@ -205,10 +225,7 @@ class DatasetValiditySweep:
             version.validity_status is ValidityStatus.VALID
             and source.reachability is SourceReachability.MISSING
         ):
-            reason = (
-                f"{source.missing} 个上游 Episode 的 Canonical Manifest 在对象存储中不存在"
-                "（来源不可达，无法确认有效性）"
-            )
+            reason = self._missing_source_reason(source)
             return self._transition(
                 scope,
                 version,
@@ -362,9 +379,17 @@ class DatasetValiditySweep:
     ) -> _SourceOutcome | None:
         """探测版本条目的来源对象；返回 None 表示本轮无法下结论。
 
+        两层对象都要探：Episode 的 Canonical Manifest，以及 Episode 通过
+        ``episode_raw_assets`` 引用的原始资产。manifest 存在不代表原始文件
+        还在，只探 manifest 会漏掉"清单在、内容被删"的版本。
+
         只有"每个条目都有可探测引用，且全部探测完成"才给结论。部分条目没有
         ``manifest_key``（Episode 尚未就绪）时保守放弃——把"没有引用"误判为
-        "来源丢失"会让合法版本永久 UNKNOWN。
+        "来源丢失"会让合法版本永久 UNKNOWN。没有任何 raw asset 关联不算异常
+        （纯 Canonical 版本合法），只是少一层校验。
+
+        对象总数受 ``max_objects_per_version`` 约束：超出上限时整轮跳过并
+        记录原因，不做部分探测，避免对象数量放大把巡检拖成 N+1。
         """
         episode_ids = sorted({item.episode_id for item in items})
         if not episode_ids:
@@ -380,28 +405,79 @@ class DatasetValiditySweep:
             )
             return None
         keys = self._upstream.episode_manifest_keys(scope, episode_ids)
-        object_keys: list[str] = []
+        manifest_keys: list[str] = []
         for episode_id in episode_ids:
             object_key = keys.get(episode_id)
             if object_key is None:
                 # Episode 不存在由上游检查处理；存在但没有 Manifest 引用则无法探测。
                 return None
-            object_keys.append(object_key)
+            manifest_keys.append(object_key)
+        raw_keys = self._raw_asset_keys(scope, episode_ids)
+        if len(manifest_keys) + len(raw_keys) > self._max_objects_per_version:
+            # 对象数量是版本维度的放大器：超出上限时整轮跳过而不是部分探测，
+            # 避免"探了一半"被误当成完整结论。
+            logger.warning(
+                "数据集版本来源对象超过单轮探测上限，跳过来源探测",
+                extra={
+                    "dataset_version_id": str(version.dataset_version_id),
+                    "manifest_count": len(manifest_keys),
+                    "raw_asset_count": len(raw_keys),
+                    "limit": self._max_objects_per_version,
+                },
+            )
+            return None
+        missing_manifests = self._probe_keys(budget, manifest_keys)
+        if missing_manifests is None:
+            return None
+        missing_raw_assets = self._probe_keys(budget, raw_keys)
+        if missing_raw_assets is None:
+            return None
+        reachability = (
+            SourceReachability.MISSING
+            if missing_manifests or missing_raw_assets
+            else SourceReachability.REACHABLE
+        )
+        return _SourceOutcome(
+            reachability=reachability,
+            missing_manifests=missing_manifests,
+            missing_raw_assets=missing_raw_assets,
+            probed=len(manifest_keys) + len(raw_keys),
+        )
+
+    def _raw_asset_keys(
+        self,
+        scope: ProjectScope,
+        episode_ids: list[UUID],
+    ) -> list[str]:
+        """批量取回 Episode 引用的原始资产对象键（跨 Episode 去重、顺序稳定）。"""
+        grouped = self._upstream.episode_raw_asset_keys(scope, episode_ids)
+        return sorted({object_key for keys in grouped.values() for object_key in keys})
+
+    def _probe_keys(
+        self,
+        budget: _ProbeBudget,
+        object_keys: list[str],
+    ) -> int | None:
+        """探测一组对象并返回明确缺失数；任一对象不可判定时返回 None。"""
         missing = 0
         for object_key in object_keys:
             verdict = self._probe_object(budget, object_key)
-            if verdict is None:
-                return None
-            if verdict is SourceReachability.UNREACHABLE:
+            if verdict is None or verdict is SourceReachability.UNREACHABLE:
                 return None
             if verdict is SourceReachability.MISSING:
                 missing += 1
-        reachability = SourceReachability.MISSING if missing else SourceReachability.REACHABLE
-        return _SourceOutcome(
-            reachability=reachability,
-            missing=missing,
-            probed=len(object_keys),
-        )
+        return missing
+
+    @staticmethod
+    def _missing_source_reason(source: _SourceOutcome) -> str:
+        """把缺失对象按来源类型分开表述，便于判断是清单还是原始文件丢失。"""
+        missing_parts: list[str] = []
+        if source.missing_manifests:
+            missing_parts.append(f"{source.missing_manifests} 个 Canonical Manifest")
+        if source.missing_raw_assets:
+            missing_parts.append(f"{source.missing_raw_assets} 个原始资产对象")
+        detail = "、".join(missing_parts) or "来源对象"
+        return f"{detail}在对象存储中不存在（来源不可达，无法确认有效性）"
 
     def _probe_object(
         self,

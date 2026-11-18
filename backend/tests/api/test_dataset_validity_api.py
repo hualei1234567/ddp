@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 from app.application.datasets.ports import SourceReachability
 from app.application.datasets.validity import DatasetValiditySweep
+from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.collection import AuditLog
 from app.infrastructure.db.models.datasets import DatasetVersionModel
 from app.infrastructure.db.models.episodes import EpisodeModel
@@ -25,7 +26,7 @@ from app.infrastructure.repositories.dataset_repositories import (
     SqlDatasetVersionRepository,
 )
 from app.infrastructure.repositories.projects import SqlProjectMemberRepository
-from sqlalchemy import select, update
+from sqlalchemy import event, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import ApiIds, make_client
@@ -329,14 +330,26 @@ def test_sweep_leaves_healthy_version_valid(
 
 
 class _FakeSourceProbe:
-    """来源探测端口替身：按固定结论应答并记录探测过的对象键。"""
+    """来源探测端口替身：按对象类别应答并记录探测过的对象键。
 
-    def __init__(self, verdict: SourceReachability) -> None:
+    ``raw_verdict`` 为 None 时所有对象都用 ``verdict``，保持既有用例语义；
+    需要区分"manifest 正常、原始资产缺失/不可达"时传入它。
+    """
+
+    def __init__(
+        self,
+        verdict: SourceReachability,
+        *,
+        raw_verdict: SourceReachability | None = None,
+    ) -> None:
         self.verdict = verdict
+        self.raw_verdict = raw_verdict
         self.calls: list[str] = []
 
     def probe(self, object_key: str) -> SourceReachability:
         self.calls.append(object_key)
+        if self.raw_verdict is not None and not object_key.endswith("/manifest.json"):
+            return self.raw_verdict
         return self.verdict
 
 
@@ -388,8 +401,9 @@ def test_source_probe_reachable_keeps_version_valid(
         outcomes = _sweep(session, probe).run_once(limit=50)
 
     assert outcomes == []
-    # 确实探测了当前项目的 Episode Manifest，而且是服务端得到的作用域。
-    assert probe.calls
+    # 两层对象都探测了当前项目的对象，而且是服务端得到的作用域。
+    assert any(key.endswith("/manifest.json") for key in probe.calls)
+    assert any(key.startswith("raw/") for key in probe.calls)
     assert all(str(ids.project_a) in key for key in probe.calls)
     assert _version_detail(ctx, ids, version_id)["validity_status"] == "VALID"
 
@@ -482,3 +496,111 @@ def test_source_probe_recovery_requires_human_revalidate(
     )
     assert restored.status_code == 200, restored.text
     assert restored.json()["validity_status"] == "VALID"
+
+def test_source_probe_missing_raw_asset_marks_unknown_with_distinct_reason(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """manifest 都在、原始资产缺失时必须写 UNKNOWN，并在原因里区分来源类型。"""
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    version_id = str(ctx["version"]["dataset_version_id"])
+    probe = _FakeSourceProbe(
+        SourceReachability.REACHABLE,
+        raw_verdict=SourceReachability.MISSING,
+    )
+
+    with factory() as session:
+        outcomes = _sweep(session, probe).run_once(limit=50)
+
+    assert len(outcomes) == 1
+    reasons = "；".join(outcomes[0].reasons)
+    assert "原始资产对象" in reasons, reasons
+    assert "不存在" in reasons, reasons
+    # 只缺原始资产时原因里不得出现 manifest 缺失，否则无法判断是清单还是内容丢失。
+    assert "Canonical Manifest" not in reasons, reasons
+    assert any(key.startswith("raw/") for key in probe.calls)
+    assert _version_detail(ctx, ids, version_id)["validity_status"] == "UNKNOWN"
+
+
+def test_source_probe_unreachable_raw_asset_keeps_version_valid(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """原始资产探测超时/存储不可用是"无法判定"，不得写坏 VALID。"""
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    version_id = str(ctx["version"]["dataset_version_id"])
+    probe = _FakeSourceProbe(
+        SourceReachability.REACHABLE,
+        raw_verdict=SourceReachability.UNREACHABLE,
+    )
+
+    with factory() as session:
+        outcomes = _sweep(session, probe).run_once(limit=50)
+
+    assert outcomes == []
+    # 10 个 manifest 正常后，遇到第一个不可达的原始资产立即放弃本版本。
+    assert len(probe.calls) == 11, probe.calls
+    assert probe.calls[-1].startswith("raw/")
+    assert _version_detail(ctx, ids, version_id)["validity_status"] == "VALID"
+
+
+def test_source_probe_total_object_limit_skips_without_conclusion(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """manifest + raw asset 总数超过上限时整轮跳过，不做部分探测。"""
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    version_id = str(ctx["version"]["dataset_version_id"])
+    probe = _FakeSourceProbe(SourceReachability.REACHABLE)
+
+    with factory() as session:
+        # 10 个 manifest + 10 个原始资产 = 20 个对象；上限设为 19。
+        outcomes = _sweep(session, probe, max_objects=19).run_once(limit=50)
+
+    assert outcomes == []
+    assert probe.calls == []
+    assert _version_detail(ctx, ids, version_id)["validity_status"] == "VALID"
+
+
+def test_episode_raw_asset_keys_is_batched_and_project_scoped(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """批量取键：多 Episode 只发一条 join 查询，且跨项目作用域读不到数据。"""
+    factory, ids = api_db
+    episodes = seed_dataset_episodes(factory, ids.project_a, ids.editor_a, count=5)
+    scope = ProjectScope(ids.project_a, actor_id=ids.editor_a)
+
+    statements: list[str] = []
+    with factory() as session:
+        engine = session.get_bind()
+
+        def _record(conn: object, cursor: object, statement: str, *args: object) -> None:
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", _record)
+        try:
+            keys = SqlDatasetUpstreamDirectory(session).episode_raw_asset_keys(
+                scope, episodes
+            )
+        finally:
+            event.remove(engine, "before_cursor_execute", _record)
+
+    assert set(keys) == set(episodes)
+    assert all(
+        object_key.startswith(f"raw/{ids.project_a}/")
+        for object_keys in keys.values()
+        for object_key in object_keys
+    )
+    joins = [
+        statement
+        for statement in statements
+        if "episode_raw_assets" in statement and "raw_assets" in statement
+    ]
+    assert len(joins) == 1, statements
+
+    with factory() as session:
+        foreign = SqlDatasetUpstreamDirectory(session).episode_raw_asset_keys(
+            ProjectScope(ids.project_b, actor_id=ids.owner_a),
+            episodes,
+        )
+    assert foreign == {}
