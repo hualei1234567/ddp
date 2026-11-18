@@ -19,7 +19,7 @@ pytestmark = pytest.mark.usefixtures("api_db")
 def _create(client, project_id, **overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "pipeline_version": "pipeline-v1",
-        "input_refs": ["raw/asset-1"],
+        "input_refs": [f"raw/{project_id}/asset-1"],
     }
     payload.update(overrides)
     response = client.post(url(project_id, "/processing-runs"), json=payload)
@@ -50,8 +50,13 @@ def test_create_get_and_allowed_actions(api_db) -> None:
 def test_list_filters_and_pagination(api_db) -> None:
     factory, ids = api_db
     editor = make_client(factory, ids.editor_a)
-    first = _create(editor, ids.project_a, input_refs=["raw/1"])
-    second = _create(editor, ids.project_a, input_refs=["raw/2"], pipeline_version="pipeline-v2")
+    first = _create(editor, ids.project_a, input_refs=[f"raw/{ids.project_a}/1"])
+    second = _create(
+        editor,
+        ids.project_a,
+        input_refs=[f"raw/{ids.project_a}/2"],
+        pipeline_version="pipeline-v2",
+    )
 
     page = editor.get(url(ids.project_a, "/processing-runs"), params={"limit": 1})
     assert page.status_code == 200, page.text
@@ -128,7 +133,7 @@ def test_project_isolation_and_role_permissions(api_db) -> None:
 
     forbidden = viewer.post(
         url(ids.project_a, "/processing-runs"),
-        json={"pipeline_version": "pipeline-v1", "input_refs": ["raw/1"]},
+        json={"pipeline_version": "pipeline-v1", "input_refs": [f"raw/{ids.project_a}/1"]},
     )
     assert forbidden.status_code == 403
 
@@ -159,7 +164,7 @@ def test_invalid_payload_and_unknown_run(api_db) -> None:
         url(ids.project_a, "/processing-runs"),
         json={
             "pipeline_version": "pipeline-v1",
-            "input_refs": ["raw/1"],
+            "input_refs": [f"raw/{ids.project_a}/1"],
             "project_id": str(ids.project_b),
         },
     )

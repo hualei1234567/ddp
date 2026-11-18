@@ -69,6 +69,20 @@ class SkippedStage:
         )
 
 
+#: 允许作为处理输入的顶层前缀；第二段必须是本项目的 project_id。
+_PROJECT_SCOPED_ROOTS = frozenset({"raw", "canonical"})
+
+
+def _is_project_scoped(ref: str, project_id: str) -> bool:
+    """``<root>/<project_id>/...`` 形式才允许被探测；其余一律拒绝。"""
+    if not isinstance(ref, str) or not ref:
+        return False
+    parts = ref.split("/")
+    if len(parts) < 3 or any(part in {"", ".", ".."} for part in parts):
+        return False
+    return parts[0] in _PROJECT_SCOPED_ROOTS and parts[1] == project_id
+
+
 class FileValidationHandler:
     """检查 ``input_refs`` 指向的对象在对象存储中确实存在。
 
@@ -81,7 +95,17 @@ class FileValidationHandler:
 
     def __call__(self, context: StageContext) -> StageOutcome:
         total_bytes = 0
+        project_id = str(context.run.project_id)
         for ref in context.run.input_refs:
+            # 输入引用只允许指向**当前项目**的对象。不做这一步，任何项目成员
+            # 都能用一个猜到的 key 探测别的项目里对象是否存在、有多大
+            # （`object_missing` 与"合计 N 字节"就是两个可观测侧信道），
+            # 直接绕过服务端强制 project_id 隔离。
+            if not _is_project_scoped(ref, project_id):
+                raise StageFailure(
+                    "input_ref_not_project_scoped",
+                    "输入引用必须属于当前项目",
+                )
             try:
                 size = self._inspector.object_size(ref)
             except ObjectInspectionError as exc:

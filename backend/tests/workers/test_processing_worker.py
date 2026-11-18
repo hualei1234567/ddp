@@ -78,11 +78,30 @@ def _settings(max_attempts: int = 2) -> Settings:
     )
 
 
+def test_claim_lease_prevents_second_worker_from_taking_the_same_event(api_db) -> None:
+    """claim 后必须落租约：pipeline 中途提交会释放行锁，否则事件会被重复领取。"""
+    from app.infrastructure.repositories.outbox_validation import SqlOutboxValidationQueue
+
+    factory, ids = api_db
+    _create_run(factory, ids)
+    moment = _now()
+    with factory() as session:
+        queue = SqlOutboxValidationQueue(session)
+        claimed = queue.claim_next(now=moment, event_type=RUN_REQUESTED_EVENT)
+        assert claimed is not None
+        assert queue.mark_claimed(claimed.event_id, now=moment, lease_seconds=60)
+        session.commit()
+
+    with factory() as session:
+        queue = SqlOutboxValidationQueue(session)
+        assert queue.claim_next(now=moment, event_type=RUN_REQUESTED_EVENT) is None
+
+
 def _create_run(
     factory: sessionmaker[Session],
     ids,
     *,
-    input_refs: tuple[str, ...] = ("raw/a",),
+    input_refs: tuple[str, ...] | None = None,
 ) -> UUID:
     with factory() as session:
         runs = SqlProcessingRunRepository(session)
@@ -95,7 +114,10 @@ def _create_run(
         )
         run = use_cases.create(
             ProjectScope(ids.project_a, actor_id=ids.editor_a),
-            NewProcessingRun(pipeline_version="pipeline-v1", input_refs=input_refs),
+            NewProcessingRun(
+                pipeline_version="pipeline-v1",
+                input_refs=input_refs or (f"raw/{ids.project_a}/a",),
+            ),
         )
         return run.run_id
 
@@ -138,7 +160,7 @@ def test_worker_consumes_requested_event_and_runs_all_stages(env) -> None:
     worker = ProcessingRunWorker(
         factory,
         _settings(),
-        inspector=FakeInspector({"raw/a": 12}),
+        inspector=FakeInspector({f"raw/{ids.project_a}/a": 12}),
     )
 
     result = worker.process_once(now=_now())
@@ -154,7 +176,7 @@ def test_worker_consumes_requested_event_and_runs_all_stages(env) -> None:
 
 def test_failure_retries_then_dead_letters_without_orphans(env) -> None:
     factory, ids = env
-    run_id = _create_run(factory, ids, input_refs=("raw/missing",))
+    run_id = _create_run(factory, ids, input_refs=(f"raw/{ids.project_a}/missing",))
     worker = ProcessingRunWorker(factory, _settings(max_attempts=2), inspector=FakeInspector())
 
     first_moment = _now()
@@ -202,7 +224,7 @@ def test_duplicate_event_is_published_without_extra_steps(env) -> None:
     worker = ProcessingRunWorker(
         factory,
         _settings(),
-        inspector=FakeInspector({"raw/a": 1}),
+        inspector=FakeInspector({f"raw/{ids.project_a}/a": 1}),
     )
 
     assert worker.process_once(now=_now())["status"] == RunProcessingStatus.PUBLISHED.value
@@ -216,8 +238,12 @@ def test_duplicate_event_is_published_without_extra_steps(env) -> None:
 def test_only_the_consuming_worker_gets_the_event(env) -> None:
     factory, ids = env
     _create_run(factory, ids)
-    first = ProcessingRunWorker(factory, _settings(), inspector=FakeInspector({"raw/a": 1}))
-    second = ProcessingRunWorker(factory, _settings(), inspector=FakeInspector({"raw/a": 1}))
+    first = ProcessingRunWorker(
+        factory, _settings(), inspector=FakeInspector({f"raw/{ids.project_a}/a": 1})
+    )
+    second = ProcessingRunWorker(
+        factory, _settings(), inspector=FakeInspector({f"raw/{ids.project_a}/a": 1})
+    )
 
     assert first.process_once(now=_now())["status"] == RunProcessingStatus.PUBLISHED.value
     assert second.process_once(now=_now())["status"] == RunProcessingStatus.IDLE.value

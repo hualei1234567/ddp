@@ -117,10 +117,13 @@ def test_happy_path_marks_unimplemented_stages_skipped(factory: sessionmaker[Ses
             scope,
             NewProcessingRun(
                 pipeline_version="pipeline-v1",
-                input_refs=("raw/a", "raw/b"),
+                input_refs=(f"raw/{ids.project_a}/a", f"raw/{ids.project_a}/b"),
             ),
         )
-        pipeline = _pipeline(session, inspector=FakeInspector({"raw/a": 10, "raw/b": 5}))
+        pipeline = _pipeline(
+            session,
+            inspector=FakeInspector({f"raw/{ids.project_a}/a": 10, f"raw/{ids.project_a}/b": 5}),
+        )
 
         outcome = pipeline.execute(scope, run.run_id)
 
@@ -142,6 +145,41 @@ def test_happy_path_marks_unimplemented_stages_skipped(factory: sessionmaker[Ses
         session.close()
 
 
+def test_input_ref_outside_project_is_rejected_without_storage_access(
+    factory: sessionmaker[Session],
+) -> None:
+    """输入引用必须落在本项目下：不能借 object_missing/大小日志探测别的项目。"""
+
+    class NoStorageInspector:
+        def object_size(self, object_key: str) -> int | None:
+            raise AssertionError(f"不应访问对象存储：{object_key}")
+
+    ids = seed_identity(factory)
+    scope = ProjectScope(project_id=ids.project_a, actor_id=ids.editor_a)
+    session, use_cases, _worker = _session_services(factory)
+    try:
+        run = use_cases.create(
+            scope,
+            NewProcessingRun(
+                pipeline_version="pipeline-v1",
+                input_refs=(f"raw/{ids.project_b}/secret",),
+            ),
+        )
+        pipeline = _pipeline(session, inspector=NoStorageInspector())
+
+        outcome = pipeline.execute(scope, run.run_id)
+
+        assert outcome.status == PipelineOutcomeStatus.FAILED.value
+        assert outcome.error_code == "input_ref_not_project_scoped"
+        step = use_cases.list_steps(scope, run.run_id)[0]
+        assert step.error_code == "input_ref_not_project_scoped"
+        # 错误摘要不得回显 key。
+        assert "secret" not in (step.error_summary or "")
+        assert "secret" not in (step.log_summary or "")
+    finally:
+        session.close()
+
+
 def test_missing_input_object_fails_and_retry_uses_new_attempt(
     factory: sessionmaker[Session],
 ) -> None:
@@ -151,7 +189,9 @@ def test_missing_input_object_fails_and_retry_uses_new_attempt(
     try:
         run = use_cases.create(
             scope,
-            NewProcessingRun(pipeline_version="pipeline-v1", input_refs=("raw/missing",)),
+            NewProcessingRun(
+                pipeline_version="pipeline-v1", input_refs=(f"raw/{ids.project_a}/missing",)
+            ),
         )
         pipeline = _pipeline(session, inspector=FakeInspector({}))
 
@@ -190,7 +230,9 @@ def test_storage_unavailable_is_distinct_from_missing_object(
     try:
         run = use_cases.create(
             scope,
-            NewProcessingRun(pipeline_version="pipeline-v1", input_refs=("raw/a",)),
+            NewProcessingRun(
+                pipeline_version="pipeline-v1", input_refs=(f"raw/{ids.project_a}/a",)
+            ),
         )
         pipeline = _pipeline(session, inspector=FakeInspector(unavailable=True))
 
@@ -230,9 +272,11 @@ def test_cancel_during_stage_aborts_step_without_leaving_running(
     try:
         run = use_cases.create(
             scope,
-            NewProcessingRun(pipeline_version="pipeline-v1", input_refs=("raw/a",)),
+            NewProcessingRun(
+                pipeline_version="pipeline-v1", input_refs=(f"raw/{ids.project_a}/a",)
+            ),
         )
-        handlers = default_handlers(FakeInspector({"raw/a": 1}))
+        handlers = default_handlers(FakeInspector({f"raw/{ids.project_a}/a": 1}))
         handlers[ProcessingStage.FILE_VALIDATION] = _CancelDuringStage(use_cases)
         pipeline = _pipeline(session, handlers=handlers)
 
@@ -262,7 +306,9 @@ def test_terminal_run_is_noop(factory: sessionmaker[Session]) -> None:
     try:
         run = use_cases.create(
             scope,
-            NewProcessingRun(pipeline_version="pipeline-v1", input_refs=("raw/a",)),
+            NewProcessingRun(
+                pipeline_version="pipeline-v1", input_refs=(f"raw/{ids.project_a}/a",)
+            ),
         )
         use_cases.cancel(scope, run.run_id, expected_version=run.row_version)
         outcome = _pipeline(session).execute(scope, run.run_id)
@@ -280,7 +326,9 @@ def test_scope_is_enforced_for_cross_project_run(factory: sessionmaker[Session])
     try:
         run = use_cases.create(
             scope_a,
-            NewProcessingRun(pipeline_version="pipeline-v1", input_refs=("raw/a",)),
+            NewProcessingRun(
+                pipeline_version="pipeline-v1", input_refs=(f"raw/{ids.project_a}/a",)
+            ),
         )
         with pytest.raises(ResourceNotFoundError):
             _pipeline(session).execute(scope_b, run.run_id)

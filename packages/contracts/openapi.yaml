@@ -87,7 +87,7 @@ info:
       与八个执行阶段的封闭枚举。客户端只能看到服务端 `allowed_actions`；
       `system-*` / `worker-*` 内部动作不对外暴露。本版本**不包含**八阶段编排、
       Worker claim/advance 的触发入口与前端页面（N4-002 及后续）。
-    - `1.11.0` **新增数据源远端校验与详情聚合**：`DataSourceCreate` 新增可选
+    - `1.12.0` **新增数据源远端校验与详情聚合**：`DataSourceCreate` 新增可选
       `verify_remote`（默认 `false`，不访问外网）；开启后超时、仓库不存在/无权限、
       gated 与声明不一致均以 `validation_failed` 拒绝登记。校验结论只以规范化摘要
       写入服务端保留的 `metadata.remote_check`，远端返回的其他字段不落库。

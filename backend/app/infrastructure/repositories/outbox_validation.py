@@ -6,7 +6,7 @@ PostgreSQL 使用 ``SELECT ... FOR UPDATE SKIP LOCKED`` 让多个 Worker 各自�
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -63,6 +63,33 @@ class SqlOutboxValidationQueue:
             attempts=row.attempts,
             created_at=created_at,
         )
+
+    def mark_claimed(
+        self,
+        event_id: UUID,
+        *,
+        now: datetime,
+        lease_seconds: float,
+    ) -> bool:
+        """把事件的可见时间推后一个租约，防止处理期间被第二个 Worker 再领取。
+
+        ``claim_next`` 的行锁只在当前事务内有效；处理流程中途提交（例如每条
+        阶段步骤各自提交）会释放锁，行仍停在 PENDING，另一个 Worker 能再次
+        捞到同一事件。这里用现有 ``available_at`` 做租约，不新增列与迁移：
+        提交后事件在租约内不可见；处理完成由 mark_published/mark_retry 覆盖；
+        Worker 崩溃则租约到期后自动重新可见。
+
+        返回 ``False`` 表示事件已不在 PENDING（被并发方处理掉了）。
+        """
+        result = self._session.execute(
+            update(OutboxEventModel)
+            .where(
+                OutboxEventModel.id == event_id,
+                OutboxEventModel.status == _PENDING,
+            )
+            .values(available_at=now + timedelta(seconds=lease_seconds))
+        )
+        return bool(result.rowcount)
 
     def mark_published(self, event_id: UUID, *, now: datetime) -> None:
         result = self._session.execute(

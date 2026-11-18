@@ -39,6 +39,10 @@
 | 两套规则会漂移；引号值只截到空格 | 收敛为单一实现并补引号/多词用例 |
 | TD-25 | `application/datasources/import_runner.py` 724 行（>500 评审线） | 文件规模 |
 | 进度/日志上报与 RawAsset 登记混杂 | 拆为协作者，先补重试一致性用例 |
+| TD-27 | `/data-sources/{id}/detail` 与既有 `GET /data-sources/{id}` 字段重叠 | `api/v1/datasource_routes.py` |
+| 两套详情类型长期易漂移 | 收敛为 `GET /data-sources/{id}?include=imports,check` 或把 `/detail` 定为唯一聚合入口 |
+| TD-28 | 审看页同一机位的多个片段只显示首个 | `apps/web/src/pages/datasources/AssetReviewPage.tsx` |
+| 同机位多片段不可见 | 增加片段选择器，按 asset_id 而非 camera `find` |
 | TD-26 | 审核 evidence 存于 `audit_logs.details`，应用层读审计回填 | `application/datasources/reviews.py` |
 | 证据生命周期被审计保留策略绑定；领域状态依赖审计表 | 新增 `data_source_reviews.evidence` JSON 列并回填（N2-009） |
 | TD-23 | `infrastructure/repositories/calibration_records.py` 869 行（>800），本次 N1-002 继续增长 | 文件规模 |

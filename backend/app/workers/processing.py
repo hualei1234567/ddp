@@ -94,6 +94,20 @@ class ProcessingRunWorker:
             if claimed is None:
                 return {"status": RunProcessingStatus.IDLE.value}
 
+            # claim 的行锁只在当前事务内有效；pipeline 会按阶段提交，锁会释放。
+            # 先落一个租约再提交，避免第二个 Worker 在同一运行上并发执行阶段。
+            if not queue.mark_claimed(
+                claimed.event_id,
+                now=moment,
+                lease_seconds=self._settings.processing_event_lease_seconds,
+            ):
+                session.commit()
+                return {
+                    "status": RunProcessingStatus.PUBLISHED.value,
+                    "skipped": "事件已被另一 Worker 领取",
+                }
+            session.commit()
+
             raw_id = claimed.payload.get("run_id")
             try:
                 run_id = UUID(str(raw_id))
