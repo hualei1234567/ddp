@@ -62,6 +62,7 @@ from app.application.datasources.ports import (
     UnitOfWork,
 )
 from app.application.ingestion.ports import RawAssetRepository
+from app.core.logging import current_trace_id
 from app.domain.datasources.enums import ImportLogLevel, ImportScope, ImportStage, ImportStatus
 from app.domain.datasources.errors import DomainValidationError
 from app.domain.datasources.media import MediaAsset
@@ -443,7 +444,7 @@ class ImportRunner:
             from_status=latest.status.value,
             to_status=saved.status.value,
             reason="系统重试：可恢复失败，退回待领取",
-            request_id=None,
+            request_id=current_trace_id(),
             details={"attempt": saved.attempt, "max_attempts": saved.max_attempts},
             event_type="datasource.import.retry",
             event_payload={
@@ -607,7 +608,7 @@ class ImportRunner:
             from_status=job.status.value,
             to_status=saved.status.value,
             reason=None,
-            request_id=None,
+            request_id=current_trace_id(),
             details={"row_count": row_count, "file_count": file_count},
             event_type=DATASOURCE_IMPORT_ACTION_EVENTS[action],
             event_payload={
@@ -665,7 +666,7 @@ class ImportRunner:
             from_status=job.status.value,
             to_status=saved.status.value,
             reason=safe_message,
-            request_id=None,
+            request_id=current_trace_id(),
             details={},
             event_type="datasource.import.fail",
             event_payload={"import_id": str(saved.import_id), "error_message": safe_message},

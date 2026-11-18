@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from app.core.logging import JsonFormatter, trace_id_var
 from app.domain.identity.models import ProjectScope
+from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
 from app.infrastructure.db.models.datasets import DatasetVersionModel
 from app.infrastructure.repositories.export_jobs import SqlExportJobRepository
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import ApiIds, make_client
@@ -228,3 +232,57 @@ def test_export_worker_timeout_and_stale_version(
     assert stale["status"] == "FAILED"
     assert stale["error_code"] == "dataset_upstream_invalidated"
     assert stale_storage.objects == {}
+
+
+class _CollectingJsonHandler(logging.Handler):
+    def __init__(self) -> None:
+        super().__init__()
+        self.payloads: list[dict[str, object]] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.payloads.append(json.loads(self.format(record)))
+
+
+def test_export_worker_reuses_request_id_from_event(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """HTTP request_id → 导出事件 → Worker 日志/审计，同一 ID 可检索。"""
+    factory, ids = api_db
+    ctx = build_frozen_version(factory, ids)
+    storage = FakeExportStorage()
+    client = make_client(factory, ids.editor_a)
+    response = client.post(
+        url(ids.project_a, "/exports"),
+        json=export_payload(ctx["version_id"]),
+        headers={
+            "Idempotency-Key": "export-trace-id",
+            "X-Request-Id": "req-export-1",
+        },
+    )
+    assert response.status_code == 202, response.text
+    job_id = response.json()["export_job_id"]
+
+    handler = _CollectingJsonHandler()
+    handler.setFormatter(JsonFormatter())
+    worker_logger = logging.getLogger("ddp.worker.exports")
+    worker_logger.addHandler(handler)
+    try:
+        result = run_export_worker(factory, storage)
+    finally:
+        worker_logger.removeHandler(handler)
+
+    assert result.status == "PUBLISHED"
+    with factory() as session:
+        requested = session.scalar(
+            select(OutboxEvent).where(OutboxEvent.event_type == "dataset.export.requested")
+        )
+        assert requested is not None
+        assert requested.payload["request_id"] == "req-export-1"
+        audits = session.scalars(select(AuditLog).where(AuditLog.resource_id == UUID(job_id))).all()
+        assert audits
+        assert all(item.request_id == "req-export-1" for item in audits)
+
+    assert handler.payloads, "Worker 必须留下可检索的结果日志"
+    assert all(item["trace_id"] == "req-export-1" for item in handler.payloads)
+    assert all(item["trace_source"] == "event" for item in handler.payloads)
+    assert trace_id_var.get() is None

@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -24,6 +26,7 @@ from app.application.ingestion.validation_events import (
     ValidationEventProcessor,
 )
 from app.core.config import Settings
+from app.core.logging import JsonFormatter, is_safe_trace_id, trace_id_var
 from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.enums import (
     RawAssetFormat,
@@ -168,10 +171,18 @@ def _enqueue_validation(
     project_id: UUID | None = None,
     actor_user_id: UUID | None = None,
     validation_job_id: UUID | None = None,
+    request_id: str | None = None,
 ) -> UUID:
     project = project_id or asset.project_id
     actor = actor_user_id or harness.user_a
     event_id = uuid4()
+    payload: dict[str, object] = {
+        "asset_id": str(asset.asset_id),
+        "actor_user_id": str(actor),
+        "validation_job_id": str(validation_job_id or uuid4()),
+    }
+    if request_id is not None:
+        payload["request_id"] = request_id
     with harness.factory() as session:
         SqlOutboxRepository(session).enqueue(
             ProjectScope(project, actor_id=actor),
@@ -181,11 +192,7 @@ def _enqueue_validation(
                 aggregate_type="RAW_ASSET",
                 aggregate_id=asset.asset_id,
                 event_type=VALIDATION_EVENT_TYPE,
-                payload={
-                    "asset_id": str(asset.asset_id),
-                    "actor_user_id": str(actor),
-                    "validation_job_id": str(validation_job_id or uuid4()),
-                },
+                payload=payload,
                 occurred_at=NOW,
                 # 这条事件是要被 worker 消费的，必须标为投递类（R-13 / T-1）。
                 dispatch=True,
@@ -518,3 +525,90 @@ def test_build_validation_processor_uses_configured_chunk_size(
     with harness.factory() as session:
         processor = build_validation_processor(session, harness.settings, harness.fake)
         assert isinstance(processor, ValidationEventProcessor)
+
+
+class _CollectingJsonHandler(logging.Handler):
+    """按真实 ``JsonFormatter`` 输出解析日志，断言 trace 字段。"""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.payloads: list[dict[str, object]] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.payloads.append(json.loads(self.format(record)))
+
+
+def _capture_worker_logs():
+    handler = _CollectingJsonHandler()
+    handler.setFormatter(JsonFormatter())
+    logger = logging.getLogger("ddp.worker.outbox")
+    logger.addHandler(handler)
+    return logger, handler
+
+
+def test_worker_reuses_event_request_id_in_logs_audit_and_event(
+    worker_harness: WorkerHarness,
+) -> None:
+    """同一 request_id 贯穿：outbox 事件 → Worker 日志 → 审计 → validated 事件。"""
+    harness = worker_harness
+    asset = _seed_asset(harness)
+    _enqueue_validation(harness, asset, request_id="req-upload-1")
+
+    logger, handler = _capture_worker_logs()
+    try:
+        result = harness.worker().process_once(now=NOW)
+    finally:
+        logger.removeHandler(handler)
+
+    assert result.status is ProcessingStatus.PUBLISHED
+    with harness.factory() as session:
+        audit = session.scalar(select(AuditLog).where(AuditLog.resource_id == asset.asset_id))
+        assert audit is not None
+        assert audit.request_id == "req-upload-1"
+        validated = session.scalar(
+            select(OutboxEvent).where(OutboxEvent.event_type == VALIDATED_EVENT_TYPE)
+        )
+        assert validated is not None
+        assert validated.payload["request_id"] == "req-upload-1"
+
+    assert handler.payloads, "Worker 必须留下可检索的结果日志"
+    assert all(item["trace_id"] == "req-upload-1" for item in handler.payloads)
+    assert all(item["trace_source"] == "event" for item in handler.payloads)
+    # 处理结束后上下文复位，不串到下一条事件。
+    assert trace_id_var.get() is None
+
+
+def test_worker_generates_marked_trace_when_event_has_no_request_id(
+    worker_harness: WorkerHarness,
+) -> None:
+    """无来源时生成新 trace_id 并标注 generated，不拿 event_id 冒充。"""
+    harness = worker_harness
+    asset = _seed_asset(harness)
+    event_id = _enqueue_validation(harness, asset)
+
+    logger, handler = _capture_worker_logs()
+    try:
+        result = harness.worker().process_once(now=NOW)
+    finally:
+        logger.removeHandler(handler)
+
+    assert result.status is ProcessingStatus.PUBLISHED
+    assert handler.payloads
+    generated = {str(item["trace_id"]) for item in handler.payloads}
+    assert len(generated) == 1
+    trace_id = next(iter(generated))
+    assert trace_id != str(event_id), "不得把事件 ID 当作请求 ID"
+    assert is_safe_trace_id(trace_id)
+    assert all(item["trace_source"] == "generated" for item in handler.payloads)
+
+    with harness.factory() as session:
+        audit = session.scalar(select(AuditLog).where(AuditLog.resource_id == asset.asset_id))
+        assert audit is not None
+        # 审计沿用同一个生成 ID，链路仍可端到端检索。
+        assert audit.request_id == trace_id
+        validated = session.scalar(
+            select(OutboxEvent).where(OutboxEvent.event_type == VALIDATED_EVENT_TYPE)
+        )
+        assert validated is not None
+        assert validated.payload["request_id"] == trace_id
+    assert trace_id_var.get() is None

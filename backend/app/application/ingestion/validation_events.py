@@ -23,6 +23,7 @@ from app.application.ingestion.raw_asset_validation import (
     RawAssetValidationService,
     ValidationOutcome,
 )
+from app.core.logging import bind_trace, trace_from_event_payload
 from app.domain.ingestion.errors import (
     DomainValidationError,
     InvalidStateTransitionError,
@@ -80,15 +81,39 @@ class ValidationEventProcessor:
         self._retry_max_seconds = retry_max_seconds
         self._chunk_size_bytes = chunk_size_bytes
 
-    def process_next(self, *, now: datetime | None = None) -> ProcessResult:
-        occurred_at = now or datetime.now(UTC)
-        event = self._queue.claim_next(
-            now=occurred_at,
+    def claim_next(self, *, now: datetime | None = None) -> ClaimedValidationEvent | None:
+        """抢占一条待处理的校验事件（不推进业务状态）。
+
+        与 :meth:`process_claimed` 分开，是为了让 Worker 能在**事件处理前**
+        绑定追踪上下文，并让处理结果日志与业务日志落在同一 ``trace_id`` 下。
+        """
+        return self._queue.claim_next(
+            now=now or datetime.now(UTC),
             event_type=VALIDATION_EVENT_TYPE,
         )
+
+    def process_next(self, *, now: datetime | None = None) -> ProcessResult:
+        """抢占并处理一条事件；供测试与不关心日志上下文的调用方使用。"""
+        occurred_at = now or datetime.now(UTC)
+        event = self.claim_next(now=occurred_at)
         if event is None:
             return ProcessResult(status=ProcessingStatus.IDLE)
+        with bind_trace(trace_from_event_payload(event.payload)) as trace:
+            return self.process_claimed(
+                event,
+                trace_id=trace.trace_id,
+                now=occurred_at,
+            )
 
+    def process_claimed(
+        self,
+        event: ClaimedValidationEvent,
+        *,
+        trace_id: str,
+        now: datetime | None = None,
+    ) -> ProcessResult:
+        """处理一条已抢占事件；``trace_id`` 写入审计与后续事件。"""
+        occurred_at = now or datetime.now(UTC)
         try:
             asset_id, actor_user_id, validation_job_id = _parse_payload(event)
             result = self._validation.validate(
@@ -96,7 +121,9 @@ class ValidationEventProcessor:
                 asset_id=asset_id,
                 actor_user_id=actor_user_id,
                 validation_job_id=validation_job_id,
-                request_id=str(event.event_id),
+                # 沿用请求/事件恢复的 trace_id（此前用 event_id 顶替，
+                # 让「请求 → 事件 → 审计」无法用同一个 ID 串起来）。
+                request_id=trace_id,
                 chunk_size_bytes=self._chunk_size_bytes,
                 now=occurred_at,
             )

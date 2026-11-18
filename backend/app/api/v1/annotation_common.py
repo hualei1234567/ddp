@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import Depends, Header, Path, Request
+from fastapi import Depends, Header, Path
 
 from app.api.deps import get_project_scope, get_write_scope
+from app.api.deps import request_id as request_id  # noqa: F401 - 兼容既有导入路径
 from app.api.v1.preconditions import require_expected_version
 from app.domain.identity.models import ProjectScope
 
@@ -18,11 +19,6 @@ IdempotencyKey = Annotated[
     Header(alias="Idempotency-Key", min_length=8, max_length=128),
 ]
 ActionName = Annotated[str, Path(min_length=1, max_length=64)]
-
-
-def request_id(request: Request) -> str | None:
-    value = getattr(request.state, "request_id", None)
-    return value if isinstance(value, str) else None
 
 
 # 系统内部动作前缀。这些动作由应用层在状态推进时自行发起（例如提交后触发

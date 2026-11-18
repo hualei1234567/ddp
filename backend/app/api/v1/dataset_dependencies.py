@@ -5,13 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import Depends, Header, Path, Request
+from fastapi import Depends, Header, Path
 
 from app.api.deps import (
     DbSession,
     get_owner_scope,
     get_project_scope,
     get_write_scope,
+)
+from app.api.deps import (
+    # 保留同名再导出：既有调用方仍从本模块导入 request_id。
+    request_id as request_id,
 )
 from app.api.v1.preconditions import require_expected_version
 from app.application.datasets.datasets import DatasetUseCases as DatasetCrudUseCases
@@ -121,8 +125,3 @@ def get_dataset_use_cases(session: DbSession) -> DatasetServices:
 
 
 DatasetUseCasesDep = Annotated[DatasetServices, Depends(get_dataset_use_cases)]
-
-
-def request_id(request: Request) -> str | None:
-    value = getattr(request.state, "request_id", None)
-    return value if isinstance(value, str) else None

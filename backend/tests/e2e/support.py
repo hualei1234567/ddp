@@ -198,8 +198,13 @@ def register_import_chain(
     *,
     code: str,
     sample_limit: int = EXPECTED_EPISODES,
+    request_id: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    """登记数据源并创建导入任务（不下载数据，事件由 Worker 消费）。"""
+    """登记数据源并创建导入任务（不下载数据，事件由 Worker 消费）。
+
+    ``request_id`` 会以 ``X-Request-Id`` 传给创建导入的请求，供追踪测试
+    验证「请求 → 事件 → Worker 审计」是否使用同一个 ID。
+    """
     source = editor.post(
         url(project_id, "/data-sources"),
         json={
@@ -224,7 +229,10 @@ def register_import_chain(
             "tool_version": "0.27.1",
             "sample_limit": sample_limit,
         },
-        headers={"Idempotency-Key": f"import-{code}"},
+        headers={
+            "Idempotency-Key": f"import-{code}",
+            **({"X-Request-Id": request_id} if request_id is not None else {}),
+        },
     )
     assert created.status_code == 201, created.text
     return source.json(), created.json()

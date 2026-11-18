@@ -173,6 +173,8 @@ class IngestionJobService:
                 "parser_id": created.parser_id,
                 "parser_version": created.parser_version,
                 "config_hash": created.config_hash,
+                # 供 Worker 恢复 trace_id；附加字段，既有字段语义不变。
+                **({"request_id": request_id} if request_id is not None else {}),
             },
             occurred_at=now,
             # 投递类：此前是留痕类，于是**建了任务没有任何进程去执行**——

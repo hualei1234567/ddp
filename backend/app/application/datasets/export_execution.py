@@ -26,6 +26,7 @@ from app.application.datasets.ports import (
     OutboxRepository,
     UnitOfWork,
 )
+from app.core.logging import current_trace_id
 from app.domain.datasets.canonical import sha256_text
 from app.domain.datasets.enums import (
     DatasetStatus,
@@ -450,7 +451,10 @@ class ExportExecutionService:
             from_status=None,
             to_status=job.status.value,
             reason=job.error_summary,
-            request_id=None,
+            # 本服务只在 Worker 进程内调用；上下文由 outbox 事件的
+            # request_id 恢复（缺失时由 Worker 生成并标注 generated），
+            # 这里沿用同一 trace_id，保证「请求 → 事件 → 审计」可串起来。
+            request_id=current_trace_id(),
             details={
                 "attempt": job.attempt,
                 "artifact_count": job.artifact_count,
