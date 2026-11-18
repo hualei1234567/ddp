@@ -145,6 +145,7 @@ export const LINEAGE_RELATION_VALUES = [
   "EVALUATED_BY",
   "ANNOTATED_BY",
   "INCLUDED_IN",
+  "TRAINED_ON",
 ] as const;
 
 export const LINEAGE_DIRECTION_VALUES = ["forward", "reverse"] as const;

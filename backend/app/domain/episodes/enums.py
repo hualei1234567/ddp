@@ -79,3 +79,5 @@ class LineageRelation(StrEnum):
     EVALUATED_BY = "EVALUATED_BY"
     ANNOTATED_BY = "ANNOTATED_BY"
     INCLUDED_IN = "INCLUDED_IN"
+    # DatasetVersion → TrainingRun：某次训练基于哪个数据集版本（ADR-0036）。
+    TRAINED_ON = "TRAINED_ON"

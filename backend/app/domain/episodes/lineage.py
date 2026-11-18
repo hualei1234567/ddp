@@ -73,6 +73,12 @@ RELATION_ENDPOINTS: Mapping[
             frozenset({LineageNodeType.EPISODE}),
             frozenset({LineageNodeType.DATASET_VERSION}),
         ),
+        # 训练运行消费数据集版本：上游版本 → 下游外部训练引用节点
+        # （``external_training_references.id``），见 ADR-0036。
+        LineageRelation.TRAINED_ON: (
+            frozenset({LineageNodeType.DATASET_VERSION}),
+            frozenset({LineageNodeType.TRAINING_RUN}),
+        ),
     }
 )
 

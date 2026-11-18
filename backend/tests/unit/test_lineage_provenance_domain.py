@@ -135,3 +135,49 @@ def test_annotation_and_quality_edges_reject_wrong_endpoints(
             created_by=uuid4(),
             created_at=_NOW,
         )
+
+
+def test_trained_on_allows_dataset_version_to_training_run() -> None:
+    """``DatasetVersion --TRAINED_ON--> TrainingRun`` 是 ADR-0036 冻结的方向。"""
+    edge = LineageEdge(
+        edge_id=uuid4(),
+        project_id=uuid4(),
+        from_node_type=LineageNodeType.DATASET_VERSION,
+        from_node_id=uuid4(),
+        to_node_type=LineageNodeType.TRAINING_RUN,
+        to_node_id=uuid4(),
+        relation=LineageRelation.TRAINED_ON,
+        created_by=uuid4(),
+        created_at=_NOW,
+    )
+    assert edge.relation is LineageRelation.TRAINED_ON
+    assert LineageRelation.TRAINED_ON.value == "TRAINED_ON"
+
+
+@pytest.mark.parametrize(
+    ("from_type", "to_type"),
+    [
+        # 方向不能反：训练运行是消费方，不是数据集版本的上游。
+        (LineageNodeType.TRAINING_RUN, LineageNodeType.DATASET_VERSION),
+        # 不能借用该关系连接其他节点对。
+        (LineageNodeType.DATASET_VERSION, LineageNodeType.EPISODE),
+        (LineageNodeType.EPISODE, LineageNodeType.TRAINING_RUN),
+        (LineageNodeType.DATASET_VERSION, LineageNodeType.DATASET_VERSION),
+    ],
+)
+def test_trained_on_rejects_reverse_or_unrelated_endpoints(
+    from_type: LineageNodeType,
+    to_type: LineageNodeType,
+) -> None:
+    with pytest.raises(LineageConflictError):
+        LineageEdge(
+            edge_id=uuid4(),
+            project_id=uuid4(),
+            from_node_type=from_type,
+            from_node_id=uuid4(),
+            to_node_type=to_type,
+            to_node_id=uuid4(),
+            relation=LineageRelation.TRAINED_ON,
+            created_by=uuid4(),
+            created_at=_NOW,
+        )
