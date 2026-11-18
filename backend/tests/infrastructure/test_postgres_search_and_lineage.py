@@ -156,7 +156,9 @@ def _insert_episode(
                     content_type="video/mp4",
                     format="MP4",
                     sha256="sha256:" + "a" * 64,
-                    status="VALID",
+                    # 守卫要求原始资产以 VALIDATING 创建；机位过滤只读
+                    # raw_metadata，不看状态，这里无需再推进到 VALID。
+                    status="VALIDATING",
                     raw_metadata={"camera": camera},
                     ingested_at=_NOW,
                     storage_class="STANDARD",
@@ -168,6 +170,10 @@ def _insert_episode(
                     updated_by=user_id,
                 )
             )
+            # 两个模型之间没有 ORM relationship，SQLAlchemy 不会保证
+            # raw_assets 先于 episode_raw_assets 写入；显式 flush 一次，
+            # 否则复合外键在 PostgreSQL 上直接拒绝。
+            session.flush()
             session.add(
                 EpisodeRawAssetModel(
                     project_id=project_id,
