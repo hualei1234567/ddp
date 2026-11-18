@@ -387,13 +387,14 @@ def test_create_version_with_build_now_does_not_crash(
     assert body["status"] in {"BUILDING", "READY", "VALIDATING"}
 
 
-def test_dedup_similarity_method_is_enum_validated(
+def test_dedup_similarity_method_rejects_unsupported_value_with_supported_list(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:
-    """``similarity_method`` 契约是枚举：非法值必须在请求校验阶段 422。
+    """不支持的近重复方法必须 422 并回显 ``supported``，不静默降级。
 
-    此前契约写的是自由字符串、领域只认 ``TEMPORAL_OVERLAP_V1``，非法值要等到
-    真正构建数据集时才在领域层炸，客户端拿到的错误也偏离"哪个字段不合法"。
+    契约刻意保留自由字符串（收窄已发布请求字段属破坏性变更），因此"只支持
+    ``TEMPORAL_OVERLAP_V1``"这条约束必须由响应表达清楚：客户端要知道哪个值
+    不可用、能用什么，而不是收到一句泛化的校验失败。
     """
     factory, ids = api_db
     editor = make_client(factory, ids.editor_a)
@@ -408,7 +409,13 @@ def test_dedup_similarity_method_is_enum_validated(
         },
     )
     assert rejected.status_code == 422, rejected.text
-    assert rejected.json()["error"]["code"] == "validation_failed"
+    body = rejected.json()["error"]
+    assert body["code"] == "validation_failed"
+    assert body["details"] == {
+        "field": "similarity_method",
+        "provided": "PERCEPTUAL_HASH_V9",
+        "supported": ["TEMPORAL_OVERLAP_V1"],
+    }
 
     accepted = editor.post(
         url(ids.project_a, f"/datasets/{dataset['dataset_id']}/dedup-policies"),

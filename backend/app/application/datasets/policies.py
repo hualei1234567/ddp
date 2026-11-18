@@ -23,6 +23,7 @@ from app.application.datasets.ports import (
     UnitOfWork,
 )
 from app.domain.datasets.errors import ResourceNotFoundError
+from app.domain.datasets.near_duplicate import ensure_supported_method
 from app.domain.datasets.policies import (
     DedupPolicy,
     LeakagePolicy,
@@ -82,6 +83,9 @@ class DatasetPolicyUseCases:
         if replay is not None:
             return self.get_dedup(scope, dataset_id, _uuid(replay.response_ref))
         self._ensure_dataset(scope, dataset_id)
+        if command.similarity_method is not None:
+            # 写入前就拒：否则非法方法会先落进策略表，等构建时才炸。
+            ensure_supported_method(command.similarity_method)
         policy = DedupPolicy(
             dedup_policy_id=uuid4(),
             project_id=scope.project_id,
