@@ -14,6 +14,7 @@ from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from app.core.metrics_access import parse_source_networks
+from app.domain.datasets.training_enums import DECLARED_EXECUTION_MODES
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
@@ -57,11 +58,11 @@ _HSTS_PRELOAD_MIN_AGE_SECONDS = 31_536_000
 _REDIS_URL_SCHEMES = frozenset({"redis", "rediss"})
 
 
-def _parse_adapter_endpoint_map(raw: object) -> object:
-    """解析 ``adapter_id -> endpoint`` 映射。
+def _parse_adapter_assignment_map(raw: object, label: str) -> object:
+    """解析 ``adapter_id -> 值`` 映射（endpoint、执行方式共用同一套写法）。
 
     同时接受 JSON 对象（与既有 ``*_ADAPTER_SHARED_SECRETS`` 一致）与
-    ``id=url,id=url`` 逗号分隔两种写法；**空字符串一律视为未配置**——
+    ``id=value,id=value`` 逗号分隔两种写法；**空字符串一律视为未配置**——
     compose 里的 ``${VAR:-}`` 默认就把变量置成空串，一个空变量不应该让
     整个 API 启动自检失败。
 
@@ -79,17 +80,22 @@ def _parse_adapter_endpoint_map(raw: object) -> object:
         try:
             decoded = json.loads(text)
         except json.JSONDecodeError as exc:
-            raise ValueError(f"adapter endpoint 不是合法 JSON：{exc.msg}") from exc
+            raise ValueError(f"{label} 不是合法 JSON：{exc.msg}") from exc
         if not isinstance(decoded, dict):
-            raise ValueError("adapter endpoint 必须是 JSON 对象")
+            raise ValueError(f"{label} 必须是 JSON 对象")
         return decoded
     pairs: dict[str, str] = {}
     for item in text.split(","):
         name, separator, value = item.partition("=")
         if not separator or not name.strip() or not value.strip():
-            raise ValueError(f"adapter endpoint 片段非法：{item!r}（应为 adapter_id=url）")
+            raise ValueError(f"{label} 片段非法：{item!r}（应为 adapter_id=值）")
         pairs[name.strip()] = value.strip()
     return pairs
+
+
+def _parse_adapter_endpoint_map(raw: object) -> object:
+    """解析 ``adapter_id -> endpoint`` 映射；规则见 ``_parse_adapter_assignment_map``。"""
+    return _parse_adapter_assignment_map(raw, "adapter endpoint")
 
 
 def _endpoint_url_problems(variable: str, endpoints: dict[str, str]) -> list[str]:
@@ -222,6 +228,13 @@ class Settings(BaseSettings):
     # training_adapter_unavailable（503），绝不伪造训练成功；只有登记了
     # endpoint 的 adapter 才会真正发出 HTTP 请求。
     training_adapter_endpoints: Annotated[dict[str, str], NoDecode] = Field(default_factory=dict)
+    # Adapter 的执行方式声明：adapter_id -> LOCAL/MOCK/DRY_RUN/REMOTE。
+    # 这是"这次训练在哪里跑"的部署事实，必须由运维显式声明，不在代码里猜：
+    # 未声明的 Adapter 需要请求显式指定 execution_mode；两者都没有时提交被拒，
+    # **绝不默认 REMOTE 冒充真实远端训练**。
+    training_adapter_execution_modes: Annotated[dict[str, str], NoDecode] = Field(
+        default_factory=dict
+    )
     # 单次 Adapter 调用超时。必须显式设置：没有超时的外部调用会把 API 线程
     # 挂在不可达的平台上一整个 TCP 超时周期。超时按不可用处理（503），不重试。
     training_adapter_timeout_seconds: float = Field(default=10.0, gt=0, le=600)
@@ -352,6 +365,18 @@ class Settings(BaseSettings):
     @classmethod
     def _decode_adapter_endpoints(cls, raw: object) -> object:
         return _parse_adapter_endpoint_map(raw)
+
+    @field_validator("training_adapter_execution_modes", mode="before")
+    @classmethod
+    def _decode_training_execution_modes(cls, raw: object) -> object:
+        decoded = _parse_adapter_assignment_map(raw, "adapter execution mode")
+        if not isinstance(decoded, dict):
+            return decoded
+        # 归一为大写：枚举值来自部署环境变量，大小写差异不应该变成运行时 422。
+        return {
+            key: value.strip().upper() if isinstance(value, str) else value
+            for key, value in decoded.items()
+        }
 
     def validate_runtime_security(self) -> None:
         """启动自检：配置不安全时 fail-closed。
@@ -588,6 +613,17 @@ class Settings(BaseSettings):
                 "DDP_TRAINING_ADAPTER_ENDPOINTS", self.training_adapter_endpoints
             )
         )
+        declared_modes = {mode.value for mode in DECLARED_EXECUTION_MODES}
+        for adapter_id, mode in self.training_adapter_execution_modes.items():
+            if not adapter_id.strip() or adapter_id != adapter_id.strip():
+                problems.append("训练 Adapter 执行方式声明的 ID 非法")
+                continue
+            if not isinstance(mode, str) or mode not in declared_modes:
+                # UNKNOWN 不是一种执行方式；配置里出现它说明部署方在回避判断。
+                problems.append(
+                    f"训练 Adapter {adapter_id!r} 的执行方式非法：{mode!r}"
+                    f"（只允许 {'/'.join(sorted(declared_modes))}）"
+                )
         return problems
 
     def _model_adapter_config_problems(self) -> list[str]:

@@ -19,6 +19,7 @@
     "item_count",
     "split_counts",
     "status",
+    "execution_mode",
     "version",
     "created_at",
     "created_by",
@@ -110,6 +111,17 @@
         "REWORK",
         "CANCELLED"
       ]
+    },
+    "execution_mode": {
+      "type": "string",
+      "enum": [
+        "LOCAL",
+        "MOCK",
+        "DRY_RUN",
+        "REMOTE",
+        "UNKNOWN"
+      ],
+      "description": "交付级执行方式：取该交付最近一次外部训练引用的 execution_mode；尚未提交任何外部训练时为 UNKNOWN。UNKNOWN/MOCK/DRY_RUN 不得展示为真实训练结果。"
     },
     "delivered_at": {
       "oneOf": [

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.application.datasets.training_ports import CallbackRecord
 from app.domain.datasets.training_deliveries import TrainingDelivery
 from app.domain.datasets.training_enums import (
+    ExecutionMode,
     ExternalTrainingStatus,
     TrainingDeliveryStatus,
 )
@@ -228,6 +229,7 @@ class SqlExternalReferenceRepository:
             external_run_id=reference.external_run_id,
             external_run_url=reference.external_run_url,
             external_status=enum_value(reference.external_status),
+            execution_mode=enum_value(reference.execution_mode),
             status_stale=reference.status_stale,
             submitted_at=reference.submitted_at,
             last_synced_at=reference.last_synced_at,
@@ -358,6 +360,30 @@ class SqlExternalReferenceRepository:
             updated_by=scope.actor_id,
         )
 
+    def latest_execution_modes(
+        self,
+        scope: ProjectScope,
+        *,
+        delivery_ids: tuple[UUID, ...],
+    ) -> dict[UUID, ExecutionMode]:
+        if not delivery_ids:
+            return {}
+        # 按 created_at + id 倒序，每个交付取第一条即"最近一次引用"。引用数量
+        # 以人工提交为界，量级很小；不为它引入窗口函数，保持 SQL 可读。
+        statement = (
+            scoped_select(ExternalTrainingReferenceModel, scope)
+            .where(ExternalTrainingReferenceModel.training_delivery_id.in_(delivery_ids))
+            .order_by(
+                ExternalTrainingReferenceModel.training_delivery_id,
+                ExternalTrainingReferenceModel.created_at.desc(),
+                ExternalTrainingReferenceModel.id.desc(),
+            )
+        )
+        modes: dict[UUID, ExecutionMode] = {}
+        for row in self._session.scalars(statement):
+            modes.setdefault(row.training_delivery_id, ExecutionMode(row.execution_mode))
+        return modes
+
     def _from_row(self, row: ExternalTrainingReferenceModel) -> ExternalTrainingReference:
         return ExternalTrainingReference(
             external_ref_id=row.id,
@@ -370,6 +396,7 @@ class SqlExternalReferenceRepository:
             external_run_id=row.external_run_id,
             external_run_url=row.external_run_url,
             external_status=ExternalTrainingStatus(row.external_status),
+            execution_mode=ExecutionMode(row.execution_mode),
             status_stale=row.status_stale,
             submitted_at=as_utc(row.submitted_at) or _now(),
             last_synced_at=as_utc(row.last_synced_at) or _now(),

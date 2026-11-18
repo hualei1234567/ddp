@@ -596,8 +596,9 @@ def _configured_training_adapter() -> tuple[str, str] | None:
     此前这里写死 ``adapter_id="demo-trainer"``，于是即使本地栈已经接了
     ``local-training``，外部引用也永远返回 422 ``training_adapter_unsupported``，
     种子只能记一条 BLOCKED——把"配置里有可用 Adapter"误报成"平台没有能力"。
-    这里读 ``DDP_TRAINING_ADAPTER_ENDPOINTS`` 与 ``..._CAPABILITIES``，
-    找不到能 submit 的 Adapter 才如实 BLOCKED。
+    这里读 ``DDP_TRAINING_ADAPTER_ENDPOINTS`` / ``..._CAPABILITIES`` /
+    ``..._EXECUTION_MODES``，找不到能 submit 的 Adapter 或没有声明执行方式时
+    如实 BLOCKED——种子不猜测"这次训练在哪里跑"，更不默认 REMOTE。
     """
     import json
 
@@ -607,6 +608,7 @@ def _configured_training_adapter() -> tuple[str, str] | None:
     try:
         endpoints = json.loads(env.get("DDP_TRAINING_ADAPTER_ENDPOINTS") or "{}")
         capabilities = json.loads(env.get("DDP_TRAINING_ADAPTER_CAPABILITIES") or "{}")
+        modes = json.loads(env.get("DDP_TRAINING_ADAPTER_EXECUTION_MODES") or "{}")
     except ValueError:
         return None
     if not isinstance(endpoints, dict):
@@ -614,7 +616,10 @@ def _configured_training_adapter() -> tuple[str, str] | None:
     for adapter_id in endpoints:
         caps = capabilities.get(adapter_id) if isinstance(capabilities, dict) else None
         if isinstance(caps, list) and "submit" in caps:
-            return str(adapter_id), str(endpoints[adapter_id])
+            mode = modes.get(adapter_id) if isinstance(modes, dict) else None
+            if not isinstance(mode, str) or not mode:
+                return None
+            return str(adapter_id), str(endpoints[adapter_id]), mode
     return None
 
 
@@ -635,11 +640,12 @@ def _run_external_reference(
     if adapter is None:
         _blocked(
             "external-references",
-            "DDP_TRAINING_ADAPTER_ENDPOINTS 里没有声明 submit 能力的训练 Adapter；"
-            "本机接 local-adapter 时应配置 local-training",
+            "DDP_TRAINING_ADAPTER_ENDPOINTS 里没有声明 submit 能力、且在 "
+            "DDP_TRAINING_ADAPTER_EXECUTION_MODES 声明了执行方式的训练 Adapter；"
+            "本机接 local-adapter 时应配置 local-training=LOCAL",
         )
         return
-    adapter_id, _endpoint = adapter
+    adapter_id, _endpoint, execution_mode = adapter
     status, payload = client.call(
         "POST",
         f"{base}/training-deliveries/{delivery_id}/external-references",
@@ -648,6 +654,7 @@ def _run_external_reference(
             "adapter_version": "1.0.0",
             "correlation_id": f"corr-{ctx.stamp}",
             "config": {"epochs": 10},
+            "execution_mode": execution_mode,
         },
         headers={"Idempotency-Key": idempotency_key()},
     )

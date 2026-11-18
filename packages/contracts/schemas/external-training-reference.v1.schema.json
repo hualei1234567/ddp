@@ -15,6 +15,7 @@
     "dataset_version_id",
     "external_run_id",
     "external_status",
+    "execution_mode",
     "correlation_id",
     "idempotency_key",
     "submitted_at",
@@ -33,6 +34,11 @@
     "external_run_id": {"type": "string", "minLength": 1, "maxLength": 200},
     "external_run_url": {"type": ["string", "null"], "maxLength": 4096},
     "external_status": {"type": "string", "enum": ["SUBMITTED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN", "UNAVAILABLE"]},
+    "execution_mode": {
+      "type": "string",
+      "enum": ["LOCAL", "MOCK", "DRY_RUN", "REMOTE", "UNKNOWN"],
+      "description": "训练执行方式，提交时定死、之后不可修改。LOCAL=本机参考实现真实执行；MOCK=模拟；DRY_RUN=只走编排不训练；REMOTE=真实远端平台；UNKNOWN=迁移前记录，无法回溯判定。读取方不得把 MOCK/DRY_RUN/UNKNOWN 当作真实训练结果。"
+    },
     "status_stale": {"type": "boolean", "default": false, "description": "状态超过同步窗口或平台不可达时为 true，不得显示成功。"},
     "submitted_at": {"$ref": "#/$defs/date_time"},
     "last_synced_at": {"$ref": "#/$defs/date_time"},

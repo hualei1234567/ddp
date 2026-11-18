@@ -301,6 +301,15 @@ export interface TrainingRequestRevision {
   created_at: string;
 }
 
+export const EXECUTION_MODE_VALUES = [
+  "LOCAL",
+  "MOCK",
+  "DRY_RUN",
+  "REMOTE",
+  "UNKNOWN",
+] as const;
+export type ExecutionMode = (typeof EXECUTION_MODE_VALUES)[number];
+
 export interface TrainingDelivery {
   training_delivery_id: string;
   project_id: string;
@@ -317,6 +326,11 @@ export interface TrainingDelivery {
   split_counts: Record<string, number>;
   quality_report_ref: string | null;
   status: string;
+  /**
+   * 交付级执行方式：最近一次外部训练引用的方式；尚未提交训练为 UNKNOWN。
+   * MOCK / DRY_RUN / UNKNOWN 都不得展示成真实训练结果。
+   */
+  execution_mode: ExecutionMode;
   delivered_at: string | null;
   accepted_at: string | null;
   acceptance_opinion: string | null;
@@ -338,6 +352,8 @@ export interface ExternalTrainingReference {
   external_run_id: string;
   external_run_url: string | null;
   external_status: string;
+  /** 提交时定死；MOCK / DRY_RUN / UNKNOWN 必须与真实训练视觉区分。 */
+  execution_mode: ExecutionMode;
   status_stale: boolean;
   model_ref: Record<string, unknown> | null;
   evaluation_ref: Record<string, unknown> | null;

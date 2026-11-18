@@ -606,6 +606,9 @@ class TrainingDeliveryOut(BaseModel):
     # TRN-002 需求核对报告。None 表示该交付建立于核对能力上线之前，
     # **不是**"核对通过"；客户端必须区分三态。
     requirement_match: dict[str, Any] | None = None
+    # 交付级执行方式：取最近一次外部训练引用；尚未提交训练为 UNKNOWN。
+    # 客户端不得把 UNKNOWN/MOCK/DRY_RUN 展示成真实训练结果。
+    execution_mode: str
     status: str
     delivered_at: datetime | None = None
     accepted_by: UUID | None = None
@@ -643,6 +646,8 @@ class ExternalTrainingReferenceOut(BaseModel):
     external_run_id: str
     external_run_url: str | None = None
     external_status: str
+    # LOCAL / MOCK / DRY_RUN / REMOTE / UNKNOWN；提交时定死，之后不可修改。
+    execution_mode: str
     status_stale: bool = False
     submitted_at: datetime
     last_synced_at: datetime

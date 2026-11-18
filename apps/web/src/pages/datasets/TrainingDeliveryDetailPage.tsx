@@ -1,11 +1,13 @@
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import {
+  Alert,
   Button,
   Descriptions,
   Divider,
   Form,
   Input,
   Modal,
+  Select,
   Space,
   Table,
   Typography,
@@ -29,11 +31,15 @@ import { useRequest } from "../../hooks/useRequest";
 import { trainingApi, type ExternalReferenceCreateInput } from "../../services/training";
 import {
   presentDeliveryStatus,
+  presentExecutionMode,
   presentExternalStatus,
 } from "../../services/datasetPresentation";
 import { trainingRequestDetailPath } from "../../services/datasetUrl";
 import { resolvePagePhase } from "../../services/pagePhase";
 import type { ExternalTrainingReference, TrainingDelivery } from "../../types/dataset";
+
+/** MOCK / DRY_RUN / UNKNOWN 都不是真实训练结果，界面必须显式提示。 */
+const NON_REAL_EXECUTION_MODES = new Set(["MOCK", "DRY_RUN", "UNKNOWN"]);
 
 function ExternalReferencesPanel({
   projectId,
@@ -85,6 +91,21 @@ function ExternalReferencesPanel({
 
   const columns: ColumnsType<ExternalTrainingReference> = [
     { title: "Adapter", key: "adapter", width: 180, render: (_, item) => `${item.adapter_id} ${item.adapter_version}` },
+    {
+      title: "执行方式",
+      key: "execution_mode",
+      width: 190,
+      // 执行方式与"外部 Run 状态"是两回事：SUCCEEDED 的 MOCK 运行仍然是模拟。
+      // 因此这里单独成列并直接给出"非真实训练结果"警示，不能只藏在详情角落。
+      render: (_, item) => (
+        <Space direction="vertical" size={0}>
+          <StatusTag value={item.execution_mode} presentation={presentExecutionMode} />
+          {NON_REAL_EXECUTION_MODES.has(item.execution_mode) ? (
+            <Typography.Text type="warning">非真实训练结果</Typography.Text>
+          ) : null}
+        </Space>
+      ),
+    },
     { title: "外部 Run", dataIndex: "external_run_id", ellipsis: true },
     {
       title: "训练产物",
@@ -179,9 +200,26 @@ function ExternalReferencesPanel({
           <Form.Item name="correlation_id" label="关联 ID" rules={[{ required: true, max: 128 }]}>
             <Input placeholder="delivery-2026-001" />
           </Form.Item>
+          <Form.Item
+            name="execution_mode"
+            label="执行方式"
+            tooltip="留空时由 Adapter 部署配置决定；两者都没有时服务端拒绝提交。"
+          >
+            <Select
+              allowClear
+              placeholder="由 Adapter 配置决定；未配置时必须选择"
+              options={[
+                { value: "LOCAL", label: "LOCAL 本地真实执行" },
+                { value: "MOCK", label: "MOCK 模拟训练" },
+                { value: "DRY_RUN", label: "DRY_RUN 空跑（不训练）" },
+                { value: "REMOTE", label: "REMOTE 远端真实训练" },
+              ]}
+            />
+          </Form.Item>
         </Form>
         <Typography.Text type="secondary">
-          真实训练平台未接入时使用 [MOCK] Adapter；DDP 只保存外部引用与状态摘要。
+          执行方式必须与 Adapter 实际运行环境一致；MOCK / DRY_RUN 的结果不得当作真实训练结果。
+          留空且 Adapter 未配置执行方式时，服务端会拒绝提交而不是默认 REMOTE。
         </Typography.Text>
       </Modal>
     </Space>
@@ -223,6 +261,22 @@ function DeliveryDetailContent({
         {stale ? (
           <PageState compact variant="stale" description="刷新失败，展示上次成功数据。" onRetry={reload} />
         ) : null}
+        {NON_REAL_EXECUTION_MODES.has(delivery.execution_mode) ? (
+          <Alert
+            showIcon
+            type={delivery.execution_mode === "UNKNOWN" ? "error" : "warning"}
+            message={
+              delivery.execution_mode === "UNKNOWN"
+                ? "执行方式未知：不得视为真实训练结果"
+                : `${presentExecutionMode(delivery.execution_mode).label}：结果不得作为真实训练结果使用`
+            }
+            description={
+              delivery.execution_mode === "UNKNOWN"
+                ? "尚未提交外部训练时为正常状态。若下方已有训练引用，则该记录产生于执行方式落地之前（迁移前存量），无法回溯判定本地、模拟还是远端。"
+                : "执行方式由训练提交时的 Adapter 配置或请求声明确定，逐条外部训练引用的执行方式见下方列表。"
+            }
+          />
+        ) : null}
         <Descriptions
           size="small"
           column={2}
@@ -232,6 +286,16 @@ function DeliveryDetailContent({
               key: "status",
               label: "状态",
               children: <StatusTag value={delivery.status} presentation={presentDeliveryStatus} />,
+            },
+            {
+              key: "execution_mode",
+              label: "执行方式",
+              children: (
+                <StatusTag
+                  value={delivery.execution_mode}
+                  presentation={presentExecutionMode}
+                />
+              ),
             },
             { key: "recipient", label: "接收人", children: delivery.recipient_id },
             { key: "team", label: "接收团队", children: delivery.recipient_team ?? "—" },
