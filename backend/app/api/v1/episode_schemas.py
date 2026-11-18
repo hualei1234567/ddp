@@ -209,6 +209,9 @@ EPISODE_ACTION_MAP: dict[str, str] = {
     "accept": "accept",
     "reject": "reject",
     "complete": "complete",
+    # 归档是数据生命周期的正常终点（COMPLETED → ARCHIVED）：长训数据集里
+    # 已经用过的 Episode 不必永久占据"活跃"列表，但历史与血缘必须保留。
+    "archive": "archive",
     "invalidate": "invalidate",
 }
 _PUBLIC_ACTION_BY_DOMAIN = {internal: public for public, internal in EPISODE_ACTION_MAP.items()}

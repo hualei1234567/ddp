@@ -432,3 +432,53 @@ def test_ready_is_gated_by_readiness_facts(
     # 机位和帧率都没声明时，流本身就不完整（STREAM_INCOMPLETE）；判定不会
     # 再对一个"没有有效流"的 Episode 补报帧率缺失——一条事实只报一次。
     assert {item["code"] for item in blockers} >= {"STREAM_INCOMPLETE"}
+
+
+def test_archive_is_reachable_from_completed(
+    episode_api: tuple[Any, ApiIds, UUID],
+) -> None:
+    """COMPLETED → ARCHIVED 必须能通过网络接口走通。
+
+    归档此前只在领域状态机里有边，HTTP 动作映射与契约枚举都没暴露它，
+    结果是"数据生命周期终点"在界面上不可达——Episode 永远停在 COMPLETED。
+    """
+    client, ids, asset_id, _factory = episode_api
+    project = ids.project_a
+    episode = _create(
+        client,
+        project,
+        asset_id,
+        code="EP-API-ARCHIVE",
+        key="episode-archive-0001",
+        start_time_ns=1_000_000_000,
+        end_time_ns=2_000_000_000,
+    )
+    base = project_url(project, f"/episodes/{episode['episode_id']}")
+    for action, payload, version in (
+        ("ready", {"manifest": manifest_for_episode(episode), "frame_count": 30}, "1"),
+        ("quality-check", None, "3"),
+        ("quality-result", {"quality_status": "PASS"}, "4"),
+        ("accept", None, "5"),
+        ("complete", None, "6"),
+    ):
+        response = client.post(
+            f"{base}/actions/{action}",
+            json=payload,
+            headers={"If-Match": f'"{version}"', "Idempotency-Key": f"ep-archive-{action}-0001"},
+        )
+        assert response.status_code == 200, (action, response.text)
+
+    completed = response.json()
+    assert completed["status"] == "COMPLETED"
+    # 归档是公开动作：出现在 allowed_actions 里才谈得上界面上点得到。
+    assert "archive" in completed["allowed_actions"]
+
+    archived = client.post(
+        f"{base}/actions/archive",
+        headers={"If-Match": '"7"', "Idempotency-Key": "ep-archive-archive-0001"},
+    )
+    assert archived.status_code == 200, archived.text
+    body = archived.json()
+    assert body["status"] == "ARCHIVED"
+    # ARCHIVED 是终态：不再下发任何动作按钮。
+    assert body["allowed_actions"] == []

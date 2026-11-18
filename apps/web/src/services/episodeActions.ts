@@ -24,6 +24,7 @@ export const EPISODE_ACTION_OPTIONS: EpisodeActionOption[] = [
   { action: "accept", label: "验收通过", hint: "服务端校验状态机后生效。" },
   { action: "reject", label: "驳回", hint: "建议填写原因。" },
   { action: "complete", label: "完成", hint: "服务端校验终态条件。" },
+  { action: "archive", label: "归档", hint: "COMPLETED 之后的生命周期终点；历史与血缘保留，不再出现在活跃列表。" },
   { action: "invalidate", label: "标记失效", hint: "失效不删除历史，需填写原因。" },
 ];
 
