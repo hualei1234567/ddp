@@ -138,12 +138,12 @@ def update_supplier(
 def act_on_supplier(
     supplier_id: UUID,
     action: str,
-    payload: SupplierActionRequest | None,
     request: Request,
     scope: WriteScope,
     context: Annotated[ProjectContext, Depends(get_project_context)],
     services: SupplierServicesDep,
     expected_version: ExpectedVersion,
+    payload: SupplierActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> SupplierOut:
     """激活/暂停/恢复为常规写动作；终止是不可逆高风险动作，要求项目 Owner。"""

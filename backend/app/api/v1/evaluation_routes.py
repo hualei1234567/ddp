@@ -93,11 +93,11 @@ def get_evaluation(
 def act_on_evaluation(
     evaluation_id: UUID,
     action: str,
-    payload: ActionRequest | None,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
+    payload: ActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> EvaluationOut:
     evaluation = services.evaluations.apply_action(

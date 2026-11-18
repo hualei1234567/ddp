@@ -92,11 +92,11 @@ def get_feedback(feedback_id: UUID, scope: ReadScope, services: ModelOpsServices
 def act_on_feedback(
     feedback_id: UUID,
     action: str,
-    payload: FeedbackActionRequest | None,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
+    payload: FeedbackActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> FeedbackOut:
     item = services.feedback.apply_action(

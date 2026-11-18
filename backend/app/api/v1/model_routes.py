@@ -116,11 +116,11 @@ def update_model(
 def act_on_model(
     model_id: UUID,
     action: str,
-    payload: ActionRequest | None,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
+    payload: ActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> ModelOut:
     model = services.models.apply_action(
@@ -212,12 +212,12 @@ def act_on_version(
     model_id: UUID,
     version_id: UUID,
     action: str,
-    payload: ActionRequest | None,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
     context: Annotated[ProjectContext, Depends(get_project_context)],
+    payload: ActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> ModelVersionOut:
     if action == "publish":

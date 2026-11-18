@@ -86,11 +86,11 @@ def get_service(
 def act_on_service(
     service_id: UUID,
     action: str,
-    payload: ActionRequest | None,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
+    payload: ActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> InferenceServiceOut:
     service = services.services.apply_action(
@@ -169,11 +169,11 @@ def get_task(task_id: UUID, scope: ReadScope, services: ModelOpsServicesDep) -> 
 def act_on_task(
     task_id: UUID,
     action: str,
-    payload: ActionRequest | None,
     request: Request,
     scope: WriteScope,
     services: ModelOpsServicesDep,
     expected_version: ExpectedVersion,
+    payload: ActionRequest | None = None,
     idempotency_key: IdempotencyKey = None,
 ) -> InferenceTaskOut:
     task = services.tasks.apply_action(
