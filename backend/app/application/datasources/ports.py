@@ -14,7 +14,7 @@ from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
 from app.domain.datasources.media import MediaAsset as MediaAssetT
-from app.domain.datasources.models import DataSource, DataSourceImport
+from app.domain.datasources.models import DataSource, DataSourceImport, DataSourceImportLog
 from app.domain.datasources.review import DataReview as DataReviewT
 from app.domain.identity.models import ProjectScope
 
@@ -117,9 +117,35 @@ class ObjectWriter(Protocol):
 class MediaAssetRepository(Protocol):
     def add(self, scope: ProjectScope, asset: MediaAssetT) -> MediaAssetT: ...
 
+    def get_by_import_path(
+        self, scope: ProjectScope, import_id: UUID, path: str
+    ) -> MediaAssetT | None:
+        """按 ``(import_id, path)`` 查已落库资产。
+
+        Worker 在入库阶段会分批提交进度；重试时已提交的资产必须能跳过，
+        否则同一路径会撞唯一约束，把"可重试"变成"永久失败"。
+        """
+        ...
+
     def list_by_import(
         self, scope: ProjectScope, import_id: UUID, *, limit: int = 200
     ) -> list[MediaAssetT]: ...
+
+
+class DataSourceImportLogRepository(Protocol):
+    """导入步骤日志：只追加、按项目隔离、只读列表。"""
+
+    def add(self, scope: ProjectScope, item: DataSourceImportLog) -> DataSourceImportLog: ...
+
+    def list_recent(
+        self,
+        scope: ProjectScope,
+        import_id: UUID,
+        *,
+        limit: int = 100,
+    ) -> tuple[list[DataSourceImportLog], bool]:
+        """返回按时间正序的最近 ``limit`` 条，以及是否被上限截断。"""
+        ...
 
 
 # 审计、outbox 与幂等记录类型统一由 application 顶层声明。
@@ -136,6 +162,7 @@ __all__ = [
     "MediaAssetRepository",
     "ObjectReader",
     "ObjectWriter",
+    "DataSourceImportLogRepository",
     "DataSourceImportRepository",
     "DataSourceRepository",
     "IdempotencyRecord",

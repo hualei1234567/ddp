@@ -14,7 +14,9 @@ from uuid import UUID
 from app.domain.datasources.enums import (
     AccessCondition,
     DataSourceKind,
+    ImportLogLevel,
     ImportScope,
+    ImportStage,
     ImportStatus,
 )
 from app.domain.datasources.errors import DomainValidationError
@@ -26,6 +28,7 @@ REVISION_MAX_LENGTH = 100
 LICENSE_MAX_LENGTH = 100
 URL_MAX_LENGTH = 2048
 NOTE_MAX_LENGTH = 2000
+IMPORT_LOG_MESSAGE_MAX_LENGTH = 1000
 
 
 def _normalized(value: str, field_name: str, *, max_length: int) -> str:
@@ -136,6 +139,15 @@ class DataSourceImport:
     error_message: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    # 运行期可观测性（迁移 0055）。NULL 表示"未测量"：迁移前的存量导入没有
+    # 阶段与进度信息，绝不回填 0 冒充"已完成"。
+    #
+    # ``processed_items`` / ``total_items`` 的单位是**媒体文件**（导入产出的
+    # 资产数），``total_items`` 在元数据解析完成后才可知。二者都为非空且
+    # ``total_items > 0`` 时前端才展示百分比；否则显示"未测量"。
+    stage: ImportStage | str | None = None
+    processed_items: int | None = None
+    total_items: int | None = None
     # 已执行的尝试次数（从 1 开始）。用于「可重试失败」与「彻底失败」的区分：
     # 导入任务进 FAILED 后按契约不得再动，所以第一次失败必须能退回 PENDING
     # 重新领取；attempt 与 max_attempts 决定还能退几次。
@@ -174,6 +186,18 @@ class DataSourceImport:
             raise DomainValidationError("max_attempts 必须大于等于 1")
         if self.attempt > self.max_attempts:
             raise DomainValidationError("attempt 不得超过 max_attempts")
+        if self.stage is not None:
+            object.__setattr__(self, "stage", ImportStage(self.stage))
+        for name in ("processed_items", "total_items"):
+            value = getattr(self, name)
+            if value is not None and value < 0:
+                raise DomainValidationError(f"{name} 不能为负数")
+        if (
+            self.processed_items is not None
+            and self.total_items is not None
+            and self.processed_items > self.total_items
+        ):
+            raise DomainValidationError("processed_items 不得超过 total_items")
 
     @property
     def can_retry(self) -> bool:
@@ -183,3 +207,44 @@ class DataSourceImport:
         「导入能重试、接入任务不能」这类分叉。
         """
         return self.status is ImportStatus.FAILED and self.attempt < self.max_attempts
+
+
+@dataclass(frozen=True, slots=True)
+class DataSourceImportLog:
+    """导入执行期的一条结构化步骤日志（只追加、只读）。
+
+    为什么单独建表而不复用 ``audit_logs``：审计记录的是"谁在什么时候把什么
+    改成了什么"，导入阶段进度是高频运行期遥测，写进审计会污染变更时间线，
+    也无法表达 ``stage`` / ``level``。本实体只承载排障信息，不参与业务状态。
+
+    ``message`` 在应用层写入前已脱敏（URL / 预签名参数 / 绝对路径），
+    这里只做非空与长度校验。
+    """
+
+    log_id: UUID
+    project_id: UUID
+    import_id: UUID
+    stage: ImportStage | str
+    level: ImportLogLevel | str
+    message: str
+    occurred_at: datetime
+    # 同一导入内的单调序号（取写日志时的导入行版本号）。时间戳在注入时钟/
+    # 快速连续写入时可能相同，没有它日志顺序就只能靠随机 UUID。
+    sequence_no: int
+    attempt: int = 1
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "stage", ImportStage(self.stage))
+        object.__setattr__(self, "level", ImportLogLevel(self.level))
+        text = (self.message or "").strip()
+        if not text:
+            raise DomainValidationError("日志 message 不能为空")
+        if len(text) > IMPORT_LOG_MESSAGE_MAX_LENGTH:
+            raise DomainValidationError(
+                f"日志 message 长度不能超过 {IMPORT_LOG_MESSAGE_MAX_LENGTH}"
+            )
+        if self.attempt < 1:
+            raise DomainValidationError("attempt 必须大于等于 1")
+        if self.sequence_no < 1:
+            raise DomainValidationError("sequence_no 必须大于等于 1")
+        object.__setattr__(self, "message", text)

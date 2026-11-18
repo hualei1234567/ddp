@@ -16,16 +16,19 @@ from sqlalchemy.orm import Session
 from app.domain.datasources.enums import (
     AccessCondition,
     DataSourceKind,
+    ImportLogLevel,
     ImportScope,
+    ImportStage,
     ImportStatus,
 )
 from app.domain.datasources.errors import DuplicateResourceError, VersionConflictError
 from app.domain.datasources.media import MediaAsset
-from app.domain.datasources.models import DataSource, DataSourceImport
+from app.domain.datasources.models import DataSource, DataSourceImport, DataSourceImportLog
 from app.domain.datasources.review import DataReview
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.datasources import (
     DataReviewModel,
+    DataSourceImportLogModel,
     DataSourceImportModel,
     DataSourceModel,
     MediaAssetModel,
@@ -93,6 +96,9 @@ def _import_values(item: DataSourceImport) -> dict[str, object]:
         "error_message": item.error_message,
         "started_at": item.started_at,
         "finished_at": item.finished_at,
+        "stage": ImportStage(item.stage).value if item.stage is not None else None,
+        "processed_items": item.processed_items,
+        "total_items": item.total_items,
         "attempt": item.attempt,
         "max_attempts": item.max_attempts,
     }
@@ -116,6 +122,9 @@ def _import_from_row(row: DataSourceImportModel) -> DataSourceImport:
         error_message=row.error_message,
         started_at=as_utc(row.started_at),
         finished_at=as_utc(row.finished_at),
+        stage=row.stage,
+        processed_items=row.processed_items,
+        total_items=row.total_items,
         attempt=row.attempt,
         max_attempts=row.max_attempts,
         row_version=row.version,
@@ -341,6 +350,77 @@ class SqlDataSourceImportRepository:
         return replace(item, row_version=expected_version + 1)
 
 
+def _log_from_row(row: DataSourceImportLogModel) -> DataSourceImportLog:
+    occurred_at = as_utc(row.occurred_at)
+    if occurred_at is None:
+        # occurred_at 是 NOT NULL 列；显式兜底，避免把 None 带进领域对象。
+        raise ValueError("data_source_import_logs.occurred_at 不允许为空")
+    return DataSourceImportLog(
+        log_id=row.id,
+        project_id=row.project_id,
+        import_id=row.import_id,
+        stage=ImportStage(row.stage),
+        level=ImportLogLevel(row.level),
+        message=row.message,
+        occurred_at=occurred_at,
+        sequence_no=row.sequence_no,
+        attempt=row.attempt,
+    )
+
+
+class SqlDataSourceImportLogRepository:
+    """导入步骤日志读写；只追加，项目隔离由 ``scoped_select`` 强制。"""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def add(self, scope: ProjectScope, item: DataSourceImportLog) -> DataSourceImportLog:
+        scope.ensure(item.project_id)
+        self._session.add(
+            DataSourceImportLogModel(
+                id=item.log_id,
+                project_id=item.project_id,
+                import_id=item.import_id,
+                stage=ImportStage(item.stage).value,
+                level=ImportLogLevel(item.level).value,
+                message=item.message,
+                attempt=item.attempt,
+                occurred_at=item.occurred_at,
+                sequence_no=item.sequence_no,
+            )
+        )
+        self._session.flush()
+        return item
+
+    def list_recent(
+        self,
+        scope: ProjectScope,
+        import_id: UUID,
+        *,
+        limit: int = 100,
+    ) -> tuple[list[DataSourceImportLog], bool]:
+        """取最近 ``limit`` 条（时间正序返回），并如实报告是否截断。
+
+        查询按时间倒序多取一条判断截断，再把结果反转成正序：运维要看的
+        通常是"最近发生了什么"，而界面上按时间线阅读最自然。
+        """
+        statement = (
+            scoped_select(DataSourceImportLogModel, scope)
+            .where(DataSourceImportLogModel.import_id == import_id)
+            .order_by(
+                DataSourceImportLogModel.occurred_at.desc(),
+                DataSourceImportLogModel.attempt.desc(),
+                DataSourceImportLogModel.sequence_no.desc(),
+            )
+            .limit(bounded_limit(limit + 1, maximum=501))
+        )
+        rows = list(self._session.scalars(statement))
+        truncated = len(rows) > limit
+        rows = rows[:limit]
+        rows.reverse()
+        return [_log_from_row(row) for row in rows], truncated
+
+
 def _asset_from_row(row: MediaAssetModel) -> MediaAsset:
     return MediaAsset(
         asset_id=row.id,
@@ -398,6 +478,18 @@ class SqlMediaAssetRepository:
         except IntegrityError as exc:
             raise DuplicateResourceError(f"媒体资产重复：{asset.path}") from exc
         return asset
+
+    def get_by_import_path(
+        self, scope: ProjectScope, import_id: UUID, path: str
+    ) -> MediaAsset | None:
+        row = self._session.scalar(
+            select(MediaAssetModel).where(
+                MediaAssetModel.project_id == scope.project_id,
+                MediaAssetModel.import_id == import_id,
+                MediaAssetModel.path == path,
+            )
+        )
+        return _asset_from_row(row) if row is not None else None
 
     def list_by_import(
         self, scope: ProjectScope, import_id: UUID, *, limit: int = 200

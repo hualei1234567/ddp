@@ -27,6 +27,8 @@ from app.api.v1.datasource_schemas import (
     ImportActionRequest,
     ImportEpisodeMaterializeRequest,
     ImportEpisodeMaterializeResultOut,
+    ImportLogListOut,
+    ImportLogOut,
     MaterializedEpisodeOut,
     MediaAssetListOut,
     MediaAssetOut,
@@ -52,6 +54,7 @@ from app.application.datasources.episode_materialization import (
 from app.application.datasources.ports import (
     AuditRepository,
     DataReviewRepository,
+    DataSourceImportLogRepository,
     DataSourceImportRepository,
     DataSourceRepository,
     IdempotencyRepository,
@@ -69,6 +72,7 @@ from app.infrastructure.repositories.dataset_audit import (
 )
 from app.infrastructure.repositories.datasources import (
     SqlDataReviewRepository,
+    SqlDataSourceImportLogRepository,
     SqlDataSourceImportRepository,
     SqlDataSourceRepository,
     SqlMediaAssetRepository,
@@ -91,6 +95,7 @@ def get_data_source_use_cases(session: DbSession) -> DataSourceUseCases:
         outbox=_cast_outbox(SqlDatasetOutboxRepository(session)),
         idempotency=_cast_idem(SqlIdempotencyRepository(session)),
         uow=_cast_uow(session),
+        logs=_cast_logs(SqlDataSourceImportLogRepository(session)),
     )
 
 
@@ -116,6 +121,10 @@ def _cast_idem(value: object) -> IdempotencyRepository:
 
 
 def _cast_uow(value: object) -> UnitOfWork:
+    return value  # type: ignore[return-value]
+
+
+def _cast_logs(value: object) -> DataSourceImportLogRepository:
     return value  # type: ignore[return-value]
 
 
@@ -346,6 +355,28 @@ def get_import(
 ) -> dict[str, Any]:
     item = use_cases.get_import(scope, import_id)
     return DataSourceImportOut.from_domain(item).model_dump(mode="json")
+
+
+@router.get(
+    "/data-source-imports/{import_id}/logs",
+    response_model=ImportLogListOut,
+)
+def list_import_logs(
+    import_id: UUID,
+    scope: ReadScope,
+    use_cases: DataSourceServicesDep,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> dict[str, Any]:
+    """只读步骤日志：时间、阶段、等级、脱敏后的消息。
+
+    只返回最近 ``limit`` 条（默认 100、上限 500），``truncated`` 如实说明
+    是否截断；不提供任何写入/修改入口。消息已在写入与读取两侧脱敏。
+    """
+    items, truncated = use_cases.list_import_logs(scope, import_id, limit=limit)
+    return ImportLogListOut(
+        items=[ImportLogOut.from_domain(item) for item in items],
+        truncated=truncated,
+    ).model_dump(mode="json")
 
 
 @router.post(

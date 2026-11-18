@@ -12,7 +12,11 @@ from app.domain.datasources.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
-from app.domain.datasources.models import DataSource, DataSourceImport
+from app.domain.datasources.models import (
+    DataSource,
+    DataSourceImport,
+    DataSourceImportLog,
+)
 from app.domain.datasources.state_machines import (
     allowed_import_actions,
     import_target_status,
@@ -22,6 +26,7 @@ __all__ = [
     "DataSource",
     "DataSourceDomainError",
     "DataSourceImport",
+    "DataSourceImportLog",
     "DomainValidationError",
     "DuplicateResourceError",
     "InvalidStateTransitionError",

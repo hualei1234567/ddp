@@ -5,6 +5,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Progress,
   Select,
   Space,
   Table,
@@ -24,8 +25,13 @@ import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
 import { dataSourceApi } from "../../services/datasources";
 import { formatDateTime } from "../../services/format";
+import {
+  presentImportProgress,
+  presentImportStage,
+} from "../../services/importProgress";
 import { resolvePagePhase } from "../../services/pagePhase";
 import type { DataSourceImport, ImportAction } from "../../types/datasource";
+import ImportLogDrawer from "./ImportLogDrawer";
 
 const STATUS_VALUES = [
   "PENDING",
@@ -200,6 +206,7 @@ function ImportListContent({
   const [successTarget, setSuccessTarget] = useState<DataSourceImport | null>(
     null,
   );
+  const [logTarget, setLogTarget] = useState<DataSourceImport | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
 
   const load = useCallback(
@@ -254,6 +261,31 @@ function ImportListContent({
       width: 110,
       render: (value: DataSourceImport["status"]) => <StatusTag status={value} />,
     },
+    {
+      title: "阶段 / 进度",
+      key: "progress",
+      width: 190,
+      render: (_, item) => {
+        const progress = presentImportProgress(
+          item.processed_items,
+          item.total_items,
+        );
+        return (
+          <Space direction="vertical" size={0} style={{ width: "100%" }}>
+            <Tag>{presentImportStage(item.stage)}</Tag>
+            {progress.measured ? (
+              <Progress
+                percent={progress.percent ?? 0}
+                size="small"
+                format={() => progress.label}
+              />
+            ) : (
+              <Typography.Text type="secondary">未测量</Typography.Text>
+            )}
+          </Space>
+        );
+      },
+    },
     { title: "范围", dataIndex: "scope", width: 90 },
     {
       title: "样本上限",
@@ -305,6 +337,17 @@ function ImportListContent({
         ) : (
           <Typography.Text type="secondary">—</Typography.Text>
         ),
+    },
+    {
+      title: "日志",
+      key: "logs",
+      width: 80,
+      // 任何状态都可查看步骤日志：失败排障恰恰发生在非成功状态。
+      render: (_, item) => (
+        <Button size="small" type="link" onClick={() => setLogTarget(item)}>
+          查看
+        </Button>
+      ),
     },
     {
       title: "操作",
@@ -391,7 +434,7 @@ function ImportListContent({
         columns={phase === "forbidden" ? [] : columns}
         dataSource={phase === "forbidden" ? [] : items}
         pagination={false}
-        scroll={{ x: 1300 }}
+        scroll={{ x: 1580 }}
         locale={{ emptyText: error ? "加载失败" : "暂无导入任务" }}
       />
       {error ? <ApiErrorState error={error} onRetry={reload} /> : null}
@@ -420,6 +463,7 @@ function ImportListContent({
         onClose={() => setSuccessTarget(null)}
         onDone={reload}
       />
+      <ImportLogDrawer target={logTarget} onClose={() => setLogTarget(null)} />
     </PageContainer>
   );
 }

@@ -6,7 +6,11 @@ import type {
   DataSource,
   DataSourceImport,
   DataSourceKind,
+  ImportLog,
+  ImportLogLevel,
+  ImportLogList,
   ImportScope,
+  ImportStage,
   ImportStatus,
   MediaAsset,
   MediaPlayback,
@@ -44,6 +48,26 @@ const STATUSES: readonly ImportStatus[] = [
   "FAILED",
   "CANCELLED",
 ];
+const STAGES: readonly ImportStage[] = [
+  "DOWNLOAD",
+  "VALIDATE",
+  "PARSE",
+  "INGEST",
+  "COMPLETE",
+];
+const LOG_LEVELS: readonly ImportLogLevel[] = ["INFO", "WARNING", "ERROR"];
+
+/** 可空阶段：null 表示"未测量"，不是缺失字段。 */
+function readOptionalStage(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): ImportStage | null {
+  if (record[key] === undefined || record[key] === null) {
+    return null;
+  }
+  return readEnum(record, key, path, STAGES);
+}
 
 /** 可空非负整数：服务端可能返回 null 表示"尚未统计"。 */
 function readOptionalCount(
@@ -123,7 +147,7 @@ export function parseDataSourceImport(value: unknown): DataSourceImport {
       ACTIONS,
     ),
   );
-  return {
+  const result: DataSourceImport = {
     import_id: readUuid(record, "import_id", "import_id"),
     project_id: readUuid(record, "project_id", "project_id"),
     data_source_id: readUuid(record, "data_source_id", "data_source_id"),
@@ -150,8 +174,55 @@ export function parseDataSourceImport(value: unknown): DataSourceImport {
     error_message: readOptionalString(record, "error_message", "error_message"),
     started_at: readOptionalString(record, "started_at", "started_at"),
     finished_at: readOptionalString(record, "finished_at", "finished_at"),
+    stage: readOptionalStage(record, "stage", "stage"),
+    processed_items: readOptionalCount(
+      record,
+      "processed_items",
+      "processed_items",
+    ),
+    total_items: readOptionalCount(record, "total_items", "total_items"),
     version: readPositiveInteger(record, "version", "version"),
     allowed_actions: allowed,
+  };
+  if (
+    result.processed_items !== null &&
+    result.total_items !== null &&
+    result.processed_items > result.total_items
+  ) {
+    throw new Error("processed_items 不得超过 total_items");
+  }
+  return result;
+}
+
+function parseImportLog(value: unknown, path: string): ImportLog {
+  const record = asRecord(value, path);
+  const message = readString(record, "message", `${path}.message`);
+  if (message.trim().length === 0) {
+    throw new Error(`${path}.message 不能为空`);
+  }
+  return {
+    log_id: readUuid(record, "log_id", `${path}.log_id`),
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    import_id: readUuid(record, "import_id", `${path}.import_id`),
+    stage: readEnum(record, "stage", `${path}.stage`, STAGES),
+    level: readEnum(record, "level", `${path}.level`, LOG_LEVELS),
+    message,
+    attempt: readPositiveInteger(record, "attempt", `${path}.attempt`),
+    occurred_at: readString(record, "occurred_at", `${path}.occurred_at`),
+  };
+}
+
+/** 步骤日志列表：`truncated` 必须显式给出，不能把"没返回"当成"没有更多"。 */
+export function parseImportLogList(value: unknown): ImportLogList {
+  const record = asRecord(value, "导入日志列表");
+  if (!Array.isArray(record.items)) {
+    throw new Error("导入日志列表.items 必须是数组");
+  }
+  return {
+    items: record.items.map((item, index) =>
+      parseImportLog(item, `导入日志列表.items[${index}]`),
+    ),
+    truncated: readBoolean(record, "truncated", "导入日志列表.truncated"),
   };
 }
 

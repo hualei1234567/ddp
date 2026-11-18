@@ -20,6 +20,7 @@ from app.application.datasources.events import DATASOURCE_IMPORT_ACTION_EVENTS
 from app.application.datasources.idempotency import IdempotencyGuard, validate_key
 from app.application.datasources.ports import (
     AuditRepository,
+    DataSourceImportLogRepository,
     DataSourceImportRepository,
     DataSourceRepository,
     IdempotencyRepository,
@@ -33,7 +34,7 @@ from app.domain.datasources.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
-from app.domain.datasources.models import DataSource, DataSourceImport
+from app.domain.datasources.models import DataSource, DataSourceImport, DataSourceImportLog
 from app.domain.datasources.state_machines import (
     allowed_import_actions,
     import_target_status,
@@ -58,6 +59,7 @@ class DataSourceUseCases:
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        logs: DataSourceImportLogRepository,
     ) -> None:
         self._sources = sources
         self._imports = imports
@@ -65,6 +67,7 @@ class DataSourceUseCases:
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        self._logs = logs
 
     # ---------- 数据源 ----------
 
@@ -251,6 +254,21 @@ class DataSourceUseCases:
         if item is None:
             raise ResourceNotFoundError("导入任务", import_id)
         return item
+
+    def list_import_logs(
+        self,
+        scope: ProjectScope,
+        import_id: UUID,
+        *,
+        limit: int = 100,
+    ) -> tuple[list[DataSourceImportLog], bool]:
+        """读取一次导入的步骤日志（最近 ``limit`` 条，时间正序）。
+
+        先 ``get_import``：跨项目或不存在一律 404，不能靠"空日志列表"泄露
+        "该 ID 存在与否"的差异。
+        """
+        self.get_import(scope, import_id)
+        return self._logs.list_recent(scope, import_id, limit=limit)
 
     def create_import(
         self,
