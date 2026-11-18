@@ -13,6 +13,7 @@ from app.application.annotation.episode_status_projection import (
     project_submission_status,
 )
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
+from app.application.annotation.lineage import AnnotationLineageRecorder
 from app.application.annotation.ports import (
     AnnotationRecordRepository,
     AnnotationReviewRepository,
@@ -21,6 +22,7 @@ from app.application.annotation.ports import (
     AuditRepository,
     EpisodeDirectory,
     IdempotencyRepository,
+    LineageRecorder,
     MemberDirectory,
     OutboxRepository,
     UnitOfWork,
@@ -48,7 +50,7 @@ from app.domain.annotation.state_machines import (
     assert_review_action,
     validate_action_name,
 )
-from app.domain.annotation.submission import submission_already_decided
+from app.domain.annotation.submission import AnnotationRecord, submission_already_decided
 from app.domain.identity.models import ProjectScope
 
 if TYPE_CHECKING:
@@ -72,6 +74,7 @@ class AnnotationReviewUseCases:
         *,
         episodes: EpisodeDirectory | None = None,
         progress: AnnotationProgressRefresher | None = None,
+        lineage: LineageRecorder | None = None,
     ) -> None:
         self._reviews = reviews
         self._submissions = submissions
@@ -84,6 +87,9 @@ class AnnotationReviewUseCases:
         self._uow = uow
         self._episodes = episodes
         self._progress = progress
+        # None 只在纯领域测试装配里出现；生产装配必须传入，否则通过动作
+        # 不会留下 ANNOTATED_BY 边（缺失会被 API 用例暴露）。
+        self._lineage = AnnotationLineageRecorder(lineage) if lineage is not None else None
 
     def get(self, scope: ProjectScope, review_id: UUID) -> AnnotationReview:
         review = self._reviews.get(scope, review_id)
@@ -312,8 +318,25 @@ class AnnotationReviewUseCases:
             AnnotationSubmissionAction.REJECT.value: AnnotationRecordStatus.REJECTED,
             AnnotationSubmissionAction.ESCALATE.value: None,
         }[submission_action]
-        if target is not None:
-            self._mark_records(scope, submission, target, reason=reason, now=now)
+        if target is None:
+            return
+        approved_records = self._mark_records(
+            scope,
+            submission,
+            target,
+            reason=reason,
+            now=now,
+        )
+        if target is AnnotationRecordStatus.APPROVED and self._lineage is not None:
+            # 只有本次真正从 SUBMITTED 推进到 APPROVED 的记录才写边；
+            # 重复通过（例如返工后再次通过）由 ensure_edge 幂等吸收。
+            self._lineage.record_approved_annotations(
+                scope,
+                submission_id=updated.submission_id,
+                submission_version=updated.submission_version,
+                records=approved_records,
+                now=now,
+            )
 
     def _transition_submission(
         self,
@@ -358,11 +381,12 @@ class AnnotationReviewUseCases:
         *,
         reason: str | None,
         now: datetime,
-    ) -> None:
+    ) -> tuple[AnnotationRecord, ...]:
         action = {
             AnnotationRecordStatus.APPROVED: "approve-with-submission",
             AnnotationRecordStatus.REJECTED: "reject-with-submission",
         }[target]
+        updated_records = []
         for record in self._records.list_for_submission(scope, submission.submission_id):
             if record.status is not AnnotationRecordStatus.SUBMITTED:
                 continue
@@ -375,7 +399,10 @@ class AnnotationReviewUseCases:
                 ),
                 updated_by=scope.actor_id,
             )
-            self._records.save(scope, updated, expected_version=record.version)
+            updated_records.append(
+                self._records.save(scope, updated, expected_version=record.version)
+            )
+        return tuple(updated_records)
 
     def _get_submission(self, scope: ProjectScope, submission_id: UUID):
         submission = self._submissions.get(scope, submission_id)

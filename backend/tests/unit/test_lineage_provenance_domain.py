@@ -78,3 +78,60 @@ def test_produced_still_rejects_unrelated_endpoints(
     """放宽 PRODUCED 不能变成"任意类型都能连"：方向或组合不对仍然拒绝。"""
     with pytest.raises(LineageConflictError):
         _edge(from_type, to_type)
+
+
+@pytest.mark.parametrize(
+    ("from_type", "to_type", "relation"),
+    [
+        # 标注通过：Episode 被 ANNOTATION 标注。
+        (LineageNodeType.EPISODE, LineageNodeType.ANNOTATION, LineageRelation.ANNOTATED_BY),
+        # 质量运行：Episode 被 QUALITY_RUN 评估。
+        (LineageNodeType.EPISODE, LineageNodeType.QUALITY_RUN, LineageRelation.EVALUATED_BY),
+    ],
+)
+def test_annotation_and_quality_edges_allow_expected_endpoints(
+    from_type: LineageNodeType,
+    to_type: LineageNodeType,
+    relation: LineageRelation,
+) -> None:
+    edge = LineageEdge(
+        edge_id=uuid4(),
+        project_id=uuid4(),
+        from_node_type=from_type,
+        from_node_id=uuid4(),
+        to_node_type=to_type,
+        to_node_id=uuid4(),
+        relation=relation,
+        created_by=uuid4(),
+        created_at=_NOW,
+    )
+    assert edge.relation is relation
+
+
+@pytest.mark.parametrize(
+    ("from_type", "to_type", "relation"),
+    [
+        # 方向必须是从 Episode 出发；反向不是"同一个关系"。
+        (LineageNodeType.ANNOTATION, LineageNodeType.EPISODE, LineageRelation.ANNOTATED_BY),
+        (LineageNodeType.QUALITY_RUN, LineageNodeType.EPISODE, LineageRelation.EVALUATED_BY),
+        # 交叉类型不能借用这两个关系。
+        (LineageNodeType.EPISODE, LineageNodeType.QUALITY_RUN, LineageRelation.ANNOTATED_BY),
+    ],
+)
+def test_annotation_and_quality_edges_reject_wrong_endpoints(
+    from_type: LineageNodeType,
+    to_type: LineageNodeType,
+    relation: LineageRelation,
+) -> None:
+    with pytest.raises(LineageConflictError):
+        LineageEdge(
+            edge_id=uuid4(),
+            project_id=uuid4(),
+            from_node_type=from_type,
+            from_node_id=uuid4(),
+            to_node_type=to_type,
+            to_node_id=uuid4(),
+            relation=relation,
+            created_by=uuid4(),
+            created_at=_NOW,
+        )
