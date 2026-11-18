@@ -73,6 +73,7 @@ import NotFound from "./pages/NotFound";
 import PeoplePage from "./pages/people/PeoplePage";
 import ProjectListPage from "./pages/projects/ProjectListPage";
 import RawAssetDetailPage from "./pages/rawAssets/RawAssetDetailPage";
+import RawAssetListPage from "./pages/rawAssets/RawAssetListPage";
 import Workbench from "./pages/Workbench";
 
 /**
@@ -170,6 +171,7 @@ export default function AppRoutes() {
         <Route path="locations/:locationId" element={<LocationDetailPage />} />
         <Route path="episodes" element={<EpisodeListPage />} />
         <Route path="episodes/:episodeId" element={<EpisodeDetailPage />} />
+        <Route path="assets" element={<RawAssetListPage />} />
         <Route path="raw-assets/:assetId" element={<RawAssetDetailPage />} />
         <Route path="annotation" element={<AnnotationIndexRedirect />} />
         <Route path="annotation-tasks" element={<AnnotationTaskListPage />} />

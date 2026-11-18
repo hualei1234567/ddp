@@ -6,6 +6,7 @@ import {
   getEpisodeStatus,
   getPriority,
   getQualityStatus,
+  getRawAssetStatus,
   getTaskStatus,
   getUploadStatus,
   getVerificationStatus,
@@ -20,6 +21,7 @@ export type CollectionStatusKind =
   | "episode"
   | "quality"
   | "annotation"
+  | "rawAsset"
   | "priority";
 
 interface CollectionStatusTagProps {
@@ -46,6 +48,8 @@ function resolve(kind: CollectionStatusKind, value: string): StatusPresentation 
       return getQualityStatus(value);
     case "annotation":
       return getAnnotationStatus(value);
+    case "rawAsset":
+      return getRawAssetStatus(value);
     case "priority":
       return getPriority(value);
   }
