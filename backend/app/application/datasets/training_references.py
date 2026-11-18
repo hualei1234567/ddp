@@ -35,6 +35,7 @@ from app.domain.datasets.errors import (
 from app.domain.datasets.training_deliveries import TrainingDelivery
 from app.domain.datasets.training_enums import (
     AdapterCapability,
+    ExecutionMode,
     ExternalTrainingStatus,
     TrainingDeliveryStatus,
 )
@@ -46,6 +47,7 @@ from app.domain.datasets.training_errors import (
 from app.domain.datasets.training_references import (
     ExternalTrainingReference,
     new_external_reference,
+    resolve_execution_mode,
 )
 from app.domain.datasets.training_state_machines import (
     allowed_external_actions,
@@ -109,6 +111,16 @@ class ExternalTrainingReferenceUseCases:
             scope, delivery_id=delivery_id, after_id=after_id, limit=limit
         )
 
+    def latest_execution_modes(
+        self,
+        scope: ProjectScope,
+        delivery_ids: list[UUID],
+    ) -> dict[UUID, ExecutionMode]:
+        """交付级执行方式投影：最近一次外部训练引用；无引用时由调用方填 UNKNOWN。"""
+        if not delivery_ids:
+            return {}
+        return self._references.latest_execution_modes(scope, delivery_ids=tuple(delivery_ids))
+
     def create(
         self,
         scope: ProjectScope,
@@ -131,11 +143,16 @@ class ExternalTrainingReferenceUseCases:
         key = validate_key(idempotency_key or command.correlation_id)
         if key is None:
             raise DomainValidationError("外部训练引用必须提供幂等键或 correlation_id")
+        # 执行方式先定死再走幂等：同一幂等键携带不同 execution_mode 不是同一次提交。
+        execution_mode = resolve_execution_mode(
+            configured=self._gateway.execution_mode(command.adapter_id),
+            requested=command.execution_mode,
+        )
         existing = self._references.get_by_idempotency_key(
             scope, adapter_id=command.adapter_id, idempotency_key=key
         )
         if existing is not None:
-            candidate = self._candidate(scope, delivery, command, key)
+            candidate = self._candidate(scope, delivery, command, key, execution_mode)
             if not existing.matches_idempotent_request(candidate):
                 raise TrainingExternalRunConflictError("同一幂等键对应不同的外部训练请求")
             return existing
@@ -180,6 +197,7 @@ class ExternalTrainingReferenceUseCases:
             external_run_url=run.external_run_url,
             correlation_id=command.correlation_id,
             idempotency_key=key,
+            execution_mode=execution_mode,
             model_ref=command.model_ref or run.model_ref,
             evaluation_ref=command.evaluation_ref or run.evaluation_ref,
             actor_id=scope.actor_id,
@@ -202,6 +220,7 @@ class ExternalTrainingReferenceUseCases:
                 "adapter_version": created.adapter_version,
                 "external_run_id": created.external_run_id,
                 "correlation_id": created.correlation_id,
+                "execution_mode": created.execution_mode.value,
             },
             event_type="training.external_reference.created",
             event_payload={
@@ -210,6 +229,7 @@ class ExternalTrainingReferenceUseCases:
                 "adapter_id": created.adapter_id,
                 "external_run_id": created.external_run_id,
                 "external_status": created.external_status.value,
+                "execution_mode": created.execution_mode.value,
             },
             occurred_at=now,
         )
@@ -355,6 +375,7 @@ class ExternalTrainingReferenceUseCases:
         delivery: TrainingDelivery,
         command: NewExternalTrainingReference,
         key: str,
+        execution_mode: ExecutionMode,
     ) -> ExternalTrainingReference:
         now = _utcnow()
         return new_external_reference(
@@ -369,6 +390,7 @@ class ExternalTrainingReferenceUseCases:
             external_run_url=None,
             correlation_id=command.correlation_id,
             idempotency_key=key,
+            execution_mode=execution_mode,
             model_ref=command.model_ref,
             evaluation_ref=command.evaluation_ref,
             actor_id=scope.actor_id,

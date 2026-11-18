@@ -52,6 +52,38 @@ class ExternalTrainingStatus(StrEnum):
     UNAVAILABLE = "UNAVAILABLE"
 
 
+class ExecutionMode(StrEnum):
+    """训练执行方式标记。
+
+    这不是第二套训练状态机：它只回答"这次训练是在什么环境、用什么方式跑的"，
+    与 ``ExternalTrainingStatus``（提交/运行/成功/失败）正交。引入它的唯一目的
+    是让 Mock、空跑、本地参考实现与真实远端训练在数据与界面上**可区分**，
+    避免把模拟结果当成真实训练结果。
+
+    ``UNKNOWN`` 只用于"记录产生时还没有这个字段、无法回溯判定"的存量数据；
+    新提交必须由 Adapter 配置或请求显式声明四种可执行方式之一，不得写入
+    ``UNKNOWN``，更不得默认成 ``REMOTE``。
+    """
+
+    LOCAL = "LOCAL"
+    MOCK = "MOCK"
+    DRY_RUN = "DRY_RUN"
+    REMOTE = "REMOTE"
+    UNKNOWN = "UNKNOWN"
+
+
+# 部署配置与客户端请求只允许声明这四种真实执行方式。UNKNOWN 是"无法判定"，
+# 不是一种执行方式，因此既不允许配置也不允许客户端提交。
+DECLARED_EXECUTION_MODES: frozenset[ExecutionMode] = frozenset(
+    {
+        ExecutionMode.LOCAL,
+        ExecutionMode.MOCK,
+        ExecutionMode.DRY_RUN,
+        ExecutionMode.REMOTE,
+    }
+)
+
+
 class DatasetGrantStatus(StrEnum):
     PENDING_APPROVAL = "PENDING_APPROVAL"
     ACTIVE = "ACTIVE"

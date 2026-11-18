@@ -845,6 +845,9 @@ def data_chain(chain: Chain, stamp: str, *, data_only: bool = False) -> dict[str
         "adapter_id": "local-training",
         "adapter_version": "1.0.0",
         "correlation_id": f"chain-{stamp}",
+        # 本链路调用的就是 services/local-adapter 的真实 CPU 参考实现；
+        # 执行方式是提交时定死的事实，不能靠服务端默认推断。
+        "execution_mode": "LOCAL",
         "config": {"project_id": chain.project_id, "export_job_id": export_id},
     })
     ref_id = str(ref["external_ref_id"])

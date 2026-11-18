@@ -21,7 +21,7 @@ import httpx
 
 from app.application.datasets.training_ports import AdapterRunRef, AdapterRunStatus
 from app.core.config import Settings
-from app.domain.datasets.training_enums import ExternalTrainingStatus
+from app.domain.datasets.training_enums import ExecutionMode, ExternalTrainingStatus
 from app.domain.datasets.training_errors import TrainingAdapterUnavailableError
 from app.infrastructure.adapter_http import (
     AdapterHttpFailure,
@@ -52,6 +52,10 @@ class HttpTrainingAdapterGateway:
 
     def capabilities(self, adapter_id: str) -> frozenset[str]:
         return self._fallback.capabilities(adapter_id)
+
+    def execution_mode(self, adapter_id: str) -> ExecutionMode | None:
+        # 执行方式来自部署配置，与 endpoint 是否登记无关。
+        return self._fallback.execution_mode(adapter_id)
 
     def submit(
         self,

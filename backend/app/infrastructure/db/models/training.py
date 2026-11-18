@@ -24,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.domain.datasets.training_enums import (
     DatasetGrantStatus,
+    ExecutionMode,
     ExternalTrainingStatus,
     RevisionStatus,
     TrainingDeliveryStatus,
@@ -326,6 +327,11 @@ class ExternalTrainingReferenceModel(Base):
     external_run_id: Mapped[str] = mapped_column(String(200), nullable=False)
     external_run_url: Mapped[str | None] = mapped_column(String(4096), nullable=True)
     external_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    # 执行方式（LOCAL/MOCK/DRY_RUN/REMOTE/UNKNOWN）由迁移 0054 引入。存量行为
+    # UNKNOWN：迁移无法回溯判定当时是本地参考实现还是真实远端平台，不猜 REMOTE。
+    execution_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default=text("'UNKNOWN'")
+    )
     status_stale: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=text("false")
     )
@@ -389,6 +395,10 @@ class ExternalTrainingReferenceModel(Base):
         CheckConstraint(
             f"external_status IN ({_values(ExternalTrainingStatus)})",
             name="external_status_allowed",
+        ),
+        CheckConstraint(
+            f"execution_mode IN ({_values(ExecutionMode)})",
+            name="execution_mode_allowed",
         ),
         CheckConstraint("length(adapter_id) >= 1", name="adapter_id_non_empty"),
         CheckConstraint("length(adapter_version) >= 1", name="adapter_version_non_empty"),

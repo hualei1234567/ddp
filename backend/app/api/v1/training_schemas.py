@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.datasets.dataset_grants import DatasetGrant
 from app.domain.datasets.training_deliveries import TrainingDelivery
+from app.domain.datasets.training_enums import ExecutionMode
 from app.domain.datasets.training_references import ExternalTrainingReference
 from app.domain.datasets.training_requests import TrainingRequest, TrainingRequestRevision
 from app.domain.datasets.training_state_machines import allowed_external_actions
@@ -97,6 +98,12 @@ class ExternalTrainingReferenceCreate(BaseModel):
     model_ref: dict[str, object] | None = None
     evaluation_ref: dict[str, object] | None = None
     config: dict[str, object] = Field(default_factory=dict)
+    # 可选显式执行方式。Adapter 配置已声明时以配置为准且必须一致；两边都没有
+    # 时服务端拒绝（422），不默认 REMOTE。
+    #
+    # 这里用 Literal 而不是 ExecutionMode：UNKNOWN 只描述存量数据，不是客户端
+    # 可声明的执行方式，运行时 OpenAPI 也必须与契约一致地只暴露这四个值。
+    execution_mode: Literal["LOCAL", "MOCK", "DRY_RUN", "REMOTE"] | None = None
 
 
 class DatasetGrantCreate(BaseModel):
@@ -189,7 +196,9 @@ def training_revision_out(revision: TrainingRequestRevision) -> dict[str, Any]:
     }
 
 
-def training_delivery_out(delivery: TrainingDelivery) -> dict[str, Any]:
+def training_delivery_out(
+    delivery: TrainingDelivery, *, execution_mode: ExecutionMode
+) -> dict[str, Any]:
     return {
         "training_delivery_id": delivery.training_delivery_id,
         "project_id": delivery.project_id,
@@ -211,6 +220,9 @@ def training_delivery_out(delivery: TrainingDelivery) -> dict[str, Any]:
         # TRN-002 核对报告：``None`` 表示该交付建立于核对能力上线之前，
         # 客户端不得把 ``None`` 渲染成"已通过"。
         "requirement_match": delivery.requirement_match,
+        # 交付级执行方式：最近一次外部训练引用的方式；尚未提交训练为 UNKNOWN。
+        # 客户端不得把 UNKNOWN 渲染成"真实训练"。
+        "execution_mode": execution_mode.value,
         "status": _value(delivery.status),
         "delivered_at": _iso(delivery.delivered_at),
         "accepted_by": delivery.accepted_by,
@@ -238,6 +250,8 @@ def external_reference_out(reference: ExternalTrainingReference) -> dict[str, An
         "external_run_id": reference.external_run_id,
         "external_run_url": reference.external_run_url,
         "external_status": _value(reference.external_status),
+        # 执行方式在提交时定死；MOCK/DRY_RUN/UNKNOWN 必须在界面上与真实训练区分。
+        "execution_mode": _value(reference.execution_mode),
         "status_stale": reference.status_stale,
         "submitted_at": _iso(reference.submitted_at),
         "last_synced_at": _iso(reference.last_synced_at),

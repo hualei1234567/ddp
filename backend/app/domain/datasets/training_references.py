@@ -12,7 +12,11 @@ from datetime import datetime
 from uuid import UUID
 
 from app.domain.datasets.errors import DomainValidationError, InvalidStateTransitionError
-from app.domain.datasets.training_enums import ExternalTrainingStatus
+from app.domain.datasets.training_enums import (
+    DECLARED_EXECUTION_MODES,
+    ExecutionMode,
+    ExternalTrainingStatus,
+)
 from app.domain.datasets.training_state_machines import external_target
 from app.domain.datasets.validation import (
     aware_datetime,
@@ -110,6 +114,48 @@ def _artifacts(value: object) -> dict[str, object] | None:
     return dict(value)
 
 
+def resolve_execution_mode(*, configured: object, requested: object) -> ExecutionMode:
+    """确定一次训练提交的执行方式。
+
+    规则（fail-closed，绝不猜测）：
+
+    - Adapter 配置声明了模式：以配置为准；请求同时声明但与配置不一致时拒绝，
+      防止客户端把本地/Mock 运行标成 ``REMOTE``；
+    - 只有请求声明：采用请求值；
+    - 两者都没有：拒绝——"不知道在哪里跑"不能被默认成真实远端训练。
+
+    ``UNKNOWN`` 只描述无法回溯的存量记录，不得从配置或请求写入。
+    """
+    configured_mode = _declared_mode(configured, "Adapter 配置的 execution_mode")
+    requested_mode = _declared_mode(requested, "请求的 execution_mode")
+    if (
+        configured_mode is not None
+        and requested_mode is not None
+        and configured_mode is not requested_mode
+    ):
+        raise DomainValidationError(
+            "请求的 execution_mode 与 Adapter 配置不一致："
+            f"{requested_mode.value} != {configured_mode.value}"
+        )
+    mode = configured_mode if configured_mode is not None else requested_mode
+    if mode is None:
+        raise DomainValidationError(
+            "无法确定训练执行方式：Adapter 未声明 execution_mode，请求也未指定；"
+            "不允许默认成 REMOTE"
+        )
+    return mode
+
+
+def _declared_mode(value: object, field_name: str) -> ExecutionMode | None:
+    if value is None:
+        return None
+    mode = coerce_enum(value, ExecutionMode, field_name)
+    if mode not in DECLARED_EXECUTION_MODES:
+        allowed = "/".join(sorted(item.value for item in DECLARED_EXECUTION_MODES))
+        raise DomainValidationError(f"{field_name} 只能是 {allowed}")
+    return mode
+
+
 @dataclass(frozen=True, slots=True)
 class ExternalTrainingReference:
     external_ref_id: UUID
@@ -124,6 +170,9 @@ class ExternalTrainingReference:
     idempotency_key: str
     submitted_at: datetime
     last_synced_at: datetime
+    # 执行方式在提交时定死，之后不可修改：一次训练的"在哪里跑"是事实，
+    # 不是可以随状态更新漂移的展示字段。
+    execution_mode: ExecutionMode | str
     external_status: ExternalTrainingStatus | str = ExternalTrainingStatus.SUBMITTED
     external_run_url: str | None = None
     status_stale: bool = False
@@ -173,6 +222,11 @@ class ExternalTrainingReference:
             self,
             "external_status",
             coerce_enum(self.external_status, ExternalTrainingStatus, "external_status"),
+        )
+        object.__setattr__(
+            self,
+            "execution_mode",
+            coerce_enum(self.execution_mode, ExecutionMode, "execution_mode"),
         )
         object.__setattr__(
             self,
@@ -295,6 +349,10 @@ class ExternalTrainingReference:
             return False
         if self.correlation_id != other.correlation_id:
             return False
+        if self.execution_mode != other.execution_mode:
+            # 同一幂等键重新声明了不同执行方式，说明不是同一次提交；必须冲突，
+            # 不能把后到的 REMOTE 覆盖到已有的 MOCK 记录上。
+            return False
         if self.model_ref != other.model_ref or self.evaluation_ref != other.evaluation_ref:
             return False
         return (
@@ -317,6 +375,7 @@ def new_external_reference(
     external_run_url: str | None,
     correlation_id: str,
     idempotency_key: str,
+    execution_mode: ExecutionMode | str,
     model_ref: object,
     evaluation_ref: object,
     actor_id: UUID,
@@ -334,6 +393,7 @@ def new_external_reference(
         external_run_url=external_run_url,
         correlation_id=correlation_id,
         idempotency_key=idempotency_key,
+        execution_mode=execution_mode,
         model_ref=_model_ref(model_ref),
         evaluation_ref=_evaluation_ref(evaluation_ref),
         external_status=ExternalTrainingStatus.SUBMITTED,
@@ -346,4 +406,8 @@ def new_external_reference(
     )
 
 
-__all__ = ["ExternalTrainingReference", "new_external_reference"]
+__all__ = [
+    "ExternalTrainingReference",
+    "new_external_reference",
+    "resolve_execution_mode",
+]

@@ -11,6 +11,7 @@ from uuid import UUID
 
 from app.application.datasets.training_ports import AdapterRunRef, AdapterRunStatus
 from app.core.config import Settings
+from app.domain.datasets.training_enums import ExecutionMode
 from app.domain.datasets.training_errors import TrainingAdapterUnavailableError
 
 
@@ -20,9 +21,18 @@ class ConfiguredTrainingAdapterGateway:
             adapter_id: frozenset(capabilities)
             for adapter_id, capabilities in settings.training_adapter_capabilities.items()
         }
+        # 只接受启动自检通过的四种执行方式；配置层已在 validate_runtime_security
+        # 拒绝非法值，这里不再静默降级。
+        self._execution_modes = {
+            adapter_id: ExecutionMode(mode)
+            for adapter_id, mode in settings.training_adapter_execution_modes.items()
+        }
 
     def capabilities(self, adapter_id: str) -> frozenset[str]:
         return self._capabilities.get(adapter_id, frozenset())
+
+    def execution_mode(self, adapter_id: str) -> ExecutionMode | None:
+        return self._execution_modes.get(adapter_id)
 
     def submit(
         self,

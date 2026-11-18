@@ -21,11 +21,13 @@ import type {
   TrainingRequest,
   TrainingRequestRevision,
 } from "../types/dataset";
+import { EXECUTION_MODE_VALUES } from "../types/dataset";
 import {
   asRecord,
   ContractValidationError,
   parseCursorPage,
   readBoolean,
+  readEnum,
   readInteger,
   readNumber,
   readOptionalNumber,
@@ -530,6 +532,12 @@ export function parseTrainingDelivery(value: unknown): TrainingDelivery {
     split_counts: readCountMap(record, "split_counts", "trainingDelivery"),
     quality_report_ref: readOptionalString(record, "quality_report_ref", "trainingDelivery"),
     status: readString(record, "status", "trainingDelivery"),
+    execution_mode: readEnum(
+      record,
+      "execution_mode",
+      "trainingDelivery",
+      EXECUTION_MODE_VALUES,
+    ),
     delivered_at: readOptionalString(record, "delivered_at", "trainingDelivery"),
     accepted_at: readOptionalString(record, "accepted_at", "trainingDelivery"),
     acceptance_opinion: readOptionalString(record, "acceptance_opinion", "trainingDelivery"),
@@ -564,6 +572,12 @@ export function parseExternalTrainingReference(value: unknown): ExternalTraining
     external_run_id: readString(record, "external_run_id", "externalReference"),
     external_run_url: readOptionalString(record, "external_run_url", "externalReference"),
     external_status: readString(record, "external_status", "externalReference"),
+    execution_mode: readEnum(
+      record,
+      "execution_mode",
+      "externalReference",
+      EXECUTION_MODE_VALUES,
+    ),
     status_stale: record.status_stale
       ? readBoolean(record, "status_stale", "externalReference")
       : false,

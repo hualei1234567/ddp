@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -20,6 +21,7 @@ from app.domain.datasets.errors import (
 from app.domain.datasets.training_deliveries import new_training_delivery
 from app.domain.datasets.training_enums import (
     DatasetGrantStatus,
+    ExecutionMode,
     ExternalTrainingStatus,
     GrantScope,
     RevisionStatus,
@@ -34,7 +36,10 @@ from app.domain.datasets.training_errors import (
     TrainingRequestImmutableError,
     TrainingRequestIncompleteError,
 )
-from app.domain.datasets.training_references import new_external_reference
+from app.domain.datasets.training_references import (
+    new_external_reference,
+    resolve_execution_mode,
+)
 from app.domain.datasets.training_requests import (
     new_training_request,
     normalize_requirement_snapshot,
@@ -268,6 +273,7 @@ def test_external_reference_status_is_authoritative_and_terminal() -> None:
         external_run_url=None,
         correlation_id="corr-1",
         idempotency_key="idem-0001",
+        execution_mode="LOCAL",
         model_ref=None,
         evaluation_ref=None,
         actor_id=actor,
@@ -419,6 +425,7 @@ def test_external_reference_keeps_callback_artifacts() -> None:
         external_run_url=None,
         correlation_id="corr-artifacts",
         idempotency_key="idem-artifacts",
+        execution_mode="LOCAL",
         model_ref=None,
         evaluation_ref=None,
         actor_id=actor,
@@ -457,6 +464,7 @@ def test_external_reference_rejects_oversized_or_non_object_artifacts() -> None:
         external_run_url=None,
         correlation_id="corr-big",
         idempotency_key="idem-big",
+        execution_mode="LOCAL",
         model_ref=None,
         evaluation_ref=None,
         actor_id=actor,
@@ -515,6 +523,7 @@ def test_adapter_callback_persists_artifact_metadata() -> None:
         external_run_url=None,
         correlation_id="corr-save",
         idempotency_key="idem-save",
+        execution_mode="LOCAL",
         model_ref=None,
         evaluation_ref=None,
         actor_id=actor,
@@ -588,3 +597,69 @@ def test_adapter_callback_persists_artifact_metadata() -> None:
             "size_bytes": 30542,
         }
     }
+
+
+def _reference_with_mode(mode: object):
+    return new_external_reference(
+        external_ref_id=uuid4(),
+        project_id=uuid4(),
+        adapter_id="adapter-under-test",
+        adapter_version="1.0.0",
+        training_delivery_id=uuid4(),
+        training_request_revision_id=uuid4(),
+        dataset_version_id=uuid4(),
+        external_run_id="run-mode",
+        external_run_url=None,
+        correlation_id="corr-mode",
+        idempotency_key="idem-mode",
+        execution_mode=mode,
+        model_ref=None,
+        evaluation_ref=None,
+        actor_id=uuid4(),
+        now=NOW,
+    )
+
+
+@pytest.mark.parametrize("mode", ["LOCAL", "MOCK", "DRY_RUN", "REMOTE"])
+def test_external_reference_accepts_four_declared_execution_modes(mode: str) -> None:
+    reference = _reference_with_mode(mode)
+    assert reference.execution_mode is ExecutionMode(mode)
+
+
+def test_external_reference_rejects_invalid_execution_mode() -> None:
+    with pytest.raises(DomainValidationError):
+        _reference_with_mode("BOGUS")
+    # UNKNOWN 在实体层是合法的：存量记录无法回溯判定，必须以 UNKNOWN 读出。
+    assert _reference_with_mode("UNKNOWN").execution_mode is ExecutionMode.UNKNOWN
+
+
+def test_resolve_execution_mode_prefers_config_and_rejects_conflict() -> None:
+    assert resolve_execution_mode(configured="MOCK", requested=None) is ExecutionMode.MOCK
+    assert resolve_execution_mode(configured=None, requested="REMOTE") is ExecutionMode.REMOTE
+    assert resolve_execution_mode(configured="LOCAL", requested="LOCAL") is ExecutionMode.LOCAL
+    with pytest.raises(DomainValidationError):
+        resolve_execution_mode(configured="LOCAL", requested="REMOTE")
+    # 两边都没有：拒绝，绝不默认 REMOTE。
+    with pytest.raises(DomainValidationError):
+        resolve_execution_mode(configured=None, requested=None)
+    # UNKNOWN 是"无法判定"，不是可声明的执行方式。
+    with pytest.raises(DomainValidationError):
+        resolve_execution_mode(configured=None, requested="UNKNOWN")
+    with pytest.raises(DomainValidationError):
+        resolve_execution_mode(configured="UNKNOWN", requested=None)
+
+
+def test_idempotent_reference_rejects_different_execution_mode() -> None:
+    reference = _reference_with_mode("MOCK")
+    same = _reference_with_mode("MOCK")
+    # _reference_with_mode 每次都生成新的 UUID，先对齐业务键再比较。
+    same = replace(
+        same,
+        external_ref_id=reference.external_ref_id,
+        training_delivery_id=reference.training_delivery_id,
+        training_request_revision_id=reference.training_request_revision_id,
+        dataset_version_id=reference.dataset_version_id,
+    )
+    assert reference.matches_idempotent_request(same)
+    remote = replace(same, execution_mode=ExecutionMode.REMOTE)
+    assert not reference.matches_idempotent_request(remote)

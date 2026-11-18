@@ -5,6 +5,8 @@ import {
   parseDataset,
   parseDatasetVersion,
   parseExportJob,
+  parseExternalTrainingReference,
+  parseTrainingDelivery,
   parseTrainingRequestRevision,
 } from "./datasetParsers";
 
@@ -144,5 +146,85 @@ describe("阶段 4 响应解析", () => {
     });
     expect(revision.allowed_actions).toEqual(["submit"]);
     expect(revision.version).toBe(4);
+  });
+
+  it("交付与外部训练引用都带 execution_mode", () => {
+    const delivery = parseTrainingDelivery({
+      training_delivery_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      project_id: PROJECT,
+      training_request_id: "99999999-9999-4999-8999-999999999999",
+      training_request_revision_id: "88888888-8888-4888-8888-888888888888",
+      dataset_version_id: "22222222-2222-4222-8222-222222222223",
+      export_job_id: "33333333-3333-4333-8333-333333333333",
+      delivery_note_no: "DN-001",
+      recipient_id: USER,
+      recipient_team: "算法组",
+      artifact_manifest_sha256: SHA,
+      aggregate_sha256: SHA,
+      item_count: 10,
+      split_counts: { train: 8, validation: 1, test: 1 },
+      quality_report_ref: null,
+      status: "DELIVERED",
+      execution_mode: "MOCK",
+      delivered_at: "2026-11-09T00:00:00Z",
+      allowed_actions: ["accept"],
+      version: 1,
+      created_at: "2026-11-09T00:00:00Z",
+    });
+    expect(delivery.execution_mode).toBe("MOCK");
+
+    const reference = parseExternalTrainingReference({
+      external_ref_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      project_id: PROJECT,
+      adapter_id: "local-training",
+      adapter_version: "1.0.0",
+      training_delivery_id: delivery.training_delivery_id,
+      training_request_revision_id: delivery.training_request_revision_id,
+      dataset_version_id: delivery.dataset_version_id,
+      external_run_id: "run-1",
+      external_run_url: null,
+      external_status: "SUCCEEDED",
+      execution_mode: "UNKNOWN",
+      status_stale: false,
+      model_ref: null,
+      evaluation_ref: null,
+      artifacts: null,
+      correlation_id: "corr-1",
+      idempotency_key: "idem-0001",
+      error_code: null,
+      error_summary: null,
+      allowed_actions: [],
+      version: 1,
+      submitted_at: "2026-11-09T00:00:00Z",
+      last_synced_at: "2026-11-09T00:00:00Z",
+    });
+    expect(reference.execution_mode).toBe("UNKNOWN");
+  });
+
+  it("拒绝缺失或非法的 execution_mode", () => {
+    const base = {
+      training_delivery_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      project_id: PROJECT,
+      training_request_id: "99999999-9999-4999-8999-999999999999",
+      training_request_revision_id: "88888888-8888-4888-8888-888888888888",
+      dataset_version_id: "22222222-2222-4222-8222-222222222223",
+      export_job_id: "33333333-3333-4333-8333-333333333333",
+      delivery_note_no: "DN-001",
+      recipient_id: USER,
+      recipient_team: null,
+      artifact_manifest_sha256: SHA,
+      aggregate_sha256: SHA,
+      item_count: 10,
+      split_counts: { train: 10, validation: 0, test: 0 },
+      quality_report_ref: null,
+      status: "DRAFT",
+      allowed_actions: [],
+      version: 1,
+      created_at: "2026-11-09T00:00:00Z",
+    };
+    expect(() => parseTrainingDelivery(base)).toThrow(ContractValidationError);
+    expect(() => parseTrainingDelivery({ ...base, execution_mode: "BOGUS" })).toThrow(
+      ContractValidationError,
+    );
   });
 });

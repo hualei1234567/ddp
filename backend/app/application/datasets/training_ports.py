@@ -9,7 +9,7 @@ from uuid import UUID
 
 from app.domain.datasets.dataset_grants import DatasetGrant
 from app.domain.datasets.training_deliveries import TrainingDelivery
-from app.domain.datasets.training_enums import ExternalTrainingStatus
+from app.domain.datasets.training_enums import ExecutionMode, ExternalTrainingStatus
 from app.domain.datasets.training_references import ExternalTrainingReference
 from app.domain.datasets.training_requests import TrainingRequest, TrainingRequestRevision
 from app.domain.identity.models import ProjectScope
@@ -142,6 +142,19 @@ class ExternalReferenceRepository(Protocol):
         expected_version: int,
     ) -> ExternalTrainingReference: ...
 
+    def latest_execution_modes(
+        self,
+        scope: ProjectScope,
+        *,
+        delivery_ids: tuple[UUID, ...],
+    ) -> dict[UUID, ExecutionMode]:
+        """每个交付**最近一次**外部训练引用的执行方式。
+
+        没有引用的交付不出现在返回值里，由调用方显式填 ``UNKNOWN``——"尚未提交
+        训练"不能用 REMOTE 顶替。
+        """
+        ...
+
 
 class GrantRepository(Protocol):
     def add(self, scope: ProjectScope, grant: DatasetGrant) -> DatasetGrant: ...
@@ -219,6 +232,14 @@ class TrainingAdapterGateway(Protocol):
     """Adapter Port；不支持的能力必须抛 ``TrainingAdapterUnsupportedError``。"""
 
     def capabilities(self, adapter_id: str) -> frozenset[str]: ...
+
+    def execution_mode(self, adapter_id: str) -> ExecutionMode | None:
+        """部署为该 Adapter 声明的执行方式；未声明返回 ``None``。
+
+        返回 ``None`` 不是"默认 REMOTE"：调用方必须要求请求显式声明，
+        否则拒绝提交。
+        """
+        ...
 
     def submit(
         self,
