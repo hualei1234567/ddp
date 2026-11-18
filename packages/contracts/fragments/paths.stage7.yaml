@@ -1,5 +1,5 @@
 # 阶段 7 数据平面路径片段（第一批：HF 数据源登记与导入）。
-# 仅声明 backend/app/api/v1/datasource_routes.py 实际实现的端点（7 个操作）。
+# 仅声明 backend/app/api/v1/datasource_routes.py 实际实现的端点。
 # 由 openapi.yaml 通过 $ref 解析；引用回入口文件以复用公共参数与响应。
 
 dataSources:
