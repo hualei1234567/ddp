@@ -38,6 +38,38 @@ class UnitOfWork(Protocol):
     def commit(self) -> None: ...
 
 
+class LineageRecorder(Protocol):
+    """标注域需要的**血缘写边能力**（只暴露写，不暴露遍历）。
+
+    与 ``app.application.datasets.ports.LineageRecorder`` 同构：节点必须先登记
+    才能写边（复合外键兜底），边写入幂等。标注域只关心
+    ``Episode --ANNOTATED_BY--> ANNOTATION`` 与
+    ``Episode --EVALUATED_BY--> QUALITY_RUN`` 两类边，不引入通用图操作。
+    """
+
+    def ensure_node(
+        self,
+        scope: ProjectScope,
+        *,
+        node_type: object,
+        node_id: UUID,
+        now: datetime,
+    ) -> object: ...
+
+    def ensure_edge(
+        self,
+        scope: ProjectScope,
+        *,
+        from_node_type: object,
+        from_node_id: UUID,
+        to_node_type: object,
+        to_node_id: UUID,
+        relation: object,
+        metadata: Mapping[str, object],
+        now: datetime,
+    ) -> bool: ...
+
+
 @dataclass(frozen=True, slots=True)
 class EpisodeCandidate:
     """样本选择所需的 Episode 只读投影。"""

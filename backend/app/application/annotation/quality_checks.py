@@ -18,6 +18,10 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
+from app.application.annotation.lineage import (
+    AnnotationLineageRecorder,
+    AnnotationLineageWriteError,
+)
 from app.application.annotation.ports import (
     AnnotationRecordRepository,
     AnnotationSchemaRepository,
@@ -25,6 +29,7 @@ from app.application.annotation.ports import (
     AnnotationTaskRepository,
     AuditRepository,
     EpisodeDirectory,
+    LineageRecorder,
     OutboxRepository,
     QualityCheckRepository,
     UnitOfWork,
@@ -67,6 +72,7 @@ class QualityCheckUseCases:
         outbox: OutboxRepository,
         uow: UnitOfWork,
         registry: QualityRuleRegistry | None = None,
+        lineage: LineageRecorder | None = None,
     ) -> None:
         self._checks = checks
         self._submissions = submissions
@@ -78,6 +84,8 @@ class QualityCheckUseCases:
         self._outbox = outbox
         self._uow = uow
         self._registry = registry or default_registry()
+        # None 只在纯领域测试装配里出现；生产装配必须传入。
+        self._lineage = AnnotationLineageRecorder(lineage) if lineage is not None else None
 
     @property
     def rule_set_version(self) -> str:
@@ -153,6 +161,23 @@ class QualityCheckUseCases:
             created_by=scope.actor_id,
         )
         created = self._checks.add(scope, run)
+        if self._lineage is not None:
+            # 与质量运行同一事务提交：边写入失败会让本次检查整体回滚，
+            # 不会留下"有检查记录却查不到血缘"的半成品。
+            try:
+                self._lineage.record_quality_run(
+                    scope,
+                    submission_id=submission_id,
+                    run_id=created.run_id,
+                    quality_status=created.status.value,
+                    rule_set_version=created.rule_set_version,
+                    episode_ids=[record.episode_id for record in records],
+                    now=finished_at,
+                )
+            except Exception as exc:  # noqa: BLE001 - 统一转成可识别的血缘写失败
+                raise AnnotationLineageWriteError(
+                    f"质量检查血缘写入失败：run_id={created.run_id}"
+                ) from exc
         self._record(scope, created, request_id=request_id, occurred_at=finished_at)
         self._uow.commit()
         return created

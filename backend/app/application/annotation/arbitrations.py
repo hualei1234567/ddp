@@ -13,6 +13,7 @@ from app.application.annotation.episode_status_projection import (
     project_submission_status,
 )
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
+from app.application.annotation.lineage import AnnotationLineageRecorder
 from app.application.annotation.ports import (
     AnnotationArbitrationRepository,
     AnnotationRecordRepository,
@@ -21,6 +22,7 @@ from app.application.annotation.ports import (
     AuditRepository,
     EpisodeDirectory,
     IdempotencyRepository,
+    LineageRecorder,
     MemberDirectory,
     OutboxRepository,
     UnitOfWork,
@@ -70,6 +72,7 @@ class AnnotationArbitrationUseCases:
         *,
         episodes: EpisodeDirectory | None = None,
         progress: AnnotationProgressRefresher | None = None,
+        lineage: LineageRecorder | None = None,
     ) -> None:
         self._arbitrations = arbitrations
         self._submissions = submissions
@@ -82,6 +85,8 @@ class AnnotationArbitrationUseCases:
         self._uow = uow
         self._episodes = episodes
         self._progress = progress
+        # None 只在纯领域测试装配里出现；生产装配必须传入。
+        self._lineage = AnnotationLineageRecorder(lineage) if lineage is not None else None
 
     def get(self, scope: ProjectScope, arbitration_id: UUID) -> AnnotationArbitration:
         arbitration = self._arbitrations.get(scope, arbitration_id)
@@ -343,6 +348,7 @@ class AnnotationArbitrationUseCases:
             if record_target is AnnotationRecordStatus.APPROVED
             else "reject-with-submission"
         )
+        saved_records = []
         for record in self._records.list_for_submission(scope, saved.submission_id):
             if record.status is not AnnotationRecordStatus.SUBMITTED:
                 continue
@@ -355,7 +361,21 @@ class AnnotationArbitrationUseCases:
                 ),
                 updated_by=scope.actor_id,
             )
-            self._records.save(scope, record_updated, expected_version=record.version)
+            saved_records.append(
+                self._records.save(scope, record_updated, expected_version=record.version)
+            )
+        if (
+            action is AnnotationSubmissionAction.RESOLVE_APPROVED
+            and self._lineage is not None
+            and saved_records
+        ):
+            self._lineage.record_approved_annotations(
+                scope,
+                submission_id=saved.submission_id,
+                submission_version=saved.submission_version,
+                records=saved_records,
+                now=now,
+            )
 
     def _transition_submission(
         self,

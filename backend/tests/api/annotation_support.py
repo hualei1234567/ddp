@@ -43,7 +43,15 @@ def seed_episode(
                 end_time_ns=2_000,
                 duration_ns=1_000,
                 time_domain="UTC",
-                time_base={},
+                # 必须与 ``validate_time_base`` 的契约一致：空对象虽然能直接
+                # 落库，但任何经 Episode 领域读取的接口（例如血缘查询）都会
+                # 报 ``episode_time_base_invalid``，让测试夹具本身失真。
+                time_base={
+                    "time_domain": "UTC",
+                    "clock_source": "HOST_CLOCK",
+                    "sync_method": "PTP",
+                    "sync_status": "VERIFIED",
+                },
                 canonical_schema_version="ddp.canonical/1.0.0-draft",
                 pipeline_id="parser",
                 pipeline_version="1.0.0",
