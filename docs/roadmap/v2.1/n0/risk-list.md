@@ -32,7 +32,7 @@
 | ID | 风险 | 证据 | 概率 | 影响 | 缓解 | 责任 |
 |---|---|---|---|---|---|---|
 | RK-13 | **无分支保护**（私有仓 API 403），可直推 main | 审计 §12.1 R-3；`docs/operations/main-分支保护与评审纪律.md` | 中 | P1 | CI 必过 + 人工评审纪律；所有变更走 PR（本会话已执行） | 用户 |
-| RK-14 | ~~训练 Adapter SSRF 未防护~~ **已修复**（N8-001：`adapter_url_guard.py` + 禁重定向 + 默认拒绝私网；本地例外显式开关） | `test_adapter_url_guard.py` 38 例；单元 1260 passed | 低 | P1 | 剩余：模型平台网关未接同一守卫（Backlog N8-008） | 后端 |
+| RK-14 | ~~Adapter SSRF 未防护~~ **已修复**（N8-001 训练侧 + N8-008 模型侧：同一 `adapter_url_guard.py`、禁重定向、默认拒绝私网；本地例外按出站面分别显式开关） | `test_adapter_url_guard.py` 模型/训练双侧用例；`test_modelops_gateway_chain.py` API 回归；单元 1294 passed | 低 | P1 | 残余：DNS 重绑定 TOCTOU（守卫 docstring 已记录，仅接受部署配置来源前提） | 后端 |
 | RK-15 | 限流 fail-open：Redis 不可用时退化为单机内存限流 | ADR-0031 | 中 | P2 | 监控降级事件；关键写接口另有配额 | 后端 |
 | RK-16 | 未脱敏历史/文档可能含真实邮箱、内网 IP | 用户约束 | 低 | P1 | 提交前扫描；证据只留摘要 | 全体 |
 | RK-17 | 依赖告警积压：14 个 Dependabot PR 未处理（fastapi/alembic/pytest 等大版本） | `gh pr list` | 高 | P2 | 按季度集中升级；先补兼容性测试再合并 | 后端 / 用户 |

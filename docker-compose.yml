@@ -119,8 +119,9 @@ services:
       DDP_TRAINING_ADAPTER_EXECUTION_MODES: ${DDP_TRAINING_ADAPTER_EXECUTION_MODES:-}
       DDP_MODEL_ADAPTER_ENDPOINTS: ${DDP_MODEL_ADAPTER_ENDPOINTS:-}
       # SSRF 守卫例外（默认 false）。本地 `local-adapter` 服务名落在私有网段，
-      # 需要在 .env 中显式置 true 才放行；共享/生产环境必须保持 false。
+      # 需要在 .env 中按出站面分别显式置 true 才放行；共享/生产环境必须保持 false。
       DDP_TRAINING_ADAPTER_ALLOW_PRIVATE: ${DDP_TRAINING_ADAPTER_ALLOW_PRIVATE:-false}
+      DDP_MODEL_ADAPTER_ALLOW_PRIVATE: ${DDP_MODEL_ADAPTER_ALLOW_PRIVATE:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -154,6 +155,7 @@ services:
       DDP_TRAINING_ADAPTER_EXECUTION_MODES: ${DDP_TRAINING_ADAPTER_EXECUTION_MODES:-}
       DDP_MODEL_ADAPTER_ENDPOINTS: ${DDP_MODEL_ADAPTER_ENDPOINTS:-}
       DDP_TRAINING_ADAPTER_ALLOW_PRIVATE: ${DDP_TRAINING_ADAPTER_ALLOW_PRIVATE:-false}
+      DDP_MODEL_ADAPTER_ALLOW_PRIVATE: ${DDP_MODEL_ADAPTER_ALLOW_PRIVATE:-false}
     depends_on:
       postgres:
         condition: service_healthy

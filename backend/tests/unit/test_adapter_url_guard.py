@@ -1,8 +1,9 @@
-"""训练 Adapter 出站 URL 的 SSRF 守卫单元测试。
+"""训练 / 模型 Adapter 出站 URL 的 SSRF 守卫单元测试。
 
 不联网：``socket.getaddrinfo`` 由 monkeypatch 替换，HTTP 传输用
-``httpx.MockTransport``。覆盖验收要求的全部拒绝/放行形态，以及网关层
-"守卫失败 → TrainingAdapterUnavailableError（503）"的映射与重定向不跟随。
+``httpx.MockTransport``。覆盖验收要求的全部拒绝/放行形态，以及两个网关层
+"守卫失败 → *AdapterUnavailableError（503）"的映射、开关独立性与重定向不跟随。
+N8-008 起模型平台网关接线复用同一守卫，规则不在网关里重复实现。
 """
 
 from __future__ import annotations
@@ -16,8 +17,10 @@ import httpx
 import pytest
 from app.core.config import Settings
 from app.domain.datasets.training_errors import TrainingAdapterUnavailableError
+from app.domain.modelops.errors import ModelAdapterUnavailableError
 from app.infrastructure.adapter_http import AdapterHttpFailure
 from app.infrastructure.adapter_url_guard import ensure_safe_adapter_url
+from app.infrastructure.model_platform_http import HttpModelPlatformGateway
 from app.infrastructure.training_adapter_http import HttpTrainingAdapterGateway
 
 _PUBLIC_IP = "93.184.216.34"
@@ -301,3 +304,147 @@ def test_gateway_does_not_follow_redirects() -> None:
 
     assert "HTTP 302" in str(excinfo.value)
     assert len(seen) == 1
+
+
+# ------------------------------------------------------------------ 模型平台网关接线
+
+
+def _model_gateway(
+    endpoint: str,
+    *,
+    client: httpx.Client,
+    **overrides: object,
+) -> HttpModelPlatformGateway:
+    return HttpModelPlatformGateway(
+        _settings(model_adapter_endpoints={"mock": endpoint}, **overrides),
+        client=client,
+    )
+
+
+def _reject_at_transport(request: httpx.Request) -> httpx.Response:  # pragma: no cover
+    """传输层兜底：不安全的 endpoint 根本不应进入 httpx。"""
+    raise AssertionError(f"不安全的模型 Adapter 地址不得进入传输层：{request.url}")
+
+
+def _submit_evaluation(gateway: HttpModelPlatformGateway) -> None:
+    gateway.submit_evaluation(
+        adapter_id="mock",
+        adapter_version="1.0.0",
+        evaluation_id=uuid4(),
+        model_version_id=uuid4(),
+        dataset_version_id=uuid4(),
+        config={},
+    )
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "reason"),
+    [
+        ("http://127.0.0.1:9101", "环回地址"),
+        ("http://[::1]:9101", "环回地址"),
+        ("http://[::ffff:127.0.0.1]:9101", "环回地址"),
+        ("http://10.1.2.3:9101", "私有地址"),
+        ("http://172.16.0.1:9101", "私有地址"),
+        ("http://192.168.1.10:9101", "私有地址"),
+        ("http://169.254.169.254", "链路本地地址"),
+        ("http://0.0.0.0:9101", "未指定地址"),
+        ("http://100.64.0.1:9101", "非公网地址"),
+        ("http://user:pass@93.184.216.34:9101", "不得内嵌凭据"),
+        ("ftp://93.184.216.34:9101", "协议不被允许"),
+    ],
+)
+def test_model_gateway_rejects_unsafe_endpoints(endpoint: str, reason: str) -> None:
+    """私网/环回/元数据/凭据/非 http(s) 在模型网关出站前一律拒绝。"""
+    gateway = _model_gateway(endpoint, client=_client(_reject_at_transport))
+
+    with pytest.raises(ModelAdapterUnavailableError) as excinfo:
+        _submit_evaluation(gateway)
+
+    assert reason in str(excinfo.value)
+    # 复用训练网关的中文前缀口径，排障时能直接看出是哪个 adapter、哪个动作。
+    assert "模型 Adapter mock 提交评测" in str(excinfo.value)
+
+
+def test_model_gateway_rejects_hostname_resolving_to_private_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _fake_dns(monkeypatch, {"model-adapter.internal": [_PUBLIC_IP, "10.0.0.7"]})
+
+    gateway = _model_gateway(
+        "http://model-adapter.internal:9101",
+        client=_client(_reject_at_transport),
+    )
+    with pytest.raises(ModelAdapterUnavailableError) as excinfo:
+        _submit_evaluation(gateway)
+
+    assert "10.0.0.7" in str(excinfo.value)
+
+
+def test_model_gateway_allows_public_endpoint() -> None:
+    """公网 endpoint 不被误杀：评测与推理都照常发出，路径不变。"""
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(202)
+
+    gateway = _model_gateway(f"http://{_PUBLIC_IP}:9101", client=_client(handler))
+    _submit_evaluation(gateway)
+    gateway.submit_inference(
+        adapter_id="mock",
+        adapter_version="1.0.0",
+        task_id=uuid4(),
+        model_version_id=uuid4(),
+        service_id=None,
+        dataset_version_id=None,
+        episode_ids=[],
+        config={},
+    )
+
+    assert [str(request.url) for request in seen] == [
+        f"http://{_PUBLIC_IP}:9101/evaluations",
+        f"http://{_PUBLIC_IP}:9101/inference-tasks",
+    ]
+
+
+def test_model_gateway_allows_local_endpoint_when_model_switch_is_on() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(202)
+
+    gateway = _model_gateway(
+        "http://127.0.0.1:9101",
+        client=_client(handler),
+        model_adapter_allow_private=True,
+    )
+    _submit_evaluation(gateway)
+
+    assert [str(request.url) for request in seen] == ["http://127.0.0.1:9101/evaluations"]
+
+
+def test_training_switch_does_not_open_the_model_gateway() -> None:
+    """两个出站面的开关相互独立：放开训练不得连带放开模型。"""
+    gateway = _model_gateway(
+        "http://127.0.0.1:9101",
+        client=_client(_reject_at_transport),
+        training_adapter_allow_private=True,
+    )
+
+    with pytest.raises(ModelAdapterUnavailableError) as excinfo:
+        _submit_evaluation(gateway)
+
+    assert "环回地址" in str(excinfo.value)
+
+
+def test_model_allow_private_defaults_to_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DDP_MODEL_ADAPTER_ALLOW_PRIVATE", raising=False)
+
+    assert Settings(_env_file=None).model_adapter_allow_private is False
+
+
+def test_model_allow_private_can_be_enabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DDP_MODEL_ADAPTER_ALLOW_PRIVATE", "true")
+
+    assert Settings(_env_file=None).model_adapter_allow_private is True
