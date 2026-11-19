@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -19,6 +19,7 @@ from app.application.idempotency import (
 from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
+from app.domain.collection.artifacts import ArtifactCursor, CaptureSessionArtifact
 from app.domain.collection.assets import ActionSpec, CollectionPlan, CollectionSop, Scenario
 from app.domain.collection.enums import (
     CaptureSessionStatus,
@@ -133,6 +134,22 @@ class CaptureSessionRepository(Protocol):
         *,
         expected_version: int,
     ) -> CaptureSession: ...
+
+
+class CaptureSessionArtifactRepository(Protocol):
+    """会话产物只读投影；跨 RawAsset / Episode 两张权威表。
+
+    只读：产物归属由各自创建链路写入，本仓储不提供任何写方法。
+    """
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        session_id: UUID,
+        after: ArtifactCursor | None = None,
+        limit: int = 20,
+    ) -> Sequence[CaptureSessionArtifact]: ...
 
 
 class AssignmentDirectory(Protocol):

@@ -99,6 +99,7 @@ class UploadSession:
     allowed_content_types: tuple[str, ...]
     collection_task_id: UUID | None = None
     batch_id: UUID | None = None
+    capture_session_id: UUID | None = None
     status: UploadSessionStatus | str = UploadSessionStatus.CREATED
     expected_sha256: str | None = None
     format_hint: RawAssetFormat | str | None = None
@@ -165,6 +166,7 @@ class UploadSession:
         for name in (
             "collection_task_id",
             "batch_id",
+            "capture_session_id",
             "deduplicated_asset_id",
             "asset_id",
             "validation_job_id",
@@ -347,6 +349,7 @@ class RawAsset:
     collection_task_id: UUID | None = None
     batch_id: UUID | None = None
     upload_session_id: UUID | None = None
+    capture_session_id: UUID | None = None
     captured_at: datetime | None = None
     device_ids: tuple[UUID, ...] = ()
     sensor_ids: tuple[UUID, ...] = ()
@@ -398,6 +401,7 @@ class RawAsset:
             "collection_task_id",
             "batch_id",
             "upload_session_id",
+            "capture_session_id",
             "retention_policy_id",
             "duplicate_of_asset_id",
         ):

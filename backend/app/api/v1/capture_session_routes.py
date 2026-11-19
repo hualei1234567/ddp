@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, Header, Query, Request
 from app.api.deps import get_project_scope, get_write_scope, request_id
 from app.api.v1.capture_session_schemas import (
     CaptureSessionActionRequest,
+    CaptureSessionArtifactOut,
     CaptureSessionCreate,
     CaptureSessionOut,
 )
@@ -84,6 +85,33 @@ def get_capture_session(
     use_cases: CollectionUseCasesDep,
 ) -> CaptureSessionOut:
     return CaptureSessionOut.from_domain(use_cases.sessions.get_session(scope, session_id))
+
+
+@router.get(
+    "/capture-sessions/{session_id}/artifacts",
+    response_model=PageOut[CaptureSessionArtifactOut],
+)
+def list_capture_session_artifacts(
+    session_id: UUID,
+    scope: ReadScope,
+    use_cases: CollectionUseCasesDep,
+    cursor: Annotated[str | None, Query(max_length=512)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> PageOut[CaptureSessionArtifactOut]:
+    """列出归属该会话的 RawAsset / Episode（只读、复合游标分页）。
+
+    会话不存在或跨项目一律 404；会话存在但尚未产出时返回空页，不是 404。
+    """
+    page = use_cases.sessions.list_artifacts(
+        scope,
+        session_id,
+        cursor=cursor,
+        limit=limit,
+    )
+    return PageOut(
+        items=[CaptureSessionArtifactOut.from_domain(item) for item in page.items],
+        next_cursor=page.next_cursor,
+    )
 
 
 @router.post(

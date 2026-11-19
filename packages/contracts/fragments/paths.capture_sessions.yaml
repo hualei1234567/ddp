@@ -131,3 +131,38 @@ captureSessionActions:
       "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
       "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+captureSessionArtifacts:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: session_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  get:
+    operationId: listCaptureSessionArtifacts
+    tags: [collection]
+    summary: 会话产物（RawAsset / Episode）只读列表
+    description: |
+      返回归属该采集会话的 RawAsset 与 Episode，按 `(created_at DESC, kind ASC,
+      artifact_id ASC)` 复合键集分页。`kind` 区分 `RAW_ASSET` / `EPISODE`。
+
+      会话不存在或跨项目一律 404；会话存在但尚未产出时返回空页（`items: []`），
+      不是 404——「会话存在但还没产出」是合法状态，不是探测入口。
+
+      产物归属由各自创建链路写入（上传完成时复制到 RawAsset、Episode 创建时
+      携带），本端点只读，不提供绑定/解绑动作。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: 会话产物分页
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/CaptureSessionArtifactPage"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}

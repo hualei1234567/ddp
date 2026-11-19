@@ -183,13 +183,14 @@ UploadPartSummary:
     recorded_at: {type: string, format: date-time}
 UploadSession:
   type: object
-  required: [upload_session_id, project_id, collection_task_id, batch_id, status, verification_status, verification_error_code, verified_at, original_filename, declared_content_type, declared_size_bytes, expected_sha256, format_hint, part_size_bytes, max_size_bytes, allowed_content_types, object_key_prefix, object_key, expires_at, completed_at, aborted_at, failure_code, failure_summary, uploaded_bytes, uploaded_part_count, missing_part_numbers, uploaded_parts, deduplicated, deduplicated_asset_id, asset_id, version, created_at, updated_at, created_by]
+  required: [upload_session_id, project_id, collection_task_id, batch_id, capture_session_id, status, verification_status, verification_error_code, verified_at, original_filename, declared_content_type, declared_size_bytes, expected_sha256, format_hint, part_size_bytes, max_size_bytes, allowed_content_types, object_key_prefix, object_key, expires_at, completed_at, aborted_at, failure_code, failure_summary, uploaded_bytes, uploaded_part_count, missing_part_numbers, uploaded_parts, deduplicated, deduplicated_asset_id, asset_id, version, created_at, updated_at, created_by]
   additionalProperties: false
   properties:
     upload_session_id: {type: string, format: uuid}
     project_id: {type: string, format: uuid}
     collection_task_id: {type: [string, "null"], format: uuid}
     batch_id: {type: [string, "null"], format: uuid}
+    capture_session_id: {type: [string, "null"], format: uuid}
     status: {$ref: "#/UploadSessionStatus"}
     verification_status: {$ref: "#/UploadVerificationStatus"}
     verification_error_code: {type: [string, "null"], maxLength: 64}
@@ -227,6 +228,7 @@ UploadSessionCreate:
   properties:
     collection_task_id: {type: [string, "null"], format: uuid}
     batch_id: {type: [string, "null"], format: uuid}
+    capture_session_id: {type: [string, "null"], format: uuid}
     original_filename: {type: string, minLength: 1, maxLength: 255}
     declared_content_type: {type: string, minLength: 1, maxLength: 200}
     declared_size_bytes: {type: integer, minimum: 1}
@@ -300,7 +302,7 @@ CompleteUploadRequest:
     metadata: {type: object, additionalProperties: true}
 RawAsset:
   type: object
-  required: [asset_id, project_id, code, source_type, collection_task_id, batch_id, upload_session_id, original_filename, object_key, size_bytes, content_type, format, sha256, status, captured_at, ingested_at, device_ids, sensor_ids, sensor_snapshot, device_time_raw, raw_metadata, storage_class, retention_policy_id, quarantine_reason, quarantine_codes, scan_report_key, verified_at, archived_at, tombstoned_at, duplicate_of_asset_id, uploaded_by, version, created_at, updated_at, created_by, updated_by, allowed_actions]
+  required: [asset_id, project_id, code, source_type, collection_task_id, batch_id, upload_session_id, capture_session_id, original_filename, object_key, size_bytes, content_type, format, sha256, status, captured_at, ingested_at, device_ids, sensor_ids, sensor_snapshot, device_time_raw, raw_metadata, storage_class, retention_policy_id, quarantine_reason, quarantine_codes, scan_report_key, verified_at, archived_at, tombstoned_at, duplicate_of_asset_id, uploaded_by, version, created_at, updated_at, created_by, updated_by, allowed_actions]
   additionalProperties: false
   properties:
     asset_id: {type: string, format: uuid}
@@ -310,6 +312,7 @@ RawAsset:
     collection_task_id: {type: [string, "null"], format: uuid}
     batch_id: {type: [string, "null"], format: uuid}
     upload_session_id: {type: [string, "null"], format: uuid}
+    capture_session_id: {type: [string, "null"], format: uuid}
     original_filename: {type: string, minLength: 1, maxLength: 255}
     object_key: {type: string, maxLength: 1024}
     size_bytes: {type: integer, minimum: 1}
@@ -512,7 +515,7 @@ CalibrationSnapshotItem:
     schema_version: {type: string, minLength: 1, maxLength: 64}
 Episode:
   type: object
-  required: [episode_id, project_id, episode_lineage_id, episode_version, code, task_id, batch_id, robot_id, device_ids, sensor_ids, status, quality_status, annotation_status, success, failure_reason, readiness_blockers, scene_labels, language_instruction, start_time_ns, end_time_ns, duration_ns, time_base, canonical_schema_version, pipeline_id, pipeline_version, segmentation_rule_version, frame_count, calibration_snapshot, manifest_key, manifest_sha256, preview_refs, supersedes_id, attempt, max_attempts, version, created_at, updated_at, created_by, updated_by, allowed_actions]
+  required: [episode_id, project_id, episode_lineage_id, episode_version, code, task_id, batch_id, robot_id, capture_session_id, device_ids, sensor_ids, status, quality_status, annotation_status, success, failure_reason, readiness_blockers, scene_labels, language_instruction, start_time_ns, end_time_ns, duration_ns, time_base, canonical_schema_version, pipeline_id, pipeline_version, segmentation_rule_version, frame_count, calibration_snapshot, manifest_key, manifest_sha256, preview_refs, supersedes_id, attempt, max_attempts, version, created_at, updated_at, created_by, updated_by, allowed_actions]
   additionalProperties: false
   properties:
     episode_id: {type: string, format: uuid}
@@ -522,6 +525,7 @@ Episode:
     code: {type: string, minLength: 1, maxLength: 64}
     task_id: {type: [string, "null"], format: uuid}
     batch_id: {type: [string, "null"], format: uuid}
+    capture_session_id: {type: [string, "null"], format: uuid}
     robot_id: {type: [string, "null"], format: uuid}
     device_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
     sensor_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
@@ -600,6 +604,7 @@ EpisodeCreate:
     code: {type: [string, "null"], minLength: 1, maxLength: 64}
     task_id: {type: [string, "null"], format: uuid}
     batch_id: {type: [string, "null"], format: uuid}
+    capture_session_id: {type: [string, "null"], format: uuid}
     robot_id: {type: [string, "null"], format: uuid}
     device_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
     sensor_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}

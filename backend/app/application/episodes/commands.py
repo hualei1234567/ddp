@@ -22,6 +22,7 @@ class CreateEpisodeCommand:
     task_id: UUID | None = None
     batch_id: UUID | None = None
     robot_id: UUID | None = None
+    capture_session_id: UUID | None = None
     device_ids: tuple[UUID, ...] = ()
     sensor_ids: tuple[UUID, ...] = ()
     scene_labels: tuple[str, ...] = ()

@@ -74,3 +74,26 @@ CaptureSessionPage:
   properties:
     items: {type: array, items: {$ref: "#/CaptureSession"}}
     next_cursor: {type: [string, "null"]}
+
+CaptureSessionArtifactKind:
+  type: string
+  enum: [RAW_ASSET, EPISODE]
+
+CaptureSessionArtifact:
+  type: object
+  required: [kind, artifact_id, code, status, created_at]
+  additionalProperties: false
+  properties:
+    kind: {$ref: "#/CaptureSessionArtifactKind"}
+    artifact_id: {type: string, format: uuid}
+    code: {type: string, minLength: 1, maxLength: 64}
+    status: {type: string, minLength: 1, maxLength: 32}
+    created_at: {type: string, format: date-time}
+
+CaptureSessionArtifactPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/CaptureSessionArtifact"}}
+    next_cursor: {type: [string, "null"]}

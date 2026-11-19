@@ -13,6 +13,10 @@ from datetime import UTC, datetime
 from types import MappingProxyType
 from uuid import UUID, uuid4
 
+from app.application.collection.artifact_cursor import (
+    decode_artifact_cursor,
+    encode_artifact_cursor,
+)
 from app.application.collection.audit import record_change
 from app.application.collection.commands import NewCaptureSession
 from app.application.collection.idempotency import IdempotencyGuard, validate_key
@@ -25,6 +29,7 @@ from app.application.collection.pagination import (
 from app.application.collection.ports import (
     AssignmentDirectory,
     AuditRepository,
+    CaptureSessionArtifactRepository,
     CaptureSessionRepository,
     CollectionBatchRepository,
     CollectionTaskRepository,
@@ -33,6 +38,7 @@ from app.application.collection.ports import (
     UnitOfWork,
 )
 from app.application.locations.ports import LocationDirectory
+from app.domain.collection.artifacts import ArtifactCursor, CaptureSessionArtifact
 from app.domain.collection.enums import (
     PUBLIC_CAPTURE_SESSION_ACTIONS,
     CaptureSessionStatus,
@@ -76,6 +82,7 @@ class CaptureSessionUseCases:
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        artifacts: CaptureSessionArtifactRepository | None = None,
     ) -> None:
         self._sessions = sessions
         self._tasks = tasks
@@ -86,6 +93,7 @@ class CaptureSessionUseCases:
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        self._artifacts = artifacts
 
     def list_sessions(
         self,
@@ -113,6 +121,33 @@ class CaptureSessionUseCases:
         if session is None:
             raise ResourceNotFoundError("采集会话", session_id)
         return session
+
+    def list_artifacts(
+        self,
+        scope: ProjectScope,
+        session_id: UUID,
+        *,
+        cursor: str | None = None,
+        limit: int = 20,
+    ) -> Page[CaptureSessionArtifact]:
+        """列出归属该会话的 RawAsset / Episode。
+
+        先校验会话同项目存在（跨项目 404），再查产物；空页返回空列表而非
+        404——"会话存在但尚未产出"是合法状态，不是探测入口。
+        """
+        if self._artifacts is None:
+            raise RuntimeError("采集会话用例缺少产物只读依赖")
+        self.get_session(scope, session_id)
+        bounded_limit = normalize_limit(limit)
+        items = list(
+            self._artifacts.list(
+                scope,
+                session_id=session_id,
+                after=decode_artifact_cursor(cursor),
+                limit=bounded_limit + 1,
+            )
+        )
+        return _build_artifact_page(items, limit=bounded_limit)
 
     def create_session(
         self,
@@ -363,3 +398,25 @@ def _reason(payload: Mapping[str, object] | None) -> str | None:
         return None
     value = payload.get("reason")
     return value if isinstance(value, str) else None
+
+
+def _build_artifact_page(
+    items: list[CaptureSessionArtifact],
+    *,
+    limit: int,
+) -> Page[CaptureSessionArtifact]:
+    """复合游标分页：多取一条判断是否还有下一页。"""
+    if len(items) <= limit:
+        return Page(items=items, next_cursor=None)
+    visible = items[:limit]
+    last = visible[-1]
+    return Page(
+        items=visible,
+        next_cursor=encode_artifact_cursor(
+            ArtifactCursor(
+                created_at=last.created_at,
+                kind=last.kind,
+                artifact_id=last.artifact_id,
+            )
+        ),
+    )

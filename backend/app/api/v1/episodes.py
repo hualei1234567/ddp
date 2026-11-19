@@ -79,6 +79,7 @@ def create_episode(
             task_id=payload.task_id,
             batch_id=payload.batch_id,
             robot_id=payload.robot_id,
+            capture_session_id=payload.capture_session_id,
             device_ids=tuple(payload.device_ids),
             sensor_ids=tuple(payload.sensor_ids),
             scene_labels=tuple(payload.scene_labels),
