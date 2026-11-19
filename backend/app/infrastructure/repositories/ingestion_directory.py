@@ -1,4 +1,4 @@
-"""上传会话引用的采集任务/批次存在性适配。"""
+"""上传会话引用的采集任务/批次/会话存在性适配。"""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.identity.models import ProjectScope
+from app.infrastructure.db.models.capture_session import CaptureSessionModel
 from app.infrastructure.db.models.collection import CollectionBatch, CollectionTask
 
 
@@ -36,6 +37,15 @@ class SqlCollectionDirectory:
                 CollectionBatch.id == batch_id,
                 CollectionBatch.project_id == scope.project_id,
                 CollectionBatch.task_id == task_id,
+            )
+        )
+        return row is not None
+
+    def capture_session_exists(self, scope: ProjectScope, session_id: UUID) -> bool:
+        row = self._session.scalar(
+            select(CaptureSessionModel.id).where(
+                CaptureSessionModel.id == session_id,
+                CaptureSessionModel.project_id == scope.project_id,
             )
         )
         return row is not None

@@ -31,6 +31,7 @@ class UploadSessionCreate(BaseModel):
     declared_size_bytes: int = Field(gt=0)
     collection_task_id: UUID | None = None
     batch_id: UUID | None = None
+    capture_session_id: UUID | None = None
     expected_sha256: str | None = Field(default=None, pattern=_SHA256_PATTERN)
     format_hint: str | None = Field(default=None, pattern=_FORMAT_PATTERN)
     part_size_bytes: int | None = Field(default=None, gt=0)
@@ -100,6 +101,7 @@ class UploadSessionOut(BaseModel):
     project_id: UUID
     collection_task_id: UUID | None
     batch_id: UUID | None
+    capture_session_id: UUID | None
     status: str
     verification_status: str
     verification_error_code: str | None
@@ -209,6 +211,7 @@ class RawAssetOut(BaseModel):
     collection_task_id: UUID | None
     batch_id: UUID | None
     upload_session_id: UUID | None
+    capture_session_id: UUID | None
     original_filename: str
     object_key: str
     size_bytes: int
@@ -251,6 +254,7 @@ class RawAssetOut(BaseModel):
             collection_task_id=asset.collection_task_id,
             batch_id=asset.batch_id,
             upload_session_id=asset.upload_session_id,
+            capture_session_id=asset.capture_session_id,
             original_filename=asset.original_filename,
             object_key=asset.object_key,
             size_bytes=asset.size_bytes,
@@ -337,6 +341,7 @@ def _session_out(
         project_id=session.project_id,
         collection_task_id=session.collection_task_id,
         batch_id=session.batch_id,
+        capture_session_id=session.capture_session_id,
         status=_value(session.status),
         verification_status=_value(session.verification_status),
         verification_error_code=session.verification_error_code,

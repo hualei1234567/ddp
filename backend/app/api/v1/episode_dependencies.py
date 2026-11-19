@@ -25,6 +25,7 @@ from app.infrastructure.repositories.episodes import (
     SqlEpisodeRawAssetRepository,
     SqlEpisodeRepository,
 )
+from app.infrastructure.repositories.ingestion_directory import SqlCollectionDirectory
 from app.infrastructure.repositories.ingestion_jobs import SqlIngestionJobRepository
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
@@ -62,6 +63,8 @@ def build_episode_service(
         # 同一个 readiness 服务同时供 HTTP ready 的门禁使用：两条路径共用
         # 一套判定，避免"自动就绪被拒、手工 ready 放行"的口径分裂。
         readiness=build_readiness_service(session),
+        # 会话归属校验复用上传链路同一个存在性适配器，不另写一份项目过滤。
+        capture_sessions=SqlCollectionDirectory(session),
     )
 
 

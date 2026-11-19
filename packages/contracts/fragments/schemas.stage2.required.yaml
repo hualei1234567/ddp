@@ -13,6 +13,7 @@ EpisodeCreate:
     code: {type: [string, "null"], minLength: 1, maxLength: 64}
     task_id: {type: [string, "null"], format: uuid}
     batch_id: {type: [string, "null"], format: uuid}
+    capture_session_id: {type: [string, "null"], format: uuid}
     robot_id: {type: [string, "null"], format: uuid}
     device_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}
     sensor_ids: {type: array, items: {type: string, format: uuid}, uniqueItems: true}

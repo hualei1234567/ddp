@@ -620,6 +620,7 @@ class UploadCompletionService:
             collection_task_id=session.collection_task_id,
             batch_id=session.batch_id,
             upload_session_id=session.upload_session_id,
+            capture_session_id=session.capture_session_id,
             original_filename=session.original_filename,
             object_key=session.object_key,
             size_bytes=session.declared_size_bytes,

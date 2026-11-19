@@ -168,6 +168,7 @@ class UploadSessionUseCases:
             scope,
             command.collection_task_id,
             command.batch_id,
+            command.capture_session_id,
         )
 
         asset_id = uuid4()
@@ -183,6 +184,7 @@ class UploadSessionUseCases:
             project_id=scope.project_id,
             collection_task_id=command.collection_task_id,
             batch_id=command.batch_id,
+            capture_session_id=command.capture_session_id,
             original_filename=filename,
             declared_content_type=content_type,
             declared_size_bytes=declared_size,
@@ -634,6 +636,7 @@ class UploadSessionUseCases:
         scope: ProjectScope,
         task_id: UUID | None,
         batch_id: UUID | None,
+        capture_session_id: UUID | None,
     ) -> None:
         if batch_id is not None and task_id is None:
             raise DomainValidationError("batch_id 必须与 collection_task_id 同时提供")
@@ -647,6 +650,12 @@ class UploadSessionUseCases:
                 task_id=task_id,
             ):
                 raise ResourceNotFoundError("采集批次", batch_id)
+        # 会话归属：只允许同项目；跨项目按 404 处理，不泄漏资源是否存在。
+        if capture_session_id is not None and not self._directory.capture_session_exists(
+            scope,
+            capture_session_id,
+        ):
+            raise ResourceNotFoundError("采集会话", capture_session_id)
 
 
 def _ack_result(part: UploadPart, parts: list[UploadPart]) -> AckUploadPartResult:
