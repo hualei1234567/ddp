@@ -12,8 +12,10 @@ import type {
   AnnotationTaskCreateInput,
   DoubleAnnotationConsistency,
 } from "../types/annotation";
+import type { AnnotationOverdueSummary } from "../types/annotationOverdue";
 import type { WithAllowedActions } from "./annotationAllowedActions";
 import type { ApiClient } from "./api";
+import { parseAnnotationOverdueSummary } from "./annotationOverdueParsers";
 import { parseDoubleAnnotationConsistency } from "./annotationRecordParsers";
 import {
   parseAnnotationAssignment,
@@ -40,6 +42,7 @@ import {
   requireIdentifier,
   type PageRequestOptions,
 } from "./projectScope";
+import { ContractValidationError } from "./validation";
 
 /** 新建批次（后端 `AnnotationBatchCreate`）。 */
 export interface AnnotationBatchCreateInput {
@@ -90,6 +93,11 @@ export interface AnnotationTaskApi {
     taskId: string,
     options?: DetailRequestOptions,
   ) => Promise<DoubleAnnotationConsistency>;
+  /** 项目级逾期汇总（只读）；服务端强制 project_id 隔离。 */
+  getOverdueSummary: (
+    projectId: string,
+    options?: DetailRequestOptions,
+  ) => Promise<AnnotationOverdueSummary>;
   actOnTask: (
     projectId: string,
     taskId: string,
@@ -208,6 +216,21 @@ export function createAnnotationTaskApi(client: ApiClient): AnnotationTaskApi {
             projectId,
             "双标一致性",
           ),
+      });
+    },
+
+    async getOverdueSummary(projectId, options) {
+      return client.get(projectPath(projectId, "/annotation-overdue-summary"), {
+        signal: options?.signal,
+        validate: (value) => {
+          const summary = parseAnnotationOverdueSummary(value);
+          if (summary.project_id !== projectId) {
+            throw new ContractValidationError(
+              "逾期汇总.project_id 与请求路径不一致",
+            );
+          }
+          return summary;
+        },
       });
     },
 

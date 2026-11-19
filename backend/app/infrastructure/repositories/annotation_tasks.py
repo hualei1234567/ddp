@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.domain.annotation.errors import DomainValidationError
+from app.domain.annotation.overdue_summary import OVERDUE_BUCKETS, OverdueGroup
 from app.domain.annotation.task import SLA_CLOSED_STATUSES, AnnotationTask
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.annotation_work import (
@@ -36,6 +37,29 @@ def _overdue_condition(now: datetime):
         AnnotationTaskModel.due_at < now,
         AnnotationTaskModel.status.not_in(_CLOSED_STATUS_VALUES),
     )
+
+
+def _overdue_bucket_expression(now: datetime):
+    """由 ``OVERDUE_BUCKETS`` 生成分桶 ``CASE``；阈值只存在于领域常量一处。
+
+    条件按桶顺序短路求值：``due_at > now - upper`` 为假即落入更长的桶；
+    最后一个无上界桶作为 ``else``，不需要重复写阈值。
+    """
+    whens: list[tuple[object, str]] = []
+    fallback: str | None = None
+    for definition in OVERDUE_BUCKETS:
+        if definition.upper_bound_hours is None:
+            fallback = definition.bucket.value
+            continue
+        whens.append(
+            (
+                AnnotationTaskModel.due_at > now - timedelta(hours=definition.upper_bound_hours),
+                definition.bucket.value,
+            )
+        )
+    if fallback is None:  # pragma: no cover - 领域常量保证了兜底桶存在
+        raise RuntimeError("逾期分桶缺少无上界兜底桶")
+    return case(*whens, else_=fallback)
 
 
 class SqlAnnotationTaskRepository:
@@ -253,6 +277,41 @@ class SqlAnnotationTaskRepository:
             select(func.count()).select_from(AnnotationTaskModel).where(_overdue_condition(now))
         )
         return int(total or 0)
+
+    def overdue_groups(self, scope: ProjectScope, now: datetime) -> list[OverdueGroup]:
+        """按「优先级 × 状态 × 逾期分桶」聚合**本项目**逾期任务；只读。
+
+        与跨项目的 ``count_overdue`` / ``list_overdue_candidates`` 不同：汇总卡片
+        是项目内视图，``project_id`` 由服务端作用域强制，绝不接受客户端声明。
+        分桶在 SQL 内完成（避免把每条逾期任务拉到应用层），结果行数上界是
+        ``优先级数 × 状态数 × 桶数``，不随任务总量增长。
+        """
+        bucket = _overdue_bucket_expression(now)
+        statement = (
+            select(
+                AnnotationTaskModel.priority,
+                AnnotationTaskModel.status,
+                bucket.label("bucket"),
+                func.count().label("group_count"),
+                func.min(AnnotationTaskModel.due_at).label("earliest_due_at"),
+            )
+            .where(
+                AnnotationTaskModel.project_id == scope.project_id,
+                _overdue_condition(now),
+            )
+            .group_by(AnnotationTaskModel.priority, AnnotationTaskModel.status, bucket)
+        )
+        rows = self._session.execute(statement).all()
+        return [
+            OverdueGroup(
+                priority=row.priority,
+                status=row.status,
+                bucket=row.bucket,
+                count=int(row.group_count),
+                earliest_due_at=as_utc(row.earliest_due_at),
+            )
+            for row in rows
+        ]
 
     def list_overdue_candidates(
         self,

@@ -26,9 +26,9 @@
 
 | 项 | 值 | 证据 |
 |---|---|---|
-| 契约版本 | **1.23.0**（P11：采集会话 1.22.0、MOCK/DRY_RUN 执行器 1.23.0） | `packages/contracts/openapi.yaml:4` |
-| 路径数 | **238** | `grep -c '^  /' packages/contracts/openapi.yaml` |
-| operationId 数 | **314** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
+| 契约版本 | **1.24.0**（P11：采集会话 1.22.0、MOCK/DRY_RUN 执行器 1.23.0、项目级逾期汇总 1.24.0） | `packages/contracts/openapi.yaml:4` |
+| 路径数 | **239** | `grep -c '^  /' packages/contracts/openapi.yaml` |
+| operationId 数 | **319** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
 | 冻结基线 | stage2–stage7 共 6 份 bundle + SHA256 | `packages/contracts/baselines/` |
 | 一致性检查 | 通过；**基线内已接受 62 项差异**（含 9 条生效契约超前错误码、1 条映射表无产生点） | `python3 scripts/check_contract_parity.py --strict` |
 | Lint | Redocly `@redocly/cli@1.34.24`（CI job） | `.github/workflows/ci.yml` |

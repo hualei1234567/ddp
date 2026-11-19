@@ -3,6 +3,7 @@ import { Button, Grid, Select, Space, Typography } from "antd";
 import { useCallback } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
+import OverdueSummaryCard from "../../components/annotation/OverdueSummaryCard";
 import TaskListBody from "../../components/annotation/TaskListBody";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageContainer from "../../components/ui/PageContainer";
@@ -102,6 +103,7 @@ function TaskListContent({
         </Space>
       }
     >
+      <OverdueSummaryCard projectId={projectId} />
       {phase === "forbidden" && error ? (
         <ApiErrorState error={error} onRetry={reload} />
       ) : (

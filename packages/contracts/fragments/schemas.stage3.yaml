@@ -593,3 +593,71 @@ SchemaPresetCatalog:
     items:
       type: array
       items: {$ref: "#/SchemaPreset"}
+
+# N6-002 收尾：项目级逾期汇总（只读）。
+#
+# 所有计数由同一批聚合行派生，服务端保证 `total_overdue` 等于
+# `by_priority` / `by_status` / `buckets` 各自计数之和。
+# `by_status` 只列出实际出现过的状态；`by_priority` 与 `buckets` 是封闭集合，
+# 零值也显式返回，客户端据此渲染固定顺序。
+# 分桶边界由服务端领域常量给出（`domain/annotation/overdue_summary.py`
+# 的 `OVERDUE_BUCKET_HOURS`），响应回传边界，客户端不得自行推导。
+AnnotationOverdueSummary:
+  type: object
+  required:
+    - project_id
+    - evaluated_at
+    - total_overdue
+    - earliest_due_at
+    - by_priority
+    - by_status
+    - buckets
+  additionalProperties: false
+  properties:
+    project_id: {type: string, format: uuid}
+    evaluated_at:
+      type: string
+      format: date-time
+      description: 服务端计算分桶所用的“现在”；客户端据此解释边界，不取本地时间。
+    total_overdue: {type: integer, minimum: 0}
+    earliest_due_at:
+      type: [string, "null"]
+      format: date-time
+      description: 逾期任务里最早的 `due_at`；没有逾期任务时为 null。
+    by_priority:
+      type: array
+      items: {$ref: "#/OverduePriorityCount"}
+    by_status:
+      type: array
+      items: {$ref: "#/OverdueStatusCount"}
+    buckets:
+      type: array
+      items: {$ref: "#/OverdueBucketCount"}
+
+OverduePriorityCount:
+  type: object
+  required: [priority, count]
+  additionalProperties: false
+  properties:
+    priority: {type: string, enum: [P0, P1, P2, P3]}
+    count: {type: integer, minimum: 0}
+
+OverdueStatusCount:
+  type: object
+  required: [status, count]
+  additionalProperties: false
+  properties:
+    status: {$ref: "#/AnnotationTaskStatus"}
+    count: {type: integer, minimum: 0}
+
+OverdueBucketCount:
+  type: object
+  required: [bucket, count, lower_bound_hours, upper_bound_hours]
+  additionalProperties: false
+  properties:
+    bucket: {type: string, enum: [LT_24H, D1_TO_D3, GT_3D]}
+    count: {type: integer, minimum: 0}
+    lower_bound_hours: {type: integer, minimum: 0}
+    upper_bound_hours:
+      type: [integer, "null"]
+      description: 分桶上界（小时，左闭右开）；null 表示无上界。
