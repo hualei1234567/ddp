@@ -1,14 +1,18 @@
-"""处理阶段处理器（N4-002 / N4-005）。
+"""处理阶段处理器（N4-002 / N4-005 / N4-002 增量）。
 
 从编排器中拆出，保持"编排"与"阶段能力"两块各自小于评审阈值：
 
 - ``FILE_VALIDATION`` 有真实落点：只用对象存储的标量元数据（``object_size``）
   校验 ``input_refs`` 指向的对象存在，不把对象本体读进内存；
+- ``METADATA_EXTRACTION`` / ``FORMAT_PARSING`` 由
+  :mod:`app.application.processing.metadata_stage` 实现：只读对象元数据
+  （MP4/Parquet/MCAP）并投影为既有 Canonical 只读结构或阶段产物引用；
 - ``QUALITY_PRE_CHECK`` 由 :mod:`app.application.processing.quality_stage` 实现，
   对本次运行关联的 Episode 逐个执行既有统一质量引擎；
-- 其余六个阶段仍**没有真实实现**，一律由 :class:`SkippedStage` 显式 SKIPPED
-  并写明原因——把未实现写成 ``SUCCEEDED`` 会让"处理完成"变成谎话，也会让
-  下游误以为已有产物。
+- 其余四个阶段（``TIME_ALIGNMENT`` / ``CALIBRATION_VALIDATION`` /
+  ``EPISODE_SEGMENTATION`` / ``DATA_CLEANING``）仍**没有真实实现**，一律由
+  :class:`SkippedStage` 显式 SKIPPED 并写明原因——把未实现写成 ``SUCCEEDED``
+  会让"处理完成"变成谎话，也会让下游误以为已有产物。
 
 阶段处理器是纯函数式对象：输入 :class:`StageContext`，返回
 :class:`StageOutcome`；可预期失败抛 :class:`StageFailure`，由编排器脱敏落库。
@@ -78,7 +82,7 @@ class SkippedStage:
 _PROJECT_SCOPED_ROOTS = frozenset({"raw", "canonical"})
 
 
-def _is_project_scoped(ref: str, project_id: str) -> bool:
+def is_project_scoped(ref: str, project_id: str) -> bool:
     """``<root>/<project_id>/...`` 形式才允许被探测；其余一律拒绝。"""
     if not isinstance(ref, str) or not ref:
         return False
@@ -106,7 +110,7 @@ class FileValidationHandler:
             # 都能用一个猜到的 key 探测别的项目里对象是否存在、有多大
             # （`object_missing` 与"合计 N 字节"就是两个可观测侧信道），
             # 直接绕过服务端强制 project_id 隔离。
-            if not _is_project_scoped(ref, project_id):
+            if not is_project_scoped(ref, project_id):
                 raise StageFailure(
                     "input_ref_not_project_scoped",
                     "输入引用必须属于当前项目",
@@ -130,37 +134,44 @@ class FileValidationHandler:
         )
 
 
-#: 无真实实现阶段的跳过原因。逐阶段写明原因，方便前端与排障一眼看出
-#: "为什么这条流水线没有产出"，而不是只看到一个笼统的 SKIPPED。
+#: 无真实实现阶段的跳过原因。逐阶段写明"缺什么、依赖哪个任务"，方便前端与
+#: 排障一眼看出"为什么这条流水线没有产出"，而不是只看到一个笼统的 SKIPPED。
 STAGE_SKIP_REASONS: Mapping[ProcessingStage, str] = {
-    ProcessingStage.METADATA_EXTRACTION: (
-        "无可复用的元数据解析产物：当前元数据解析发生在数据源导入链路，"
-        "ProcessingRun 尚无独立解析产物落库语义"
+    ProcessingStage.TIME_ALIGNMENT: (
+        "缺少帧级多模态时间对齐能力（依赖 N3 多模态 Pipeline：跨相机/IMU/关节流的"
+        "统一时钟与插值），当前流水线没有真实时间对齐输入流"
     ),
-    ProcessingStage.FORMAT_PARSING: (
-        "无真实解析器接入：数据集格式解析由导入 Adapter 负责，本阶段尚未接线"
+    ProcessingStage.CALIBRATION_VALIDATION: (
+        "缺少标定版本快照与真实传感器数据（依赖设备域标定记录接入处理运行），" "本阶段尚未接线"
     ),
-    ProcessingStage.TIME_ALIGNMENT: ("需要帧级多模态时间对齐能力（N3），当前流水线没有真实输入流"),
-    ProcessingStage.CALIBRATION_VALIDATION: ("需要标定版本快照与真实传感器数据，本阶段尚未接入"),
     ProcessingStage.EPISODE_SEGMENTATION: (
-        "切片入口在导入链路（POST /data-source-imports/{id}/episodes），本阶段尚未接线"
+        "切片入口在导入链路（POST /data-source-imports/{id}/episodes），"
+        "帧级切片依赖 N3 多模态 Pipeline，本阶段尚未接线"
     ),
-    ProcessingStage.DATA_CLEANING: "清洗规则尚未接入处理运行，本阶段没有真实实现",
+    ProcessingStage.DATA_CLEANING: (
+        "清洗规则尚未接入处理运行（缺少规则集版本与清洗产物落库语义），本阶段没有真实实现"
+    ),
 }
 
 
 def default_handlers(
     inspector: InputObjectInspector,
     *,
+    metadata_extraction: StageHandler,
+    format_parsing: StageHandler,
     quality_check: StageHandler,
 ) -> dict[ProcessingStage, StageHandler]:
-    """默认阶段表：``FILE_VALIDATION`` 与 ``QUALITY_PRE_CHECK`` 有真实落点。
+    """默认阶段表：``FILE_VALIDATION`` / ``METADATA_EXTRACTION`` /
+    ``FORMAT_PARSING`` / ``QUALITY_PRE_CHECK`` 有真实落点，其余四个显式 SKIPPED。
 
-    ``quality_check`` 必须由组合根显式注入：静默回退到 SKIPPED 会让"自动质检
-    没接线"在生产里看起来像"没有需要检查的 Episode"。
+    ``metadata_extraction`` / ``format_parsing`` / ``quality_check`` 必须由组合根
+    显式注入：静默回退到 SKIPPED 会让"阶段没接线"在生产里看起来像"没有需要
+    处理的对象"。
     """
     handlers: dict[ProcessingStage, StageHandler] = {
         ProcessingStage.FILE_VALIDATION: FileValidationHandler(inspector),
+        ProcessingStage.METADATA_EXTRACTION: metadata_extraction,
+        ProcessingStage.FORMAT_PARSING: format_parsing,
         ProcessingStage.QUALITY_PRE_CHECK: quality_check,
     }
     for stage, reason in STAGE_SKIP_REASONS.items():
@@ -180,4 +191,5 @@ __all__ = [
     "StageHandler",
     "StageOutcome",
     "default_handlers",
+    "is_project_scoped",
 ]

@@ -41,14 +41,26 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import seed_identity
 from tests.api.dataset_support import seed_dataset_episodes
+from tests.unit.processing_stage_support import FakeArtifactStore, FakeObjectReader
 
 
-class FakeInspector:
-    def __init__(self, sizes: dict[str, int] | None = None) -> None:
-        self._sizes = sizes or {}
+def _worker(
+    factory: sessionmaker[Session],
+    settings: Settings,
+    objects: dict[str, bytes] | None = None,
+) -> ProcessingRunWorker:
+    """用内存对象存储装配 Worker；``objects`` 同时提供存在性与内容。
 
-    def object_size(self, object_key: str) -> int | None:
-        return self._sizes.get(object_key)
+    阶段只读元数据：这里用显式标注的内存替身，真实 MinIO 行为由集成验收覆盖。
+    """
+    reader = FakeObjectReader(objects or {})
+    return ProcessingRunWorker(
+        factory,
+        settings,
+        inspector=reader,
+        reader=reader,
+        artifacts=FakeArtifactStore(),
+    )
 
 
 def _now() -> datetime:
@@ -175,7 +187,7 @@ def test_permanent_failure_is_not_retried(api_db) -> None:
         ids,
         input_refs=(f"raw/{ids.project_b}/secret",),
     )
-    worker = ProcessingRunWorker(factory, _settings(), inspector=FakeInspector({}))
+    worker = _worker(factory, _settings())
 
     result = worker.process_once(now=_now())
 
@@ -194,11 +206,7 @@ def test_permanent_failure_is_not_retried(api_db) -> None:
 def test_worker_consumes_requested_event_and_runs_all_stages(env) -> None:
     factory, ids = env
     run_id = _create_run(factory, ids)
-    worker = ProcessingRunWorker(
-        factory,
-        _settings(),
-        inspector=FakeInspector({f"raw/{ids.project_a}/a": 12}),
-    )
+    worker = _worker(factory, _settings(), {f"raw/{ids.project_a}/a": b"0123456789ab"})
 
     result = worker.process_once(now=_now())
 
@@ -214,7 +222,7 @@ def test_worker_consumes_requested_event_and_runs_all_stages(env) -> None:
 def test_failure_retries_then_dead_letters_without_orphans(env) -> None:
     factory, ids = env
     run_id = _create_run(factory, ids, input_refs=(f"raw/{ids.project_a}/missing",))
-    worker = ProcessingRunWorker(factory, _settings(max_attempts=2), inspector=FakeInspector())
+    worker = _worker(factory, _settings(max_attempts=2))
 
     first_moment = _now()
     first = worker.process_once(now=first_moment)
@@ -263,11 +271,7 @@ def test_duplicate_event_is_published_without_extra_steps(env) -> None:
             )
         )
         session.commit()
-    worker = ProcessingRunWorker(
-        factory,
-        _settings(),
-        inspector=FakeInspector({f"raw/{ids.project_a}/a": 1}),
-    )
+    worker = _worker(factory, _settings(), {f"raw/{ids.project_a}/a": b"x"})
 
     assert worker.process_once(now=_now())["status"] == RunProcessingStatus.PUBLISHED.value
     duplicate = worker.process_once(now=_now())
@@ -280,12 +284,8 @@ def test_duplicate_event_is_published_without_extra_steps(env) -> None:
 def test_only_the_consuming_worker_gets_the_event(env) -> None:
     factory, ids = env
     _create_run(factory, ids)
-    first = ProcessingRunWorker(
-        factory, _settings(), inspector=FakeInspector({f"raw/{ids.project_a}/a": 1})
-    )
-    second = ProcessingRunWorker(
-        factory, _settings(), inspector=FakeInspector({f"raw/{ids.project_a}/a": 1})
-    )
+    first = _worker(factory, _settings(), {f"raw/{ids.project_a}/a": b"x"})
+    second = _worker(factory, _settings(), {f"raw/{ids.project_a}/a": b"x"})
 
     assert first.process_once(now=_now())["status"] == RunProcessingStatus.PUBLISHED.value
     assert second.process_once(now=_now())["status"] == RunProcessingStatus.IDLE.value
@@ -308,7 +308,7 @@ def test_missing_run_goes_to_dead_letter(env) -> None:
             )
         )
         session.commit()
-    worker = ProcessingRunWorker(factory, _settings(), inspector=FakeInspector())
+    worker = _worker(factory, _settings())
 
     result = worker.process_once(now=_now())
 
@@ -335,11 +335,7 @@ def test_worker_runs_quality_stage_for_episode_manifest(env) -> None:
     )[0]
     ref = f"canonical/{ids.project_a}/{episode_id}/1/manifest.json"
     run_id = _create_run(factory, ids, input_refs=(ref,))
-    worker = ProcessingRunWorker(
-        factory,
-        _settings(),
-        inspector=FakeInspector({ref: 42}),
-    )
+    worker = _worker(factory, _settings(), {ref: b"0123456789" * 4})
 
     result = worker.process_once(now=_now())
 

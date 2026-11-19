@@ -18,6 +18,7 @@ from app.application.processing.commands import NewProcessingRun
 from app.application.processing.pipeline import (
     PipelineOutcomeStatus,
     ProcessingPipeline,
+    SkippedStage,
     default_handlers,
 )
 from app.application.processing.quality_stage import QualityCheckHandler
@@ -172,7 +173,12 @@ def _pipeline(
             audit=SqlAuditRepository(session),
             outbox=SqlOutboxRepository(session),
         ),
-        default_handlers(inspector, quality_check=quality_check),
+        default_handlers(
+            inspector,
+            metadata_extraction=SkippedStage("质量流水线测试不装配元数据解析"),
+            format_parsing=SkippedStage("质量流水线测试不装配格式解析"),
+            quality_check=quality_check,
+        ),
         session,
     )
 
