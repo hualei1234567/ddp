@@ -9,7 +9,7 @@ from fastapi import Depends
 
 from app.api.deps import DbSession
 from app.api.v1.upload_dependencies import ObjectStorageDep, SettingsDep
-from app.application.episodes import EpisodeService, LineageService
+from app.application.episodes import EpisodeService, LineageGraphService, LineageService
 from app.application.episodes.provenance import SourceProvenanceResolver
 from app.application.episodes.readiness import EpisodeReadinessService
 from app.application.ingestion import RawAssetDownloadUseCases, RawAssetUseCases
@@ -34,6 +34,7 @@ from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 class EpisodeUseCases:
     episodes: EpisodeService
     lineage: LineageService
+    lineage_graph: LineageGraphService
     assets: RawAssetUseCases
     downloads: RawAssetDownloadUseCases
 
@@ -100,6 +101,21 @@ def build_lineage_service(session: DbSession) -> LineageService:
     )
 
 
+def build_lineage_graph_service(session: DbSession) -> LineageGraphService:
+    """装配通用图查询用例（N5-003）。
+
+    与 :func:`build_lineage_service` 共用同一套只读适配器；图查询本身不写
+    血缘表，因此不需要审计/outbox/事务端口。
+    """
+    return LineageGraphService(
+        SqlLineageRepository(session),
+        SourceProvenanceResolver(
+            SqlSourceProvenanceRepository(session),
+            SqlRawAssetRepository(session),
+        ),
+    )
+
+
 def get_episode_use_cases(
     session: DbSession,
     settings: SettingsDep,
@@ -110,6 +126,7 @@ def get_episode_use_cases(
     return EpisodeUseCases(
         episodes=build_episode_service(session),
         lineage=build_lineage_service(session),
+        lineage_graph=build_lineage_graph_service(session),
         assets=RawAssetUseCases(raw_assets),
         downloads=RawAssetDownloadUseCases(
             raw_assets,

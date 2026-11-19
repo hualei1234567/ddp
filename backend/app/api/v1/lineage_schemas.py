@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.application.episodes.graph import LineageGraphNode, LineageGraphPage
 from app.application.episodes.lineage import LineageTrace
 from app.application.episodes.provenance import RawAssetOrigin, SourceLink
 from app.domain.episodes.lineage import LineageEdge
@@ -140,6 +141,65 @@ class DownloadUrlOut(BaseModel):
 
     url: str
     expires_at: datetime
+
+
+class LineageGraphRootOut(BaseModel):
+    """图查询的起点；由客户端提交，服务端回显以便客户端对齐分页结果。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    node_type: str
+    node_id: UUID
+
+
+class LineageGraphNodeOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    node_type: str
+    node_id: UUID
+    # 相对起点的跳数：起点为 0；``depth`` 是本次遍历的上限。
+    level: int
+
+    @classmethod
+    def from_domain(cls, node: LineageGraphNode) -> LineageGraphNodeOut:
+        return cls(
+            node_type=node.node_type.value,
+            node_id=node.node_id,
+            level=node.level,
+        )
+
+
+class LineageGraphResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    root: LineageGraphRootOut
+    root_found: bool
+    direction: str
+    depth: int
+    nodes: list[LineageGraphNodeOut]
+    edges: list[LineageEdgeOut]
+    next_cursor: str | None
+    truncated: bool
+    raw_asset_sources: list[RawAssetSourceOut] = Field(default_factory=list)
+
+
+def build_lineage_graph_response(page: LineageGraphPage) -> LineageGraphResponse:
+    return LineageGraphResponse(
+        root=LineageGraphRootOut(
+            node_type=page.root.node_type.value,
+            node_id=page.root.node_id,
+        ),
+        root_found=page.root_found,
+        direction=page.direction.value,
+        depth=page.depth,
+        nodes=[LineageGraphNodeOut.from_domain(node) for node in page.nodes],
+        edges=[LineageEdgeOut.from_domain(edge) for edge in page.edges],
+        next_cursor=page.next_cursor,
+        truncated=page.truncated,
+        raw_asset_sources=[
+            RawAssetSourceOut.from_origin(origin) for origin in page.raw_asset_sources
+        ],
+    )
 
 
 def to_internal_direction(direction: str) -> str:

@@ -8,6 +8,7 @@ from app.application.episodes.commands import (
     ReviseEpisodeCommand,
 )
 from app.application.episodes.episodes import EpisodeService
+from app.application.episodes.graph import LineageGraphService
 from app.application.episodes.lineage import LineageService
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "CreateEpisodeCommand",
     "EpisodeActionCommand",
     "EpisodeService",
+    "LineageGraphService",
     "LineageService",
     "MarkEpisodeReadyCommand",
     "ReviseEpisodeCommand",

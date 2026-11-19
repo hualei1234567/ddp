@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from app.domain.episodes.enums import EpisodeStatus, LineageNodeType
+from app.domain.episodes.enums import EpisodeStatus, LineageDirection, LineageNodeType
 from app.domain.episodes.filters import EpisodeListFilters
 from app.domain.episodes.lineage import LineageEdge, LineageNodeRef
 from app.domain.episodes.models import Episode, EpisodeRawAsset
@@ -155,3 +156,18 @@ class LineageRepository(Protocol):
         node_id: UUID,
         limit: int = 100,
     ) -> list[LineageEdge]: ...
+
+    def list_edges_for_nodes(
+        self,
+        scope: ProjectScope,
+        *,
+        nodes: Sequence[tuple[LineageNodeType, UUID]],
+        direction: LineageDirection,
+        limit: int,
+    ) -> list[LineageEdge]:
+        """一次取多个节点在当前方向的邻边（图查询批量入口）。
+
+        实现必须：按 ``scope.project_id`` 过滤、按 ``(created_at, id)`` 排序、
+        不超过 ``limit`` 行；不得逐节点查询。图查询由调用方按块传入节点，
+        以这一条端口承载"批量而非 N+1"的约束。
+        """
