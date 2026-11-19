@@ -33,7 +33,7 @@
     "dataset_version_id": {"$ref": "#/$defs/uuid"},
     "external_run_id": {"type": "string", "minLength": 1, "maxLength": 200},
     "external_run_url": {"type": ["string", "null"], "maxLength": 4096},
-    "external_status": {"type": "string", "enum": ["SUBMITTED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN", "UNAVAILABLE", "DRY_RUN"], "description": "DRY_RUN 是演练专用终态：只做校验与计划，不是成功训练，读取方不得按 SUCCEEDED 判定。"},
+    "external_status": {"type": "string", "x-extensible-enum": ["SUBMITTED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN", "UNAVAILABLE", "DRY_RUN"], "enum": ["SUBMITTED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN", "UNAVAILABLE", "DRY_RUN"], "description": "状态集合明确可增长，客户端必须容忍未知值；DRY_RUN 是演练专用终态：只做校验与计划，不是成功训练，读取方不得按 SUCCEEDED 判定。"},
     "execution_mode": {
       "type": "string",
       "enum": ["LOCAL", "MOCK", "DRY_RUN", "REMOTE", "UNKNOWN"],
