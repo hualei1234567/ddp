@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
-from app.domain.episodes.enums import LineageNodeType, LineageRelation
+from app.domain.episodes.enums import LineageDirection, LineageNodeType, LineageRelation
 from app.domain.episodes.errors import ConflictError, DomainValidationError, LineageConflictError
 from app.domain.episodes.lineage import (
     LineageEdge,
@@ -290,6 +291,59 @@ class SqlLineageRepository:
                 DataLineageEdgeModel.project_id == scope.project_id,
                 DataLineageEdgeModel.to_node_type == node_type.value,
                 DataLineageEdgeModel.to_node_id == node_id,
+            )
+            .order_by(DataLineageEdgeModel.created_at, DataLineageEdgeModel.id)
+            .limit(limit)
+        )
+        return [self._from_edge_row(row) for row in rows]
+
+    def list_edges_for_nodes(
+        self,
+        scope: ProjectScope,
+        *,
+        nodes: Sequence[tuple[LineageNodeType, UUID]],
+        direction: LineageDirection,
+        limit: int,
+    ) -> list[LineageEdge]:
+        """批量取多个节点在当前方向的邻边。
+
+        与 :meth:`list_edges_from` / :meth:`list_edges_to` 的单节点版本语义
+        相同，但用一次 ``OR`` 查询覆盖整块节点，图遍历因此不会退化成逐节点
+        N+1。``BOTH`` 同时匹配 ``from`` 与 ``to`` 两侧；``limit`` 由调用方
+        按剩余预算传入，SQL 侧不放大；排序固定为 ``(created_at, id)``。
+        """
+        if not nodes:
+            return []
+        try:
+            normalized_direction = LineageDirection(direction)
+        except (TypeError, ValueError) as exc:
+            raise DomainValidationError("direction 取值非法") from exc
+        from_conditions = [
+            and_(
+                DataLineageEdgeModel.from_node_type == node_type.value,
+                DataLineageEdgeModel.from_node_id == node_id,
+            )
+            for node_type, node_id in nodes
+        ]
+        to_conditions = [
+            and_(
+                DataLineageEdgeModel.to_node_type == node_type.value,
+                DataLineageEdgeModel.to_node_id == node_id,
+            )
+            for node_type, node_id in nodes
+        ]
+        conditions: list[ColumnElement[bool]] = []
+        if normalized_direction in (LineageDirection.OUT, LineageDirection.BOTH):
+            conditions.extend(from_conditions)
+        if normalized_direction in (LineageDirection.IN, LineageDirection.BOTH):
+            conditions.extend(to_conditions)
+        if not conditions:
+            return []
+        rows = self._session.scalars(
+            select(DataLineageEdgeModel)
+            .where(
+                DataLineageEdgeModel.project_id == scope.project_id,
+                or_(*conditions),
             )
             .order_by(DataLineageEdgeModel.created_at, DataLineageEdgeModel.id)
             .limit(limit)

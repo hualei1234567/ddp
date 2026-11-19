@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.20.0
+  version: 1.21.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -162,6 +162,15 @@ info:
       404，避免用状态码差异探测其他项目对象。未知 `subject_type` 返回 422。
       本操作不触发检查、不改变历史结论。全部为增量：仅新增路径操作、
       query 参数与 `QualityRunPage` schema，无既有路径/字段变更。
+    - `1.21.0` **通用血缘图查询（N5-003）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/lineage/graph`，从任意血缘节点按
+      `direction`（`OUT` / `IN` / `BOTH`）做受控深度 BFS（硬上限 3），
+      返回本页节点、边与键集游标。服务端强制项目隔离；节点/边各有硬上限
+      （500 / 1000），触顶时 `truncated=true`，**不把截断结果伪装成完整图**。
+      防环由 BFS 全局 visited 保证；邻边按层批量查询，不退化为逐节点 N+1。
+      不新增表、不写任何节点或边，`DATA_SOURCE` / `DATA_SOURCE_IMPORT`
+      继续使用既有只读投影。全部为增量：仅新增路径与 schema，无既有
+      路径/字段变更，无数据库迁移。
     - `1.20.0` **处理运行失败收口（N4-006）**：`ProcessingRun` 响应新增可选字段
       `closed_at`（date-time / null）。`FAILED` 运行在服务端 `system-close`
       后写入该时间：状态仍为 `FAILED`，`error_code` / `error_summary` 完整保留，
@@ -170,6 +179,15 @@ info:
       不进入 `allowed_actions`、不提供 HTTP 入口**，客户端不能提交 `closed_at`。
       数据库迁移 0065 仅在 `processing_runs` 新增可空列（不重建表）。
       全部为增量：无路径删除、无字段删除、无必填性收紧、无既有字段语义变更。
+    - `1.21.0` **评测失败 → 候选缺口 → 人工转需求（N7-005）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/data-gap-candidates`，从当前项目近期
+      评测的 `failure_cases` 聚合候选缺口（按归一化 `suggested_gap`，无提示值时
+      按 `category`），并复用 N7-004 的归因规则只挂到已存在的维度键；无法归因
+      的候选在 `unmapped` 中显式列出。新增人工动作
+      `POST .../data-gap-candidates/{candidate_key}/data-requirements`：仅允许
+      已归因候选创建 **DRAFT** 数据需求，维度/来源/`source_type` 由服务端推导，
+      **不自动创建、不自动提交、不自动审批**。全部为增量：仅新增路径与 schema，
+      无既有路径/字段变更，无数据库迁移。
     - `1.19.0` **采集方案绑定目标与质量阈值（N9-003）**：`CollectionPlan`
       响应新增 `target_episode_count`（可空整数）与 `quality_thresholds`
       （对象），创建与 PATCH 请求同步新增可选字段；PATCH 传 `null` 表示清空
@@ -230,7 +248,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.20.0
+  version: 1.21.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -742,6 +760,10 @@ paths:
     $ref: "./fragments/paths.stage5.yaml#/modelFeedbackActions"
   /api/v1/projects/{project_id}/data-gaps:
     $ref: "./fragments/paths.stage5.yaml#/dataGaps"
+  /api/v1/projects/{project_id}/data-gap-candidates:
+    $ref: "./fragments/paths.stage5.yaml#/dataGapCandidates"
+  /api/v1/projects/{project_id}/data-gap-candidates/{candidate_key}/data-requirements:
+    $ref: "./fragments/paths.stage5.yaml#/dataGapCandidateConversion"
   /api/v1/projects/{project_id}/data-requirements:
     $ref: "./fragments/paths.stage5.yaml#/dataRequirements"
   /api/v1/projects/{project_id}/data-requirements/{requirement_id}:
@@ -802,6 +824,9 @@ paths:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportEpisodes"
   /api/v1/projects/{project_id}/data-sources/{data_source_id}/lineage:
     $ref: "./fragments/paths.stage2.yaml#/dataSourceLineage"
+  # --- N5-003 通用血缘图查询（只读）---
+  /api/v1/projects/{project_id}/lineage/graph:
+    $ref: "./fragments/paths.lineage_graph.yaml#/lineageGraph"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/review:
     $ref: "./fragments/paths.stage7.yaml#/dataSourceImportReview"
   /api/v1/projects/{project_id}/data-source-imports/{import_id}/review/decisions:
@@ -1091,6 +1116,10 @@ components:
     LineageRelation: {$ref: "./fragments/schemas.stage2.yaml#/LineageRelation"}
     LineageEdge: {$ref: "./fragments/schemas.stage2.yaml#/LineageEdge"}
     LineageResponse: {$ref: "./fragments/schemas.stage2.yaml#/LineageResponse"}
+    LineageGraphDirection: {$ref: "./fragments/schemas.lineage_graph.yaml#/LineageGraphDirection"}
+    LineageGraphRoot: {$ref: "./fragments/schemas.lineage_graph.yaml#/LineageGraphRoot"}
+    LineageGraphNode: {$ref: "./fragments/schemas.lineage_graph.yaml#/LineageGraphNode"}
+    LineageGraphResponse: {$ref: "./fragments/schemas.lineage_graph.yaml#/LineageGraphResponse"}
     RawAssetSource: {$ref: "./fragments/schemas.stage2.yaml#/RawAssetSource"}
     DataSourceNode: {$ref: "./fragments/schemas.stage2.yaml#/DataSourceNode"}
     DataSourceImportNode: {$ref: "./fragments/schemas.stage2.yaml#/DataSourceImportNode"}
@@ -1290,6 +1319,10 @@ components:
     DataRequirement: {$ref: "./fragments/schemas.stage5.yaml#/DataRequirement"}
     RequirementActionRequest: {$ref: "./fragments/schemas.stage5.yaml#/RequirementActionRequest"}
     DataGapSummary: {$ref: "./fragments/schemas.stage5.yaml#/DataGapSummary"}
+    DataGapCandidateSummary: {$ref: "./fragments/schemas.stage5.yaml#/DataGapCandidateSummary"}
+    GapCandidate: {$ref: "./fragments/schemas.stage5.yaml#/GapCandidate"}
+    GapUnmappedCandidate: {$ref: "./fragments/schemas.stage5.yaml#/GapUnmappedCandidate"}
+    GapCandidateConversionRequest: {$ref: "./fragments/schemas.stage5.yaml#/GapCandidateConversionRequest"}
     GapEvidenceSource: {$ref: "./fragments/schemas.stage5.yaml#/GapEvidenceSource"}
     GapEvidenceUnmappedReason: {$ref: "./fragments/schemas.stage5.yaml#/GapEvidenceUnmappedReason"}
     GapSourceCount: {$ref: "./fragments/schemas.stage5.yaml#/GapSourceCount"}

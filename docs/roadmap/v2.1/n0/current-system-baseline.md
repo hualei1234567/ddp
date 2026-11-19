@@ -14,7 +14,7 @@
 |---|---|
 | 仓库 | `github.com/hualei1234567/ddp`（私有） |
 | 默认分支 | `main` |
-| 当前 HEAD | `7a9bb4b` — Merge pull request #33（数据集版本有效性状态轴闭环） |
+| 当前 HEAD | 批次 10 分支 `feat/v21-p10-batch`（基线提交 `51123ff`，批次内 5 项：N6-005 / N7-005 / N5-003 / N4-003 / N8-002） |
 | 分支模型 | 任务分支 + PR；`main` 不做直推（纪律，平台未强制） |
 | 工作区 | 干净（本轮 N0 只新增文档） |
 | 分支保护 | **不可用**（私有仓 rulesets API 403），以 CI + 评审纪律替代 |
@@ -26,9 +26,9 @@
 
 | 项 | 值 | 证据 |
 |---|---|---|
-| 契约版本 | **1.20.0**（P9：Schema 预设/采集方案阈值 1.19.0、处理运行 closed_at 1.20.0） | `packages/contracts/openapi.yaml:4` |
-| 路径数 | **232** | `grep -c '^  /' packages/contracts/openapi.yaml` |
-| operationId 数 | **311** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
+| 契约版本 | **1.21.0**（P10：标注逾期提醒事件、失败→缺口候选→人工转需求、通用血缘图查询） | `packages/contracts/openapi.yaml:4` |
+| 路径数 | **235** | `grep -c '^  /' packages/contracts/openapi.yaml` |
+| operationId 数 | **314** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
 | 冻结基线 | stage2–stage7 共 6 份 bundle + SHA256 | `packages/contracts/baselines/` |
 | 一致性检查 | 通过；**基线内已接受 62 项差异**（含 9 条生效契约超前错误码、1 条映射表无产生点） | `python3 scripts/check_contract_parity.py --strict` |
 | Lint | Redocly `@redocly/cli@1.34.24`（CI job） | `.github/workflows/ci.yml` |
@@ -37,10 +37,10 @@
 
 | 层 | 文件数 | 行数 | 证据 |
 |---|---:|---:|---|
-| 后端 `backend/app`（Python） | 591 | 134,395 | `find backend/app -name '*.py'` |
+| 后端 `backend/app`（Python） | 599 | 137,162 | `find backend/app -name '*.py'` |
 | 前端 `apps/web/src`（TS/TSX） | 442 | 86,074 | `find apps/web/src \( -name '*.ts' -o -name '*.tsx' \)` |
 | 前端页面文件 | 95 | — | `find apps/web/src/pages -name '*.tsx' \| grep -v test` |
-| 后端路由模块 | 42 | 327 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
+| 后端路由模块 | 42 | 330 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
 | 后端 Worker | 10 | — | `backend/app/workers/*.py` |
 | Alembic 迁移 | 59 | 单头 `0065`（0062 审核 evidence / 0063 训练字段 / 0064 采集方案目标 / 0065 处理运行收口；0060 未使用） | `alembic heads` |
 | ORM 表 | 84 | PostgreSQL 实表 85 | `__tablename__` 去重 / `information_schema` |
@@ -49,10 +49,9 @@
 端点方法分布：GET 140、POST 144、PATCH 21、DELETE 5、PUT 1。
 
 > **超限文件（>800 行，已登记 TD-01）**：
-> `application/annotation/submissions.py` 908、`api/errors.py` 877、
-> `application/episodes/episodes.py` 850、`infrastructure/repositories/calibration_records.py` 821、
-> `application/annotation/ports.py` 809、`application/datasets/version_actions.py` 803。
-> 500–800 行文件 63 个。
+> `api/errors.py` 954、`application/annotation/submissions.py` 935、`application/annotation/ports.py` 888、
+> `infrastructure/repositories/calibration_records.py` 869、`application/episodes/episodes.py` 850、
+> `application/datasets/version_actions.py` 829、`apps/web/src/types/annotation.ts` 806（详见 TD-01）。
 
 ## 4. 领域模块（当前真实存在）
 
@@ -95,7 +94,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 
 | 项 | 命令 | 结果 |
 |---|---|---|
-| 后端用例收集 | `.venv/bin/python -m pytest --collect-only -q` | **2958 collected** |
+| 后端用例收集 | `.venv/bin/python -m pytest --collect-only -q` | **3052 collected** |
 | 后端全量 | `.venv/bin/python -m pytest -o addopts="" -q` | 见 §6.1（本轮实际输出） |
 | 前端全量 | `npx vitest run` | **912 passed / 19 skipped**（118 文件，114 过 / 4 跳） |
 | 契约 | `check_contract_parity.py --strict` | 通过（基线内 62 项） |
@@ -104,11 +103,11 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 ### 6.1 后端全量结果
 
 ```
-2957 passed, 1 skipped（2958 collected；真实 PostgreSQL + Redis，P9 批次后，546.661s）
+3051 passed, 1 skipped（3052 collected；真实 PostgreSQL + Redis，P10 批次后，634.38s）
 ```
 
 - 命令：`cd backend && DDP_TEST_POSTGRES_URL=... DDP_TEST_REDIS_URL=... .venv/bin/python -m pytest -q --junitxml=...`
-- 集合 2958 = 2957 passed + 1 skipped；唯一 skip 为需显式 `DDP_RUN_REMOTE_VERIFY=1` 的 Hugging Face 手动用例（本机装有 ffprobe，MP4 真实样例未被跳过）。
+- 集合 3052 = 3051 passed + 1 skipped；唯一 skip 为需显式 `DDP_RUN_REMOTE_VERIFY=1` 的 Hugging Face 手动用例（本机装有 ffprobe，MP4 真实样例未被跳过）。
 - 前端：`912 passed / 19 skipped`（118 文件，P7 批次后）（`cd apps/web && npx vitest run`）。
 - 结论：SQLite + 真实 PostgreSQL + 真实 Redis 全绿；迁移 0062（审核 evidence）在 SQLite 与真实 PG 上 upgrade→downgrade→upgrade 通过。
 
@@ -151,7 +150,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 | Canonical Frame / SensorStream / Action / Observation | **MISSING** |
 | Parquet / MCAP / ROS Bag / HDF5 字段级解析 | **MISSING** |
 | 六类质量报告 UI | **MISSING** |
-| 性能基线（100/1K/10K episodes） | **MISSING** |
+| 性能基线（100/1K/10K episodes） | **PARTIAL**（本机只读场景已测，见 `docs/operations/性能基线-DDP-V21-N8-002-2026-11-19.md`；staging/生产 **BLOCKED**） |
 | staging / 生产发布 | **BLOCKED** |
 | 经营成本核算 | **MISSING**（需财务口径） |
 | `validity_status=UNKNOWN` 写入点 | **MISSING** |

@@ -31,7 +31,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
@@ -223,7 +223,12 @@ class GapEvidenceAttribution:
         return ()
 
 
-def _normalize(value: str) -> str:
+def normalize_dimension_hint(value: str) -> str:
+    """提示值归一口径：去首尾空白、忽略大小写。
+
+    N7-004 的证据归因与 N7-005 的候选缺口聚合共用这一实现；新增调用方
+    不得再写第二套"trim + casefold"。
+    """
     return value.strip().casefold()
 
 
@@ -233,8 +238,34 @@ def _known_key_index(
     keys = frozenset((str(item[0]), str(item[1])) for item in known_keys)
     by_value: dict[str, list[tuple[str, str]]] = {}
     for key in keys:
-        by_value.setdefault(_normalize(key[1]), []).append(key)
+        by_value.setdefault(normalize_dimension_hint(key[1]), []).append(key)
     return keys, by_value
+
+
+def _match_from_index(
+    normalized: str,
+    by_value: Mapping[str, list[tuple[str, str]]],
+) -> tuple[tuple[str, str] | None, GapUnmappedReason | None]:
+    matches = by_value.get(normalized, [])
+    if len(matches) == 1:
+        return matches[0], None
+    if not matches:
+        return None, GapUnmappedReason.VALUE_NOT_FOUND
+    return None, GapUnmappedReason.AMBIGUOUS_VALUE
+
+
+def match_dimension_hint(
+    value: str,
+    known_keys: Iterable[tuple[str, str]],
+) -> tuple[tuple[str, str] | None, GapUnmappedReason | None]:
+    """把提示值匹配到**既有**维度键，绝不创建新维度。
+
+    返回 ``(key, None)`` 表示唯一命中；``(None, reason)`` 表示无法归因：
+    找不到对应值为 ``VALUE_NOT_FOUND``，同名值命中多个维度类型为
+    ``AMBIGUOUS_VALUE``（不替用户做选择）。
+    """
+    _, by_value = _known_key_index(known_keys)
+    return _match_from_index(normalize_dimension_hint(value), by_value)
 
 
 def attribute_gap_evidence(
@@ -265,13 +296,17 @@ def attribute_gap_evidence(
             else:
                 _add_unmapped(record.source, GapUnmappedReason.VALUE_NOT_FOUND.value, record.count)
         elif record.dimension_value is not None:
-            matches = by_value.get(_normalize(record.dimension_value), [])
-            if len(matches) == 1:
-                _add_source(matches[0], record.source, record.count)
-            elif not matches:
-                _add_unmapped(record.source, GapUnmappedReason.VALUE_NOT_FOUND.value, record.count)
+            key, reason = _match_from_index(
+                normalize_dimension_hint(record.dimension_value), by_value
+            )
+            if key is not None:
+                _add_source(key, record.source, record.count)
             else:
-                _add_unmapped(record.source, GapUnmappedReason.AMBIGUOUS_VALUE.value, record.count)
+                _add_unmapped(
+                    record.source,
+                    (reason or GapUnmappedReason.VALUE_NOT_FOUND).value,
+                    record.count,
+                )
         else:
             reason = record.reason or GapUnmappedReason.NO_DIMENSION.value
             _add_unmapped(record.source, reason, record.count)
@@ -371,12 +406,12 @@ def filter_evidence_axis(
     if dimension_type is None:
         return list(records)
     other_values = {
-        _normalize(value)
+        normalize_dimension_hint(value)
         for current_type, value in all_known_keys
         if current_type != dimension_type
     }
     target_values = {
-        _normalize(value)
+        normalize_dimension_hint(value)
         for current_type, value in all_known_keys
         if current_type == dimension_type
     }
@@ -386,7 +421,7 @@ def filter_evidence_axis(
             if record.dimension_type == dimension_type:
                 kept.append(record)
         elif record.dimension_value is not None:
-            normalized = _normalize(record.dimension_value)
+            normalized = normalize_dimension_hint(record.dimension_value)
             if normalized in other_values and normalized not in target_values:
                 continue
             kept.append(record)
@@ -406,5 +441,7 @@ __all__ = [
     "attribute_gap_evidence",
     "feedback_evidence",
     "filter_evidence_axis",
+    "match_dimension_hint",
+    "normalize_dimension_hint",
     "open_requirement_evidence",
 ]

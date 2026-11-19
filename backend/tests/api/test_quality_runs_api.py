@@ -171,6 +171,12 @@ def test_import_run_has_six_categories_and_is_retrievable(api_db) -> None:
     assert payload["next_cursor"] is None
     assert all(item["status"] == "PASS" for item in payload["items"])
     assert all(item["rule_version"] == "1.1.0" for item in payload["items"])
+    # N4-003：每流帧索引映射随 finding 落库并可经 API 读回（无新表/迁移）。
+    sync_item = next(item for item in payload["items"] if item["rule_id"] == "stream_sync_aligned")
+    assert sync_item["evidence"]["episodes_checked"] == 1
+    episode = sync_item["evidence"]["episodes"][0]
+    assert episode["frame_index_status"] == "DERIVED"
+    assert episode["streams"][0]["frame_rate"] == {"num": 30, "den": 1}
 
 
 def test_import_without_assets_fails_integrity(api_db) -> None:

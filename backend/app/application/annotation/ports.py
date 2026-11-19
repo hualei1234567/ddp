@@ -12,6 +12,10 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.application.annotation.overdue_ports import (
+    OverdueAlertEventRepository,
+    OverdueTaskDirectory,
+)
 from app.application.audit import OutboxEvent
 from app.application.idempotency import (
     IdempotencyRecord as _IdempotencyRecord,
@@ -32,6 +36,10 @@ from app.domain.annotation.schema import AnnotationSchema
 from app.domain.annotation.submission import AnnotationRecord, AnnotationSubmission
 from app.domain.annotation.task import AnnotationTask
 from app.domain.identity.models import ProjectScope
+
+# 逾期提醒端口已迁至 ``overdue_ports``（TD-01：ports.py 已超 800 行，
+# 不再新增协议）；在此重新导出，保持既有导入路径不变。
+__all__ = ["OverdueAlertEventRepository", "OverdueTaskDirectory"]
 
 
 class UnitOfWork(Protocol):
@@ -176,7 +184,7 @@ class AnnotationSampleSetRepository(Protocol):
     ) -> list[SampleEpisodeRef]: ...
 
 
-class AnnotationTaskRepository(Protocol):
+class AnnotationTaskRepository(OverdueTaskDirectory, Protocol):
     def add(self, scope: ProjectScope, task: AnnotationTask) -> AnnotationTask: ...
 
     def get(self, scope: ProjectScope, task_id: UUID) -> AnnotationTask | None: ...

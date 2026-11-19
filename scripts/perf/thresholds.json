@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "notes": "DDP-V21-N8-002 本机参考阈值（advisory）。p95/吞吐与硬件、PG 版本、数据分布、运行顺序强相关；换环境后必须重新实测校准，不得作为跨机器硬门禁。默认只报超限，--fail-on-threshold 才以非零退出。阈值按本机 2026-11-19 实测（100/1K/10K，单 API 进程，PG 16.16，并发 1/4/8）留约 1.5–2 倍余量；跨规模抖动明显，回归比较必须同机同参数并重复取中位数。",
+  "scenarios": {
+    "s*.list.*.c1": {"p95_ms": 400, "min_rps": 10},
+    "s*.list.*.c4": {"p95_ms": 600, "min_rps": 15},
+    "s*.list.*.c8": {"p95_ms": 600, "min_rps": 20},
+    "s*.filter.*": {"p95_ms": 300, "min_rps": 20},
+    "s*.video.presign.*": {"p95_ms": 300, "min_rps": 20},
+    "s*.video.range.*": {"p95_ms": 400, "min_rps": 40}
+  },
+  "defaults": {
+    "max_error_rate": 0.0
+  }
+}

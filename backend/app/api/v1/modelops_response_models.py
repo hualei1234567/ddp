@@ -17,6 +17,11 @@ from uuid import UUID
 from pydantic import BaseModel, Field
 
 from app.domain.modelops.failure_cases import FailureCase
+from app.domain.modelops.gap_candidates import (
+    GapCandidate,
+    GapCandidateSummary,
+    GapUnmappedCandidate,
+)
 from app.domain.modelops.gaps import GapSummary, GapSummaryItem
 from app.domain.modelops.models import (
     DataRequirement,
@@ -446,14 +451,75 @@ class DataGapSummaryOut(BaseModel):
         )
 
 
+class GapCandidateOut(BaseModel):
+    """已归因到既有维度的候选缺口；它是事实线索，不是需求或缺口定义。"""
+
+    candidate_key: str
+    kind: str
+    label: str
+    failure_count: int
+    evaluation_count: int
+    categories: list[str]
+    severities: list[str]
+    dimension_type: str
+    dimension_value: str
+    source_evaluation_ids: list[UUID] = Field(default_factory=list)
+
+    @classmethod
+    def from_domain(cls, item: GapCandidate) -> GapCandidateOut:
+        return cls(**item.to_payload())  # type: ignore[arg-type]
+
+
+class GapUnmappedCandidateOut(BaseModel):
+    """无法归因到既有维度的候选；显式列出，不允许自动转需求。"""
+
+    candidate_key: str
+    kind: str
+    label: str
+    failure_count: int
+    evaluation_count: int
+    categories: list[str]
+    severities: list[str]
+    unmapped_reason: str
+
+    @classmethod
+    def from_domain(cls, item: GapUnmappedCandidate) -> GapUnmappedCandidateOut:
+        return cls(**item.to_payload())  # type: ignore[arg-type]
+
+
+class DataGapCandidateSummaryOut(BaseModel):
+    items: list[GapCandidateOut]
+    unmapped: list[GapUnmappedCandidateOut]
+    items_truncated: bool
+    unmapped_truncated: bool
+    scan_truncated: bool
+    scanned_evaluation_count: int
+    invalid_evaluation_count: int
+
+    @classmethod
+    def from_domain(cls, summary: GapCandidateSummary) -> DataGapCandidateSummaryOut:
+        return cls(
+            items=[GapCandidateOut.from_domain(item) for item in summary.items],
+            unmapped=[GapUnmappedCandidateOut.from_domain(item) for item in summary.unmapped],
+            items_truncated=summary.items_truncated,
+            unmapped_truncated=summary.unmapped_truncated,
+            scan_truncated=summary.scan_truncated,
+            scanned_evaluation_count=summary.scanned_evaluation_count,
+            invalid_evaluation_count=summary.invalid_evaluation_count,
+        )
+
+
 __all__ = [
+    "DataGapCandidateSummaryOut",
     "DataGapSummaryItemOut",
     "DataGapSummaryOut",
     "DataRequirementOut",
     "EvaluationOut",
     "FeedbackOut",
+    "GapCandidateOut",
     "GapDimensionOut",
     "GapSourceCountOut",
+    "GapUnmappedCandidateOut",
     "GapUnmappedEvidenceOut",
     "InferenceServiceOut",
     "InferenceTaskOut",

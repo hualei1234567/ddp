@@ -103,6 +103,10 @@ def test_import_source_maps_existing_seven_rules() -> None:
         QualityCategory.VISUAL,
     }
     assert all(draft.score == 1.0 for draft in drafts)
+    # N4-003：每流同步证据必须随统一质量结论落库，而不是只留在临时报告里。
+    sync_draft = next(draft for draft in drafts if draft.rule_id == "stream_sync_aligned")
+    assert sync_draft.evidence is not None
+    assert sync_draft.evidence["episodes_checked"] == 1
 
 
 def test_episode_without_import_assets_is_not_applicable_not_pass() -> None:

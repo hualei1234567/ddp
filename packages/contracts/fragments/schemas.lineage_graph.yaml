@@ -1,0 +1,69 @@
+# N5-003 通用血缘图查询响应。
+#
+# 边沿用既有 LineageEdge / LineageResponse 的形状，不新增字段；本文件只新增
+# 图查询特有的起点、节点与分页外壳。
+LineageGraphDirection:
+  type: string
+  enum: [IN, OUT, BOTH]
+  default: OUT
+  description: |
+    `OUT` 沿边向下游（from → to），`IN` 向上游（to → from），`BOTH` 两侧
+    同时展开。与既有逐节点血缘端点的 `forward` / `reverse` 等价关系是
+    `OUT = forward`、`IN = reverse`；图查询额外提供 `BOTH`。
+LineageGraphRoot:
+  type: object
+  required: [node_type, node_id]
+  additionalProperties: false
+  properties:
+    node_type: { $ref: "../openapi.yaml#/components/schemas/LineageNodeType" }
+    node_id: { type: string, format: uuid }
+LineageGraphNode:
+  type: object
+  required: [node_type, node_id, level]
+  additionalProperties: false
+  properties:
+    node_type: { $ref: "../openapi.yaml#/components/schemas/LineageNodeType" }
+    node_id: { type: string, format: uuid }
+    level:
+      type: integer
+      minimum: 0
+      maximum: 3
+      description: 相对起点的跳数；起点为 0。
+LineageGraphResponse:
+  type: object
+  required:
+    [root, root_found, direction, depth, nodes, edges, next_cursor, truncated]
+  additionalProperties: false
+  properties:
+    root: { $ref: "../openapi.yaml#/components/schemas/LineageGraphRoot" }
+    root_found:
+      type: boolean
+      description: |
+        `false` 表示起点不在当前项目的血缘图中（或投影节点归属未确认），
+        此时 `nodes` / `edges` 为空。它**不**区分「不存在」与「无权访问」，
+        跨项目资源不会因为状态码或字段差异被探测出来。
+    direction: { $ref: "../openapi.yaml#/components/schemas/LineageGraphDirection" }
+    depth:
+      type: integer
+      minimum: 1
+      maximum: 3
+    nodes:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/LineageGraphNode" }
+    edges:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/LineageEdge" }
+    next_cursor:
+      type: [string, "null"]
+      maxLength: 512
+      description: 下一页的边键集游标；`null` 表示本起点在当前方向/深度下已无更多边。
+    truncated:
+      type: boolean
+      description: |
+        服务端硬上限（节点 500 / 边 1000）被触发。`true` 时本结果不是完整图，
+        调用方应缩小 `depth` 或换更具体的起点，而不是把它当成全量血缘。
+    raw_asset_sources:
+      type: array
+      default: []
+      description: 本页出现的 RawAsset 的来源结论（形状与 LineageResponse 一致）。
+      items: { $ref: "../openapi.yaml#/components/schemas/RawAssetSource" }

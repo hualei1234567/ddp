@@ -17,10 +17,12 @@
   检测器写入它；``invalidate`` / ``revalidate`` 因此永远不可达，失效版本
   仍然可以继续导出与交付。
 - 标注任务有 ``due_at``，但没有到期观测。逾期是派生事实，本 worker 只做
-  只读计数与日志，**不改派、不关闭、不写状态**。
+  计数、日志与**留痕提醒事件**（``annotation.task.overdue``），**不改派、
+  不关闭、不写任务状态**。
 
-本 worker 按固定周期跑这四类巡检（逾期扫描只读）。每类都是**有界批量 + 幂等**（只处理
-``SUBMITTED`` / 已到租约的记录），单条失败只记日志并留待下一轮，不中断整批。
+本 worker 按固定周期跑这四类巡检。每类都是**有界批量 + 幂等**（只处理
+``SUBMITTED`` / 已到租约的记录 / 尚未提醒的逾期窗口），单条失败只记日志并留待
+下一轮，不中断整批。
 
 **为什么不塞进 maintenance worker**
 
@@ -41,6 +43,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.annotation.assignments import AnnotationAssignmentUseCases
+from app.application.annotation.overdue_alerts import AnnotationOverdueAlertSweep
 from app.application.collection.data_check import CollectionDataCheckUseCases
 from app.application.datasets.ports import ValiditySourceProbe
 from app.application.datasets.validity import DatasetValiditySweep
@@ -106,6 +109,8 @@ class DomainSweepWorker:
         self._max_failures_per_run = max_failures_per_run
         # 可达的 VALID 版本不会被状态变化移出候选集，需要进程内游标轮转。
         self._validity_after_id: UUID | None = None
+        # 已提醒过的逾期任务仍是候选（去重后跳过），同样需要游标轮转。
+        self._overdue_after_id: UUID | None = None
 
     # ---- 标注分配租约 ----
     def expire_assignments(self, *, now: datetime | None = None) -> int:
@@ -146,13 +151,37 @@ class DomainSweepWorker:
         logger.info("标注租约巡检完成", extra={"expired": expired})
         return expired
 
-    # ---- 标注任务逾期扫描（只读） ----
+    # ---- 标注任务逾期观测 ----
     def count_overdue_tasks(self, *, now: datetime | None = None) -> int:
+        """跨项目统计逾期任务数；只读，不产生提醒事件。"""
         moment = now or datetime.now(UTC)
         with self._factory() as session:
             overdue = SqlAnnotationTaskRepository(session).count_overdue(moment)
         logger.info("标注任务逾期扫描完成", extra={"overdue_tasks": overdue})
         return overdue
+
+    def alert_overdue_tasks(self, *, now: datetime | None = None) -> int:
+        """为进入逾期窗口的任务写一次提醒留痕，返回本轮新发事件数。
+
+        去重、批量上限与失败隔离都在用例内完成；本方法只负责装配与游标。
+        """
+        moment = now or datetime.now(UTC)
+        with self._factory() as session:
+            sweep = AnnotationOverdueAlertSweep(
+                SqlAnnotationTaskRepository(session),
+                SqlAnnotationOutboxRepository(session),
+                SqlProjectMemberRepository(session),
+                SqlAnnotationAuditRepository(session),
+                SqlAnnotationOutboxRepository(session),
+                session,
+            )
+            result = sweep.run_once(
+                limit=self._batch_limit,
+                now=moment,
+                after_id=self._overdue_after_id,
+            )
+            self._overdue_after_id = result.next_after_id
+        return result.emitted
 
     # ---- 采集任务数据检查 ----
     def check_collection_tasks(self, *, now: datetime | None = None) -> int:
@@ -220,6 +249,10 @@ class DomainSweepWorker:
             result["overdue_annotation_tasks"] = self.count_overdue_tasks(now=moment)
         except Exception:  # noqa: BLE001
             logger.exception("标注任务逾期扫描失败，下一轮重试")
+        try:
+            self.alert_overdue_tasks(now=moment)
+        except Exception:  # noqa: BLE001
+            logger.exception("标注任务逾期提醒失败，下一轮重试")
         try:
             result["checked_collection_tasks"] = self.check_collection_tasks(now=moment)
         except Exception:  # noqa: BLE001
