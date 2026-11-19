@@ -254,6 +254,27 @@ class SqlAnnotationTaskRepository:
         )
         return int(total or 0)
 
+    def list_overdue_candidates(
+        self,
+        now: datetime,
+        *,
+        after_id: UUID | None = None,
+        limit: int = 100,
+    ) -> list[AnnotationTask]:
+        """**跨项目**列出逾期任务（按 id 键集游标）；只读。
+
+        与 ``count_overdue`` 同口径：不做项目过滤，因为提醒巡检需要一次看到
+        所有项目。写提醒前调用方必须用任务自身的 ``project_id`` 构造
+        ``ProjectScope``，由仓储与审计共同兜底隔离。
+        """
+        if limit < 1 or limit > 201:
+            raise DomainValidationError("limit 必须在 1 到 201 之间")
+        statement = select(AnnotationTaskModel).where(_overdue_condition(now))
+        if after_id is not None:
+            statement = statement.where(AnnotationTaskModel.id > after_id)
+        statement = statement.order_by(AnnotationTaskModel.id).limit(limit)
+        return [self._from_row(row) for row in self._session.scalars(statement)]
+
     def _from_row(self, row: AnnotationTaskModel) -> AnnotationTask:
         return AnnotationTask(
             task_id=row.id,

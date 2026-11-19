@@ -103,12 +103,17 @@ def record_change(
     result: str = "SUCCESS",
     actor_role: str | None = None,
     dispatch: bool = False,
+    event_id: UUID | None = None,
 ) -> None:
     """同事务写审计与 outbox；任一失败都向上抛，由事务边界回滚。
 
     ``dispatch`` 默认 ``False``：绝大多数事件是留痕类。投递类必须显式传
     ``True``——默认值刻意选"不需要消费者"的那一侧，避免新增事件时
     无意间留下一条永远不会被消费的待投递消息。
+
+    ``event_id`` 默认由 ``uuid4`` 生成；调用方只有在事件**天然按某个业务键
+    去重**时才传入确定性 id（如逾期提醒按任务 + 截止时间窗口）。此时重复写入
+    会撞主键，由调用方回滚并视为"已记录"，不产生第二条事件。
     """
     audit.record(
         scope,
@@ -132,7 +137,7 @@ def record_change(
     outbox.enqueue(
         scope,
         OutboxEvent(
-            event_id=uuid4(),
+            event_id=event_id or uuid4(),
             project_id=scope.project_id,
             aggregate_type=resource_type,
             aggregate_id=resource_id,
