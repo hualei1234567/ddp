@@ -18,6 +18,16 @@ class UnitOfWork(Protocol):
     def commit(self) -> None: ...
 
 
+class CaptureSessionDirectory(Protocol):
+    """Episode 创建时的会话归属校验；只返回同项目存在性。
+
+    与 ``AssignmentDirectory`` 同理：跨对象前置条件放应用层，数据库复合外键
+    兜底。只暴露 ``bool``，避免 Episode 用例顺手把会话内容读进来、耦合两个聚合。
+    """
+
+    def capture_session_exists(self, scope: ProjectScope, session_id: UUID) -> bool: ...
+
+
 class EpisodeRepository(Protocol):
     def add(self, scope: ProjectScope, episode: Episode) -> Episode: ...
 

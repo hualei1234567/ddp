@@ -59,6 +59,7 @@ class EpisodeCreate(BaseModel):
     task_id: UUID | None = None
     batch_id: UUID | None = None
     robot_id: UUID | None = None
+    capture_session_id: UUID | None = None
     device_ids: list[UUID] = Field(default_factory=list)
     sensor_ids: list[UUID] = Field(default_factory=list)
     scene_labels: list[str] = Field(default_factory=list)
@@ -110,6 +111,7 @@ class EpisodeOut(BaseModel):
     task_id: UUID | None
     batch_id: UUID | None
     robot_id: UUID | None
+    capture_session_id: UUID | None
     device_ids: list[UUID]
     sensor_ids: list[UUID]
     status: str
@@ -157,6 +159,7 @@ class EpisodeOut(BaseModel):
             task_id=episode.task_id,
             batch_id=episode.batch_id,
             robot_id=episode.robot_id,
+            capture_session_id=episode.capture_session_id,
             device_ids=list(episode.device_ids),
             sensor_ids=list(episode.sensor_ids),
             status=_value(episode.status),

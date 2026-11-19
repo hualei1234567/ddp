@@ -18,6 +18,9 @@ from app.application.collection import (
     ScenarioUseCases,
 )
 from app.infrastructure.repositories.assignment_directory import SqlAssignmentDirectory
+from app.infrastructure.repositories.capture_session_artifacts import (
+    SqlCaptureSessionArtifactRepository,
+)
 from app.infrastructure.repositories.capture_sessions import SqlCaptureSessionRepository
 from app.infrastructure.repositories.collection_asset_directory import (
     SqlCollectionAssetDirectory,
@@ -93,6 +96,7 @@ def get_collection_use_cases(session: DbSession) -> CollectionUseCases:
             outbox=outbox,
             idempotency=idempotency,
             uow=session,
+            artifacts=SqlCaptureSessionArtifactRepository(session),
         ),
         plans=CollectionPlanUseCases(
             repository=SqlCollectionPlanRepository(session),

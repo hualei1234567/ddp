@@ -12,6 +12,10 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.collection.artifacts import (
+    CaptureSessionArtifact,
+    CaptureSessionArtifactKind,
+)
 from app.domain.collection.enums import (
     PUBLIC_CAPTURE_SESSION_ACTIONS,
     CaptureSessionStatus,
@@ -86,3 +90,23 @@ class CaptureSessionOut(BaseModel):
 
 def _value(value: object) -> str:
     return value.value if hasattr(value, "value") else str(value)
+
+
+class CaptureSessionArtifactOut(BaseModel):
+    """会话产物只读投影；``kind`` 区分 RawAsset / Episode。"""
+
+    kind: str
+    artifact_id: UUID
+    code: str
+    status: str
+    created_at: datetime
+
+    @classmethod
+    def from_domain(cls, artifact: CaptureSessionArtifact) -> CaptureSessionArtifactOut:
+        return cls(
+            kind=CaptureSessionArtifactKind(_value(artifact.kind)).value,
+            artifact_id=artifact.artifact_id,
+            code=artifact.code,
+            status=artifact.status,
+            created_at=artifact.created_at,
+        )

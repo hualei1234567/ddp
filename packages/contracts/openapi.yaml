@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.25.0
+  version: 1.26.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -186,6 +186,15 @@ info:
       超界视为 `RESPONSE_TOO_LARGE` 而非截断冒充完整。远端调用有界：显式超时
       + 仅对瞬时错误（超时 / 5xx）的有界重试。全部为增量：无路径删除、无字段
       删除、无既有字段语义变更；无数据库迁移。
+    - `1.26.0` **采集会话产物归属（N9-008）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/capture-sessions/{session_id}/artifacts`，
+      返回归属该会话的 RawAsset 与 Episode（`kind` 区分），按
+      `(created_at DESC, kind ASC, artifact_id ASC)` 复合键集分页。归属是产物的
+      固有属性：`raw_assets` / `episodes` / `upload_sessions` 各新增可空
+      `capture_session_id` 列与 `(project_id, capture_session_id)` 复合外键
+      （迁移 0068），跨项目引用在数据库层拒绝；写入复用既有创建链路
+      （上传完成复制到 RawAsset、Episode 创建携带），不新增第二套创建接口。
+      全部为增量：仅新增路径与 schema，既有字段只增不改，无路径/字段删除。
     - `1.25.0` **项目级逾期汇总（N6-002 收尾）**：新增只读端点
       `GET /api/v1/projects/{project_id}/annotation-overdue-summary`，返回本项目
       逾期任务总数、按优先级/状态分布、最早期逾期时间与 SLA 分桶
@@ -286,7 +295,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.25.0
+  version: 1.26.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -556,6 +565,8 @@ paths:
     $ref: "./fragments/paths.capture_sessions.yaml#/captureSessionDetail"
   /api/v1/projects/{project_id}/capture-sessions/{session_id}/actions/{action}:
     $ref: "./fragments/paths.capture_sessions.yaml#/captureSessionActions"
+  /api/v1/projects/{project_id}/capture-sessions/{session_id}/artifacts:
+    $ref: "./fragments/paths.capture_sessions.yaml#/captureSessionArtifacts"
   /api/v1/projects/{project_id}/upload-sessions:
     $ref: "./fragments/paths.stage2.yaml#/uploadSessions"
   /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}:
@@ -1141,6 +1152,9 @@ components:
     CaptureSessionCreate: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionCreate"}
     CaptureSessionActionRequest: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionActionRequest"}
     CaptureSessionPage: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionPage"}
+    CaptureSessionArtifactKind: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionArtifactKind"}
+    CaptureSessionArtifact: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionArtifact"}
+    CaptureSessionArtifactPage: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionArtifactPage"}
     UploadSessionStatus: {$ref: "./fragments/schemas.stage2.yaml#/UploadSessionStatus"}
     UploadVerificationStatus: {$ref: "./fragments/schemas.stage2.yaml#/UploadVerificationStatus"}
     RawAssetStatus: {$ref: "./fragments/schemas.stage2.yaml#/RawAssetStatus"}

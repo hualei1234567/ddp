@@ -29,6 +29,7 @@ from app.application.episodes.commands import (
     ReviseEpisodeCommand,
 )
 from app.application.episodes.ports import (
+    CaptureSessionDirectory,
     EpisodeRawAssetRepository,
     EpisodeRepository,
     LineageRepository,
@@ -101,12 +102,14 @@ class EpisodeService:
         idempotency: IdempotencyRepository | None = None,
         segmentation_rules: SegmentationRuleRegistry | None = None,
         readiness: EpisodeReadinessService | None = None,
+        capture_sessions: CaptureSessionDirectory | None = None,
     ) -> None:
         self._episodes = episodes
         self._episode_assets = episode_assets
         self._lineage = lineage
         self._raw_assets = raw_assets
         self._jobs = jobs
+        self._capture_sessions = capture_sessions
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
@@ -177,6 +180,15 @@ class EpisodeService:
         for job_id in _unique_uuids(command.ingestion_job_ids):
             if self._jobs.get(scope, job_id) is None:
                 raise ResourceNotFoundError("接入任务", job_id)
+        # N9-008：会话归属只允许同项目；跨项目按 404 处理，不泄漏资源是否存在。
+        if command.capture_session_id is not None:
+            if self._capture_sessions is None:
+                raise RuntimeError("Episode 用例缺少会话归属校验依赖")
+            if not self._capture_sessions.capture_session_exists(
+                scope,
+                command.capture_session_id,
+            ):
+                raise ResourceNotFoundError("采集会话", command.capture_session_id)
 
         episode_id = uuid4()
         code = command.code or f"EP-{episode_id.hex[:20]}"
@@ -197,6 +209,7 @@ class EpisodeService:
             task_id=command.task_id,
             batch_id=command.batch_id,
             robot_id=command.robot_id,
+            capture_session_id=command.capture_session_id,
             device_ids=command.device_ids,
             sensor_ids=command.sensor_ids,
             scene_labels=command.scene_labels,

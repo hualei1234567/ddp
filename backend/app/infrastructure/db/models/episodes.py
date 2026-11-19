@@ -59,6 +59,8 @@ class EpisodeModel(Base):
     task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     batch_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     robot_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # N9-008：产出该 Episode 的采集会话；可空（历史行无归属），同项目由复合外键强制。
+    capture_session_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     device_ids: Mapped[list[str]] = mapped_column(
         _JSON_TYPE,
         nullable=False,
@@ -195,6 +197,12 @@ class EpisodeModel(Base):
             ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(
+            ["project_id", "capture_session_id"],
+            ["capture_sessions.project_id", "capture_sessions.id"],
+            name="fk_episodes_project_capture_session",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
             ["project_id", "supersedes_id"],
             ["episodes.project_id", "episodes.id"],
             name="fk_episodes_project_supersedes",
@@ -227,6 +235,7 @@ class EpisodeModel(Base):
         Index("ix_episodes_project_status_created_at", "project_id", "status", "created_at"),
         Index("ix_episodes_project_task", "project_id", "task_id"),
         Index("ix_episodes_project_batch", "project_id", "batch_id"),
+        Index("ix_episodes_project_capture_session", "project_id", "capture_session_id"),
         Index("ix_episodes_project_lineage", "project_id", "episode_lineage_id"),
         Index(
             "ix_episodes_project_quality_status",

@@ -141,7 +141,7 @@ class RawAssetLinkRepository(Protocol):
 
 
 class CollectionDirectory(Protocol):
-    """校验上传会话引用的采集任务/批次；只返回存在性。"""
+    """校验上传会话引用的采集任务/批次/会话；只返回存在性。"""
 
     def task_exists(self, scope: ProjectScope, task_id: UUID) -> bool: ...
 
@@ -152,6 +152,8 @@ class CollectionDirectory(Protocol):
         batch_id: UUID,
         task_id: UUID,
     ) -> bool: ...
+
+    def capture_session_exists(self, scope: ProjectScope, session_id: UUID) -> bool: ...
 
 
 class IngestionJobRepository(Protocol):
@@ -325,6 +327,7 @@ class CreateUploadSessionCommand:
     declared_size_bytes: int
     collection_task_id: UUID | None = None
     batch_id: UUID | None = None
+    capture_session_id: UUID | None = None
     expected_sha256: str | None = None
     format_hint: str | None = None
     part_size_bytes: int | None = None

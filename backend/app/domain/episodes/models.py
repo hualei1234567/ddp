@@ -181,6 +181,7 @@ class Episode:
     task_id: UUID | None = None
     batch_id: UUID | None = None
     robot_id: UUID | None = None
+    capture_session_id: UUID | None = None
     device_ids: tuple[UUID, ...] = ()
     sensor_ids: tuple[UUID, ...] = ()
     status: EpisodeStatus | str = EpisodeStatus.PENDING
@@ -257,6 +258,7 @@ class Episode:
             "task_id",
             "batch_id",
             "robot_id",
+            "capture_session_id",
             "supersedes_id",
             "created_by",
             "updated_by",

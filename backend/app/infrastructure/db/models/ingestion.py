@@ -67,6 +67,8 @@ class UploadSessionModel(Base):
     )
     collection_task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     batch_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # N9-008：产出该上传会话的采集会话；完成时复制到 RawAsset。
+    capture_session_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     verification_status: Mapped[str] = mapped_column(String(16), nullable=False)
     verification_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -154,6 +156,12 @@ class UploadSessionModel(Base):
             name="fk_upload_sessions_project_batch",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["project_id", "capture_session_id"],
+            ["capture_sessions.project_id", "capture_sessions.id"],
+            name="fk_upload_sessions_project_capture_session",
+            ondelete="RESTRICT",
+        ),
         _enum_check("status", _UPLOAD_SESSION_STATUS_VALUES, "status_allowed"),
         _enum_check(
             "verification_status",
@@ -192,6 +200,11 @@ class UploadSessionModel(Base):
             "status",
         ),
         Index("ix_upload_sessions_project_asset", "project_id", "asset_id"),
+        Index(
+            "ix_upload_sessions_project_capture_session",
+            "project_id",
+            "capture_session_id",
+        ),
     )
 
 
@@ -279,6 +292,8 @@ class RawAssetModel(Base):
     collection_task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     batch_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     upload_session_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # N9-008：产出该资产的采集会话；可空（历史行无归属），同项目由复合外键强制。
+    capture_session_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     object_key: Mapped[str] = mapped_column(String(1024), nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -371,6 +386,12 @@ class RawAssetModel(Base):
             name="fk_raw_assets_project_batch",
             ondelete="RESTRICT",
         ),
+        ForeignKeyConstraint(
+            ["project_id", "capture_session_id"],
+            ["capture_sessions.project_id", "capture_sessions.id"],
+            name="fk_raw_assets_project_capture_session",
+            ondelete="RESTRICT",
+        ),
         _enum_check("status", _RAW_ASSET_STATUS_VALUES, "status_allowed"),
         _enum_check("source_type", _RAW_ASSET_SOURCE_VALUES, "source_type_allowed"),
         _enum_check("format", _RAW_ASSET_FORMAT_VALUES, "format_allowed"),
@@ -381,6 +402,11 @@ class RawAssetModel(Base):
         Index("ix_raw_assets_project_status_created_at", "project_id", "status", "created_at"),
         Index("ix_raw_assets_project_task", "project_id", "collection_task_id"),
         Index("ix_raw_assets_project_session", "project_id", "upload_session_id"),
+        Index(
+            "ix_raw_assets_project_capture_session",
+            "project_id",
+            "capture_session_id",
+        ),
         Index(
             "uq_raw_assets_project_content_active",
             "project_id",
