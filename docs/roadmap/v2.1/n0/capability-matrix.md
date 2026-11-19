@@ -13,8 +13,8 @@
 
 | 状态 | 数量 |
 |---|---:|
-| VERIFIED | 21 |
-| PARTIAL | 24 |
+| VERIFIED | 22 |
+| PARTIAL | 23 |
 | MISSING | 1 |
 | BLOCKED | 1 |
 | **合计** | **47** |
@@ -91,7 +91,7 @@
 | DDP-V21-N7-03 | Training Run 记录 | **PARTIAL** | N7-002 + 迁移 0063：既有外部引用上新增 `config_summary`（≤8KiB、脱敏）、`code_version`、`model_version`；存量保持 NULL 不回填；契约 1.18.0 | 无独立 TrainingRun；状态轮询未实现（按需 sync/cancel 仍为权威入口）；DB 层未把三列纳入不可变守卫 |
 | DDP-V21-N7-04 | Evaluation（model/dataset/config/metrics/artifacts/failure cases） | **VERIFIED** | N7-003：`FailureCase` 领域值对象 + 迁移 0061 + 回调校验（类别/重复/4KiB/200 条/64KiB）+ 响应与前端详情展示；成功评测后不可变 | 列表响应可能较大（每评测 ≤64KiB），后续可加独立明细端点 |
 | DDP-V21-N7-05 | Data Gap（多来源、target_count、priority、status） | **PARTIAL** | N7-004 + N7-008：五类来源证据、`unmapped`（含原因）与 `truncated_sources`；证据不造维度、不参与覆盖口径；前端展示来源徽标、未映射与截断；契约 1.14.0 | 低分评测只能作为项目级未映射证据，不能归因到具体维度；缺口项仍无 priority/status |
-| DDP-V21-N7-06 | 闭环 Evaluation→Failure→Gap→Requirement→New Data | **PARTIAL** | `application/modelops/feedback.py:221,291`；`requirements.py:318`；e2e 主链；N7-005：失败评测可产出**候选**缺口（`GET /data-gap-candidates`），候选转数据需求必须人工确认且仅 DRAFT 可转（`POST /data-gap-candidates/{candidate_key}/data-requirements`），不自动建需求；契约 1.21.0 | 候选缺口到需求的最后一步仍人工；新数据回流（Requirement→新采集→重训）未验证 |
+| DDP-V21-N7-06 | 闭环 Evaluation→Failure→Gap→Requirement→New Data | **VERIFIED** | `application/modelops/feedback.py:221,291`；`requirements.py:318`；N7-005 候选缺口；N7-006：新数据回流闭环 e2e（真实 PG + 真实导入 Worker）——反馈转需求 → 审批 → 新采集（第二批数据源，新 Episode ACCEPTED/APPROVED）→ 新数据集版本冻结 → 训练交付 → 训练引用（MOCK 显式标注且登记模型版本被 422 拒绝；LOCAL 经真实 `sync` 到 SUCCEEDED）→ 新模型版本 READY → 新版本复评 PASS → satisfy/link-retest/close + 反馈 resolve，缺口视图 `open_feedback_count=0`、`current_count=20`、`suggested=0`；证据 `backend/tests/e2e/test_data_reflow_e2e.py`、`docs/testing/主链端到端与可追溯性验收-2026-11-17.md` §13；契约 1.23.0（未新增字段） | 候选缺口转需求仍人工（刻意，不自动审批）；真实训练平台计算与真实权重 `BLOCKED`（N7-02），本项只证明编排闭环 |
 
 ## 8. N8 可观测性 / 性能 / 安全 / 部署
 

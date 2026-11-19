@@ -152,10 +152,15 @@ def create_snapshot_set(
     editor: TestClient,
     project_id: object,
     code: str,
+    *,
+    filters: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    """创建并快照样本集；``filters`` 默认按 kitchen 场景，回流批次可传
+    ``include_episode_ids`` 只圈定新采集的 Episode。"""
+    sample_filters = dict(filters or {"scene_labels": ["kitchen"]})
     created = editor.post(
         url(project_id, "/annotation-sample-sets"),
-        json={"code": code, "filters": {"scene_labels": ["kitchen"]}},
+        json={"code": code, "filters": sample_filters},
     )
     assert created.status_code == 201, created.text
     sample_set = created.json()
@@ -165,7 +170,7 @@ def create_snapshot_set(
             f"/annotation-sample-sets/{sample_set['sample_set_id']}/actions/preview",
         ),
         headers={"If-Match": '"1"'},
-        json={"filters": {"scene_labels": ["kitchen"]}},
+        json={"filters": sample_filters},
     )
     assert previewed.status_code == 200, previewed.text
     snapshot = editor.post(
