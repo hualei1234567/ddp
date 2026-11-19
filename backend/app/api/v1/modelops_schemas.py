@@ -158,6 +158,27 @@ class FeedbackActionRequest(BaseModel):
     priority: str | None = None
 
 
+class GapCandidateConvertRequest(BaseModel):
+    """人工把候选缺口转为 DRAFT 需求的请求。
+
+    刻意**没有** ``dimensions`` / ``source_type`` / ``source_evaluation_ids``：
+    维度与来源评测由服务端按当前候选事实推导，调用方不能把 ``suggested_gap``
+    提示值直接当权威维度。``code`` / ``title`` / ``owner_id`` 必须由人填写，
+    不存在自动生成或自动审批路径。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=64)
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+    owner_id: UUID
+    target_episode_count: int = Field(default=1, ge=1)
+    quality_thresholds: dict[str, object] = Field(default_factory=dict)
+    priority: str = "P1"
+    due_at: datetime | None = None
+
+
 class RequirementCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -232,6 +253,7 @@ __all__ = [
     "ArtifactInput",
     "EvaluationCreate",
     "FailureCasePayload",
+    "GapCandidateConvertRequest",
     "FeedbackActionRequest",
     "FeedbackCreate",
     "GapDimensionInput",

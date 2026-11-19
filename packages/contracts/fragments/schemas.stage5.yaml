@@ -1412,6 +1412,174 @@ DataGapSummary:
         因服务端资源上限被截断的来源。非空时，该来源"没有出现"不能读成
         "该来源为空"。
 
+GapCandidate:
+  type: object
+  required:
+  - candidate_key
+  - kind
+  - label
+  - failure_count
+  - evaluation_count
+  - categories
+  - severities
+  - dimension_type
+  - dimension_value
+  additionalProperties: false
+  properties:
+    candidate_key:
+      type: string
+      maxLength: 64
+    kind:
+      type: string
+      enum: [SUGGESTED_GAP, CATEGORY]
+    label:
+      type: string
+      maxLength: 200
+    failure_count:
+      type: integer
+      minimum: 1
+    evaluation_count:
+      type: integer
+      minimum: 1
+    categories:
+      type: array
+      items:
+        type: string
+    severities:
+      type: array
+      items:
+        type: string
+    dimension_type:
+      type: string
+    dimension_value:
+      type: string
+    source_evaluation_ids:
+      type: array
+      items:
+        type: string
+        format: uuid
+GapUnmappedCandidate:
+  type: object
+  required:
+  - candidate_key
+  - kind
+  - label
+  - failure_count
+  - evaluation_count
+  - categories
+  - severities
+  - unmapped_reason
+  additionalProperties: false
+  properties:
+    candidate_key:
+      type: string
+      maxLength: 64
+    kind:
+      type: string
+      enum: [SUGGESTED_GAP, CATEGORY]
+    label:
+      type: string
+      maxLength: 200
+    failure_count:
+      type: integer
+      minimum: 1
+    evaluation_count:
+      type: integer
+      minimum: 1
+    categories:
+      type: array
+      items:
+        type: string
+    severities:
+      type: array
+      items:
+        type: string
+    unmapped_reason:
+      type: string
+      enum: [NO_DIMENSION, VALUE_NOT_FOUND, AMBIGUOUS_VALUE, INVALID_EVIDENCE]
+DataGapCandidateSummary:
+  type: object
+  required:
+  - items
+  - unmapped
+  - items_truncated
+  - unmapped_truncated
+  - scan_truncated
+  - scanned_evaluation_count
+  - invalid_evaluation_count
+  additionalProperties: false
+  properties:
+    items:
+      type: array
+      items:
+        $ref: ../openapi.yaml#/components/schemas/GapCandidate
+      description: |
+        已归因到既有维度的候选；仍只是事实线索，不是缺口定义或数据需求。
+    unmapped:
+      type: array
+      items:
+        $ref: ../openapi.yaml#/components/schemas/GapUnmappedCandidate
+      description: |
+        无法归因到既有维度的候选（未知提示值、歧义取值或没有提示值的类别
+        汇总）；显式列出，不允许自动转需求。
+    items_truncated:
+      type: boolean
+      description: "`items` 因 `limit` 被截断。"
+    unmapped_truncated:
+      type: boolean
+      description: "`unmapped` 因 `limit` 被截断。"
+    scan_truncated:
+      type: boolean
+      description: |
+        评测扫描触达服务端上限。为真时"没有某个候选"不能读成"该候选不存在"。
+    scanned_evaluation_count:
+      type: integer
+      minimum: 0
+    invalid_evaluation_count:
+      type: integer
+      minimum: 0
+      description: |
+        扫描范围内 `failure_cases` 无法解析的评测条数（存量损坏行）。显式计数，
+        不静默丢弃；非 0 时说明候选视图可能缺少这部分事实。
+GapCandidateConversionRequest:
+  type: object
+  required:
+  - code
+  - title
+  - owner_id
+  additionalProperties: false
+  properties:
+    code:
+      type: string
+      minLength: 1
+      maxLength: 64
+    title:
+      type: string
+      minLength: 1
+      maxLength: 200
+    description:
+      type:
+      - string
+      - 'null'
+      maxLength: 4000
+    owner_id:
+      type: string
+      format: uuid
+    target_episode_count:
+      type: integer
+      minimum: 1
+      default: 1
+    quality_thresholds:
+      type: object
+      additionalProperties: true
+    priority:
+      type: string
+      default: P1
+    due_at:
+      type:
+      - string
+      - 'null'
+      format: date-time
 ModelAdapterCallback:
   type: object
   required:

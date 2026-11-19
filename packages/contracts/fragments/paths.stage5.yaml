@@ -852,6 +852,92 @@ dataGaps:
         $ref: ../openapi.yaml#/components/responses/Forbidden
       '429':
         $ref: ../openapi.yaml#/components/responses/TooManyRequests
+dataGapCandidates:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  get:
+    operationId: listDataGapCandidates
+    tags:
+    - data-gap-candidates
+    summary: 评测失败事实聚合出的只读候选缺口
+    description: |
+      从当前项目近期评测的 `failure_cases` 聚合候选缺口：按归一化
+      `suggested_gap` 分组（去首尾空白、忽略大小写），没有提示值的失败用例
+      按 `category` 分组。候选只挂到缺口视图已存在的维度键（反馈或实测覆盖
+      建立）上；匹配不上或同名值命中多个轴的候选在 `unmapped` 中显式列出。
+      本操作**只读**，不创建缺口、需求或任何记录。
+    parameters:
+    - name: limit
+      in: query
+      description: 每类候选最多返回条数，默认 50，最大 200。
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    responses:
+      '200':
+        description: 候选缺口只读视图
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/DataGapCandidateSummary
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
+dataGapCandidateConversion:
+  parameters:
+  - $ref: ../openapi.yaml#/components/parameters/ProjectId
+  - name: candidate_key
+    in: path
+    required: true
+    description: 候选标识，来自候选列表的 `candidate_key`。
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 64
+  post:
+    operationId: convertDataGapCandidate
+    tags:
+    - data-gap-candidates
+    summary: 人工确认后从候选缺口创建 DRAFT 数据需求
+    description: |
+      仅允许转换**已归因到既有维度**的候选；无法归因的候选返回 422，不存在或
+      已消失的候选返回 404。请求体不能提交维度、来源评测或 `source_type`——
+      这些字段由服务端按当前候选事实推导。创建结果固定为 `DRAFT`，不会自动
+      提交或审批；重复请求复用既有需求创建的幂等语义。
+    parameters:
+    - $ref: ../openapi.yaml#/components/parameters/IdempotencyKey
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../openapi.yaml#/components/schemas/GapCandidateConversionRequest
+    responses:
+      '201':
+        description: 已创建的 DRAFT 数据需求
+        content:
+          application/json:
+            schema:
+              $ref: ../openapi.yaml#/components/schemas/DataRequirement
+      '401':
+        $ref: ../openapi.yaml#/components/responses/Unauthorized
+      '403':
+        $ref: ../openapi.yaml#/components/responses/Forbidden
+      '404':
+        $ref: ../openapi.yaml#/components/responses/NotFound
+      '409':
+        $ref: ../openapi.yaml#/components/responses/Conflict
+      '422':
+        $ref: ../openapi.yaml#/components/responses/UnprocessableEntity
+      '429':
+        $ref: ../openapi.yaml#/components/responses/TooManyRequests
 dataRequirements:
   parameters:
   - $ref: ../openapi.yaml#/components/parameters/ProjectId

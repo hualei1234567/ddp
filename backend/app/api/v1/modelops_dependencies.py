@@ -21,6 +21,7 @@ from app.api.v1.upload_dependencies import SettingsDep
 from app.application.modelops.callbacks import ModelCallbackUseCases
 from app.application.modelops.evaluations import EvaluationUseCases
 from app.application.modelops.feedback import FeedbackUseCases
+from app.application.modelops.gap_candidates import GapCandidateUseCases
 from app.application.modelops.inference import (
     InferenceServiceUseCases,
     InferenceTaskUseCases,
@@ -62,6 +63,7 @@ class ModelOpsServices:
     tasks: InferenceTaskUseCases
     feedback: FeedbackUseCases
     requirements: RequirementUseCases
+    candidates: GapCandidateUseCases
     callbacks: ModelCallbackUseCases
 
 
@@ -144,6 +146,8 @@ def build_modelops_services(
         idempotency=idempotency,
         uow=session,
     )
+    # 只读证据仓储：N7-004 缺口证据与 N7-005 候选缺口共用同一实例/同一查询。
+    evidence = SqlGapEvidenceDirectory(session)
     feedback = FeedbackUseCases(
         feedback=feedback_repo,
         requirements=requirements_repo,
@@ -156,7 +160,7 @@ def build_modelops_services(
         uow=session,
         coverage=SqlEpisodeCoverageDirectory(session),
         coverage_stale_after=timedelta(seconds=settings.model_gap_freshness_stale_after_seconds),
-        evidence=SqlGapEvidenceDirectory(session),
+        evidence=evidence,
     )
     requirements = RequirementUseCases(
         requirements=requirements_repo,
@@ -166,6 +170,12 @@ def build_modelops_services(
         outbox=outbox,
         idempotency=idempotency,
         uow=session,
+    )
+    candidates = GapCandidateUseCases(
+        # 与 N7-004 共用同一个只读证据仓储：失败事实扫描只有一处实现。
+        candidates=evidence,
+        feedback=feedback,
+        requirements=requirements,
     )
     callbacks = ModelCallbackUseCases(
         callbacks=SqlModelCallbackRepository(session),
@@ -182,6 +192,7 @@ def build_modelops_services(
         tasks=tasks,
         feedback=feedback,
         requirements=requirements,
+        candidates=candidates,
         callbacks=callbacks,
     )
 

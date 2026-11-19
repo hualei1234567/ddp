@@ -33,6 +33,7 @@ from app.domain.identity.models import ProjectScope
 from app.domain.modelops.enums import EvaluationVerdict, GapDimensionType
 from app.domain.modelops.errors import DomainValidationError
 from app.domain.modelops.failure_cases import parse_failure_cases
+from app.domain.modelops.gap_candidates import FailureCaseFact, FailureCaseScan
 from app.domain.modelops.gap_evidence import (
     GapEvidenceFacts,
     GapEvidenceRecord,
@@ -68,7 +69,7 @@ class SqlGapEvidenceDirectory:
         dialect = self._dialect()
         records: list[GapEvidenceRecord] = []
         truncated: list[str] = []
-        failure_records, failure_truncated = self._failure_cases(scope, dialect=dialect)
+        failure_records, failure_truncated = self._failure_cases(scope)
         records.extend(failure_records)
         if failure_truncated:
             truncated.append(GapEvidenceSource.FAILURE_CASE.value)
@@ -85,24 +86,26 @@ class SqlGapEvidenceDirectory:
     # ------------------------------------------------------------------ #
     # 评测失败用例
     # ------------------------------------------------------------------ #
-    def _failure_cases(
-        self, scope: ProjectScope, *, dialect: str
-    ) -> tuple[list[GapEvidenceRecord], bool]:
+    def failure_case_scan(self, scope: ProjectScope) -> FailureCaseScan:
+        """读取当前项目近期评测的失败明细（有界、只读）。
+
+        N7-004 的证据统计与 N7-005 的候选缺口共用这一查询；返回的是**原始
+        事实**，聚合与归因由领域层完成。解析失败的存量行显式计数，不静默丢弃。
+        """
         statement = (
-            select(EvaluationRow.failure_cases)
+            select(EvaluationRow.id, EvaluationRow.failure_cases)
             .where(
                 EvaluationRow.project_id == scope.project_id,
-                json_array_length(EvaluationRow.failure_cases, dialect=dialect) > 0,
+                json_array_length(EvaluationRow.failure_cases, dialect=self._dialect()) > 0,
             )
             .order_by(EvaluationRow.created_at.desc(), EvaluationRow.id.desc())
             .limit(MAX_FAILURE_CASE_EVALUATIONS + 1)
         )
-        payloads = list(self._session.scalars(statement))
-        truncated = len(payloads) > MAX_FAILURE_CASE_EVALUATIONS
-        by_value: dict[str, int] = {}
-        without_value = 0
+        rows = self._session.execute(statement).all()
+        truncated = len(rows) > MAX_FAILURE_CASE_EVALUATIONS
+        facts: list[FailureCaseFact] = []
         invalid = 0
-        for payload in payloads[:MAX_FAILURE_CASE_EVALUATIONS]:
+        for evaluation_id, payload in rows[:MAX_FAILURE_CASE_EVALUATIONS]:
             try:
                 cases = parse_failure_cases(payload)
             except DomainValidationError:
@@ -110,11 +113,24 @@ class SqlGapEvidenceDirectory:
                 logger.warning("数据缺口证据：评测失败用例解析失败 project_id=%s", scope.project_id)
                 invalid += 1
                 continue
-            for case in cases:
-                if case.suggested_gap is None:
-                    without_value += 1
-                    continue
-                by_value[case.suggested_gap] = by_value.get(case.suggested_gap, 0) + 1
+            facts.extend(FailureCaseFact(evaluation_id=evaluation_id, case=case) for case in cases)
+        return FailureCaseScan(
+            facts=tuple(facts),
+            evaluations_scanned=min(len(rows), MAX_FAILURE_CASE_EVALUATIONS),
+            invalid_evaluation_count=invalid,
+            truncated=truncated,
+        )
+
+    def _failure_cases(self, scope: ProjectScope) -> tuple[list[GapEvidenceRecord], bool]:
+        scan = self.failure_case_scan(scope)
+        by_value: dict[str, int] = {}
+        without_value = 0
+        for fact in scan.facts:
+            case = fact.case
+            if case.suggested_gap is None:
+                without_value += 1
+                continue
+            by_value[case.suggested_gap] = by_value.get(case.suggested_gap, 0) + 1
         records = [
             GapEvidenceRecord(
                 source=GapEvidenceSource.FAILURE_CASE.value,
@@ -131,15 +147,15 @@ class SqlGapEvidenceDirectory:
                     reason=GapUnmappedReason.NO_DIMENSION.value,
                 )
             )
-        if invalid:
+        if scan.invalid_evaluation_count:
             records.append(
                 GapEvidenceRecord(
                     source=GapEvidenceSource.FAILURE_CASE.value,
-                    count=invalid,
+                    count=scan.invalid_evaluation_count,
                     reason=GapUnmappedReason.INVALID_EVIDENCE.value,
                 )
             )
-        return records, truncated
+        return records, scan.truncated
 
     # ------------------------------------------------------------------ #
     # 评测低分
