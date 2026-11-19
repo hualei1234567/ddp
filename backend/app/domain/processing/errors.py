@@ -23,10 +23,14 @@ class InvalidStateTransitionError(ProcessingDomainError):
 
     code = "state_transition_invalid"
 
-    def __init__(self, current: object, action: object) -> None:
+    def __init__(self, current: object, action: object, *, detail: str | None = None) -> None:
         self.current = current
         self.action = action
-        super().__init__(f"处理运行当前状态 {current} 不允许动作 {action}")
+        self.detail = detail
+        message = f"处理运行当前状态 {current} 不允许动作 {action}"
+        if detail:
+            message = f"{message}：{detail}"
+        super().__init__(message)
 
 
 class ResourceNotFoundError(ProcessingDomainError):

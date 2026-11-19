@@ -118,6 +118,7 @@ class ProcessingPipeline:
         run_id: UUID,
         *,
         now: datetime | None = None,
+        request_id: str | None = None,
     ) -> PipelineOutcome:
         moment = now or datetime.now(UTC)
         run = self._runs.get(scope, run_id)
@@ -131,7 +132,7 @@ class ProcessingPipeline:
             )
 
         try:
-            run = self._prepare(scope, run, now=moment)
+            run = self._prepare(scope, run, now=moment, request_id=request_id)
         except (VersionConflictError, InvalidStateTransitionError) as exc:
             # 另一 Worker 已把运行推进到终态，或客户端刚取消：本事件无需重试。
             raise ConcurrentRunUpdate(str(exc)) from exc
@@ -160,6 +161,7 @@ class ProcessingPipeline:
                     summary=failure.summary,
                     retryable=failure.retryable,
                     now=moment,
+                    request_id=request_id,
                 )
             except Exception as exc:  # noqa: BLE001 - 阶段边界：记录后失败，不吞
                 logger.exception(
@@ -174,6 +176,7 @@ class ProcessingPipeline:
                     error_code="stage_execution_failed",
                     summary=str(exc),
                     now=moment,
+                    request_id=request_id,
                 )
 
             next_stage = self._next_stage(stage)
@@ -231,12 +234,19 @@ class ProcessingPipeline:
         run: ProcessingRun,
         *,
         now: datetime,
+        request_id: str | None = None,
     ) -> ProcessingRun:
         """把运行推进到可执行的 RUNNING；崩溃恢复沿用当前阶段与 attempt。"""
         if run.status == ProcessingRunStatus.CREATED.value:
             run = self._worker.enqueue(scope, run.run_id, expected_version=run.row_version, now=now)
         if run.status == ProcessingRunStatus.FAILED.value:
-            run = self._worker.retry(scope, run.run_id, expected_version=run.row_version, now=now)
+            run = self._worker.retry(
+                scope,
+                run.run_id,
+                expected_version=run.row_version,
+                request_id=request_id,
+                now=now,
+            )
         if run.status in {
             ProcessingRunStatus.QUEUED.value,
             ProcessingRunStatus.RETRYING.value,
@@ -314,6 +324,7 @@ class ProcessingPipeline:
         summary: str,
         retryable: bool = True,
         now: datetime,
+        request_id: str | None = None,
     ) -> PipelineOutcome:
         safe_summary = sanitize_log_message(
             summary,
@@ -335,6 +346,7 @@ class ProcessingPipeline:
                 expected_version=run.row_version,
                 error_code=error_code,
                 error_summary=safe_summary,
+                request_id=request_id,
                 now=now,
             )
         except (VersionConflictError, InvalidStateTransitionError) as exc:

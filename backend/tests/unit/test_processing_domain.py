@@ -79,6 +79,11 @@ _ALLOWED_EDGES: frozenset[tuple[str, str, str]] = frozenset(
             ProcessingRunStatus.RETRYING.value,
         ),
         (
+            ProcessingRunStatus.FAILED.value,
+            ProcessingRunAction.SYSTEM_CLOSE.value,
+            ProcessingRunStatus.FAILED.value,
+        ),
+        (
             ProcessingRunStatus.RETRYING.value,
             ProcessingRunAction.WORKER_CLAIM.value,
             ProcessingRunStatus.RUNNING.value,
@@ -440,3 +445,94 @@ def test_advance_keeps_status_and_does_not_bump_attempt() -> None:
     assert advanced.status == ProcessingRunStatus.RUNNING.value
     assert advanced.attempt == 1
     assert advanced.retry_count == 0
+
+
+def test_system_close_requires_reason_and_preserves_error() -> None:
+    """收口是保留错误的自环：状态/错误/阶段/结束时间都不变，只是不可再操作。"""
+    failed = _failed()
+    assert failed.is_terminal is False
+
+    with pytest.raises(DomainValidationError):
+        failed.transition(
+            ProcessingRunAction.SYSTEM_CLOSE.value,
+            now=LATER,
+            actor_id=ACTOR,
+        )
+
+    closed = failed.transition(
+        ProcessingRunAction.SYSTEM_CLOSE.value,
+        now=LATER,
+        actor_id=ACTOR,
+        reason="人工确认放弃本次处理",
+    )
+    assert closed.status == ProcessingRunStatus.FAILED.value
+    assert closed.closed is True
+    assert closed.closed_at == LATER
+    assert closed.is_terminal
+    assert closed.error_code == failed.error_code
+    assert closed.error_summary == failed.error_summary
+    assert closed.stage == failed.stage
+    assert closed.finished_at == failed.finished_at
+    assert closed.updated_at == LATER
+    assert closed.updated_by == ACTOR
+
+
+def test_closed_run_rejects_every_outgoing_action() -> None:
+    closed = _failed(closed_at=LATER)
+    assert closed.is_terminal
+
+    with pytest.raises(InvalidStateTransitionError):
+        closed.transition(
+            ProcessingRunAction.WORKER_RETRY.value,
+            now=LATER,
+            actor_id=ACTOR,
+        )
+    with pytest.raises(InvalidStateTransitionError):
+        closed.transition(
+            ProcessingRunAction.SYSTEM_CLOSE.value,
+            now=LATER,
+            actor_id=ACTOR,
+            reason="重复收口",
+        )
+
+
+def test_system_close_rejected_outside_failed_state() -> None:
+    for run in (_run(), _queued(), _running()):
+        with pytest.raises(InvalidStateTransitionError):
+            run.transition(
+                ProcessingRunAction.SYSTEM_CLOSE.value,
+                now=LATER,
+                actor_id=ACTOR,
+                reason="状态不符",
+            )
+
+
+def test_reason_is_only_accepted_by_system_close() -> None:
+    with pytest.raises(DomainValidationError):
+        _running().transition(
+            ProcessingRunAction.WORKER_FAIL.value,
+            now=LATER,
+            actor_id=ACTOR,
+            error_code="e",
+            error_summary="s",
+            reason="不该出现在失败动作上",
+        )
+
+
+def test_closed_at_only_allowed_on_failed_status() -> None:
+    with pytest.raises(DomainValidationError):
+        _run(status=ProcessingRunStatus.CREATED.value, closed_at=LATER)
+    with pytest.raises(DomainValidationError):
+        _run(status=ProcessingRunStatus.FAILED.value, closed_at="yes")  # type: ignore[arg-type]
+    with pytest.raises(DomainValidationError):
+        # closed_at 不能早于失败结束时间。
+        _run(
+            status=ProcessingRunStatus.FAILED.value,
+            stage=first_stage(),
+            attempt=1,
+            started_at=NOW,
+            finished_at=LATER,
+            error_code="parse_error",
+            error_summary="字段缺失",
+            closed_at=NOW,
+        )

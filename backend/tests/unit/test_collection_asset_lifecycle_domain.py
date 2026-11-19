@@ -20,6 +20,7 @@ from uuid import uuid4
 import pytest
 from app.domain.collection.asset_lifecycle import (
     ACTION_SPEC_PATCHABLE_FIELDS,
+    DESCRIPTIVE_FIELDS,
     PLAN_PATCHABLE_FIELDS,
     SCENARIO_PATCHABLE_FIELDS,
     SOP_PATCHABLE_FIELDS,
@@ -138,7 +139,12 @@ def test_patchable_fields_exclude_code_and_execution_content() -> None:
         assert "code" not in patchable
         assert "steps" not in patchable
         assert "actions" not in patchable
-    assert SCENARIO_PATCHABLE_FIELDS == PLAN_PATCHABLE_FIELDS | {"scene_labels"}
+    # 采集目标/阈值是计划元数据（N9-003），可改但不得混入执行内容语义。
+    assert PLAN_PATCHABLE_FIELDS == DESCRIPTIVE_FIELDS | {
+        "target_episode_count",
+        "quality_thresholds",
+    }
+    assert SCENARIO_PATCHABLE_FIELDS == DESCRIPTIVE_FIELDS | {"scene_labels"}
 
 
 @pytest.mark.parametrize(

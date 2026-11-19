@@ -167,3 +167,13 @@ parameters:
     schema:
       type: string
       enum: [sample, assign, start, pass, fail, escalate, close, cancel]
+  PresetKey:
+    name: preset_key
+    in: path
+    required: true
+    description: 预设模板键；未注册返回 404，不做前缀或模糊匹配。
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: "^[a-z][a-z0-9-]*$"

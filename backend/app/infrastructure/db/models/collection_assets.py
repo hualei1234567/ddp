@@ -66,6 +66,15 @@ class CollectionPlanModel(Base, ProjectScopedAuditMixin):
         ForeignKey("users.id"),
         nullable=True,
     )
+    # 采集目标/质量阈值是计划字段，不是执行结果，也不构成自动验收依据。
+    # NULL 表示"未设定目标"，与 0 区分；阈值默认空对象表示"未指定"。
+    target_episode_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quality_thresholds: Mapped[dict[str, object]] = mapped_column(
+        _JSON_TYPE,
+        nullable=False,
+        default=dict,
+        server_default=text("'{}'"),
+    )
 
     __table_args__ = (
         UniqueConstraint("project_id", "id", name="uq_collection_plans_project_id_id"),

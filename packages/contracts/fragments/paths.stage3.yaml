@@ -946,3 +946,44 @@ iaaReportDetail:
       "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
       "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSchemaPresets:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listAnnotationSchemaPresets
+    tags: [annotation-schemas]
+    summary: 标签 Schema 预设模板目录（只读）
+    description: |
+      返回代码级权威的七类常用模板（action / segment / object / attributes /
+      quality / scene / robot-state）。预设不落库、不属于任何项目，因此响应
+      在项目之间一致；仍要求调用者是路径项目的成员，避免未授权主体访问标注
+      配置入口。
+
+      目录只提供创建 Schema 的起始定义：客户端可复制 `labels` 与
+      `annotation_levels`，按项目需要覆盖后走既有 `POST /annotation-schemas`。
+      预设不绕过既有 Schema 校验——创建请求仍由服务端按同一套规则重新校验。
+      本操作没有写路径，也不改变任何项目数据。
+    responses:
+      "200": {description: 预设模板目录, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/SchemaPresetCatalog"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationSchemaPresetDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/PresetKey"
+  get:
+    operationId: getAnnotationSchemaPreset
+    tags: [annotation-schemas]
+    summary: 单个 Schema 预设模板（只读）
+    description: |
+      未注册的 `preset_key` 返回 404，不回退到任意默认模板，也不按前缀模糊匹配。
+    responses:
+      "200": {description: 预设模板, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/SchemaPreset"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}

@@ -20,6 +20,7 @@ from app.application.audit import (
     OutboxRepository,
     record_change,
 )
+from app.application.observability_redaction import sanitize_log_message
 from app.application.processing.commands import NewProcessingRun
 from app.application.processing.ports import (
     ProcessingRunRepository,
@@ -39,11 +40,27 @@ from app.domain.processing.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
-from app.domain.processing.models import ProcessingRun
+from app.domain.processing.models import STATUS_REASON_MAX_LENGTH, ProcessingRun
 from app.domain.processing.state_machines import validate_action_name
 from app.domain.processing.steps import ProcessingStep
 
 _NOT_FOUND_MESSAGE = "处理运行不存在或不属于当前项目"
+
+#: 审计/outbox 里的资源类型短名；只做留痕，不作为任何状态来源。
+PROCESSING_RUN_RESOURCE_TYPE = "PROCESSING_RUN"
+
+#: 需要留痕的关键动作 → 事件类型。键集合是状态机动作名的子集；值全部是
+#: 字面量（禁止 f-string），这样 outbox 归类脚本能静态提取。
+#: 阶段推进/成功由 ``processing_run_steps`` 记录，不在此表重复。
+PROCESSING_RUN_ACTION_EVENTS: dict[str, str] = {
+    "cancel": "processing.run.cancel",
+    "worker-fail": "processing.run.failed",
+    "worker-retry": "processing.run.retry",
+    "system-close": "processing.run.closed",
+}
+
+#: 审计 ``reason`` 列宽；失败摘要可能更长，写入审计前统一截断/脱敏。
+AUDIT_REASON_MAX_LENGTH = STATUS_REASON_MAX_LENGTH
 
 #: 投递类事件：创建运行后由 ``app.workers.processing`` 消费并执行八阶段。
 #: 常量写在这里而不是 Worker 里，是因为**生产点**才是语义来源；消费者
@@ -104,7 +121,7 @@ class ProcessingRunUseCases:
             self._audit,
             self._outbox,
             scope,
-            resource_type="PROCESSING_RUN",
+            resource_type=PROCESSING_RUN_RESOURCE_TYPE,
             resource_id=created.run_id,
             action="create",
             from_status=None,
@@ -179,9 +196,13 @@ class ProcessingRunUseCases:
         action: str,
         *,
         expected_version: int,
+        request_id: str | None = None,
         now: datetime | None = None,
     ) -> ProcessingRun:
-        """客户端动作入口：只接受 ``PUBLIC_PROCESSING_ACTIONS``。"""
+        """客户端动作入口：只接受 ``PUBLIC_PROCESSING_ACTIONS``。
+
+        ``system-close`` 等内部动作在这里就被拒绝，客户端无法伪造系统收口。
+        """
         action_name = validate_action_name(action)
         if action_name not in PUBLIC_PROCESSING_ACTIONS:
             raise DomainValidationError(f"客户端不支持动作 {action_name}")
@@ -190,6 +211,7 @@ class ProcessingRunUseCases:
             run_id,
             action_name,
             expected_version=expected_version,
+            request_id=request_id,
             now=now or _utcnow(),
         )
 
@@ -199,6 +221,7 @@ class ProcessingRunUseCases:
         run_id: UUID,
         *,
         expected_version: int,
+        request_id: str | None = None,
         now: datetime | None = None,
     ) -> ProcessingRun:
         return self._apply_client(
@@ -206,6 +229,7 @@ class ProcessingRunUseCases:
             run_id,
             ProcessingRunAction.CANCEL.value,
             expected_version=expected_version,
+            request_id=request_id,
             now=now or _utcnow(),
         )
 
@@ -216,6 +240,7 @@ class ProcessingRunUseCases:
         action: str,
         *,
         expected_version: int,
+        request_id: str | None,
         now: datetime,
     ) -> ProcessingRun:
         run = self.get(scope, run_id)
@@ -225,16 +250,95 @@ class ProcessingRunUseCases:
             raise InvalidStateTransitionError(run.status, action)
         updated = run.transition(action, now=now, actor_id=scope.actor_id)
         saved = self._runs.save(scope, updated, expected_version=expected_version)
+        # 客户端动作也必须留痕：审计与 outbox 同事务写入，失败整体回滚。
+        _record_transition(
+            self._audit,
+            self._outbox,
+            scope,
+            action=action,
+            before=run,
+            after=saved,
+            reason=None,
+            request_id=request_id,
+            occurred_at=now,
+            extra_details={},
+        )
         self._uow.commit()
         return saved
+
+
+def _record_transition(
+    audit: AuditRepository,
+    outbox: OutboxRepository,
+    scope: ProjectScope,
+    *,
+    action: str,
+    before: ProcessingRun,
+    after: ProcessingRun,
+    reason: str | None,
+    request_id: str | None,
+    occurred_at: datetime,
+    extra_details: dict[str, object],
+) -> None:
+    """写审计 + 留痕类 outbox；只处理 :data:`PROCESSING_RUN_ACTION_EVENTS`。
+
+    审计记录必须能回答"谁/何时/从什么状态到什么状态/原因"：
+    ``actor_user_id`` / ``occurred_at`` / ``from_status`` / ``to_status`` /
+    ``reason`` 是固定字段，业务补充信息放 ``details``。
+    """
+    event_type = PROCESSING_RUN_ACTION_EVENTS.get(action)
+    if event_type is None:
+        return
+    details: dict[str, object] = {
+        "stage": after.stage,
+        "attempt": after.attempt,
+        "retry_count": after.retry_count,
+        "error_code": after.error_code,
+        "closed": after.closed,
+        "closed_at": after.closed_at.isoformat() if after.closed_at is not None else None,
+    }
+    details.update(extra_details)
+    payload: dict[str, object] = {
+        "run_id": str(after.run_id),
+        "from_status": before.status,
+        "to_status": after.status,
+        "stage": after.stage,
+    }
+    if request_id is not None:
+        payload["request_id"] = request_id
+    record_change(
+        audit,
+        outbox,
+        scope,
+        resource_type=PROCESSING_RUN_RESOURCE_TYPE,
+        resource_id=after.run_id,
+        action=action,
+        from_status=before.status,
+        to_status=after.status,
+        reason=reason,
+        request_id=request_id,
+        details=details,
+        event_type=event_type,
+        event_payload=payload,
+        occurred_at=occurred_at,
+    )
 
 
 class ProcessingWorkerUseCases:
     """服务端内部入口；不实现阶段业务，只推进状态、阶段与计数。"""
 
-    def __init__(self, runs: ProcessingRunRepository, uow: UnitOfWork) -> None:
+    def __init__(
+        self,
+        runs: ProcessingRunRepository,
+        uow: UnitOfWork,
+        *,
+        audit: AuditRepository,
+        outbox: OutboxRepository,
+    ) -> None:
         self._runs = runs
         self._uow = uow
+        self._audit = audit
+        self._outbox = outbox
 
     def enqueue(
         self,
@@ -316,6 +420,7 @@ class ProcessingWorkerUseCases:
         expected_version: int,
         error_code: str,
         error_summary: str,
+        request_id: str | None = None,
         now: datetime | None = None,
     ) -> ProcessingRun:
         return self._apply_internal(
@@ -326,6 +431,7 @@ class ProcessingWorkerUseCases:
             now=now or _utcnow(),
             error_code=error_code,
             error_summary=error_summary,
+            request_id=request_id,
         )
 
     def retry(
@@ -334,6 +440,7 @@ class ProcessingWorkerUseCases:
         run_id: UUID,
         *,
         expected_version: int,
+        request_id: str | None = None,
         now: datetime | None = None,
     ) -> ProcessingRun:
         return self._apply_internal(
@@ -341,7 +448,32 @@ class ProcessingWorkerUseCases:
             run_id,
             ProcessingRunAction.WORKER_RETRY.value,
             expected_version=expected_version,
+            request_id=request_id,
             now=now or _utcnow(),
+        )
+
+    def close(
+        self,
+        scope: ProjectScope,
+        run_id: UUID,
+        *,
+        expected_version: int,
+        reason: str,
+        request_id: str | None = None,
+        now: datetime | None = None,
+    ) -> ProcessingRun:
+        """保留错误的失败收口；内部动作，绝不暴露给客户端。
+
+        收口后运行的 ``is_terminal`` 为真，``worker-retry`` 等方法一律拒绝。
+        """
+        return self._apply_internal(
+            scope,
+            run_id,
+            ProcessingRunAction.SYSTEM_CLOSE.value,
+            expected_version=expected_version,
+            now=now or _utcnow(),
+            reason=reason,
+            request_id=request_id,
         )
 
     def _apply_internal(
@@ -356,6 +488,8 @@ class ProcessingWorkerUseCases:
         output_refs: tuple[str, ...] = (),
         error_code: str | None = None,
         error_summary: str | None = None,
+        reason: str | None = None,
+        request_id: str | None = None,
     ) -> ProcessingRun:
         run = self._runs.get(scope, run_id)
         if run is None:
@@ -370,15 +504,39 @@ class ProcessingWorkerUseCases:
             output_refs=output_refs,
             error_code=error_code,
             error_summary=error_summary,
+            reason=reason,
         )
         saved = self._runs.save(scope, updated, expected_version=expected_version)
+        audit_reason = reason
+        extra_details: dict[str, object] = {}
+        if action == ProcessingRunAction.WORKER_FAIL.value and error_summary is not None:
+            safe_summary = sanitize_log_message(
+                error_summary,
+                limit=AUDIT_REASON_MAX_LENGTH,
+            )
+            audit_reason = safe_summary
+            extra_details["error_summary"] = safe_summary
+        _record_transition(
+            self._audit,
+            self._outbox,
+            scope,
+            action=action,
+            before=run,
+            after=saved,
+            reason=audit_reason,
+            request_id=request_id,
+            occurred_at=now,
+            extra_details=extra_details,
+        )
         self._uow.commit()
         return saved
 
 
 __all__ = [
     "DETAIL_STEP_LIMIT",
+    "PROCESSING_RUN_ACTION_EVENTS",
     "PROCESSING_RUN_REQUESTED_EVENT",
+    "PROCESSING_RUN_RESOURCE_TYPE",
     "ProcessingRunUseCases",
     "ProcessingWorkerUseCases",
 ]

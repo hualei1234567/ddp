@@ -5,8 +5,10 @@
 
 **七个状态**（N4-001 权威定义）：
 ``CREATED → QUEUED → RUNNING → SUCCEEDED/FAILED``，失败可经 ``RETRYING``
-重新排队；``CANCELLED`` 可由 CREATED/QUEUED/RUNNING/FAILED/RETRYING 进入。``SUCCEEDED`` 与
-``CANCELLED`` 是终态，没有出边。
+重新排队；``CANCELLED`` 可由 CREATED/QUEUED/RUNNING/RETRYING 进入。
+``FAILED`` 不能直接取消（那会抹掉错误原因），只能由服务端 ``system-close``
+做保留错误的收口。``SUCCEEDED`` / ``CANCELLED`` 与收口后的 ``FAILED`` 是
+终态，没有出边。
 
 **八个阶段**取自《DDP 具身智能数据闭环平台建设总规范》§7.1 Pipeline：
 ``Upload → File Validation → Metadata Extraction → Format Parsing →
@@ -40,6 +42,7 @@ class ProcessingRunAction(StrEnum):
     """
 
     SYSTEM_QUEUE = "system-queue"
+    SYSTEM_CLOSE = "system-close"
     WORKER_CLAIM = "worker-claim"
     WORKER_ADVANCE = "worker-advance"
     WORKER_SUCCEED = "worker-succeed"
@@ -86,7 +89,8 @@ class ProcessingStage(StrEnum):
 # 阶段顺序是权威定义：只允许前进，不允许回退（重试从当前阶段继续）。
 STAGE_SEQUENCE: tuple[ProcessingStage, ...] = tuple(ProcessingStage)
 
-# 终态：没有出边。
+# 状态层面的终态：没有出边。注意 ``FAILED`` 写入 ``closed_at`` 后也是终态，
+# 判断请用 ``ProcessingRun.is_terminal``（只看持久字段，不读取审计表）。
 PROCESSING_RUN_TERMINAL_STATUSES: frozenset[str] = frozenset(
     {
         ProcessingRunStatus.SUCCEEDED.value,

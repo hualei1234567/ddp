@@ -20,7 +20,7 @@ from app.core.config import Settings
 from app.domain.identity.models import ProjectScope
 from app.domain.processing.enums import ProcessingRunStatus
 from app.infrastructure.db.base import Base
-from app.infrastructure.db.models.collection import OutboxEvent
+from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
 from app.infrastructure.db.models.quality import QualityRunModel
 from app.infrastructure.db.session import create_db_engine, create_session_factory
 from app.infrastructure.repositories.collection_audit import (
@@ -150,6 +150,17 @@ def _event_status(factory: sessionmaker[Session]) -> list[tuple[str, int]]:
         return [(status, attempts) for status, attempts in rows]
 
 
+def _audit_actions(factory: sessionmaker[Session], run_id: UUID) -> set[str]:
+    with factory() as session:
+        rows = session.scalars(
+            select(AuditLog.action).where(
+                AuditLog.resource_type == "PROCESSING_RUN",
+                AuditLog.resource_id == run_id,
+            )
+        ).all()
+        return set(rows)
+
+
 def test_event_type_is_the_documented_dispatch_contract() -> None:
     # 事件名是跨进程契约：生产点、消费者与 outbox 归类文档必须是同一个字符串。
     assert RUN_REQUESTED_EVENT == "processing.run.requested"
@@ -172,6 +183,11 @@ def test_permanent_failure_is_not_retried(api_db) -> None:
     run = _run(factory, ids, run_id)
     assert run.status == ProcessingRunStatus.FAILED.value
     assert run.error_code == "input_ref_not_project_scoped"
+    # 永久性失败没有消费者会再推进：Worker 必须显式 system-close 收口。
+    assert run.closed is True
+    assert run.closed_at is not None
+    assert run.is_terminal
+    assert "system-close" in _audit_actions(factory, run_id)
     assert _event_status(factory) == [("PUBLISHED", 0)]
 
 
@@ -219,6 +235,11 @@ def test_failure_retries_then_dead_letters_without_orphans(env) -> None:
     assert final is not None
     assert final.status == ProcessingRunStatus.FAILED.value
     assert final.error_code == "object_missing"
+    # 死信即终局：保留 error_*，同时收口为不可再操作的终态。
+    assert final.closed is True
+    assert final.closed_at is not None
+    assert final.is_terminal
+    assert "system-close" in _audit_actions(factory, run_id)
     failed_steps = [step for step in _steps(factory, ids, run_id) if step.status == "FAILED"]
     assert [step.attempt for step in failed_steps] == [1, 2]
     assert _event_status(factory) == [("FAILED", 2)]

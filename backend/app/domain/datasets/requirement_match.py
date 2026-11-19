@@ -195,6 +195,10 @@ _QUALITY_THRESHOLD_METRICS: Mapping[str, Callable[[Mapping[str, object]], object
     "max_warning_count": lambda metrics: len(metrics.get("warnings") or ()),
 }
 
+# 公开的阈值键清单：其它模块（如采集方案）绑定质量阈值时只允许使用这组键，
+# 避免各自另造一套质量词汇，导致同一指标出现两个名字。
+QUALITY_THRESHOLD_KEYS: frozenset[str] = frozenset(_QUALITY_THRESHOLD_METRICS)
+
 _COMPARATORS: Mapping[str, Callable[[Any, Any], bool]] = {
     "min_": operator.ge,
     "max_": operator.le,
@@ -595,6 +599,7 @@ __all__ = [
     "MatchPolicy",
     "MatchReport",
     "MatchStatus",
+    "QUALITY_THRESHOLD_KEYS",
     "VersionFacts",
     "evaluate_requirement_match",
 ]

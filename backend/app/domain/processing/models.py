@@ -24,6 +24,7 @@ from app.domain.processing.enums import (
 )
 from app.domain.processing.errors import (
     DomainValidationError,
+    InvalidStateTransitionError,
 )
 from app.domain.processing.state_machines import (
     allowed_actions,
@@ -47,6 +48,8 @@ REF_MAX_LENGTH = 1024
 PIPELINE_VERSION_MAX_LENGTH = 64
 ERROR_CODE_MAX_LENGTH = 64
 ERROR_SUMMARY_MAX_LENGTH = 2000
+#: 收口原因与 ``audit_logs.reason`` 同宽；不新增列，原因只落在审计记录里。
+STATUS_REASON_MAX_LENGTH = 1000
 
 _STAGE_ACTIONS = frozenset(
     {
@@ -133,6 +136,9 @@ class ProcessingRun:
     error_summary: str | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
+    #: 失败收口时间：``FAILED`` 上由服务端 ``system-close`` 写入；为 NULL 时
+    #: 仍可按 Worker 的重试策略拉起。它不替代 ``error_*``，收口后错误原因保留。
+    closed_at: datetime | None = None
     row_version: int = 1
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -189,9 +195,15 @@ class ProcessingRun:
         )
         object.__setattr__(self, "started_at", optional_aware(self.started_at, "started_at"))
         object.__setattr__(self, "finished_at", optional_aware(self.finished_at, "finished_at"))
+        object.__setattr__(self, "closed_at", optional_aware(self.closed_at, "closed_at"))
         object.__setattr__(self, "row_version", positive_int(self.row_version, "row_version"))
         object.__setattr__(self, "created_at", optional_aware(self.created_at, "created_at"))
         object.__setattr__(self, "updated_at", optional_aware(self.updated_at, "updated_at"))
+        if self.closed_at is not None:
+            if self.status != ProcessingRunStatus.FAILED.value:
+                raise DomainValidationError("只有 FAILED 状态可以记录 closed_at")
+            if self.finished_at is not None and self.closed_at < self.finished_at:
+                raise DomainValidationError("closed_at 不得早于 finished_at")
         self._validate_invariants()
 
     def _validate_invariants(self) -> None:
@@ -221,10 +233,22 @@ class ProcessingRun:
 
     @property
     def is_terminal(self) -> bool:
-        return self.status in {
+        """终态：成功、取消，或保留错误的失败收口。
+
+        ``FAILED`` 本身不是终态（Worker 仍可重试）；只有 ``closed_at`` 非空后
+        才不可再操作。判定只看本实体的持久字段，不读取审计表。
+        """
+        if self.status in {
             ProcessingRunStatus.SUCCEEDED.value,
             ProcessingRunStatus.CANCELLED.value,
-        }
+        }:
+            return True
+        return self.status == ProcessingRunStatus.FAILED.value and self.closed_at is not None
+
+    @property
+    def closed(self) -> bool:
+        """是否已失败收口；``closed_at`` 的布尔投影，供审计/响应使用。"""
+        return self.closed_at is not None
 
     def transition(
         self,
@@ -236,6 +260,7 @@ class ProcessingRun:
         output_refs: list[str] | tuple[str, ...] = (),
         error_code: str | None = None,
         error_summary: str | None = None,
+        reason: str | None = None,
     ) -> ProcessingRun:
         """按显式迁移表生成新状态；非法动作/字段组合一律拒绝。"""
         action_name = validate_action_name(action)
@@ -243,6 +268,9 @@ class ProcessingRun:
         if moment is None:
             raise DomainValidationError("now 不能为空")
         actor = required_uuid(actor_id, "actor_id")
+        if self.closed_at is not None:
+            # 收口是吸收态：连 Worker 重试也不允许，避免把已放弃的失败重新拉起。
+            raise InvalidStateTransitionError(self.status, action_name, detail="运行已系统收口")
         target = target_status(self.status, action_name)
 
         if action_name == ProcessingRunAction.WORKER_ADVANCE.value and stage is None:
@@ -259,6 +287,16 @@ class ProcessingRun:
             error_code is None or error_summary is None
         ):
             raise DomainValidationError("worker-fail 必须同时提供 error_code 与 error_summary")
+        reason_text = optional_text(
+            reason,
+            "reason",
+            max_length=STATUS_REASON_MAX_LENGTH,
+        )
+        if action_name == ProcessingRunAction.SYSTEM_CLOSE.value:
+            if reason_text is None:
+                raise DomainValidationError("system-close 必须提供收口原因")
+        elif reason_text is not None:
+            raise DomainValidationError(f"动作 {action_name} 不接受 reason")
 
         new_stage = self.stage
         if stage is not None:
@@ -284,7 +322,10 @@ class ProcessingRun:
             "updated_by": actor,
         }
 
-        if action_name == ProcessingRunAction.WORKER_CLAIM.value:
+        if action_name == ProcessingRunAction.SYSTEM_CLOSE.value:
+            # 自环：状态、阶段、错误与结束时间全部保持原样，只记录收口时间。
+            updates["closed_at"] = moment
+        elif action_name == ProcessingRunAction.WORKER_CLAIM.value:
             updates.update(
                 {
                     "attempt": self.attempt + 1,
@@ -337,6 +378,7 @@ __all__ = [
     "MAX_REFS",
     "PIPELINE_VERSION_MAX_LENGTH",
     "REF_MAX_LENGTH",
+    "STATUS_REASON_MAX_LENGTH",
     "ProcessingRun",
     "STAGE_SEQUENCE",
 ]

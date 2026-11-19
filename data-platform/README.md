@@ -28,3 +28,4 @@
 |---|---|---|
 | `ddp_data/huggingface/` | 进行中 | HF 数据集元信息 Adapter（Repo ID / revision / license / gated） |
 | `ddp_data/media/` | 进行中 | MP4 只读 metadata 探测：ffprobe 子进程、超时/输出上限/显式错误，返回 duration/fps/分辨率/编码/streams |
+| `ddp_data/parquet/` | 进行中 | Parquet 只读元数据：官方 PyArrow（`requirements.txt` 固定 23.0.1）读取 footer，还原 schema/行数/行组数、表预览与显式缺失列；有界、不读数据页 |

@@ -85,6 +85,8 @@ def create_collection_plan(
             plan_version=payload.plan_version,
             description=payload.description,
             owner_id=payload.owner_id,
+            target_episode_count=payload.target_episode_count,
+            quality_thresholds=payload.quality_thresholds,
         ),
         idempotency_key=idempotency_key,
         method=request.method,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
@@ -48,6 +49,8 @@ class NewCollectionPlan:
     plan_version: int = 1
     description: str | None = None
     owner_id: UUID | None = None
+    target_episode_count: int | None = None
+    quality_thresholds: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)

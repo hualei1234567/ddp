@@ -6,14 +6,27 @@ If-Match 乐观锁、非法内部动作与状态机冲突。
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+from app.infrastructure.db.models.collection import AuditLog
+from sqlalchemy import select
 
 from tests.api.conftest import make_client
 from tests.api.dataset_support import url
 
 pytestmark = pytest.mark.usefixtures("api_db")
+
+
+def _audit_rows(factory, run_id: str) -> dict[str, AuditLog]:
+    with factory() as session:
+        rows = session.scalars(
+            select(AuditLog).where(
+                AuditLog.resource_type == "PROCESSING_RUN",
+                AuditLog.resource_id == UUID(run_id),
+            )
+        ).all()
+        return {row.action: row for row in rows}
 
 
 def _create(client, project_id, **overrides: object) -> dict[str, object]:
@@ -37,6 +50,7 @@ def test_create_get_and_allowed_actions(api_db) -> None:
     assert created["stage"] is None
     assert created["attempt"] == 0
     assert created["retry_count"] == 0
+    assert created["closed_at"] is None
     assert created["allowed_actions"] == ["cancel"]
     assert created["version"] == 1
     assert created["project_id"] == str(ids.project_a)
@@ -45,6 +59,12 @@ def test_create_get_and_allowed_actions(api_db) -> None:
     assert detail.status_code == 200, detail.text
     assert detail.json()["run_id"] == created["run_id"]
     assert detail.headers["ETag"] == '"1"'
+
+    audits = _audit_rows(factory, created["run_id"])
+    create_row = audits["create"]
+    assert create_row.actor_user_id == ids.editor_a
+    assert (create_row.from_status, create_row.to_status) == (None, "CREATED")
+    assert create_row.request_id is not None
 
 
 def test_list_filters_and_pagination(api_db) -> None:
@@ -104,6 +124,11 @@ def test_cancel_requires_if_match_and_is_idempotent_only_once(api_db) -> None:
     assert cancelled.json()["allowed_actions"] == []
     assert cancelled.headers["ETag"] == '"2"'
 
+    cancel_audit = _audit_rows(factory, run["run_id"])["cancel"]
+    assert cancel_audit.actor_user_id == ids.editor_a
+    assert (cancel_audit.from_status, cancel_audit.to_status) == ("CREATED", "CANCELLED")
+    assert cancel_audit.request_id is not None
+
     again = editor.post(
         url(ids.project_a, f"/processing-runs/{run['run_id']}/actions/cancel"),
         headers={"If-Match": '"2"'},
@@ -112,16 +137,24 @@ def test_cancel_requires_if_match_and_is_idempotent_only_once(api_db) -> None:
     assert again.json()["error"]["code"] == "state_transition_invalid"
 
 
-def test_internal_actions_cannot_be_invoked_by_clients(api_db) -> None:
+@pytest.mark.parametrize("action", ["worker-succeed", "worker-retry", "system-close"])
+def test_internal_actions_cannot_be_invoked_by_clients(api_db, action: str) -> None:
     factory, ids = api_db
     editor = make_client(factory, ids.editor_a)
     run = _create(editor, ids.project_a)
     response = editor.post(
-        url(ids.project_a, f"/processing-runs/{run['run_id']}/actions/worker-succeed"),
+        url(ids.project_a, f"/processing-runs/{run['run_id']}/actions/{action}"),
         headers={"If-Match": f'"{run["version"]}"'},
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_failed"
+
+    # 伪造内部动作不得改变状态/版本，也不得留下任何审计。
+    unchanged = editor.get(url(ids.project_a, f"/processing-runs/{run['run_id']}"))
+    assert unchanged.status_code == 200
+    assert unchanged.json()["status"] == "CREATED"
+    assert unchanged.json()["version"] == run["version"]
+    assert set(_audit_rows(factory, run["run_id"])) == {"create"}
 
 
 def test_project_isolation_and_role_permissions(api_db) -> None:
@@ -193,7 +226,7 @@ class _AnyObjectInspector:
         return len(object_key.encode())
 
 
-def _run_worker_once(api_db) -> dict[str, object]:
+def _run_worker_once(api_db, *, inspector=None, now=None) -> dict[str, object]:
     from datetime import UTC, datetime
 
     from app.core.config import Settings
@@ -203,9 +236,9 @@ def _run_worker_once(api_db) -> dict[str, object]:
     worker = ProcessingRunWorker(
         factory,
         Settings(validation_max_attempts=2),  # type: ignore[call-arg]
-        inspector=_AnyObjectInspector(),
+        inspector=inspector or _AnyObjectInspector(),
     )
-    return worker.process_once(now=datetime.now(UTC))
+    return worker.process_once(now=now or datetime.now(UTC))
 
 
 def test_steps_are_inlined_in_detail_and_paged_by_endpoint(api_db) -> None:
@@ -275,3 +308,59 @@ def test_steps_endpoint_enforces_project_isolation_and_unknown_run(api_db) -> No
         params={"cursor": "not-a-cursor"},
     )
     assert invalid.status_code == 422
+
+
+class _MissingObjectInspector:
+    def object_size(self, object_key: str) -> int | None:
+        return None
+
+
+def test_dead_letter_closes_failed_run_and_is_visible_in_audit_timeline(api_db) -> None:
+    """失败收口：错误保留在运行上，system-close 只出现在审计时间线（owner 可读）。"""
+    from datetime import UTC, datetime, timedelta
+
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    viewer = make_client(factory, ids.viewer_a)
+    run = _create(editor, ids.project_a, input_refs=[f"raw/{ids.project_a}/missing"])
+
+    first_moment = datetime.now(UTC)
+    first = _run_worker_once(
+        api_db,
+        inspector=_MissingObjectInspector(),
+        now=first_moment,
+    )
+    assert first["status"] == "RETRIED", first
+    second = _run_worker_once(
+        api_db,
+        inspector=_MissingObjectInspector(),
+        now=first_moment + timedelta(seconds=5),
+    )
+    assert second["status"] == "DEAD_LETTER", second
+
+    detail = editor.get(url(ids.project_a, f"/processing-runs/{run['run_id']}"))
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["status"] == "FAILED"
+    assert body["error_code"] == "object_missing"
+    assert body["error_summary"]
+    assert body["closed_at"] is not None
+    # FAILED 本来就没有客户端动作；收口后仍是空集合，客户端无法伪造 system-close。
+    assert body["allowed_actions"] == []
+
+    timeline = owner.get(
+        url(ids.project_a, f"/audit-logs/PROCESSING_RUN/{run['run_id']}"),
+    )
+    assert timeline.status_code == 200, timeline.text
+    actions = {item["action"] for item in timeline.json()["items"]}
+    assert {"create", "worker-fail", "system-close"} <= actions
+
+    close_row = next(item for item in timeline.json()["items"] if item["action"] == "system-close")
+    assert (close_row["from_status"], close_row["to_status"]) == ("FAILED", "FAILED")
+    assert close_row["reason"]
+
+    forbidden = viewer.get(
+        url(ids.project_a, f"/audit-logs/PROCESSING_RUN/{run['run_id']}"),
+    )
+    assert forbidden.status_code == 403

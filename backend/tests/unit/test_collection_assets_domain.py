@@ -256,3 +256,80 @@ def test_version_must_match_existing_row() -> None:
         _call(directory, sop_id=sop_id, sop_version="v9")
     with pytest.raises(DomainValidationError):
         _call(directory, action_spec_id=spec_id, action_spec_version="v9")
+
+
+# --- N9-003：采集方案目标与质量阈值 -----------------------------------------
+def test_plan_targets_default_to_unset() -> None:
+    """缺省不是 0 / 空值伪装出来的目标：NULL 与 ``{}`` 都表示"未设定"。"""
+    plan = CollectionPlan(plan_id=uuid4(), project_id=uuid4(), code="p", name="n")
+    assert plan.target_episode_count is None
+    assert dict(plan.quality_thresholds) == {}
+
+
+def test_plan_targets_accept_registered_thresholds() -> None:
+    plan = CollectionPlan(
+        plan_id=uuid4(),
+        project_id=uuid4(),
+        code="p",
+        name="n",
+        target_episode_count=20,
+        quality_thresholds={
+            "min_selected_count": 20,
+            "max_duplicated_count": 0,
+            "min_total_duration_ns": 1_000_000_000,
+            "max_blocking_issue_count": 0,
+            "max_warning_count": 2.5,
+        },
+    )
+    assert plan.target_episode_count == 20
+    assert dict(plan.quality_thresholds)["min_total_duration_ns"] == 1_000_000_000
+
+
+@pytest.mark.parametrize("value", [-1, True, 1.5, "20"])
+def test_plan_target_episode_count_must_be_non_negative_int(value: object) -> None:
+    with pytest.raises(DomainValidationError):
+        CollectionPlan(
+            plan_id=uuid4(),
+            project_id=uuid4(),
+            code="p",
+            name="n",
+            target_episode_count=value,  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize(
+    "thresholds",
+    [
+        {"unknown_threshold": 1},
+        {"min_selected_count": -1},
+        {"min_selected_count": float("nan")},
+        {"min_selected_count": float("inf")},
+        {"min_selected_count": "10"},
+        {"min_selected_count": True},
+        {"min_selected_count": None},
+    ],
+)
+def test_plan_quality_thresholds_are_structured_and_bounded(
+    thresholds: dict[str, object],
+) -> None:
+    with pytest.raises(DomainValidationError):
+        CollectionPlan(
+            plan_id=uuid4(),
+            project_id=uuid4(),
+            code="p",
+            name="n",
+            quality_thresholds=thresholds,  # type: ignore[arg-type]
+        )
+
+
+def test_plan_quality_thresholds_are_frozen() -> None:
+    source: dict[str, object] = {"min_selected_count": 5}
+    plan = CollectionPlan(
+        plan_id=uuid4(),
+        project_id=uuid4(),
+        code="p",
+        name="n",
+        quality_thresholds=source,
+    )
+    source["min_selected_count"] = 999
+    assert dict(plan.quality_thresholds) == {"min_selected_count": 5}

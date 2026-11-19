@@ -55,11 +55,14 @@
 | RK-32 | 多基地概览按 `location_id` 聚合依赖 `project_id` 前缀索引，未在 PG 做 `EXPLAIN`；单项目超大时可能退化为项目级扫描 | `location_resources.py`；N9-005 报告 | 中 | P2 | 数据量到阈值时补 `(project_id, location_id)` 索引并留 EXPLAIN 证据 | 后端 |
 | RK-33 | 盲审对所有非标注人生效，仲裁人/负责人也看不到标签值；若业务需要仲裁豁免，当前无规则 | `review_policy.py`；N6-004 报告 | 中 | P2 | 明确仲裁豁免规则后再开放；当前按最严格口径 | 产品 / 后端 |
 | RK-34 | `/metrics` 业务指标为拉取式全库聚合，状态表缺 `status` 前缀索引；PG 运行时路径仅编译级验证 | `observability.py`；TD-11 | 中 | P2 | 2s 超时按组降级；数据量上来后预聚合或补索引；PG 环境补一次抓取回归 | 后端 / 运维 |
-| RK-35 | 来源探测只 HEAD Canonical manifest，manifest 存在不代表所有 `raw_assets` 对象都在 | `validity.py`；N5-004 报告 | 中 | P2 | 后续把 `raw_assets.object_key` 纳入第二层探测（N5-007） | 后端 |
+| RK-35 | ~~来源探测只 HEAD Canonical manifest~~ **已修复**（N5-007：manifest + `raw_assets.object_key` 双层有界探测，明确缺失写 UNKNOWN；对象上限口径为两类总数） | `validity.py`；N5-007 报告 | 低 | P2 | 大版本会因对象总数超限整轮跳过，需按部署规模调阈值 | 后端 |
 | RK-36 | Adapter 的 fetch/verify/write 能力尚未接入导入链路，当前内置 Adapter 只声明 parse/detect | `registry.py`；N3-002 报告 | 低 | P2 | 后续按格式接入时再启用，避免能力声明与实际执行脱节 | 后端 |
 | RK-37 | 训练状态没有受控轮询；`config_summary` 只是脱敏摘要，权威配置仍在外部平台 | `training_references.py`；N7-002 报告 | 中 | P2 | 复用 domain_sweeps 做受控轮询前先定部署开关与失败语义 | 后端 |
 | RK-38 | MP4 探测已实现但未接入导入链路；后端镜像未安装 ffprobe，接入前需补部署依赖 | `ddp_data/media/mp4.py`；N3-004 报告 | 中 | P2 | 接入 local-adapter 或落盘路径，并在镜像安装 ffmpeg | 后端 / 运维 |
 | RK-39 | Asset Catalog 只按标识前缀检索，不支持名称/文件名；PG `EXPLAIN` 未验收 | `asset_catalog.py`；N5-001 报告 | 中 | P2 | 有名称检索需求时单独评审索引方案；真实 PG 补 EXPLAIN | 后端 |
+| RK-40 | 处理运行收口只体现为 `closed_at`/空 `allowed_actions`，响应没有显式“已收口”标签 | `processing_response_models.py`；N4-006 报告 | 低 | P2 | 前端需要时再评估契约字段；当前通过审计时间线观测 | 后端 / 前端 |
+| RK-41 | Parquet 仅 footer 元数据；PyArrow wheel 体积较大且要求 glibc ≥2.28 | `ddp_data/parquet`；N3-003 报告 | 中 | P2 | 接入数据页解析前评估；CI/基础镜像保持满足要求 | 后端 / 运维 |
+| RK-42 | 采集方案目标/阈值只是计划值，没有自动验收或执行保证 | `collection_plans`；N9-003 报告 | 低 | P2 | 前端展示时必须与实绩区分，禁止当作达标证明 | 产品 / 前端 |
 
 ## 5. 产品与验收口径
 
