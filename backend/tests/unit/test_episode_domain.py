@@ -122,6 +122,21 @@ def test_episode_time_base_and_failure_reason_validation() -> None:
         _episode(success=False)
 
 
+def test_time_base_stays_closed_and_legacy_shape_remains_valid() -> None:
+    """历史最小 ``time_base`` 仍可建 Episode；每流映射不得塞进这个封闭对象。
+
+    N4-003 的每流 clock/offset/drift/frame index 明细放在质量证据 JSON，
+    不扩 ``time_base``（契约 ``additionalProperties: false``），因此这里
+    显式锁住"历史形状不变 + 未声明字段仍被拒绝"。
+    """
+    legacy = _time_base()
+    episode = _episode(time_base=legacy)
+    assert dict(episode.time_base) == legacy
+
+    with pytest.raises(TimeBaseInvalidError):
+        _episode(time_base={**legacy, "streams": [{"stream_id": "main"}]})
+
+
 def test_episode_state_machine_rejects_skipping_quality() -> None:
     episode = _episode()
     with pytest.raises(InvalidStateTransitionError):

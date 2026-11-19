@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -172,3 +173,83 @@ def test_empty_assets_fails_sync_rule() -> None:
 def test_sync_rule_is_versioned_with_other_rules() -> None:
     """新增规则必须随之升 RULE_VERSION，否则历史判定不可追溯。"""
     assert RULE_VERSION == "1.1.0"
+
+
+# --------------------------------------------------------------------------
+# N4-003：每流时钟/偏移/漂移/帧索引映射写进质量证据（不新增迁移）
+# --------------------------------------------------------------------------
+
+
+def _sync_evidence(report):
+    rule = _sync_rule(report)
+    assert rule.evidence is not None
+    return rule.evidence
+
+
+def test_sync_evidence_carries_per_stream_frame_index_mapping() -> None:
+    report = _report(
+        [
+            _asset(camera="main", path="a.mp4", source_fps=30.0),
+            _asset(camera="wrist", path="b.mp4", source_fps=30.0),
+        ]
+    )
+
+    evidence = _sync_evidence(report)
+    assert evidence["episodes_checked"] == 1
+    episode = evidence["episodes"][0]
+    assert episode["frame_index_status"] == "DERIVED"
+    # 导入元数据没有逐流时钟声明：必须如实 UNKNOWN，不能伪造 PTP/NTP。
+    assert episode["clock_domain_status"] == "UNKNOWN"
+    assert episode["drift_status"] == "UNKNOWN"
+    streams = {item["stream_id"]: item for item in episode["streams"]}
+    assert streams["main"]["frame_rate"] == {"num": 30, "den": 1}
+    # excerpt_seconds=12.0 @ 30fps = 360 帧
+    assert streams["main"]["frame_count"] == 360
+    assert streams["main"]["start_offset_frames"] == {
+        "numerator": 0,
+        "denominator": 1,
+    }
+    assert streams["main"]["recommended_trim_ns"] == 0
+
+
+def test_sync_evidence_marks_legacy_assets_without_fps_as_unknown() -> None:
+    """历史导入行没有 source_fps：帧索引显式 UNKNOWN，不拖垮既有同步结论。"""
+    report = _report(
+        [
+            _asset(camera="main", path="a.mp4", source_fps=None),
+            _asset(camera="wrist", path="b.mp4", source_fps=None),
+        ]
+    )
+
+    rule = _sync_rule(report)
+    assert rule.passed is True
+    assert "帧索引不可完全推导" in rule.detail
+    episode = _sync_evidence(report)["episodes"][0]
+    assert episode["frame_index_status"] == "UNKNOWN"
+    assert all(item["frame_count"] is None for item in episode["streams"])
+
+
+def test_sync_evidence_is_bounded_and_marks_truncation() -> None:
+    """证据列有 4000 字节上限：超限必须显式标记，不能静默丢弃。"""
+    assets = [
+        _asset(
+            episode_key=f"demo_{index:03d}",
+            camera=camera,
+            path=f"demo_{index:03d}-{camera}.mp4",
+            source_fps=30.0,
+        )
+        for index in range(40)
+        for camera in ("main", "right", "wrist_left", "stereo")
+    ]
+
+    evidence = _sync_evidence(_report(assets))
+    encoded = json.dumps(
+        evidence,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    assert len(encoded.encode("utf-8")) <= 4000
+    assert evidence["episodes_truncated"] is True
+    assert evidence["episodes_checked"] == 40
