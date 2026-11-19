@@ -63,6 +63,11 @@
 | RK-40 | 处理运行收口只体现为 `closed_at`/空 `allowed_actions`，响应没有显式“已收口”标签 | `processing_response_models.py`；N4-006 报告 | 低 | P2 | 前端需要时再评估契约字段；当前通过审计时间线观测 | 后端 / 前端 |
 | RK-41 | Parquet 仅 footer 元数据；PyArrow wheel 体积较大且要求 glibc ≥2.28 | `ddp_data/parquet`；N3-003 报告 | 中 | P2 | 接入数据页解析前评估；CI/基础镜像保持满足要求 | 后端 / 运维 |
 | RK-42 | 采集方案目标/阈值只是计划值，没有自动验收或执行保证 | `collection_plans`；N9-003 报告 | 低 | P2 | 前端展示时必须与实绩区分，禁止当作达标证明 | 产品 / 前端 |
+| RK-43 | 时间同步校正只是只读建议，若被前端或人工当成「已校正」会导致误判数据可用 | `domain/episodes/sync_analysis.py`（`CorrectionProposal.applied=False`）；N4-003 报告 | 中 | P1 | 证据里显式 `applied` 字段与 `correction_available` 原因；前端展示必须注明「建议未应用」 | 前端 / 后端 |
+| RK-44 | 导入链路无逐流时钟声明，同步证据多为 `UNKNOWN`，容易被读成「同步不合格」 | `application/datasources/quality.py`；N4-003 报告 | 中 | P2 | 文档与 UI 明确 UNKNOWN=「不可判定」而非失败；有真实数据源时补声明 | 产品 / 后端 |
+| RK-45 | 逾期提醒只落事件与审计，没有站内/邮件通道，用户可能仍看不到提醒 | `application/annotation/overdue_alerts.py`；N6-005 报告 | 中 | P2 | 事件已有确定性去重，接入通道时可直接消费；未接入前不得宣称「已提醒」 | 后端 / 产品 |
+| RK-46 | 血缘图查询有节点/边上限与深度上限，超大链路会被截断 | `application/episodes/graph.py`；N5-003 报告 | 低 | P2 | 截断标志与游标显式返回；超大图需专用离线分析而非在线 API | 后端 |
+| RK-47 | 性能基线验证时把**本地开发库** `ddp` 从 0061 升级到 0065（非 staging/生产，未删数据） | N8-002 报告 §5；`alembic upgrade head` | 低 | P2 | 该操作只发生在本机开发库；staging/生产迁移仍需单独批准；后续脚本禁止对非白名单库执行 DDL | 后端 / 运维 |
 
 ## 5. 产品与验收口径
 
