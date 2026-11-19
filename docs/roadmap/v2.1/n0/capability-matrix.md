@@ -2,7 +2,7 @@
 
 - 日期：2026-11-18
 - 基线提交：`7a9bb4b`
-- 覆盖范围：V2.1 实施级 WBS 的 **N1–N9 共 47 个能力项**（N0 是过程项，不在此表）
+- 覆盖范围：V2.1 实施级 WBS 的 **N1–N9 共 48 个能力项**（新增 N8-07 前端 E2E；N0 是过程项，不在此表）
 - 状态口径（唯一）：
   - **VERIFIED**：有代码 + 自动化测试或真实运行证据，且契约/前端一致。
   - **PARTIAL**：主体能力可用，但存在本条列出的明确缺口。
@@ -14,10 +14,10 @@
 | 状态 | 数量 |
 |---|---:|
 | VERIFIED | 23 |
-| PARTIAL | 22 |
+| PARTIAL | 23 |
 | MISSING | 1 |
 | BLOCKED | 1 |
-| **合计** | **47** |
+| **合计** | **48** |
 
 > 读法：PARTIAL 不是「差不多完成」，而是「能用，但缺什么已写在缺口列」。
 > 任何阶段要标记 DONE，必须把该阶段所有 PARTIAL 关闭或显式转为接受项。
@@ -58,7 +58,7 @@
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
-| DDP-V21-N4-01 | Processing Run 实体与状态机（CREATED/QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED/RETRYING） | **VERIFIED** | N4-001/002/005/006：七态状态机、迁移 0056/0057/0065、投递与消费、阶段步骤表与 `GET /steps`；FILE_VALIDATION 与 QUALITY_PRE_CHECK 真实执行；create/cancel/fail/retry/system-close 全审计，永久失败/死信自动 `closed_at` 收口且保留错误 | 解析/切片/清洗处理器属后续增量；前端 `/processing` 页面仍 PLANNED；`closed_at` 仅领域保证不变量 |
+| DDP-V21-N4-01 | Processing Run 实体与状态机（CREATED/QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED/RETRYING） | **VERIFIED** | N4-001/002/005/006 + N4-002 增量：七态状态机、迁移 0056/0057/0065、投递与消费、阶段步骤表与 `GET /steps`；**FILE_VALIDATION / METADATA_EXTRACTION / FORMAT_PARSING / QUALITY_PRE_CHECK 四个阶段真实执行**（元数据支持 MP4/Parquet/MCAP 只读解析，格式解析只投影 Canonical VideoStream、不伪造 Episode）；create/cancel/fail/retry/system-close 全审计，永久失败/死信自动 `closed_at` 收口且保留错误 | TIME_ALIGNMENT / CALIBRATION_VALIDATION / EPISODE_SEGMENTATION / DATA_CLEANING 仍显式 SKIPPED（原因写明依赖任务）；前端 `/processing` 页面仍 PLANNED |
 | DDP-V21-N4-02 | 时间同步（timestamp/frame index/offset/drift） | **PARTIAL** | N4-003：复用 `sync_drift.detect_sync_drift`（起点/时长/基准权威实现），新增时钟域一致性、精确有理数帧索引、`drift_ppm` 与负漂移判定；结论写入既有 `quality_findings.evidence`（有界 3.5KiB、显式截断标记），经 `/quality-runs/{id}/findings` 读回；不可判定一律 UNKNOWN/失败关闭 | 校正仅为只读建议（`applied=False`），不回写时间戳/帧索引/媒体文件；持续漂移需重采样（显式 `DRIFT_REQUIRES_RESAMPLING`）；导入元数据无逐流时钟声明，故导入证据多为 `UNKNOWN` |
 | DDP-V21-N4-03 | Episode 切分（metadata/time range/manual/task boundary） | **PARTIAL** | `domain/episodes/segmentation_rules.py:235,317,409`；`episode_materialization.py:131` | 只有 MANUAL_TIME_RANGE / fixed-window / episode-boundary；无 task-boundary、无帧级切片 |
 | DDP-V21-N4-04 | 质量引擎（checksum/decode/fps/resolution/duration/timestamp/missing frame/metadata/annotation） | **PARTIAL** | N4-004/005/007/008：统一规则注册表 + 六类分层 + 规则集内容 SHA + `quality_runs/quality_findings` + 创建/详情/findings/按对象列举；处理流水线 QUALITY 阶段逐 Episode 自动质检；数据集构造/导出按 `min_quality_score` 读取最新结论（无运行/INCOMPLETE/低分阻断） | decode/resolution/missing-frame 仍无规则；数据集规则源入口未开放；门禁阈值暂存 `selection_filters`（非独立契约字段） |
@@ -103,6 +103,7 @@
 | DDP-V21-N8-04 | Backup / Restore | **VERIFIED** | `scripts/ops/backup-restore-drill.sh`；`docs/operations/备份与恢复演练记录-2026-11-17.md`（PG+MinIO 全量、抽样 sha256 一致） | 仅本机、无加密/异地/RTO |
 | DDP-V21-N8-05 | Staging 发布链 | **BLOCKED** | CI 无 deploy job；`scripts/deploy-laptop.sh` 仅本机 | 主机不可解析（RK-01） |
 | DDP-V21-N8-06 | Security（JWT/RBAC/scope/signed URL/SSRF/path traversal/secret） | **VERIFIED** | N8-001 + N8-008：训练与模型网关共用 `adapter_url_guard.py`，两个独立 allow_private 开关默认 false；JWT/RBAC/scope/signed URL/path traversal/secret 均有用例 | 限流 Redis 不可用时 fail-open（ADR-0031 已接受） |
+| DDP-V21-N8-07 | 前端交互测试与 E2E | **PARTIAL** | N8-007：引入官方 `@playwright/test@1.65.1` 做关键路径 E2E（上传/审核/动作条三条），无 `DDP_E2E_BASE_URL` 时显式 SKIPPED（报告为 skipped 而非 passed）；本地全栈脚本 + 种子数据跑完自动清理；另引入 Testing Library + jsdom 覆盖动作条按 `allowed_actions` 渲染的交互（`*.dom.test.tsx`）；`npm test` 934 passed / 19 skipped | 三条 E2E 路径需真实后端+MinIO 环境才执行（本机无浏览器栈时 SKIPPED）；未接入默认 CI（避免无环境变红） |
 
 ## 9. N9 真实机器人 / 规模化
 
@@ -110,7 +111,7 @@
 |---|---|---|---|---|
 | DDP-V21-N9-01 | Robot Registry（model/serial/firmware/controller/sensor/profile） | **PARTIAL** | `domain/devices/models.py:72-91`；`robots.py`；`test_robots_api.py` | 无 controller 字段；传感器独立实体 |
 | DDP-V21-N9-02 | Capture Plan（task/scene/robot/sensor/operator/SOP/target/threshold） | **PARTIAL** | N9-003：迁移 0064 增加 `target_episode_count` 与 `quality_thresholds`（键复用数据集质量白名单）；Plan 仍是项目级可复用方案 | 无逐设备执行态；目标/阈值是计划值，不构成自动验收；前端未展示 |
-| DDP-V21-N9-03 | Capture Session（Plan→Session→Raw→Upload→Validation→Episode） | **PARTIAL** | N9-001 + ADR-0037：新建 `capture_sessions`（迁移 0066）记录一次真实执行：`SCHEDULED → RUNNING ↔ PAUSED → COMPLETED/ABORTED`，终止动作必须带原因，状态与时间一致性由领域保证、DB 触发器兜底；创建/列表/详情/状态动作走既有 If-Match/幂等/审计，事件全部为留痕类，不向机器人下发控制命令 | 会话尚未与 Episode/RawAsset 建立归属链路（只能回答「执行发生过」，不能回答「产出了哪些 Episode」）；无前端页面；未与真实硬件联调（BLOCKED） |
+| DDP-V21-N9-03 | Capture Session（Plan→Session→Raw→Upload→Validation→Episode） | **PARTIAL** | N9-001 + ADR-0037：新建 `capture_sessions`（迁移 0066）记录一次真实执行：`SCHEDULED → RUNNING ↔ PAUSED → COMPLETED/ABORTED`，终止动作必须带原因，状态与时间一致性由领域保证、DB 触发器兜底；N9-008：`raw_assets`/`episodes`/`upload_sessions` 新增可空 `capture_session_id` + 复合外键（迁移 0068），归属复用既有创建链路；`GET .../capture-sessions/{id}/artifacts` 复合键集分页只读列出产物，跨项目 404、未产出空页 | 尚无前端会话页面；未与真实硬件联调（BLOCKED）；产物归属只能在创建时携带，历史产物保持 NULL（不回填） |
 | DDP-V21-N9-04 | 真实设备格式 Adapter（LeRobot/ROS Bag/MCAP/HDF5） | **PARTIAL** | 格式识别 + 魔数（`domain/ingestion/enums.py:85`）；LeRobot preview 解析 | 无字段级解析；无真实设备数据验证（BLOCKED：无硬件） |
 | DDP-V21-N9-05 | 项目隔离与多基地/供应商 | **VERIFIED** | `locations`、`suppliers`、项目成员、跨项目隔离测试；N9-005 新增 `GET /projects/{id}/sites/overview` 按场地只读聚合设备/传感器/采集任务 | 无跨基地调度与供应商计费；仅挂机器人的传感器不归因到场地 |
 

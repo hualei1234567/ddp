@@ -26,9 +26,9 @@
 
 | 项 | 值 | 证据 |
 |---|---|---|
-| 契约版本 | **1.25.0**（P12：数据源远端校验结构化 1.24.0、项目级逾期汇总 1.25.0） | `packages/contracts/openapi.yaml:4` |
-| 路径数 | **239** | `grep -c '^  /' packages/contracts/openapi.yaml` |
-| operationId 数 | **319** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
+| 契约版本 | **1.26.0**（P13：采集会话产物归属链路） | `packages/contracts/openapi.yaml:4` |
+| 路径数 | **240** | `grep -c '^  /' packages/contracts/openapi.yaml` |
+| operationId 数 | **320** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
 | 冻结基线 | stage2–stage7 共 6 份 bundle + SHA256 | `packages/contracts/baselines/` |
 | 一致性检查 | 通过；**基线内已接受 62 项差异**（含 9 条生效契约超前错误码、1 条映射表无产生点） | `python3 scripts/check_contract_parity.py --strict` |
 | Lint | Redocly `@redocly/cli@1.34.24`（CI job） | `.github/workflows/ci.yml` |
@@ -37,12 +37,12 @@
 
 | 层 | 文件数 | 行数 | 证据 |
 |---|---:|---:|---|
-| 后端 `backend/app`（Python） | 611 | 139,862 | `find backend/app -name '*.py'` |
-| 前端 `apps/web/src`（TS/TSX） | 448 | 86,748 | `find apps/web/src \( -name '*.ts' -o -name '*.tsx' \)` |
+| 后端 `backend/app`（Python） | 615 | 141,258 | `find backend/app -name '*.py'` |
+| 前端 `apps/web/src`（TS/TSX） | 450 | 86,911 | `find apps/web/src \( -name '*.ts' -o -name '*.tsx' \)` |
 | 前端页面文件 | 95 | — | `find apps/web/src/pages -name '*.tsx' \| grep -v test` |
-| 后端路由模块 | 45 | 335 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
+| 后端路由模块 | 45 | 336 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
 | 后端 Worker | 10 | — | `backend/app/workers/*.py` |
-| Alembic 迁移 | 61 | 单头 `0067`（0062 审核 evidence / 0063 训练字段 / 0064 采集方案目标 / 0065 处理运行收口 / 0066 采集会话 / 0067 演练终态；0060 未使用） | `alembic heads` |
+| Alembic 迁移 | 62 | 单头 `0068`（0066 采集会话 / 0067 演练终态 / 0068 会话产物归属；0060 未使用） | `alembic heads` |
 | ORM 表 | 90 | PostgreSQL 实表 90 | `__tablename__` 去重 / `information_schema` |
 | ADR | 37 | — | `docs/adr/*.md` |
 
@@ -94,21 +94,21 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 
 | 项 | 命令 | 结果 |
 |---|---|---|
-| 后端用例收集 | `.venv/bin/python -m pytest --collect-only -q` | **3174 collected** |
+| 后端用例收集 | `.venv/bin/python -m pytest --collect-only -q` | **3220 collected** |
 | 后端全量 | `.venv/bin/python -m pytest -o addopts="" -q` | 见 §6.1（本轮实际输出） |
-| 前端全量 | `npx vitest run` | **928 passed / 19 skipped**（121 文件，117 过 / 4 跳） |
+| 前端全量 | `npx vitest run` | **934 passed / 19 skipped**（121 文件，117 过 / 4 跳；另含 Playwright E2E 三条路径，无环境时 SKIPPED） |
 | 契约 | `check_contract_parity.py --strict` | 通过（基线内 62 项） |
 | make check | `bash scripts/check.sh` | 8 步：ruff / pytest / tsc+eslint+vitest / build / secret / Agent 守卫 / outbox / 契约 |
 
 ### 6.1 后端全量结果
 
 ```
-3173 passed, 1 skipped（3174 collected；真实 PostgreSQL + Redis，P12 批次后，738.32s）
+3219 passed, 1 skipped（3220 collected；真实 PostgreSQL + Redis，P13 批次后，687.45s）
 ```
 
 - 命令：`cd backend && DDP_TEST_POSTGRES_URL=... DDP_TEST_REDIS_URL=... .venv/bin/python -m pytest -q --junitxml=...`
-- 集合 3174 = 3173 passed + 1 skipped；唯一 skip 为需显式 `DDP_RUN_REMOTE_VERIFY=1` 的 Hugging Face 手动用例（本机装有 ffprobe，MP4 真实样例未被跳过）。
-- 前端：`928 passed / 19 skipped`（121 文件，P12 批次后）（`cd apps/web && npx vitest run`）。
+- 集合 3220 = 3219 passed + 1 skipped；唯一 skip 为需显式 `DDP_RUN_REMOTE_VERIFY=1` 的 Hugging Face 手动用例（本机装有 ffprobe，MP4 真实样例未被跳过）。
+- 前端：`934 passed / 19 skipped`（121 文件，P13 批次后）（`cd apps/web && npx vitest run`）；E2E `npm run e2e` 无环境时输出 `SKIPPED: 未提供 DDP_E2E_BASE_URL`。
 - 结论：SQLite + 真实 PostgreSQL + 真实 Redis 全绿；迁移 0062（审核 evidence）在 SQLite 与真实 PG 上 upgrade→downgrade→upgrade 通过。
 
 ## 7. 数据事实（本地 PostgreSQL，非生产）
@@ -146,7 +146,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 |---|---|
 | 真实机器人设备格式端到端 | **BLOCKED**（无硬件） |
 | Episode 级自动质检 | **VERIFIED**（N4-005：`application/quality/episode_checks.py` + 处理流水线 QUALITY 阶段逐 Episode 质检） |
-| Processing Pipeline（八阶段） | **PARTIAL**（FILE_VALIDATION / QUALITY_PRE_CHECK 真实执行；解析/切片/清洗等处理器仍缺失） |
+| Processing Pipeline（八阶段） | **PARTIAL**（FILE_VALIDATION / METADATA_EXTRACTION / FORMAT_PARSING / QUALITY_PRE_CHECK 真实执行；TIME_ALIGNMENT / CALIBRATION_VALIDATION / EPISODE_SEGMENTATION / DATA_CLEANING 仍显式 SKIPPED） |
 | Canonical Frame / SensorStream / Action / Observation | **PARTIAL**（N3-001 `data-platform/ddp_data/canonical/` 只读契约；无生产者、无持久化，ADR-0035 有意不建表） |
 | Parquet / MCAP / ROS Bag / HDF5 字段级解析 | **PARTIAL**（Parquet footer 与 MCAP 元数据只读已实现；ROS Bag / HDF5 **MISSING**；均未接入导入链路） |
 | 六类质量报告 UI | **MISSING** |
@@ -155,7 +155,8 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 | 经营成本核算 | **MISSING**（需财务口径） |
 | `validity_status=UNKNOWN` 写入点 | **VERIFIED**（N5-004/N5-007：manifest 与 raw asset 双层探测，明确缺失写 UNKNOWN 并区分原因） |
 | 真实训练平台 | **BLOCKED**（未配置）；MOCK/DRY_RUN 已是独立执行器（N7-007），但不代表真实训练 |
-| 采集会话 → Episode / RawAsset 归属链路 | **MISSING**（N9-001 会话只记录执行事实，尚未关联产出） |
+| 采集会话 → Episode / RawAsset 归属链路 | **VERIFIED**（N9-008：迁移 0068 复合外键 + 只读产物列表端点；历史产物保持 NULL 不回填） |
+| 前端关键路径 E2E | **PARTIAL**（N8-007：三条路径已实现，需真实后端+MinIO 时执行；默认环境 SKIPPED） |
 
 ## 10. 复现命令清单
 
