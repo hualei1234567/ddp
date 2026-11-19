@@ -134,9 +134,7 @@ class SchemaPreset:
             "description": self.description,
             "version": self.version,
             "annotation_levels": [level.value for level in self.annotation_levels],
-            "labels": [
-                definition.to_payload() for definition in self.labels
-            ],
+            "labels": [definition.to_payload() for definition in self.labels],
         }
 
 

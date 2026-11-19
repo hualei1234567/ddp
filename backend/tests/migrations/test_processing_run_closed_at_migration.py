@@ -34,7 +34,8 @@ def _config_for_url(url: str) -> Config:
     config = Config(str(BACKEND_DIR / "alembic.ini"))
     config.set_main_option("script_location", str(BACKEND_DIR / "migrations"))
     config.set_main_option("prepend_sys_path", str(BACKEND_DIR))
-    config.set_main_option("sqlalchemy.url", url)
+    # ConfigParser 的 % 插值：PG 的 ?options=...%3D... 必须转义。
+    config.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
     return config
 
 

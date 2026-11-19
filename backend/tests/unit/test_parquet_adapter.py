@@ -251,10 +251,10 @@ def test_adapter_facade_keeps_stable_identity() -> None:
 
 
 def test_missing_file_fails_without_leaking_path(tmp_path: Path) -> None:
-    secret = "very-secret-dataset-name.parquet"
+    sensitive_name = "private-dataset-name.parquet"
     with pytest.raises(ParquetInputError) as excinfo:
-        read_parquet_metadata(tmp_path / secret)
-    assert secret not in str(excinfo.value)
+        read_parquet_metadata(tmp_path / sensitive_name)
+    assert sensitive_name not in str(excinfo.value)
 
 
 def test_non_parquet_and_truncated_inputs_fail(tmp_path: Path) -> None:

@@ -50,6 +50,7 @@
 | TD-26 | ~~审核 evidence 存于 `audit_logs.details`，应用层读审计回填~~ **已闭环（新数据）**（N2-009：迁移 0062 独立 JSON 列，双写；存量行 NULL 才回退审计，不反推回填） | — | — | — | — |
 | TD-23 | `infrastructure/repositories/calibration_records.py` 869 行（>800），本次 N1-002 继续增长 | 文件规模 |
 | 违反 CLAUDE.md §五；activate 链路与本文件职责混杂 | 拆出 activate/状态迁移到独立模块，先补仓储测试锁定语义 |
+| TD-33 | **4 个文件处于 500–800 行评审区**：`infrastructure/repositories/collection_assets.py` 557、`domain/annotation/schema_presets.py` 555（静态模板数据）、`application/processing/use_cases.py` 542、`application/datasets/validity.py` 510 | 文件规模 | 本轮 `wc -l` | 修改成本上升；尚未到 800 行硬拆分线 | 下次扩展前按职责拆分；schema_presets 以数据为主可豁免但需说明 |
 | TD-22 | V2.1 蓝图与仓库文档并存，缺少单一入口 | `docs/roadmap/next-stage-v2/`、`docs/roadmap/v2.1/` | 本轮新建 | 新人/Agent 读错基线 | 本目录 README 声明：V2.1 为实施基线，V2.0 为历史蓝图 |
 
 ## 3. 已闭环但需保留证据的项（避免重复登记）

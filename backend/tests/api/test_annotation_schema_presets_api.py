@@ -53,9 +53,7 @@ def test_list_and_detail_return_seven_readonly_templates(api_db) -> None:
 
     detail = viewer.get(url(ids.project_a, "/annotation-schema-presets/action"))
     assert detail.status_code == 200, detail.text
-    assert detail.json() == next(
-        item for item in body["items"] if item["preset_key"] == "action"
-    )
+    assert detail.json() == next(item for item in body["items"] if item["preset_key"] == "action")
 
     # 只读：目录端点不提供任何写方法。
     assert viewer.post(url(ids.project_a, "/annotation-schema-presets"), json={}).status_code == 405

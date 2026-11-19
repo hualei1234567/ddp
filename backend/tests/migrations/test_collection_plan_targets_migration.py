@@ -153,10 +153,13 @@ def test_sqlite_roundtrip_adds_columns_without_rebuild(tmp_path: Path) -> None:
         # 原生 ADD/DROP COLUMN 不重建表：方案行、素材状态守卫触发器与
         # 任务到本表的复合外键都必须保持原样。
         with engine.begin() as connection:
-            assert connection.execute(
-                text("SELECT code FROM collection_plans WHERE id = :id"),
-                {"id": plan_id},
-            ).scalar_one() == "PLAN-1"
+            assert (
+                connection.execute(
+                    text("SELECT code FROM collection_plans WHERE id = :id"),
+                    {"id": plan_id},
+                ).scalar_one()
+                == "PLAN-1"
+            )
         assert PLAN_TRIGGERS <= _sqlite_triggers(engine)
         task_fks = {item["name"] for item in inspect(engine).get_foreign_keys("collection_tasks")}
         assert "fk_collection_tasks_project_plan" in task_fks

@@ -497,6 +497,7 @@ def test_source_probe_recovery_requires_human_revalidate(
     assert restored.status_code == 200, restored.text
     assert restored.json()["validity_status"] == "VALID"
 
+
 def test_source_probe_missing_raw_asset_marks_unknown_with_distinct_reason(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:
@@ -579,9 +580,7 @@ def test_episode_raw_asset_keys_is_batched_and_project_scoped(
 
         event.listen(engine, "before_cursor_execute", _record)
         try:
-            keys = SqlDatasetUpstreamDirectory(session).episode_raw_asset_keys(
-                scope, episodes
-            )
+            keys = SqlDatasetUpstreamDirectory(session).episode_raw_asset_keys(scope, episodes)
         finally:
             event.remove(engine, "before_cursor_execute", _record)
 

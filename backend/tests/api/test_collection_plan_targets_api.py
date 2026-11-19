@@ -44,9 +44,7 @@ def test_plan_targets_roundtrip_and_defaults(
         "max_warning_count": 2.0,
     }
 
-    detail = client.get(
-        _url(ids.project_a, "collection-plans", f"/{created['plan_id']}")
-    )
+    detail = client.get(_url(ids.project_a, "collection-plans", f"/{created['plan_id']}"))
     assert detail.status_code == 200
     assert detail.json()["target_episode_count"] == 20
     assert detail.json()["quality_thresholds"] == created["quality_thresholds"]

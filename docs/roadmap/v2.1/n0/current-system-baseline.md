@@ -26,9 +26,9 @@
 
 | 项 | 值 | 证据 |
 |---|---|---|
-| 契约版本 | **1.18.0**（P8：Asset Catalog 与 TrainingRun 字段；1.17.0 为盲审） | `packages/contracts/openapi.yaml:4` |
-| 路径数 | **230** | `grep -c '^  /' packages/contracts/openapi.yaml` |
-| operationId 数 | **309** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
+| 契约版本 | **1.20.0**（P9：Schema 预设/采集方案阈值 1.19.0、处理运行 closed_at 1.20.0） | `packages/contracts/openapi.yaml:4` |
+| 路径数 | **232** | `grep -c '^  /' packages/contracts/openapi.yaml` |
+| operationId 数 | **311** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
 | 冻结基线 | stage2–stage7 共 6 份 bundle + SHA256 | `packages/contracts/baselines/` |
 | 一致性检查 | 通过；**基线内已接受 62 项差异**（含 9 条生效契约超前错误码、1 条映射表无产生点） | `python3 scripts/check_contract_parity.py --strict` |
 | Lint | Redocly `@redocly/cli@1.34.24`（CI job） | `.github/workflows/ci.yml` |
@@ -37,12 +37,12 @@
 
 | 层 | 文件数 | 行数 | 证据 |
 |---|---:|---:|---|
-| 后端 `backend/app`（Python） | 589 | 133,216 | `find backend/app -name '*.py'` |
+| 后端 `backend/app`（Python） | 591 | 134,395 | `find backend/app -name '*.py'` |
 | 前端 `apps/web/src`（TS/TSX） | 442 | 86,074 | `find apps/web/src \( -name '*.ts' -o -name '*.tsx' \)` |
 | 前端页面文件 | 95 | — | `find apps/web/src/pages -name '*.tsx' \| grep -v test` |
-| 后端路由模块 | 42 | 325 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
+| 后端路由模块 | 42 | 327 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
 | 后端 Worker | 10 | — | `backend/app/workers/*.py` |
-| Alembic 迁移 | 57 | 单头 `0063`（0058 质量引擎 / 0059 训练血缘 / 0061 失败用例 / 0062 审核 evidence / 0063 训练字段；0060 未使用） | `alembic heads` |
+| Alembic 迁移 | 59 | 单头 `0065`（0062 审核 evidence / 0063 训练字段 / 0064 采集方案目标 / 0065 处理运行收口；0060 未使用） | `alembic heads` |
 | ORM 表 | 84 | PostgreSQL 实表 85 | `__tablename__` 去重 / `information_schema` |
 | ADR | 36 | — | `docs/adr/*.md` |
 
@@ -64,7 +64,8 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 （横切：`audit.py`、`idempotency.py`）。
 
 `data-platform/ddp_data/`：`huggingface/`（hub_client、adapter、importer）、
-`lerobot/parser.py`、`adapters/{registry,builtin}.py`。
+`lerobot/parser.py`、`adapters/{registry,builtin}.py`、`media/mp4.py`、
+`parquet/`（官方 PyArrow 23.0.1 只读 footer）、`canonical/`。
 
 `backend/app/workers/`：`outbox`、`datasources`、`ingestion_jobs`、`exports`、
 `domain_sweeps`、`usage_snapshots`、`maintenance`。
@@ -94,7 +95,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 
 | 项 | 命令 | 结果 |
 |---|---|---|
-| 后端用例收集 | `.venv/bin/python -m pytest --collect-only -q` | **2890 collected** |
+| 后端用例收集 | `.venv/bin/python -m pytest --collect-only -q` | **2958 collected** |
 | 后端全量 | `.venv/bin/python -m pytest -o addopts="" -q` | 见 §6.1（本轮实际输出） |
 | 前端全量 | `npx vitest run` | **912 passed / 19 skipped**（118 文件，114 过 / 4 跳） |
 | 契约 | `check_contract_parity.py --strict` | 通过（基线内 62 项） |
@@ -103,11 +104,11 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 ### 6.1 后端全量结果
 
 ```
-2889 passed, 1 skipped（2890 collected；真实 PostgreSQL + Redis，P8 批次后，487.676s）
+2957 passed, 1 skipped（2958 collected；真实 PostgreSQL + Redis，P9 批次后，546.661s）
 ```
 
 - 命令：`cd backend && DDP_TEST_POSTGRES_URL=... DDP_TEST_REDIS_URL=... .venv/bin/python -m pytest -q --junitxml=...`
-- 集合 2890 = 2889 passed + 1 skipped；唯一 skip 为需显式 `DDP_RUN_REMOTE_VERIFY=1` 的 Hugging Face 手动用例。
+- 集合 2958 = 2957 passed + 1 skipped；唯一 skip 为需显式 `DDP_RUN_REMOTE_VERIFY=1` 的 Hugging Face 手动用例（本机装有 ffprobe，MP4 真实样例未被跳过）。
 - 前端：`912 passed / 19 skipped`（118 文件，P7 批次后）（`cd apps/web && npx vitest run`）。
 - 结论：SQLite + 真实 PostgreSQL + 真实 Redis 全绿；迁移 0062（审核 evidence）在 SQLite 与真实 PG 上 upgrade→downgrade→upgrade 通过。
 

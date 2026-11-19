@@ -142,7 +142,6 @@ class AnnotationSchemaOut(BaseModel):
         )
 
 
-
 class SchemaPresetOut(BaseModel):
     """预设模板：只含创建 Schema 所需的可编辑定义，不含项目/ID 等权威字段。"""
 
