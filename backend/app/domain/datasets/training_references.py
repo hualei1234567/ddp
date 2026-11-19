@@ -14,7 +14,6 @@ from uuid import UUID
 from app.domain.datasets.errors import DomainValidationError, InvalidStateTransitionError
 from app.domain.datasets.training_enums import (
     DECLARED_EXECUTION_MODES,
-    NON_REAL_EXECUTION_MODES,
     ExecutionMode,
     ExternalTrainingStatus,
 )
@@ -314,14 +313,10 @@ class ExternalTrainingReference:
             raise DomainValidationError("演练计划只能出现在 execution_mode=DRY_RUN 的引用上")
         if status is ExternalTrainingStatus.DRY_RUN and mode is not ExecutionMode.DRY_RUN:
             raise DomainValidationError("DRY_RUN 状态只能对应 execution_mode=DRY_RUN")
-        if (
-            status is ExternalTrainingStatus.SUCCEEDED
-            and mode in NON_REAL_EXECUTION_MODES
-            and (self.artifacts or {}).get("mock") is not True
-        ):
-            # 模拟执行若被标成 SUCCEEDED，必须携带显式 mock 标注；否则下游会把
-            # 它当作真实训练成功。
-            raise DomainValidationError("MOCK 执行的成功记录必须携带 mock=true 产物标注")
+        # 注意：不在实体上强制"MOCK + SUCCEEDED 必须带 mock 标注"。历史上有
+        # MOCK/DRY_RUN 只是标记、仍经真实 Adapter 执行的存量记录，它们可能是
+        # SUCCEEDED 且没有 mock 标注；在这里拒绝会让这些合法存量行读不出来。
+        # 新记录由 ``MockTrainingExecutor`` 保证标注，下游按 execution_mode 拒绝。
 
     @property
     def effective_status(self) -> ExternalTrainingStatus:

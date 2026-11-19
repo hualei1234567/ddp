@@ -178,17 +178,17 @@ def _reference(mode: ExecutionMode) -> ExternalTrainingReference:
     )
 
 
-def test_mock_success_requires_mock_label() -> None:
+def test_legacy_mock_reference_without_label_still_readable() -> None:
+    """存量 MOCK + SUCCEEDED 记录可能没有 mock 标注，必须仍能读出（不 500）。"""
     reference = _reference(ExecutionMode.MOCK)
-    with pytest.raises(DomainValidationError):
-        reference.apply_status(ExternalTrainingStatus.SUCCEEDED, now=NOW, actor_id=uuid4())
-    labeled = reference.apply_status(
+    legacy = reference.apply_status(
         ExternalTrainingStatus.SUCCEEDED,
         now=NOW,
         actor_id=uuid4(),
-        artifacts={"mock": True},
+        artifacts={"model": {"object_key": "legacy/model.bin"}},
     )
-    assert labeled.effective_status is ExternalTrainingStatus.SUCCEEDED
+    assert legacy.effective_status is ExternalTrainingStatus.SUCCEEDED
+    assert "mock" not in (legacy.artifacts or {})
 
 
 def test_dry_run_status_requires_dry_run_mode() -> None:
