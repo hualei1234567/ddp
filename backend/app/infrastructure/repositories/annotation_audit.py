@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.application.annotation.overdue_alerts import OVERDUE_ALERT_EVENT
 from app.application.annotation.ports import (
     AuditRecord,
     OutboxEvent,
@@ -67,6 +71,34 @@ class SqlAnnotationOutboxRepository:
             )
         )
         self._session.flush()
+
+    def recorded_overdue_windows(
+        self,
+        scope: ProjectScope,
+        task_ids: list[UUID],
+    ) -> set[str]:
+        """返回给定任务已落库的逾期提醒窗口键（严格按项目隔离）。
+
+        ``payload`` 是 JSON 列，窗口键由应用层写入 ``overdue_window``；
+        这里只读取、不猜测结构，非字符串值一律忽略。
+        """
+        if not task_ids:
+            return set()
+        payloads = self._session.scalars(
+            select(OutboxEventModel.payload).where(
+                OutboxEventModel.project_id == scope.project_id,
+                OutboxEventModel.event_type == OVERDUE_ALERT_EVENT,
+                OutboxEventModel.aggregate_id.in_(task_ids),
+            )
+        )
+        windows: set[str] = set()
+        for payload in payloads:
+            if not isinstance(payload, dict):
+                continue
+            window = payload.get("overdue_window")
+            if isinstance(window, str):
+                windows.add(window)
+        return windows
 
 
 # 幂等仓储的实体实现统一在 app.infrastructure.repositories.idempotency；
