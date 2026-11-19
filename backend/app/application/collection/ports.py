@@ -20,8 +20,12 @@ from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
 from app.domain.collection.assets import ActionSpec, CollectionPlan, CollectionSop, Scenario
-from app.domain.collection.enums import CollectionBatchStatus, CollectionTaskStatus
-from app.domain.collection.models import CollectionBatch, CollectionTask
+from app.domain.collection.enums import (
+    CaptureSessionStatus,
+    CollectionBatchStatus,
+    CollectionTaskStatus,
+)
+from app.domain.collection.models import CaptureSession, CollectionBatch, CollectionTask
 from app.domain.identity.models import ProjectScope
 
 
@@ -100,6 +104,35 @@ class CollectionBatchRepository(Protocol):
         *,
         expected_version: int,
     ) -> CollectionBatch: ...
+
+
+class CaptureSessionRepository(Protocol):
+    """采集会话仓储；按 ID 查询必须带项目过滤，跨项目一律返回 ``None``。"""
+
+    def add(self, scope: ProjectScope, session: CaptureSession) -> CaptureSession: ...
+
+    def get(self, scope: ProjectScope, session_id: UUID) -> CaptureSession | None: ...
+
+    def get_by_code(self, scope: ProjectScope, code: str) -> CaptureSession | None: ...
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        status: CaptureSessionStatus | None = None,
+        task_id: UUID | None = None,
+        batch_id: UUID | None = None,
+        after_id: UUID | None = None,
+        limit: int = 20,
+    ) -> list[CaptureSession]: ...
+
+    def save(
+        self,
+        scope: ProjectScope,
+        session: CaptureSession,
+        *,
+        expected_version: int,
+    ) -> CaptureSession: ...
 
 
 class AssignmentDirectory(Protocol):

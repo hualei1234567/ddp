@@ -1,4 +1,4 @@
-"""采集任务与批次领域模型。"""
+"""采集任务、批次与采集会话领域模型。"""
 
 from app.domain.collection.asset_state_machines import (
     ASSET_TERMINAL,
@@ -6,6 +6,9 @@ from app.domain.collection.asset_state_machines import (
     assert_asset_action,
 )
 from app.domain.collection.enums import (
+    PUBLIC_CAPTURE_SESSION_ACTIONS,
+    CaptureSessionAction,
+    CaptureSessionStatus,
     CollectionAssetAction,
     CollectionAssetStatus,
     CollectionBatchAction,
@@ -26,20 +29,31 @@ from app.domain.collection.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
-from app.domain.collection.models import CollectionBatch, CollectionTask
+from app.domain.collection.models import CaptureSession, CollectionBatch, CollectionTask
 from app.domain.collection.state_machines import (
     BATCH_TERMINAL,
+    SESSION_TERMINAL,
     TASK_TERMINAL,
     allowed_batch_actions,
+    allowed_session_actions,
     allowed_task_actions,
     assert_batch_action,
+    assert_session_action,
     assert_task_action,
+    session_action_requires_reason,
+    session_transition_pairs,
+    validate_session_action_name,
 )
 
 __all__ = [
     "ASSET_TERMINAL",
     "BATCH_TERMINAL",
+    "PUBLIC_CAPTURE_SESSION_ACTIONS",
+    "SESSION_TERMINAL",
     "TASK_TERMINAL",
+    "CaptureSession",
+    "CaptureSessionAction",
+    "CaptureSessionStatus",
     "CollectionAssetAction",
     "CollectionAssetStatus",
     "CollectionBatch",
@@ -61,8 +75,13 @@ __all__ = [
     "VersionConflictError",
     "allowed_asset_actions",
     "allowed_batch_actions",
+    "allowed_session_actions",
     "allowed_task_actions",
     "assert_asset_action",
     "assert_batch_action",
+    "assert_session_action",
     "assert_task_action",
+    "session_action_requires_reason",
+    "session_transition_pairs",
+    "validate_session_action_name",
 ]

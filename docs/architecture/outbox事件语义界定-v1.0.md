@@ -344,6 +344,21 @@ OR (dispatch = true AND status <> 'RECORDED')
 判据只看事件类型出现的位置，不看全量字符串，避免 `vote.decision` 这类
 普通字段路径造成假阳性。
 
+### 3.2.2 采集会话（N9-001）
+
+| 事件 | 产生点 | 归类 |
+|---|---|---|
+| `collection.capture_session.created` | `SESSION_CREATED_EVENT`（`application/collection/capture_sessions.py`） | 留痕类 |
+| `collection.capture_session.started` | `SESSION_ACTION_EVENTS`（同上） | 留痕类 |
+| `collection.capture_session.paused` | `SESSION_ACTION_EVENTS`（同上） | 留痕类 |
+| `collection.capture_session.resumed` | `SESSION_ACTION_EVENTS`（同上） | 留痕类 |
+| `collection.capture_session.completed` | `SESSION_ACTION_EVENTS`（同上） | 留痕类 |
+| `collection.capture_session.aborted` | `SESSION_ACTION_EVENTS`（同上） | 留痕类 |
+
+全部为留痕类：会话状态机在 HTTP 同步路径推进，下游读取 `capture_sessions`
+表本身，而不是事件。**不向机器人下发任何控制命令**；若将来接入控制器，
+必须单独立项补消费者、授权、时限与失败记录，不能把留痕事件擅自改成投递类。
+
 ## 5. 对阶段 7 数据平面的约束
 
 `datasource.import_requested` 归为**投递类**（下一批实现 worker 消费它）。
