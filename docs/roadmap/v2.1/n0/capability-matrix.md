@@ -14,8 +14,8 @@
 | 状态 | 数量 |
 |---|---:|
 | VERIFIED | 21 |
-| PARTIAL | 23 |
-| MISSING | 2 |
+| PARTIAL | 24 |
+| MISSING | 1 |
 | BLOCKED | 1 |
 | **合计** | **47** |
 
@@ -52,7 +52,7 @@
 |---|---|---|---|---|
 | DDP-V21-N3-01 | Canonical 实体 12 类 | **PARTIAL** | N3-001：`data-platform/ddp_data/canonical/` 定义 Frame / VideoStream / SensorStream / Action / Observation / Episode（`ddp.canonical/1.0.0`，只读契约 + LeRobot 投影） | 统一 QualityResult 仍无跨域实体；Frame/Stream 尚无生产者与持久化（ADR-0035 有意不建表） |
 | DDP-V21-N3-02 | Adapter 接口与注册发现 | **VERIFIED** | N3-002：`AdapterSpec` 新增可选 `fetch/verify/write`，能力集由实现推导，未实现显式抛 `AdapterCapabilityError`；旧 Adapter 零改动；注册表可按能力检索 | 内置 Adapter 暂只声明 parse/detect；导入链路尚未接线新能力（后续增量） |
-| DDP-V21-N3-03 | 多格式 Adapter 优先级（LeRobot/Parquet/MP4/MCAP/ROS/HDF5） | **PARTIAL** | N3-003 + N3-004：官方 `pyarrow==23.0.1` 读取 Parquet footer（schema/行数/行组/逻辑类型/缺失字段）；`ddp_data/media/mp4.py` 受控 ffprobe 探测；LeRobot preview + JSONL 既有 | Parquet 仅 footer、不读数据页；Parquet/MP4 均未接入导入链路（N3-009/N3-008）；MCAP/ROS/HDF5 仍无字段级解析 |
+| DDP-V21-N3-03 | 多格式 Adapter 优先级（LeRobot/Parquet/MP4/MCAP/ROS/HDF5） | **PARTIAL** | N3-003/N3-004/N3-005：官方 `pyarrow==23.0.1` 读 Parquet footer；受控 ffprobe 探测 MP4；官方 `mcap==1.6.0` 只读 MCAP header/summary（channel/schema/统计、无 summary 时显式 `has_summary=False` 与 `None` 计数），读取字节与数量均有界、错误文本脱敏，不注册 AdapterRegistry；LeRobot preview + JSONL 既有 | Parquet 仅 footer、不读数据页；Parquet/MP4/MCAP 均未接入导入链路（N3-008/N3-009）；ROS Bag/HDF5 仍无字段级解析；无真实机器人数据验证（BLOCKED） |
 
 ## 4. N4 Processing Pipeline + 质量中心
 
@@ -87,7 +87,7 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N7-01 | Training Dataset Grant | **VERIFIED** | `domain/datasets/dataset_grants.py:48`；`dataset_grant_routes.py`；`test_dataset_grant_api.py` | 无独立 requester/purpose（`created_by` + reason 兼任） |
-| DDP-V21-N7-02 | Training Adapter（Local/Mock/Dry Run） | **PARTIAL** | `ExecutionMode`（LOCAL/MOCK/DRY_RUN/REMOTE/UNKNOWN）+ 迁移 0054 + 部署声明 `DDP_TRAINING_ADAPTER_EXECUTION_MODES` + 前端显著标注；`local-adapter` 真实执行 | MOCK/DRY_RUN 目前是**显式标记**而非独立执行器；未配置模式时提交 422（fail-closed，刻意） |
+| DDP-V21-N7-02 | Training Adapter（Local/Mock/Dry Run） | **PARTIAL** | `ExecutionMode`（LOCAL/MOCK/DRY_RUN/REMOTE/UNKNOWN）+ 迁移 0054 + 部署声明 `DDP_TRAINING_ADAPTER_EXECUTION_MODES` + 前端显著标注；`local-adapter` 真实执行；N7-007：MOCK / DRY_RUN 成为**独立执行器**——DRY_RUN 只做校验与计划（迁移 0067 的 `dry_run_plan`、终态 `DRY_RUN`），不调外部平台、不产生训练产物；MOCK 产物带 `mock=true` 且无 model object_key，模型版本登记入口拒绝非真实引用；未配置模式提交 422（fail-closed，刻意） | MOCK/DRY_RUN 仅覆盖提交链路，未接入外部回调与轮询；存量 MOCK+SUCCEEDED 记录保持可读（未强制标注）；前端已把 `external_status=DRY_RUN` 展示为「演练（未训练）」并用橙色与成功区分（`datasetPresentation.ts` + 单测）；MOCK/DRY_RUN 与真实训练的视觉隔离仍依赖既有 execution_mode 标注 |
 | DDP-V21-N7-03 | Training Run 记录 | **PARTIAL** | N7-002 + 迁移 0063：既有外部引用上新增 `config_summary`（≤8KiB、脱敏）、`code_version`、`model_version`；存量保持 NULL 不回填；契约 1.18.0 | 无独立 TrainingRun；状态轮询未实现（按需 sync/cancel 仍为权威入口）；DB 层未把三列纳入不可变守卫 |
 | DDP-V21-N7-04 | Evaluation（model/dataset/config/metrics/artifacts/failure cases） | **VERIFIED** | N7-003：`FailureCase` 领域值对象 + 迁移 0061 + 回调校验（类别/重复/4KiB/200 条/64KiB）+ 响应与前端详情展示；成功评测后不可变 | 列表响应可能较大（每评测 ≤64KiB），后续可加独立明细端点 |
 | DDP-V21-N7-05 | Data Gap（多来源、target_count、priority、status） | **PARTIAL** | N7-004 + N7-008：五类来源证据、`unmapped`（含原因）与 `truncated_sources`；证据不造维度、不参与覆盖口径；前端展示来源徽标、未映射与截断；契约 1.14.0 | 低分评测只能作为项目级未映射证据，不能归因到具体维度；缺口项仍无 priority/status |
@@ -110,7 +110,7 @@
 |---|---|---|---|---|
 | DDP-V21-N9-01 | Robot Registry（model/serial/firmware/controller/sensor/profile） | **PARTIAL** | `domain/devices/models.py:72-91`；`robots.py`；`test_robots_api.py` | 无 controller 字段；传感器独立实体 |
 | DDP-V21-N9-02 | Capture Plan（task/scene/robot/sensor/operator/SOP/target/threshold） | **PARTIAL** | N9-003：迁移 0064 增加 `target_episode_count` 与 `quality_thresholds`（键复用数据集质量白名单）；Plan 仍是项目级可复用方案 | 无逐设备执行态；目标/阈值是计划值，不构成自动验收；前端未展示 |
-| DDP-V21-N9-03 | Capture Session（Plan→Session→Raw→Upload→Validation→Episode） | **MISSING** | 无会话实体 | 全缺 |
+| DDP-V21-N9-03 | Capture Session（Plan→Session→Raw→Upload→Validation→Episode） | **PARTIAL** | N9-001 + ADR-0037：新建 `capture_sessions`（迁移 0066）记录一次真实执行：`SCHEDULED → RUNNING ↔ PAUSED → COMPLETED/ABORTED`，终止动作必须带原因，状态与时间一致性由领域保证、DB 触发器兜底；创建/列表/详情/状态动作走既有 If-Match/幂等/审计，事件全部为留痕类，不向机器人下发控制命令 | 会话尚未与 Episode/RawAsset 建立归属链路（只能回答「执行发生过」，不能回答「产出了哪些 Episode」）；无前端页面；未与真实硬件联调（BLOCKED） |
 | DDP-V21-N9-04 | 真实设备格式 Adapter（LeRobot/ROS Bag/MCAP/HDF5） | **PARTIAL** | 格式识别 + 魔数（`domain/ingestion/enums.py:85`）；LeRobot preview 解析 | 无字段级解析；无真实设备数据验证（BLOCKED：无硬件） |
 | DDP-V21-N9-05 | 项目隔离与多基地/供应商 | **VERIFIED** | `locations`、`suppliers`、项目成员、跨项目隔离测试；N9-005 新增 `GET /projects/{id}/sites/overview` 按场地只读聚合设备/传感器/采集任务 | 无跨基地调度与供应商计费；仅挂机器人的传感器不归因到场地 |
 

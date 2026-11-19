@@ -68,6 +68,10 @@
 | RK-45 | 逾期提醒只落事件与审计，没有站内/邮件通道，用户可能仍看不到提醒 | `application/annotation/overdue_alerts.py`；N6-005 报告 | 中 | P2 | 事件已有确定性去重，接入通道时可直接消费；未接入前不得宣称「已提醒」 | 后端 / 产品 |
 | RK-46 | 血缘图查询有节点/边上限与深度上限，超大链路会被截断 | `application/episodes/graph.py`；N5-003 报告 | 低 | P2 | 截断标志与游标显式返回；超大图需专用离线分析而非在线 API | 后端 |
 | RK-47 | 性能基线验证时把**本地开发库** `ddp` 从 0061 升级到 0065（非 staging/生产，未删数据） | N8-002 报告 §5；`alembic upgrade head` | 低 | P2 | 该操作只发生在本机开发库；staging/生产迁移仍需单独批准；后续脚本禁止对非白名单库执行 DDL | 后端 / 运维 |
+| RK-48 | MCAP 依赖引入 `lz4`/`zstandard` 两个 C 扩展传递依赖，且仅有合成样例、无真实机器人 MCAP 验证 | `data-platform/requirements.txt`；N3-005 报告 | 中 | P2 | 版本精确固定并纳入 `pip-audit`；接入导入链路前须用真实样例回归；CI 镜像需验证 wheel 可用 | 后端 / 运维 |
+| RK-49 | CaptureSession 尚未与 Episode/RawAsset 建立归属链路，只能回答「执行发生过」；迁移 0066 回滚会丢失会话记录 | `docs/adr/0037-capture-session-entity.md`；N9-001 报告 | 中 | P2 | 后续任务补会话→素材/Episode 关联；回滚前导出会话；不得把会话当作产出证明 | 后端 / 产品 |
+| RK-50 | MOCK/DRY_RUN 只覆盖提交链路，未接外部回调与轮询；存量 MOCK+SUCCEEDED 记录保持可读（未强制标注）；前端已把 `DRY_RUN` 展示为「演练（未训练）」（橙色），不再与成功混淆 | 迁移 0067；N7-007 报告 | 中 | P1 | 下游登记入口已拒绝非真实引用（`model_training_source_invalid`）；前端后续补演练态视觉区分；存量数据按可读不篡改原则处理 | 后端 / 前端 |
+| RK-51 | `ExternalStatus` 声明为开放枚举后，客户端必须容忍未知状态值（本次新增 `DRY_RUN`） | `packages/contracts/fragments/schemas.stage4.yaml`；兼容性脚本 | 低 | P2 | 前端按普通字符串展示并有默认样式；新增状态必须同步下游判定，禁止按「未知即成功」处理 | 前端 / 后端 |
 
 ## 5. 产品与验收口径
 

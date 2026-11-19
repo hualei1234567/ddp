@@ -89,6 +89,8 @@ const EXTERNAL_STATUS: Record<string, StatusPresentation> = {
   CANCELLED: { label: "已取消", color: "default" },
   UNKNOWN: { label: "未知", color: "default" },
   UNAVAILABLE: { label: "平台不可达", color: "orange" },
+  // N7-007：演练专用终态。必须与「成功」视觉区分，避免把演练读成真实训练。
+  DRY_RUN: { label: "演练（未训练）", color: "orange" },
 };
 
 // 执行方式：MOCK / DRY_RUN / UNKNOWN 用高对比色，避免被误读成真实训练结果。
