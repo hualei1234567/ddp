@@ -226,6 +226,36 @@ class _AnyObjectInspector:
         return len(object_key.encode())
 
 
+class _AnyObjectReader(_AnyObjectInspector):
+    """任意 Key 都返回同一段**不受支持格式**的内容。
+
+    METADATA_EXTRACTION 因此如实 SKIPPED（没有可解析格式），不会伪造元数据；
+    本文件只验证编排与步骤落库，真实格式解析由 ``tests/unit`` 覆盖。
+    """
+
+    _CONTENT = b"not-a-supported-format"
+
+    def read_range(self, object_key: str, *, start: int, length: int) -> bytes:
+        return self._CONTENT[start : start + length]
+
+    def download_to(self, object_key: str, destination, *, max_bytes: int) -> int:
+        destination.write_bytes(self._CONTENT)
+        return len(self._CONTENT)
+
+
+class _InMemoryArtifactStore:
+    """内存产物存储：同 Key 覆盖幂等。"""
+
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+
+    def put_bytes(self, object_key: str, data: bytes) -> None:
+        self.objects[object_key] = data
+
+    def read_bytes(self, object_key: str, *, max_bytes: int) -> bytes:
+        return self.objects[object_key]
+
+
 def _run_worker_once(api_db, *, inspector=None, now=None) -> dict[str, object]:
     from datetime import UTC, datetime
 
@@ -237,6 +267,8 @@ def _run_worker_once(api_db, *, inspector=None, now=None) -> dict[str, object]:
         factory,
         Settings(validation_max_attempts=2),  # type: ignore[call-arg]
         inspector=inspector or _AnyObjectInspector(),
+        reader=_AnyObjectReader(),
+        artifacts=_InMemoryArtifactStore(),
     )
     return worker.process_once(now=now or datetime.now(UTC))
 

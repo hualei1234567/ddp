@@ -30,13 +30,21 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ingestion.ports import ClaimedValidationEvent
 from app.application.observability_redaction import sanitize_log_message
+from app.application.processing.metadata_stage import (
+    FormatParsingHandler,
+    MetadataExtractionHandler,
+)
 from app.application.processing.pipeline import (
     ConcurrentRunUpdate,
     PipelineOutcomeStatus,
     ProcessingPipeline,
     default_handlers,
 )
-from app.application.processing.ports import InputObjectInspector
+from app.application.processing.ports import (
+    InputObjectInspector,
+    InputObjectReader,
+    StageArtifactStore,
+)
 from app.application.processing.quality_stage import QualityCheckHandler
 from app.application.processing.use_cases import (
     PROCESSING_RUN_REQUESTED_EVENT,
@@ -83,7 +91,11 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunStepRepository,
 )
 from app.infrastructure.repositories.quality import SqlQualityRunRepository
-from app.infrastructure.storage.processing_objects import S3InputObjectInspector
+from app.infrastructure.storage.processing_objects import (
+    S3InputObjectInspector,
+    S3InputObjectReader,
+    S3StageArtifactStore,
+)
 from app.infrastructure.storage.s3 import S3MultipartStorage
 
 logger = logging.getLogger("ddp.worker.processing")
@@ -126,12 +138,21 @@ class ProcessingRunWorker:
         settings: Settings,
         *,
         inspector: InputObjectInspector | None = None,
+        reader: InputObjectReader | None = None,
+        artifacts: StageArtifactStore | None = None,
     ) -> None:
         self._factory = factory
         self._settings = settings
         # 存储适配器按 Worker 进程复用：boto3 client 构造会读配置，每事件重建
-        # 既浪费也放大连接抖动。
-        self._inspector = inspector or S3InputObjectInspector(S3MultipartStorage(settings))
+        # 既浪费也放大连接抖动。仅在调用方未注入时才构造，测试可完全替换。
+        if inspector is None or reader is None or artifacts is None:
+            storage = S3MultipartStorage(settings)
+            inspector = inspector or S3InputObjectInspector(storage)
+            reader = reader or S3InputObjectReader(storage)
+            artifacts = artifacts or S3StageArtifactStore(storage)
+        self._inspector = inspector
+        self._reader = reader
+        self._artifacts = artifacts
 
     def process_once(self, *, now: datetime | None = None) -> dict[str, object]:
         moment = now or datetime.now(UTC)
@@ -281,11 +302,26 @@ class ProcessingRunWorker:
             quality=EpisodeQualityChecks(quality_runs),
             uow=session,
         )
+        metadata_extraction = MetadataExtractionHandler(
+            self._reader,
+            self._artifacts,
+            max_object_bytes=self._settings.processing_metadata_max_object_bytes,
+            max_artifact_bytes=self._settings.processing_metadata_max_artifact_bytes,
+        )
+        format_parsing = FormatParsingHandler(
+            self._artifacts,
+            max_artifact_bytes=self._settings.processing_metadata_max_artifact_bytes,
+        )
         return ProcessingPipeline(
             runs,
             SqlProcessingRunStepRepository(session),
             _worker_use_cases(session, runs),
-            default_handlers(self._inspector, quality_check=quality_check),
+            default_handlers(
+                self._inspector,
+                metadata_extraction=metadata_extraction,
+                format_parsing=format_parsing,
+                quality_check=quality_check,
+            ),
             session,
         )
 

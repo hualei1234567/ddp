@@ -206,6 +206,19 @@ class Settings(BaseSettings):
     # 处理运行事件的租约：claim 后把 available_at 推后这么久，避免阶段提交
     # 释放行锁后被第二个 Worker 重复领取；Worker 崩溃时租约到期自动重投。
     processing_event_lease_seconds: float = Field(default=900.0, gt=0, le=86400)
+    # 元数据提取阶段的对象读取上限：解析器只读文件头尾，但需要本地文件，
+    # 超过该上限显式失败，避免把超大对象无界复制到 Worker 临时盘。
+    processing_metadata_max_object_bytes: int = Field(
+        default=2 * 1024**3,
+        gt=0,
+        le=64 * 1024**3,
+    )
+    # 单个阶段产物的字节上限；元数据摘要必须有界。
+    processing_metadata_max_artifact_bytes: int = Field(
+        default=256 * 1024,
+        gt=0,
+        le=16 * 1024**2,
+    )
     validation_worker_poll_interval_seconds: float = Field(default=1.0, gt=0)
     validation_stream_chunk_size_bytes: int = Field(default=1024 * 1024, gt=0)
     validation_max_attempts: int = Field(default=5, ge=1, le=100)
