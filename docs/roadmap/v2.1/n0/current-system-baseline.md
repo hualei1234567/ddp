@@ -26,7 +26,7 @@
 
 | 项 | 值 | 证据 |
 |---|---|---|
-| 契约版本 | **1.24.0**（P11：采集会话 1.22.0、MOCK/DRY_RUN 执行器 1.23.0、项目级逾期汇总 1.24.0） | `packages/contracts/openapi.yaml:4` |
+| 契约版本 | **1.25.0**（P12：数据源远端校验结构化 1.24.0、项目级逾期汇总 1.25.0） | `packages/contracts/openapi.yaml:4` |
 | 路径数 | **239** | `grep -c '^  /' packages/contracts/openapi.yaml` |
 | operationId 数 | **319** | `grep -rho 'operationId: *[A-Za-z0-9_]*' packages/contracts/fragments/ \| wc -l` |
 | 冻结基线 | stage2–stage7 共 6 份 bundle + SHA256 | `packages/contracts/baselines/` |
@@ -37,13 +37,13 @@
 
 | 层 | 文件数 | 行数 | 证据 |
 |---|---:|---:|---|
-| 后端 `backend/app`（Python） | 607 | 139,093 | `find backend/app -name '*.py'` |
-| 前端 `apps/web/src`（TS/TSX） | 442 | 86,074 | `find apps/web/src \( -name '*.ts' -o -name '*.tsx' \)` |
+| 后端 `backend/app`（Python） | 611 | 139,862 | `find backend/app -name '*.py'` |
+| 前端 `apps/web/src`（TS/TSX） | 448 | 86,748 | `find apps/web/src \( -name '*.ts' -o -name '*.tsx' \)` |
 | 前端页面文件 | 95 | — | `find apps/web/src/pages -name '*.tsx' \| grep -v test` |
-| 后端路由模块 | 44 | 334 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
+| 后端路由模块 | 45 | 335 个端点 | `grep -rh '^@router\.' backend/app/api/v1/*.py` |
 | 后端 Worker | 10 | — | `backend/app/workers/*.py` |
 | Alembic 迁移 | 61 | 单头 `0067`（0062 审核 evidence / 0063 训练字段 / 0064 采集方案目标 / 0065 处理运行收口 / 0066 采集会话 / 0067 演练终态；0060 未使用） | `alembic heads` |
-| ORM 表 | 84 | PostgreSQL 实表 85 | `__tablename__` 去重 / `information_schema` |
+| ORM 表 | 90 | PostgreSQL 实表 90 | `__tablename__` 去重 / `information_schema` |
 | ADR | 37 | — | `docs/adr/*.md` |
 
 端点方法分布：GET 140、POST 144、PATCH 21、DELETE 5、PUT 1。
@@ -94,21 +94,21 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 
 | 项 | 命令 | 结果 |
 |---|---|---|
-| 后端用例收集 | `.venv/bin/python -m pytest --collect-only -q` | **3138 collected** |
+| 后端用例收集 | `.venv/bin/python -m pytest --collect-only -q` | **3174 collected** |
 | 后端全量 | `.venv/bin/python -m pytest -o addopts="" -q` | 见 §6.1（本轮实际输出） |
-| 前端全量 | `npx vitest run` | **915 passed / 19 skipped**（119 文件，115 过 / 4 跳） |
+| 前端全量 | `npx vitest run` | **928 passed / 19 skipped**（121 文件，117 过 / 4 跳） |
 | 契约 | `check_contract_parity.py --strict` | 通过（基线内 62 项） |
 | make check | `bash scripts/check.sh` | 8 步：ruff / pytest / tsc+eslint+vitest / build / secret / Agent 守卫 / outbox / 契约 |
 
 ### 6.1 后端全量结果
 
 ```
-3137 passed, 1 skipped（3138 collected；真实 PostgreSQL + Redis，P11 批次后，709.65s）
+3173 passed, 1 skipped（3174 collected；真实 PostgreSQL + Redis，P12 批次后，738.32s）
 ```
 
 - 命令：`cd backend && DDP_TEST_POSTGRES_URL=... DDP_TEST_REDIS_URL=... .venv/bin/python -m pytest -q --junitxml=...`
-- 集合 3138 = 3137 passed + 1 skipped；唯一 skip 为需显式 `DDP_RUN_REMOTE_VERIFY=1` 的 Hugging Face 手动用例（本机装有 ffprobe，MP4 真实样例未被跳过）。
-- 前端：`915 passed / 19 skipped`（119 文件，P11 批次后）（`cd apps/web && npx vitest run`）。
+- 集合 3174 = 3173 passed + 1 skipped；唯一 skip 为需显式 `DDP_RUN_REMOTE_VERIFY=1` 的 Hugging Face 手动用例（本机装有 ffprobe，MP4 真实样例未被跳过）。
+- 前端：`928 passed / 19 skipped`（121 文件，P12 批次后）（`cd apps/web && npx vitest run`）。
 - 结论：SQLite + 真实 PostgreSQL + 真实 Redis 全绿；迁移 0062（审核 evidence）在 SQLite 与真实 PG 上 upgrade→downgrade→upgrade 通过。
 
 ## 7. 数据事实（本地 PostgreSQL，非生产）

@@ -13,8 +13,8 @@
 
 | 状态 | 数量 |
 |---|---:|
-| VERIFIED | 22 |
-| PARTIAL | 23 |
+| VERIFIED | 23 |
+| PARTIAL | 22 |
 | MISSING | 1 |
 | BLOCKED | 1 |
 | **合计** | **47** |
