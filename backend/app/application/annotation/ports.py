@@ -12,6 +12,10 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.application.annotation.overdue_ports import (
+    OverdueAlertEventRepository,
+    OverdueTaskDirectory,
+)
 from app.application.audit import OutboxEvent
 from app.application.idempotency import (
     IdempotencyRecord as _IdempotencyRecord,
@@ -32,6 +36,10 @@ from app.domain.annotation.schema import AnnotationSchema
 from app.domain.annotation.submission import AnnotationRecord, AnnotationSubmission
 from app.domain.annotation.task import AnnotationTask
 from app.domain.identity.models import ProjectScope
+
+# 逾期提醒端口已迁至 ``overdue_ports``（TD-01：ports.py 已超 800 行，
+# 不再新增协议）；在此重新导出，保持既有导入路径不变。
+__all__ = ["OverdueAlertEventRepository", "OverdueTaskDirectory"]
 
 
 class UnitOfWork(Protocol):
@@ -176,7 +184,7 @@ class AnnotationSampleSetRepository(Protocol):
     ) -> list[SampleEpisodeRef]: ...
 
 
-class AnnotationTaskRepository(Protocol):
+class AnnotationTaskRepository(OverdueTaskDirectory, Protocol):
     def add(self, scope: ProjectScope, task: AnnotationTask) -> AnnotationTask: ...
 
     def get(self, scope: ProjectScope, task_id: UUID) -> AnnotationTask | None: ...
@@ -196,21 +204,6 @@ class AnnotationTaskRepository(Protocol):
 
     def count_overdue(self, now: datetime) -> int:
         """跨项目统计逾期任务数；只读，供巡检 worker 观测。"""
-        ...
-
-    def list_overdue_candidates(
-        self,
-        now: datetime,
-        *,
-        after_id: UUID | None = None,
-        limit: int = 100,
-    ) -> list[AnnotationTask]:
-        """**跨项目**列出逾期任务（按 id 键集游标）；只读。
-
-        逾期提醒巡检需要一次看到所有项目，因此这里与 ``count_overdue`` 一样
-        不做项目过滤；调用方在写提醒前必须按任务自身的 ``project_id`` 构造
-        :class:`ProjectScope`，由仓储与审计共同兜底隔离。
-        """
         ...
 
     def save(
@@ -861,16 +854,6 @@ class AuditRepository(Protocol):
 
 class OutboxRepository(Protocol):
     def enqueue(self, scope: ProjectScope, event: OutboxEvent) -> None: ...
-
-
-class OverdueAlertEventRepository(Protocol):
-    """逾期提醒的去重读模型：只查询已落库的窗口键，不写事件。"""
-
-    def recorded_overdue_windows(
-        self,
-        scope: ProjectScope,
-        task_ids: list[UUID],
-    ) -> set[str]: ...
 
 
 # 幂等记录类型与仓储协议由 application 顶层统一声明，避免四个域各写一份。
