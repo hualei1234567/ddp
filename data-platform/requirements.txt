@@ -9,3 +9,12 @@ huggingface_hub==0.27.1
 # 安全公告复核（2026-11-19）：17.0.0 命中 PYSEC-2026-113 / CVE-2026-25087
 # （Arrow IPC pre-buffering 释放后使用），23.0.1 为修复版本，故锁定 23.0.1。
 pyarrow==23.0.1
+# MCAP footer/summary/channel/schema 只读解析（DDP-V21-N3-005）。
+# 依赖评估：官方 mcap Python SDK 是 MCAP 参考实现（替代方案：自研二进制
+# 解析，已因“禁止重复造轮子”被否；社区无第二个维护中的通用解析器）。
+# 版本固定到 1.6.0；许可证 MIT；wheel 约 22 KB；传递依赖 lz4==4.4.5
+# （BSD-3-Clause，macOS arm64 wheel 约 207 KB）与 zstandard==0.25.0
+# （BSD-3-Clause，约 640 KB）。只读 footer/summary 索引，不解码消息体、
+# 不读取 chunk 数据页。
+# 安全公告复核（2026-11-19）：OSV 查询 mcap / lz4 / zstandard 均无已知公告。
+mcap==1.6.0

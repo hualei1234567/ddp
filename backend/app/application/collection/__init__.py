@@ -1,4 +1,4 @@
-"""采集任务/批次/素材应用层。"""
+"""采集任务/批次/素材/会话应用层。"""
 
 from app.application.collection.assets import (
     ActionSpecUseCases,
@@ -7,8 +7,10 @@ from app.application.collection.assets import (
     ScenarioUseCases,
 )
 from app.application.collection.batches import CollectionBatchUseCases
+from app.application.collection.capture_sessions import CaptureSessionUseCases
 from app.application.collection.commands import (
     NewActionSpec,
+    NewCaptureSession,
     NewCollectionBatch,
     NewCollectionPlan,
     NewCollectionSop,
@@ -20,6 +22,7 @@ from app.application.collection.ports import (
     ActionSpecRepository,
     AssignmentDirectory,
     AuditRepository,
+    CaptureSessionRepository,
     CollectionAssetDirectory,
     CollectionBatchRepository,
     CollectionPlanRepository,
@@ -37,6 +40,8 @@ __all__ = [
     "ActionSpecUseCases",
     "AssignmentDirectory",
     "AuditRepository",
+    "CaptureSessionRepository",
+    "CaptureSessionUseCases",
     "CollectionAssetDirectory",
     "CollectionBatchRepository",
     "CollectionBatchUseCases",
@@ -48,6 +53,7 @@ __all__ = [
     "CollectionTaskUseCases",
     "IdempotencyRepository",
     "NewActionSpec",
+    "NewCaptureSession",
     "NewCollectionBatch",
     "NewCollectionPlan",
     "NewCollectionSop",

@@ -73,12 +73,18 @@ fi
 # 清单必须显式列出并且逐个写明理由——不允许用通配或「全部枚举」开关。
 # LineageRelation：血缘关系随接入方增长（最近新增 TRAINED_ON），契约已用
 # x-extensible-enum 明示客户端必须容忍未知关系；新增取值不是破坏性变更。
+# ExternalStatus：外部训练状态随 Adapter 增长（最近新增 DRY_RUN 演练终态），
+# 契约已用 x-extensible-enum 明示客户端必须容忍未知状态；新增取值不是破坏性变更。
 # 说明：oasdiff 的 `--err-ignore` 在 `breaking` 子命令下实测无效（连 `.*` 都不忽略），
 # 因此用预处理而不是忽略规则。1.37.0 与 CI 的 1.38.0 行为一致。
-OPEN_ENUMS="ErrorCode LineageNodeType LineageRelation"
+OPEN_ENUMS="ErrorCode LineageNodeType LineageRelation ExternalStatus"
+# 部分响应直接引用独立 JSON Schema 文件（不经过 fragments），上面的顶层 schema
+# 预处理覆盖不到；同样只能显式列出，格式 `<相对 contracts 的路径>:<属性名>`。
+OPEN_ENUM_JSON_PROPERTIES="schemas/external-training-reference.v1.schema.json:external_status"
 prepare_open_enums() {
   local root="$1"
-  python3 - "$root" "$OPEN_ENUMS" <<'PYEOF'
+  python3 - "$root" "$OPEN_ENUMS" "$OPEN_ENUM_JSON_PROPERTIES" <<'PYEOF'
+import json
 import pathlib
 import sys
 
@@ -86,6 +92,7 @@ import yaml
 
 root = pathlib.Path(sys.argv[1])
 wanted = set(sys.argv[2].split())
+json_props = [item for item in sys.argv[3].split() if item]
 targets = 0
 for fragment in sorted((root / "fragments").glob("*.yaml")):
     with fragment.open(encoding="utf-8") as handle:
@@ -97,14 +104,32 @@ for fragment in sorted((root / "fragments").glob("*.yaml")):
         schema = document[name]
         if isinstance(schema, dict) and "enum" in schema:
             schema.pop("enum", None)
+            schema.pop("x-extensible-enum", None)
             schema["type"] = "string"
             changed = True
             targets += 1
     if changed:
         with fragment.open("w", encoding="utf-8") as handle:
             yaml.safe_dump(document, handle, allow_unicode=True, sort_keys=False)
+for item in json_props:
+    rel_path, property_name = item.split(":", 1)
+    schema_path = root / rel_path
+    if not schema_path.is_file():
+        continue
+    document = json.loads(schema_path.read_text(encoding="utf-8"))
+    properties = document.get("properties")
+    if not isinstance(properties, dict):
+        continue
+    prop = properties.get(property_name)
+    if isinstance(prop, dict) and "enum" in prop:
+        prop.pop("enum", None)
+        prop.pop("x-extensible-enum", None)
+        schema_path.write_text(
+            json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+        targets += 1
 if targets == 0:
-    print("警告：未在任何 fragment 中找到声明的开放枚举", file=sys.stderr)
+    print("警告：未找到声明的开放枚举", file=sys.stderr)
 PYEOF
 }
 

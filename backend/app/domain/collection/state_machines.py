@@ -13,6 +13,8 @@ from collections.abc import Mapping
 from types import MappingProxyType
 
 from app.domain.collection.enums import (
+    CaptureSessionAction,
+    CaptureSessionStatus,
     CollectionBatchAction,
     CollectionBatchStatus,
     CollectionTaskAction,
@@ -244,5 +246,93 @@ def batch_transition_pairs() -> frozenset[tuple[str, str]]:
     return frozenset(
         (current.value, target.value)
         for current, rules in _BATCH_RULES.items()
+        for target in rules.values()
+    )
+
+
+# ---------------------------------------------------------------------------
+# 采集会话状态机（N9-001）
+# ---------------------------------------------------------------------------
+# 与任务/批次的区别：会话是执行态，不走审核流。``SCHEDULED`` 可直接
+# ``start``，也可以直接 ``abort``（未开录就放弃）；一旦进入 ``COMPLETED`` /
+# ``ABORTED`` 就没有出边，任何动作都显式失败。
+SESSION_TERMINAL: frozenset[CaptureSessionStatus] = frozenset(
+    {CaptureSessionStatus.COMPLETED, CaptureSessionStatus.ABORTED}
+)
+
+_SESSION_RULES: Mapping[CaptureSessionStatus, Mapping[str, CaptureSessionStatus]] = (
+    MappingProxyType(
+        {
+            CaptureSessionStatus.SCHEDULED: {
+                CaptureSessionAction.START.value: CaptureSessionStatus.RUNNING,
+                CaptureSessionAction.ABORT.value: CaptureSessionStatus.ABORTED,
+            },
+            CaptureSessionStatus.RUNNING: {
+                CaptureSessionAction.PAUSE.value: CaptureSessionStatus.PAUSED,
+                CaptureSessionAction.COMPLETE.value: CaptureSessionStatus.COMPLETED,
+                CaptureSessionAction.ABORT.value: CaptureSessionStatus.ABORTED,
+            },
+            CaptureSessionStatus.PAUSED: {
+                CaptureSessionAction.RESUME.value: CaptureSessionStatus.RUNNING,
+                CaptureSessionAction.COMPLETE.value: CaptureSessionStatus.COMPLETED,
+                CaptureSessionAction.ABORT.value: CaptureSessionStatus.ABORTED,
+            },
+            CaptureSessionStatus.COMPLETED: {},
+            CaptureSessionStatus.ABORTED: {},
+        }
+    )
+)
+
+# 与任务/批次同一口径：影响执行连续性的动作必须留下原因。
+# ``start`` / ``complete`` 是正常路径，不强制原因。
+_SESSION_REASON_REQUIRED_ACTIONS: frozenset[str] = frozenset(
+    {
+        CaptureSessionAction.PAUSE.value,
+        CaptureSessionAction.RESUME.value,
+        CaptureSessionAction.ABORT.value,
+    }
+)
+
+
+def session_target_status(
+    current: CaptureSessionStatus,
+    action: str,
+) -> CaptureSessionStatus:
+    target = _SESSION_RULES.get(current, {}).get(action)
+    if target is None:
+        raise InvalidStateTransitionError("采集会话", current.value, action)
+    return target
+
+
+def assert_session_action(
+    current: CaptureSessionStatus,
+    action: str,
+) -> CaptureSessionStatus:
+    return session_target_status(current, action)
+
+
+def allowed_session_actions(current: CaptureSessionStatus) -> frozenset[str]:
+    return frozenset(_SESSION_RULES.get(current, {}))
+
+
+def validate_session_action_name(action: object) -> str:
+    if not isinstance(action, str) or not action.strip():
+        raise DomainValidationError("action 必须是非空字符串")
+    value = action.strip()
+    known = {name for rules in _SESSION_RULES.values() for name in rules}
+    if value not in known:
+        raise DomainValidationError("未知状态动作")
+    return value
+
+
+def session_action_requires_reason(action: str) -> bool:
+    return action in _SESSION_REASON_REQUIRED_ACTIONS
+
+
+def session_transition_pairs() -> frozenset[tuple[str, str]]:
+    """供数据库兜底触发器生成白名单。"""
+    return frozenset(
+        (current.value, target.value)
+        for current, rules in _SESSION_RULES.items()
         for target in rules.values()
     )

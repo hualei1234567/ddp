@@ -1,0 +1,133 @@
+# N9-001 采集会话路径片段。
+#
+# 端点只做「创建 / 列表 / 详情 / 具名状态动作」，与任务一致：
+# - 创建不接受 status / 时间戳 / project_id / version；
+# - 列表默认 20、上限 100，cursor 为不透明键集游标；
+# - 动作走 `If-Match` 乐观锁与 `Idempotency-Key`，非法迁移返回 409。
+
+captureSessions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listCaptureSessions
+    tags: [collection]
+    summary: 采集会话列表（游标分页）
+    parameters:
+      - name: status
+        in: query
+        required: false
+        schema: {$ref: "../openapi.yaml#/components/schemas/CaptureSessionStatus"}
+      - name: task_id
+        in: query
+        required: false
+        schema: {type: string, format: uuid}
+      - name: batch_id
+        in: query
+        required: false
+        schema: {type: string, format: uuid}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: 会话分页
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/CaptureSessionPage"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: createCaptureSession
+    tags: [collection]
+    summary: 创建采集会话（初始 SCHEDULED）
+    description: |
+      `task_id` / `batch_id` 均可选，但给出时必须同项目存在；只给 `batch_id`
+      时自动继承批次的任务，同时给出且不一致返回 422。`operator_id` 必须为
+      项目成员；`robot_id` 必须为 ACTIVE；`location_id` 必须同项目存在。
+    parameters: [{$ref: "../openapi.yaml#/components/parameters/IdempotencyKey"}]
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/CaptureSessionCreate"}
+    responses:
+      "201":
+        description: 会话已创建
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/CaptureSession"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+captureSessionDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: session_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  get:
+    operationId: getCaptureSession
+    tags: [collection]
+    summary: 采集会话详情
+    responses:
+      "200":
+        description: 会话详情
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/CaptureSession"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+captureSessionActions:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: session_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    - name: action
+      in: path
+      required: true
+      schema:
+        type: string
+        enum: [start, pause, resume, complete, abort]
+  post:
+    operationId: actOnCaptureSession
+    tags: [collection]
+    summary: 会话状态动作（白名单）
+    description: |
+      合法迁移：`SCHEDULED --start--> RUNNING`；
+      `RUNNING --pause--> PAUSED`；`PAUSED --resume--> RUNNING`；
+      `RUNNING/PAUSED --complete--> COMPLETED`；
+      `SCHEDULED/RUNNING/PAUSED --abort--> ABORTED`。
+      `COMPLETED` / `ABORTED` 为终态，无出边。`pause` / `resume` / `abort`
+      必须提供 `reason`。
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/IfMatch"
+      - $ref: "../openapi.yaml#/components/parameters/IdempotencyKey"
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/CaptureSessionActionRequest"}
+    responses:
+      "200":
+        description: 动作后的会话
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/CaptureSession"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "428": {$ref: "../openapi.yaml#/components/responses/PreconditionRequired"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}

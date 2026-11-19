@@ -43,6 +43,11 @@ class TrainingSourceFacts:
     delivery_request_id: UUID | None = None
     external_ref_id: UUID | None = None
     external_ref_delivery_id: UUID | None = None
+    # 外部训练引用是否为非真实结果（MOCK / DRY_RUN）。``None`` 表示无法判定
+    # （例如引用没有执行方式字段的存量记录），不阻断；``True`` 必须拒绝登记。
+    # 判定权威在同项目仓储（读 ``execution_mode`` 与 ``external_status``），
+    # 领域层只消费布尔事实，不复制执行方式字符串集合。
+    external_ref_non_real: bool | None = None
 
 
 def ensure_training_source(declared: TrainingSourceRef, facts: TrainingSourceFacts | None) -> None:
@@ -58,6 +63,13 @@ def ensure_training_source(declared: TrainingSourceRef, facts: TrainingSourceFac
     if declared.delivery_id is not None and declared.request_id is not None:
         if facts.delivery_request_id != declared.request_id:
             raise ModelTrainingSourceInvalidError("训练交付不属于所声明的训练需求")
+    if declared.external_ref_id is not None:
+        if facts.external_ref_non_real is True:
+            # 契约 model_training_source_invalid(422)：MOCK/DRY_RUN 产物不得
+            # 被登记成真实模型版本，否则模拟结果会沿评测/发布链路被当成真实能力。
+            raise ModelTrainingSourceInvalidError(
+                "外部训练引用是 MOCK/DRY_RUN 结果，不能登记为真实模型版本"
+            )
     if declared.external_ref_id is not None and declared.delivery_id is not None:
         if facts.external_ref_delivery_id != declared.delivery_id:
             raise ModelTrainingSourceInvalidError("外部训练引用不属于所声明的训练交付")

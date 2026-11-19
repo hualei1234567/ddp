@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from app.domain.collection.enums import (
+    CaptureSessionStatus,
     CollectionBatchStatus,
     CollectionTaskStatus,
     TaskPriority,
@@ -20,8 +21,11 @@ from app.domain.collection.errors import DomainValidationError
 from app.domain.collection.state_machines import (
     action_requires_reason,
     assert_batch_action,
+    assert_session_action,
     assert_task_action,
+    session_action_requires_reason,
     validate_action_name,
+    validate_session_action_name,
 )
 from app.domain.collection.validation import (
     CODE_MAX_LENGTH,
@@ -341,5 +345,124 @@ class CollectionBatch:
         }:
             changes["status_reason"] = reason
         if action_name == "block":
+            changes["status_reason"] = reason
+        return replace(self, **changes)
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureSession:
+    """一次真实的采集执行会话。
+
+    与 :class:`CollectionTask` 的边界见 ADR-0037：
+
+    - 任务回答"要采什么、按什么方案、谁来审"；会话回答"这段执行在什么时候、
+      由谁、在哪台机器人/哪个场地上真正开录，何时暂停/恢复/结束"。
+    - 一个任务可以有多次会话（设备切换、暂停后换人、失败重来），因此会话
+      **不是**任务的字段扩展，而是独立的执行记录聚合。
+    - 会话不承载审核流、不改变任务状态、不写素材版本；它只记录执行事实。
+
+    状态与时间字段的一致性在实体层强制：非法组合（例如 ``RUNNING`` 却没有
+    ``started_at``、终态没有 ``ended_at``）一律拒绝，避免脏数据靠下游猜。
+    """
+
+    session_id: UUID
+    project_id: UUID
+    code: str
+    task_id: UUID | None = None
+    batch_id: UUID | None = None
+    operator_id: UUID | None = None
+    robot_id: UUID | None = None
+    location_id: UUID | None = None
+    status: CaptureSessionStatus | str = CaptureSessionStatus.SCHEDULED
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    status_reason: str | None = None
+    version: int = 1
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    created_by: UUID | None = None
+    updated_by: UUID | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "code",
+            normalized_text(self.code, "code", max_length=CODE_MAX_LENGTH),
+        )
+        object.__setattr__(
+            self,
+            "status",
+            coerce_enum(self.status, CaptureSessionStatus, "status"),
+        )
+        for name in ("task_id", "batch_id", "operator_id", "robot_id", "location_id"):
+            object.__setattr__(self, name, optional_uuid(getattr(self, name), name))
+        object.__setattr__(
+            self,
+            "started_at",
+            optional_aware_datetime(self.started_at, "started_at"),
+        )
+        object.__setattr__(
+            self,
+            "ended_at",
+            optional_aware_datetime(self.ended_at, "ended_at"),
+        )
+        if self.started_at is not None and self.ended_at is not None:
+            if self.ended_at < self.started_at:
+                raise DomainValidationError("ended_at 不得早于 started_at")
+        object.__setattr__(
+            self,
+            "status_reason",
+            optional_text(
+                self.status_reason,
+                "status_reason",
+                max_length=REASON_MAX_LENGTH,
+            ),
+        )
+        object.__setattr__(self, "version", positive_int(self.version, "version"))
+        self._check_status_time_consistency()
+
+    def _check_status_time_consistency(self) -> None:
+        status = self.status
+        assert isinstance(status, CaptureSessionStatus)
+        if status is CaptureSessionStatus.SCHEDULED:
+            if self.started_at is not None or self.ended_at is not None:
+                raise DomainValidationError("SCHEDULED 会话不得带开始或结束时间")
+            return
+        if status in {CaptureSessionStatus.RUNNING, CaptureSessionStatus.PAUSED}:
+            if self.started_at is None or self.ended_at is not None:
+                raise DomainValidationError("执行中的会话必须有开始时间且不得有结束时间")
+            return
+        if self.ended_at is None:
+            raise DomainValidationError("终态会话必须有结束时间")
+        if status is CaptureSessionStatus.COMPLETED and self.started_at is None:
+            raise DomainValidationError("COMPLETED 会话必须有开始时间")
+        # ABORTED 允许 started_at 为空：未开录就放弃也是一次合法中止。
+
+    def apply_action(
+        self,
+        action: object,
+        data: Mapping[str, object] | None = None,
+        *,
+        now: datetime | None = None,
+    ) -> CaptureSession:
+        """按具名动作迁移状态；未知动作/非法迁移一律拒绝。"""
+        action_name = validate_session_action_name(action)
+        target = assert_session_action(self.status, action_name)
+        payload = dict(data or {})
+        occurred_at = now or _now()
+        reason = optional_text(
+            payload.get("reason"),
+            "reason",
+            max_length=REASON_MAX_LENGTH,
+        )
+        if session_action_requires_reason(action_name) and reason is None:
+            raise DomainValidationError("该动作必须填写原因")
+
+        changes: dict[str, object] = {"status": target, "updated_at": occurred_at}
+        if action_name == "start":
+            changes["started_at"] = self.started_at or occurred_at
+        if action_name in {"complete", "abort"}:
+            changes["ended_at"] = self.ended_at or occurred_at
+        if action_name in {"pause", "resume", "abort"}:
             changes["status_reason"] = reason
         return replace(self, **changes)

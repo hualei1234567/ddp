@@ -236,6 +236,9 @@ class SqlExternalReferenceRepository:
             model_ref=dict(reference.model_ref) if reference.model_ref else None,
             evaluation_ref=(dict(reference.evaluation_ref) if reference.evaluation_ref else None),
             artifacts=dict(reference.artifacts) if reference.artifacts else None,
+            dry_run_plan=(
+                dict(reference.dry_run_plan) if reference.dry_run_plan is not None else None
+            ),
             config_summary=(
                 dict(reference.config_summary) if reference.config_summary is not None else None
             ),
@@ -342,6 +345,9 @@ class SqlExternalReferenceRepository:
                     dict(reference.evaluation_ref) if reference.evaluation_ref else None
                 ),
                 artifacts=dict(reference.artifacts) if reference.artifacts else None,
+                dry_run_plan=(
+                    dict(reference.dry_run_plan) if reference.dry_run_plan is not None else None
+                ),
                 error_code=reference.error_code,
                 error_summary=reference.error_summary,
                 updated_at=now,
@@ -408,6 +414,7 @@ class SqlExternalReferenceRepository:
             model_ref=dict(row.model_ref) if row.model_ref else None,
             evaluation_ref=dict(row.evaluation_ref) if row.evaluation_ref else None,
             artifacts=dict(row.artifacts) if row.artifacts else None,
+            dry_run_plan=(dict(row.dry_run_plan) if row.dry_run_plan is not None else None),
             config_summary=dict(row.config_summary) if row.config_summary is not None else None,
             code_version=row.code_version,
             model_version=row.model_version,

@@ -51,7 +51,11 @@ TrainingDeliveryStatus:
 
 ExternalStatus:
   type: string
-  enum: [SUBMITTED, RUNNING, SUCCEEDED, FAILED, CANCELLED, UNKNOWN, UNAVAILABLE]
+  # 外部训练状态**明确可增长**：`DRY_RUN`（N7-007 演练终态）是新增取值，
+  # 对既有客户端向后兼容，但 oasdiff 会判为 breaking。按 oasdiff 的建议用
+  # x-extensible-enum 声明意图：客户端必须容忍未知状态值，不得按未知成功处理。
+  x-extensible-enum: [SUBMITTED, RUNNING, SUCCEEDED, FAILED, CANCELLED, UNKNOWN, UNAVAILABLE, DRY_RUN]
+  enum: [SUBMITTED, RUNNING, SUCCEEDED, FAILED, CANCELLED, UNKNOWN, UNAVAILABLE, DRY_RUN]
 
 GrantStatus:
   type: string

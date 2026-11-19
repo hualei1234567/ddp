@@ -14,6 +14,7 @@ from app.api.v1 import (
     audit_log_routes,
     calibration_profiles,
     calibrations,
+    capture_session_routes,
     collection,
     collection_asset_routes,
     dataset_grant_routes,
@@ -59,6 +60,7 @@ api_router.include_router(sensors.router)
 api_router.include_router(calibration_profiles.router)
 api_router.include_router(calibrations.router)
 api_router.include_router(collection.router)
+api_router.include_router(capture_session_routes.router)
 api_router.include_router(collection_asset_routes.router)
 api_router.include_router(location_routes.router)
 api_router.include_router(uploads.router)
