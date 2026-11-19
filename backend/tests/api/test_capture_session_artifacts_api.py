@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from uuid import UUID, uuid4
 
+from app.core.config import Settings
 from app.infrastructure.db.models.ingestion import RawAssetModel
 from fastapi.testclient import TestClient
 from sqlalchemy import update
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import ApiIds, make_client
 from tests.api.ddp310_support import episode_payload, project_url, seed_valid_asset
+from tests.fakes_s3 import FakeMultipartStorage
 
 
 def _session_url(project_id: object, suffix: str = "") -> str:
@@ -296,7 +298,18 @@ def test_upload_session_carries_capture_session_to_raw_asset(
 ) -> None:
     """上传完成链路把会话归属复制到 RawAsset（不新增第二套创建接口）。"""
     factory, ids = api_db
-    client = make_client(factory, ids.editor_a)
+    client = make_client(
+        factory,
+        ids.editor_a,
+        object_storage=FakeMultipartStorage(),
+        settings_override=Settings(
+            env="local",
+            upload_part_size_bytes=4,
+            upload_max_size_bytes=64,
+            upload_session_ttl_hours=1,
+            upload_url_ttl_seconds=60,
+        ),
+    )
     created = _create_session(client, ids.project_a)
 
     # 上传会话创建时携带会话归属；同项目校验通过。
