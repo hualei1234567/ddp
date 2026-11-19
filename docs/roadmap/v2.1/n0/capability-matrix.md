@@ -77,7 +77,7 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N6-01 | Schema Registry（action/skill/language/contact/object/failure/temporal） | **PARTIAL** | N6-001：7 类代码级预设（action/segment/object/attributes/quality/scene/robot-state）+ 只读目录端点；模板经既有 `AnnotationSchema` 完整校验；10 种 label type / 6 层 level | 前端尚未接入预设选择（后续 UI）；预设是静态代码资产，不支持项目级注册 |
-| DDP-V21-N6-02 | 标注任务（batch/assignment/priority/SLA/reviewer/status） | **VERIFIED** | N6-002 + N6-005：纯函数 `is_overdue` + 列表 `overdue` 下推过滤 + 派生字段 `is_overdue` + 巡检计数 + 前端逾期标签/汇总；巡检产出 `annotation.task.overdue` 事件，按 `<task_id>:<due_at>` 窗口去重、uuid5 确定性事件 ID，重复巡检不重复投递 | 无自动改派/关闭（刻意）；提醒仅落事件与审计，站内信/邮件通道未接入；全局逾期卡片需独立汇总端点 |
+| DDP-V21-N6-02 | 标注任务（batch/assignment/priority/SLA/reviewer/status） | **VERIFIED** | N6-002 + N6-005：纯函数 `is_overdue` + 列表 `overdue` 下推过滤 + 派生字段 `is_overdue` + 巡检计数 + 前端逾期标签/汇总；巡检产出 `annotation.task.overdue` 事件，按 `<task_id>:<due_at>` 窗口去重、uuid5 确定性事件 ID，重复巡检不重复投递；收尾新增只读端点 `GET /projects/{id}/annotation-overdue-summary`（总数、优先级/状态分布、最早期逾期时间、SLA 分桶 `<24h` / `24–72h` / `≥72h`，阈值来自领域常量 `OVERDUE_BUCKET_HOURS`）与前端逾期汇总卡片（Loading/Empty/Error/Forbidden/Stale） | 无自动改派/关闭（刻意）；提醒仅落事件与审计，站内信/邮件通道未接入 |
 | DDP-V21-N6-03 | AI 辅助标注（suggestion/confidence/human confirmation） | **VERIFIED** | `ai_suggestion.py:113-235`；`annotation_ai.py`；AI 值单独存储、`AI_ASSISTED` 标记、人工确认强一致 | — |
 | DDP-V21-N6-04 | QA：抽检/盲审/双标/IAA/仲裁 | **PARTIAL** | N6-003/004/006：双标策略 + 一致性判定复用 IAA + 不达标自动仲裁；`blind_review` 普通复核盲审（服务端对非标注人脱敏，含 Hash/AI 人工值）；创建页双标表单 | 盲审对所有非标注人生效（仲裁人豁免未定义）；聚合统计仍有小样本推断风险 |
 | DDP-V21-N6-05 | 返工闭环 Reject→Reason→Rework→Review→Pass | **VERIFIED** | `state_rules.py:159-162,284-295`；`review.py:241`；`submissions.py:113` 轮次上限；API 用例 | — |

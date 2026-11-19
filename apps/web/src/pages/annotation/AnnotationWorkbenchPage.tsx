@@ -3,6 +3,7 @@ import { Button, Space, Tag, Typography } from "antd";
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import OverdueSummaryCard from "../../components/annotation/OverdueSummaryCard";
 import WorkbenchBody from "../../components/annotation/WorkbenchBody";
 import PageContainer from "../../components/ui/PageContainer";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
@@ -258,6 +259,7 @@ function WorkbenchContent({
         草稿保存在本机浏览器；提交后版本冻结，不可原地编辑。服务端会校验
         Schema 快照、必填、类型、范围、时间片段与职责分离。
       </Typography.Paragraph>
+      <OverdueSummaryCard projectId={projectId} />
       <WorkbenchBody
         data={data}
         phase={phase}

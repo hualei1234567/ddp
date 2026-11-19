@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.domain.annotation.overdue_summary import OverdueGroup
 from app.domain.annotation.task import AnnotationTask
 from app.domain.identity.models import ProjectScope
 
@@ -45,4 +46,21 @@ class OverdueAlertEventRepository(Protocol):
     ) -> set[str]: ...
 
 
-__all__ = ["OverdueAlertEventRepository", "OverdueTaskDirectory"]
+class ProjectOverdueSummaryReader(Protocol):
+    """项目级逾期汇总的只读聚合能力（N6-002 收尾）。
+
+    与跨项目的 :class:`OverdueTaskDirectory` 不同，本端口**必须**接收
+    :class:`ProjectScope`：汇总给项目成员看，服务端强制项目隔离，聚合 SQL
+    只允许命中调用方所在项目的任务。
+    """
+
+    def overdue_groups(self, scope: ProjectScope, now: datetime) -> list[OverdueGroup]:
+        """按「优先级 × 状态 × 分桶」聚合逾期任务；只读，不写库。"""
+        ...
+
+
+__all__ = [
+    "OverdueAlertEventRepository",
+    "OverdueTaskDirectory",
+    "ProjectOverdueSummaryReader",
+]

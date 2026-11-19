@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.23.0
+  version: 1.24.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -175,6 +175,13 @@ info:
       留痕类，**不向机器人下发任何控制命令**。数据库迁移 0066 新建
       `capture_sessions`（含状态/禁删兜底触发器）。全部为增量：仅新增路径与
       schema，无既有路径/字段变更。
+    - `1.24.0` **项目级逾期汇总（N6-002 收尾）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/annotation-overdue-summary`，返回本项目
+      逾期任务总数、按优先级/状态分布、最早期逾期时间与 SLA 分桶
+      （`LT_24H` / `D1_TO_D3` / `GT_3D`，阈值来自领域常量
+      `OVERDUE_BUCKET_HOURS`，响应回传边界）。逾期是派生事实：本操作只读，
+      不写库、不推进版本、不改派或关闭任务；服务端强制 `project_id` 隔离。
+      全部为增量：仅新增路径与 schema，无既有路径/字段变更，无数据库迁移。
     - `1.23.0` **MOCK / DRY_RUN 独立执行器（N7-007）**：`ExternalTrainingReference`
       的 `external_status` 新增演练专用终态 `DRY_RUN`，响应新增可选 `dry_run_plan`
       （仅 `execution_mode=DRY_RUN` 时非空）。DRY_RUN 只做校验与计划，不调用外部
@@ -596,6 +603,8 @@ paths:
     $ref: "./fragments/paths.stage3.yaml#/annotationSampleSetDetail"
   /api/v1/projects/{project_id}/annotation-sample-sets/{sample_set_id}/actions/{action}:
     $ref: "./fragments/paths.stage3.yaml#/annotationSampleSetActions"
+  /api/v1/projects/{project_id}/annotation-overdue-summary:
+    $ref: "./fragments/paths.stage3.yaml#/annotationOverdueSummary"
   /api/v1/projects/{project_id}/annotation-tasks:
     $ref: "./fragments/paths.stage3.yaml#/annotationTasks"
   /api/v1/projects/{project_id}/annotation-tasks/{task_id}:
@@ -1206,6 +1215,10 @@ components:
     AnnotationSchemaActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSchemaActionRequest"}
     SampleSetCreate: {$ref: "./fragments/schemas.stage3.yaml#/SampleSetCreate"}
     SampleSetActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/SampleSetActionRequest"}
+    AnnotationOverdueSummary: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationOverdueSummary"}
+    OverduePriorityCount: {$ref: "./fragments/schemas.stage3.yaml#/OverduePriorityCount"}
+    OverdueStatusCount: {$ref: "./fragments/schemas.stage3.yaml#/OverdueStatusCount"}
+    OverdueBucketCount: {$ref: "./fragments/schemas.stage3.yaml#/OverdueBucketCount"}
     AnnotationTaskCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationTaskCreate"}
     AnnotationTaskPatch: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationTaskPatch"}
     AnnotationTaskActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationTaskActionRequest"}

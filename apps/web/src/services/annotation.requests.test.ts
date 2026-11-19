@@ -199,6 +199,11 @@ describe("标注列表与详情请求", () => {
       path: `/annotation-tasks/${ID}/consistency`,
     },
     {
+      name: "getOverdueSummary",
+      call: (api) => api.getOverdueSummary(PROJECT),
+      path: `/annotation-overdue-summary`,
+    },
+    {
       name: "getBatch",
       call: (api) => api.getBatch(PROJECT, ID),
       path: `/annotation-batches/${ID}`,
