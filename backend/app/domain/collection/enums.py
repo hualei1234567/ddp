@@ -130,3 +130,40 @@ class CollectionAssetAction(StrEnum):
 
 # 路径动作白名单：素材没有系统内部动作，全部可暴露给客户端。
 PUBLIC_ASSET_ACTIONS: frozenset[str] = frozenset(action.value for action in CollectionAssetAction)
+
+
+class CaptureSessionStatus(StrEnum):
+    """一次真实采集执行会话的运行时状态（N9-001）。
+
+    与 :class:`CollectionTaskStatus` 的边界：任务状态机描述"计划 → 审核 →
+    派发 → 提交 → 验收"的业务工作流；会话状态机只描述"这段执行有没有真正
+    开始、暂停、结束"。会话没有提交、复核、验收、返工等状态，也不允许从
+    终态回退。
+
+    ``SCHEDULED`` 是"已登记、尚未开录"；``RUNNING`` / ``PAUSED`` 是唯一的
+    两个执行态；``COMPLETED`` / ``ABORTED`` 是终态，语义分别为"正常结束"
+    与"带原因中止"。没有单独的 ``CANCELLED``：未开录就放弃也是一次带原因的
+    中止（``ABORTED``），再拆一个状态只会让下游多一个要合并的分支。
+    """
+
+    SCHEDULED = "SCHEDULED"
+    RUNNING = "RUNNING"
+    PAUSED = "PAUSED"
+    COMPLETED = "COMPLETED"
+    ABORTED = "ABORTED"
+
+
+class CaptureSessionAction(StrEnum):
+    """采集会话的具名动作；全部可以通过 API 路径触发。"""
+
+    START = "start"
+    PAUSE = "pause"
+    RESUME = "resume"
+    COMPLETE = "complete"
+    ABORT = "abort"
+
+
+# 路径动作白名单：会话没有系统内部动作，全部可暴露给客户端。
+PUBLIC_CAPTURE_SESSION_ACTIONS: frozenset[str] = frozenset(
+    action.value for action in CaptureSessionAction
+)

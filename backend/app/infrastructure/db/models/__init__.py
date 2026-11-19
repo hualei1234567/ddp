@@ -29,6 +29,7 @@ from app.infrastructure.db.models.annotation_work import (
     AnnotationBatch,
     AnnotationTask,
 )
+from app.infrastructure.db.models.capture_session import CaptureSessionModel
 from app.infrastructure.db.models.collection import (
     AuditLog,
     CollectionBatch,
@@ -132,6 +133,7 @@ __all__ = [
     "CalibrationRecord",
     "CalibrationTargetRef",
     "ActionSpecModel",
+    "CaptureSessionModel",
     "CollectionBatch",
     "CollectionPlanModel",
     "CollectionSopModel",

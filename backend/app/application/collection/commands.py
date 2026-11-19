@@ -37,6 +37,22 @@ class NewCollectionBatch:
     scheduled_end: datetime | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class NewCaptureSession:
+    """创建采集会话的命令。
+
+    只接受"这次执行绑定谁/在哪/属于哪个任务或批次"；``status``、时间戳、
+    ``project_id``、``version`` 与审计字段全部由服务端决定。
+    """
+
+    code: str
+    task_id: UUID | None = None
+    batch_id: UUID | None = None
+    operator_id: UUID | None = None
+    robot_id: UUID | None = None
+    location_id: UUID | None = None
+
+
 # --- COL-002 素材命令 -------------------------------------------------------
 # 四类素材的创建命令字段刻意保持"扁平 + 可选"，与既有 ``NewCollectionTask`` 一致；
 # 状态由用例填 ``DRAFT``，不接受客户端传 status（服务端权威字段）。

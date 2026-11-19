@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.21.0
+  version: 1.22.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -162,6 +162,19 @@ info:
       404，避免用状态码差异探测其他项目对象。未知 `subject_type` 返回 422。
       本操作不触发检查、不改变历史结论。全部为增量：仅新增路径操作、
       query 参数与 `QualityRunPage` schema，无既有路径/字段变更。
+    - `1.22.0` **采集会话实体（N9-001）**：新增
+      `/api/v1/projects/{project_id}/capture-sessions` 的创建、列表、详情
+      与状态动作。会话是**执行记录**，与采集任务/批次的边界见 ADR-0037：
+      任务承载计划、审核与验收；会话只记录某次执行何时开始/暂停/恢复/结束。
+      状态机 `SCHEDULED --start--> RUNNING <--resume-- PAUSED`，
+      `RUNNING/PAUSED --complete--> COMPLETED`，
+      `SCHEDULED/RUNNING/PAUSED --abort--> ABORTED`；`COMPLETED` / `ABORTED`
+      为终态。`task_id` / `batch_id` / `operator_id` / `robot_id` / `location_id`
+      全部可选但必须同项目存在（批次只给时自动继承任务）。响应 `allowed_actions`
+      由服务端计算；动作走 `If-Match` 与 `Idempotency-Key`。事件全部登记为
+      留痕类，**不向机器人下发任何控制命令**。数据库迁移 0066 新建
+      `capture_sessions`（含状态/禁删兜底触发器）。全部为增量：仅新增路径与
+      schema，无既有路径/字段变更。
     - `1.21.0` **通用血缘图查询（N5-003）**：新增只读端点
       `GET /api/v1/projects/{project_id}/lineage/graph`，从任意血缘节点按
       `direction`（`OUT` / `IN` / `BOTH`）做受控深度 BFS（硬上限 3），
@@ -248,7 +261,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.21.0
+  version: 1.22.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -512,6 +525,12 @@ paths:
     $ref: "./fragments/paths.stage2.yaml#/collectionBatchDetail"
   /api/v1/projects/{project_id}/collection-batches/{batch_id}/actions/{action}:
     $ref: "./fragments/paths.stage2.yaml#/collectionBatchActions"
+  /api/v1/projects/{project_id}/capture-sessions:
+    $ref: "./fragments/paths.capture_sessions.yaml#/captureSessions"
+  /api/v1/projects/{project_id}/capture-sessions/{session_id}:
+    $ref: "./fragments/paths.capture_sessions.yaml#/captureSessionDetail"
+  /api/v1/projects/{project_id}/capture-sessions/{session_id}/actions/{action}:
+    $ref: "./fragments/paths.capture_sessions.yaml#/captureSessionActions"
   /api/v1/projects/{project_id}/upload-sessions:
     $ref: "./fragments/paths.stage2.yaml#/uploadSessions"
   /api/v1/projects/{project_id}/upload-sessions/{upload_session_id}:
@@ -1090,6 +1109,11 @@ components:
     CollectionBatchPatch: {$ref: "./fragments/schemas.stage2.yaml#/CollectionBatchPatch"}
     CollectionBatchActionRequest: {$ref: "./fragments/schemas.stage2.yaml#/CollectionBatchActionRequest"}
     CollectionBatchPage: {$ref: "./fragments/schemas.stage2.yaml#/CollectionBatchPage"}
+    CaptureSessionStatus: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionStatus"}
+    CaptureSession: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSession"}
+    CaptureSessionCreate: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionCreate"}
+    CaptureSessionActionRequest: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionActionRequest"}
+    CaptureSessionPage: {$ref: "./fragments/schemas.capture_sessions.yaml#/CaptureSessionPage"}
     UploadSessionStatus: {$ref: "./fragments/schemas.stage2.yaml#/UploadSessionStatus"}
     UploadVerificationStatus: {$ref: "./fragments/schemas.stage2.yaml#/UploadVerificationStatus"}
     RawAssetStatus: {$ref: "./fragments/schemas.stage2.yaml#/RawAssetStatus"}

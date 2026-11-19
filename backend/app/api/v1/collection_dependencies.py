@@ -1,4 +1,4 @@
-"""采集任务/批次/素材 API 依赖装配。"""
+"""采集任务/批次/素材/会话 API 依赖装配。"""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from fastapi import Depends
 from app.api.deps import DbSession
 from app.application.collection import (
     ActionSpecUseCases,
+    CaptureSessionUseCases,
     CollectionBatchUseCases,
     CollectionPlanUseCases,
     CollectionSopUseCases,
@@ -17,6 +18,7 @@ from app.application.collection import (
     ScenarioUseCases,
 )
 from app.infrastructure.repositories.assignment_directory import SqlAssignmentDirectory
+from app.infrastructure.repositories.capture_sessions import SqlCaptureSessionRepository
 from app.infrastructure.repositories.collection_asset_directory import (
     SqlCollectionAssetDirectory,
 )
@@ -41,6 +43,7 @@ from app.infrastructure.repositories.locations import SqlLocationDirectory
 class CollectionUseCases:
     tasks: CollectionTaskUseCases
     batches: CollectionBatchUseCases
+    sessions: CaptureSessionUseCases
     plans: CollectionPlanUseCases
     sops: CollectionSopUseCases
     scenarios: ScenarioUseCases
@@ -50,6 +53,7 @@ class CollectionUseCases:
 def get_collection_use_cases(session: DbSession) -> CollectionUseCases:
     tasks = SqlCollectionTaskRepository(session)
     batches = SqlCollectionBatchRepository(session)
+    sessions = SqlCaptureSessionRepository(session)
     directory = SqlAssignmentDirectory(session)
     asset_directory = SqlCollectionAssetDirectory(session)
     location_directory = SqlLocationDirectory(session)
@@ -74,6 +78,17 @@ def get_collection_use_cases(session: DbSession) -> CollectionUseCases:
             tasks=tasks,
             batches=batches,
             directory=directory,
+            audit=audit,
+            outbox=outbox,
+            idempotency=idempotency,
+            uow=session,
+        ),
+        sessions=CaptureSessionUseCases(
+            sessions=sessions,
+            tasks=tasks,
+            batches=batches,
+            directory=directory,
+            locations=location_directory,
             audit=audit,
             outbox=outbox,
             idempotency=idempotency,

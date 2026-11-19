@@ -1,0 +1,76 @@
+# N9-001 采集会话 Schema。
+#
+# 会话是执行记录，不是任务状态的替代：字段刻意不含提交/复核/验收相关项，
+# 也不含素材版本快照（那些由任务冻结）。`allowed_actions` 由服务端状态机
+# 计算，客户端只按它渲染按钮。
+CaptureSessionStatus:
+  type: string
+  enum: [SCHEDULED, RUNNING, PAUSED, COMPLETED, ABORTED]
+
+CaptureSession:
+  type: object
+  required:
+    - session_id
+    - project_id
+    - code
+    - task_id
+    - batch_id
+    - operator_id
+    - robot_id
+    - location_id
+    - status
+    - started_at
+    - ended_at
+    - status_reason
+    - allowed_actions
+    - version
+    - created_at
+    - updated_at
+    - created_by
+    - updated_by
+  additionalProperties: false
+  properties:
+    session_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    code: {type: string, minLength: 1, maxLength: 64}
+    task_id: {type: [string, "null"], format: uuid}
+    batch_id: {type: [string, "null"], format: uuid}
+    operator_id: {type: [string, "null"], format: uuid}
+    robot_id: {type: [string, "null"], format: uuid}
+    location_id: {type: [string, "null"], format: uuid}
+    status: {$ref: "#/CaptureSessionStatus"}
+    started_at: {type: [string, "null"], format: date-time}
+    ended_at: {type: [string, "null"], format: date-time}
+    status_reason: {type: [string, "null"], maxLength: 1000}
+    allowed_actions: {type: array, items: {type: string}}
+    version: {type: integer, minimum: 1}
+    created_at: {type: [string, "null"], format: date-time}
+    updated_at: {type: [string, "null"], format: date-time}
+    created_by: {type: [string, "null"], format: uuid}
+    updated_by: {type: [string, "null"], format: uuid}
+
+CaptureSessionCreate:
+  type: object
+  required: [code]
+  additionalProperties: false
+  properties:
+    code: {type: string, minLength: 1, maxLength: 64}
+    task_id: {type: [string, "null"], format: uuid}
+    batch_id: {type: [string, "null"], format: uuid}
+    operator_id: {type: [string, "null"], format: uuid}
+    robot_id: {type: [string, "null"], format: uuid}
+    location_id: {type: [string, "null"], format: uuid}
+
+CaptureSessionActionRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    reason: {type: [string, "null"], maxLength: 1000}
+
+CaptureSessionPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/CaptureSession"}}
+    next_cursor: {type: [string, "null"]}

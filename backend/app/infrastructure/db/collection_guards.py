@@ -19,6 +19,7 @@ from sqlalchemy.engine import Connection
 from app.domain.collection.asset_state_machines import asset_transition_pairs
 from app.domain.collection.state_machines import (
     batch_transition_pairs,
+    session_transition_pairs,
     task_transition_pairs,
 )
 
@@ -32,6 +33,7 @@ def _pairs_sql(pairs: frozenset[tuple[str, str]]) -> str:
 
 _TASK_PAIRS = _pairs_sql(task_transition_pairs())
 _BATCH_PAIRS = _pairs_sql(batch_transition_pairs())
+_SESSION_PAIRS = _pairs_sql(session_transition_pairs())
 _ASSET_PAIRS = _pairs_sql(asset_transition_pairs())
 
 # 素材四表：表名 -> 触发器名。顺序稳定，便于 downgrade 逆序卸载。
@@ -197,6 +199,67 @@ _SQLITE_BATCH_STATEMENTS = (
     END
     """,
 )
+
+_SQLITE_SESSION_STATEMENTS = (
+    """
+    CREATE TRIGGER IF NOT EXISTS trg_capture_sessions_initial_status
+    BEFORE INSERT ON capture_sessions
+    FOR EACH ROW
+    WHEN NEW.status <> 'SCHEDULED'
+    BEGIN
+        SELECT RAISE(ABORT, 'capture_session_initial_status_invalid');
+    END
+    """,
+    f"""
+    CREATE TRIGGER IF NOT EXISTS trg_capture_sessions_transition
+    BEFORE UPDATE ON capture_sessions
+    FOR EACH ROW
+    WHEN OLD.status <> NEW.status AND NOT ({_SESSION_PAIRS})
+    BEGIN
+        SELECT RAISE(ABORT, 'capture_session_state_transition_invalid');
+    END
+    """,
+    """
+    CREATE TRIGGER IF NOT EXISTS trg_capture_sessions_no_delete
+    BEFORE DELETE ON capture_sessions
+    FOR EACH ROW
+    BEGIN
+        SELECT RAISE(ABORT, 'capture_session_delete_forbidden');
+    END
+    """,
+)
+
+_SESSION_FUNCTION_SQL = f"""
+CREATE OR REPLACE FUNCTION ddp_capture_session_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.status <> 'SCHEDULED' THEN
+            RAISE EXCEPTION 'capture_session_initial_status_invalid'
+                USING ERRCODE = '23514';
+        END IF;
+    ELSIF OLD.status IS DISTINCT FROM NEW.status
+          AND NOT ({_SESSION_PAIRS}) THEN
+        RAISE EXCEPTION 'capture_session_state_transition_invalid'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+"""
+
+_SESSION_DELETE_FUNCTION_SQL = """
+CREATE OR REPLACE FUNCTION ddp_capture_session_delete_guard()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION 'capture_session_delete_forbidden' USING ERRCODE = '23514';
+END;
+$$;
+"""
 
 _AUDIT_FUNCTION_SQL = """
 CREATE OR REPLACE FUNCTION ddp_audit_logs_append_only_guard()
@@ -491,6 +554,83 @@ def drop_collection_state_guards(connection: Connection) -> None:
             "ddp_collection_task_delete_guard()",
             "ddp_collection_batch_guard()",
             "ddp_collection_batch_delete_guard()",
+        ):
+            connection.exec_driver_sql(f"DROP FUNCTION IF EXISTS {function}")
+        return
+    raise RuntimeError(f"未支持的数据库方言：{dialect}")
+
+
+def install_capture_session_state_guards(connection: Connection) -> None:
+    """安装采集会话的初始状态、合法迁移与禁删兜底。
+
+    会话是执行记录：删除会丢失"这段执行发生过"的事实，因此与任务/批次
+    一致加禁删触发器；终结靠状态（``COMPLETED`` / ``ABORTED``），不靠删除。
+    """
+    if not _has_table(connection, "capture_sessions"):
+        return
+    dialect = connection.dialect.name
+    if dialect == "sqlite":
+        for statement in _SQLITE_SESSION_STATEMENTS:
+            connection.exec_driver_sql(statement)
+        return
+    if dialect == "postgresql":
+        connection.exec_driver_sql(_SESSION_FUNCTION_SQL)
+        connection.exec_driver_sql(_SESSION_DELETE_FUNCTION_SQL)
+        for trigger in (
+            "trg_capture_sessions_initial_status",
+            "trg_capture_sessions_transition",
+            "trg_capture_sessions_no_delete",
+        ):
+            connection.exec_driver_sql(
+                f"DROP TRIGGER IF EXISTS {trigger} ON capture_sessions"
+            )
+        for trigger, event, function in (
+            (
+                "trg_capture_sessions_initial_status",
+                "INSERT",
+                "ddp_capture_session_guard",
+            ),
+            (
+                "trg_capture_sessions_transition",
+                "UPDATE",
+                "ddp_capture_session_guard",
+            ),
+            (
+                "trg_capture_sessions_no_delete",
+                "DELETE",
+                "ddp_capture_session_delete_guard",
+            ),
+        ):
+            connection.exec_driver_sql(
+                f"CREATE TRIGGER {trigger} BEFORE {event} ON capture_sessions "
+                f"FOR EACH ROW EXECUTE FUNCTION {function}()"
+            )
+        return
+    raise RuntimeError(f"未支持的数据库方言：{dialect}")
+
+
+def drop_capture_session_state_guards(connection: Connection) -> None:
+    dialect = connection.dialect.name
+    if dialect == "sqlite":
+        for trigger in (
+            "trg_capture_sessions_initial_status",
+            "trg_capture_sessions_transition",
+            "trg_capture_sessions_no_delete",
+        ):
+            connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS {trigger}")
+        return
+    if dialect == "postgresql":
+        for trigger in (
+            "trg_capture_sessions_initial_status",
+            "trg_capture_sessions_transition",
+            "trg_capture_sessions_no_delete",
+        ):
+            connection.exec_driver_sql(
+                f"DROP TRIGGER IF EXISTS {trigger} ON capture_sessions"
+            )
+        for function in (
+            "ddp_capture_session_guard()",
+            "ddp_capture_session_delete_guard()",
         ):
             connection.exec_driver_sql(f"DROP FUNCTION IF EXISTS {function}")
         return
