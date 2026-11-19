@@ -18,6 +18,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from typing import Final, Literal, Protocol
 
 from app.domain.datasources.models import DataSource, DataSourceImport
@@ -25,14 +26,51 @@ from app.domain.datasources.models import DataSource, DataSourceImport
 # ``metadata`` 中服务端保留的键。客户端传入同名键会被拒绝，避免伪造"已校验"。
 REMOTE_CHECK_METADATA_KEY = "remote_check"
 REMOTE_CHECK_STATUS_VERIFIED: Final[Literal["VERIFIED"]] = "VERIFIED"
+REMOTE_CHECK_STATUS_FAILED: Final[Literal["FAILED"]] = "FAILED"
 _COMMIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
+# 规范化结果的字段上界：远端返回的任意 JSON 只保留下列白名单字段，并限制长度，
+# 超出视为"响应不可用"而不是原样落库/回显（防止超大或恶意返回值撑爆存储与日志）。
+LICENSE_MAX_LENGTH: Final = 200
+DATASET_CARD_URL_MAX_LENGTH: Final = 2048
+
+
+class RemoteCheckFailureReason(StrEnum):
+    """远端校验失败的结构化原因。
+
+    取值稳定、可枚举，供 API ``details.remote_check.reason`` 输出与前端展示；
+    **不携带远端原始报错文本**，避免把远端响应或凭据透出到响应/日志。
+    """
+
+    TIMEOUT = "TIMEOUT"
+    NOT_FOUND = "NOT_FOUND"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    SERVER_ERROR = "SERVER_ERROR"
+    INVALID_RESPONSE = "INVALID_RESPONSE"
+    RESPONSE_TOO_LARGE = "RESPONSE_TOO_LARGE"
+    UNAVAILABLE = "UNAVAILABLE"
+
+    @property
+    def is_transient(self) -> bool:
+        """可安全重试的瞬时错误；确定性错误（404/401/非法响应）重试无意义。"""
+        return self in {RemoteCheckFailureReason.TIMEOUT, RemoteCheckFailureReason.SERVER_ERROR}
 
 
 class RemoteCheckError(Exception):
     """远端元信息读取失败：超时、不存在、无权限、返回形状不可用等。
 
     调用方必须把它当作登记失败，不得降级为"未校验但继续登记"。
+    ``reason`` 是机器可读的失败分类；``message`` 已在基础设施层脱敏，不含凭据。
     """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: RemoteCheckFailureReason = RemoteCheckFailureReason.UNAVAILABLE,
+    ) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +126,22 @@ def build_remote_check_metadata(
     }
 
 
+def build_remote_check_failure_details(
+    reason: RemoteCheckFailureReason,
+) -> dict[str, object]:
+    """把失败分类压成可回显的 ``details`` 结构。
+
+    只含状态与稳定枚举原因，**不含**远端原始报错、URL、凭据或堆栈；
+    错误响应体经 ``_error_payload`` 白名单后输出，日志侧另有脱敏。
+    """
+    return {
+        "remote_check": {
+            "status": REMOTE_CHECK_STATUS_FAILED,
+            "reason": reason.value,
+        }
+    }
+
+
 def read_remote_check(metadata: Mapping[str, object]) -> RemoteCheckSummary | None:
     """从 ``metadata`` 读取校验摘要。
 
@@ -135,13 +189,18 @@ def read_remote_check(metadata: Mapping[str, object]) -> RemoteCheckSummary | No
 
 
 __all__ = [
+    "DATASET_CARD_URL_MAX_LENGTH",
+    "LICENSE_MAX_LENGTH",
     "REMOTE_CHECK_METADATA_KEY",
+    "REMOTE_CHECK_STATUS_FAILED",
     "REMOTE_CHECK_STATUS_VERIFIED",
     "DataSourceDetail",
     "RemoteCheckError",
+    "RemoteCheckFailureReason",
     "RemoteCheckResult",
     "RemoteCheckSummary",
     "RemoteSourceVerifier",
+    "build_remote_check_failure_details",
     "build_remote_check_metadata",
     "read_remote_check",
 ]

@@ -73,10 +73,16 @@ def _mp4_bytes(seed: str) -> bytes:
     return b"\x00\x00\x00\x18ftypmp42" + body + b"\x00" * 16
 
 
-def metadata_rows() -> list[dict[str, Any]]:
-    """``preview/metadata.jsonl`` 的行（generic.episode_jsonl 格式）。"""
+def metadata_rows(
+    specs: tuple[tuple[str, str, str, tuple[tuple[str, float, float], ...]], ...] = EPISODE_SPECS,
+) -> list[dict[str, Any]]:
+    """``preview/metadata.jsonl`` 的行（generic.episode_jsonl 格式）。
+
+    ``specs`` 可替换：新数据回流（N7-006）需要在同一项目里再导入一批
+    **不同 episode_key** 的数据，否则物化会按确定性 code 判重成"已存在"。
+    """
     rows: list[dict[str, Any]] = []
-    for episode_key, task_name, instruction, cameras in EPISODE_SPECS:
+    for episode_key, task_name, instruction, cameras in specs:
         rows.append(
             {
                 "episode_key": episode_key,
@@ -101,10 +107,12 @@ def metadata_rows() -> list[dict[str, Any]]:
     return rows
 
 
-def expected_media_paths() -> dict[str, tuple[str, str]]:
+def expected_media_paths(
+    specs: tuple[tuple[str, str, str, tuple[tuple[str, float, float], ...]], ...] = EPISODE_SPECS,
+) -> dict[str, tuple[str, str]]:
     """``path -> (episode_key, camera)``，用于对账导入产物。"""
     result: dict[str, tuple[str, str]] = {}
-    for row in metadata_rows():
+    for row in metadata_rows(specs):
         for asset in row["media_assets"]:
             result[str(asset["path"])] = (str(row["episode_key"]), str(asset["camera"]))
     return result
@@ -117,12 +125,21 @@ class MediaTransport:
     计算 sha256、拒绝超限/空文件/内容与扩展名不符。
     """
 
-    def __init__(self, *, drop_paths: set[str] | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        drop_paths: set[str] | None = None,
+        episode_specs: tuple[
+            tuple[str, str, str, tuple[tuple[str, float, float], ...]], ...
+        ] = EPISODE_SPECS,
+    ) -> None:
         self._drop = set(drop_paths or set())
-        files = {f"preview/{path}": _mp4_bytes(path) for path in expected_media_paths()}
-        metadata = "\n".join(json.dumps(row, ensure_ascii=False) for row in metadata_rows()).encode(
-            "utf-8"
-        )
+        files = {
+            f"preview/{path}": _mp4_bytes(path) for path in expected_media_paths(episode_specs)
+        }
+        metadata = "\n".join(
+            json.dumps(row, ensure_ascii=False) for row in metadata_rows(episode_specs)
+        ).encode("utf-8")
         self._files: dict[str, bytes] = {**files, "preview/metadata.jsonl": metadata}
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -199,11 +216,17 @@ def register_import_chain(
     code: str,
     sample_limit: int = EXPECTED_EPISODES,
     request_id: str | None = None,
+    repo_id: str = "ddp/e2e-main-chain",
+    revision: str = "b" * 40,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """登记数据源并创建导入任务（不下载数据，事件由 Worker 消费）。
 
     ``request_id`` 会以 ``X-Request-Id`` 传给创建导入的请求，供追踪测试
     验证「请求 → 事件 → Worker 审计」是否使用同一个 ID。
+
+    ``repo_id`` / ``revision`` 用于同一项目内再登记一批**新数据**：数据源有
+    ``UNIQUE(project_id, repo_id, revision, config_name, split)``，回流批次必须
+    声明不同 revision 才是合法的新数据源。
     """
     source = editor.post(
         url(project_id, "/data-sources"),
@@ -211,8 +234,8 @@ def register_import_chain(
             "code": code,
             "name": "主链验收数据源",
             "kind": "HUGGINGFACE",
-            "repo_id": "ddp/e2e-main-chain",
-            "revision": "b" * 40,
+            "repo_id": repo_id,
+            "revision": revision,
             "license": "CC-BY-4.0",
             "access_condition": "PUBLIC",
             "is_gated": False,

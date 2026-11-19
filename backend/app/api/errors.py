@@ -863,6 +863,9 @@ def datasource_error_to_app(exc: DataSourceDomainError) -> AppError:
         status_by_code=_DATASOURCE_STATUS_BY_CODE,
         messages=_DATASOURCE_MESSAGES,
         fallback=_DATASOURCE_FALLBACK,
+        # 只有 validation_failed 允许透出 details（当前唯一来源是远端校验失败的
+        # 稳定枚举原因）；其余 code 的 details 可能含内部标识，一律不回显。
+        details_codes=frozenset({"validation_failed"}),
     )
 
 

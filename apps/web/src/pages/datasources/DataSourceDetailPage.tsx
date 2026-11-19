@@ -225,7 +225,13 @@ export function DataSourceDetailBody({
               wrap
               style={{ marginBottom: 8 }}
             >
-              <Tag color="green">已验证</Tag>
+              {/* Partial：校验通过但远端未声明许可证——结论不完整，不能显示成
+                  干净的"已验证"，否则会被误读为"许可无限制"。 */}
+              {check.license === null ? (
+                <Tag color="gold">部分信息（远端未声明许可证）</Tag>
+              ) : (
+                <Tag color="green">已验证</Tag>
+              )}
               <Typography.Text type="secondary">
                 校验于 {formatDateTime(check.checked_at)}
               </Typography.Text>

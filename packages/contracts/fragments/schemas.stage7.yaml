@@ -77,8 +77,10 @@ DataSourceCreate:
         显式请求在登记前读取 Hugging Face 远端元信息。默认 `false`，避免每次
         登记都访问外网。开启后，超时、仓库不存在/无权限、gated 与声明不一致
         都会让登记失败（`validation_failed`，422），不会写入半条记录。
+        失败响应体带 `details.remote_check = {status: "FAILED", reason: <枚举>}`，
+        `reason` 取 `RemoteCheckFailureReason`，供前端区分超时/404/5xx/非法响应。
         校验结论只以规范化摘要写入服务端保留的 `metadata.remote_check`，
-        远端返回的其他字段不会落库。
+        远端返回的其他字段不会落库；远端原始报错、URL 与凭据绝不回显。
 
 DataSourcePatch:
   type: object
@@ -229,8 +231,10 @@ RemoteSourceCheck:
   required:
     [status, checked_at, resolved_revision, license, is_gated, dataset_card_url]
   description: |
-    服务端记录的一次远端校验结论，只含 Adapter 已规范化的字段。
+    服务端记录的一次**成功**远端校验结论，只含 Adapter 已规范化的字段。
     `license` 是远端 Dataset Card 的值；缺失时为 null，不代表"无限制"。
+    校验**失败**不会产生本对象（登记被拒绝），失败原因见错误体
+    `details.remote_check`（`RemoteCheckFailureReason`）。
   properties:
     status: { type: string, enum: [VERIFIED] }
     checked_at: { type: string, format: date-time }
@@ -240,6 +244,20 @@ RemoteSourceCheck:
     license: { type: [string, "null"] }
     is_gated: { type: boolean }
     dataset_card_url: { type: [string, "null"] }
+
+RemoteCheckFailureReason:
+  type: string
+  description: |
+    远端校验失败的稳定原因枚举，出现在登记失败响应的
+    `error.details.remote_check.reason`。远端原始报错、URL 与凭据不回显。
+  enum:
+    - TIMEOUT
+    - NOT_FOUND
+    - UNAUTHORIZED
+    - SERVER_ERROR
+    - INVALID_RESPONSE
+    - RESPONSE_TOO_LARGE
+    - UNAVAILABLE
 
 DataSourceDetail:
   type: object

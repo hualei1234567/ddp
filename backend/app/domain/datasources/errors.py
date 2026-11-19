@@ -6,11 +6,27 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 
 class DataSourceDomainError(ValueError):
-    """数据源域可预期错误的基类。"""
+    """数据源域可预期错误的基类。
+
+    ``details`` 是可回显给客户端的结构化补充信息（如远端校验失败原因）。
+    只有 API 层白名单内的 ``code`` 才会把它透出响应体；未登记的 code 一律
+    丢弃 details，避免内部标识泄漏。
+    """
 
     code = "validation_failed"
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        details: Mapping[str, object] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.details = dict(details) if details else None
 
 
 class DomainValidationError(DataSourceDomainError):

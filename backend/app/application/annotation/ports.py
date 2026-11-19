@@ -15,6 +15,7 @@ from uuid import UUID
 from app.application.annotation.overdue_ports import (
     OverdueAlertEventRepository,
     OverdueTaskDirectory,
+    ProjectOverdueSummaryReader,
 )
 from app.application.audit import OutboxEvent
 from app.application.idempotency import (
@@ -184,7 +185,7 @@ class AnnotationSampleSetRepository(Protocol):
     ) -> list[SampleEpisodeRef]: ...
 
 
-class AnnotationTaskRepository(OverdueTaskDirectory, Protocol):
+class AnnotationTaskRepository(OverdueTaskDirectory, ProjectOverdueSummaryReader, Protocol):
     def add(self, scope: ProjectScope, task: AnnotationTask) -> AnnotationTask: ...
 
     def get(self, scope: ProjectScope, task_id: UUID) -> AnnotationTask | None: ...

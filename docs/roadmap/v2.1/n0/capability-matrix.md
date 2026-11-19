@@ -13,8 +13,8 @@
 
 | 状态 | 数量 |
 |---|---:|
-| VERIFIED | 21 |
-| PARTIAL | 24 |
+| VERIFIED | 23 |
+| PARTIAL | 22 |
 | MISSING | 1 |
 | BLOCKED | 1 |
 | **合计** | **47** |
@@ -39,7 +39,7 @@
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
-| DDP-V21-N2-01 | 数据源中心（HF/URL/本地/S3） | **PARTIAL** | N2-003：登记可显式 `verify_remote` 调用 `HuggingFaceAdapter.describe()`（默认关闭、超时 10s）+ 详情页/详情 API | 仍只支持 Hugging Face；URL/本地/S3 源未实现 |
+| DDP-V21-N2-01 | 数据源中心（HF/URL/本地/S3） | **PARTIAL** | N2-003：登记可显式 `verify_remote` 调用 `HuggingFaceAdapter.describe()`（默认关闭、超时 10s、有界重试上限可配 1–3）+ 详情页/详情 API；失败返回结构化 `details.remote_check`（7 类稳定原因：超时/404/401/5xx/非法响应/超大响应/不可用），远端错误文本经 `sanitize_log_message` 脱敏，白名单字段 + 长度上界；前端详情页覆盖 Loading/Empty/Error/Forbidden/Partial/Stale | 仍只支持 Hugging Face；URL/本地/S3 源未实现；真实 HF 联网验收 `NOT RUN`（默认跳过） |
 | DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **VERIFIED** | 状态机 + Worker + API + 列表页；阶段/进度/步骤日志（cursor 分页）；PENDING/RUNNING 时 7s 自动轮询、终态停止；N2-010 原地合并刷新（TD-29 闭环）；N2-006 导入审看页展示统一质量六类结论与下钻 | 手动刷新仍全量重置；筛选切换需刷新才重取（TD-32）；质量运行无按对象列举接口（N4-008） |
 | DDP-V21-N2-03 | Raw Asset 字段、状态机、动作、去重 | **VERIFIED** | `domain/ingestion/models.py:332`；`state_machines.py:65`；`uploads.py:234-267`；`test_raw_asset_actions_api.py`；`scripts/qa/raw_asset_lifecycle_smoke.py` | — |
 | DDP-V21-N2-04 | Episode Explorer（时间/任务/机器人/相机/质量/状态） | **VERIFIED** | N2-004：camera 过滤（`EXISTS` 下推）+ 前端质量/标注/机器人/机位/时间筛选，全部写入 URL；契约补齐 11 个 query 参数 | `EpisodeListPage.tsx` 729 行，后续评估拆分 |
@@ -77,7 +77,7 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N6-01 | Schema Registry（action/skill/language/contact/object/failure/temporal） | **PARTIAL** | N6-001：7 类代码级预设（action/segment/object/attributes/quality/scene/robot-state）+ 只读目录端点；模板经既有 `AnnotationSchema` 完整校验；10 种 label type / 6 层 level | 前端尚未接入预设选择（后续 UI）；预设是静态代码资产，不支持项目级注册 |
-| DDP-V21-N6-02 | 标注任务（batch/assignment/priority/SLA/reviewer/status） | **VERIFIED** | N6-002 + N6-005：纯函数 `is_overdue` + 列表 `overdue` 下推过滤 + 派生字段 `is_overdue` + 巡检计数 + 前端逾期标签/汇总；巡检产出 `annotation.task.overdue` 事件，按 `<task_id>:<due_at>` 窗口去重、uuid5 确定性事件 ID，重复巡检不重复投递 | 无自动改派/关闭（刻意）；提醒仅落事件与审计，站内信/邮件通道未接入；全局逾期卡片需独立汇总端点 |
+| DDP-V21-N6-02 | 标注任务（batch/assignment/priority/SLA/reviewer/status） | **VERIFIED** | N6-002 + N6-005：纯函数 `is_overdue` + 列表 `overdue` 下推过滤 + 派生字段 `is_overdue` + 巡检计数 + 前端逾期标签/汇总；巡检产出 `annotation.task.overdue` 事件，按 `<task_id>:<due_at>` 窗口去重、uuid5 确定性事件 ID，重复巡检不重复投递；收尾新增只读端点 `GET /projects/{id}/annotation-overdue-summary`（总数、优先级/状态分布、最早期逾期时间、SLA 分桶 `<24h` / `24–72h` / `≥72h`，阈值来自领域常量 `OVERDUE_BUCKET_HOURS`）与前端逾期汇总卡片（Loading/Empty/Error/Forbidden/Stale） | 无自动改派/关闭（刻意）；提醒仅落事件与审计，站内信/邮件通道未接入 |
 | DDP-V21-N6-03 | AI 辅助标注（suggestion/confidence/human confirmation） | **VERIFIED** | `ai_suggestion.py:113-235`；`annotation_ai.py`；AI 值单独存储、`AI_ASSISTED` 标记、人工确认强一致 | — |
 | DDP-V21-N6-04 | QA：抽检/盲审/双标/IAA/仲裁 | **PARTIAL** | N6-003/004/006：双标策略 + 一致性判定复用 IAA + 不达标自动仲裁；`blind_review` 普通复核盲审（服务端对非标注人脱敏，含 Hash/AI 人工值）；创建页双标表单 | 盲审对所有非标注人生效（仲裁人豁免未定义）；聚合统计仍有小样本推断风险 |
 | DDP-V21-N6-05 | 返工闭环 Reject→Reason→Rework→Review→Pass | **VERIFIED** | `state_rules.py:159-162,284-295`；`review.py:241`；`submissions.py:113` 轮次上限；API 用例 | — |
@@ -91,7 +91,7 @@
 | DDP-V21-N7-03 | Training Run 记录 | **PARTIAL** | N7-002 + 迁移 0063：既有外部引用上新增 `config_summary`（≤8KiB、脱敏）、`code_version`、`model_version`；存量保持 NULL 不回填；契约 1.18.0 | 无独立 TrainingRun；状态轮询未实现（按需 sync/cancel 仍为权威入口）；DB 层未把三列纳入不可变守卫 |
 | DDP-V21-N7-04 | Evaluation（model/dataset/config/metrics/artifacts/failure cases） | **VERIFIED** | N7-003：`FailureCase` 领域值对象 + 迁移 0061 + 回调校验（类别/重复/4KiB/200 条/64KiB）+ 响应与前端详情展示；成功评测后不可变 | 列表响应可能较大（每评测 ≤64KiB），后续可加独立明细端点 |
 | DDP-V21-N7-05 | Data Gap（多来源、target_count、priority、status） | **PARTIAL** | N7-004 + N7-008：五类来源证据、`unmapped`（含原因）与 `truncated_sources`；证据不造维度、不参与覆盖口径；前端展示来源徽标、未映射与截断；契约 1.14.0 | 低分评测只能作为项目级未映射证据，不能归因到具体维度；缺口项仍无 priority/status |
-| DDP-V21-N7-06 | 闭环 Evaluation→Failure→Gap→Requirement→New Data | **PARTIAL** | `application/modelops/feedback.py:221,291`；`requirements.py:318`；e2e 主链；N7-005：失败评测可产出**候选**缺口（`GET /data-gap-candidates`），候选转数据需求必须人工确认且仅 DRAFT 可转（`POST /data-gap-candidates/{candidate_key}/data-requirements`），不自动建需求；契约 1.21.0 | 候选缺口到需求的最后一步仍人工；新数据回流（Requirement→新采集→重训）未验证 |
+| DDP-V21-N7-06 | 闭环 Evaluation→Failure→Gap→Requirement→New Data | **VERIFIED** | `application/modelops/feedback.py:221,291`；`requirements.py:318`；N7-005 候选缺口；N7-006：新数据回流闭环 e2e（真实 PG + 真实导入 Worker）——反馈转需求 → 审批 → 新采集（第二批数据源，新 Episode ACCEPTED/APPROVED）→ 新数据集版本冻结 → 训练交付 → 训练引用（MOCK 显式标注且登记模型版本被 422 拒绝；LOCAL 经真实 `sync` 到 SUCCEEDED）→ 新模型版本 READY → 新版本复评 PASS → satisfy/link-retest/close + 反馈 resolve，缺口视图 `open_feedback_count=0`、`current_count=20`、`suggested=0`；证据 `backend/tests/e2e/test_data_reflow_e2e.py`、`docs/testing/主链端到端与可追溯性验收-2026-11-17.md` §13；契约 1.23.0（未新增字段） | 候选缺口转需求仍人工（刻意，不自动审批）；真实训练平台计算与真实权重 `BLOCKED`（N7-02），本项只证明编排闭环 |
 
 ## 8. N8 可观测性 / 性能 / 安全 / 部署
 

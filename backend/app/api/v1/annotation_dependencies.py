@@ -18,6 +18,7 @@ from app.application.annotation.batches import AnnotationBatchUseCases
 from app.application.annotation.consistency import AnnotationConsistencyUseCases
 from app.application.annotation.gold_sets import GoldSetUseCases
 from app.application.annotation.iaa import IAAUseCases
+from app.application.annotation.overdue_summary import AnnotationOverdueSummaryUseCases
 from app.application.annotation.progress import AnnotationProgressRefresher
 from app.application.annotation.quality_checks import QualityCheckUseCases
 from app.application.annotation.quality_samples import QualitySampleUseCases
@@ -83,6 +84,7 @@ class AnnotationUseCases:
     iaa: IAAUseCases
     ai_suggestions: AnnotationAiSuggestionUseCases
     consistency: AnnotationConsistencyUseCases
+    overdue_summary: AnnotationOverdueSummaryUseCases
 
 
 def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
@@ -239,6 +241,7 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
         reviews=reviews_use_cases,
         arbitrations=arbitrations_use_cases,
         consistency=consistency_use_cases,
+        overdue_summary=AnnotationOverdueSummaryUseCases(tasks_repo),
         gold_sets=GoldSetUseCases(
             gold_sets_repo,
             schemas_repo,

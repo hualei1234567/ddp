@@ -987,3 +987,22 @@ annotationSchemaPresetDetail:
       "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
       "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationOverdueSummary:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: getAnnotationOverdueSummary
+    tags: [annotation-tasks]
+    summary: 项目级逾期汇总（只读）
+    description: |
+      返回本项目当前时刻的逾期任务总数、按优先级/状态分布、最早期逾期时间与
+      SLA 分桶（`LT_24H` / `D1_TO_D3` / `GT_3D`）。逾期是派生事实：
+      本操作只读，不写库、不推进版本、不改派或关闭任务。服务端强制
+      `project_id` 隔离，只统计调用方所在项目的任务。
+    responses:
+      "200": {description: 逾期汇总, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationOverdueSummary"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
