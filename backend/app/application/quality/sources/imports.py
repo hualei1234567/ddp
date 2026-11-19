@@ -12,6 +12,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from app.application.datasources.quality import RULE_VERSION, evaluate_import_quality
 from app.application.quality.facts import QualitySubjectFacts
 from app.domain.identity.models import ProjectScope
@@ -130,6 +132,9 @@ def _map_report(findings: tuple[object, ...]) -> tuple[QualityFindingDraft, ...]
         if not isinstance(passed, bool):
             raise QualityEngineError(f"导入质量规则 {rule_id} 未返回布尔结论")
         detail = str(getattr(finding, "detail", ""))
+        evidence = getattr(finding, "evidence", None)
+        if evidence is not None and not isinstance(evidence, Mapping):
+            raise QualityEngineError(f"导入质量规则 {rule_id} 的 evidence 必须是 JSON 对象")
         seen.add(rule_id)
         drafts.append(
             QualityFindingDraft(
@@ -139,6 +144,7 @@ def _map_report(findings: tuple[object, ...]) -> tuple[QualityFindingDraft, ...]
                 severity=declaration.severity,
                 status=QualityFindingStatus.PASS if passed else QualityFindingStatus.FAIL,
                 message=_bounded_message(detail),
+                evidence=evidence,
                 score=1.0 if passed else 0.0,
             )
         )

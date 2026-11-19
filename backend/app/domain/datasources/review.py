@@ -192,11 +192,18 @@ class DataReview:
 
 @dataclass(frozen=True, slots=True)
 class QualityFinding:
-    """一条质量规则的结果。``detail`` 只放可核对的事实，不放推测。"""
+    """一条质量规则的结果。``detail`` 只放可核对的事实，不放推测。
+
+    ``evidence`` 是可选的结构化事实（例如多路同步的每流偏移/帧索引），
+    **不参与通过与否的判定**。它随统一质量引擎落进
+    ``quality_findings.evidence``，因此不需要为每流明细新增数据库列或迁移；
+    调用方负责控制体积（证据列有上限）。
+    """
 
     rule_id: str
     passed: bool
     detail: str
+    evidence: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
