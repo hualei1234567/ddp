@@ -21,11 +21,14 @@ from app.api.v1.episode_dependencies import EpisodeUseCasesDep
 from app.api.v1.lineage_schemas import (
     Direction,
     DownloadUrlOut,
+    LineageGraphResponse,
     LineageResponse,
+    build_lineage_graph_response,
     build_lineage_response,
     to_internal_direction,
 )
-from app.domain.episodes.enums import LineageNodeType
+from app.application.episodes.graph import MAX_GRAPH_CURSOR_LENGTH, MAX_GRAPH_DEPTH, MAX_GRAPH_LIMIT
+from app.domain.episodes.enums import LineageDirection, LineageNodeType
 from app.domain.identity.models import ProjectScope
 
 router = APIRouter(tags=["lineage"])
@@ -111,6 +114,50 @@ def get_data_source_lineage(
         require_node=False,
     )
     return build_lineage_response(trace, direction)
+
+
+@router.get(
+    "/projects/{project_id}/lineage/graph",
+    response_model=LineageGraphResponse,
+)
+def get_lineage_graph(
+    scope: PathReadScope,
+    use_cases: EpisodeUseCasesDep,
+    data_sources: DataSourceServicesDep,
+    node_type: LineageNodeType,
+    node_id: UUID,
+    direction: LineageDirection = LineageDirection.OUT,
+    depth: Annotated[int, Query(ge=1, le=MAX_GRAPH_DEPTH)] = 1,
+    cursor: Annotated[str | None, Query(max_length=MAX_GRAPH_CURSOR_LENGTH)] = None,
+    limit: Annotated[int, Query(ge=1, le=MAX_GRAPH_LIMIT)] = 20,
+) -> LineageGraphResponse:
+    """从任意节点出发的受控图查询（只读）。
+
+    - ``direction``：``OUT`` 下游 / ``IN`` 上游 / ``BOTH`` 两侧；
+    - ``depth`` 硬上限 3，节点与边另有服务端硬上限，触顶时 ``truncated=true``；
+    - ``DATA_SOURCE`` / ``DATA_SOURCE_IMPORT`` 是只读投影节点，先用权威仓储
+      确认归属；跨项目一律 404，不泄露存在性；
+    - 其他节点未登记时返回空图（``root_found=false``）而不是 404——节点尚未
+      进入血缘图是正常中间态，用状态码差异反而会变成存在性探针。
+    """
+    root_verified = False
+    if node_type is LineageNodeType.DATA_SOURCE:
+        data_sources.get_source(scope, node_id)
+        root_verified = True
+    elif node_type is LineageNodeType.DATA_SOURCE_IMPORT:
+        data_sources.get_import(scope, node_id)
+        root_verified = True
+    page = use_cases.lineage_graph.query(
+        scope,
+        node_type=node_type,
+        node_id=node_id,
+        direction=direction,
+        depth=depth,
+        cursor=cursor,
+        limit=limit,
+        root_verified=root_verified,
+    )
+    return build_lineage_graph_response(page)
 
 
 @router.get("/raw-assets/{asset_id}/download-url", response_model=DownloadUrlOut)

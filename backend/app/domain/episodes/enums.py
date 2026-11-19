@@ -68,6 +68,23 @@ class LineageNodeType(StrEnum):
     TRAINING_RUN = "TRAINING_RUN"
 
 
+class LineageDirection(StrEnum):
+    """通用血缘图查询的遍历方向。
+
+    与既有逐节点血缘端点的 ``forward`` / ``reverse`` 不同：图查询需要一次
+    同时看上下游（``BOTH``），且方向语义按边的入/出定义，避免"正向"在不同
+    调用方眼里含义不一致。
+
+    - ``OUT``：沿边 ``from -> to`` 向下游展开（等价于既有 forward）；
+    - ``IN``：沿边 ``to -> from`` 向上游回溯（等价于既有 reverse）；
+    - ``BOTH``：两侧同时展开。
+    """
+
+    IN = "IN"
+    OUT = "OUT"
+    BOTH = "BOTH"
+
+
 class LineageRelation(StrEnum):
     UPLOADED_BY = "UPLOADED_BY"
     PRODUCED_BY = "PRODUCED_BY"

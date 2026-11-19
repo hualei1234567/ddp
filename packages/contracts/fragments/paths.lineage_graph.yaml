@@ -1,0 +1,63 @@
+# N5-003 通用血缘图查询（backend/app/api/v1/lineage.py）
+#
+# 只读：不写血缘表、不新增图数据库；遍历复用既有 data_lineage_edges /
+# lineage_node_refs 与数据源链只读投影。
+lineageGraph:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: getLineageGraph
+    tags: [lineage]
+    summary: 通用血缘图查询（受控深度/方向，只读）
+    description: |
+      从任意节点出发按方向做 BFS，返回本页的节点、边与游标。
+
+      - `direction=OUT` 沿边向下游（from → to）；`IN` 向上游（to → from）；
+        `BOTH` 两侧同时展开。默认 `OUT`。
+      - `depth` 硬上限 3；节点与边另有服务端硬上限（节点 500、边 1000）。
+        任一上限触顶时返回 `truncated=true`，**不得把截断结果当成完整图**。
+      - 防环：每个节点最多展开一次，互指/自环不会导致重复或死循环。
+      - 分页按边进行：`limit` 是本页边数（1..100，默认 20），`nodes` 是
+        本页边的端点并集外加起点。`next_cursor` 为不透明键集游标，非法游标
+        返回 422，不静默回到首页。
+      - `DATA_SOURCE` / `DATA_SOURCE_IMPORT` 是只读投影节点，服务端先用
+        权威仓储确认归属；跨项目一律 404，不泄露存在性。
+      - 其他节点未登记到当前项目的血缘图时返回 200 空图
+        （`root_found=false`），而不是 404——节点尚未进入血缘图是正常中间态。
+      - 只读：本操作不写任何节点或边，也不会回填历史数据。
+    parameters:
+      - name: node_type
+        in: query
+        required: true
+        schema: { $ref: "../openapi.yaml#/components/schemas/LineageNodeType" }
+      - name: node_id
+        in: query
+        required: true
+        schema: { type: string, format: uuid }
+      - name: direction
+        in: query
+        required: false
+        schema: { $ref: "../openapi.yaml#/components/schemas/LineageGraphDirection" }
+      - name: depth
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 3, default: 1 }
+      - name: cursor
+        in: query
+        required: false
+        schema: { type: string, maxLength: 512 }
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    responses:
+      "200":
+        description: 本页图（节点、边与下一页游标）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/LineageGraphResponse" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
