@@ -94,6 +94,25 @@ class NewRequirement:
     due_at: datetime | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class NewRequirementFromCandidate:
+    """人工把某个候选缺口转为 DRAFT 需求时提交的字段。
+
+    刻意**不包含** ``dimensions`` / ``source_type`` / ``source_evaluation_ids``：
+    维度与来源评测必须由服务端从当前候选事实推导，调用方不能把
+    ``suggested_gap`` 提示值直接当权威维度，也不能伪造来源。
+    """
+
+    code: str
+    title: str
+    owner_id: UUID
+    target_episode_count: int = 1
+    description: str | None = None
+    quality_thresholds: dict[str, object] | None = None
+    priority: str = "P1"
+    due_at: datetime | None = None
+
+
 __all__ = [
     "NewEvaluation",
     "NewFeedback",
@@ -102,4 +121,5 @@ __all__ = [
     "NewModel",
     "NewModelVersion",
     "NewRequirement",
+    "NewRequirementFromCandidate",
 ]

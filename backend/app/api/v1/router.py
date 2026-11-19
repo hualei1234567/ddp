@@ -25,6 +25,7 @@ from app.api.v1 import (
     evaluation_routes,
     export_routes,
     feedback_routes,
+    gap_candidate_routes,
     governance_routes,
     inbound_routes,
     inference_routes,
@@ -78,6 +79,7 @@ api_router.include_router(model_routes.router)
 api_router.include_router(evaluation_routes.router)
 api_router.include_router(inference_routes.router)
 api_router.include_router(feedback_routes.router)
+api_router.include_router(gap_candidate_routes.router)
 api_router.include_router(requirement_routes.router)
 api_router.include_router(model_adapter_routes.router)
 api_router.include_router(supplier_routes.router)

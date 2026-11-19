@@ -14,6 +14,7 @@ from app.application.idempotency import (
     IdempotencyRepository as _IdempotencyRepository,
 )
 from app.domain.identity.models import ProjectScope
+from app.domain.modelops.gap_candidates import FailureCaseScan
 from app.domain.modelops.gap_evidence import GapEvidenceFacts
 from app.domain.modelops.gaps import MeasuredCoverage
 from app.domain.modelops.models import (
@@ -248,6 +249,20 @@ class GapEvidenceDirectory(Protocol):
     """
 
     def evidence(self, scope: ProjectScope) -> GapEvidenceFacts: ...
+
+
+class GapCandidateDirectory(Protocol):
+    """候选缺口的失败事实端口（N7-005）：只读、项目内、有界。
+
+    返回当前项目近期评测的 ``failure_cases`` 明细（已由领域层解析校验）与扫描
+    边界信息；**不做聚合、不做归因**。聚合与匹配由
+    ``app.domain.modelops.gap_candidates.build_gap_candidates`` 决定。
+
+    实现必须以服务端 ``ProjectScope`` 强制 ``project_id`` 隔离；扫描触达上限时
+    在 ``FailureCaseScan.truncated`` 里如实声明，绝不静默截断。
+    """
+
+    def failure_case_scan(self, scope: ProjectScope) -> FailureCaseScan: ...
 
 
 class TrainingSourceGate(Protocol):
