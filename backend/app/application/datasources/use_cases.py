@@ -33,9 +33,11 @@ from app.application.datasources.verification import (
     RemoteCheckError,
     RemoteCheckResult,
     RemoteSourceVerifier,
+    build_remote_check_failure_details,
     build_remote_check_metadata,
     read_remote_check,
 )
+from app.application.observability_redaction import sanitize_log_message
 from app.domain.datasources.enums import ImportStatus
 from app.domain.datasources.errors import (
     DomainValidationError,
@@ -238,9 +240,13 @@ class DataSourceUseCases:
                 revision=command.revision,
             )
         except RemoteCheckError as exc:
-            # 外部异常原文只进服务端日志（领域异常处理器会记录 message），
-            # 对外由统一错误映射给出固定文案，不回显远端返回。
-            raise DomainValidationError(f"远端校验失败，数据源未登记：{exc}") from exc
+            # 失败必须显式记录：响应体带稳定的 ``details.remote_check``
+            # （status=FAILED + 枚举原因），供前端区分超时/404/5xx/非法响应；
+            # 远端原始报错只进服务端日志（已脱敏），绝不回显。
+            raise DomainValidationError(
+                f"远端校验失败，数据源未登记：{sanitize_log_message(exc)}",
+                details=build_remote_check_failure_details(exc.reason),
+            ) from exc
 
         if result.repo_id != command.repo_id.strip():
             raise DomainValidationError("远端返回的 repo_id 与登记值不一致")

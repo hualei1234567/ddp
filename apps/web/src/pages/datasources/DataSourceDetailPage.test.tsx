@@ -168,6 +168,19 @@ describe("数据源详情页状态", () => {
     expect(html).not.toContain("已验证");
   });
 
+  it("已校验但远端未声明许可证时显示 Partial，不显示干净的已验证", () => {
+    const html = render({
+      detail: {
+        ...detail,
+        remote_check: { ...detail.remote_check!, license: null },
+      },
+    });
+
+    expect(html).toContain("部分信息（远端未声明许可证）");
+    expect(html).not.toContain(">已验证<");
+    expect(html).toContain("未声明（不代表无限制）");
+  });
+
   it("没有导入任务时显示空态", () => {
     const html = render({ detail: { ...detail, imports: [] } });
 

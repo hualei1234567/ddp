@@ -5,10 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import pytest
 from app.api.v1.dataset_pagination import encode_cursor
 from app.api.v1.datasource_routes import get_remote_source_verifier
 from app.application.datasources.verification import (
     RemoteCheckError,
+    RemoteCheckFailureReason,
     RemoteCheckResult,
 )
 from app.domain.datasources.enums import ImportLogLevel, ImportStage
@@ -213,13 +215,66 @@ def test_remote_timeout_rejects_registration(api_db) -> None:
     client = make_client(factory, ids.editor_a)
     _override_verifier(
         client,
-        _FakeVerifier(error=RemoteCheckError("读取元信息超时")),
+        _FakeVerifier(
+            error=RemoteCheckError("读取元信息超时", reason=RemoteCheckFailureReason.TIMEOUT)
+        ),
     )
 
     response = client.post(_url(ids.project_a), json=_payload(verify_remote=True))
 
     assert response.status_code == 422, response.text
-    assert response.json()["error"]["code"] == "validation_failed"
+    body = response.json()["error"]
+    assert body["code"] == "validation_failed"
+    # 失败必须显式记录状态与原因，供前端区分超时/404/5xx，而不是笼统报错。
+    assert body["details"]["remote_check"] == {
+        "status": "FAILED",
+        "reason": "TIMEOUT",
+    }
+
+
+@pytest.mark.parametrize(
+    ("reason", "expected"),
+    [
+        (RemoteCheckFailureReason.NOT_FOUND, "NOT_FOUND"),
+        (RemoteCheckFailureReason.UNAUTHORIZED, "UNAUTHORIZED"),
+        (RemoteCheckFailureReason.SERVER_ERROR, "SERVER_ERROR"),
+        (RemoteCheckFailureReason.INVALID_RESPONSE, "INVALID_RESPONSE"),
+        (RemoteCheckFailureReason.RESPONSE_TOO_LARGE, "RESPONSE_TOO_LARGE"),
+    ],
+)
+def test_remote_failure_surfaces_structured_reason(api_db, reason, expected) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    _override_verifier(client, _FakeVerifier(error=RemoteCheckError("远端不可用", reason=reason)))
+
+    response = client.post(_url(ids.project_a), json=_payload(verify_remote=True))
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["details"]["remote_check"]["reason"] == expected
+
+
+def test_remote_failure_never_echoes_credentials(api_db) -> None:
+    """远端报错里混入的凭据/URL 不得出现在响应体。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    _override_verifier(
+        client,
+        _FakeVerifier(
+            error=RemoteCheckError(
+                "500 for https://huggingface.co/api/x?token=hf_leak Authorization: Bearer hf_leak2",
+                reason=RemoteCheckFailureReason.SERVER_ERROR,
+            )
+        ),
+    )
+
+    response = client.post(_url(ids.project_a), json=_payload(verify_remote=True))
+
+    assert response.status_code == 422, response.text
+    text = response.text
+    assert "hf_leak" not in text
+    assert "huggingface.co" not in text
+    # 响应只含稳定枚举原因，不含远端原文。
+    assert response.json()["error"]["details"]["remote_check"]["reason"] == "SERVER_ERROR"
 
 
 def test_remote_revision_mismatch_rejects_registration(api_db) -> None:

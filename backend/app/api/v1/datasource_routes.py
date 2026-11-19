@@ -106,6 +106,7 @@ def get_remote_source_verifier(settings: SettingsDep) -> RemoteSourceVerifier:
     return HuggingFaceRemoteVerifier(
         token=settings.huggingface_token,
         timeout_seconds=settings.huggingface_remote_check_timeout_seconds,
+        max_attempts=settings.huggingface_remote_check_max_attempts,
     )
 
 

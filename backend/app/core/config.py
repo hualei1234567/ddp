@@ -197,6 +197,10 @@ class Settings(BaseSettings):
     # 超时必须显式设置：同步登记请求不能把 API 线程挂在不可达的外网上。
     huggingface_token: str = ""
     huggingface_remote_check_timeout_seconds: float = Field(default=10.0, gt=0, le=60)
+    # 远端校验的有界重试上限：仅对瞬时错误（超时 / 5xx）重试，确定性错误
+    # （404 / 401 / 非法响应）不重试。默认 1 次（即不重试），避免同步登记
+    # 请求把 API 线程挂成 2 倍超时；上限 3 防止配置失误放大延迟。
+    huggingface_remote_check_max_attempts: int = Field(default=1, ge=1, le=3)
 
     # RawAsset 异步校验 Worker。所有阈值由部署配置注入，不在用例内硬编码。
     # 处理运行事件的租约：claim 后把 available_at 推后这么久，避免阶段提交
