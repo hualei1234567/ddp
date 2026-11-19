@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app.api.v1.training_dependencies import get_training_adapter_gateway
 from app.infrastructure.db.models.collection import OutboxEvent
+from app.infrastructure.repositories.modelops_training_source import SqlTrainingSourceGate
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -469,8 +470,10 @@ def test_external_reference_persists_sanitized_training_run_fields(
     ):
         assert leaked not in serialized
 
-    # Adapter 收到的是完整配置（训练平台需要真实参数），DDP 落库/返回的只是摘要。
-    assert gateway.submitted_configs == [payload["config"]]
+    # MOCK 是独立执行器（N7-007）：它不调用外部 Adapter，所以网关卡收不到任何
+    # 提交。DDP 落库/返回的只是脱敏摘要；真实配置的去向由 LOCAL/REMOTE 用例覆盖
+    # （见 test_local_execution_passes_full_config_to_adapter）。
+    assert gateway.submitted_configs == []
 
     fetched = editor.get(
         url(api_db[1].project_a, f"/external-training-references/{body['external_ref_id']}")
@@ -605,3 +608,165 @@ def test_external_reference_rejects_missing_or_conflicting_execution_mode(
     )
     assert conflict.status_code == 422
     assert conflict.json()["error"]["code"] == "validation_failed"
+
+
+# --------------------------------------------------------------------------- #
+# N7-007：MOCK / DRY_RUN 是独立执行器，不再调用外部 Adapter
+# --------------------------------------------------------------------------- #
+def _reference_payload(*, adapter: str, **overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "adapter_id": adapter,
+        "adapter_version": "1.0.0",
+        "correlation_id": f"corr-{uuid4().hex[:8]}",
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_dry_run_executor_plans_without_calling_adapter(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    editor, delivery = _delivered_delivery(api_db, execution_mode="DRY_RUN")
+    gateway = FakeTrainingGateway("DRY_RUN")
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: gateway
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+
+    response = editor.post(
+        url(api_db[1].project_a, base),
+        json=_reference_payload(adapter="dry-run-training"),
+        headers={"Idempotency-Key": f"dry-{uuid4().hex[:8]}"},
+    )
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert body["execution_mode"] == "DRY_RUN"
+    # 演练是独立终态：不是 SUBMITTED，更不是 SUCCEEDED。
+    assert body["external_status"] == "DRY_RUN"
+    assert body["artifacts"] is None
+    plan = body["dry_run_plan"]
+    assert plan is not None
+    assert plan["dry_run"] is True
+    assert plan["artifacts_produced"] is False
+    assert plan["external_platform_called"] is False
+    assert [check["name"] for check in plan["checks"]]
+    assert all(check["status"] != "FAIL" for check in plan["checks"])
+    assert [action["name"] for action in plan["actions"]]
+    # 关键：没有调用外部 Adapter。
+    assert gateway.submitted_configs == []
+    # run id 由幂等键确定性派生，重复同一键返回同一条引用。
+    assert body["external_run_id"].startswith("dry-run-")
+
+
+def test_mock_executor_marks_artifacts_without_calling_adapter(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    editor, delivery = _delivered_delivery(api_db, execution_mode="MOCK")
+    gateway = FakeTrainingGateway("MOCK")
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: gateway
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+
+    response = editor.post(
+        url(api_db[1].project_a, base),
+        json=_reference_payload(adapter="mock-training"),
+        headers={"Idempotency-Key": f"mock-{uuid4().hex[:8]}"},
+    )
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert body["execution_mode"] == "MOCK"
+    assert body["external_status"] == "SUCCEEDED"
+    artifacts = body["artifacts"]
+    assert artifacts["mock"] is True
+    assert artifacts["materialized"] is False
+    assert "model" not in artifacts  # 不含可登记为模型版本的对象键
+    assert body["dry_run_plan"] is None
+    assert body["external_run_id"].startswith("mock-")
+    assert gateway.submitted_configs == []
+
+
+def test_non_real_execution_replay_is_idempotent(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    editor, delivery = _delivered_delivery(api_db, execution_mode="DRY_RUN")
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: FakeTrainingGateway(
+        "DRY_RUN"
+    )
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+    key = f"dry-replay-{uuid4().hex[:8]}"
+    payload = _reference_payload(adapter="dry-run-training")
+
+    first = editor.post(
+        url(api_db[1].project_a, base), json=payload, headers={"Idempotency-Key": key}
+    )
+    replay = editor.post(
+        url(api_db[1].project_a, base), json=payload, headers={"Idempotency-Key": key}
+    )
+    assert first.status_code == 202, first.text
+    assert replay.status_code == 202, replay.text
+    assert replay.json()["external_ref_id"] == first.json()["external_ref_id"]
+    assert replay.json()["dry_run_plan"] == first.json()["dry_run_plan"]
+
+
+def test_non_real_execution_rejects_external_refs(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    editor, delivery = _delivered_delivery(api_db, execution_mode="MOCK")
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: FakeTrainingGateway(
+        "MOCK"
+    )
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+    response = editor.post(
+        url(api_db[1].project_a, base),
+        json=_reference_payload(
+            adapter="mock-training", model_ref={"model_id": "not-real"}
+        ),
+        headers={"Idempotency-Key": f"mock-ref-{uuid4().hex[:8]}"},
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "validation_failed"
+
+
+def test_local_execution_passes_full_config_to_adapter(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """LOCAL 仍走真实 Adapter：网关卡收到完整配置，DDP 只落脱敏摘要。"""
+    editor, delivery = _delivered_delivery(api_db, execution_mode="LOCAL")
+    gateway = FakeTrainingGateway("LOCAL")
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: gateway
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+    config = {"learning_rate": 0.001, "api_key": "sk-should-not-leak"}
+
+    response = editor.post(
+        url(api_db[1].project_a, base),
+        json=_reference_payload(adapter="local-training", config=config),
+        headers={"Idempotency-Key": f"local-{uuid4().hex[:8]}"},
+    )
+    assert response.status_code == 202, response.text
+    assert response.json()["execution_mode"] == "LOCAL"
+    assert response.json()["external_status"] == "SUBMITTED"
+    assert gateway.submitted_configs == [config]
+    assert response.json()["config_summary"]["api_key"] == "[已脱敏]"
+
+
+def test_training_source_gate_flags_non_real_execution(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """下游门禁据此拒绝 MOCK/DRY_RUN：仓储必须如实给出 non_real 标志。"""
+    factory, ids = api_db
+    editor, delivery = _delivered_delivery(api_db, execution_mode="MOCK")
+    editor.app.dependency_overrides[get_training_adapter_gateway] = lambda: FakeTrainingGateway(
+        "MOCK"
+    )
+    base = f"/training-deliveries/{delivery['training_delivery_id']}/external-references"
+    created = editor.post(
+        url(ids.project_a, base),
+        json=_reference_payload(adapter="mock-training"),
+        headers={"Idempotency-Key": f"gate-{uuid4().hex[:8]}"},
+    )
+    assert created.status_code == 202, created.text
+    ref_id = created.json()["external_ref_id"]
+
+    with factory() as session:
+        facts = SqlTrainingSourceGate(session).resolve(
+            ids.project_a, external_ref_id=UUID(ref_id)
+        )
+    assert facts is not None
+    assert facts.external_ref_non_real is True

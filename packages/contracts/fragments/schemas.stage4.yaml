@@ -51,7 +51,7 @@ TrainingDeliveryStatus:
 
 ExternalStatus:
   type: string
-  enum: [SUBMITTED, RUNNING, SUCCEEDED, FAILED, CANCELLED, UNKNOWN, UNAVAILABLE]
+  enum: [SUBMITTED, RUNNING, SUCCEEDED, FAILED, CANCELLED, UNKNOWN, UNAVAILABLE, DRY_RUN]
 
 GrantStatus:
   type: string

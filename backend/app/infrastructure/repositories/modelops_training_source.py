@@ -11,6 +11,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.domain.datasets.training_enums import NON_REAL_EXECUTION_MODES, ExecutionMode
 from app.domain.modelops.training_source import TrainingSourceFacts
 from app.infrastructure.db.models.training import (
     ExternalTrainingReferenceModel,
@@ -57,6 +58,7 @@ class SqlTrainingSourceGate:
             delivery_request_id = delivery.training_request_id
 
         external_ref_delivery_id: UUID | None = None
+        external_ref_non_real: bool | None = None
         if external_ref_id is not None:
             reference = self._session.scalar(
                 select(ExternalTrainingReferenceModel).where(
@@ -67,6 +69,12 @@ class SqlTrainingSourceGate:
             if reference is None:
                 return None
             external_ref_delivery_id = reference.training_delivery_id
+            # 执行方式权威定义在 datasets 域；这里只翻译成"是否非真实"。
+            # 状态为 DRY_RUN 同样视为非真实，即使执行方式字段缺失也不放行。
+            external_ref_non_real = (
+                ExecutionMode(reference.execution_mode) in NON_REAL_EXECUTION_MODES
+                or reference.external_status == "DRY_RUN"
+            )
 
         return TrainingSourceFacts(
             request_id=request_id,
@@ -74,6 +82,7 @@ class SqlTrainingSourceGate:
             delivery_request_id=delivery_request_id,
             external_ref_id=external_ref_id,
             external_ref_delivery_id=external_ref_delivery_id,
+            external_ref_non_real=external_ref_non_real,
         )
 
 

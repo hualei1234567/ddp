@@ -263,6 +263,8 @@ def external_reference_out(reference: ExternalTrainingReference) -> dict[str, An
         # 产物元数据（object_key/sha256/size_bytes）；模型版本登记从这里取，
         # 不再需要回查 Adapter 的运维接口。
         "artifacts": reference.artifacts,
+        # 演练计划：只有 DRY_RUN 引用有值；它不是训练产物。
+        "dry_run_plan": reference.dry_run_plan,
         # 配置摘要已脱敏、有界；None 只表示迁移前存量记录未保存配置。
         "config_summary": reference.config_summary,
         "code_version": reference.code_version,
