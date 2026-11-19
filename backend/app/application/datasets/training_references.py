@@ -17,6 +17,10 @@ from app.application.datasets.ports import (
 )
 from app.application.datasets.training_commands import NewExternalTrainingReference
 from app.application.datasets.training_config_summary import summarize_training_config
+from app.application.datasets.training_executors import (
+    DryRunTrainingExecutor,
+    MockTrainingExecutor,
+)
 from app.application.datasets.training_ports import (
     AdapterRunStatus,
     CallbackRecord,
@@ -37,6 +41,7 @@ from app.domain.datasets.errors import (
 from app.domain.datasets.training_deliveries import TrainingDelivery
 from app.domain.datasets.training_enums import (
     DECLARED_EXECUTION_MODES,
+    NON_REAL_EXECUTION_MODES,
     AdapterCapability,
     ExecutionMode,
     ExternalTrainingStatus,
@@ -85,6 +90,8 @@ class ExternalTrainingReferenceUseCases:
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
         lineage: DatasetVersionLineageRecorder,
+        mock_executor: MockTrainingExecutor | None = None,
+        dry_run_executor: DryRunTrainingExecutor | None = None,
     ) -> None:
         self._deliveries = deliveries
         self._references = references
@@ -94,6 +101,9 @@ class ExternalTrainingReferenceUseCases:
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
         self._lineage = lineage
+        # 独立执行器：无状态、无 I/O，默认真实实例即可；测试可注入替身。
+        self._mock_executor = mock_executor or MockTrainingExecutor()
+        self._dry_run_executor = dry_run_executor or DryRunTrainingExecutor()
 
     def get(self, scope: ProjectScope, reference_id: UUID) -> ExternalTrainingReference:
         reference = self._references.get(scope, reference_id)
@@ -178,35 +188,87 @@ class ExternalTrainingReferenceUseCases:
             configured=self._gateway.execution_mode(command.adapter_id),
             requested=command.execution_mode,
         )
-        capabilities = self._gateway.capabilities(command.adapter_id)
-        ensure_capabilities(capabilities, AdapterCapability.SUBMIT, adapter_id=command.adapter_id)
-        if command.model_ref is not None:
-            ensure_capabilities(
-                capabilities,
-                AdapterCapability.MODEL_REFERENCE,
+        # MOCK/DRY_RUN 是独立执行器，不经过外部平台，也不能声明外部模型/评测引用：
+        # 否则会把一份模拟/演练结果包装成"已有真实模型"。这里 fail-closed。
+        if execution_mode in NON_REAL_EXECUTION_MODES and (
+            command.model_ref is not None or command.evaluation_ref is not None
+        ):
+            raise DomainValidationError("MOCK/DRY_RUN 执行不能声明外部模型引用或评测引用")
+        now = _utcnow()
+        if execution_mode is ExecutionMode.DRY_RUN:
+            # 只校验、只出计划：不调用外部平台、不产生训练产物、不写 SUCCEEDED。
+            dry_run = self._dry_run_executor.execute(
                 adapter_id=command.adapter_id,
+                adapter_version=command.adapter_version,
+                idempotency_key=key,
+                delivery_id=delivery.training_delivery_id,
+                dataset_version_id=delivery.dataset_version_id,
+                delivery_status=delivery.status.value,
+                artifact_manifest_sha256=delivery.artifact_manifest_sha256,
+                aggregate_sha256=delivery.aggregate_sha256,
+                config=command.config,
+                capabilities=self._gateway.capabilities(command.adapter_id),
+                now=now,
             )
-        if command.evaluation_ref is not None:
-            ensure_capabilities(
-                capabilities,
-                AdapterCapability.EVALUATION_REFERENCE,
+            run = dry_run.run
+            final_status = ExternalTrainingStatus.DRY_RUN
+            artifacts: dict[str, object] | None = None
+            dry_run_plan: dict[str, object] | None = dry_run.plan
+            model_ref: dict[str, object] | None = None
+            evaluation_ref: dict[str, object] | None = None
+        elif execution_mode is ExecutionMode.MOCK:
+            # 模拟执行：产生显式标注 mock 的占位记录，不调用外部平台。
+            mock = self._mock_executor.execute(
                 adapter_id=command.adapter_id,
+                adapter_version=command.adapter_version,
+                idempotency_key=key,
+                delivery_id=delivery.training_delivery_id,
+                dataset_version_id=delivery.dataset_version_id,
+                now=now,
             )
-        run = self._gateway.submit(
-            adapter_id=command.adapter_id,
-            adapter_version=command.adapter_version,
-            correlation_id=command.correlation_id,
-            delivery_id=delivery.training_delivery_id,
-            dataset_version_id=delivery.dataset_version_id,
-            config=dict(command.config),
-        )
+            run = mock.run
+            final_status = ExternalTrainingStatus.SUCCEEDED
+            artifacts = mock.artifacts
+            dry_run_plan = None
+            model_ref = None
+            evaluation_ref = None
+        else:
+            # LOCAL / REMOTE：沿用既有真实 Adapter 网关与能力校验。
+            capabilities = self._gateway.capabilities(command.adapter_id)
+            ensure_capabilities(
+                capabilities, AdapterCapability.SUBMIT, adapter_id=command.adapter_id
+            )
+            if command.model_ref is not None:
+                ensure_capabilities(
+                    capabilities,
+                    AdapterCapability.MODEL_REFERENCE,
+                    adapter_id=command.adapter_id,
+                )
+            if command.evaluation_ref is not None:
+                ensure_capabilities(
+                    capabilities,
+                    AdapterCapability.EVALUATION_REFERENCE,
+                    adapter_id=command.adapter_id,
+                )
+            run = self._gateway.submit(
+                adapter_id=command.adapter_id,
+                adapter_version=command.adapter_version,
+                correlation_id=command.correlation_id,
+                delivery_id=delivery.training_delivery_id,
+                dataset_version_id=delivery.dataset_version_id,
+                config=dict(command.config),
+            )
+            final_status = ExternalTrainingStatus.SUBMITTED
+            artifacts = None
+            dry_run_plan = None
+            model_ref = command.model_ref or run.model_ref
+            evaluation_ref = command.evaluation_ref or run.evaluation_ref
         conflict = self._references.get_by_run(
             adapter_id=command.adapter_id,
             external_run_id=run.external_run_id,
         )
         if conflict is not None:
             raise TrainingExternalRunConflictError("外部训练 run 已登记")
-        now = _utcnow()
         reference = new_external_reference(
             external_ref_id=uuid4(),
             project_id=scope.project_id,
@@ -220,8 +282,8 @@ class ExternalTrainingReferenceUseCases:
             correlation_id=command.correlation_id,
             idempotency_key=key,
             execution_mode=execution_mode,
-            model_ref=command.model_ref or run.model_ref,
-            evaluation_ref=command.evaluation_ref or run.evaluation_ref,
+            model_ref=model_ref,
+            evaluation_ref=evaluation_ref,
             config_summary=config_summary,
             code_version=command.code_version,
             model_version=command.model_version,
@@ -229,6 +291,19 @@ class ExternalTrainingReferenceUseCases:
             now=now,
         )
         created = self._references.add(scope, reference)
+        if final_status is not ExternalTrainingStatus.SUBMITTED:
+            # 初始插入必须是 SUBMITTED（数据库触发器与状态机共同保证），随后在
+            # 同一事务内一次性收口到演练/模拟终态。DRY_RUN 计划也在这里写入。
+            transitioned = created.apply_status(
+                final_status,
+                now=now,
+                actor_id=scope.actor_id,
+                artifacts=artifacts,
+                dry_run_plan=dry_run_plan,
+            )
+            created = self._references.save(
+                scope, transitioned, expected_version=created.row_version
+            )
         # 血缘与引用**同事务**：写边失败会让本次会话整体回滚，不允许出现
         # "引用已登记但没有血缘"的半成功状态（ADR-0036）。
         self._lineage.record_training_run(
@@ -551,6 +626,10 @@ class AdapterCallbackUseCases:
             status = ExternalTrainingStatus(external_status)
         except ValueError as exc:
             raise DomainValidationError("external_status 取值非法") from exc
+        if status is ExternalTrainingStatus.DRY_RUN:
+            # DRY_RUN 是本地演练执行器的终态，不是外部平台状态。允许回调写入
+            # 等于让外部系统伪造"演练"或改写真实引用，必须拒绝。
+            raise DomainValidationError("DRY_RUN 是本地演练状态，不能由外部回调写入")
         if reference.effective_status in {
             ExternalTrainingStatus.SUCCEEDED,
             ExternalTrainingStatus.FAILED,

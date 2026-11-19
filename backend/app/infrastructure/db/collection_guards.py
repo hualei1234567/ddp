@@ -581,9 +581,7 @@ def install_capture_session_state_guards(connection: Connection) -> None:
             "trg_capture_sessions_transition",
             "trg_capture_sessions_no_delete",
         ):
-            connection.exec_driver_sql(
-                f"DROP TRIGGER IF EXISTS {trigger} ON capture_sessions"
-            )
+            connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS {trigger} ON capture_sessions")
         for trigger, event, function in (
             (
                 "trg_capture_sessions_initial_status",
@@ -625,9 +623,7 @@ def drop_capture_session_state_guards(connection: Connection) -> None:
             "trg_capture_sessions_transition",
             "trg_capture_sessions_no_delete",
         ):
-            connection.exec_driver_sql(
-                f"DROP TRIGGER IF EXISTS {trigger} ON capture_sessions"
-            )
+            connection.exec_driver_sql(f"DROP TRIGGER IF EXISTS {trigger} ON capture_sessions")
         for function in (
             "ddp_capture_session_guard()",
             "ddp_capture_session_delete_guard()",

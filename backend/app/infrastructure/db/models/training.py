@@ -34,6 +34,9 @@ from app.domain.datasets.training_enums import (
 from app.infrastructure.db.base import Base
 
 _JSON_TYPE = JSON().with_variant(JSONB, "postgresql")
+# 需要「Python None == SQL NULL」的 JSON 列专用：JSON 默认把 None 存成 JSON
+# 'null' 文本，会让 `col IS NULL` 判定恒假；演练计划用 CHECK 约束判空，必须真 NULL。
+_NULLABLE_JSON_TYPE = JSON(none_as_null=True).with_variant(JSONB(none_as_null=True), "postgresql")
 _SHA = "length({column}) = 71 AND substr({column}, 1, 7) = 'sha256:'"
 
 
@@ -341,6 +344,11 @@ class ExternalTrainingReferenceModel(Base):
     evaluation_ref: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
     # 回调回传的产物元数据：模型版本登记的唯一来源，见迁移 0051。
     artifacts: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
+    # 演练计划（迁移 0067，仅 execution_mode=DRY_RUN）：校验结论与将执行的动作
+    # 清单。它是"如果真跑会发生什么"，不是训练产物；其它执行方式必须为 NULL。
+    dry_run_plan: Mapped[dict[str, object] | None] = mapped_column(
+        _NULLABLE_JSON_TYPE, nullable=True
+    )
     # 提交训练时的配置摘要（迁移 0063）：有界（≤8KiB）且已脱敏。NULL 表示
     # 迁移前的存量记录没有保存配置，不等于"提交时没有配置"（后者是 {}）。
     config_summary: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
@@ -405,6 +413,12 @@ class ExternalTrainingReferenceModel(Base):
         CheckConstraint(
             f"execution_mode IN ({_values(ExecutionMode)})",
             name="execution_mode_allowed",
+        ),
+        # 演练计划只能挂在 DRY_RUN 引用上：防止把一份"动作清单"塞进真实训练记录
+        # 冒充执行细节。
+        CheckConstraint(
+            "dry_run_plan IS NULL OR execution_mode = 'DRY_RUN'",
+            name="dry_run_plan_is_dry_run",
         ),
         CheckConstraint("length(adapter_id) >= 1", name="adapter_id_non_empty"),
         CheckConstraint("length(adapter_version) >= 1", name="adapter_version_non_empty"),

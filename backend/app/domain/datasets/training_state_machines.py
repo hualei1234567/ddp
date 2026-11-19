@@ -148,6 +148,9 @@ _EXTERNAL_RULES: Mapping[ExternalTrainingStatus, Mapping[str, ExternalTrainingSt
                 "system-cancel": ExternalTrainingStatus.CANCELLED,
                 "system-unknown": ExternalTrainingStatus.UNKNOWN,
                 "system-unavailable": ExternalTrainingStatus.UNAVAILABLE,
+                # 演练：由本地 DRY_RUN 执行器在校验/计划完成后收口，终态不可再推进。
+                # 单独动作而不是复用 system-succeed：演练不是成功训练。
+                "system-dry-run": ExternalTrainingStatus.DRY_RUN,
             },
             ExternalTrainingStatus.RUNNING: {
                 "sync": ExternalTrainingStatus.RUNNING,
@@ -176,6 +179,7 @@ _EXTERNAL_RULES: Mapping[ExternalTrainingStatus, Mapping[str, ExternalTrainingSt
             ExternalTrainingStatus.SUCCEEDED: {},
             ExternalTrainingStatus.FAILED: {},
             ExternalTrainingStatus.CANCELLED: {},
+            ExternalTrainingStatus.DRY_RUN: {},
         }
     )
 )
@@ -306,6 +310,9 @@ EXTERNAL_TERMINAL_CONTENT_COLUMNS: tuple[str, ...] = (
     "evaluation_ref",
     "error_code",
     "error_summary",
+    # 演练计划只在 SUBMITTED -> DRY_RUN 的一次性收口里写入，进入终态后不可改，
+    # 防止事后把"将执行的动作清单"改成另一份。
+    "dry_run_plan",
 )
 GRANT_IMMUTABLE_COLUMNS: tuple[str, ...] = (
     "project_id",
@@ -447,7 +454,7 @@ def delivery_terminal_states() -> frozenset[str]:
 
 
 def external_terminal_states() -> frozenset[str]:
-    return frozenset({"SUCCEEDED", "FAILED", "CANCELLED"})
+    return frozenset({"SUCCEEDED", "FAILED", "CANCELLED", "DRY_RUN"})
 
 
 def grant_terminal_states() -> frozenset[str]:

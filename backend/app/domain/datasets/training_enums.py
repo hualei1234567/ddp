@@ -50,6 +50,11 @@ class ExternalTrainingStatus(StrEnum):
     CANCELLED = "CANCELLED"
     UNKNOWN = "UNKNOWN"
     UNAVAILABLE = "UNAVAILABLE"
+    # 演练（DRY_RUN）专用终态：只做校验与计划，不产生训练产物、不调用外部平台。
+    # 它不是 SUBMITTED（没有提交给任何外部平台），更不是 SUCCEEDED（没有训练）。
+    # 单独成值是为了让"这是演练"成为可查询的**状态事实**，而不是只能靠
+    # execution_mode 旁证；任何按 SUCCEEDED 判定真实训练成功的下游都不会误吞它。
+    DRY_RUN = "DRY_RUN"
 
 
 class ExecutionMode(StrEnum):
@@ -80,6 +85,16 @@ DECLARED_EXECUTION_MODES: frozenset[ExecutionMode] = frozenset(
         ExecutionMode.MOCK,
         ExecutionMode.DRY_RUN,
         ExecutionMode.REMOTE,
+    }
+)
+
+# 结果**不是真实训练**的执行方式。MOCK（模拟）与 DRY_RUN（空跑）都必须被下游
+# 识别并拒绝当作真实训练结果；这是唯一权威定义，模型版本登记等下游从这里取，
+# 不得各自复制一份字符串集合。
+NON_REAL_EXECUTION_MODES: frozenset[ExecutionMode] = frozenset(
+    {
+        ExecutionMode.MOCK,
+        ExecutionMode.DRY_RUN,
     }
 )
 
@@ -147,6 +162,7 @@ TERMINAL_EXTERNAL_STATES: frozenset[ExternalTrainingStatus] = frozenset(
         ExternalTrainingStatus.SUCCEEDED,
         ExternalTrainingStatus.FAILED,
         ExternalTrainingStatus.CANCELLED,
+        ExternalTrainingStatus.DRY_RUN,
     }
 )
 TERMINAL_GRANT_STATES: frozenset[DatasetGrantStatus] = frozenset(

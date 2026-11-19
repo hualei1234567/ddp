@@ -17,6 +17,7 @@ from app.domain.datasets.training_enums import (
     ExecutionMode,
     ExternalTrainingStatus,
 )
+from app.domain.datasets.training_executors import MAX_PLAN_BYTES
 from app.domain.datasets.training_state_machines import external_target
 from app.domain.datasets.validation import (
     aware_datetime,
@@ -39,6 +40,7 @@ _VERSION_MAX = 100
 CONFIG_SUMMARY_MAX_BYTES = 8 * 1024
 _STATUS_ACTIONS = {
     ExternalTrainingStatus.RUNNING: "sync",
+    ExternalTrainingStatus.DRY_RUN: "system-dry-run",
     ExternalTrainingStatus.SUCCEEDED: "system-succeed",
     ExternalTrainingStatus.FAILED: "system-fail",
     ExternalTrainingStatus.CANCELLED: "system-cancel",
@@ -188,6 +190,9 @@ class ExternalTrainingReference:
     # 外部平台回传的产物元数据（对象键/sha256/大小）。模型版本登记需要它，
     # 此前回调只保留 sha256、丢弃内容，导致训练成功的产物无法在平台内登记。
     artifacts: dict[str, object] | None = None
+    # 演练计划（仅 execution_mode=DRY_RUN）：校验结论与将执行的动作清单。它是
+    # "如果真跑会发生什么"，不是训练产物；其它执行方式必须为 ``None``。
+    dry_run_plan: dict[str, object] | None = None
     # 提交训练时的配置摘要：有界（≤8KiB）且已脱敏。``None`` 只表示迁移 0063
     # 之前的记录没有保存配置，**不等于**"提交时没有配置"——后者是 ``{}``。
     config_summary: dict[str, object] | None = None
@@ -260,6 +265,15 @@ class ExternalTrainingReference:
         object.__setattr__(self, "artifacts", _artifacts(self.artifacts))
         object.__setattr__(
             self,
+            "dry_run_plan",
+            optional_payload(
+                self.dry_run_plan,
+                "dry_run_plan",
+                max_bytes=MAX_PLAN_BYTES,
+            ),
+        )
+        object.__setattr__(
+            self,
             "config_summary",
             optional_payload(
                 self.config_summary,
@@ -294,6 +308,15 @@ class ExternalTrainingReference:
                 raise DomainValidationError("FAILED/UNAVAILABLE 引用必须记录错误码或 stale 标记")
         if status is ExternalTrainingStatus.SUCCEEDED and self.status_stale:
             raise DomainValidationError("SUCCEEDED 引用不得标记 stale")
+        mode = ExecutionMode(self.execution_mode)
+        if self.dry_run_plan is not None and mode is not ExecutionMode.DRY_RUN:
+            raise DomainValidationError("演练计划只能出现在 execution_mode=DRY_RUN 的引用上")
+        if status is ExternalTrainingStatus.DRY_RUN and mode is not ExecutionMode.DRY_RUN:
+            raise DomainValidationError("DRY_RUN 状态只能对应 execution_mode=DRY_RUN")
+        # 注意：不在实体上强制"MOCK + SUCCEEDED 必须带 mock 标注"。历史上有
+        # MOCK/DRY_RUN 只是标记、仍经真实 Adapter 执行的存量记录，它们可能是
+        # SUCCEEDED 且没有 mock 标注；在这里拒绝会让这些合法存量行读不出来。
+        # 新记录由 ``MockTrainingExecutor`` 保证标注，下游按 execution_mode 拒绝。
 
     @property
     def effective_status(self) -> ExternalTrainingStatus:
@@ -308,6 +331,7 @@ class ExternalTrainingReference:
         model_ref: object = None,
         evaluation_ref: object = None,
         artifacts: object = None,
+        dry_run_plan: object = None,
         error_code: str | None = None,
         error_summary: str | None = None,
         stale: bool = False,
@@ -336,6 +360,11 @@ class ExternalTrainingReference:
                 else self.evaluation_ref
             ),
             artifacts=_artifacts(artifacts) if artifacts is not None else self.artifacts,
+            dry_run_plan=(
+                optional_payload(dry_run_plan, "dry_run_plan", max_bytes=MAX_PLAN_BYTES)
+                if dry_run_plan is not None
+                else self.dry_run_plan
+            ),
             error_code=(
                 optional_text(error_code, "error_code", max_length=100)
                 if error_code is not None
@@ -422,6 +451,7 @@ def new_external_reference(
     config_summary: object = None,
     code_version: str | None = None,
     model_version: str | None = None,
+    dry_run_plan: object = None,
 ) -> ExternalTrainingReference:
     return ExternalTrainingReference(
         external_ref_id=external_ref_id,
@@ -441,6 +471,7 @@ def new_external_reference(
         config_summary=config_summary,
         code_version=code_version,
         model_version=model_version,
+        dry_run_plan=dry_run_plan,
         external_status=ExternalTrainingStatus.SUBMITTED,
         submitted_at=now,
         last_synced_at=now,

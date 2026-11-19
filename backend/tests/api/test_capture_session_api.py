@@ -136,9 +136,7 @@ def test_create_list_get_and_audit_outbox(
                 OutboxEvent.aggregate_type == "CAPTURE_SESSION",
             )
         ).all()
-        assert [event.event_type for event in events] == [
-            "collection.capture_session.created"
-        ]
+        assert [event.event_type for event in events] == ["collection.capture_session.created"]
         assert all(event.dispatch is False for event in events)
 
 

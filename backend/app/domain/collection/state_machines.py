@@ -260,27 +260,27 @@ SESSION_TERMINAL: frozenset[CaptureSessionStatus] = frozenset(
     {CaptureSessionStatus.COMPLETED, CaptureSessionStatus.ABORTED}
 )
 
-_SESSION_RULES: Mapping[
-    CaptureSessionStatus, Mapping[str, CaptureSessionStatus]
-] = MappingProxyType(
-    {
-        CaptureSessionStatus.SCHEDULED: {
-            CaptureSessionAction.START.value: CaptureSessionStatus.RUNNING,
-            CaptureSessionAction.ABORT.value: CaptureSessionStatus.ABORTED,
-        },
-        CaptureSessionStatus.RUNNING: {
-            CaptureSessionAction.PAUSE.value: CaptureSessionStatus.PAUSED,
-            CaptureSessionAction.COMPLETE.value: CaptureSessionStatus.COMPLETED,
-            CaptureSessionAction.ABORT.value: CaptureSessionStatus.ABORTED,
-        },
-        CaptureSessionStatus.PAUSED: {
-            CaptureSessionAction.RESUME.value: CaptureSessionStatus.RUNNING,
-            CaptureSessionAction.COMPLETE.value: CaptureSessionStatus.COMPLETED,
-            CaptureSessionAction.ABORT.value: CaptureSessionStatus.ABORTED,
-        },
-        CaptureSessionStatus.COMPLETED: {},
-        CaptureSessionStatus.ABORTED: {},
-    }
+_SESSION_RULES: Mapping[CaptureSessionStatus, Mapping[str, CaptureSessionStatus]] = (
+    MappingProxyType(
+        {
+            CaptureSessionStatus.SCHEDULED: {
+                CaptureSessionAction.START.value: CaptureSessionStatus.RUNNING,
+                CaptureSessionAction.ABORT.value: CaptureSessionStatus.ABORTED,
+            },
+            CaptureSessionStatus.RUNNING: {
+                CaptureSessionAction.PAUSE.value: CaptureSessionStatus.PAUSED,
+                CaptureSessionAction.COMPLETE.value: CaptureSessionStatus.COMPLETED,
+                CaptureSessionAction.ABORT.value: CaptureSessionStatus.ABORTED,
+            },
+            CaptureSessionStatus.PAUSED: {
+                CaptureSessionAction.RESUME.value: CaptureSessionStatus.RUNNING,
+                CaptureSessionAction.COMPLETE.value: CaptureSessionStatus.COMPLETED,
+                CaptureSessionAction.ABORT.value: CaptureSessionStatus.ABORTED,
+            },
+            CaptureSessionStatus.COMPLETED: {},
+            CaptureSessionStatus.ABORTED: {},
+        }
+    )
 )
 
 # 与任务/批次同一口径：影响执行连续性的动作必须留下原因。

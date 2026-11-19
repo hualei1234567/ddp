@@ -33,7 +33,7 @@
     "dataset_version_id": {"$ref": "#/$defs/uuid"},
     "external_run_id": {"type": "string", "minLength": 1, "maxLength": 200},
     "external_run_url": {"type": ["string", "null"], "maxLength": 4096},
-    "external_status": {"type": "string", "enum": ["SUBMITTED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN", "UNAVAILABLE"]},
+    "external_status": {"type": "string", "enum": ["SUBMITTED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN", "UNAVAILABLE", "DRY_RUN"], "description": "DRY_RUN 是演练专用终态：只做校验与计划，不是成功训练，读取方不得按 SUCCEEDED 判定。"},
     "execution_mode": {
       "type": "string",
       "enum": ["LOCAL", "MOCK", "DRY_RUN", "REMOTE", "UNKNOWN"],
@@ -63,7 +63,12 @@
     "artifacts": {
       "type": ["object", "null"],
       "additionalProperties": true,
-      "description": "适配器回调回传的产物元数据（如 model/metadata 的 object_key、sha256、size_bytes）。用于在平台内登记模型版本；DDP 只存元数据，不复制权重。"
+      "description": "适配器回调回传的产物元数据（如 model/metadata 的 object_key、sha256、size_bytes）。用于在平台内登记模型版本；DDP 只存元数据，不复制权重。MOCK 执行的产物带 mock=true 且不含可登记的对象键，下游必须拒绝。"
+    },
+    "dry_run_plan": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "description": "演练计划，仅 execution_mode=DRY_RUN 时非空：包含校验结论与将执行的动作清单，不包含任何训练产物；不得渲染成训练结果。"
     },
     "config_summary": {
       "type": ["object", "null"],

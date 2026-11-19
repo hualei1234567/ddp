@@ -656,6 +656,9 @@ class ExternalTrainingReferenceOut(BaseModel):
     # 训练回调回传的产物元数据（模型/元数据文件的对象键与校验和）。模型版本
     # 登记从这里取；``None`` 表示该引用没有产物信息，客户端不得渲染成"空产物"。
     artifacts: dict[str, Any] | None = None
+    # 演练计划（仅 execution_mode=DRY_RUN）：校验结论与将执行的动作清单。
+    # ``None`` 表示不是演练；客户端不得把它渲染成训练产物。
+    dry_run_plan: dict[str, Any] | None = None
     # 提交训练时的配置摘要（有界、已脱敏）。``None`` 只表示迁移前记录未保存
     # 配置，客户端不得渲染成"提交时没有配置"（后者是空对象）。
     config_summary: dict[str, Any] | None = None

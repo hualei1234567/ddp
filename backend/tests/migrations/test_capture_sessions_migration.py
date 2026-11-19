@@ -62,10 +62,7 @@ def _sqlite_triggers(engine: Engine) -> set[str]:
         return {
             row[0]
             for row in connection.execute(
-                text(
-                    "SELECT name FROM sqlite_master "
-                    "WHERE type = 'trigger' AND tbl_name = :t"
-                ),
+                text("SELECT name FROM sqlite_master " "WHERE type = 'trigger' AND tbl_name = :t"),
                 {"t": TABLE},
             )
         }
@@ -187,14 +184,20 @@ def test_sqlite_upgrade_downgrade_upgrade_roundtrip(tmp_path: Path) -> None:
 
         # 回滚后行仍保留，任务未受影响。
         with engine.connect() as connection:
-            assert connection.execute(
-                text("SELECT status FROM capture_sessions WHERE id = :id"),
-                {"id": session_id},
-            ).scalar_one() == "RUNNING"
-            assert connection.execute(
-                text("SELECT status FROM collection_tasks WHERE id = :id"),
-                {"id": task_id},
-            ).scalar_one() == "DRAFT"
+            assert (
+                connection.execute(
+                    text("SELECT status FROM capture_sessions WHERE id = :id"),
+                    {"id": session_id},
+                ).scalar_one()
+                == "RUNNING"
+            )
+            assert (
+                connection.execute(
+                    text("SELECT status FROM collection_tasks WHERE id = :id"),
+                    {"id": task_id},
+                ).scalar_one()
+                == "DRAFT"
+            )
     finally:
         engine.dispose()
 
@@ -207,8 +210,7 @@ def test_sqlite_upgrade_downgrade_upgrade_roundtrip(tmp_path: Path) -> None:
                 row[0]
                 for row in connection.execute(
                     text(
-                        "SELECT name FROM sqlite_master "
-                        "WHERE type = 'trigger' AND tbl_name = :t"
+                        "SELECT name FROM sqlite_master " "WHERE type = 'trigger' AND tbl_name = :t"
                     ),
                     {"t": TABLE},
                 )

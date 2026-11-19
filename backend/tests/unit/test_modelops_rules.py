@@ -99,6 +99,31 @@ def test_external_ref_must_belong_to_declared_delivery() -> None:
         )
 
 
+def test_non_real_external_ref_rejected_as_training_source() -> None:
+    """MOCK/DRY_RUN 产物不得登记为真实模型版本（N7-007）。"""
+    facts = TrainingSourceFacts(
+        external_ref_id=EXTERNAL_REF_ID,
+        external_ref_delivery_id=DELIVERY_ID,
+        external_ref_non_real=True,
+    )
+    with pytest.raises(ModelTrainingSourceInvalidError):
+        ensure_training_source(
+            TrainingSourceRef(delivery_id=DELIVERY_ID, external_ref_id=EXTERNAL_REF_ID),
+            facts,
+        )
+
+
+def test_real_external_ref_accepted_as_training_source() -> None:
+    facts = TrainingSourceFacts(
+        external_ref_id=EXTERNAL_REF_ID,
+        external_ref_delivery_id=DELIVERY_ID,
+        external_ref_non_real=False,
+    )
+    ensure_training_source(
+        TrainingSourceRef(delivery_id=DELIVERY_ID, external_ref_id=EXTERNAL_REF_ID), facts
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Adapter 能力：model_adapter_unsupported
 # --------------------------------------------------------------------------- #
