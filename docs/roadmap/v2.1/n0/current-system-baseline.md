@@ -146,7 +146,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 |---|---|
 | 真实机器人设备格式端到端 | **BLOCKED**（无硬件） |
 | Episode 级自动质检 | **VERIFIED**（N4-005：`application/quality/episode_checks.py` + 处理流水线 QUALITY 阶段逐 Episode 质检） |
-| Processing Pipeline（八阶段） | **PARTIAL**（FILE_VALIDATION / METADATA_EXTRACTION / FORMAT_PARSING / QUALITY_PRE_CHECK 真实执行；TIME_ALIGNMENT / CALIBRATION_VALIDATION / EPISODE_SEGMENTATION / DATA_CLEANING 仍显式 SKIPPED） |
+| Processing Pipeline（八阶段） | **PARTIAL**（FILE_VALIDATION / METADATA_EXTRACTION / FORMAT_PARSING / QUALITY_PRE_CHECK 真实执行；TIME_ALIGNMENT 输入 manifest 契约已 VERIFIED，但可信生产者仍 BLOCKED，故该阶段与 CALIBRATION_VALIDATION / EPISODE_SEGMENTATION / DATA_CLEANING 继续显式 SKIPPED） |
 | Canonical Frame / SensorStream / Action / Observation | **PARTIAL**（N3-001 `data-platform/ddp_data/canonical/` 只读契约；无生产者、无持久化，ADR-0035 有意不建表） |
 | Parquet / MCAP / ROS Bag / HDF5 字段级解析 | **PARTIAL**（Parquet footer 与 MCAP 元数据只读已实现；ROS Bag / HDF5 **MISSING**；均未接入导入链路） |
 | 六类质量报告 UI | **MISSING** |
