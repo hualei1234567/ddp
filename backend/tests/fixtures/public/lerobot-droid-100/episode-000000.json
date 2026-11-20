@@ -2,8 +2,8 @@
   "source": {
     "dataset_id": "lerobot/droid_100",
     "license": "MIT",
-    "info_url": "https://huggingface.co/datasets/lerobot/droid_100/resolve/main/meta/info.json",
-    "episodes_url": "https://huggingface.co/datasets/lerobot/droid_100/resolve/main/meta/episodes/chunk-000/file-000.parquet",
+    "info_url": "https://huggingface.co/datasets/lerobot/droid_100/resolve/87301a2d2e99340e2010c9ef0f1d8e780b08aaf9/meta/info.json",
+    "episodes_url": "https://huggingface.co/datasets/lerobot/droid_100/resolve/87301a2d2e99340e2010c9ef0f1d8e780b08aaf9/meta/episodes/chunk-000/file-000.parquet",
     "info_sha256": "6718973f1f5a5ca76cfdfdddafc177da83636d1a38e50aedca37c090991d5d78",
     "episodes_sha256": "a22cd872be7140555b7f8dfa6c34ff64642b0308d933c9aa658a89b69746fbbb",
     "retrieved_at": "2026-11-20"
