@@ -3,7 +3,8 @@
 覆盖：
 
 - 一个 run 走完八阶段：``FILE_VALIDATION`` / ``METADATA_EXTRACTION`` /
-  ``FORMAT_PARSING`` / ``QUALITY_PRE_CHECK`` 真实执行，其余四个显式 SKIPPED
+  ``FORMAT_PARSING`` / ``TIME_ALIGNMENT`` / ``QUALITY_PRE_CHECK`` 按输入真实执行，
+  其余三个显式 SKIPPED
   且原因可读；
 - 元数据产物与 Canonical 产物可回查（``output_refs`` 指向的对象真实存在）；
 - 未知格式显式失败（永久失败，不重试）；
@@ -36,6 +37,10 @@ from app.application.processing.pipeline import (
 )
 from app.application.processing.quality_stage import QualityCheckHandler
 from app.application.processing.stages import SkippedStage
+from app.application.processing.time_alignment_stage import (
+    TimeAlignmentHandler,
+    time_alignment_report_key,
+)
 from app.application.processing.use_cases import (
     ProcessingRunUseCases,
     ProcessingWorkerUseCases,
@@ -182,6 +187,7 @@ def _pipeline(
             reader,
             metadata_extraction=MetadataExtractionHandler(reader, artifacts),
             format_parsing=FormatParsingHandler(artifacts),
+            time_alignment=TimeAlignmentHandler(reader, artifacts),
             quality_check=quality_check,
         ),
         session,
@@ -250,9 +256,13 @@ def test_run_executes_metadata_and_format_stages_end_to_end(
             ProcessingStepStatus.SKIPPED.value
         )
 
-        # 四个未实现阶段显式 SKIPPED，且原因写明依赖。
+        # 未提供 manifest：TIME_ALIGNMENT 真实执行但如实 SKIPPED，不冒充分析过。
+        time_step = steps[ProcessingStage.TIME_ALIGNMENT.value]
+        assert time_step.status == ProcessingStepStatus.SKIPPED.value
+        assert "time-alignment manifest" in (time_step.log_summary or "")
+
+        # 三个未实现阶段显式 SKIPPED，且原因写明依赖。
         for stage, keyword in (
-            (ProcessingStage.TIME_ALIGNMENT, "时间对齐"),
             (ProcessingStage.CALIBRATION_VALIDATION, "标定"),
             (ProcessingStage.EPISODE_SEGMENTATION, "切片"),
             (ProcessingStage.DATA_CLEANING, "清洗"),
@@ -382,6 +392,7 @@ def test_metadata_stage_skipped_when_no_metadata_artifact_is_available(
             reader,
             metadata_extraction=SkippedStage("测试：不产出元数据"),
             format_parsing=FormatParsingHandler(artifacts),
+            time_alignment=SkippedStage("测试：不装配时间对齐"),
             quality_check=SkippedStage("测试：不装配质量引擎"),
         )
         use_cases = _use_cases(session)
@@ -411,6 +422,87 @@ def test_metadata_stage_skipped_when_no_metadata_artifact_is_available(
         )
         assert "METADATA_EXTRACTION" in (
             steps[ProcessingStage.FORMAT_PARSING.value].log_summary or ""
+        )
+    finally:
+        session.close()
+
+
+def _time_alignment_manifest() -> bytes:
+    return json.dumps(
+        {
+            "schema_version": "ddp.processing.time-alignment-input/1.0.0",
+            "time_unit": "ns",
+            "groups": [
+                {
+                    "group_key": "lerobot/droid_100:episode:0",
+                    "streams": [
+                        {
+                            "stream_id": "observation.images.exterior_image_1_left",
+                            "start_time_ns": "0",
+                            "end_time_ns": "11066667000",
+                            "frame_rate": {"num": 15, "den": 1},
+                            "declared_frame_count": 166,
+                            "time_domain": "UNKNOWN",
+                            "clock_source": "UNKNOWN",
+                        },
+                        {
+                            "stream_id": "observation.images.wrist_image_left",
+                            "start_time_ns": "0",
+                            "end_time_ns": "11066667000",
+                            "frame_rate": {"num": 15, "den": 1},
+                            "declared_frame_count": 166,
+                            "time_domain": "UNKNOWN",
+                            "clock_source": "UNKNOWN",
+                        },
+                    ],
+                }
+            ],
+        }
+    ).encode("utf-8")
+
+
+def test_run_analyzes_versioned_time_alignment_manifest(
+    factory: sessionmaker[Session],
+) -> None:
+    """有 manifest 时 TIME_ALIGNMENT 真实执行并落入可回查的只读报告。"""
+    ids = seed_identity(factory)
+    scope = ProjectScope(project_id=ids.project_a, actor_id=ids.editor_a)
+    manifest_ref = f"canonical/{ids.project_a}/time-alignment/droid-episode-0.json"
+    reader = FakeObjectReader({manifest_ref: _time_alignment_manifest()})
+    artifacts = FakeArtifactStore()
+    session = factory()
+    try:
+        use_cases = _use_cases(session)
+        run = use_cases.create(
+            scope,
+            NewProcessingRun(
+                pipeline_version="pipeline-v1",
+                input_refs=(manifest_ref,),
+            ),
+        )
+
+        outcome = _pipeline(session, reader, artifacts).execute(scope, run.run_id, now=NOW)
+
+        assert outcome.status == PipelineOutcomeStatus.SUCCEEDED.value
+        steps = {step.stage: step for step in use_cases.list_steps(scope, run.run_id)}
+        time_step = steps[ProcessingStage.TIME_ALIGNMENT.value]
+        assert time_step.status == ProcessingStepStatus.SUCCEEDED.value
+        assert "时间对齐" in (time_step.log_summary or "")
+
+        report_ref = time_alignment_report_key(ids.project_a, run.run_id)
+        assert report_ref in artifacts.keys()
+        current = use_cases.get(scope, run.run_id)
+        assert report_ref in current.output_refs
+        report = json.loads(artifacts.read_bytes(report_ref, max_bytes=256 * 1024))
+        assert report["schema_version"] == "ddp.processing.time-alignment-report/1.0.0"
+        assert report["source_manifest_ref"] == manifest_ref
+        analysis = report["groups"][0]["analysis"]
+        assert analysis["status"] == "ALIGNED"
+        assert analysis["clock_domain_status"] == "UNKNOWN"
+        assert all(
+            stream["correction"]["applied"] is False
+            for stream in analysis["streams"]
+            if stream["correction"] is not None
         )
     finally:
         session.close()

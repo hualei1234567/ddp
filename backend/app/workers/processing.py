@@ -46,6 +46,7 @@ from app.application.processing.ports import (
     StageArtifactStore,
 )
 from app.application.processing.quality_stage import QualityCheckHandler
+from app.application.processing.time_alignment_stage import TimeAlignmentHandler
 from app.application.processing.use_cases import (
     PROCESSING_RUN_REQUESTED_EVENT,
     ProcessingWorkerUseCases,
@@ -312,6 +313,11 @@ class ProcessingRunWorker:
             self._artifacts,
             max_artifact_bytes=self._settings.processing_metadata_max_artifact_bytes,
         )
+        time_alignment = TimeAlignmentHandler(
+            self._reader,
+            self._artifacts,
+            max_artifact_bytes=self._settings.processing_metadata_max_artifact_bytes,
+        )
         return ProcessingPipeline(
             runs,
             SqlProcessingRunStepRepository(session),
@@ -320,6 +326,7 @@ class ProcessingRunWorker:
                 self._inspector,
                 metadata_extraction=metadata_extraction,
                 format_parsing=format_parsing,
+                time_alignment=time_alignment,
                 quality_check=quality_check,
             ),
             session,
