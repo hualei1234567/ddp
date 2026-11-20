@@ -125,6 +125,7 @@ def _pipeline(
             # test_processing_metadata_stage.py 与 test_processing_metadata_pipeline.py。
             metadata_extraction=SkippedStage("编排测试不装配元数据解析"),
             format_parsing=SkippedStage("编排测试不装配格式解析"),
+            time_alignment=SkippedStage("编排测试不装配时间对齐"),
             quality_check=SkippedStage("编排测试不装配质量引擎"),
         ),
         session,
@@ -303,6 +304,7 @@ def test_cancel_during_stage_aborts_step_without_leaving_running(
             FakeInspector({f"raw/{ids.project_a}/a": 1}),
             metadata_extraction=SkippedStage("编排测试不装配元数据解析"),
             format_parsing=SkippedStage("编排测试不装配格式解析"),
+            time_alignment=SkippedStage("编排测试不装配时间对齐"),
             quality_check=SkippedStage("编排测试不装配质量引擎"),
         )
         handlers[ProcessingStage.FILE_VALIDATION] = _CancelDuringStage(use_cases)
@@ -324,21 +326,23 @@ def test_cancel_during_stage_aborts_step_without_leaving_running(
 def test_default_handlers_cover_every_stage(factory: sessionmaker[Session]) -> None:
     metadata_extraction = SkippedStage("测试占位：元数据")
     format_parsing = SkippedStage("测试占位：格式解析")
+    time_alignment = SkippedStage("测试占位：时间对齐")
     quality_check = SkippedStage("测试占位：质量")
     handlers = default_handlers(
         FakeInspector(),
         metadata_extraction=metadata_extraction,
         format_parsing=format_parsing,
+        time_alignment=time_alignment,
         quality_check=quality_check,
     )
     assert set(handlers) == set(STAGE_SEQUENCE)
     assert isinstance(handlers[ProcessingStage.FILE_VALIDATION], FileValidationHandler)
     assert handlers[ProcessingStage.METADATA_EXTRACTION] is metadata_extraction
     assert handlers[ProcessingStage.FORMAT_PARSING] is format_parsing
+    assert handlers[ProcessingStage.TIME_ALIGNMENT] is time_alignment
     assert handlers[ProcessingStage.QUALITY_PRE_CHECK] is quality_check
-    # 剩余四个阶段必须是显式 SKIPPED，且原因写明依赖。
+    # 剩余三个阶段必须是显式 SKIPPED，且原因写明依赖。
     for stage in (
-        ProcessingStage.TIME_ALIGNMENT,
         ProcessingStage.CALIBRATION_VALIDATION,
         ProcessingStage.EPISODE_SEGMENTATION,
         ProcessingStage.DATA_CLEANING,

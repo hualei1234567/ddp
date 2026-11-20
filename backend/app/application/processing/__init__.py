@@ -19,6 +19,11 @@ from app.application.processing.quality_stage import (
     QualityCheckHandler,
     resolve_episode_ids,
 )
+from app.application.processing.time_alignment_stage import (
+    TIME_ALIGNMENT_REPORT_SCHEMA_VERSION,
+    TimeAlignmentHandler,
+    time_alignment_report_key,
+)
 from app.application.processing.use_cases import (
     PROCESSING_RUN_REQUESTED_EVENT,
     ProcessingRunUseCases,
@@ -29,6 +34,7 @@ __all__ = [
     "MAX_AUTO_QUALITY_EPISODES",
     "MAX_METADATA_OBJECTS",
     "PROCESSING_RUN_REQUESTED_EVENT",
+    "TIME_ALIGNMENT_REPORT_SCHEMA_VERSION",
     "ConcurrentRunUpdate",
     "EpisodeQualityGateway",
     "FormatParsingHandler",
@@ -40,6 +46,8 @@ __all__ = [
     "ProcessingRunUseCases",
     "ProcessingWorkerUseCases",
     "QualityCheckHandler",
+    "TimeAlignmentHandler",
     "default_handlers",
     "resolve_episode_ids",
+    "time_alignment_report_key",
 ]

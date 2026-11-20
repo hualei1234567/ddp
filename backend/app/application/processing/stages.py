@@ -9,8 +9,10 @@
   （MP4/Parquet/MCAP）并投影为既有 Canonical 只读结构或阶段产物引用；
 - ``QUALITY_PRE_CHECK`` 由 :mod:`app.application.processing.quality_stage` 实现，
   对本次运行关联的 Episode 逐个执行既有统一质量引擎；
-- 其余四个阶段（``TIME_ALIGNMENT`` / ``CALIBRATION_VALIDATION`` /
-  ``EPISODE_SEGMENTATION`` / ``DATA_CLEANING``）仍**没有真实实现**，一律由
+- ``TIME_ALIGNMENT`` 由 :mod:`app.application.processing.time_alignment_stage`
+  实现，只消费当前项目 canonical 命名空间下的严格版本化 manifest；
+- 其余三个阶段（``CALIBRATION_VALIDATION`` / ``EPISODE_SEGMENTATION`` /
+  ``DATA_CLEANING``）仍**没有真实实现**，一律由
   :class:`SkippedStage` 显式 SKIPPED 并写明原因——把未实现写成 ``SUCCEEDED``
   会让"处理完成"变成谎话，也会让下游误以为已有产物。
 
@@ -137,10 +139,6 @@ class FileValidationHandler:
 #: 无真实实现阶段的跳过原因。逐阶段写明"缺什么、依赖哪个任务"，方便前端与
 #: 排障一眼看出"为什么这条流水线没有产出"，而不是只看到一个笼统的 SKIPPED。
 STAGE_SKIP_REASONS: Mapping[ProcessingStage, str] = {
-    ProcessingStage.TIME_ALIGNMENT: (
-        "缺少帧级多模态时间对齐能力（依赖 N3 多模态 Pipeline：跨相机/IMU/关节流的"
-        "统一时钟与插值），当前流水线没有真实时间对齐输入流"
-    ),
     ProcessingStage.CALIBRATION_VALIDATION: (
         "缺少标定版本快照与真实传感器数据（依赖设备域标定记录接入处理运行），" "本阶段尚未接线"
     ),
@@ -159,19 +157,19 @@ def default_handlers(
     *,
     metadata_extraction: StageHandler,
     format_parsing: StageHandler,
+    time_alignment: StageHandler,
     quality_check: StageHandler,
 ) -> dict[ProcessingStage, StageHandler]:
-    """默认阶段表：``FILE_VALIDATION`` / ``METADATA_EXTRACTION`` /
-    ``FORMAT_PARSING`` / ``QUALITY_PRE_CHECK`` 有真实落点，其余四个显式 SKIPPED。
+    """默认阶段表：五个阶段有真实落点，其余三个显式 SKIPPED。
 
-    ``metadata_extraction`` / ``format_parsing`` / ``quality_check`` 必须由组合根
-    显式注入：静默回退到 SKIPPED 会让"阶段没接线"在生产里看起来像"没有需要
-    处理的对象"。
+    各真实处理器必须由组合根显式注入：静默回退到 SKIPPED 会让“阶段没接线”
+    在生产里看起来像“没有需要处理的对象”。
     """
     handlers: dict[ProcessingStage, StageHandler] = {
         ProcessingStage.FILE_VALIDATION: FileValidationHandler(inspector),
         ProcessingStage.METADATA_EXTRACTION: metadata_extraction,
         ProcessingStage.FORMAT_PARSING: format_parsing,
+        ProcessingStage.TIME_ALIGNMENT: time_alignment,
         ProcessingStage.QUALITY_PRE_CHECK: quality_check,
     }
     for stage, reason in STAGE_SKIP_REASONS.items():

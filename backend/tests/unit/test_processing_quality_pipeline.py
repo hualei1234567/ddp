@@ -177,6 +177,7 @@ def _pipeline(
             inspector,
             metadata_extraction=SkippedStage("质量流水线测试不装配元数据解析"),
             format_parsing=SkippedStage("质量流水线测试不装配格式解析"),
+            time_alignment=SkippedStage("质量流水线测试不装配时间对齐"),
             quality_check=quality_check,
         ),
         session,
