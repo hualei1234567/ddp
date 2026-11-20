@@ -22,8 +22,8 @@
 | RK-06 | ~~设备域 PATCH 不写审计~~ **已修复**（N1-001：`patch_audit.py` + devices/sensors/robots 接入；profiles 无 PATCH） | `tests/api/test_*_api.py` 新增 4 例；定向 49 passed | 低 | P1 | 无 | 后端 |
 | RK-07 | **`validity_status=UNKNOWN` 无写入点**，来源不可达时仍显示有效 | TD-04 | 中 | P1 | 可达性探测；探测失败写 UNKNOWN 并阻断交付 | 后端 / 产品 |
 | RK-08 | ~~导入 `retry` 系统动作未拦截~~ **已修复**（N2-001：`validate_import_action` 在 HTTP 用例入口拒绝系统动作；Worker 走 `ImportRunner.release_for_retry` 不受影响） | API 422 用例 + Worker 重试测试通过 | 低 | P1 | 无 | 后端 |
-| RK-09 | **Atomic 语义缺口**：Episode→Annotation/Quality、DatasetVersion→TrainingRequest 血缘无边 | agent 复核：`ANNOTATED_BY`/`TRAINING_RUN` 只有枚举无写入方 | 高（现存） | P1 | 在 N5-04 补齐写边；缺边期间血缘图不得宣称完整 | 后端 |
-| RK-10 | **json vs jsonb 列类型不一致**，历史已在真实 PG 导致 500 | 报告 §4 #1；TD-08 | 中 | P1 | 统一列类型迁移 + 等价性测试 | 后端 |
+| RK-09 | ~~Atomic 语义缺口：Episode→Annotation/Quality、DatasetVersion→TrainingRun 血缘无边~~ **已闭环（N5-002/N5-005）** | `application/annotation/lineage.py`、`application/datasets/lineage.py`；API/Worker/回流 E2E 14 passed（2026-11-20） | 低 | P1 | 三类边均与业务事实同事务写入、唯一约束幂等；存量训练引用有默认 dry-run 回填 Worker | 后端 |
+| RK-10 | ~~json vs jsonb 列类型不一致，历史曾在真实 PG 导致 500~~ **已闭环** | ORM 统一 `JSON().with_variant(JSONB, "postgresql")`；真实 PG 迁移/不可变守卫 9 passed（2026-11-20） | 低 | P1 | 新增 JSON 字段继续使用统一 variant，并强制真实 PostgreSQL 升级/回滚及比较语义测试 | 后端 |
 | RK-11 | **上传配额并发窗口**：按声明字节预扣，多会话可各自通过 | 报告 §5 #9 | 中 | P2 | 原子预扣/事务锁；或明确接受并监控 | 后端 |
 | RK-12 | **对象存储用量以 DB 元数据为准**，与 MinIO 实际对象可能漂移 | 报告 §5 #10 | 中 | P2 | 定期对账任务；漂移时以 MinIO 为准并告警 | 运维 |
 
