@@ -13,24 +13,33 @@ npm run e2e
 
 ## 一键本地全栈
 
-需要 Docker（PostgreSQL + MinIO）与 `backend/.venv`：
+需要调用方先启动 MinIO，并准备 `backend/.venv` 与前端依赖。本脚本**不负责启动或停止 MinIO**；可复用仓库中已固定 digest 的 Compose 服务：
 
 ```bash
+docker compose up -d --wait minio
 cd apps/web
-npm run e2e:local
+DDP_E2E_MINIO_PORT=9000 npm run e2e:local
 ```
 
-脚本会：起临时 SQLite/回环 MinIO → 迁移 → 灌种子数据（`seed_e2e.py`）→
-起临时后端与 Vite → 跑 Playwright → 清理全部临时进程与文件。
+默认使用 `backend/.venv/bin/python`；CI 或其他隔离环境可通过
+`DDP_E2E_PYTHON=/path/to/python` 指定解释器。脚本会把
+`backend:data-platform`（绝对路径）注入 `PYTHONPATH`。
+
+脚本会：在已有回环 MinIO 创建临时桶 → 起临时 SQLite 并迁移 →
+灌种子数据（`seed_e2e.py`）→ 起临时后端、上传校验 Worker 与 Vite →
+跑 Playwright → 清理临时进程与文件。MinIO 服务及其数据卷由调用方管理，
+不在清理范围内。
 
 ## 对接已有环境
 
 ```bash
 DDP_E2E_BASE_URL=http://127.0.0.1:8088 \
 DDP_E2E_USER_ID=<项目成员 UUID> \
+DDP_E2E_REVIEWER_ID=<独立审核人 UUID> \
 DDP_E2E_PROJECT_ID=<项目 UUID> \
 DDP_E2E_TASK_ID=<采集任务 UUID> \
 DDP_E2E_IMPORT_ID=<导入任务 UUID> \
+DDP_E2E_MCAP_PATH=</absolute/path/to/valid.mcap> \
 npm run e2e
 ```
 
@@ -44,3 +53,9 @@ npm run e2e
 
 除 E2E 外，`*.dom.test.tsx` 走 jsdom + Testing Library（见 `vite.config.ts` 的
 `environmentMatchGlobs`）；其余测试仍是 node 环境，避免把整个套件拖进浏览器模拟。
+
+### MCAP fixture
+
+`e2e:local` 使用仓库固定的官方 `mcap` SDK 在临时目录生成结构完整的
+MCAP，并通过 `DDP_E2E_MCAP_PATH` 传给 Playwright。外接已有环境运行时也必须
+显式提供该变量；测试会等待独立 Worker 校验并断言“服务端已登记原始资产”。

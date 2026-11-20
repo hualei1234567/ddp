@@ -30,7 +30,8 @@ echo "[5/8] Secret 扫描"
 python3 scripts/check_secrets.py
 
 echo "[6/8] Agent Bash 守卫测试"
-backend/.venv/bin/python -m pytest scripts/tests -q
+PYTHONPATH="backend:data-platform${PYTHONPATH:+:${PYTHONPATH}}" \
+  backend/.venv/bin/python -m pytest scripts/tests -q
 
 echo "[7/8] outbox 事件归类自检（投递类必须有消费者与测试）"
 python3 scripts/check_outbox_events.py

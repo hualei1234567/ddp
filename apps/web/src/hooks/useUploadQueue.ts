@@ -351,7 +351,13 @@ export function useUploadQueue({
       }
 
       if (!signal.aborted) {
-        await finishUpload(itemId, file, session, confirmed, signal);
+        // ack 会推进会话版本；complete 必须使用服务端最新版本，不能沿用创建时版本。
+        const latestSession = await uploadsApi.getSession(
+          projectId,
+          session.upload_session_id,
+          { signal },
+        );
+        await finishUpload(itemId, file, latestSession, confirmed, signal);
       }
     },
     [finishUpload, getItem, patchItem, projectId],

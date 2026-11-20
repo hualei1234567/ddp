@@ -22,6 +22,8 @@ import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
 import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
 import AuditLogListPage from "./pages/audit/AuditLogListPage";
+import CaptureSessionDetailPage from "./pages/collection/CaptureSessionDetailPage";
+import CaptureSessionListPage from "./pages/collection/CaptureSessionListPage";
 import CollectionTaskDetailPage from "./pages/collection/CollectionTaskDetailPage";
 import CollectionAssetDetailPage from "./pages/collectionAssets/AssetDetailPage";
 import CollectionAssetListPage from "./pages/collectionAssets/AssetListPage";
@@ -151,6 +153,14 @@ export default function AppRoutes() {
         <Route path="robots/:robotId" element={<RobotDetailPage />} />
         <Route path="collection" element={<CollectionIndexRedirect />} />
         <Route path="collection/tasks" element={<CollectionTaskListPage />} />
+        <Route
+          path="collection/capture-sessions"
+          element={<CaptureSessionListPage />}
+        />
+        <Route
+          path="collection/capture-sessions/:sessionId"
+          element={<CaptureSessionDetailPage />}
+        />
         <Route
           path="collection/tasks/:taskId"
           element={<CollectionTaskDetailPage />}

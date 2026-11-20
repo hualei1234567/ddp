@@ -14,7 +14,7 @@
 |---|---|
 | 仓库 | `github.com/hualei1234567/ddp`（私有） |
 | 默认分支 | `main` |
-| 当前 HEAD | 批次 10 分支 `feat/v21-p10-batch`（基线提交 `51123ff`，批次内 5 项：N6-005 / N7-005 / N5-003 / N4-003 / N8-002） |
+| 当前 HEAD | 批次 14 分支 `feat/v21-p14-batch`（N8-013 CI 强制 E2E + N9-014 采集会话前端） |
 | 分支模型 | 任务分支 + PR；`main` 不做直推（纪律，平台未强制） |
 | 工作区 | 干净（本轮 N0 只新增文档） |
 | 分支保护 | **不可用**（私有仓 rulesets API 403），以 CI + 评审纪律替代 |
@@ -96,7 +96,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 |---|---|---|
 | 后端用例收集 | `.venv/bin/python -m pytest --collect-only -q` | **3220 collected** |
 | 后端全量 | `.venv/bin/python -m pytest -o addopts="" -q` | 见 §6.1（本轮实际输出） |
-| 前端全量 | `npx vitest run` | **934 passed / 19 skipped**（121 文件，117 过 / 4 跳；另含 Playwright E2E 三条路径，无环境时 SKIPPED） |
+| 前端全量 | `npm test` | **952 passed / 19 skipped**（126 文件，122 过 / 4 跳）；Playwright 真实本地栈 **4 passed / 0 skipped** |
 | 契约 | `check_contract_parity.py --strict` | 通过（基线内 62 项） |
 | make check | `bash scripts/check.sh` | 8 步：ruff / pytest / tsc+eslint+vitest / build / secret / Agent 守卫 / outbox / 契约 |
 
@@ -108,7 +108,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 
 - 命令：`cd backend && DDP_TEST_POSTGRES_URL=... DDP_TEST_REDIS_URL=... .venv/bin/python -m pytest -q --junitxml=...`
 - 集合 3220 = 3219 passed + 1 skipped；唯一 skip 为需显式 `DDP_RUN_REMOTE_VERIFY=1` 的 Hugging Face 手动用例（本机装有 ffprobe，MP4 真实样例未被跳过）。
-- 前端：`934 passed / 19 skipped`（121 文件，P13 批次后）（`cd apps/web && npx vitest run`）；E2E `npm run e2e` 无环境时输出 `SKIPPED: 未提供 DDP_E2E_BASE_URL`。
+- 前端：`952 passed / 19 skipped`（126 文件，P14 批次）；E2E `DDP_E2E_MINIO_PORT=9000 npm run e2e:local` 为 `4 passed / 0 skipped`，CI 结构化门禁要求同值。
 - 结论：SQLite + 真实 PostgreSQL + 真实 Redis 全绿；迁移 0062（审核 evidence）在 SQLite 与真实 PG 上 upgrade→downgrade→upgrade 通过。
 
 ## 7. 数据事实（本地 PostgreSQL，非生产）
@@ -156,7 +156,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 | `validity_status=UNKNOWN` 写入点 | **VERIFIED**（N5-004/N5-007：manifest 与 raw asset 双层探测，明确缺失写 UNKNOWN 并区分原因） |
 | 真实训练平台 | **BLOCKED**（未配置）；MOCK/DRY_RUN 已是独立执行器（N7-007），但不代表真实训练 |
 | 采集会话 → Episode / RawAsset 归属链路 | **VERIFIED**（N9-008：迁移 0068 复合外键 + 只读产物列表端点；历史产物保持 NULL 不回填） |
-| 前端关键路径 E2E | **PARTIAL**（N8-007：三条路径已实现，需真实后端+MinIO 时执行；默认环境 SKIPPED） |
+| 前端关键路径 E2E | **VERIFIED**（N8-007/N8-013：CI 独立 job 启动真实后端、固定 digest MinIO、Worker 与 Chromium；4 passed / 0 skipped；完整 MCAP 经 Worker 后 RawAsset 为 VALID） |
 
 ## 10. 复现命令清单
 
