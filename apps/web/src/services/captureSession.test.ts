@@ -49,9 +49,20 @@ describe("采集会话 API", () => {
     expect(JSON.parse(String(init.body))).toEqual({ code: "CAP-001", task_id: null });
   });
 
-  it("动作请求携带 If-Match、幂等键和原因", async () => {
+  it.each(["pause", "resume", "abort"] as const)("%s 在原因缺失或空白时请求前拒绝", async (action) => {
+    for (const reason of [null, undefined, "   "]) {
+      const { api, fetchImpl } = apiWith(fixture());
+
+      await expect(
+        api.action(PROJECT_ID, SESSION_ID, action, reason as string | null, { version: 1 }),
+      ).rejects.toThrow(/原因不能为空/);
+      expect(fetchImpl).not.toHaveBeenCalled();
+    }
+  });
+
+  it("动作请求携带 If-Match、幂等键和去空白原因", async () => {
     const { api, fetchImpl } = apiWith(fixture({ status: "PAUSED" }));
-    await api.action(PROJECT_ID, SESSION_ID, "pause", "现场暂停", { version: 1, idempotencyKey: "idem-1" });
+    await api.action(PROJECT_ID, SESSION_ID, "pause", "  现场暂停  ", { version: 1, idempotencyKey: "idem-1" });
     const init = fetchImpl.mock.calls[0]?.[1] as RequestInit;
     expect(fetchImpl.mock.calls[0]?.[0]).toBe(`http://api.test/api/v1/projects/${PROJECT_ID}/capture-sessions/${SESSION_ID}/actions/pause`);
     expect(init.headers).toMatchObject({ "If-Match": "\"1\"", "Idempotency-Key": "idem-1" });
