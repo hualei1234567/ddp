@@ -78,7 +78,7 @@
 | RK-55 | 处理运行的 METADATA_EXTRACTION 会把输入对象流式下载到 Worker 本地临时目录后再解析；大对象受 `processing_metadata_max_object_bytes` 限制，但临时磁盘仍需预留 | `application/processing/metadata_stage.py`；N4-002 报告 | 中 | P2 | 上限由部署配置注入并在超限时显式失败；临时目录用后即删；不得把上限调到超过 Worker 磁盘 | 后端 / 运维 |
 | RK-56 | 采集会话产物归属只在创建时携带，历史 RawAsset/Episode 保持 NULL（不回填） | 迁移 0068；N9-008 报告 | 中 | P2 | 文档明确「NULL = 未记录执行来源」，不得按推测回填；需要追溯时以导入链路元数据为准 | 后端 / 产品 |
 | RK-57 | ~~前端 E2E 三条路径默认 CI 不执行，可能把 SKIPPED 误当通过~~ **已闭环（N8-013）** | `.github/workflows/ci.yml`；`apps/web/playwright.config.ts` | 低 | P2 | 独立 CI job 运行真实后端 + MinIO + Chromium；读取 Playwright JSON，严格门禁 4 passed / 0 skipped；`if: always()` 上传 HTML、trace、screenshot 与 JSON 结果 | 前端 / 运维 |
-| RK-58 | TIME_ALIGNMENT 缺少可信版本化多流时间 manifest，直接接入会诱发伪造起点、分组或时钟结论 | N4-011 前置契约审计；`application/processing/default_handlers()` 仍为 SkippedStage | 高 | P1 | 前置 manifest 落地并验证 schema/unit/唯一性/时钟声明前保持 BLOCKED；缺失事实一律 UNKNOWN，校正 `applied=false` | 后端 / 数据 |
+| RK-58 | TIME_ALIGNMENT 已有版本化输入契约，但缺少可信逐流 manifest 生产者；直接从 MP4/MCAP/Parquet 摘要推断仍会伪造起点、分组或时钟结论 | `processing-time-alignment-input.v1.schema.json`；`domain/episodes/time_alignment_manifest.py`；`application/processing/default_handlers()` 仍为 SkippedStage | 高 | P1 | 契约严格验证 schema/unit/唯一性/时钟枚举；生产者未落地前保持 BLOCKED，缺失事实一律 UNKNOWN，禁止按输入顺序/topic 推断，校正 `applied=false` | 后端 / 数据 |
 
 ## 5. 产品与验收口径
 
