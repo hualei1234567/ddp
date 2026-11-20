@@ -13,15 +13,22 @@ npm run e2e
 
 ## 一键本地全栈
 
-需要 Docker（PostgreSQL + MinIO）与 `backend/.venv`：
+需要调用方先启动 MinIO，并准备 `backend/.venv` 与前端依赖。本脚本**不负责启动或停止 MinIO**；可复用仓库中已固定 digest 的 Compose 服务：
 
 ```bash
+docker compose up -d --wait minio
 cd apps/web
-npm run e2e:local
+DDP_E2E_MINIO_PORT=9000 npm run e2e:local
 ```
 
-脚本会：起临时 SQLite/回环 MinIO → 迁移 → 灌种子数据（`seed_e2e.py`）→
-起临时后端与 Vite → 跑 Playwright → 清理全部临时进程与文件。
+默认使用 `backend/.venv/bin/python`；CI 或其他隔离环境可通过
+`DDP_E2E_PYTHON=/path/to/python` 指定解释器。脚本会把
+`backend:data-platform`（绝对路径）注入 `PYTHONPATH`。
+
+脚本会：在已有回环 MinIO 创建临时桶 → 起临时 SQLite 并迁移 →
+灌种子数据（`seed_e2e.py`）→ 起临时后端、上传校验 Worker 与 Vite →
+跑 Playwright → 清理临时进程与文件。MinIO 服务及其数据卷由调用方管理，
+不在清理范围内。
 
 ## 对接已有环境
 

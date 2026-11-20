@@ -77,7 +77,7 @@
 | RK-54 | 新数据回流 e2e 使用 LOCAL 网关替身，不证明真实训练平台计算与真实权重 | `backend/tests/e2e/test_data_reflow_e2e.py`；N7-006 报告 | 中 | P2 | 真实训练平台仍 `BLOCKED`；文档明确「只证明编排闭环」；接入真实平台后补同链路验收 | 后端 / 运维 |
 | RK-55 | 处理运行的 METADATA_EXTRACTION 会把输入对象流式下载到 Worker 本地临时目录后再解析；大对象受 `processing_metadata_max_object_bytes` 限制，但临时磁盘仍需预留 | `application/processing/metadata_stage.py`；N4-002 报告 | 中 | P2 | 上限由部署配置注入并在超限时显式失败；临时目录用后即删；不得把上限调到超过 Worker 磁盘 | 后端 / 运维 |
 | RK-56 | 采集会话产物归属只在创建时携带，历史 RawAsset/Episode 保持 NULL（不回填） | 迁移 0068；N9-008 报告 | 中 | P2 | 文档明确「NULL = 未记录执行来源」，不得按推测回填；需要追溯时以导入链路元数据为准 | 后端 / 产品 |
-| RK-57 | 前端 E2E 三条路径需要真实后端 + MinIO，默认 CI 不执行；本机无浏览器栈时为 SKIPPED | `apps/web/e2e/`；N8-007 报告 | 中 | P2 | 跳过在报告中显式可见（skipped 而非 passed）；需要时用 `npm run e2e:local` 起全栈执行；后续可接入带环境的 CI job | 前端 / 运维 |
+| RK-57 | ~~前端 E2E 三条路径默认 CI 不执行，可能把 SKIPPED 误当通过~~ **已闭环（N8-013）** | `.github/workflows/ci.yml`；`apps/web/playwright.config.ts` | 低 | P2 | 独立 CI job 运行真实后端 + MinIO + Chromium；读取 Playwright JSON，严格门禁 4 passed / 0 skipped；`if: always()` 上传 HTML、trace、screenshot 与 JSON 结果 | 前端 / 运维 |
 
 ## 5. 产品与验收口径
 

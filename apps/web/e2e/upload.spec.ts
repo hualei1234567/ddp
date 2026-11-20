@@ -14,7 +14,7 @@ import { e2eEnv, skipWithoutEnv } from "./support";
 test.describe("关键路径：上传", () => {
   skipWithoutEnv();
 
-  test("创建会话、上传文件并展示进度与最终状态", async ({ page }) => {
+  test("创建会话、上传文件并进入服务端校验", async ({ page }) => {
     const env = e2eEnv();
     await page.goto(
       `/collection/workbench/${env.taskId}?project_id=${env.projectId}&step=upload`,
@@ -28,8 +28,11 @@ test.describe("关键路径：上传", () => {
 
     await fileInput.setInputFiles({
       name: "e2e-episode.mcap",
-      mimeType: "application/octet-stream",
-      buffer: Buffer.from("DDP E2E upload payload"),
+      mimeType: "application/x-mcap",
+      buffer: Buffer.concat([
+        Buffer.from([0x89]),
+        Buffer.from("MCAP0\r\nDDP E2E upload payload"),
+      ]),
     });
 
     // 队列项出现即说明 addFiles 已入队；后续状态由真实会话驱动。
@@ -38,9 +41,9 @@ test.describe("关键路径：上传", () => {
     // 至少出现过进度条（服务端返回 part_size 后计算真实百分比）。
     await expect(page.locator(".ant-progress")).toBeVisible({ timeout: 30_000 });
 
-    // 终态：服务端登记（或去重命中）——两者都是"上传成功"的权威结论。
-    await expect(
-      page.getByText(/服务端已登记原始资产|服务端命中已有资产/),
-    ).toBeVisible({ timeout: 60_000 });
+    // complete 后进入独立 Worker 校验，不能把“已上传”伪装成“已登记”。
+    await expect(page.getByText("已提交，等待服务端校验")).toBeVisible({
+      timeout: 30_000,
+    });
   });
 });

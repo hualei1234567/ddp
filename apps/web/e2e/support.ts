@@ -11,6 +11,7 @@ export interface E2EEnv {
   projectId: string;
   taskId: string;
   importId: string;
+  reviewerId: string;
 }
 
 function read(name: string): string {
@@ -21,13 +22,15 @@ export function e2eEnv(): E2EEnv {
   const projectId = read("DDP_E2E_PROJECT_ID");
   const taskId = read("DDP_E2E_TASK_ID");
   const importId = read("DDP_E2E_IMPORT_ID");
-  if (!projectId || !taskId || !importId) {
+  const reviewerId = read("DDP_E2E_REVIEWER_ID");
+  if (!projectId || !taskId || !importId || !reviewerId) {
     throw new Error(
-      "缺少 DDP_E2E_PROJECT_ID / DDP_E2E_TASK_ID / DDP_E2E_IMPORT_ID；" +
-        "请用 npm run e2e:local 或按 scripts/e2e/README.md 注入种子 ID",
+      "缺少 DDP_E2E_PROJECT_ID / DDP_E2E_TASK_ID / DDP_E2E_IMPORT_ID / " +
+        "DDP_E2E_REVIEWER_ID；请用 npm run e2e:local 或按 " +
+        "scripts/e2e/README.md 注入种子 ID",
     );
   }
-  return { projectId, taskId, importId };
+  return { projectId, taskId, importId, reviewerId };
 }
 
 /**

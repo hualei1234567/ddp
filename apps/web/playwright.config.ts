@@ -25,7 +25,11 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   // 本任务只做关键路径冒烟，不追求全量覆盖；失败时保留 trace 便于定位。
-  reporter: [["list"], ["html", { outputFolder: "e2e-report", open: "never" }]],
+  reporter: [
+    ["list"],
+    ["html", { outputFolder: "e2e-report", open: "never" }],
+    ["json", { outputFile: "e2e-results.json" }],
+  ],
   timeout: 60_000,
   expect: { timeout: 10_000 },
   use: {

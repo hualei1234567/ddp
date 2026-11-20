@@ -27,10 +27,14 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 from urllib.parse import urlparse
 from uuid import UUID
 
 from sqlalchemy import create_engine, select
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.infrastructure.db.models.datasources import (
@@ -76,7 +80,15 @@ def _database_url() -> str:
     value = os.environ.get("DDP_DATABASE_URL", "").strip()
     if not value:
         raise SystemExit("缺少 DDP_DATABASE_URL")
-    if not _is_local_endpoint(value):
+
+    parsed = make_url(value)
+    if parsed.get_backend_name() == "sqlite":
+        database = parsed.database or ""
+        path = Path(database).resolve()
+        temp_roots = (Path("/tmp").resolve(), Path(tempfile.gettempdir()).resolve())
+        if not any(path.is_relative_to(root) for root in temp_roots):
+            raise SystemExit("拒绝使用非本机数据库（该脚本只用于本地 E2E）")
+    elif not _is_local_endpoint(value):
         raise SystemExit("拒绝使用非本机数据库（该脚本只用于本地 E2E）")
     return value
 
@@ -140,6 +152,7 @@ def _seed_task(session: Session) -> None:
 
 
 def _seed_datasource(session: Session) -> None:
+    now = datetime.now(UTC)
     if session.get(DataSourceModel, DATA_SOURCE_ID) is None:
         session.add(
             DataSourceModel(
@@ -156,6 +169,8 @@ def _seed_datasource(session: Session) -> None:
                 metadata_json={},
                 created_by=SUBMITTER_ID,
                 updated_by=SUBMITTER_ID,
+                created_at=now,
+                updated_at=now,
             )
         )
     if session.get(DataSourceImportModel, IMPORT_ID) is None:
@@ -166,10 +181,13 @@ def _seed_datasource(session: Session) -> None:
                 data_source_id=DATA_SOURCE_ID,
                 status="PENDING",
                 scope="SAMPLE",
+                sample_limit=1,
                 tool_name="e2e-import",
                 tool_version="1.0.0",
                 created_by=SUBMITTER_ID,
                 updated_by=SUBMITTER_ID,
+                created_at=now,
+                updated_at=now,
             )
         )
 
@@ -177,7 +195,6 @@ def _seed_datasource(session: Session) -> None:
 def _seed_review(session: Session) -> None:
     if session.get(DataReviewModel, REVIEW_ID) is not None:
         return
-    from datetime import UTC, datetime
 
     # 提交人 = SUBMITTER；E2E 用 REVIEWER 身份裁决，满足职责分离。
     session.add(
@@ -190,7 +207,10 @@ def _seed_review(session: Session) -> None:
             reason=None,
             reviewer_id=None,
             submitted_by=SUBMITTER_ID,
+            created_by=SUBMITTER_ID,
+            updated_by=SUBMITTER_ID,
             created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
     )
 
@@ -214,7 +234,9 @@ def _advance_task_to_in_progress(api_base_url: str) -> None:
         if detail.json()["status"] == "IN_PROGRESS":
             return
 
-        def act(action: str, *, actor_headers: dict[str, str], body: dict | None = None) -> None:
+        def act(
+            action: str, *, actor_headers: dict[str, str], body: dict | None = None
+        ) -> None:
             nonlocal version
             response = client.post(
                 f"{base}/actions/{action}",

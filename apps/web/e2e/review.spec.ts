@@ -16,6 +16,7 @@ test.describe("关键路径：审核", () => {
 
   test("提交审核决定后状态更新", async ({ page }) => {
     const env = e2eEnv();
+    await page.setExtraHTTPHeaders({ "X-User-Id": env.reviewerId });
     await page.goto(
       `/data-source-imports/${env.importId}/review?project_id=${env.projectId}`,
     );
@@ -24,7 +25,7 @@ test.describe("关键路径：审核", () => {
     await expect(page.getByText("待审核")).toBeVisible({ timeout: 30_000 });
 
     // 通过：无需原因，直接提交。
-    await page.getByRole("button", { name: "通过", exact: true }).click();
+    await page.getByRole("button", { name: /通\s*过/ }).click();
 
     // 服务端返回后状态标签变为已通过，并出现审核结论。
     await expect(page.getByText("已通过")).toBeVisible({ timeout: 30_000 });

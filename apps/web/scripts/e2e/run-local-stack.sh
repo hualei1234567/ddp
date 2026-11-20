@@ -8,14 +8,15 @@
 #   - 不读取仓库 .env（用 env -i 隔离），不写任何真实凭据；
 #   - 退出时杀掉全部子进程并删除临时目录。
 #
-# 依赖：docker（MinIO 桶）、backend/.venv、apps/web/node_modules。
+# 依赖：调用方已启动的 MinIO、backend/.venv（或 DDP_E2E_PYTHON）、
+# apps/web/node_modules。本脚本只创建临时桶，不负责启动或停止 MinIO。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WEB_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ROOT="$(cd "${WEB_DIR}/../.." && pwd)"
 
-PYTHON="${ROOT}/backend/.venv/bin/python"
+PYTHON="${DDP_E2E_PYTHON:-${ROOT}/backend/.venv/bin/python}"
 API_PORT="${DDP_E2E_API_PORT:-8010}"
 WEB_PORT="${DDP_E2E_WEB_PORT:-5174}"
 MINIO_PORT="${DDP_E2E_MINIO_PORT:-9100}"
@@ -24,17 +25,28 @@ DB_PATH="${TMP_DIR}/e2e.db"
 BUCKET="ddp-e2e-n8-007"
 
 BACKEND_PID=""
+WORKER_PID=""
 WEB_PID=""
 
 cleanup() {
   local status=$?
+  if [[ "${status}" -ne 0 && -f "${TMP_DIR}/worker.log" ]]; then
+    echo "上传校验 Worker 日志：" >&2
+    cat "${TMP_DIR}/worker.log" >&2
+  fi
   [[ -n "${WEB_PID}" ]] && kill "${WEB_PID}" >/dev/null 2>&1 || true
+  [[ -n "${WORKER_PID}" ]] && kill "${WORKER_PID}" >/dev/null 2>&1 || true
   [[ -n "${BACKEND_PID}" ]] && kill "${BACKEND_PID}" >/dev/null 2>&1 || true
   wait >/dev/null 2>&1 || true
   rm -rf "${TMP_DIR}"
   exit "${status}"
 }
 trap cleanup EXIT
+
+if [[ ! -x "${PYTHON}" ]]; then
+  echo "Python 不可执行：${PYTHON}；请创建 backend/.venv 或设置 DDP_E2E_PYTHON。" >&2
+  exit 1
+fi
 
 port_open() {
   "${PYTHON}" - "$1" <<'PY'
@@ -79,7 +91,11 @@ for port in "${API_PORT}" "${WEB_PORT}"; do
   fi
 done
 
-echo "[1/6] 临时 MinIO 桶（127.0.0.1:${MINIO_PORT}）"
+echo "[1/6] 在调用方已启动的 MinIO 创建临时桶（127.0.0.1:${MINIO_PORT}）"
+if ! port_open "${MINIO_PORT}"; then
+  echo "MinIO 端口 ${MINIO_PORT} 不可用；本脚本不负责启动 MinIO，请先启动仓库 docker compose 的 minio 服务。" >&2
+  exit 1
+fi
 "${PYTHON}" - "${MINIO_PORT}" "${BUCKET}" <<'PY'
 import sys
 
@@ -103,7 +119,7 @@ PY
 echo "[2/6] 临时 SQLite 迁移"
 (
   cd "${ROOT}/backend"
-  env -i PATH="${PATH}" HOME="${HOME}" PYTHONPATH="${ROOT}/backend" \
+  env -i PATH="${PATH}" HOME="${HOME}" PYTHONPATH="${ROOT}/backend:${ROOT}/data-platform" \
     DDP_ENV="local" \
     DDP_DATABASE_URL="sqlite+pysqlite:///${DB_PATH}" \
     "${PYTHON}" -m alembic upgrade head
@@ -112,7 +128,7 @@ echo "[2/6] 临时 SQLite 迁移"
 echo "[3/6] 启动临时后端 127.0.0.1:${API_PORT}"
 (
   cd "${TMP_DIR}"
-  exec env -i PATH="${PATH}" HOME="${HOME}" PYTHONPATH="${ROOT}/backend" \
+  exec env -i PATH="${PATH}" HOME="${HOME}" PYTHONPATH="${ROOT}/backend:${ROOT}/data-platform" \
     DDP_ENV="local" \
     DDP_DATABASE_URL="sqlite+pysqlite:///${DB_PATH}" \
     DDP_LOCAL_HEADER_AUTH="true" \
@@ -136,11 +152,28 @@ wait_http "http://127.0.0.1:${API_PORT}/health" 90 || {
 echo "[4/6] 写入 E2E 种子（含真实 HTTP 状态推进）"
 (
   cd "${TMP_DIR}"
-  env -i PATH="${PATH}" HOME="${HOME}" PYTHONPATH="${ROOT}/backend" \
+  env -i PATH="${PATH}" HOME="${HOME}" PYTHONPATH="${ROOT}/backend:${ROOT}/data-platform" \
     DDP_DATABASE_URL="sqlite+pysqlite:///${DB_PATH}" \
     DDP_E2E_API_BASE_URL="http://127.0.0.1:${API_PORT}" \
     "${PYTHON}" "${SCRIPT_DIR}/seed_e2e.py"
 )
+
+# 完成上传只登记待校验资产；独立 outbox Worker 才会读取对象、校验签名并
+# 把会话推进到终态。与生产边界一致，不在 HTTP 线程处理文件。
+# 放在种子之后启动，避免 Worker 轮询与种子写入争用 SQLite 写锁。
+(
+  cd "${TMP_DIR}"
+  exec env -i PATH="${PATH}" HOME="${HOME}" PYTHONPATH="${ROOT}/backend:${ROOT}/data-platform" \
+    DDP_ENV="local" \
+    DDP_DATABASE_URL="sqlite+pysqlite:///${DB_PATH}" \
+    DDP_S3_ENDPOINT="http://127.0.0.1:${MINIO_PORT}" \
+    DDP_S3_BUCKET="${BUCKET}" \
+    DDP_S3_ACCESS_KEY="minioadmin" \
+    DDP_S3_SECRET_KEY="minioadmin" \
+    DDP_S3_REGION="us-east-1" \
+    "${PYTHON}" -m app.workers.outbox
+) >"${TMP_DIR}/worker.log" 2>&1 &
+WORKER_PID=$!
 
 echo "[5/6] 构建并启动前端预览 127.0.0.1:${WEB_PORT}"
 (
