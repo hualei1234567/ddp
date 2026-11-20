@@ -79,6 +79,7 @@
 | RK-56 | 采集会话产物归属只在创建时携带，历史 RawAsset/Episode 保持 NULL（不回填） | 迁移 0068；N9-008 报告 | 中 | P2 | 文档明确「NULL = 未记录执行来源」，不得按推测回填；需要追溯时以导入链路元数据为准 | 后端 / 产品 |
 | RK-57 | ~~前端 E2E 三条路径默认 CI 不执行，可能把 SKIPPED 误当通过~~ **已闭环（N8-013）** | `.github/workflows/ci.yml`；`apps/web/playwright.config.ts` | 低 | P2 | 独立 CI job 运行真实后端 + MinIO + Chromium；读取 Playwright JSON，严格门禁 4 passed / 0 skipped；`if: always()` 上传 HTML、trace、screenshot 与 JSON 结果 | 前端 / 运维 |
 | RK-58 | ~~TIME_ALIGNMENT 缺少可信 producer 与 Pipeline handler~~ **已闭环（N4-011/N4-012）**：LeRobot v3 只读取逐视频显式时间范围；固定 DROID-100 revision 真实验收；handler 只消费当前项目唯一严格 manifest，不声明未知物理时钟 | `v3_time_manifest.py`；`time_alignment_stage.py`；`test_public_droid_time_manifest.py`；`test_processing_time_alignment_stage.py` | 低 | P2 | 通用 MP4/MCAP/Parquet 摘要不得推断分组或时钟；缺失/空组保持 SKIPPED，非法/歧义输入 fail-closed，校正 `applied=false`；后续真实物理时钟仍需硬件验证 | 后端 / 数据 |
+| RK-59 | DROID 官方 GitHub 硬件仓库未声明许可证，且公开资料没有现场序列号、固件、标定与物理时钟；把公开型号清单误当真机联调会形成虚假闭环 | `droid/hardware.py`；`fixtures/public/droid-hardware/facts.json`；`test_public_droid_hardware.py` | 中 | P1 | 只记录固定 commit/blob/SHA 的事实与 provenance，不复制或执行远端代码；未知字段保持 NULL/NONE；状态保持 PARTIAL / HARDWARE BLOCKED，硬件到位后补在环验收 | 数据 / 设备 |
 
 ## 5. 产品与验收口径
 

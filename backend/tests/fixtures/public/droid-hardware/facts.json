@@ -1,0 +1,60 @@
+{
+  "source": {
+    "repository": "droid-dataset/droid",
+    "commit": "33ae6a67274f36d2e29525b86f23a56616ef43a7",
+    "license": null,
+    "shopping_list_path": "docs/hardware-setup/shopping-list.md",
+    "shopping_list_git_blob_sha1": "bc8250082c63201fe1942817d6bb71b15b425519",
+    "shopping_list_size_bytes": 8593,
+    "robot_config_path": "config/panda/franka_panda.yaml",
+    "robot_config_git_blob_sha1": "0c7d971a2604814efda3093dd57cc1c775c1afb6",
+    "robot_config_size_bytes": 591,
+    "dataset_id": "lerobot/droid_100",
+    "dataset_revision": "87301a2d2e99340e2010c9ef0f1d8e780b08aaf9",
+    "dataset_license": "MIT",
+    "retrieved_at": "2026-11-20"
+  },
+  "robot": {
+    "vendor": "Franka Robotics",
+    "model": "Franka Emika Panda / Franka Research 3",
+    "quantity": 1,
+    "num_dofs": 7
+  },
+  "gripper": {
+    "vendor": "Robotiq",
+    "model": "2F-85",
+    "quantity": 1
+  },
+  "cameras": [
+    {"vendor": "Stereolabs", "model": "ZED 2", "quantity": 2},
+    {"vendor": "Stereolabs", "model": "ZED Mini", "quantity": 1}
+  ],
+  "stream_models": {
+    "observation.images.exterior_image_1_left": "ZED 2",
+    "observation.images.exterior_image_2_left": "ZED 2",
+    "observation.images.wrist_image_left": "ZED Mini"
+  },
+  "video_streams": [
+    {
+      "stream_id": "observation.images.exterior_image_1_left",
+      "fps": 15.0,
+      "width": 320,
+      "height": 180,
+      "role": "EXTERIOR"
+    },
+    {
+      "stream_id": "observation.images.exterior_image_2_left",
+      "fps": 15.0,
+      "width": 320,
+      "height": 180,
+      "role": "EXTERIOR"
+    },
+    {
+      "stream_id": "observation.images.wrist_image_left",
+      "fps": 15.0,
+      "width": 320,
+      "height": 180,
+      "role": "WRIST_FIRST_PERSON"
+    }
+  ]
+}
