@@ -73,6 +73,7 @@ def test_empty_groups_is_valid_and_does_not_invent_a_group() -> None:
         (("time_unit",), "ms"),
         (("groups", 0, "streams", 0, "start_time_ns"), 1730000000000000000),
         (("groups", 0, "streams", 0, "start_time_ns"), "01"),
+        (("groups", 0, "streams", 0, "end_time_ns"), "9223372036854775808"),
         (("groups", 0, "streams", 0, "time_domain"), "GPS"),
         (("groups", 0, "streams", 0, "clock_source"), "GPS_CLOCK"),
         (("groups", 0, "streams", 0, "frame_rate", "num"), 0),

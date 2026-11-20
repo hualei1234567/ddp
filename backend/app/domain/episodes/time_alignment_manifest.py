@@ -18,6 +18,8 @@ from app.domain.episodes.sync_frame_index import FrameRate, StreamSyncProfile
 TIME_ALIGNMENT_INPUT_SCHEMA_VERSION = "ddp.processing.time-alignment-input/1.0.0"
 TIME_ALIGNMENT_INPUT_TIME_UNIT = "ns"
 _MAX_KEY_LENGTH = 200
+_INT64_MIN = -(2**63)
+_INT64_MAX = 2**63 - 1
 _DECIMAL_INTEGER = re.compile(r"^-?(?:0|[1-9][0-9]*)$")
 _ROOT_KEYS = frozenset({"schema_version", "time_unit", "groups"})
 _GROUP_KEYS = frozenset({"group_key", "streams"})
@@ -166,7 +168,12 @@ def _text(value: object, field: str) -> str:
 def _decimal_integer(value: object, field: str) -> int:
     if not isinstance(value, str) or _DECIMAL_INTEGER.fullmatch(value) is None:
         raise SyncDriftError(f"{field} 必须是规范十进制整数字符串")
-    return int(value, 10)
+    if len(value) > 20:
+        raise SyncDriftError(f"{field} 超出 int64 范围")
+    resolved = int(value, 10)
+    if not _INT64_MIN <= resolved <= _INT64_MAX:
+        raise SyncDriftError(f"{field} 超出 int64 范围")
+    return resolved
 
 
 def _frame_rate(value: object, field: str) -> FrameRate | None:
