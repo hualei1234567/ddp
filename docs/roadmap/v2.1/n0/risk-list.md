@@ -47,7 +47,7 @@
 | RK-19 | **契约 parity 基线已接受 61 项差异**（其中 9 条生效契约超前错误码），基线可能被当成「已一致」 | `check_contract_parity.py --strict` 输出 | 中 | P1 | 每次变更先看差异清单；新差异零容忍 | 架构 / 后端 |
 | RK-20 | **迁移编号缺口**（0037/0039/0045–0047），多人并行易再撞号 | `alembic history` | 中 | P2 | 迁移编号单一 Owner；合并前检查 `alembic heads` 单头 | 后端 |
 | RK-21 | 多会话/多 worktree 并行时，同一测试文件语义冲突（历史上已发生） | 报告 §4 #7 | 中 | P2 | 任务卡声明文件所有权；合并后跑全量 | 全体 |
-| RK-22 | **前端无 jsdom 交互测试 / 无 E2E**，页面行为回归靠静态断言 | 前端 101 文件均为静态/纯函数测试 | 高 | P2 | 引入 Testing Library + 关键路径 Playwright；先补上传/审核/动作条 | 前端 |
+| RK-22 | ~~前端无 jsdom 交互测试 / 无 E2E~~ **已闭环（N8-007/N8-013）** | Testing Library + Playwright；CI 真实栈 4 passed / 0 skipped | 低 | P2 | 保持结构化门禁与失败 trace/screenshot；新增关键路径时同步提高期望总数 | 前端 |
 | RK-23 | **无性能基线**（100/1K/10K episodes），规模化能力未知 | TD/agent：无压测脚本 | 高 | P1 | N8-03 建脚本与阈值；先测只读列表与视频 Range | QA |
 | RK-24 | 备份只做本机 PG+MinIO，无异地/加密/RTO 指标 | `docs/operations/备份与恢复演练记录-2026-11-17.md` | 中 | P1 | 增加异地副本与恢复时长目标；每季度演练 | 运维 |
 | RK-30 | 评测列表复用详情响应，每条最多内联 64 KiB `failure_cases`；一页 100 条最坏约 6.4 MB | `fragments/schemas.stage5.yaml` 的 `Evaluation`；契约明确"上限即分页" | 中 | P2 | 列表页保持小 `limit`；后续评估独立 `failure-cases` 子资源端点 | 后端 / 前端 |
@@ -78,6 +78,7 @@
 | RK-55 | 处理运行的 METADATA_EXTRACTION 会把输入对象流式下载到 Worker 本地临时目录后再解析；大对象受 `processing_metadata_max_object_bytes` 限制，但临时磁盘仍需预留 | `application/processing/metadata_stage.py`；N4-002 报告 | 中 | P2 | 上限由部署配置注入并在超限时显式失败；临时目录用后即删；不得把上限调到超过 Worker 磁盘 | 后端 / 运维 |
 | RK-56 | 采集会话产物归属只在创建时携带，历史 RawAsset/Episode 保持 NULL（不回填） | 迁移 0068；N9-008 报告 | 中 | P2 | 文档明确「NULL = 未记录执行来源」，不得按推测回填；需要追溯时以导入链路元数据为准 | 后端 / 产品 |
 | RK-57 | ~~前端 E2E 三条路径默认 CI 不执行，可能把 SKIPPED 误当通过~~ **已闭环（N8-013）** | `.github/workflows/ci.yml`；`apps/web/playwright.config.ts` | 低 | P2 | 独立 CI job 运行真实后端 + MinIO + Chromium；读取 Playwright JSON，严格门禁 4 passed / 0 skipped；`if: always()` 上传 HTML、trace、screenshot 与 JSON 结果 | 前端 / 运维 |
+| RK-58 | TIME_ALIGNMENT 缺少可信版本化多流时间 manifest，直接接入会诱发伪造起点、分组或时钟结论 | N4-011 前置契约审计；`application/processing/default_handlers()` 仍为 SkippedStage | 高 | P1 | 前置 manifest 落地并验证 schema/unit/唯一性/时钟声明前保持 BLOCKED；缺失事实一律 UNKNOWN，校正 `applied=false` | 后端 / 数据 |
 
 ## 5. 产品与验收口径
 
