@@ -121,6 +121,10 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
+      - name: E2E 临时数据库守卫测试
+        env:
+          PYTHONPATH: backend:data-platform
+        run: backend/.venv/bin/python -m pytest scripts/tests/test_e2e_seed_guard.py -q
       - name: 启动固定 digest MinIO 并等待健康
         run: docker compose up -d --wait minio
       - name: 运行本地全栈 E2E

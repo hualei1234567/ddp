@@ -82,14 +82,17 @@ def _database_url() -> str:
         raise SystemExit("缺少 DDP_DATABASE_URL")
 
     parsed = make_url(value)
-    if parsed.get_backend_name() == "sqlite":
-        database = parsed.database or ""
-        path = Path(database).resolve()
-        temp_roots = (Path("/tmp").resolve(), Path(tempfile.gettempdir()).resolve())
-        if not any(path.is_relative_to(root) for root in temp_roots):
-            raise SystemExit("拒绝使用非本机数据库（该脚本只用于本地 E2E）")
-    elif not _is_local_endpoint(value):
-        raise SystemExit("拒绝使用非本机数据库（该脚本只用于本地 E2E）")
+    database = parsed.database or ""
+    database_path = Path(database)
+    temp_roots = (Path("/tmp").resolve(), Path(tempfile.gettempdir()).resolve())
+    is_temporary_sqlite = (
+        parsed.get_backend_name() == "sqlite"
+        and database != ":memory:"
+        and database_path.is_absolute()
+        and any(database_path.resolve().is_relative_to(root) for root in temp_roots)
+    )
+    if not is_temporary_sqlite:
+        raise SystemExit("拒绝使用非临时 E2E 数据库（仅允许临时目录中的 SQLite 文件）")
     return value
 
 

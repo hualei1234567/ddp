@@ -25,9 +25,14 @@ def test_database_url_accepts_temporary_sqlite(monkeypatch: pytest.MonkeyPatch) 
 @pytest.mark.parametrize(
     "url",
     [
+        "sqlite+pysqlite:///:memory:",
         "sqlite+pysqlite:///relative.db",
         "sqlite+pysqlite:////workspace/shared.db",
         "postgresql+psycopg://ddp:ddp@example.com/ddp",
+        "postgresql+psycopg://ddp:ddp@localhost/ddp",
+        "postgresql+psycopg://ddp:ddp@127.0.0.1/ddp",
+        "postgresql+psycopg://ddp:ddp@[::1]/ddp",
+        "postgresql+psycopg://ddp:ddp@postgres/ddp",
     ],
 )
 def test_database_url_rejects_non_temporary_or_remote_database(
@@ -36,5 +41,5 @@ def test_database_url_rejects_non_temporary_or_remote_database(
 ) -> None:
     monkeypatch.setenv("DDP_DATABASE_URL", url)
 
-    with pytest.raises(SystemExit, match="拒绝使用非本机数据库"):
+    with pytest.raises(SystemExit, match="拒绝使用非临时 E2E 数据库"):
         seed_e2e._database_url()

@@ -158,6 +158,33 @@ echo "[4/6] 写入 E2E 种子（含真实 HTTP 状态推进）"
     "${PYTHON}" "${SCRIPT_DIR}/seed_e2e.py"
 )
 
+# 用仓库已固定版本的官方 MCAP SDK生成最小完整 fixture。它包含 header、
+# schema、channel、message、footer/summary 和首尾 magic，Worker 必须能够真实解析。
+MCAP_PATH="${TMP_DIR}/e2e-episode.mcap"
+env -i PATH="${PATH}" HOME="${HOME}" PYTHONPATH="${ROOT}/backend:${ROOT}/data-platform" \
+  "${PYTHON}" - "${MCAP_PATH}" <<'PY'
+import sys
+from pathlib import Path
+
+from mcap.writer import CompressionType, Writer
+
+path = Path(sys.argv[1])
+with path.open("wb") as stream:
+    writer = Writer(stream, compression=CompressionType.NONE)
+    writer.start(profile="robot/teleop", library="ddp-e2e")
+    schema_id = writer.register_schema(
+        name="ddp.e2e.Frame", encoding="jsonschema", data=b'{"type":"object"}'
+    )
+    channel_id = writer.register_channel(
+        topic="/e2e/frame", message_encoding="json", schema_id=schema_id
+    )
+    writer.add_message(
+        channel_id=channel_id, log_time=1_000_000_000,
+        publish_time=1_000_000_000, data=b'{"frame":1}'
+    )
+    writer.finish()
+PY
+
 # 完成上传只登记待校验资产；独立 outbox Worker 才会读取对象、校验签名并
 # 把会话推进到终态。与生产边界一致，不在 HTTP 线程处理文件。
 # 放在种子之后启动，避免 Worker 轮询与种子写入争用 SQLite 写锁。
@@ -206,4 +233,5 @@ DDP_E2E_REVIEWER_ID="99999999-9999-7999-8999-999999999999" \
 DDP_E2E_TASK_ID="22222222-2222-7222-8222-222222222222" \
 DDP_E2E_IMPORT_ID="44444444-4444-7444-8444-444444444444" \
 DDP_E2E_PROJECT_ID="11111111-1111-7111-8111-111111111111" \
+DDP_E2E_MCAP_PATH="${MCAP_PATH}" \
   ./node_modules/.bin/playwright test "$@"

@@ -35,9 +35,11 @@ DDP_E2E_MINIO_PORT=9000 npm run e2e:local
 ```bash
 DDP_E2E_BASE_URL=http://127.0.0.1:8088 \
 DDP_E2E_USER_ID=<项目成员 UUID> \
+DDP_E2E_REVIEWER_ID=<独立审核人 UUID> \
 DDP_E2E_PROJECT_ID=<项目 UUID> \
 DDP_E2E_TASK_ID=<采集任务 UUID> \
 DDP_E2E_IMPORT_ID=<导入任务 UUID> \
+DDP_E2E_MCAP_PATH=</absolute/path/to/valid.mcap> \
 npm run e2e
 ```
 
@@ -51,3 +53,9 @@ npm run e2e
 
 除 E2E 外，`*.dom.test.tsx` 走 jsdom + Testing Library（见 `vite.config.ts` 的
 `environmentMatchGlobs`）；其余测试仍是 node 环境，避免把整个套件拖进浏览器模拟。
+
+### MCAP fixture
+
+`e2e:local` 使用仓库固定的官方 `mcap` SDK 在临时目录生成结构完整的
+MCAP，并通过 `DDP_E2E_MCAP_PATH` 传给 Playwright。外接已有环境运行时也必须
+显式提供该变量；测试会等待独立 Worker 校验并断言“服务端已登记原始资产”。
