@@ -203,7 +203,7 @@ jobs:
             packages/contracts/openapi.yaml \
             --config packages/contracts/redocly.yaml
       - name: 安装 Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           # DDP-214：锁定版本，不用 "stable"（会随上游漂移，同一提交在不同
           # 时间跑可能行为不同）。go1.27.4 是最新稳定版，满足 oasdiff
