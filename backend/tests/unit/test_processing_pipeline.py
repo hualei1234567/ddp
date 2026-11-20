@@ -126,6 +126,7 @@ def _pipeline(
             metadata_extraction=SkippedStage("编排测试不装配元数据解析"),
             format_parsing=SkippedStage("编排测试不装配格式解析"),
             time_alignment=SkippedStage("编排测试不装配时间对齐"),
+            calibration_validation=SkippedStage("编排测试不装配标定校验"),
             quality_check=SkippedStage("编排测试不装配质量引擎"),
         ),
         session,
@@ -305,6 +306,7 @@ def test_cancel_during_stage_aborts_step_without_leaving_running(
             metadata_extraction=SkippedStage("编排测试不装配元数据解析"),
             format_parsing=SkippedStage("编排测试不装配格式解析"),
             time_alignment=SkippedStage("编排测试不装配时间对齐"),
+            calibration_validation=SkippedStage("编排测试不装配标定校验"),
             quality_check=SkippedStage("编排测试不装配质量引擎"),
         )
         handlers[ProcessingStage.FILE_VALIDATION] = _CancelDuringStage(use_cases)
@@ -327,12 +329,14 @@ def test_default_handlers_cover_every_stage(factory: sessionmaker[Session]) -> N
     metadata_extraction = SkippedStage("测试占位：元数据")
     format_parsing = SkippedStage("测试占位：格式解析")
     time_alignment = SkippedStage("测试占位：时间对齐")
+    calibration_validation = SkippedStage("测试占位：标定校验")
     quality_check = SkippedStage("测试占位：质量")
     handlers = default_handlers(
         FakeInspector(),
         metadata_extraction=metadata_extraction,
         format_parsing=format_parsing,
         time_alignment=time_alignment,
+        calibration_validation=calibration_validation,
         quality_check=quality_check,
     )
     assert set(handlers) == set(STAGE_SEQUENCE)
@@ -340,10 +344,10 @@ def test_default_handlers_cover_every_stage(factory: sessionmaker[Session]) -> N
     assert handlers[ProcessingStage.METADATA_EXTRACTION] is metadata_extraction
     assert handlers[ProcessingStage.FORMAT_PARSING] is format_parsing
     assert handlers[ProcessingStage.TIME_ALIGNMENT] is time_alignment
+    assert handlers[ProcessingStage.CALIBRATION_VALIDATION] is calibration_validation
     assert handlers[ProcessingStage.QUALITY_PRE_CHECK] is quality_check
-    # 剩余三个阶段必须是显式 SKIPPED，且原因写明依赖。
+    # 剩余两个阶段必须是显式 SKIPPED，且原因写明依赖。
     for stage in (
-        ProcessingStage.CALIBRATION_VALIDATION,
         ProcessingStage.EPISODE_SEGMENTATION,
         ProcessingStage.DATA_CLEANING,
     ):

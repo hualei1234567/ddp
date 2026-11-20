@@ -3,9 +3,8 @@
 覆盖：
 
 - 一个 run 走完八阶段：``FILE_VALIDATION`` / ``METADATA_EXTRACTION`` /
-  ``FORMAT_PARSING`` / ``TIME_ALIGNMENT`` / ``QUALITY_PRE_CHECK`` 按输入真实执行，
-  其余三个显式 SKIPPED
-  且原因可读；
+  ``FORMAT_PARSING`` / ``TIME_ALIGNMENT`` / ``CALIBRATION_VALIDATION`` /
+  ``QUALITY_PRE_CHECK`` 按输入真实执行，其余两个显式 SKIPPED 且原因可读；
 - 元数据产物与 Canonical 产物可回查（``output_refs`` 指向的对象真实存在）；
 - 未知格式显式失败（永久失败，不重试）；
 - 元数据解析失败可重试（存储故障）。
@@ -25,6 +24,7 @@ from uuid import UUID
 
 import app.infrastructure.db.models  # noqa: F401 - 注册全部 ORM 模型
 import pytest
+from app.application.processing.calibration_stage import CalibrationValidationHandler
 from app.application.processing.commands import NewProcessingRun
 from app.application.processing.metadata_stage import (
     FormatParsingHandler,
@@ -64,6 +64,7 @@ from app.infrastructure.repositories.annotation_schemas import (
     SqlAnnotationSchemaRepository,
 )
 from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRepository
+from app.infrastructure.repositories.calibration_records import SqlCalibrationRecordRepository
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
     SqlOutboxRepository,
@@ -174,6 +175,11 @@ def _pipeline(
         quality=EpisodeQualityChecks(_quality_use_cases(session)),
         uow=session,
     )
+    calibration_validation = CalibrationValidationHandler(
+        episodes=SqlEpisodeRepository(session),
+        episode_assets=SqlEpisodeRawAssetRepository(session),
+        calibrations=SqlCalibrationRecordRepository(session),
+    )
     return ProcessingPipeline(
         runs,
         SqlProcessingRunStepRepository(session),
@@ -188,6 +194,7 @@ def _pipeline(
             metadata_extraction=MetadataExtractionHandler(reader, artifacts),
             format_parsing=FormatParsingHandler(artifacts),
             time_alignment=TimeAlignmentHandler(reader, artifacts),
+            calibration_validation=calibration_validation,
             quality_check=quality_check,
         ),
         session,
@@ -261,9 +268,13 @@ def test_run_executes_metadata_and_format_stages_end_to_end(
         assert time_step.status == ProcessingStepStatus.SKIPPED.value
         assert "time-alignment manifest" in (time_step.log_summary or "")
 
-        # 三个未实现阶段显式 SKIPPED，且原因写明依赖。
+        # 本次运行未关联 Episode：标定校验真实执行但如实 SKIPPED。
+        calibration_step = steps[ProcessingStage.CALIBRATION_VALIDATION.value]
+        assert calibration_step.status == ProcessingStepStatus.SKIPPED.value
+        assert "未关联任何 Episode" in (calibration_step.log_summary or "")
+
+        # 两个未实现阶段显式 SKIPPED，且原因写明依赖。
         for stage, keyword in (
-            (ProcessingStage.CALIBRATION_VALIDATION, "标定"),
             (ProcessingStage.EPISODE_SEGMENTATION, "切片"),
             (ProcessingStage.DATA_CLEANING, "清洗"),
         ):
@@ -393,6 +404,7 @@ def test_metadata_stage_skipped_when_no_metadata_artifact_is_available(
             metadata_extraction=SkippedStage("测试：不产出元数据"),
             format_parsing=FormatParsingHandler(artifacts),
             time_alignment=SkippedStage("测试：不装配时间对齐"),
+            calibration_validation=SkippedStage("测试：不装配标定校验"),
             quality_check=SkippedStage("测试：不装配质量引擎"),
         )
         use_cases = _use_cases(session)

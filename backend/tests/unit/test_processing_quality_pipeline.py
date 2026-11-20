@@ -14,6 +14,7 @@ from uuid import UUID
 
 import app.infrastructure.db.models  # noqa: F401 - 注册全部 ORM 模型
 import pytest
+from app.application.processing.calibration_stage import CalibrationValidationHandler
 from app.application.processing.commands import NewProcessingRun
 from app.application.processing.pipeline import (
     PipelineOutcomeStatus,
@@ -46,6 +47,7 @@ from app.infrastructure.repositories.annotation_schemas import (
     SqlAnnotationSchemaRepository,
 )
 from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRepository
+from app.infrastructure.repositories.calibration_records import SqlCalibrationRecordRepository
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
     SqlOutboxRepository,
@@ -164,6 +166,11 @@ def _pipeline(
         quality=gateway or EpisodeQualityChecks(_quality_use_cases(session)),
         uow=session,
     )
+    calibration_validation = CalibrationValidationHandler(
+        episodes=SqlEpisodeRepository(session),
+        episode_assets=SqlEpisodeRawAssetRepository(session),
+        calibrations=SqlCalibrationRecordRepository(session),
+    )
     return ProcessingPipeline(
         runs,
         SqlProcessingRunStepRepository(session),
@@ -178,6 +185,7 @@ def _pipeline(
             metadata_extraction=SkippedStage("质量流水线测试不装配元数据解析"),
             format_parsing=SkippedStage("质量流水线测试不装配格式解析"),
             time_alignment=SkippedStage("质量流水线测试不装配时间对齐"),
+            calibration_validation=calibration_validation,
             quality_check=quality_check,
         ),
         session,
@@ -247,6 +255,11 @@ def test_pipeline_checks_every_episode_and_persists_rule_version(
             step for step in steps if step.stage == ProcessingStage.QUALITY_PRE_CHECK.value
         )
         assert quality_step.status == ProcessingStepStatus.SUCCEEDED.value
+        calibration_step = next(
+            step for step in steps if step.stage == ProcessingStage.CALIBRATION_VALIDATION.value
+        )
+        assert calibration_step.status == ProcessingStepStatus.SUCCEEDED.value
+        assert "无效 2" in (calibration_step.log_summary or "")
         summary = quality_step.log_summary or ""
         assert "检查 2 个 Episode" in summary
         versions = _RULE_VERSION_PATTERN.findall(summary)
@@ -357,8 +370,8 @@ def test_cross_project_episode_reference_is_not_read(factory: sessionmaker[Sessi
         count=1,
         record_labels=_RECORD_LABELS,
     )[0]
-    # 项目 A 的 Key 前缀 + 项目 B 的 Episode ID：解析阶段看似合法，但质量引擎
-    # 按 A 的作用域读取时必然查不到，不能跨项目读取。
+    # 项目 A 的 Key 前缀 + 项目 B 的 Episode ID：解析阶段看似合法，但标定阶段
+    # 按 A 的作用域读取时必然查不到，并在质量阶段之前 fail-closed。
     ref = _manifest(ids.project_a, foreign_episode)
     scope = ProjectScope(project_id=ids.project_a, actor_id=ids.editor_a)
     session, use_cases = _session_services(factory)
@@ -372,7 +385,7 @@ def test_cross_project_episode_reference_is_not_read(factory: sessionmaker[Sessi
         outcome = pipeline.execute(scope, run.run_id, now=NOW)
 
         assert outcome.status == PipelineOutcomeStatus.FAILED.value
-        assert outcome.error_code == "quality_episode_not_found"
+        assert outcome.error_code == "calibration_episode_not_found"
         assert outcome.retryable is False
         assert _quality_rows(factory, ids.project_a) == []
         assert _quality_rows(factory, ids.project_b) == []
