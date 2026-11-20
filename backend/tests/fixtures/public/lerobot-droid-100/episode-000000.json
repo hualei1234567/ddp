@@ -1,0 +1,51 @@
+{
+  "source": {
+    "dataset_id": "lerobot/droid_100",
+    "license": "MIT",
+    "info_url": "https://huggingface.co/datasets/lerobot/droid_100/resolve/main/meta/info.json",
+    "episodes_url": "https://huggingface.co/datasets/lerobot/droid_100/resolve/main/meta/episodes/chunk-000/file-000.parquet",
+    "info_sha256": "6718973f1f5a5ca76cfdfdddafc177da83636d1a38e50aedca37c090991d5d78",
+    "episodes_sha256": "a22cd872be7140555b7f8dfa6c34ff64642b0308d933c9aa658a89b69746fbbb",
+    "retrieved_at": "2026-11-20"
+  },
+  "info": {
+    "codebase_version": "v3.0",
+    "fps": 15,
+    "features": {
+      "observation.images.exterior_image_1_left": {
+        "dtype": "video",
+        "video_info": {"video.fps": 15.0, "video.codec": "av1"}
+      },
+      "observation.images.exterior_image_2_left": {
+        "dtype": "video",
+        "video_info": {"video.fps": 15.0, "video.codec": "av1"}
+      },
+      "observation.images.wrist_image_left": {
+        "dtype": "video",
+        "video_info": {"video.fps": 15.0, "video.codec": "av1"}
+      },
+      "timestamp": {"dtype": "float32", "fps": 15.0},
+      "episode_index": {"dtype": "int64", "fps": 15.0},
+      "frame_index": {"dtype": "int64", "fps": 15.0}
+    }
+  },
+  "episode": {
+    "episode_index": 0,
+    "dataset_from_index": 0,
+    "dataset_to_index": 166,
+    "videos/observation.images.exterior_image_1_left/chunk_index": 0,
+    "videos/observation.images.exterior_image_1_left/file_index": 0,
+    "videos/observation.images.exterior_image_1_left/from_timestamp": 0.0,
+    "videos/observation.images.exterior_image_1_left/to_timestamp": 11.066667,
+    "videos/observation.images.exterior_image_2_left/chunk_index": 0,
+    "videos/observation.images.exterior_image_2_left/file_index": 0,
+    "videos/observation.images.exterior_image_2_left/from_timestamp": 0.0,
+    "videos/observation.images.exterior_image_2_left/to_timestamp": 11.066667,
+    "videos/observation.images.wrist_image_left/chunk_index": 0,
+    "videos/observation.images.wrist_image_left/file_index": 0,
+    "videos/observation.images.wrist_image_left/from_timestamp": 0.0,
+    "videos/observation.images.wrist_image_left/to_timestamp": 11.066667,
+    "tasks": ["Put the marker in the pot"],
+    "length": 166
+  }
+}

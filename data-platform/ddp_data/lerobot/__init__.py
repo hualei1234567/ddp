@@ -1,9 +1,7 @@
 """LeRobot 格式解析。
 
-当前支持 Human-1M 的 ``preview/metadata.jsonl`` 平铺元数据
-（每个相机一个视频文件 + 一行元数据）。真正的 LeRobot v3.0 完整格式
-（Parquet 分片 + meta/info.json + episodes/*.parquet）留接口，等拿到
-有 parquet 的真实来源再实现——不凭 schema 文档硬造解析器。
+支持 Human-1M preview 元数据，以及由真实 LeRobot v3 ``info.json`` 和 episode
+元数据生成 DDP 多流时间 manifest。媒体数据本体仍由对象存储链路管理。
 """
 
 from ddp_data.lerobot.parser import (
@@ -12,10 +10,12 @@ from ddp_data.lerobot.parser import (
     LeRobotParseError,
     parse_preview_metadata,
 )
+from ddp_data.lerobot.v3_time_manifest import build_v3_time_alignment_manifest
 
 __all__ = [
     "CanonicalEpisode",
     "CanonicalMediaAsset",
     "LeRobotParseError",
+    "build_v3_time_alignment_manifest",
     "parse_preview_metadata",
 ]
