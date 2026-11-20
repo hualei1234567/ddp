@@ -122,9 +122,9 @@ def _parse_stream(
             stream.get("declared_frame_count"),
             f"{field}.declared_frame_count",
         ),
-        time_domain=stream.get("time_domain"),  # type: ignore[arg-type]
-        clock_source=stream.get("clock_source"),  # type: ignore[arg-type]
-        clock_id=stream.get("clock_id"),  # type: ignore[arg-type]
+        time_domain=_optional_text(stream.get("time_domain"), f"{field}.time_domain"),
+        clock_source=_optional_text(stream.get("clock_source"), f"{field}.clock_source"),
+        clock_id=_optional_text(stream.get("clock_id"), f"{field}.clock_id"),
         drift_ppm=_optional_finite_number(stream.get("drift_ppm"), f"{field}.drift_ppm"),
     )
     return stream_id, window, profile
@@ -181,7 +181,24 @@ def _frame_rate(value: object, field: str) -> FrameRate | None:
         return None
     rate = _mapping(value, field)
     _exact_keys(rate, required=_FRAME_RATE_KEYS, allowed=_FRAME_RATE_KEYS, field=field)
-    return FrameRate(num=rate["num"], den=rate["den"])  # type: ignore[arg-type]
+    return FrameRate(
+        num=_positive_int(rate["num"], f"{field}.num"),
+        den=_positive_int(rate["den"], f"{field}.den"),
+    )
+
+
+def _positive_int(value: object, field: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise SyncDriftError(f"{field} 必须是正整数")
+    return value
+
+
+def _optional_text(value: object, field: str) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise SyncDriftError(f"{field} 必须是字符串或 null")
+    return value
 
 
 def _optional_non_negative_int(value: object, field: str) -> int | None:
