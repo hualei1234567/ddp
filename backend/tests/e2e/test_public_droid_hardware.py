@@ -18,6 +18,11 @@ _FILES = {
         16 * 1024,
         "75992f70751c7c63a6ca8681f226d2d026593823811e7b780e059c34f39b452d",
     ),
+    "assembly": (
+        "docs/hardware-setup/assembly.md",
+        32 * 1024,
+        "8aeba6841a9f6ab45ea125b18e611404d8710513dd02a756eee82269fcfdf36c",
+    ),
     "robot_config": (
         "config/panda/franka_panda.yaml",
         4 * 1024,
@@ -43,6 +48,12 @@ def test_fixed_droid_hardware_sources_match_blueprint_facts() -> None:
     assert "2F-85 Robotiq Gripper" in shopping
     assert "| Zed 2 | 2 |" in shopping
     assert "| Zed Mini | 1 |" in shopping
+
+    assembly = documents["assembly"].decode("utf-8")
+    # 官方装配文档明确 ZED Mini 是手腕相机；结合清单中的 2× ZED 2，
+    # 三路公开流的型号映射不依赖推测。
+    assert "mount the zed mini camera on the Franka robot arm" in assembly
+    assert "Mounting Third-Person Cameras" in assembly
 
     config = documents["robot_config"].decode("utf-8")
     assert "num_dofs: 7" in config
