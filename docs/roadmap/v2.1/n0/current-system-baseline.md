@@ -146,7 +146,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 |---|---|
 | 真实机器人设备格式端到端 | **PARTIAL / HARDWARE BLOCKED**（N9-015 已用固定 DROID 官方 GitHub commit + Hugging Face DROID-100 revision 验证 Franka/Robotiq/ZED 公开硬件事实，经既有 Robot/Device/Sensor API 与 Repository 写入回读；真实设备在线握手、序列号/固件、标定与物理时钟仍因无硬件 BLOCKED） |
 | Episode 级自动质检 | **VERIFIED**（N4-005：`application/quality/episode_checks.py` + 处理流水线 QUALITY 阶段逐 Episode 质检） |
-| Processing Pipeline（八阶段） | **PARTIAL**（FILE_VALIDATION / METADATA_EXTRACTION / FORMAT_PARSING / TIME_ALIGNMENT / QUALITY_PRE_CHECK 真实执行；TIME_ALIGNMENT 输入 manifest 契约、LeRobot v3 producer 与 Pipeline handler 已 VERIFIED，固定 DROID-100 revision 的 100 个真实 episode 已完成三流解析与同步分析；handler 只消费唯一严格 manifest 并写版本化只读报告；CALIBRATION_VALIDATION / EPISODE_SEGMENTATION / DATA_CLEANING 继续显式 SKIPPED） |
+| Processing Pipeline（八阶段） | **PARTIAL**（FILE_VALIDATION / METADATA_EXTRACTION / FORMAT_PARSING / TIME_ALIGNMENT / CALIBRATION_VALIDATION / QUALITY_PRE_CHECK 六阶段真实执行；N4-013 标定阶段按运行关联 Episode 读取冻结快照，并与项目隔离的 Calibration Repository 比较业务版本、checksum、目标与 Profile schema；结果区分一致/无效/缺失，检查完成不代表当前 ACTIVE；EPISODE_SEGMENTATION / DATA_CLEANING 继续显式 SKIPPED） |
 | Canonical Frame / SensorStream / Action / Observation | **PARTIAL**（N3-001 `data-platform/ddp_data/canonical/` 只读契约；无生产者、无持久化，ADR-0035 有意不建表） |
 | Parquet / MCAP / ROS Bag / HDF5 字段级解析 | **PARTIAL**（Parquet footer 与 MCAP 元数据只读已实现；ROS Bag / HDF5 **MISSING**；均未接入导入链路） |
 | 六类质量报告 UI | **MISSING** |

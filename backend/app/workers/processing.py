@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ingestion.ports import ClaimedValidationEvent
 from app.application.observability_redaction import sanitize_log_message
+from app.application.processing.calibration_stage import CalibrationValidationHandler
 from app.application.processing.metadata_stage import (
     FormatParsingHandler,
     MetadataExtractionHandler,
@@ -71,6 +72,7 @@ from app.infrastructure.repositories.annotation_schemas import (
     SqlAnnotationSchemaRepository,
 )
 from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRepository
+from app.infrastructure.repositories.calibration_records import SqlCalibrationRecordRepository
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
     SqlOutboxRepository,
@@ -318,6 +320,11 @@ class ProcessingRunWorker:
             self._artifacts,
             max_artifact_bytes=self._settings.processing_metadata_max_artifact_bytes,
         )
+        calibration_validation = CalibrationValidationHandler(
+            episodes=SqlEpisodeRepository(session),
+            episode_assets=SqlEpisodeRawAssetRepository(session),
+            calibrations=SqlCalibrationRecordRepository(session),
+        )
         return ProcessingPipeline(
             runs,
             SqlProcessingRunStepRepository(session),
@@ -327,6 +334,7 @@ class ProcessingRunWorker:
                 metadata_extraction=metadata_extraction,
                 format_parsing=format_parsing,
                 time_alignment=time_alignment,
+                calibration_validation=calibration_validation,
                 quality_check=quality_check,
             ),
             session,
