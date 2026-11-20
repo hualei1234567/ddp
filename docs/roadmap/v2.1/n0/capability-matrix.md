@@ -109,10 +109,10 @@
 
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
-| DDP-V21-N9-01 | Robot Registry（model/serial/firmware/controller/sensor/profile） | **PARTIAL** | `domain/devices/models.py:72-91`；`robots.py`；`test_robots_api.py` | 无 controller 字段；传感器独立实体 |
+| DDP-V21-N9-01 | Robot Registry（model/serial/firmware/controller/sensor/profile） | **PARTIAL** | `domain/devices/models.py:72-91`；`robots.py`；`test_robots_api.py`；N9-015 固定 DROID 官方 GitHub commit 与 Hugging Face DROID-100 revision，严格映射 Franka Panda/FR3、Robotiq 2F-85、ZED 2 ×2、ZED Mini ×1，并经既有 Robot/Device/Sensor API 与 Repository 写入回读 | 无 controller 字段；公开来源无序列号/固件/硬件版本，保持 NULL；真实设备在线握手仍 BLOCKED |
 | DDP-V21-N9-02 | Capture Plan（task/scene/robot/sensor/operator/SOP/target/threshold） | **PARTIAL** | N9-003：迁移 0064 增加 `target_episode_count` 与 `quality_thresholds`（键复用数据集质量白名单）；Plan 仍是项目级可复用方案 | 无逐设备执行态；目标/阈值是计划值，不构成自动验收；前端未展示 |
 | DDP-V21-N9-03 | Capture Session（Plan→Session→Raw→Upload→Validation→Episode） | **PARTIAL** | N9-001/N9-008/N9-014：会话状态机、迁移 0066/0068、产物归属与只读分页；前端列表/详情/产物独立分页和动作条严格消费服务端 `allowed_actions`，pause/resume/abort 在服务边界强制非空 reason，覆盖七类页面状态 | 未与真实硬件联调（BLOCKED）；历史产物保持 NULL（不回填）；计划目标与实绩仍未自动对账 |
-| DDP-V21-N9-04 | 真实设备格式 Adapter（LeRobot/ROS Bag/MCAP/HDF5） | **PARTIAL** | 格式识别 + 魔数（`domain/ingestion/enums.py:85`）；LeRobot preview 解析 | 无字段级解析；无真实设备数据验证（BLOCKED：无硬件） |
+| DDP-V21-N9-04 | 真实设备格式 Adapter（LeRobot/ROS Bag/MCAP/HDF5） | **PARTIAL** | 格式识别 + 魔数（`domain/ingestion/enums.py:85`）；LeRobot preview；N9-015 以固定 GitHub/HF 来源完成真实公开硬件事实与三流 schema → DDP 设备档案闭环 | ROS Bag/HDF5 仍无字段级解析；公开数据不含现场序列号、固件、标定和物理时钟；真实硬件在环验证仍 BLOCKED |
 | DDP-V21-N9-05 | 项目隔离与多基地/供应商 | **VERIFIED** | `locations`、`suppliers`、项目成员、跨项目隔离测试；N9-005 新增 `GET /projects/{id}/sites/overview` 按场地只读聚合设备/传感器/采集任务 | 无跨基地调度与供应商计费；仅挂机器人的传感器不归因到场地 |
 
 ## 10. 状态变更规则
