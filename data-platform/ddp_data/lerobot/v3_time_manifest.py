@@ -34,13 +34,13 @@ def build_v3_time_alignment_manifest(
     info_map = _mapping(info, "info")
     episode_map = _mapping(episode, "episode")
     features = _mapping(info_map.get("features"), "info.features")
-    episode_index = _non_negative_int(episode_map.get("episode_index"), "episode.episode_index")
+    episode_index = _non_negative_int(
+        episode_map.get("episode_index"), "episode.episode_index"
+    )
     frame_count = _positive_int(episode_map.get("length"), "episode.length")
 
     video_keys = sorted(
-        key
-        for key, raw_feature in features.items()
-        if _is_video_feature(raw_feature)
+        key for key, raw_feature in features.items() if _is_video_feature(raw_feature)
     )
     if not video_keys:
         raise LeRobotParseError("info.features 未声明 video 流")
@@ -77,8 +77,12 @@ def _stream_document(
 ) -> dict[str, object]:
     _text(stream_id, "stream_id", max_length=_MAX_STREAM_ID_LENGTH)
     prefix = f"videos/{stream_id}"
-    start = _seconds_to_ns(episode.get(f"{prefix}/from_timestamp"), f"{prefix}/from_timestamp")
-    end = _seconds_to_ns(episode.get(f"{prefix}/to_timestamp"), f"{prefix}/to_timestamp")
+    start = _seconds_to_ns(
+        episode.get(f"{prefix}/from_timestamp"), f"{prefix}/from_timestamp"
+    )
+    end = _seconds_to_ns(
+        episode.get(f"{prefix}/to_timestamp"), f"{prefix}/to_timestamp"
+    )
     if start >= end:
         raise LeRobotParseError(f"{prefix} 的 from_timestamp 必须小于 to_timestamp")
 
@@ -117,7 +121,9 @@ def _seconds_to_ns(value: object, field: str) -> int:
     nanoseconds = seconds * _NS_PER_SECOND
     integral = nanoseconds.to_integral_value()
     difference = abs(nanoseconds - integral)
-    allow_float_noise = isinstance(value, float) and difference <= _FLOAT_NOISE_TOLERANCE_NS
+    allow_float_noise = (
+        isinstance(value, float) and difference <= _FLOAT_NOISE_TOLERANCE_NS
+    )
     if difference and not allow_float_noise:
         raise LeRobotParseError(f"{field} 不能精确表示为纳秒 timestamp")
     resolved = int(integral)

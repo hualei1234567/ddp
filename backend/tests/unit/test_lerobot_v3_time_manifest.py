@@ -12,10 +12,7 @@ from app.domain.episodes.sync_drift import SyncDriftStatus
 from app.domain.episodes.time_alignment_manifest import parse_time_alignment_manifest
 from ddp_data.lerobot import LeRobotParseError, build_v3_time_alignment_manifest
 
-_FIXTURE = (
-    Path(__file__).parents[1]
-    / "fixtures/public/lerobot-droid-100/episode-000000.json"
-)
+_FIXTURE = Path(__file__).parents[1] / "fixtures/public/lerobot-droid-100/episode-000000.json"
 
 
 def _source() -> dict[str, object]:
@@ -49,8 +46,7 @@ def test_real_droid_episode_builds_three_stream_aligned_manifest() -> None:
     assert report.status is SyncDriftStatus.ALIGNED
     assert report.clock_domain_status is ClockDomainStatus.UNKNOWN
     assert all(
-        detail.correction is None or detail.correction.applied is False
-        for detail in report.streams
+        detail.correction is None or detail.correction.applied is False for detail in report.streams
     )
 
 
