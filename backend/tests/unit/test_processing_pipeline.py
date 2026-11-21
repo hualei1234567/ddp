@@ -127,6 +127,7 @@ def _pipeline(
             format_parsing=SkippedStage("编排测试不装配格式解析"),
             time_alignment=SkippedStage("编排测试不装配时间对齐"),
             calibration_validation=SkippedStage("编排测试不装配标定校验"),
+            episode_segmentation=SkippedStage("编排测试不装配分段追溯"),
             quality_check=SkippedStage("编排测试不装配质量引擎"),
         ),
         session,
@@ -307,6 +308,7 @@ def test_cancel_during_stage_aborts_step_without_leaving_running(
             format_parsing=SkippedStage("编排测试不装配格式解析"),
             time_alignment=SkippedStage("编排测试不装配时间对齐"),
             calibration_validation=SkippedStage("编排测试不装配标定校验"),
+            episode_segmentation=SkippedStage("编排测试不装配分段追溯"),
             quality_check=SkippedStage("编排测试不装配质量引擎"),
         )
         handlers[ProcessingStage.FILE_VALIDATION] = _CancelDuringStage(use_cases)
@@ -330,6 +332,7 @@ def test_default_handlers_cover_every_stage(factory: sessionmaker[Session]) -> N
     format_parsing = SkippedStage("测试占位：格式解析")
     time_alignment = SkippedStage("测试占位：时间对齐")
     calibration_validation = SkippedStage("测试占位：标定校验")
+    episode_segmentation = SkippedStage("测试占位：分段追溯")
     quality_check = SkippedStage("测试占位：质量")
     handlers = default_handlers(
         FakeInspector(),
@@ -337,6 +340,7 @@ def test_default_handlers_cover_every_stage(factory: sessionmaker[Session]) -> N
         format_parsing=format_parsing,
         time_alignment=time_alignment,
         calibration_validation=calibration_validation,
+        episode_segmentation=episode_segmentation,
         quality_check=quality_check,
     )
     assert set(handlers) == set(STAGE_SEQUENCE)
@@ -345,13 +349,10 @@ def test_default_handlers_cover_every_stage(factory: sessionmaker[Session]) -> N
     assert handlers[ProcessingStage.FORMAT_PARSING] is format_parsing
     assert handlers[ProcessingStage.TIME_ALIGNMENT] is time_alignment
     assert handlers[ProcessingStage.CALIBRATION_VALIDATION] is calibration_validation
+    assert handlers[ProcessingStage.EPISODE_SEGMENTATION] is episode_segmentation
     assert handlers[ProcessingStage.QUALITY_PRE_CHECK] is quality_check
-    # 剩余两个阶段必须是显式 SKIPPED，且原因写明依赖。
-    for stage in (
-        ProcessingStage.EPISODE_SEGMENTATION,
-        ProcessingStage.DATA_CLEANING,
-    ):
-        assert isinstance(handlers[stage], SkippedStage)
+    # 剩余 DATA_CLEANING 阶段必须显式 SKIPPED，且原因写明依赖。
+    assert isinstance(handlers[ProcessingStage.DATA_CLEANING], SkippedStage)
 
 
 def test_terminal_run_is_noop(factory: sessionmaker[Session]) -> None:

@@ -4,7 +4,8 @@
 
 - 一个 run 走完八阶段：``FILE_VALIDATION`` / ``METADATA_EXTRACTION`` /
   ``FORMAT_PARSING`` / ``TIME_ALIGNMENT`` / ``CALIBRATION_VALIDATION`` /
-  ``QUALITY_PRE_CHECK`` 按输入真实执行，其余两个显式 SKIPPED 且原因可读；
+  ``EPISODE_SEGMENTATION`` / ``QUALITY_PRE_CHECK`` 按输入真实执行，DATA_CLEANING
+  显式 SKIPPED 且原因可读；
 - 元数据产物与 Canonical 产物可回查（``output_refs`` 指向的对象真实存在）；
 - 未知格式显式失败（永久失败，不重试）；
 - 元数据解析失败可重试（存储故障）。
@@ -36,6 +37,7 @@ from app.application.processing.pipeline import (
     default_handlers,
 )
 from app.application.processing.quality_stage import QualityCheckHandler
+from app.application.processing.segmentation_stage import EpisodeSegmentationHandler
 from app.application.processing.stages import SkippedStage
 from app.application.processing.time_alignment_stage import (
     TimeAlignmentHandler,
@@ -48,6 +50,7 @@ from app.application.processing.use_cases import (
 from app.application.quality.episode_checks import EpisodeQualityChecks
 from app.application.quality.registry import default_registry
 from app.application.quality.use_cases import QualityRunUseCases
+from app.domain.episodes.segmentation_rules import build_segmentation_rule_registry
 from app.domain.identity.models import ProjectScope
 from app.domain.processing.enums import (
     STAGE_SEQUENCE,
@@ -180,6 +183,11 @@ def _pipeline(
         episode_assets=SqlEpisodeRawAssetRepository(session),
         calibrations=SqlCalibrationRecordRepository(session),
     )
+    episode_segmentation = EpisodeSegmentationHandler(
+        episodes=SqlEpisodeRepository(session),
+        episode_assets=SqlEpisodeRawAssetRepository(session),
+        rules=build_segmentation_rule_registry(),
+    )
     return ProcessingPipeline(
         runs,
         SqlProcessingRunStepRepository(session),
@@ -195,6 +203,7 @@ def _pipeline(
             format_parsing=FormatParsingHandler(artifacts),
             time_alignment=TimeAlignmentHandler(reader, artifacts),
             calibration_validation=calibration_validation,
+            episode_segmentation=episode_segmentation,
             quality_check=quality_check,
         ),
         session,
@@ -273,14 +282,15 @@ def test_run_executes_metadata_and_format_stages_end_to_end(
         assert calibration_step.status == ProcessingStepStatus.SKIPPED.value
         assert "未关联任何 Episode" in (calibration_step.log_summary or "")
 
-        # 两个未实现阶段显式 SKIPPED，且原因写明依赖。
-        for stage, keyword in (
-            (ProcessingStage.EPISODE_SEGMENTATION, "切片"),
-            (ProcessingStage.DATA_CLEANING, "清洗"),
-        ):
-            step = steps[stage.value]
-            assert step.status == ProcessingStepStatus.SKIPPED.value
-            assert keyword in (step.log_summary or "")
+        # 本次运行未关联 Episode：分段追溯真实执行但如实 SKIPPED。
+        segmentation_step = steps[ProcessingStage.EPISODE_SEGMENTATION.value]
+        assert segmentation_step.status == ProcessingStepStatus.SKIPPED.value
+        assert "未关联任何 Episode" in (segmentation_step.log_summary or "")
+
+        # 唯一未实现的 DATA_CLEANING 阶段显式 SKIPPED。
+        cleaning_step = steps[ProcessingStage.DATA_CLEANING.value]
+        assert cleaning_step.status == ProcessingStepStatus.SKIPPED.value
+        assert "清洗" in (cleaning_step.log_summary or "")
 
         # 产物可回查：metadata 与 canonical 引用都指向真实存在的对象。
         current = use_cases.get(scope, run.run_id)
@@ -405,6 +415,7 @@ def test_metadata_stage_skipped_when_no_metadata_artifact_is_available(
             format_parsing=FormatParsingHandler(artifacts),
             time_alignment=SkippedStage("测试：不装配时间对齐"),
             calibration_validation=SkippedStage("测试：不装配标定校验"),
+            episode_segmentation=SkippedStage("测试：不装配分段追溯"),
             quality_check=SkippedStage("测试：不装配质量引擎"),
         )
         use_cases = _use_cases(session)
