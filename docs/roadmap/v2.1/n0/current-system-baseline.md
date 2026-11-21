@@ -149,7 +149,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 | Processing Pipeline（八阶段） | **PARTIAL**（FILE_VALIDATION / METADATA_EXTRACTION / FORMAT_PARSING / TIME_ALIGNMENT / CALIBRATION_VALIDATION / EPISODE_SEGMENTATION / QUALITY_PRE_CHECK 七阶段真实执行；N4-014 分段阶段只检查运行关联 Episode 的冻结规则版本能否由权威注册表追溯，手工/历史标签如实计为“不可重放”，不创建 Episode、不猜测规则参数、不冒充已重新切片；DATA_CLEANING 继续显式 SKIPPED） |
 | Canonical Frame / SensorStream / Action / Observation | **PARTIAL**（N3-001 `data-platform/ddp_data/canonical/` 只读契约；无生产者、无持久化，ADR-0035 有意不建表） |
 | Parquet / MCAP / ROS Bag / HDF5 字段级解析 | **PARTIAL**（Parquet footer 与 MCAP 元数据只读已实现；ROS Bag / HDF5 **MISSING**；均未接入导入链路） |
-| 六类质量报告 UI | **MISSING** |
+| 六类质量报告 UI | **VERIFIED**（N2-006/N4-008：导入审看页展示服务端六类摘要、整体结论与 findings 分页筛选，可自动发现最近运行、URL 深链回看并下钻媒体资产；INCOMPLETE / NOT_APPLICABLE 不误报通过；Loading/Empty/Error/Forbidden/Partial/Stale/Disabled 已覆盖；2026-11-21 专项 6 files / 74 tests passed） |
 | 性能基线（100/1K/10K episodes） | **PARTIAL**（本机只读场景已测，见 `docs/operations/性能基线-DDP-V21-N8-002-2026-11-19.md`；staging/生产 **BLOCKED**） |
 | staging / 生产发布 | **BLOCKED** |
 | 经营成本核算 | **MISSING**（需财务口径） |
