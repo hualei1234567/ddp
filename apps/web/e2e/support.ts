@@ -49,3 +49,20 @@ export function skipWithoutEnv(): void {
     );
   }
 }
+
+/**
+ * 在 `test.describe` 内调用：基础环境缺失或本组专属种子缺失时整组跳过。
+ *
+ * 与 `skipWithoutEnv` 的区别：本组除 `DDP_E2E_BASE_URL` 外还需要额外种子
+ * （例如标注控制台需要一条 `IN_PROGRESS` 的分配）。缺种子时**必须是
+ * skipped 而不是 failed**——本地栈模式按设计不提供这些种子，见
+ * `scripts/e2e/README.md`；提供环境却缺种子时，用例体里的 `read()` 仍会
+ * 直接失败，避免"以为跑了其实没跑"。
+ */
+export function skipWithoutSeed(names: readonly string[], reason: string): void {
+  skipWithoutEnv();
+  const missing = names.filter((name) => !read(name));
+  if (missing.length > 0) {
+    test.skip(true, `SKIPPED: ${reason}（缺少 ${missing.join(" / ")}）`);
+  }
+}

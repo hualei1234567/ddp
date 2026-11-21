@@ -49,7 +49,10 @@ from typing import Protocol
 from uuid import UUID, uuid4
 
 from app.application.audit import record_change
-from app.application.datasources.events import DATASOURCE_IMPORT_ACTION_EVENTS
+from app.application.datasources.events import (
+    DATASOURCE_IMPORT_ACTION_EVENTS,
+    DATASOURCE_IMPORT_SUCCEEDED_EVENT,
+)
 from app.application.datasources.observability import sanitize_log_message
 from app.application.datasources.ports import (
     AuditRepository,
@@ -599,26 +602,43 @@ class ImportRunner:
         if file_count is not None:
             updates["imported_file_count"] = file_count
         saved = self._imports.save(scope, replace(job, **updates), expected_version=job.row_version)
-        record_change(
-            self._audit,
-            self._outbox,
-            scope,
-            resource_type="data_source_import",
-            resource_id=saved.import_id,
-            action=action,
-            from_status=job.status.value,
-            to_status=saved.status.value,
-            reason=None,
-            request_id=current_trace_id(),
-            details={"row_count": row_count, "file_count": file_count},
-            event_type=DATASOURCE_IMPORT_ACTION_EVENTS[action],
-            event_payload={
-                "import_id": str(saved.import_id),
-                "data_source_id": str(saved.data_source_id),
-                "to_status": saved.status.value,
-            },
-            occurred_at=moment,
-        )
+        event_payload = {
+            "import_id": str(saved.import_id),
+            "data_source_id": str(saved.data_source_id),
+            "to_status": saved.status.value,
+        }
+        common: dict[str, object] = {
+            "resource_type": "data_source_import",
+            "resource_id": saved.import_id,
+            "action": action,
+            "from_status": job.status.value,
+            "to_status": saved.status.value,
+            "reason": None,
+            "request_id": current_trace_id(),
+            "details": {"row_count": row_count, "file_count": file_count},
+            "event_payload": event_payload,
+            "occurred_at": moment,
+        }
+        if action == "succeed":
+            # 投递类：Worker 消费后自动物化 Episode（V31-014）。显式
+            # ``dispatch=True`` 同时是 ``scripts/check_outbox_events.py``
+            # 静态识别的构造点，其余动作仍是留痕类。
+            record_change(
+                self._audit,
+                self._outbox,
+                scope,
+                **common,
+                event_type=DATASOURCE_IMPORT_SUCCEEDED_EVENT,
+                dispatch=True,
+            )
+        else:
+            record_change(
+                self._audit,
+                self._outbox,
+                scope,
+                **common,
+                event_type=DATASOURCE_IMPORT_ACTION_EVENTS[action],
+            )
         self._uow.commit()
         return saved
 

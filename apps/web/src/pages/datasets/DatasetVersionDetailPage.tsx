@@ -12,9 +12,11 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import ActionButtons from "../../components/dataset/ActionButtons";
+import SelectionPreviewDetails from "../../components/dataset/SelectionPreviewDetails";
+import VersionReportsPanel from "../../components/dataset/VersionReportsPanel";
 import {
   datasetVersionActionConfirm,
   datasetVersionActionPayload,
@@ -26,6 +28,8 @@ import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useCursorPage } from "../../hooks/useCursorPage";
+import { buildAnnotationSubmissionPath } from "../../services/annotationUrl";
+import { buildEpisodeDetailPath } from "../../services/collectionUrl";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
@@ -41,8 +45,6 @@ import { resolvePagePhase } from "../../services/pagePhase";
 import type {
   DatasetItem,
   DatasetVersion,
-  LeakageReport,
-  QualityReport,
   SelectionPreview,
 } from "../../types/dataset";
 
@@ -68,7 +70,24 @@ function ItemsTable({
     (item) => item.dataset_item_id,
   );
   const columns: ColumnsType<DatasetItem> = [
-    { title: "Episode", dataIndex: "episode_id", ellipsis: true },
+    {
+      title: "Episode",
+      dataIndex: "episode_id",
+      ellipsis: true,
+      // 条目回链：从数据集条目直接回到 Episode 与其标注提交，便于核对
+      // "这条训练数据是怎么来的"。两处都复用既有详情页，不新造页面。
+      render: (value: string) => (
+        <Link to={buildEpisodeDetailPath(projectId, value)}>{value}</Link>
+      ),
+    },
+    {
+      title: "标注提交",
+      dataIndex: "annotation_submission_id",
+      ellipsis: true,
+      render: (value: string) => (
+        <Link to={buildAnnotationSubmissionPath(projectId, value)}>{value}</Link>
+      ),
+    },
     {
       title: "划分",
       dataIndex: "split",
@@ -185,15 +204,7 @@ function PreviewPanel({
               划分预览：{preview.split_preview_status}
             </Tag>
           </Space>
-          {Object.keys(preview.exclusion_summary).length > 0 ? (
-            <Space wrap>
-              {Object.entries(preview.exclusion_summary).map(([key, value]) => (
-                <Tag key={key} color="default">
-                  {key}：{value}
-                </Tag>
-              ))}
-            </Space>
-          ) : null}
+          <SelectionPreviewDetails projectId={projectId} preview={preview} />
           {preview.warnings.map((warning) => (
             <Alert key={warning} type="warning" showIcon message={warning} />
           ))}
@@ -205,96 +216,6 @@ function PreviewPanel({
           </Typography.Text>
         </Space>
       ) : null}
-    </Space>
-  );
-}
-
-function ReportsPanel({
-  projectId,
-  datasetId,
-  versionId,
-}: {
-  projectId: string;
-  datasetId: string;
-  versionId: string;
-}) {
-  const loadQuality = useCallback(
-    (signal: AbortSignal) =>
-      datasetApi.getQualityReport(projectId, datasetId, versionId, { signal }),
-    [projectId, datasetId, versionId],
-  );
-  const loadLeakage = useCallback(
-    (signal: AbortSignal) =>
-      datasetApi.getLeakageReport(projectId, datasetId, versionId, { signal }),
-    [projectId, datasetId, versionId],
-  );
-  const quality = useRequest<QualityReport>(loadQuality);
-  const leakage = useRequest<LeakageReport>(loadLeakage);
-
-  return (
-    <Space direction="vertical" size={16} style={{ width: "100%" }}>
-      <Space direction="vertical" size={8} style={{ width: "100%" }}>
-        <Typography.Text strong>质量报告</Typography.Text>
-        {quality.loading ? <PageState compact variant="loading" description="加载中" /> : null}
-        {quality.error ? (
-          <Typography.Text type="secondary">
-            未生成或加载失败：{quality.error.message}
-          </Typography.Text>
-        ) : null}
-        {quality.data ? (
-          <>
-            <CountsGrid
-              items={[
-                { label: "状态", value: quality.data.status },
-                { label: "候选", value: quality.data.candidate_count },
-                { label: "入选", value: quality.data.selected_count },
-                { label: "排除", value: quality.data.excluded_count },
-              ]}
-            />
-            {quality.data.blocking_issues.map((issue) => (
-              <Alert key={issue} type="error" showIcon message={issue} />
-            ))}
-            <Typography.Text type="secondary">
-              报告 Hash：{quality.data.report_sha256}
-            </Typography.Text>
-          </>
-        ) : null}
-      </Space>
-      <Space direction="vertical" size={8} style={{ width: "100%" }}>
-        <Typography.Text strong>泄漏报告</Typography.Text>
-        {leakage.loading ? <PageState compact variant="loading" description="加载中" /> : null}
-        {leakage.error ? (
-          <Typography.Text type="secondary">
-            未生成或加载失败：{leakage.error.message}
-          </Typography.Text>
-        ) : null}
-        {leakage.data ? (
-          <>
-            <Space wrap>
-              <StatusTag value={leakage.data.leakage_status} presentation={presentLeakageStatus} />
-              <Tag>规则数：{leakage.data.checked_rule_count}</Tag>
-              <Tag color={leakage.data.hard_violation_count > 0 ? "red" : "default"}>
-                硬违规：{leakage.data.hard_violation_count}
-              </Tag>
-              <Tag color={leakage.data.soft_violation_count > 0 ? "orange" : "default"}>
-                软违规：{leakage.data.soft_violation_count}
-              </Tag>
-            </Space>
-            {leakage.data.violations.map((violation, index) => (
-              <Alert
-                key={`${violation.rule}:${index}`}
-                type={violation.severity === "HARD" ? "error" : "warning"}
-                showIcon
-                message={`${violation.rule}（${violation.severity}）`}
-                description={violation.detail ?? violation.item_id ?? undefined}
-              />
-            ))}
-            <Typography.Text type="secondary">
-              报告 Hash：{leakage.data.report_sha256}
-            </Typography.Text>
-          </>
-        ) : null}
-      </Space>
     </Space>
   );
 }
@@ -437,7 +358,7 @@ function VersionDetailContent({
               key: "reports",
               label: "质量与泄漏报告",
               children: (
-                <ReportsPanel
+                <VersionReportsPanel
                   key={`reports:${refreshToken}`}
                   projectId={projectId}
                   datasetId={datasetId}

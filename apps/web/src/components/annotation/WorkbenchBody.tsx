@@ -38,6 +38,8 @@ import AnnotationStatusTag from "./AnnotationStatusTag";
 import EpisodeEditor from "./EpisodeEditor";
 
 export interface WorkbenchBodyProps {
+  /** 服务端强制项目隔离；所有子请求都必须显式带上项目上下文。 */
+  projectId: string;
   data: WorkbenchData | null;
   phase: PagePhase;
   error: ApiError | null;
@@ -212,6 +214,7 @@ function Summary({ data }: { data: WorkbenchData }) {
  * 表单值、完整性校验与提交由页面/Hook 统一编排。
  */
 export default function WorkbenchBody({
+  projectId,
   data,
   phase,
   error,
@@ -445,6 +448,7 @@ export default function WorkbenchBody({
                 {data.episodes.map((episode) => (
                   <EpisodeEditor
                     key={episode.episode_id}
+                    projectId={projectId}
                     episode={episode}
                     definitions={definitions}
                     values={values[episode.episode_id] ?? {}}

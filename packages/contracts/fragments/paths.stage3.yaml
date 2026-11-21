@@ -1006,3 +1006,28 @@ annotationOverdueSummary:
       "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
       "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationWorkload:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: getAnnotationWorkload
+    tags: [annotation-assignments]
+    summary: 人员周期工作量聚合（只读）
+    description: |
+      按 `(project_id, assignee_id, [period_start, period_end))` 聚合分配事件。
+      周期必填：没有时间窗口，「工作量」没有定义。`capacity_minutes` 来自部署
+      配置；未配置时为 `null`，`utilization_ratio` 同为 `null`，不得把缺失
+      当成 0。`missing_semantics` 显式区分 `N/A / UNKNOWN / STALE / PARTIAL`。
+      本操作只读：不写库、不推进版本、不改派或关闭任务。
+    parameters:
+      - {name: assignee_id, in: query, required: true, schema: {type: string, format: uuid}}
+      - {name: period_start, in: query, required: true, schema: {type: string, format: date-time}}
+      - {name: period_end, in: query, required: true, schema: {type: string, format: date-time}}
+    responses:
+      "200": {description: 工作量聚合, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationWorkload"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}

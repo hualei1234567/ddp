@@ -87,10 +87,44 @@ describe("Episode 解析", () => {
     expect(episode.quality_status).toBe("NOT_CHECKED");
   });
 
-  it("标定快照为空时拒绝，避免无标定 Episode 进入 UI", () => {
+  it("真后端以整数返回纳秒时间戳时无损转成字符串", () => {
+    // 契约（schemas.stage2.yaml）把 start_time_ns 声明为 integer，真后端按
+    // 数字返回；前端统一用字符串承载，避免大数在后续运算里丢精度。
+    const episode = parseEpisode({
+      ...episodeFixture,
+      start_time_ns: 69000000000,
+      end_time_ns: 81000000000,
+      duration_ns: 12000000000,
+    });
+    expect(episode.start_time_ns).toBe("69000000000");
+    expect(episode.end_time_ns).toBe("81000000000");
+    expect(episode.duration_ns).toBe("12000000000");
+  });
+
+  it("纳秒整数超出 JS 安全范围时报错，不静默接受已丢失的精度", () => {
+    // epoch 纳秒约 1.7e18，超过 Number.MAX_SAFE_INTEGER（9.0e15）。
     expect(() =>
-      parseEpisode({ ...episodeFixture, calibration_snapshot: [] }),
+      parseEpisode({
+        ...episodeFixture,
+        start_time_ns: 1730000000000000000,
+      }),
+    ).toThrow(/安全整数范围/);
+  });
+
+  it("纳秒字段既非字符串也非整数时拒绝解析", () => {
+    expect(() =>
+      parseEpisode({ ...episodeFixture, duration_ns: null }),
     ).toThrow(ContractValidationError);
+  });
+
+  it("标定快照为空时仍解析：真实 Episode 可以没有标定", () => {
+    // 后端 `EpisodeOut.calibration_snapshot` 默认空数组；要求非空会让公开
+    // 数据集与未标定 Episode 在标注台全部不可用（见 collectionParsers.ts）。
+    const episode = parseEpisode({
+      ...episodeFixture,
+      calibration_snapshot: [],
+    });
+    expect(episode.calibration_snapshot).toEqual([]);
   });
 
   it("解析 Episode 分页", () => {

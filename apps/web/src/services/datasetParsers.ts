@@ -7,6 +7,7 @@ import type {
   DatasetManifest,
   DatasetVersion,
   DedupPolicy,
+  ExclusionSummaryEntry,
   ExportArtifactManifest,
   ExportArtifactDownload,
   ExportJob,
@@ -16,6 +17,7 @@ import type {
   QualityPolicy,
   QualityReport,
   SelectionPreview,
+  SelectionPreviewItem,
   SplitPolicy,
   TrainingDelivery,
   TrainingRequest,
@@ -189,6 +191,12 @@ export function parseDatasetItem(value: unknown): DatasetItem {
     episode_id: readUuid(record, "episode_id", "datasetItem"),
     episode_version: readInteger(record, "episode_version", "datasetItem"),
     episode_lineage_id: readUuid(record, "episode_lineage_id", "datasetItem"),
+    annotation_submission_id: readUuid(
+      record,
+      "annotation_submission_id",
+      "datasetItem",
+    ),
+    annotation_version: readPositiveInteger(record, "annotation_version", "datasetItem"),
     split: readString(record, "split", "datasetItem"),
     sample_role: readString(record, "sample_role", "datasetItem"),
     weight: readNumber(record, "weight", "datasetItem"),
@@ -284,6 +292,41 @@ export function parseQualityPolicyPage(value: unknown) {
   return parseCursorPage(value, "qualityPolicies", parseQualityPolicy);
 }
 
+/**
+ * 排除摘要按契约是数组（`{code,count,sample_episode_ids}`），不是
+ * `code → 数量` 的映射。曾经按映射解析，真实后端返回数组时整页预览报错。
+ */
+function readExclusionSummary(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): ExclusionSummaryEntry[] {
+  return readRecordArray(record, key, path).map((entry, index) => ({
+    code: readString(entry, "code", `${path}.${key}[${index}]`),
+    count: readInteger(entry, "count", `${path}.${key}[${index}]`),
+    sample_episode_ids: entry.sample_episode_ids
+      ? readStringArray(entry, "sample_episode_ids", `${path}.${key}[${index}]`)
+      : [],
+  }));
+}
+
+function readPreviewItems(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): SelectionPreviewItem[] {
+  return readRecordArray(record, key, path).map((item, index) => {
+    const itemPath = `${path}.${key}[${index}]`;
+    return {
+      episode_id: readString(item, "episode_id", itemPath),
+      episode_version: readPositiveInteger(item, "episode_version", itemPath),
+      split: readOptionalString(item, "split", itemPath),
+      decision: readString(item, "decision", itemPath),
+      reason: readOptionalString(item, "reason", itemPath),
+    };
+  });
+}
+
 export function parseSelectionPreview(value: unknown): SelectionPreview {
   const record = asRecord(value, "selectionPreview");
   return {
@@ -293,7 +336,12 @@ export function parseSelectionPreview(value: unknown): SelectionPreview {
     duplicated_count: readInteger(record, "duplicated_count", "selectionPreview"),
     split_counts: readCountMap(record, "split_counts", "selectionPreview"),
     split_preview_status: readString(record, "split_preview_status", "selectionPreview"),
-    exclusion_summary: readCountMap(record, "exclusion_summary", "selectionPreview"),
+    exclusion_summary: readExclusionSummary(
+      record,
+      "exclusion_summary",
+      "selectionPreview",
+    ),
+    items_sample: readPreviewItems(record, "items_sample", "selectionPreview"),
     warnings: record.warnings ? readStringArray(record, "warnings", "selectionPreview") : [],
     blocking_issues: record.blocking_issues
       ? readStringArray(record, "blocking_issues", "selectionPreview")

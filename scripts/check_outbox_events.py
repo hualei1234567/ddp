@@ -40,6 +40,8 @@ DISPATCH_EVENTS = {
     "ingestion.raw_asset.validation_requested": "backend/app/workers/outbox.py",
     "dataset.export.requested": "backend/app/workers/exports.py",
     "datasource.import_requested": "backend/app/workers/datasources.py",
+    # V31-014：导入成功后由同一 Worker 自动物化 Episode。
+    "datasource.import.succeed": "backend/app/workers/datasources.py",
     "ingestion.job.created": "backend/app/workers/ingestion_jobs.py",
     # N4-002：创建处理运行即投递，由八阶段编排 Worker 消费。
     "processing.run.requested": "backend/app/workers/processing.py",
@@ -68,6 +70,47 @@ def _string_constants(tree: ast.Module) -> dict[str, str]:
             if _EVENT_PATTERN.match(value.value):
                 constants[target.id] = value.value
     return constants
+
+
+_MODULE_CONSTANTS: dict[Path, dict[str, str]] = {}
+
+
+def _module_constants(path: Path) -> dict[str, str]:
+    cached = _MODULE_CONSTANTS.get(path)
+    if cached is None:
+        cached = _string_constants(ast.parse(path.read_text(encoding="utf-8")))
+        _MODULE_CONSTANTS[path] = cached
+    return cached
+
+
+def _resolve_module(module: str) -> Path | None:
+    """``app.application.datasources.events`` -> ``backend/app/.../events.py``。"""
+    if not module.startswith("app."):
+        return None
+    candidate = BACKEND / (module.replace(".", "/") + ".py")
+    return candidate if candidate.is_file() else None
+
+
+def _imported_string_constants(path: Path, tree: ast.Module) -> dict[str, str]:
+    """把 ``from app.x import NAME`` 引入的字面量常量也纳入解析。
+
+    投递类事件名按规范只在 ``application/<domain>/events.py`` 定义一次，消费
+    方通过常量引用；若校验器只认本模块的模块级常量，就会把"符合单一权威"
+    的写法误判成"找不到 dispatch=True 的写入点"。
+    """
+    found: dict[str, str] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ImportFrom) or node.module is None:
+            continue
+        source = _resolve_module(node.module)
+        if source is None:
+            continue
+        source_constants = _module_constants(source)
+        for alias in node.names:
+            value = source_constants.get(alias.name)
+            if value is not None:
+                found[alias.asname or alias.name] = value
+    return found
 
 
 def _collect(path: Path) -> tuple[set[str], set[str]]:
@@ -333,7 +376,7 @@ def main() -> int:
         if "tests" in path.parts:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        constants = _string_constants(tree)
+        constants = {**_string_constants(tree), **_imported_string_constants(path, tree)}
         declared_dispatch |= _dispatch_events(tree, constants)
     for event_type in sorted(declared_dispatch - set(DISPATCH_EVENTS)):
         problems.append(

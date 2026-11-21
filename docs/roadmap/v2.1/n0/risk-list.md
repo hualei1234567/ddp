@@ -69,7 +69,7 @@
 | RK-46 | 血缘图查询有节点/边上限与深度上限，超大链路会被截断 | `application/episodes/graph.py`；N5-003 报告 | 低 | P2 | 截断标志与游标显式返回；超大图需专用离线分析而非在线 API | 后端 |
 | RK-47 | 性能基线验证时把**本地开发库** `ddp` 从 0061 升级到 0065（非 staging/生产，未删数据） | N8-002 报告 §5；`alembic upgrade head` | 低 | P2 | 该操作只发生在本机开发库；staging/生产迁移仍需单独批准；后续脚本禁止对非白名单库执行 DDL | 后端 / 运维 |
 | RK-48 | MCAP 依赖引入 `lz4`/`zstandard` 两个 C 扩展传递依赖，且仅有合成样例、无真实机器人 MCAP 验证 | `data-platform/requirements.txt`；N3-005 报告 | 中 | P2 | 版本精确固定并纳入 `pip-audit`；接入导入链路前须用真实样例回归；CI 镜像需验证 wheel 可用 | 后端 / 运维 |
-| RK-49 | CaptureSession 尚未与 Episode/RawAsset 建立归属链路，只能回答「执行发生过」；迁移 0066 回滚会丢失会话记录 | `docs/adr/0037-capture-session-entity.md`；N9-001 报告 | 中 | P2 | 后续任务补会话→素材/Episode 关联；回滚前导出会话；不得把会话当作产出证明 | 后端 / 产品 |
+| RK-49 | ~~CaptureSession 尚未与 Episode/RawAsset 建立归属链路~~ **素材侧已闭环（迁移 0068 / V31-001）**：上传会话可携带 `capture_session_id`，完成上传时写入 RawAsset，会话产物列表可回读；Episode 侧仍无直接会话外键，只能经 `RAW_ASSET --SEGMENTED_INTO--> EPISODE` 与资产归属间接追溯 | `docs/adr/0037-capture-session-entity.md`；迁移 0068；`test_capture_session_upload_linkage.py` | 中 | P2 | 只把会话当「执行来源」，不当产出证明；历史 NULL 行见 RK-56；Episode 级直接归属如需强约束另立任务 | 后端 / 产品 |
 | RK-50 | MOCK/DRY_RUN 只覆盖提交链路，未接外部回调与轮询；存量 MOCK+SUCCEEDED 记录保持可读（未强制标注）；前端已把 `DRY_RUN` 展示为「演练（未训练）」（橙色），不再与成功混淆 | 迁移 0067；N7-007 报告 | 中 | P1 | 下游登记入口已拒绝非真实引用（`model_training_source_invalid`）；前端已区分演练态；存量数据按可读不篡改原则处理；回调/轮询接入前不得宣称「已同步」 | 后端 / 前端 |
 | RK-51 | `ExternalStatus` 声明为开放枚举后，客户端必须容忍未知状态值（本次新增 `DRY_RUN`） | `packages/contracts/fragments/schemas.stage4.yaml`；兼容性脚本 | 低 | P2 | 前端按普通字符串展示并有默认样式；新增状态必须同步下游判定，禁止按「未知即成功」处理 | 前端 / 后端 |
 | RK-52 | 数据源远端校验仍只支持 Hugging Face；真实联网验收默认跳过，结构化原因依赖外部异常分类 | `infrastructure/huggingface/remote_verifier.py`；N2-003 报告 | 中 | P2 | 外部异常类型不稳定时统一收敛为 `UNAVAILABLE`，不伪造具体原因；接入 URL/S3 时复用同一有界调用与脱敏 | 后端 |

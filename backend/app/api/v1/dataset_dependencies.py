@@ -18,6 +18,7 @@ from app.api.deps import (
     request_id as request_id,
 )
 from app.api.v1.preconditions import require_expected_version
+from app.api.v1.upload_dependencies import ObjectStorageDep
 from app.application.datasets.datasets import DatasetUseCases as DatasetCrudUseCases
 from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.policies import DatasetPolicyUseCases
@@ -71,7 +72,10 @@ class DatasetServices:
     lineage: LineageService
 
 
-def get_dataset_use_cases(session: DbSession) -> DatasetServices:
+def get_dataset_use_cases(
+    session: DbSession,
+    storage: ObjectStorageDep,
+) -> DatasetServices:
     datasets_repo = SqlDatasetRepository(session)
     versions_repo = SqlDatasetVersionRepository(session)
     items_repo = SqlDatasetItemRepository(session)
@@ -110,6 +114,7 @@ def get_dataset_use_cases(session: DbSession) -> DatasetServices:
             outbox,
             idempotency,
             session,
+            storage=storage,
             lineage=lineage,
             quality_gate=quality_gate,
         ),

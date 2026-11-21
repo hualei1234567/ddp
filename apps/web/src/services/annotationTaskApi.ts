@@ -13,9 +13,11 @@ import type {
   DoubleAnnotationConsistency,
 } from "../types/annotation";
 import type { AnnotationOverdueSummary } from "../types/annotationOverdue";
+import type { AnnotationWorkload } from "../types/annotationWorkload";
 import type { WithAllowedActions } from "./annotationAllowedActions";
 import type { ApiClient } from "./api";
 import { parseAnnotationOverdueSummary } from "./annotationOverdueParsers";
+import { parseAnnotationWorkload } from "./annotationWorkloadParsers";
 import { parseDoubleAnnotationConsistency } from "./annotationRecordParsers";
 import {
   parseAnnotationAssignment,
@@ -73,6 +75,13 @@ export interface AnnotationAssignmentActionOptions
   approvedItemCount?: number;
 }
 
+/** 周期工作量查询参数；周期两端必填（半开区间 `[start, end)`）。 */
+export interface WorkloadQuery {
+  assigneeId: string;
+  periodStart: string;
+  periodEnd: string;
+}
+
 export interface AnnotationTaskApi {
   listTasks: (
     projectId: string,
@@ -98,6 +107,17 @@ export interface AnnotationTaskApi {
     projectId: string,
     options?: DetailRequestOptions,
   ) => Promise<AnnotationOverdueSummary>;
+  /**
+   * 指派人在给定周期内的工作量聚合（只读）。
+   *
+   * 周期必填：没有时间窗口"工作量"没有定义。容量由服务端部署配置决定，
+   * 未配置时响应里的 `capacity_minutes` / `utilization_ratio` 为 `null`。
+   */
+  getWorkload: (
+    projectId: string,
+    query: WorkloadQuery,
+    options?: DetailRequestOptions,
+  ) => Promise<AnnotationWorkload>;
   actOnTask: (
     projectId: string,
     taskId: string,
@@ -230,6 +250,31 @@ export function createAnnotationTaskApi(client: ApiClient): AnnotationTaskApi {
             );
           }
           return summary;
+        },
+      });
+    },
+
+    async getWorkload(projectId, query, options) {
+      return client.get(projectPath(projectId, "/annotation-workload"), {
+        signal: options?.signal,
+        query: {
+          assignee_id: requireIdentifier(query.assigneeId, "assignee_id"),
+          period_start: query.periodStart,
+          period_end: query.periodEnd,
+        },
+        validate: (value) => {
+          const workload = parseAnnotationWorkload(value);
+          if (workload.project_id !== projectId) {
+            throw new ContractValidationError(
+              "工作量汇总.project_id 与请求路径不一致",
+            );
+          }
+          if (workload.user_id !== query.assigneeId) {
+            throw new ContractValidationError(
+              "工作量汇总.user_id 与请求的 assignee_id 不一致",
+            );
+          }
+          return workload;
         },
       });
     },

@@ -10,6 +10,7 @@ import type { WorkbenchBodyProps } from "./WorkbenchBody";
 import WorkbenchBody from "./WorkbenchBody";
 
 const baseProps: WorkbenchBodyProps = {
+  projectId: workbenchDataFixture.task.project_id,
   data: workbenchDataFixture,
   phase: "ready",
   error: null,

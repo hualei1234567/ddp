@@ -5,6 +5,7 @@ import type {
   TimeRangeInput,
 } from "../../services/annotationValidation";
 import type { LabelDefinition } from "../../types/annotation";
+import ObjectTrackEditor from "./ObjectTrackEditor";
 
 interface SchemaFieldProps {
   definition: LabelDefinition;
@@ -12,6 +13,8 @@ interface SchemaFieldProps {
   disabled: boolean;
   error?: string;
   onChange: (value: DraftFieldValue) => void;
+  /** 时间轴当前选区，供 OBJECT_TRACK 新增行直接带入。 */
+  pendingRangeNs?: { startNs: number; endNs: number } | null;
 }
 
 function enumValues(definition: LabelDefinition): string[] {
@@ -52,6 +55,7 @@ export default function SchemaField({
   disabled,
   error,
   onChange,
+  pendingRangeNs,
 }: SchemaFieldProps) {
   const requiredMark = definition.required ? (
     <Typography.Text type="danger"> *</Typography.Text>
@@ -169,6 +173,17 @@ export default function SchemaField({
       break;
     }
     case "OBJECT_TRACK":
+      // OBJECT_TRACK 是高频结构化输入：用行编辑器，而不是手写 JSON。
+      control = (
+        <ObjectTrackEditor
+          definition={definition}
+          value={typeof value === "string" ? value : ""}
+          disabled={disabled}
+          pendingRangeNs={pendingRangeNs}
+          onChange={(text) => onChange(text)}
+        />
+      );
+      break;
     case "JSON":
       control = (
         <Input.TextArea
@@ -176,11 +191,7 @@ export default function SchemaField({
           value={typeof value === "string" ? value : ""}
           disabled={disabled}
           rows={4}
-          placeholder={
-            definition.label_type === "OBJECT_TRACK"
-              ? '[{"start_time_ns": 0, "end_time_ns": 1000}]'
-              : "请输入合法 JSON"
-          }
+          placeholder="请输入合法 JSON"
           onChange={(event) => onChange(event.target.value)}
         />
       );

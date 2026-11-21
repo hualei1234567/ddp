@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from uuid import UUID, uuid4
 
 import pytest
@@ -20,6 +21,7 @@ from tests.api.dataset_support import (
     url,
     version_payload,
 )
+from tests.api.export_support import FakeExportStorage
 
 SHA_E = "sha256:" + "e" * 64
 
@@ -32,9 +34,12 @@ def _setup(factory: sessionmaker[Session], ids: ApiIds, *, count: int = 10, **se
         count=count,
         **seed,
     )
-    editor = make_client(factory, ids.editor_a)
-    owner = make_client(factory, ids.owner_a)
-    viewer = make_client(factory, ids.viewer_a)
+    # 冻结会把 Manifest 写入对象存储并回读校验；内存替身让断言可以复核
+    # 「库里 Hash == 存储里的字节」而不依赖本机 MinIO。
+    storage = FakeExportStorage()
+    editor = make_client(factory, ids.editor_a, object_storage=storage)
+    owner = make_client(factory, ids.owner_a, object_storage=storage)
+    viewer = make_client(factory, ids.viewer_a, object_storage=storage)
     dataset = create_dataset(editor, ids.project_a, ids.owner_a, f"ds-{uuid4().hex[:8]}")
     policies = create_policies(editor, ids.project_a, dataset["dataset_id"])
     created = editor.post(
@@ -44,6 +49,7 @@ def _setup(factory: sessionmaker[Session], ids: ApiIds, *, count: int = 10, **se
     assert created.status_code == 201, created.text
     return {
         "episodes": episodes,
+        "storage": storage,
         "editor": editor,
         "owner": owner,
         "viewer": viewer,
@@ -162,6 +168,12 @@ def test_dataset_version_lifecycle_reports_and_freeze(
     assert frozen_body["frozen_by"] == str(ids.owner_a)
     assert frozen_body["freeze_approval_id"]
     assert frozen_body["manifest_sha256"] == ready["manifest_sha256"]
+    # V31-040：冻结时 Manifest 必须真正落到对象存储，且可独立复算校验。
+    manifest_key = frozen_body["manifest_key"]
+    assert manifest_key == ready["manifest_key"]
+    assert manifest_key == (f"datasets/{project_id}/{dataset_id}/{version_id}/manifest.json")
+    stored = ctx["storage"].objects[manifest_key]
+    assert hashlib.sha256(stored).hexdigest() == frozen_body["manifest_sha256"][7:]
 
     dataset = editor.get(url(project_id, f"/datasets/{dataset_id}"))
     assert dataset.status_code == 200
@@ -191,6 +203,83 @@ def test_dataset_version_lifecycle_reports_and_freeze(
             session.execute(delete(DatasetModel).where(DatasetModel.id == UUID(dataset_id)))
             session.flush()
         session.rollback()
+
+
+def test_dataset_preview_after_validate_not_blocked_by_stored_manifest(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """版本转 READY 后预览仍是预演：不能被已存 Manifest Hash 判成漂移。"""
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    editor = ctx["editor"]
+    project_id = ids.project_a
+    dataset_id = ctx["dataset"]["dataset_id"]
+    version_id = ctx["version"]["dataset_version_id"]
+
+    built = editor.post(
+        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/actions/build"),
+        headers={"If-Match": '"1"'},
+        json={"reason": None},
+    )
+    assert built.status_code == 200, built.text
+    validated = editor.post(
+        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/actions/validate"),
+        headers={"If-Match": f'"{built.json()["version"]}"'},
+        json={},
+    )
+    assert validated.status_code == 200, validated.text
+    assert validated.json()["status"] == "READY"
+    assert validated.json()["manifest_sha256"] is not None
+
+    preview = editor.post(
+        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/selection-preview"),
+        json=_preview_body(ctx["policies"]),
+    )
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["selected_count"] == 10
+    # 逐条样例带决策与原因，前端据此做排除原因跳转。
+    assert {item["decision"] for item in body["items_sample"]} == {"SELECTED"}
+
+
+def test_dataset_freeze_rejects_manifest_readback_mismatch(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """回读字节与声明 Hash 不一致时必须拒绝冻结，不能只信写成功。"""
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    editor = ctx["editor"]
+    project_id = ids.project_a
+    dataset_id = ctx["dataset"]["dataset_id"]
+    version_id = ctx["version"]["dataset_version_id"]
+
+    built = editor.post(
+        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/actions/build"),
+        headers={"If-Match": '"1"'},
+        json={"reason": None},
+    )
+    assert built.status_code == 200, built.text
+    validated = editor.post(
+        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/actions/validate"),
+        headers={"If-Match": f'"{built.json()["version"]}"'},
+        json={},
+    )
+    assert validated.status_code == 200, validated.text
+    ready = validated.json()
+    assert ready["status"] == "READY"
+
+    ctx["storage"].corrupt_next_read()
+    frozen = ctx["owner"].post(
+        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/actions/freeze"),
+        headers={"If-Match": f'"{ready["version"]}"'},
+        json={"reason": "QA 独立核验通过", "payload": {"qa_verified": True}},
+    )
+    assert frozen.status_code == 409, frozen.text
+    assert frozen.json()["error"]["code"] == "dataset_manifest_mismatch"
+
+    current = editor.get(url(project_id, f"/datasets/{dataset_id}/versions/{version_id}"))
+    assert current.status_code == 200
+    assert current.json()["status"] == "READY"
 
 
 def test_dataset_permissions_idempotency_cross_project_and_if_match(

@@ -13,6 +13,8 @@ import {
   PartitionOutlined,
   ReadOutlined,
   RobotOutlined,
+  ScheduleOutlined,
+  SolutionOutlined,
   SafetyCertificateOutlined,
   TagsOutlined,
   TeamOutlined,
@@ -125,12 +127,30 @@ export const navSections: NavSection[] = [
         available: true,
       },
       {
+        // 个人队列排在标注中心之前：标注人每天打开的是「我的任务」，
+        // 任务/批次管理是管理员视角。
+        path: "/annotation/my-tasks",
+        label: "我的任务",
+        description: "按当前认证身份聚合各项目的待办分配，可直接领取进入工作台。",
+        icon: createElement(ScheduleOutlined),
+        available: true,
+      },
+      {
         path: "/annotation-tasks",
         label: "标注中心",
         description: "管理标注 Schema、样本集、任务、工作台、复核与仲裁。",
         icon: createElement(TagsOutlined),
         available: true,
         aliases: ["/annotation"],
+      },
+      {
+        // 工作量按人员与周期聚合分配事件；容量来自服务端部署配置，
+        // 未配置时如实显示「未配置」而不是 0。
+        path: "/annotation/workload",
+        label: "工作量运营",
+        description: "按项目成员与周期查看分配、领取、提交、通过、返工与工时。",
+        icon: createElement(SolutionOutlined),
+        available: true,
       },
       {
         // 后端 N4 质量能力（黄金集 / 抽检 / IAA / 提交质量检查）早已就绪，

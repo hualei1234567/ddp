@@ -1,4 +1,9 @@
-"""Episode/血缘/RawAsset 下载 API 依赖装配。"""
+"""Episode/血缘/RawAsset 下载 API 依赖装配。
+
+``build_episode_service`` / ``build_readiness_service`` 的实现在组合根
+``app.composition.episodes``（Worker 也要用，不能让 Worker 反向依赖 API 层）；
+本模块继续 re-export，既有调用点无需改 import。
+"""
 
 from __future__ import annotations
 
@@ -11,22 +16,20 @@ from app.api.deps import DbSession
 from app.api.v1.upload_dependencies import ObjectStorageDep, SettingsDep
 from app.application.episodes import EpisodeService, LineageGraphService, LineageService
 from app.application.episodes.provenance import SourceProvenanceResolver
-from app.application.episodes.readiness import EpisodeReadinessService
 from app.application.ingestion import RawAssetDownloadUseCases, RawAssetUseCases
+from app.composition.episodes import (
+    build_episode_service as build_episode_service,
+)
+from app.composition.episodes import (
+    build_readiness_service as build_readiness_service,
+)
 from app.infrastructure.repositories.collection_audit import (
     SqlAuditRepository,
-    SqlIdempotencyRepository,
     SqlOutboxRepository,
 )
 from app.infrastructure.repositories.datasource_provenance import (
     SqlSourceProvenanceRepository,
 )
-from app.infrastructure.repositories.episodes import (
-    SqlEpisodeRawAssetRepository,
-    SqlEpisodeRepository,
-)
-from app.infrastructure.repositories.ingestion_directory import SqlCollectionDirectory
-from app.infrastructure.repositories.ingestion_jobs import SqlIngestionJobRepository
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 
@@ -38,50 +41,6 @@ class EpisodeUseCases:
     lineage_graph: LineageGraphService
     assets: RawAssetUseCases
     downloads: RawAssetDownloadUseCases
-
-
-def build_episode_service(
-    session: DbSession,
-    *,
-    with_idempotency: bool = True,
-) -> EpisodeService:
-    """装配 ``EpisodeService``；需要它的模块统一调用本函数。
-
-    ``episode_dependencies`` 与数据源导入的物化端点都要这个服务。抽出来
-    只装配一次，避免两处接线各自演化——那会变成"同一服务两套依赖"。
-    """
-    return EpisodeService(
-        SqlEpisodeRepository(session),
-        SqlEpisodeRawAssetRepository(session),
-        SqlLineageRepository(session),
-        SqlRawAssetRepository(session),
-        SqlIngestionJobRepository(session),
-        SqlAuditRepository(session),
-        SqlOutboxRepository(session),
-        session,
-        idempotency=SqlIdempotencyRepository(session) if with_idempotency else None,
-        # 同一个 readiness 服务同时供 HTTP ready 的门禁使用：两条路径共用
-        # 一套判定，避免"自动就绪被拒、手工 ready 放行"的口径分裂。
-        readiness=build_readiness_service(session),
-        # 会话归属校验复用上传链路同一个存在性适配器，不另写一份项目过滤。
-        capture_sessions=SqlCollectionDirectory(session),
-    )
-
-
-def build_readiness_service(session: DbSession) -> EpisodeReadinessService:
-    """装配自动就绪用例；与 ``build_episode_service`` 同理只接线一次。
-
-    导入物化端点要用它（创建 Episode 后立刻尝试就绪），因此和
-    ``build_episode_service`` 一样按请求装配，不跨请求共享。
-    """
-    return EpisodeReadinessService(
-        SqlEpisodeRepository(session),
-        SqlEpisodeRawAssetRepository(session),
-        SqlRawAssetRepository(session),
-        SqlAuditRepository(session),
-        SqlOutboxRepository(session),
-        session,
-    )
 
 
 def build_lineage_service(session: DbSession) -> LineageService:

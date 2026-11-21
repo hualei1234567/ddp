@@ -140,9 +140,13 @@ def build_frozen_version(
         ]
         seed_kwargs["raw_hashes"] = [_digest(f"{seed_salt}-raw-{index:02d}") for index in range(10)]
     episodes = seed_dataset_episodes(factory, ids.project_a, ids.editor_a, count=10, **seed_kwargs)
-    editor = make_client(factory, ids.editor_a)
-    owner = make_client(factory, ids.owner_a)
-    viewer = make_client(factory, ids.viewer_a)
+    # 冻结要写 Manifest 并回读校验（V31-040），必须注入对象存储替身：不注入时
+    # 走真实 S3MultipartStorage，本地靠碰巧运行中的 MinIO、CI 直接 503。
+    # 同一替身给三个客户端，冻结与后续读取看到的是同一个对象。
+    storage = FakeExportStorage()
+    editor = make_client(factory, ids.editor_a, object_storage=storage)
+    owner = make_client(factory, ids.owner_a, object_storage=storage)
+    viewer = make_client(factory, ids.viewer_a, object_storage=storage)
     dataset_code = code or f"export-ds-{uuid4().hex[:8]}"
     dataset = create_dataset(editor, ids.project_a, ids.owner_a, dataset_code)
     policies = create_policies(editor, ids.project_a, dataset["dataset_id"])
@@ -187,6 +191,7 @@ def build_frozen_version(
         "editor": editor,
         "owner": owner,
         "viewer": viewer,
+        "storage": storage,
     }
 
 

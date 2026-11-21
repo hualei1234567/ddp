@@ -16,7 +16,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.identity.models import ProjectRole
+from app.application.projects.ports import UserProfile
+from app.domain.identity.models import PlatformRole, Principal, ProjectRole
 from app.domain.identity.projects import (
     PROJECT_CODE_MAX_LENGTH,
     PROJECT_DESCRIPTION_MAX_LENGTH,
@@ -134,7 +135,27 @@ class ProjectMemberOut(BaseModel):
         )
 
 
+class CurrentUserOut(BaseModel):
+    """``GET /api/v1/me``：已认证主体自述。
+
+    只有服务端认证结果能填充这些字段；请求头或查询参数里的 user_id 一律忽略。
+    """
+
+    user_id: UUID
+    display_name: str
+    platform_role: PlatformRole
+
+    @classmethod
+    def from_domain(cls, profile: UserProfile, principal: Principal) -> CurrentUserOut:
+        return cls(
+            user_id=profile.user_id,
+            display_name=profile.display_name,
+            platform_role=principal.platform_role,
+        )
+
+
 __all__ = [
+    "CurrentUserOut",
     "ProjectCreate",
     "ProjectMemberAdd",
     "ProjectMemberOut",

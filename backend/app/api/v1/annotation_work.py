@@ -34,6 +34,7 @@ from app.api.v1.annotation_work_models import (
     AnnotationTaskCreate,
     AnnotationTaskOut,
     AnnotationTaskPatch,
+    AnnotationWorkloadOut,
 )
 from app.api.v1.schemas import PageOut
 from app.application.annotation.commands import (
@@ -347,6 +348,34 @@ def list_assignments(
         items=[AnnotationAssignmentOut.from_domain(item) for item in page.items],
         next_cursor=page.next_cursor,
     )
+
+
+@router.get(
+    "/annotation-workload",
+    response_model=AnnotationWorkloadOut,
+)
+def get_workload(
+    scope: ReadScope,
+    use_cases: AnnotationUseCasesDep,
+    settings: Annotated[Settings, Depends(get_settings)],
+    assignee_id: UUID,
+    period_start: datetime,
+    period_end: datetime,
+) -> AnnotationWorkloadOut:
+    """周期工作量聚合（只读）。
+
+    周期必填：没有时间窗口，「工作量」没有定义，默认成"全部时间"会让
+    「本期超容量」变成「历史总量超容量」。容量来自部署配置；未配置时
+    如实返回 `capacity_minutes=null`，不把缺失当成 0。
+    """
+    summary = use_cases.assignments.workload(
+        scope,
+        assignee_id=assignee_id,
+        period_start=period_start,
+        period_end=period_end,
+        capacity=CapacityPolicy(capacity_minutes=settings.annotation_capacity_minutes),
+    )
+    return AnnotationWorkloadOut.from_domain(summary)
 
 
 @router.post(

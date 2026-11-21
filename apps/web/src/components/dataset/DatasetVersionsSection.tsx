@@ -13,7 +13,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { useCursorPage } from "../../hooks/useCursorPage";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
@@ -23,7 +23,11 @@ import {
   presentValidityStatus,
   presentVersionStatus,
 } from "../../services/datasetPresentation";
-import { datasetVersionPath } from "../../services/datasetUrl";
+import {
+  buildEpisodeSelectionFilters,
+  datasetVersionPath,
+  readEpisodeIdsParam,
+} from "../../services/datasetUrl";
 import type { DatasetVersion } from "../../types/dataset";
 import ApiErrorState from "../ui/ApiErrorState";
 import StatusTag from "./StatusTag";
@@ -66,6 +70,25 @@ export default function DatasetVersionsSection({
   const [form] = Form.useForm<VersionCreateInput>();
   const [messageApi, holder] = message.useMessage();
   const [policyReloadToken, setPolicyReloadToken] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // 审核通过后的「加入数据集」会带 `episode_ids` 跳到这里：打开新建版本，
+  // 把 Episode 过滤条件预填进 selection_filters，然后消费掉参数，
+  // 避免关闭弹窗或刷新后反复自动打开。
+  useEffect(() => {
+    const episodeIds = readEpisodeIdsParam(searchParams);
+    if (episodeIds.length === 0) {
+      return;
+    }
+    form.setFieldValue(
+      "selection_filters",
+      JSON.stringify(buildEpisodeSelectionFilters(episodeIds)),
+    );
+    setOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("episode_ids");
+    setSearchParams(next, { replace: true });
+  }, [form, searchParams, setSearchParams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,6 +289,9 @@ export default function DatasetVersionsSection({
       <Modal
         title="新建数据集版本"
         open={open}
+        // 表单实例在组件挂载时就绑定（含 URL 预填场景），避免
+        // "useForm is not connected" 警告与首帧 setFieldValue 落空。
+        forceRender
         okText="创建"
         cancelText="取消"
         width={620}

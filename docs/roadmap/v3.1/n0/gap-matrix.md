@@ -93,7 +93,7 @@
 | ProcessingRun 输入是裸对象 key，非 RawAsset ID | `MISSING` | `backend/app/api/v1/processing_routes.py:60-84` |
 | Processing 未复用 AdapterRegistry，另有一套格式 switch | `MISSING` | `metadata_stage.py:490-502` vs `data-platform/ddp_data/adapters/registry.py` |
 | Pipeline `EPISODE_SEGMENTATION` 只核验已有 Episode，不切片不创建 | `PARTIAL` | `backend/app/application/processing/segmentation_stage.py:39-79` |
-| 导入成功不自动触发 Episode 物化，需手工 API | `MISSING` | `backend/app/api/v1/datasource_routes.py:570-596` |
+| 导入成功不自动触发 Episode 物化，需手工 API | 已消除（V31-014，2026-11-22） | `backend/app/workers/datasources.py` 消费投递类 `datasource.import.succeed`（测试：`tests/workers/test_datasource_episode_worker.py`）；手工端点保留为重放入口 |
 | SensorStream / Observation / Action 无真实生产 | `MISSING` | 仅有类型定义与构造测试 |
 | Canonical 实体无数据库持久化 | `MISSING` | 无对应表 / repository |
 | 产物仅 `output_refs` JSON 数组，无 Artifact 目录 | `MISSING` | `backend/app/infrastructure/db/models/processing.py:58-65` |

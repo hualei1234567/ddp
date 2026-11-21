@@ -19,6 +19,7 @@ import {
   type ArbitrationTrigger,
 } from "../../types/annotation";
 import { formatDateTime } from "../../services/format";
+import type { ProjectMember } from "../../types/project";
 import IdentifierValue from "../ui/IdentifierValue";
 import PageState from "../ui/PageState";
 import AnnotationStatusTag from "./AnnotationStatusTag";
@@ -33,6 +34,10 @@ export interface ArbitrationCreateFormInput {
 interface ArbitrationPanelProps {
   submission: AnnotationSubmission;
   arbitrations: AnnotationArbitration[];
+  /** 项目成员：仲裁人候选；为空时退回手填 UUID。 */
+  candidates: readonly ProjectMember[];
+  /** 成员列表读取失败：界面说明为什么只能手填。 */
+  candidatesDegraded?: boolean;
   busyAction: string | null;
   onCreate: (input: ArbitrationCreateFormInput) => void;
   onAction: (
@@ -200,22 +205,27 @@ function ArbitrationCard({
 export default function ArbitrationPanel({
   submission,
   arbitrations,
+  candidates,
+  candidatesDegraded = false,
   busyAction,
   onCreate,
   onAction,
   onVote,
 }: ArbitrationPanelProps) {
-  const [arbiterText, setArbiterText] = useState("");
+  const [arbiterIds, setArbiterIds] = useState<string[]>([]);
   const [quorum, setQuorum] = useState(1);
   const [trigger, setTrigger] = useState<ArbitrationTrigger>(
     "REVIEWER_DISAGREEMENT",
   );
   const [localError, setLocalError] = useState<string | null>(null);
   const canCreate = submission.status === "ESCALATED";
-  const arbiterIds = arbiterText
-    .split(",")
-    .map((item) => item.trim())
-    .filter((item) => item !== "");
+  // 标注人不能仲裁自己的提交；其余利益冲突（首轮复核人、成员资格）由服务端判定。
+  const arbiterOptions = candidates
+    .filter((member) => member.user_id !== submission.annotator_id)
+    .map((member) => ({
+      value: member.user_id,
+      label: `${member.display_name}（${member.user_id}）`,
+    }));
 
   const handleCreate = () => {
     if (arbiterIds.length === 0) {
@@ -249,12 +259,16 @@ export default function ArbitrationPanel({
           ) : null}
           {localError ? <Alert type="error" showIcon message={localError} /> : null}
           <Space wrap>
-            <Input
-              placeholder="仲裁人 UUID，多个用英文逗号分隔"
-              value={arbiterText}
-              onChange={(event) => setArbiterText(event.target.value)}
-              style={{ width: 380 }}
+            <Select
+              mode="tags"
+              aria-label="仲裁人"
+              placeholder="选择或输入仲裁人 UUID"
+              value={arbiterIds}
+              options={arbiterOptions}
+              onChange={setArbiterIds}
+              style={{ minWidth: 380 }}
               disabled={!canCreate || busyAction !== null}
+              tokenSeparators={[","]}
             />
             <InputNumber
               min={1}
@@ -284,7 +298,9 @@ export default function ArbitrationPanel({
             </Button>
           </Space>
           <Typography.Text type="secondary">
-            仲裁人不得是标注人或首轮复核人；服务端会校验成员资格与利益冲突。
+            {candidatesDegraded
+              ? "成员列表读取失败，只能手填仲裁人 UUID。"
+              : "仲裁人不得是标注人或首轮复核人；服务端会校验成员资格与利益冲突。"}
           </Typography.Text>
         </Space>
       </Card>

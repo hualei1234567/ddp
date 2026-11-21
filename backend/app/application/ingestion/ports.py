@@ -101,6 +101,19 @@ class RawAssetRepository(Protocol):
         size_bytes: int,
     ) -> RawAsset | None: ...
 
+    def attach_capture_session_if_absent(
+        self,
+        scope: ProjectScope,
+        asset_id: UUID,
+        *,
+        capture_session_id: UUID,
+    ) -> bool:
+        """内容去重命中时，为尚无会话归属的资产补写本次 ``capture_session_id``。
+
+        已有时保留最早归属（不覆盖），返回是否真的写入。
+        """
+        ...
+
     def list(
         self,
         scope: ProjectScope,

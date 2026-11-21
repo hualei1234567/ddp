@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from app.domain.datasets.canonical import sha256_value
+from app.domain.datasets.canonical import canonical_json_bytes, sha256_value
 from app.domain.datasets.errors import ManifestMismatchError
 from app.domain.datasets.models import DatasetItem, DatasetVersion
 from app.domain.datasets.validation import (
@@ -151,6 +151,14 @@ class Manifest:
             "canonicalization": "RFC8785_JCS",
         }
 
+    def canonical_bytes(self) -> bytes:
+        """被哈希的 RFC 8785 规范化字节；落对象存储与回读校验共用这一份实现。
+
+        `manifest_sha256` 是对这批字节的 SHA256，因此对象存储里的文件可以
+        用同一条规则独立复算校验，不需要理解字段语义。
+        """
+        return canonical_json_bytes(self._hash_payload())
+
     def to_payload(
         self, *, inline: bool = True, download_url: str | None = None
     ) -> dict[str, object]:
@@ -171,6 +179,7 @@ def build_manifest(
     annotation_submission_refs_digest: str | None,
     annotation_schema_versions: tuple[dict[str, object], ...],
     created_at: datetime,
+    verify_stored_hash: bool = True,
 ) -> Manifest:
     if version.quality_report_sha256 is None or version.leakage_report_sha256 is None:
         raise ManifestMismatchError("生成 Manifest 需要质量报告与泄漏报告 Hash")
@@ -205,7 +214,14 @@ def build_manifest(
         annotation_submission_refs_digest=annotation_submission_refs_digest,
         manifest_key=version.manifest_key,
     )
-    if version.manifest_sha256 is not None and manifest.manifest_sha256 != version.manifest_sha256:
+    if (
+        verify_stored_hash
+        and version.manifest_sha256 is not None
+        and manifest.manifest_sha256 != version.manifest_sha256
+    ):
+        # 构建 / 校验路径用它防止"重建结果与冻结记录不一致"被静默放过；
+        # 预演（selection-preview）传 False，因为它本来就要算出一份不同的
+        # 假设结果，不落库也不改版本。
         raise ManifestMismatchError("Manifest Hash 与版本冻结记录不一致")
     return manifest
 

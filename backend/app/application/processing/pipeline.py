@@ -6,10 +6,14 @@
   本模块只决定"调哪个动作"，不复制迁移表；
 - 每个阶段写一条 ``processing_run_steps``（``RUNNING`` → 终态），失败原因
   与跳过原因都落库，不依赖日志文件才能解释结果；
-- 只有 ``FILE_VALIDATION`` 与 ``QUALITY_PRE_CHECK`` 有真实落点：前者检查
-  ``input_refs`` 指向的对象存在；后者对本次运行关联的 Episode 逐个执行统一
-  质量引擎（N4-005）。其余六个阶段仍**没有真实实现**，一律显式 ``SKIPPED``
-  并写明原因：把未实现写成 ``SUCCEEDED`` 会让"处理完成"变成谎话。
+- 阶段能力由 :mod:`app.application.processing.stages` 组装：``FILE_VALIDATION``
+  （输入对象存在性）、``METADATA_EXTRACTION`` / ``FORMAT_PARSING``（对象元数据
+  抽取与解析，N3）、``TIME_ALIGNMENT``、``CALIBRATION_VALIDATION``、
+  ``EPISODE_SEGMENTATION``（N4）与 ``QUALITY_PRE_CHECK``（N4-005 统一质量引擎）
+  均有真实落点；各处理器由组合根显式注入，不静默回退。
+- ``DATA_CLEANING`` 仍**没有真实实现**，一律显式 ``SKIPPED`` 并写明原因
+  （见 ``STAGE_SKIP_REASONS``）：把未实现写成 ``SUCCEEDED`` 会让"处理完成"
+  变成谎话。
 
 **重试与恢复**
 

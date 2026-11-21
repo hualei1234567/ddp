@@ -130,7 +130,10 @@ jobs:
       - name: 运行本地全栈 E2E
         working-directory: apps/web
         run: DDP_E2E_MINIO_PORT=9000 npm run e2e:local
-      - name: 校验结构化 E2E 结果（4 passed / 0 skipped）
+      # 本地栈模式覆盖上传 / 动作栏 / 复核 4 条用例；标注控制台按设计需要
+      # 真实栈种子（含 Manifest 的 Episode + IN_PROGRESS 分配，见
+      # scripts/e2e/README.md），缺种子时必须是**具名 skipped**而不是静默通过。
+      - name: 校验结构化 E2E 结果（4 passed / 1 skipped：标注控制台待真实栈种子）
         if: always()
         working-directory: apps/web
         run: |
@@ -139,10 +142,21 @@ jobs:
 
           const report = JSON.parse(readFileSync("e2e-results.json", "utf8"));
           const statuses = [];
+          const skippedSpecs = [];
           const visit = (suite) => {
             for (const spec of suite.specs ?? []) {
+              const specStatuses = [];
               for (const test of spec.tests ?? []) {
-                for (const result of test.results ?? []) statuses.push(result.status);
+                for (const result of test.results ?? []) {
+                  specStatuses.push(result.status);
+                  statuses.push(result.status);
+                }
+              }
+              if (
+                specStatuses.length > 0 &&
+                specStatuses.every((status) => status === "skipped")
+              ) {
+                skippedSpecs.push(spec.file ?? spec.title ?? "unknown");
               }
             }
             for (const child of suite.suites ?? []) visit(child);
@@ -151,8 +165,14 @@ jobs:
 
           const passed = statuses.filter((status) => status === "passed").length;
           const skipped = statuses.filter((status) => status === "skipped").length;
-          console.log(JSON.stringify({ passed, skipped, statuses }));
-          if (passed !== 4 || skipped !== 0 || statuses.length !== 4) process.exit(1);
+          console.log(JSON.stringify({ passed, skipped, statuses, skippedSpecs }));
+          if (passed !== 4 || skipped !== 1 || statuses.length !== 5) process.exit(1);
+          // 唯一允许 skipped 的必须是标注控制台（真实栈种子在 CI 本地栈模式不可得）。
+          // 其他任何用例静默跳过都会让本步骤失败，避免"没跑"被算作"通过"。
+          if (!skippedSpecs.some((file) => String(file).endsWith("annotation-console.spec.ts"))) {
+            console.error("skipped 的用例不是预期的标注控制台：", skippedSpecs);
+            process.exit(1);
+          }
           NODE
       - name: 停止 E2E MinIO
         if: always()

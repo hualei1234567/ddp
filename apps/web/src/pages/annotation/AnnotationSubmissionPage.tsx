@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import AiSuggestionPanel from "../../components/annotation/AiSuggestionPanel";
+import DatasetLinkagePanel from "../../components/annotation/DatasetLinkagePanel";
 import AnnotationFeedbackAlert from "../../components/annotation/AnnotationFeedbackAlert";
 import ArbitrationPanel, {
   type ArbitrationCreateFormInput,
@@ -11,11 +12,13 @@ import ArbitrationPanel, {
 import ReviewPanel, {
   type ReviewActionPayload,
 } from "../../components/annotation/ReviewPanel";
+import SubmissionMediaPanel from "../../components/annotation/SubmissionMediaPanel";
 import SubmissionSummary from "../../components/annotation/SubmissionSummary";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
+import { useAnnotationReviewers } from "../../hooks/useAnnotationReviewers";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
 import { annotationApi } from "../../services/annotation";
@@ -56,6 +59,7 @@ function SubmissionContent({
   );
   const { data, error, loading, refreshing, stale, updatedAt, reload } =
     useRequest(load);
+  const reviewers = useAnnotationReviewers(projectId);
   const phase = resolvePagePhase({
     hasData: data !== null,
     loading,
@@ -296,6 +300,8 @@ function SubmissionContent({
           onSubmit={() => handleSubmissionAction("submit")}
           onWithdraw={() => handleSubmissionAction("withdraw")}
         />
+        <Divider orientation="left">媒体证据</Divider>
+        <SubmissionMediaPanel projectId={projectId} records={data.records} />
         <Divider orientation="left">AI 建议</Divider>
         <AiSuggestionPanel
           suggestions={data.aiSuggestions}
@@ -309,6 +315,9 @@ function SubmissionContent({
         <ReviewPanel
           submission={data.submission}
           reviews={data.reviews}
+          candidates={reviewers.members}
+          currentUserId={reviewers.currentUserId}
+          candidatesDegraded={reviewers.degraded}
           busyAction={busyAction}
           onCreate={handleCreateReview}
           onAction={(review, action, payload) =>
@@ -319,10 +328,18 @@ function SubmissionContent({
         <ArbitrationPanel
           submission={data.submission}
           arbitrations={data.arbitrations}
+          candidates={reviewers.members}
+          candidatesDegraded={reviewers.degraded}
           busyAction={busyAction}
           onCreate={handleCreateArbitration}
           onAction={handleArbitrationAction}
           onVote={handleVote}
+        />
+        <Divider orientation="left">训练数据</Divider>
+        <DatasetLinkagePanel
+          projectId={projectId}
+          submission={data.submission}
+          records={data.records}
         />
       </Space>
     );

@@ -112,6 +112,7 @@ def run_pipeline(
     sample_limit: int = 50,
     require_explicit_candidates: bool = False,
     quality_verdicts: Mapping[UUID, EpisodeQualityVerdict] | None = None,
+    verify_stored_manifest_hash: bool = True,
 ) -> PipelineResult:
     selection = evaluate_selection(
         candidates,
@@ -267,6 +268,7 @@ def run_pipeline(
             annotation_submission_refs_digest=submission_digest,
             annotation_schema_versions=schema_versions,
             created_at=now,
+            verify_stored_hash=verify_stored_manifest_hash,
         )
         version_updates["manifest_key"] = _manifest_key(base_version)
         version_updates["manifest_sha256"] = manifest.manifest_sha256

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.26.0
+  version: 1.28.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -195,6 +195,22 @@ info:
       （迁移 0068），跨项目引用在数据库层拒绝；写入复用既有创建链路
       （上传完成复制到 RawAsset、Episode 创建携带），不新增第二套创建接口。
       全部为增量：仅新增路径与 schema，既有字段只增不改，无路径/字段删除。
+    - `1.27.0` **当前认证主体（V31-025 前置）**：新增只读端点 `GET /api/v1/me`，
+      回显服务端已认证主体的 `user_id` / `display_name` / `platform_role`。
+      浏览器只有外部签发的 Bearer 令牌、读不到其中的用户 ID，「我的任务」「我的
+      工作量」这类个人视图无法在前端推断身份，因此必须由服务端回答"我是谁"。
+      请求头或查询参数里的 `user_id` 一律忽略（服务端认证结果是唯一来源）；用户
+      目录无此人时返回 `404 not_found`，不隐式创建账号，也不返回只有 ID 的裸对象。
+      平台角色仍只来自签名声明。全部为增量：无路径/字段删除，无数据库迁移。
+    - `1.28.0` **标注工作量聚合（V31-026）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/annotation-workload`，按
+      `(assignee_id, [period_start, period_end))` 返回分配/领取/提交/通过/返工
+      计数与 `total_minutes`。周期为必填参数：没有时间窗口"工作量"没有定义，
+      默认成"全部时间"会让"本期超容量"变成"历史总量超容量"。容量来自部署配置，
+      未配置时 `capacity_minutes` 与 `utilization_ratio` 均为 `null`、状态为
+      `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
+      本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
+      `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
     - `1.25.0` **项目级逾期汇总（N6-002 收尾）**：新增只读端点
       `GET /api/v1/projects/{project_id}/annotation-overdue-summary`，返回本项目
       逾期任务总数、按优先级/状态分布、最早期逾期时间与 SLA 分桶
@@ -295,7 +311,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.26.0
+  version: 1.28.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -477,6 +493,9 @@ paths:
   /api/v1/platform/meta:
     $ref: "./fragments/paths.stage1.yaml#/platformMeta"
   # --- 项目与成员（/projects 本身没有 project_id 前缀）---
+  # 认证主体自述：浏览器拿不到令牌里的用户 ID，「我的任务/工作量」只能由服务端给出。
+  /api/v1/me:
+    $ref: "./fragments/paths.projects.yaml#/me"
   /api/v1/projects:
     $ref: "./fragments/paths.projects.yaml#/projects"
   /api/v1/projects/{project_id}:
@@ -643,6 +662,8 @@ paths:
     $ref: "./fragments/paths.stage3.yaml#/annotationBatchActions"
   /api/v1/projects/{project_id}/annotation-assignments:
     $ref: "./fragments/paths.stage3.yaml#/annotationAssignments"
+  /api/v1/projects/{project_id}/annotation-workload:
+    $ref: "./fragments/paths.stage3.yaml#/annotationWorkload"
   /api/v1/projects/{project_id}/annotation-assignments/{assignment_id}:
     $ref: "./fragments/paths.stage3.yaml#/annotationAssignmentDetail"
   /api/v1/projects/{project_id}/annotation-assignments/{assignment_id}/actions/{action}:
@@ -1225,6 +1246,7 @@ components:
     DoubleAnnotationConsistency: {$ref: "./schemas/double-annotation-consistency.v1.schema.json"}
     AnnotationBatch: {$ref: "./schemas/annotation-batch.v1.schema.json"}
     AnnotationAssignment: {$ref: "./schemas/annotation-assignment.v1.schema.json"}
+    AnnotationWorkload: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationWorkload"}
     AnnotationSubmission: {$ref: "./schemas/annotation-submission.v1.schema.json"}
     AnnotationRecord: {$ref: "./schemas/annotation-record.v1.schema.json"}
     AnnotationReview: {$ref: "./schemas/annotation-review.v1.schema.json"}
@@ -1524,6 +1546,8 @@ components:
     ProjectMemberPage: {$ref: "./fragments/schemas.projects.yaml#/ProjectMemberPage"}
     ProjectMemberAdd: {$ref: "./fragments/schemas.projects.yaml#/ProjectMemberAdd"}
     ProjectMemberRolePatch: {$ref: "./fragments/schemas.projects.yaml#/ProjectMemberRolePatch"}
+    PlatformRole: {$ref: "./fragments/schemas.projects.yaml#/PlatformRole"}
+    CurrentUser: {$ref: "./fragments/schemas.projects.yaml#/CurrentUser"}
     QualityFinding: {$ref: "./fragments/schemas.stage9.yaml#/QualityFinding"}
     QualityCheckRun: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRun"}
     QualityCheckRunPage: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRunPage"}

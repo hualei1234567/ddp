@@ -53,6 +53,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -353,6 +354,11 @@ def _request_schema(operation: object, base: Base) -> tuple[object, Base]:
 def load_runtime_openapi() -> dict[str, object]:
     if str(BACKEND_DIR) not in sys.path:
         sys.path.insert(0, str(BACKEND_DIR))
+    # ``app.main`` 导入时就 ``create_app()``，而 ``Settings`` 默认 env 是
+    # production——缺少 DDP_ENV 时安全配置守卫会拒启动（RuntimeError），
+    # 本地 ``make check`` 在没有 .env 的机器上会整步失败。本检查只读路由表，
+    # 不连库、不连对象存储；显式按本地环境构建，不依赖调用方是否导出了变量。
+    os.environ.setdefault("DDP_ENV", "local")
     from app.main import create_app  # 延迟导入：只读模式下不引入数据库依赖
 
     return create_app().openapi()

@@ -130,8 +130,13 @@ def import_reflow_batch(
     project_id: UUID,
     *,
     code: str,
+    store: InMemoryObjectStore,
 ) -> dict[str, Any]:
-    """第二批真实采集数据：数据源 → 导入 Worker → 物化 Episode → ACCEPTED。"""
+    """第二批真实采集数据：数据源 → 导入 Worker → 物化 Episode → ACCEPTED。
+
+    ``store`` 由调用方持有：同一实例既是导入 Worker 的存储，也是 API 侧的
+    存储（冻结写 Manifest、训练交付回读），否则两条路径看到的是两个世界。
+    """
     source, job = register_import_chain(
         editor,
         project_id,
@@ -140,7 +145,6 @@ def import_reflow_batch(
         repo_id="ddp/e2e-reflow",
         revision="c" * 40,
     )
-    store = InMemoryObjectStore()
     import pytest
 
     with pytest.MonkeyPatch.context() as patch:

@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import { ContractValidationError } from "./validation";
 import {
   parseDataset,
+  parseDatasetItem,
   parseDatasetVersion,
   parseExportJob,
   parseExternalTrainingReference,
+  parseSelectionPreview,
   parseTrainingDelivery,
   parseTrainingRequestRevision,
 } from "./datasetParsers";
@@ -226,5 +228,114 @@ describe("阶段 4 响应解析", () => {
     expect(() => parseTrainingDelivery({ ...base, execution_mode: "BOGUS" })).toThrow(
       ContractValidationError,
     );
+  });
+});
+
+function selectionPreviewPayload() {
+  return {
+    preview_id: null,
+    project_id: PROJECT,
+    dataset_id: DATASET,
+    dataset_version_id: null,
+    candidate_count: 5,
+    selected_count: 3,
+    excluded_count: 2,
+    duplicated_count: 1,
+    split_counts: { train: 2, validation: 1, test: 0 },
+    split_preview_status: "OK",
+    exclusion_summary: [
+      {
+        code: "ANNOTATION_NOT_APPROVED",
+        count: 1,
+        sample_episode_ids: ["66666666-6666-4666-8666-666666666666"],
+      },
+      { code: "DUPLICATE", count: 1, sample_episode_ids: [] },
+    ],
+    items_sample: [
+      {
+        episode_id: "66666666-6666-4666-8666-666666666666",
+        episode_version: 2,
+        split: "train",
+        decision: "SELECTED",
+        reason: null,
+      },
+      {
+        episode_id: "77777777-7777-4777-8777-777777777777",
+        episode_version: 1,
+        split: null,
+        decision: "EXCLUDED",
+        reason: "标注未通过复核",
+      },
+    ],
+    warnings: [],
+    blocking_issues: [],
+    source_snapshot_at: "2026-11-22T00:00:00Z",
+    preview_sha256: SHA,
+    created_at: null,
+  };
+}
+
+describe("选择预览：排除原因与逐条决策", () => {
+  it("按契约把 exclusion_summary 与 items_sample 读成数组", () => {
+    const preview = parseSelectionPreview(selectionPreviewPayload());
+    expect(preview.exclusion_summary).toEqual([
+      {
+        code: "ANNOTATION_NOT_APPROVED",
+        count: 1,
+        sample_episode_ids: ["66666666-6666-4666-8666-666666666666"],
+      },
+      { code: "DUPLICATE", count: 1, sample_episode_ids: [] },
+    ]);
+    expect(preview.items_sample[1]).toMatchObject({
+      episode_id: "77777777-7777-4777-8777-777777777777",
+      decision: "EXCLUDED",
+      reason: "标注未通过复核",
+      split: null,
+    });
+  });
+
+  it("exclusion_summary 是对象而不是数组时抛契约错误", () => {
+    const payload = selectionPreviewPayload() as Record<string, unknown>;
+    payload.exclusion_summary = { DUPLICATE: 1 };
+    expect(() => parseSelectionPreview(payload)).toThrow(ContractValidationError);
+  });
+
+  it("items_sample 缺少 decision 时抛契约错误", () => {
+    const payload = selectionPreviewPayload();
+    delete (payload.items_sample[0] as Record<string, unknown>).decision;
+    expect(() => parseSelectionPreview(payload)).toThrow(ContractValidationError);
+  });
+});
+
+describe("数据集条目回链", () => {
+  const itemPayload = () => ({
+    dataset_item_id: "88888888-8888-4888-8888-888888888888",
+    project_id: PROJECT,
+    dataset_version_id: "99999999-9999-4999-8999-999999999999",
+    episode_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    episode_version: 2,
+    episode_lineage_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+    annotation_submission_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    annotation_version: 1,
+    split: "train",
+    sample_role: "NORMAL",
+    weight: 1,
+    selected_reason: "ELIGIBLE",
+    item_sha256: SHA,
+    created_at: "2026-11-22T00:00:00Z",
+  });
+
+  it("保留标注提交引用，供条目回链到提交详情", () => {
+    const item = parseDatasetItem(itemPayload());
+    expect(item.annotation_submission_id).toBe(
+      "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+    );
+    expect(item.annotation_version).toBe(1);
+  });
+
+  it("缺少 annotation_submission_id 时抛契约错误", () => {
+    const payload = itemPayload() as Record<string, unknown>;
+    delete payload.annotation_submission_id;
+    expect(() => parseDatasetItem(payload)).toThrow(ContractValidationError);
   });
 });

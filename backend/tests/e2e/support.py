@@ -11,7 +11,8 @@
 
 本模块只补现有支撑没有的两类东西：
 
-1. **HF 导入链路的确定性输入**：HTTP 传输层替身 + 内存对象存储。URL 构造、
+1. **HF 导入链路的确定性输入**：HTTP 传输层替身 + 内存对象存储
+   （同一替身也注入 API 依赖，供数据集冻结写 Manifest 与训练交付回读）。URL 构造、
    内容签名、大小上限、sha256、Adapter 内容探测、导入状态机、RawAsset
    生命周期仍然全部走生产代码（``_HttpxFetcher`` / ``_parse_metadata`` /
    ``_registry_parser`` / ``ImportRunner`` / ``DataSourceImportWorker``）。
@@ -36,6 +37,7 @@ import httpx
 from app.api.deps import get_current_principal
 
 from tests.api.dataset_support import url
+from tests.api.export_support import FakeExportStorage
 
 # 模型平台 Adapter 的 HMAC 密钥：仅测试内使用，显式标注不是真实凭据。
 MODEL_ADAPTER_SECRET = "placeholder-model-adapter-secret-0123456789abcdef"
@@ -160,14 +162,14 @@ class MediaTransport:
         return httpx.Client(transport=httpx.MockTransport(self.handler))
 
 
-class InMemoryObjectStore:
-    """MinIO/S3 写入替身（显式标注）；只实现导入链路用到的 ``put_bytes``。"""
+class InMemoryObjectStore(FakeExportStorage):
+    """导入 / 冻结 / 交付共用的内存对象存储替身（显式标注，不替代真实 MinIO）。
 
-    def __init__(self) -> None:
-        self.objects: dict[str, tuple[bytes, str]] = {}
-
-    def put_bytes(self, object_key: str, data: bytes, *, content_type: str) -> None:
-        self.objects[object_key] = (bytes(data), content_type)
+    继承 ``tests.api.export_support.FakeExportStorage``：冻结 Manifest 需要
+    ``put_bytes`` + ``stream_object`` 回读校验，训练交付还要再读同一对象；
+    再写一份第二套替身就是复制粘贴（CLAUDE.md「禁止复制粘贴业务规则」）。
+    这里只补导入 Worker 用的 ``put`` 别名。
+    """
 
     def put(self, object_key: str, data: bytes, *, content_type: str) -> None:
         self.put_bytes(object_key, data, content_type=content_type)

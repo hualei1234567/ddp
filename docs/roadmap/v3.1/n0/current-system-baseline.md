@@ -65,7 +65,8 @@ EXIT_CODE=0
 | 应用用例 | `backend/app/application/{devices,collection,ingestion,processing,datasources,episodes,annotation,datasets,modelops}` |
 | 领域 | `backend/app/domain/*`（不依赖 Web / ORM / 队列 / 云 SDK） |
 | 基础设施 | `backend/app/infrastructure/{db,repositories,storage,queue}` |
-| Worker | `backend/app/workers/{processing,exports,...}.py` |
+| Worker | `backend/app/workers/{processing,exports,...}.py`（`datasources.py` 同时消费导入请求与导入成功事件） |
+| 组合根 | `backend/app/composition/{episodes,datasources}.py`（HTTP 与 Worker 共用的装配函数） |
 | 数据平台 | `data-platform/ddp_data/{adapters,canonical,hdf5,rosbag,mcap,lerobot}` |
 | 前端 | `apps/web/src/{pages,components,services,routes.tsx}` |
 
