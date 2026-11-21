@@ -66,6 +66,7 @@ from app.domain.ingestion.errors import (
 )
 from app.domain.ingestion.models import RawAsset, RawAssetLink, UploadPart, UploadSession
 from app.domain.ingestion.validation import (
+    HDF5_DETECTION_BYTES,
     canonical_content_type,
     detect_format,
     normalize_etag,
@@ -589,7 +590,7 @@ class UploadCompletionService:
         prefix = self._storage.read_range(
             object_key,
             start=0,
-            length=min(64, size_bytes),
+            length=min(HDF5_DETECTION_BYTES, size_bytes),
         )
         suffix_start = max(0, size_bytes - 4)
         suffix = self._storage.read_range(object_key, start=suffix_start, length=4)

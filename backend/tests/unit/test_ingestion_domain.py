@@ -81,6 +81,11 @@ def test_object_key_is_server_generated_and_matches_contract() -> None:
 def test_content_signature_detection_and_compatibility() -> None:
     assert detect_format(b"\x89MCAP0\r\n") is RawAssetFormat.MCAP
     assert detect_format(b"\x89HDF\r\n\x1a\n") is RawAssetFormat.HDF5
+    hdf5_magic = b"\x89HDF\r\n\x1a\n"
+    assert detect_format(b"\x00" * 512 + hdf5_magic) is RawAssetFormat.HDF5
+    assert detect_format(b"\x00" * (1024 * 1024) + hdf5_magic) is RawAssetFormat.HDF5
+    assert detect_format(b"\x00" * (1024 * 1024 + 512) + hdf5_magic) is None
+    assert detect_format(b"\x00" * 513 + hdf5_magic) is None
     assert detect_format(b"SQLite format 3\x00") is RawAssetFormat.ROSBAG2
     assert detect_format(b"PK\x03\x04") is RawAssetFormat.ZIP
     assert detect_format(b"\x00\x00\x00\x18ftypmp42") is RawAssetFormat.MP4
