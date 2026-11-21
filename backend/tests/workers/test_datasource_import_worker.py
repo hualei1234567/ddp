@@ -112,9 +112,17 @@ def test_import_worker_publishes_event_and_stamps_real_actor(
         )
         assert {"create", "start", "succeed"} <= set(audit_actions), audit_actions
 
-    # 重复投递：事件已被发布，再次处理必须 IDLE，不得重复导入。
-    again = run_import_worker(
+    # 成功事件随后由同一 Worker 自动消费（V31-014）：物化 Episode，且不重复导入。
+    materialized = run_import_worker(
         factory, MediaTransport(), now=datetime.now(UTC) + timedelta(seconds=2)
+    )
+    assert materialized["event"] == "episodes", materialized
+    assert materialized["created"] == EXPECTED_EPISODES, materialized
+    assert materialized["skipped"] == 0, materialized
+
+    # 两类事件都已发布：再次处理必须 IDLE，不得重复导入，也不得重复物化。
+    again = run_import_worker(
+        factory, MediaTransport(), now=datetime.now(UTC) + timedelta(seconds=3)
     )
     assert again["status"] == "IDLE", again
 

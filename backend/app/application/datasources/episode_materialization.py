@@ -56,7 +56,8 @@ from app.application.episodes.readiness import (
     ReadinessOutcome,
     ReadinessStatus,
 )
-from app.domain.datasources.errors import DomainValidationError
+from app.domain.datasources.enums import ImportStatus
+from app.domain.datasources.errors import DomainValidationError, ResourceNotFoundError
 from app.domain.datasources.media import MediaAsset
 from app.domain.episodes.errors import ConflictError as EpisodeConflictError
 from app.domain.episodes.models import Segmentation
@@ -162,7 +163,16 @@ class ImportEpisodeMaterializer:
     ) -> MaterializeResult:
         job = self._imports.get(scope, import_id)
         if job is None:
-            raise DomainValidationError("导入任务不存在或不属于当前项目")
+            # 不存在与"跨项目不可见"必须是同一结论（404），否则跨项目探测
+            # 就能靠 422/404 的差异判断某个 import_id 是否存在。
+            raise ResourceNotFoundError("导入任务", import_id)
+        if job.status is not ImportStatus.SUCCEEDED:
+            # 单一权威：HTTP 重放端点与 Worker 自动物化都经过这里。对失败或
+            # 进行中的导入生成 Episode 等于把半截数据当成样本；重试也不会
+            # 改变结论，调用方应把它当作永久性失败。
+            raise DomainValidationError(
+                f"导入状态为 {job.status.value}，只有 SUCCEEDED 的导入才能生成 Episode"
+            )
 
         grouped = _group_by_episode(self._assets.list_by_import(scope, import_id, limit=1000))
         if not grouped:

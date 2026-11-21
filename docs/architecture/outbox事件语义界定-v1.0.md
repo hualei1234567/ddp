@@ -45,13 +45,14 @@
 
 ## 3. 当前归类
 
-### 3.1 投递类（5 个，均有消费者与测试）
+### 3.1 投递类（6 个，均有消费者与测试）
 
 | 事件 | 消费者 | 状态 |
 |---|---|---|
 | `ingestion.raw_asset.validation_requested` | `workers/outbox.py` | ✅ 已实现 |
 | `dataset.export.requested` | `workers/exports.py` | ✅ 已实现 |
 | `datasource.import_requested` | `workers/datasources.py` | ✅ 已实现 |
+| `datasource.import.succeed` | `workers/datasources.py` | ✅ 已实现（2026-11-22 由留痕类改为投递类：自动物化 Episode） |
 | `ingestion.job.created` | `workers/ingestion_jobs.py` | ✅ 已实现（2026-11-16 由留痕类改为投递类） |
 | `processing.run.requested` | `workers/processing.py` | ✅ 已实现（2026-11-18，N4-002 八阶段编排） |
 
@@ -173,7 +174,6 @@
 | `training.request.cancel` | `TRAINING_REQUEST_ACTION_EVENTS` | 留痕类 |
 | `training.request.close` | `TRAINING_REQUEST_ACTION_EVENTS` | 留痕类 |
 | `datasource.import.start` | `DATASOURCE_IMPORT_ACTION_EVENTS` | 留痕类 |
-| `datasource.import.succeed` | `DATASOURCE_IMPORT_ACTION_EVENTS` | 留痕类 |
 | `datasource.import.fail` | `DATASOURCE_IMPORT_ACTION_EVENTS` | 留痕类 |
 | `datasource.import.cancel` | `DATASOURCE_IMPORT_ACTION_EVENTS` | 留痕类 |
 | `ingestion.job.worker-start` | `INGESTION_JOB_ACTION_EVENTS` | 留痕类 |

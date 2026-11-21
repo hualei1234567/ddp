@@ -16,7 +16,10 @@ from app.application.datasources.commands import (
     NewDataSource,
     NewDataSourceImport,
 )
-from app.application.datasources.events import DATASOURCE_IMPORT_ACTION_EVENTS
+from app.application.datasources.events import (
+    DATASOURCE_IMPORT_ACTION_EVENTS,
+    DATASOURCE_IMPORT_SUCCEEDED_EVENT,
+)
 from app.application.datasources.idempotency import IdempotencyGuard, validate_key
 from app.application.datasources.ports import (
     AuditRepository,
@@ -495,30 +498,45 @@ class DataSourceUseCases:
         saved = self._imports.save(
             scope, replace(current, **updates), expected_version=expected_version
         )
-        record_change(
-            self._audit,
-            self._outbox,
-            scope,
-            resource_type=_RESOURCE_IMPORT,
-            resource_id=saved.import_id,
-            action=action,
-            from_status=current.status.value,
-            to_status=saved.status.value,
-            reason=error_message,
-            request_id=request_id,
-            details={
+        common: dict[str, object] = {
+            "resource_type": _RESOURCE_IMPORT,
+            "resource_id": saved.import_id,
+            "action": action,
+            "from_status": current.status.value,
+            "to_status": saved.status.value,
+            "reason": error_message,
+            "request_id": request_id,
+            "details": {
                 "row_count": saved.imported_row_count,
                 "file_count": saved.imported_file_count,
             },
-            event_type=DATASOURCE_IMPORT_ACTION_EVENTS[action],
-            event_payload={
+            "event_payload": {
                 "import_id": str(saved.import_id),
                 "data_source_id": str(saved.data_source_id),
                 "from_status": current.status.value,
                 "to_status": saved.status.value,
             },
-            occurred_at=now,
-        )
+            "occurred_at": now,
+        }
+        # 成功事件是**投递类**：与 Worker 路径同一语义，谁宣布导入成功都不能
+        # 绕过 Episode 物化（V31-014）。其余动作只留痕。
+        if action == "succeed":
+            record_change(
+                self._audit,
+                self._outbox,
+                scope,
+                **common,
+                event_type=DATASOURCE_IMPORT_SUCCEEDED_EVENT,
+                dispatch=True,
+            )
+        else:
+            record_change(
+                self._audit,
+                self._outbox,
+                scope,
+                **common,
+                event_type=DATASOURCE_IMPORT_ACTION_EVENTS[action],
+            )
         self._uow.commit()
         return saved
 

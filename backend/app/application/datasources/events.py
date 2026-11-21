@@ -15,9 +15,14 @@ from __future__ import annotations
 # 「``import_target_status`` 接受什么，这里就必须有什么」，新增动作时两处同步。
 # 客户端动作受 ``validate_import_action`` 约束（须与契约 ImportAction 一致）；
 # 系统动作（``retry``）不经该函数，只由 Worker 触发。
+# 投递类事件：导入成功后必须由 Worker 自动物化 Episode（V31-014），
+# 因此这条事件有消费者，不能只当留痕。字面量单独成常量是为了让
+# ``scripts/check_outbox_events.py`` 能静态识别 dispatch=True 的构造点。
+DATASOURCE_IMPORT_SUCCEEDED_EVENT = "datasource.import.succeed"
+
 DATASOURCE_IMPORT_ACTION_EVENTS: dict[str, str] = {
     "start": "datasource.import.start",
-    "succeed": "datasource.import.succeed",
+    "succeed": DATASOURCE_IMPORT_SUCCEEDED_EVENT,
     "fail": "datasource.import.fail",
     "cancel": "datasource.import.cancel",
     # 系统动作：Worker 发现可恢复失败时把任务从 FAILED 退回 PENDING。

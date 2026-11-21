@@ -44,7 +44,6 @@ from app.api.v1.datasource_schemas import (
     ReviewCreateOut,
     ReviewDecisionRequest,
 )
-from app.api.v1.episode_dependencies import build_episode_service, build_readiness_service
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.schemas import PageOut
 from app.api.v1.upload_dependencies import SettingsDep
@@ -75,9 +74,9 @@ from app.application.datasources.verification import (
     REMOTE_CHECK_STATUS_VERIFIED,
     RemoteSourceVerifier,
 )
+from app.composition.datasources import build_episode_materializer
 from app.core.config import get_settings
-from app.domain.datasources.enums import ImportStatus
-from app.domain.datasources.errors import DomainValidationError, ResourceNotFoundError
+from app.domain.datasources.errors import ResourceNotFoundError
 from app.infrastructure.huggingface import HuggingFaceRemoteVerifier
 from app.infrastructure.repositories.audit_logs import SqlAuditLogQueryRepository
 from app.infrastructure.repositories.dataset_audit import (
@@ -91,7 +90,6 @@ from app.infrastructure.repositories.datasources import (
     SqlDataSourceRepository,
     SqlMediaAssetRepository,
 )
-from app.infrastructure.repositories.episodes import SqlEpisodeRepository
 from app.infrastructure.repositories.idempotency import SqlIdempotencyRepository
 from app.infrastructure.storage.data_source_objects import DataSourceObjectReader
 from app.infrastructure.storage.s3 import S3MultipartStorage
@@ -188,18 +186,10 @@ ReviewServicesDep = Annotated[DataReviewUseCases, Depends(get_review_use_cases)]
 def get_episode_materializer(session: DbSession) -> ImportEpisodeMaterializer:
     """导入产物 -> Episode 的物化用例。
 
-    Episode 侧的 8 个协作者由 ``build_episode_service`` 统一装配，不在这里
-    重抄一遍——重抄就多了一处会漂移的接线。
+    装配在组合根（``app.composition.datasources``）：Worker 消费导入成功事件
+    时走同一个函数，两条入口不各自接线。
     """
-    return ImportEpisodeMaterializer(
-        imports=_cast_import(SqlDataSourceImportRepository(session)),
-        assets=_as_asset_repo(SqlMediaAssetRepository(session)),
-        episodes=build_episode_service(session),
-        episode_repository=SqlEpisodeRepository(session),
-        # 创建后立刻尝试自动就绪（Canonical Manifest 生成器），
-        # 否则 Episode 永远停在 PENDING 等人手工提交 Manifest。
-        readiness=build_readiness_service(session),
-    )
+    return build_episode_materializer(session)
 
 
 MaterializerDep = Annotated[ImportEpisodeMaterializer, Depends(get_episode_materializer)]
@@ -575,20 +565,15 @@ __all__ = ["router"]
 def materialize_import_episodes(
     import_id: UUID,
     scope: WriteScope,
-    use_cases: DataSourceServicesDep,
     materializer: MaterializerDep,
     payload: ImportEpisodeMaterializeRequest | None = None,
 ) -> ImportEpisodeMaterializeResultOut:
     """把一次成功导入的媒体资产生成 Canonical Episode（按 episode_key 分组）。
 
-    前置：导入状态必须 ``SUCCEEDED``。对失败/进行中的导入生成 Episode 等于
-    把半截数据当成样本，因此显式拒绝而不是"能跑就让它跑"。
+    前置条件（导入必须 ``SUCCEEDED``）由用例层判定——Worker 的自动物化走同一
+    条规则，不能只在 HTTP 层校验。本端点保留为**重放入口**：Worker 已自动
+    物化过时，重复调用返回 ``skipped_episode_keys`` 而不是再造一份 Episode。
     """
-    job = use_cases.get_import(scope, import_id)
-    if job.status is not ImportStatus.SUCCEEDED:
-        raise DomainValidationError(
-            f"导入状态为 {job.status.value}，只有 SUCCEEDED 的导入才能生成 Episode"
-        )
     result = materializer.materialize(
         scope,
         import_id,

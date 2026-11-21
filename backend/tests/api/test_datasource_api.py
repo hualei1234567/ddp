@@ -16,7 +16,7 @@ from app.application.datasources.verification import (
 from app.domain.datasources.enums import ImportLogLevel, ImportStage
 from app.domain.datasources.models import DataSourceImportLog
 from app.domain.identity.models import ProjectScope
-from app.infrastructure.db.models.collection import AuditLog
+from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
 from app.infrastructure.db.models.datasources import DataReviewModel
 from app.infrastructure.repositories.datasources import (
     SqlDataReviewRepository,
@@ -415,6 +415,19 @@ def test_import_lifecycle_and_terminal_state(api_db) -> None:
     assert succeeded.json()["status"] == "SUCCEEDED"
     assert succeeded.json()["imported_row_count"] == 10
     assert succeeded.json()["allowed_actions"] == []
+
+    # 成功事件是投递类：客户端宣布成功也必须触发 Episode 自动物化（V31-014），
+    # 否则这条路径的导入永远停在 RawAsset 阶段。
+    with factory() as session:
+        succeeded_event = session.scalar(
+            select(OutboxEvent).where(
+                OutboxEvent.aggregate_id == UUID(job["import_id"]),
+                OutboxEvent.event_type == "datasource.import.succeed",
+            )
+        )
+        assert succeeded_event is not None
+        assert succeeded_event.dispatch is True
+        assert succeeded_event.status == "PENDING"
 
     # 终态不得回退
     again = client.post(f"{import_url}/actions/start", headers={"If-Match": '"3"'}, json={})
