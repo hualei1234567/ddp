@@ -261,6 +261,7 @@ function WorkbenchContent({
       </Typography.Paragraph>
       <OverdueSummaryCard projectId={projectId} />
       <WorkbenchBody
+        projectId={projectId}
         data={data}
         phase={phase}
         error={workbench.error}

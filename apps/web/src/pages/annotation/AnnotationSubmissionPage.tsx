@@ -11,6 +11,7 @@ import ArbitrationPanel, {
 import ReviewPanel, {
   type ReviewActionPayload,
 } from "../../components/annotation/ReviewPanel";
+import SubmissionMediaPanel from "../../components/annotation/SubmissionMediaPanel";
 import SubmissionSummary from "../../components/annotation/SubmissionSummary";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageContainer from "../../components/ui/PageContainer";
@@ -296,6 +297,8 @@ function SubmissionContent({
           onSubmit={() => handleSubmissionAction("submit")}
           onWithdraw={() => handleSubmissionAction("withdraw")}
         />
+        <Divider orientation="left">媒体证据</Divider>
+        <SubmissionMediaPanel projectId={projectId} records={data.records} />
         <Divider orientation="left">AI 建议</Divider>
         <AiSuggestionPanel
           suggestions={data.aiSuggestions}
