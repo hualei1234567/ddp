@@ -40,11 +40,11 @@
 | Task ID | 能力项 | 状态 | 现有实现 / 证据 | 缺口 |
 |---|---|---|---|---|
 | DDP-V21-N2-01 | 数据源中心（HF/URL/本地/S3） | **PARTIAL** | N2-003：登记可显式 `verify_remote` 调用 `HuggingFaceAdapter.describe()`（默认关闭、超时 10s、有界重试上限可配 1–3）+ 详情页/详情 API；失败返回结构化 `details.remote_check`（7 类稳定原因：超时/404/401/5xx/非法响应/超大响应/不可用），远端错误文本经 `sanitize_log_message` 脱敏，白名单字段 + 长度上界；前端详情页覆盖 Loading/Empty/Error/Forbidden/Partial/Stale | 仍只支持 Hugging Face；URL/本地/S3 源未实现；真实 HF 联网验收 `NOT RUN`（默认跳过） |
-| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **VERIFIED** | 状态机 + Worker + API + 列表页；阶段/进度/步骤日志（cursor 分页）；PENDING/RUNNING 时 7s 自动轮询、终态停止；N2-010 原地合并刷新（TD-29 闭环）；N2-006 导入审看页展示统一质量六类结论与下钻 | 手动刷新仍全量重置；筛选切换需刷新才重取（TD-32）；质量运行无按对象列举接口（N4-008） |
+| DDP-V21-N2-02 | 导入中心（状态机、retry、cancel、progress、error、logs） | **VERIFIED** | 状态机 + Worker + API + 列表页；阶段/进度/步骤日志（cursor 分页）；PENDING/RUNNING 时 7s 自动轮询、终态停止；N2-010 原地合并刷新（TD-29 闭环）；N2-006 导入审看页展示统一质量六类结论与下钻；N4-008 按对象列举可自动发现最近运行 | 手动刷新仍全量重置；筛选切换需刷新才重取（TD-32） |
 | DDP-V21-N2-03 | Raw Asset 字段、状态机、动作、去重 | **VERIFIED** | `domain/ingestion/models.py:332`；`state_machines.py:65`；`uploads.py:234-267`；`test_raw_asset_actions_api.py`；`scripts/qa/raw_asset_lifecycle_smoke.py` | — |
 | DDP-V21-N2-04 | Episode Explorer（时间/任务/机器人/相机/质量/状态） | **VERIFIED** | N2-004：camera 过滤（`EXISTS` 下推）+ 前端质量/标注/机器人/机位/时间筛选，全部写入 URL；契约补齐 11 个 query 参数 | `EpisodeListPage.tsx` 729 行，后续评估拆分 |
 | DDP-V21-N2-05 | 人工审看（播放/倍速/Range/时间轴/导航/多视角/decision+reason+evidence） | **PARTIAL** | N2-005：倍速/时间轴/2 机位同屏/结构化 evidence；预签名 URL + 206 Range 已实测 | 审看绑定导入任务，无 Episode 级导航；多机位为独立播放（不保证音画同步） |
-| DDP-V21-N2-06 | 六类质量报告 UI（Integrity/Temporal/Visual/Metadata/Annotation/Overall） | **MISSING** | 现有为扁平 7 条 rule findings；`application/datasources/quality.py` | 六类分层不存在；不可点击下钻 |
+| DDP-V21-N2-06 | 六类质量报告 UI（Integrity/Temporal/Visual/Metadata/Annotation/Overall） | **VERIFIED** | N2-006/N4-008：`QualityRunReport` 展示服务端六类摘要与整体结论，`ImportQualityRunSection` 自动发现最近运行并支持 URL 深链；findings 游标分页、类别服务端筛选、严重度已加载范围筛选及媒体资产下钻；严格区分 INCOMPLETE / NOT_APPLICABLE / FAILED；覆盖 Loading/Empty/Error/Forbidden/Partial/Stale/Disabled；2026-11-21 专项 6 files / 74 tests passed | 历史扁平导入报告仅保留为对照，不作为六类权威结论 |
 
 ## 3. N3 Canonical + Adapter
 

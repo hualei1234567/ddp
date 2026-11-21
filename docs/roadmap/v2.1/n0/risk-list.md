@@ -51,7 +51,7 @@
 | RK-23 | **无性能基线**（100/1K/10K episodes），规模化能力未知 | TD/agent：无压测脚本 | 高 | P1 | N8-03 建脚本与阈值；先测只读列表与视频 Range | QA |
 | RK-24 | 备份只做本机 PG+MinIO，无异地/加密/RTO 指标 | `docs/operations/备份与恢复演练记录-2026-11-17.md` | 中 | P1 | 增加异地副本与恢复时长目标；每季度演练 | 运维 |
 | RK-30 | 评测列表复用详情响应，每条最多内联 64 KiB `failure_cases`；一页 100 条最坏约 6.4 MB | `fragments/schemas.stage5.yaml` 的 `Evaluation`；契约明确"上限即分页" | 中 | P2 | 列表页保持小 `limit`；后续评估独立 `failure-cases` 子资源端点 | 后端 / 前端 |
-| RK-31 | `quality-runs` 没有按对象列举接口，导入审看页无法自动发现历史运行，只能深链或手动触发 | `fragments/paths.quality.yaml`；N2-006 实现 | 中 | P2 | 补 `GET /quality-runs?subject_type=&subject_id=`（N4-008） | 后端 / 前端 |
+| RK-31 | ~~`quality-runs` 没有按对象列举接口，导入审看页无法自动发现历史运行~~ **已闭环（N4-008）** | `fragments/paths.quality.yaml`；`services/qualityRuns.ts`；`ImportQualityRunSection.tsx` | 低 | P2 | 按对象游标倒序列举并自动选择最近运行；URL 保留 run_id 供刷新与分享回看 | 后端 / 前端 |
 | RK-32 | 多基地概览按 `location_id` 聚合依赖 `project_id` 前缀索引，未在 PG 做 `EXPLAIN`；单项目超大时可能退化为项目级扫描 | `location_resources.py`；N9-005 报告 | 中 | P2 | 数据量到阈值时补 `(project_id, location_id)` 索引并留 EXPLAIN 证据 | 后端 |
 | RK-33 | 盲审对所有非标注人生效，仲裁人/负责人也看不到标签值；若业务需要仲裁豁免，当前无规则 | `review_policy.py`；N6-004 报告 | 中 | P2 | 明确仲裁豁免规则后再开放；当前按最严格口径 | 产品 / 后端 |
 | RK-34 | `/metrics` 业务指标为拉取式全库聚合，状态表缺 `status` 前缀索引；PG 运行时路径仅编译级验证 | `observability.py`；TD-11 | 中 | P2 | 2s 超时按组降级；数据量上来后预聚合或补索引；PG 环境补一次抓取回归 | 后端 / 运维 |
@@ -90,7 +90,7 @@
 | RK-25 | 把 PARTIAL/MISSING 说成已完成，误导后续排期 | 历史多次出现（报告 §4 与 §5） | 中 | P1 | 状态六态唯一口径；交付必须附命令/证据 | 全体 |
 | RK-26 | ~~Mock/Local 训练被误认为真实训练~~ **已修复**（N7-001：`ExecutionMode` + 迁移 0054 + 契约 1.10.0 + 前端显著标注；未配置模式提交 422） | 领域/API/迁移/前端解析器用例通过 | 低 | P1 | 剩余：MOCK/DRY_RUN 是标记而非独立执行器（Backlog N7-007） | 后端 / 前端 |
 | RK-27 | 长链（导入→标注→数据集→训练→评测）任一步失败时，用户看不到「下一步做什么」 | UI 蓝图 §3；当前各页独立 | 中 | P2 | 工作台聚合队列；失败项带 retry/logs 入口 | 前端 / 产品 |
-| RK-28 | 质量报告六类分层缺失，业务无法按维度定位问题 | N2-06 MISSING | 高 | P2 | N4-04 统一 Quality Engine 后重做报告 UI | 产品 / 后端 |
+| RK-28 | ~~质量报告六类分层缺失，业务无法按维度定位问题~~ **已闭环（N2-006/N4-004/N4-008）** | `QualityRunReport.tsx`；`ImportQualityRunSection.tsx`；2026-11-21 专项 74 tests passed | 低 | P2 | 六类摘要与 findings 均使用服务端权威结论；历史扁平报告只作对照，禁止混作六类结论 | 产品 / 前端 |
 
 ## 6. 风险处置节奏
 
