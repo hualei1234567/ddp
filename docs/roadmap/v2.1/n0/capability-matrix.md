@@ -52,7 +52,7 @@
 |---|---|---|---|---|
 | DDP-V21-N3-01 | Canonical 实体 12 类 | **PARTIAL** | N3-001：`data-platform/ddp_data/canonical/` 定义 Frame / VideoStream / SensorStream / Action / Observation / Episode（`ddp.canonical/1.0.0`，只读契约 + LeRobot 投影） | 统一 QualityResult 仍无跨域实体；Frame/Stream 尚无生产者与持久化（ADR-0035 有意不建表） |
 | DDP-V21-N3-02 | Adapter 接口与注册发现 | **VERIFIED** | N3-002：`AdapterSpec` 新增可选 `fetch/verify/write`，能力集由实现推导，未实现显式抛 `AdapterCapabilityError`；旧 Adapter 零改动；注册表可按能力检索 | 内置 Adapter 暂只声明 parse/detect；导入链路尚未接线新能力（后续增量） |
-| DDP-V21-N3-03 | 多格式 Adapter 优先级（LeRobot/Parquet/MP4/MCAP/ROS/HDF5） | **PARTIAL** | N3-003/N3-004/N3-005：官方 `pyarrow==23.0.1` 读 Parquet footer；受控 ffprobe 探测 MP4；官方 `mcap==1.6.0` 只读 MCAP header/summary（channel/schema/统计、无 summary 时显式 `has_summary=False` 与 `None` 计数），读取字节与数量均有界、错误文本脱敏，不注册 AdapterRegistry；LeRobot preview + JSONL 既有 | Parquet 仅 footer、不读数据页；Parquet/MP4/MCAP 均未接入导入链路（N3-008/N3-009）；ROS Bag/HDF5 仍无字段级解析；无真实机器人数据验证（BLOCKED） |
+| DDP-V21-N3-03 | 多格式 Adapter 优先级（LeRobot/Parquet/MP4/MCAP/ROS/HDF5） | **PARTIAL** | N3-003/N3-004/N3-005/N3-006：官方 `pyarrow==23.0.1` 读 Parquet footer；受控 ffprobe 探测 MP4；官方 `mcap==1.6.0` 只读 MCAP header/summary；N3-006 官方 `h5py==3.16.0` 只读 HDF5 结构（组/数据集路径、shape/dtype/compression/chunks、属性名、软链接/外部链接声明不跟随），读取字节与结构数量均有界、超限显式失败、错误文本脱敏，同样不注册 AdapterRegistry；真实公开样例 RoboMimic v1.5（HF 固定 revision，36.7 MB，SHA256 校验）6008 数据集/1802 组探测通过（默认跳过、需 `DDP_TEST_REAL_HDF5`）；LeRobot preview + JSONL 既有 | Parquet 仅 footer、不读数据页；Parquet/MP4/MCAP/HDF5 均未接入导入链路（N3-008/N3-009）；ROS Bag 仍无字段级解析；HDF5 不读取数据集值，故不构成观测/动作语义验证；真实机器人数据集端到端仍 BLOCKED |
 
 ## 4. N4 Processing Pipeline + 质量中心
 
@@ -112,7 +112,7 @@
 | DDP-V21-N9-01 | Robot Registry（model/serial/firmware/controller/sensor/profile） | **PARTIAL** | `domain/devices/models.py:72-91`；`robots.py`；`test_robots_api.py`；N9-015 固定 DROID 官方 GitHub commit 与 Hugging Face DROID-100 revision，严格映射 Franka Panda/FR3、Robotiq 2F-85、ZED 2 ×2、ZED Mini ×1，并经既有 Robot/Device/Sensor API 与 Repository 写入回读 | 无 controller 字段；公开来源无序列号/固件/硬件版本，保持 NULL；真实设备在线握手仍 BLOCKED |
 | DDP-V21-N9-02 | Capture Plan（task/scene/robot/sensor/operator/SOP/target/threshold） | **PARTIAL** | N9-003：迁移 0064 增加 `target_episode_count` 与 `quality_thresholds`（键复用数据集质量白名单）；Plan 仍是项目级可复用方案 | 无逐设备执行态；目标/阈值是计划值，不构成自动验收；前端未展示 |
 | DDP-V21-N9-03 | Capture Session（Plan→Session→Raw→Upload→Validation→Episode） | **PARTIAL** | N9-001/N9-008/N9-014：会话状态机、迁移 0066/0068、产物归属与只读分页；前端列表/详情/产物独立分页和动作条严格消费服务端 `allowed_actions`，pause/resume/abort 在服务边界强制非空 reason，覆盖七类页面状态 | 未与真实硬件联调（BLOCKED）；历史产物保持 NULL（不回填）；计划目标与实绩仍未自动对账 |
-| DDP-V21-N9-04 | 真实设备格式 Adapter（LeRobot/ROS Bag/MCAP/HDF5） | **PARTIAL** | 格式识别 + 魔数（`domain/ingestion/enums.py:85`）；LeRobot preview；N9-015 以固定 GitHub/HF 来源完成真实公开硬件事实与三流 schema → DDP 设备档案闭环 | ROS Bag/HDF5 仍无字段级解析；公开数据不含现场序列号、固件、标定和物理时钟；真实硬件在环验证仍 BLOCKED |
+| DDP-V21-N9-04 | 真实设备格式 Adapter（LeRobot/ROS Bag/MCAP/HDF5） | **PARTIAL** | 格式识别 + 魔数（`domain/ingestion/enums.py:85`）；LeRobot preview；N9-015 以固定 GitHub/HF 来源完成真实公开硬件事实与三流 schema → DDP 设备档案闭环；N3-006 补齐 HDF5 结构只读探测并以 RoboMimic v1.5 真实公开样例复验 | ROS Bag 仍无字段级解析；HDF5 仅结构不含观测/动作语义；公开数据不含现场序列号、固件、标定和物理时钟；真实硬件在环验证仍 BLOCKED |
 | DDP-V21-N9-05 | 项目隔离与多基地/供应商 | **VERIFIED** | `locations`、`suppliers`、项目成员、跨项目隔离测试；N9-005 新增 `GET /projects/{id}/sites/overview` 按场地只读聚合设备/传感器/采集任务 | 无跨基地调度与供应商计费；仅挂机器人的传感器不归因到场地 |
 
 ## 10. 状态变更规则
