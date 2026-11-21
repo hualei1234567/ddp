@@ -13,6 +13,8 @@ interface SchemaFormProps {
   errors: Record<string, string>;
   disabled: boolean;
   onChange: (labelKey: string, value: DraftFieldValue) => void;
+  /** 时间轴当前选区，透传给 OBJECT_TRACK 行编辑器。 */
+  pendingRangeNs?: { startNs: number; endNs: number } | null;
 }
 
 export default function SchemaForm({
@@ -21,6 +23,7 @@ export default function SchemaForm({
   errors,
   disabled,
   onChange,
+  pendingRangeNs,
 }: SchemaFormProps) {
   if (definitions.length === 0) {
     return (
@@ -38,6 +41,7 @@ export default function SchemaForm({
           value={values[definition.label_key]}
           disabled={disabled}
           error={errors[definition.label_key]}
+          pendingRangeNs={pendingRangeNs}
           onChange={(value) => onChange(definition.label_key, value)}
         />
       ))}

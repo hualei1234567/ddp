@@ -219,6 +219,7 @@ export default function EpisodeEditor({
           errors={errors}
           disabled={disabled}
           onChange={onChange}
+          pendingRangeNs={pendingRange}
         />
       </Space>
     </Card>
