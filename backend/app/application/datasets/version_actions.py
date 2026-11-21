@@ -397,7 +397,8 @@ class DatasetVersionActionsMixin:
             raise LeakageCheckUnknownError("泄漏检查未知，按失败关闭")
         if current.train_count < 1 or current.validation_count < 1:
             raise InsufficientDataError("训练或验证划分为空")
-        self._verify_manifest(scope, current)
+        manifest = self._verify_manifest(scope, current)
+        manifest_key, manifest_sha256 = self._persist_manifest(manifest)
         previous = self._versions.latest_frozen(scope, dataset_id)
         if previous is not None and previous.dataset_version_id != version_id:
             superseded = replace(
@@ -434,6 +435,8 @@ class DatasetVersionActionsMixin:
         frozen = replace(
             current,
             status=DatasetVersionStatus.FROZEN,
+            manifest_key=manifest_key,
+            manifest_sha256=manifest_sha256,
             supersedes_version_id=supersedes_id,
             freeze_approval_id=uuid4(),
             frozen_by=scope.actor_id,
@@ -465,6 +468,7 @@ class DatasetVersionActionsMixin:
             reason=command.reason,
             request_id=request_id,
             details={
+                "manifest_key": saved.manifest_key,
                 "manifest_sha256": saved.manifest_sha256,
                 "quality_report_sha256": saved.quality_report_sha256,
                 "leakage_report_sha256": saved.leakage_report_sha256,

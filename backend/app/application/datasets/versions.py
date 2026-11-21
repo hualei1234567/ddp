@@ -12,6 +12,7 @@ from app.application.datasets.commands import (
     NewDatasetVersion,
     PreviewSelection,
 )
+from app.application.datasets.export_ports import ExportObjectStorage
 from app.application.datasets.idempotency import IdempotencyGuard, validate_key
 from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.ports import (
@@ -29,6 +30,7 @@ from app.application.datasets.ports import (
 from app.application.datasets.quality_gate import EpisodeQualityGate
 from app.application.datasets.version_actions import DatasetVersionActionsMixin
 from app.application.datasets.version_common import _utcnow, _uuid
+from app.domain.datasets.canonical import sha256_text
 from app.domain.datasets.enums import (
     DatasetStatus,
     DatasetVersionStatus,
@@ -67,6 +69,7 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        storage: ExportObjectStorage,
         lineage: DatasetVersionLineageRecorder | None = None,
         quality_gate: EpisodeQualityGate | None = None,
     ) -> None:
@@ -80,6 +83,9 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        # 冻结时把 Manifest 写入对象存储并回读校验（V31-040）。生产装配一定
+        # 注入；对象存储不可用时冻结失败，而不是只在库里留一个 Hash。
+        self._storage = storage
         # 版本转 READY 时写 Episode → DatasetVersion 的 INCLUDED_IN 边。
         # 允许为 None 是为了保持既有纯读/纯策略用例的构造签名兼容；
         # 生产装配一定注入，见 ``api/v1/dataset_dependencies.py``。
@@ -456,6 +462,25 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         return self._verify_manifest(scope, version, items=tuple(items))
 
     # ---- 内部 ----
+    def _persist_manifest(self, manifest: Manifest) -> tuple[str, str]:
+        """把 Manifest 规范化字节写入对象存储并回读校验。
+
+        对象键复用 validate 阶段已写入版本的 ``manifest_key``（Manifest 自身
+        携带该字段），保证数据库记录、对象存储与下载地址指向同一处；
+        返回 ``(object_key, manifest_sha256)``。落库的 Hash 与对象字节必须
+        一致：回读不通过就抛错，由外层事务回滚，版本保持 READY。
+        """
+        object_key = manifest.manifest_key
+        if object_key is None:
+            raise ManifestMismatchError("版本缺少 manifest_key，无法落盘 Manifest")
+        data = manifest.canonical_bytes()
+        digest = sha256_text(data.decode("utf-8"))
+        self._storage.put_bytes(object_key, data, content_type="application/json")
+        readback = b"".join(self._storage.stream_object(object_key, chunk_size=64 * 1024))
+        if sha256_text(readback.decode("utf-8")) != digest:
+            raise ManifestMismatchError("Manifest 回读校验失败，拒绝冻结")
+        return object_key, digest
+
     def _verify_manifest(
         self,
         scope: ProjectScope,

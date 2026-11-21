@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
 
-from app.domain.datasets.canonical import sha256_value
+from app.domain.datasets.canonical import canonical_json_bytes, sha256_value
 from app.domain.datasets.errors import ManifestMismatchError
 from app.domain.datasets.models import DatasetItem, DatasetVersion
 from app.domain.datasets.validation import (
@@ -150,6 +150,14 @@ class Manifest:
             "annotation_submission_refs_digest": self.annotation_submission_refs_digest,
             "canonicalization": "RFC8785_JCS",
         }
+
+    def canonical_bytes(self) -> bytes:
+        """被哈希的 RFC 8785 规范化字节；落对象存储与回读校验共用这一份实现。
+
+        `manifest_sha256` 是对这批字节的 SHA256，因此对象存储里的文件可以
+        用同一条规则独立复算校验，不需要理解字段语义。
+        """
+        return canonical_json_bytes(self._hash_payload())
 
     def to_payload(
         self, *, inline: bool = True, download_url: str | None = None
