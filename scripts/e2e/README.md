@@ -72,14 +72,17 @@ backend/.venv/bin/python scripts/e2e/v31-annotation-chain.py
 cd apps/web
 DDP_E2E_BASE_URL=http://127.0.0.1:5174 \
 DDP_E2E_USER_ID=<标注人 UUID> \
+DDP_E2E_REVIEWER_ID=<复核人 UUID> \
 DDP_E2E_PROJECT_ID=<项目 UUID> \
 DDP_E2E_ANNOTATION_ASSIGNMENT_ID=<上一步输出的 assignment_id> \
+DDP_E2E_ANNOTATION_TASK_ID=<上一步输出的 task_id> \
 npx playwright test e2e/annotation-console.spec.ts --reporter=list
 ```
 
 用例覆盖：我的任务（个人队列）→ 工作台 → 时间轴拖拽框选 → OBJECT_TRACK
 行编辑器（新增轨迹带入选区）→ 必填标签（Episode 结果 + 时间片段）→ 提交
-→ 服务端冻结提示。通过后可用下面的 SQL 复核记录确实落库：
+→ 服务端冻结提示 → 切复核人身份进复核队列 → 创建复核（默认当前用户）→
+领取 → 通过。通过后可用下面的 SQL 复核记录确实落库：
 
 ```sql
 SELECT id, status, item_count, data_source, submitted_at
@@ -98,6 +101,7 @@ FROM annotation_records WHERE submission_id = '<submission_id>';
 | `DDP_E2E_PROJECT_ID` | 项目 UUID |
 | `DDP_E2E_TASK_ID` / `DDP_E2E_IMPORT_ID` / `DDP_E2E_REVIEWER_ID` / `DDP_E2E_MCAP_PATH` | 上传与复核路径的种子 |
 | `DDP_E2E_ANNOTATION_ASSIGNMENT_ID` | 标注控制台路径的分配 |
+| `DDP_E2E_ANNOTATION_TASK_ID` | 复核队列按任务聚合，需要任务 UUID |
 | `DDP_E2E_API_BASE` | `v31-annotation-chain.py` 调用的后端地址，默认 `http://127.0.0.1:8010/api/v1` |
 
 ## 其他真实栈脚本

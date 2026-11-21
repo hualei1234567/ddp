@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
  * 关键路径：标注控制台（V31-027）。
  *
  * 覆盖：我的任务（个人队列） → 工作台 → 时间轴框选 → OBJECT_TRACK 行编辑器
- * → 必填标签 → 提交。
+ * → 必填标签 → 提交 → 复核队列 → 创建复核（默认当前用户）→ 领取 → 通过。
  *
  * 数据由真实后端提供：`DDP_E2E_ANNOTATION_ASSIGNMENT_ID` 指向一条已
  * `IN_PROGRESS` 的分配（见 `scripts/e2e/` 的真实链路种子）。未提供环境时
@@ -95,5 +95,44 @@ test.describe("关键路径：标注控制台", () => {
     // 4. 提交；服务端返回后页面显示冻结提示。
     await page.getByRole("button", { name: /提交标注/ }).click();
     await expect(page.getByText(/提交已冻结/)).toBeVisible({ timeout: 30_000 });
+
+    // 5. 复核：换成复核人身份，从复核队列进入该提交，领取并通过。
+    const reviewerId = read("DDP_E2E_REVIEWER_ID");
+    const taskId = read("DDP_E2E_ANNOTATION_TASK_ID");
+    const userId = read("DDP_E2E_USER_ID");
+    await page.setExtraHTTPHeaders({ "X-User-Id": reviewerId });
+    await page.goto(
+      `/annotation/reviews?project_id=${projectId}&task_id=${taskId}`,
+    );
+    await expect(page.getByRole("heading", { name: "复核队列" })).toBeVisible({
+      timeout: 30_000,
+    });
+    await page.getByRole("link", { name: "查看 / 复核" }).first().click();
+    const createReview = page.getByRole("button", { name: "创建复核" });
+    await expect(createReview).toBeVisible({ timeout: 30_000 });
+    // 复核人默认就是当前认证用户，不需要手抄 UUID。
+    await expect(page.getByRole("combobox", { name: "复核人" })).toHaveValue(
+      reviewerId,
+    );
+    await createReview.click();
+    await expect(page.getByText(/复核已创建/)).toBeVisible({ timeout: 30_000 });
+    await page.getByRole("button", { name: "领取复核" }).click();
+    await expect(page.getByText(/复核动作 claim 已提交/)).toBeVisible({
+      timeout: 30_000,
+    });
+    await page
+      .getByRole("checkbox", {
+        name: /我已核对 Schema 快照、标签完整性、证据与职责分离/,
+      })
+      .check();
+    await page.getByRole("button", { name: /^通\s*过$/ }).click();
+    await expect(page.getByText(/复核动作 approve 已提交/)).toBeVisible({
+      timeout: 30_000,
+    });
+
+    // 6. 复核后身份切回标注人，界面显示服务端推进后的终态。
+    await page.setExtraHTTPHeaders({ "X-User-Id": userId });
+    await page.reload();
+    await expect(page.getByText("复核：已通过")).toBeVisible({ timeout: 30_000 });
   });
 });
