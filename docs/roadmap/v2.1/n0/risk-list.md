@@ -84,6 +84,7 @@
 | RK-61 | Episode 只冻结 `segmentation_rule_version`，未冻结规则参数；把版本可追溯误写成“可完整重放”会伪造分段闭环 | `domain/episodes/models.py`；`application/processing/segmentation_stage.py`；`test_processing_segmentation_stage.py` | 中 | P1 | N4-014 只报告注册版本可追溯与手工/历史标签不可重放，明确未执行重新切片；后续如需完整重放，先以兼容迁移冻结 method + parameters，历史值保持 UNKNOWN，禁止推测回填 | 后端 / 数据 |
 | RK-62 | HDF5 探测只读结构、不解码数据集值；把“结构可读”误当成“观测/动作语义已验证”会形成虚假闭环 | `data-platform/ddp_data/hdf5/metadata.py`；`test_hdf5_probe.py`；`test_hdf5_real_public_sample.py` | 中 | P1 | N3-006 摘要只含路径/shape/dtype/compression/chunks/属性名，明确不含数据集值与属性值；真实公开样例仅证明结构可读，不证明标定、物理时钟或硬件在环；ROS Bag 仍 MISSING | 数据 / 后端 |
 | RK-63 | 导入链路的格式识别只拿文件前 64 字节做魔数匹配，HDF5 的 user block 会让签名落在 512 整数倍偏移，被误判为 UNKNOWN | `domain/ingestion/validation.py::detect_format`；`import_runner.py:684`；`upload_completion.py:596` | 中 | P2 | N3-006 的结构探测器已按规范支持 user block 偏移；导入链路要覆盖同一情况需改调用方从“前 64 字节”改为“按偏移取样”，涉及上传/导入两处语义，留作独立任务；在此之前带 user block 的 HDF5 仍会被判 UNKNOWN 并走既有隔离路径 | 后端 |
+| RK-64 | ROS Bag 结构探测只读索引/metadata、不解码消息体；把 topic/msgtype/计数可读误当成传感器字段语义已验证会形成虚假闭环 | `data-platform/ddp_data/rosbag/metadata.py`；`test_rosbag_probe.py`；`test_rosbag_real_public_sample.py` | 中 | P1 | N3-007 明确不调用 `messages()`，rosbag2 metadata 设 4 MiB 上限并拒绝 file 级压缩无界解压，摘要不含消息定义、QoS 或消息体；真实公开 ROS1 bag 仅证明索引结构可读，观测/动作字段映射、标定与物理时钟仍需独立任务和硬件验证 | 数据 / 后端 |
 
 ## 5. 产品与验收口径
 

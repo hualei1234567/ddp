@@ -1,0 +1,24 @@
+{
+  "source": {
+    "repository": "foxglove/mcap",
+    "revision": "d330d56fe7725bd08b8e93b47480fd04f04d0553",
+    "license": "MIT",
+    "gated": false,
+    "file_path": "testdata/bags/generated/noetic-multitopic-none.bag",
+    "file_size_bytes": 5482,
+    "file_sha256": "a5a7acb5f8af7c5d1bbfe2a4dbc2b3e411abc83284019c0c63c570a49f8d9f1e",
+    "retrieved_at": "2026-11-21"
+  },
+  "observed_structure": {
+    "format": "rosbag1",
+    "topic_count": 2,
+    "message_count": 3,
+    "start_time_ns": 1000000002,
+    "end_time_ns": 3000000004,
+    "duration_ns": 2000000002,
+    "topics": [
+      {"topic": "/chatter", "msgtype": "std_msgs/msg/String", "message_count": 2},
+      {"topic": "/numbers", "msgtype": "std_msgs/msg/UInt32", "message_count": 1}
+    ]
+  }
+}
