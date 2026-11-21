@@ -68,7 +68,9 @@ _DETECTION_SUFFIX_BYTES = 16
 MAX_PARQUET_COLUMNS = 512
 
 #: 本阶段支持的格式；其余格式显式失败或跳过，不默认成功。
-SUPPORTED_FORMATS = frozenset({RawAssetFormat.MP4, RawAssetFormat.PARQUET, RawAssetFormat.MCAP})
+SUPPORTED_FORMATS = frozenset(
+    {RawAssetFormat.MP4, RawAssetFormat.PARQUET, RawAssetFormat.MCAP, RawAssetFormat.HDF5}
+)
 
 MP4_ADAPTER_ID = "mp4.ffprobe_readonly"
 MP4_ADAPTER_VERSION = "1.0.0"
@@ -161,14 +163,14 @@ class MetadataExtractionHandler:
             return StageOutcome(
                 status=ProcessingStepStatus.SKIPPED.value,
                 log_summary=(
-                    "跳过：输入中没有可解析格式" f"（支持 MP4/Parquet/MCAP，实际为 {formats}）"
+                    "跳过：输入中没有可解析格式" f"（支持 MP4/Parquet/MCAP/HDF5，实际为 {formats}）"
                 ),
             )
         if unsupported:
             formats = "、".join(sorted(set(unsupported)))
             raise StageFailure(
                 "metadata_format_unsupported",
-                f"存在不支持的对象格式：{formats}（支持 MP4/Parquet/MCAP）",
+                f"存在不支持的对象格式：{formats}（支持 MP4/Parquet/MCAP/HDF5）",
                 retryable=False,
             )
 
@@ -486,7 +488,9 @@ def _extract_payload(
         return _extract_mp4(path)
     if raw_format is RawAssetFormat.PARQUET:
         return _extract_parquet(path)
-    return _extract_mcap(path)
+    if raw_format is RawAssetFormat.MCAP:
+        return _extract_mcap(path)
+    return _extract_hdf5(path)
 
 
 def _extract_mp4(path: Path) -> tuple[str, str, dict[str, object]]:
@@ -517,6 +521,23 @@ def _extract_mcap(path: Path) -> tuple[str, str, dict[str, object]]:
     except McapProbeError as exc:
         raise _probe_failure("MCAP", exc) from exc
     return ADAPTER_ID, ADAPTER_VERSION, metadata.as_metadata()
+
+
+def _extract_hdf5(path: Path) -> tuple[str, str, dict[str, object]]:
+    from ddp_data.hdf5 import (
+        ADAPTER_ID,
+        ADAPTER_VERSION,
+        Hdf5ProbeError,
+        read_hdf5_structure,
+    )
+
+    from app.application.processing.hdf5_metadata import hdf5_stage_payload
+
+    try:
+        structure = read_hdf5_structure(path)
+    except Hdf5ProbeError as exc:
+        raise _probe_failure("HDF5", exc) from exc
+    return ADAPTER_ID, ADAPTER_VERSION, hdf5_stage_payload(structure)
 
 
 def _parquet_payload(preview: object) -> dict[str, object]:
@@ -555,7 +576,7 @@ def _parquet_payload(preview: object) -> dict[str, object]:
 def _probe_failure(raw_format: str, exc: Exception) -> StageFailure:
     """把解析器异常映射为稳定失败码；摘要只含格式与错误码，不回显路径。"""
     code = str(getattr(exc, "code", "probe_failed"))
-    if code in {"ffprobe_unavailable", "mcap_unavailable"}:
+    if code in {"ffprobe_unavailable", "mcap_unavailable", "hdf5_unavailable"}:
         return StageFailure(
             "metadata_probe_unavailable",
             f"{raw_format} 元数据探测不可用（{code}）",

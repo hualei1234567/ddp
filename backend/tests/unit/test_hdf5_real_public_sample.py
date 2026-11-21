@@ -91,3 +91,56 @@ def test_real_metadata_does_not_leak_dataset_values() -> None:
     # actions 是 float64 数组；若摘要夹带数值会被这里抓住。
     assert "0.123456" not in payload
     assert structure.as_metadata()["datasets"][0]["shape"] is not None
+
+
+def test_real_robomimic_processing_stage_emits_bounded_explicit_projection() -> None:
+    """真实文件经 Processing Stage 后小于 256 KiB，且不隐藏完整总数。"""
+    from datetime import UTC, datetime
+    from uuid import uuid4
+
+    from app.application.processing.metadata_stage import MetadataExtractionHandler
+    from app.application.processing.stages import StageContext
+    from app.domain.identity.models import ProjectScope
+    from app.domain.processing.enums import ProcessingStage, ProcessingStepStatus
+    from app.domain.processing.models import ProcessingRun
+
+    from tests.unit.processing_stage_support import FakeArtifactStore, FakeObjectReader
+
+    source = Path(_REAL_PATH)  # type: ignore[arg-type]
+    project_id = uuid4()
+    run_id = uuid4()
+    ref = f"raw/{project_id}/2026/11/21/{uuid4()}/content.h5"
+    artifacts = FakeArtifactStore()
+    context = StageContext(
+        run=ProcessingRun(
+            run_id=run_id,
+            project_id=project_id,
+            pipeline_version="pipeline-v1",
+            input_refs=(ref,),
+            output_refs=(),
+            status="RUNNING",
+            stage=ProcessingStage.METADATA_EXTRACTION.value,
+            attempt=1,
+            started_at=datetime(2026, 11, 21, tzinfo=UTC),
+        ),
+        scope=ProjectScope(project_id=project_id, actor_id=uuid4()),
+        now=datetime(2026, 11, 21, tzinfo=UTC),
+    )
+
+    outcome = MetadataExtractionHandler(
+        FakeObjectReader({ref: source.read_bytes()}),
+        artifacts,
+    )(context)
+
+    assert outcome.status == ProcessingStepStatus.SUCCEEDED.value
+    encoded = artifacts.read_bytes(outcome.output_refs[0], max_bytes=256 * 1024)
+    document = json.loads(encoded)
+    metadata = document["metadata"]
+    expected = _facts()["observed_structure"]
+    assert metadata["dataset_count"] == expected["dataset_count"]
+    assert metadata["group_count"] == expected["group_count"]
+    assert metadata["attribute_count"] == expected["attribute_count"]
+    assert metadata["details_truncated"] is True
+    assert metadata["omitted_dataset_count"] == 6008 - len(metadata["datasets"])
+    assert metadata["omitted_group_count"] == 1802 - len(metadata["groups"])
+    assert len(encoded) <= 256 * 1024
