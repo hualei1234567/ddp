@@ -9,7 +9,13 @@
 
 | 文档 | 内容 | 状态 |
 |---|---|---|
-| **[roadmap/v2.1/README.md](roadmap/v2.1/README.md)** | **V2.1 建设路线入口**：N0 基线、能力矩阵、复用矩阵、技术债、Backlog、DAG、风险、No-Go | **现行执行基线** |
+| **[roadmap/v3.1/README.md](roadmap/v3.1/README.md)** | **V3.1 全链路数据生产闭环路线入口**：N0 现状复核、模块差距矩阵、复用关系、实施任务 DAG 与里程碑 | **现行执行基线** |
+| [roadmap/v3.1/n0/current-system-baseline.md](roadmap/v3.1/n0/current-system-baseline.md) | V3.1 事实基线：`46864a9`、契约 1.26.0、迁移 0068、`make check` EXIT 0 | **现行** |
+| [roadmap/v3.1/n0/gap-matrix.md](roadmap/v3.1/n0/gap-matrix.md) | 用户点名的七项重点能力逐项状态与证据路径 | **现行** |
+| [roadmap/v3.1/n0/reuse-map.md](roadmap/v3.1/n0/reuse-map.md) | 数据库 / API / 前端组件的复用与扩展判定（复用优先依据） | **现行** |
+| [roadmap/v3.1/n0/task-dag.md](roadmap/v3.1/n0/task-dag.md) | V31-001..044 任务 DAG、里程碑 M1–M5、待确认决策 D1–D5 | **现行** |
+| [roadmap/v3.1/n0/audit-method.md](roadmap/v3.1/n0/audit-method.md) | N0 审计方法、证据分级与不可宣称项 | **现行** |
+| **[roadmap/v2.1/README.md](roadmap/v2.1/README.md)** | **V2.1 建设路线入口**：N0 基线、能力矩阵、复用矩阵、技术债、Backlog、DAG、风险、No-Go | V2.1 执行记录 |
 | [roadmap/v2.1/n0/current-system-baseline.md](roadmap/v2.1/n0/current-system-baseline.md) | 当前系统事实：`7a9bb4b`、契约 1.9.0、迁移 0052、后端 2240 passed、前端 739 passed | **现行** |
 | [roadmap/v2.1/n0/capability-matrix.md](roadmap/v2.1/n0/capability-matrix.md) | N1–N9 共 47 项能力唯一状态（12 VERIFIED / 30 PARTIAL / 4 MISSING / 1 BLOCKED） | **现行** |
 
