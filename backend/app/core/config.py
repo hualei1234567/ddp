@@ -191,6 +191,10 @@ class Settings(BaseSettings):
     # 标注分配容量上限；由部署配置注入，HTTP 层统一执行。
     annotation_max_open_items: int = Field(default=50, gt=0)
     annotation_max_planned_minutes: int = Field(default=2400, gt=0)
+    # 周期工作量容量（分钟）。``None`` = 未配置：工作量端点如实返回
+    # ``capacity_minutes=null`` / ``utilization_ratio=null``，不用 0 冒充
+    # 「未超容量」。配置后才可能出现 AT_CAPACITY / OVER_CAPACITY。
+    annotation_capacity_minutes: int | None = Field(default=None, ge=1)
 
     # Hugging Face 远端校验：仅当登记请求显式 verify_remote=true 时才调用。
     # token 为空表示匿名只读（公开数据集足够）；GATED 数据集需要配置只读 token。

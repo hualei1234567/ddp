@@ -204,6 +204,16 @@ describe("标注列表与详情请求", () => {
       path: `/annotation-overdue-summary`,
     },
     {
+      name: "getWorkload",
+      call: (api) =>
+        api.getWorkload(PROJECT, {
+          assigneeId: ID,
+          periodStart: "2026-11-01T00:00:00Z",
+          periodEnd: "2026-11-08T00:00:00Z",
+        }),
+      path: `/annotation-workload`,
+    },
+    {
       name: "getBatch",
       call: (api) => api.getBatch(PROJECT, ID),
       path: `/annotation-batches/${ID}`,
@@ -260,6 +270,67 @@ describe("标注列表与详情请求", () => {
       expect(init.method ?? "GET").toBe("GET");
     });
   }
+});
+
+/**
+ * 工作量聚合：周期两端必须原样出现在查询串里，响应必须与请求的
+ * project/assignee 一致——否则运营页会把别人的数字当成本项目的。
+ */
+describe("工作量聚合请求", () => {
+  const WORKLOAD_ID = "44444444-4444-4444-4444-444444444444";
+
+  function workloadFixture(overrides: Record<string, unknown> = {}) {
+    return {
+      project_id: PROJECT,
+      user_id: WORKLOAD_ID,
+      period_start: "2026-11-01T00:00:00Z",
+      period_end: "2026-11-08T00:00:00Z",
+      assigned_item_count: 4,
+      claimed_item_count: 2,
+      submitted_item_count: 1,
+      approved_item_count: 1,
+      rework_item_count: 0,
+      total_minutes: 90,
+      capacity_minutes: null,
+      utilization_ratio: null,
+      status: "NORMAL",
+      missing_semantics: "N/A",
+      source_version: "annotation-assignment-events/1",
+      ...overrides,
+    };
+  }
+
+  it("周期参数原样进入查询串", async () => {
+    const { api, fetchImpl } = makeApi(workloadFixture());
+
+    await api.getWorkload(PROJECT, {
+      assigneeId: WORKLOAD_ID,
+      periodStart: "2026-11-01T00:00:00Z",
+      periodEnd: "2026-11-08T00:00:00Z",
+    });
+
+    const [url] = lastCall(fetchImpl);
+    const query = queryOf(url);
+    expect(query.get("assignee_id")).toBe(WORKLOAD_ID);
+    expect(query.get("period_start")).toBe("2026-11-01T00:00:00Z");
+    expect(query.get("period_end")).toBe("2026-11-08T00:00:00Z");
+  });
+
+  it("响应 user_id 与请求的 assignee 不一致时报契约错误", async () => {
+    const { api } = makeApi(
+      workloadFixture({ user_id: "55555555-5555-5555-5555-555555555555" }),
+    );
+
+    // ApiClient 会把解析失败统一包装成 invalid_response；这里断言类别，
+    // 而不是包装后的通用文案。
+    await expect(
+      api.getWorkload(PROJECT, {
+        assigneeId: WORKLOAD_ID,
+        periodStart: "2026-11-01T00:00:00Z",
+        periodEnd: "2026-11-08T00:00:00Z",
+      }),
+    ).rejects.toMatchObject({ kind: "invalid_response" });
+  });
 });
 
 /**

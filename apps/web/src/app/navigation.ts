@@ -14,6 +14,7 @@ import {
   ReadOutlined,
   RobotOutlined,
   ScheduleOutlined,
+  SolutionOutlined,
   SafetyCertificateOutlined,
   TagsOutlined,
   TeamOutlined,
@@ -141,6 +142,15 @@ export const navSections: NavSection[] = [
         icon: createElement(TagsOutlined),
         available: true,
         aliases: ["/annotation"],
+      },
+      {
+        // 工作量按人员与周期聚合分配事件；容量来自服务端部署配置，
+        // 未配置时如实显示「未配置」而不是 0。
+        path: "/annotation/workload",
+        label: "工作量运营",
+        description: "按项目成员与周期查看分配、领取、提交、通过、返工与工时。",
+        icon: createElement(SolutionOutlined),
+        available: true,
       },
       {
         // 后端 N4 质量能力（黄金集 / 抽检 / IAA / 提交质量检查）早已就绪，

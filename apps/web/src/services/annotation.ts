@@ -51,6 +51,7 @@ export type {
   AnnotationAssignmentActionOptions,
   AnnotationAssignmentCreateInput,
   AnnotationBatchCreateInput,
+  WorkloadQuery,
 } from "./annotationTaskApi";
 
 export type {

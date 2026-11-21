@@ -661,3 +661,29 @@ OverdueBucketCount:
     upper_bound_hours:
       type: [integer, "null"]
       description: 分桶上界（小时，左闭右开）；null 表示无上界。
+
+AnnotationWorkload:
+  type: object
+  additionalProperties: false
+  required: [project_id, user_id, period_start, period_end, assigned_item_count, claimed_item_count, submitted_item_count, approved_item_count, rework_item_count, total_minutes, capacity_minutes, utilization_ratio, status, missing_semantics, source_version]
+  properties:
+    project_id: {type: string, format: uuid}
+    user_id: {type: string, format: uuid}
+    period_start: {type: string, format: date-time}
+    period_end: {type: string, format: date-time}
+    assigned_item_count: {type: integer, minimum: 0}
+    claimed_item_count: {type: integer, minimum: 0}
+    submitted_item_count: {type: integer, minimum: 0}
+    approved_item_count: {type: integer, minimum: 0}
+    rework_item_count: {type: integer, minimum: 0}
+    total_minutes: {type: integer, minimum: 0}
+    capacity_minutes:
+      type: [integer, "null"]
+      minimum: 0
+      description: 部署配置的周期容量；`null` 表示未配置，不是 0。
+    utilization_ratio:
+      type: [number, "null"]
+      description: "`total_minutes / capacity_minutes`；容量未配置或为 0 时为 `null`。"
+    status: {type: string, enum: [NORMAL, AT_CAPACITY, OVER_CAPACITY, STALE, PARTIAL, UNKNOWN]}
+    missing_semantics: {type: string, enum: [NONE, "N/A", UNKNOWN, STALE, PARTIAL]}
+    source_version: {type: string}
