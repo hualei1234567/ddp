@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import AiSuggestionPanel from "../../components/annotation/AiSuggestionPanel";
+import DatasetLinkagePanel from "../../components/annotation/DatasetLinkagePanel";
 import AnnotationFeedbackAlert from "../../components/annotation/AnnotationFeedbackAlert";
 import ArbitrationPanel, {
   type ArbitrationCreateFormInput,
@@ -333,6 +334,12 @@ function SubmissionContent({
           onCreate={handleCreateArbitration}
           onAction={handleArbitrationAction}
           onVote={handleVote}
+        />
+        <Divider orientation="left">训练数据</Divider>
+        <DatasetLinkagePanel
+          projectId={projectId}
+          submission={data.submission}
+          records={data.records}
         />
       </Space>
     );

@@ -33,3 +33,22 @@ if (typeof window !== "undefined" && typeof window.getComputedStyle === "functio
 afterEach(() => {
   cleanup();
 });
+
+/**
+ * antd 的响应式 Hook（Table/Grid 等）在挂载时调用 `window.matchMedia`，
+ * jsdom 未实现。返回"永不匹配"的最小实现即可：组件只关心断点，测试不依赖
+ * 真实媒体查询结果。
+ */
+if (typeof window !== "undefined" && typeof window.matchMedia !== "function") {
+  window.matchMedia = ((query: string) =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }) as unknown as MediaQueryList) as typeof window.matchMedia;
+}

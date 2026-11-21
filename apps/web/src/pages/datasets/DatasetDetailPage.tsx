@@ -1,7 +1,7 @@
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Descriptions, Divider, Space, Tabs, Tag, Typography } from "antd";
-import { useCallback, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import ActionButtons from "../../components/dataset/ActionButtons";
 import DatasetGrantsSection from "../../components/dataset/DatasetGrantsSection";
@@ -20,6 +20,7 @@ import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
 import { datasetApi } from "../../services/datasets";
+import { readEpisodeIdsParam } from "../../services/datasetUrl";
 import {
   presentDatasetStatus,
   presentPurpose,
@@ -37,7 +38,18 @@ function DatasetDetailContent({
   datasetId: string;
 }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [refreshToken, setRefreshToken] = useState(0);
+  const [activeTab, setActiveTab] = useState(() =>
+    readEpisodeIdsParam(searchParams).length > 0 ? "versions" : "policies",
+  );
+
+  useEffect(() => {
+    if (readEpisodeIdsParam(searchParams).length > 0) {
+      setActiveTab("versions");
+    }
+  }, [searchParams]);
+
   const load = useCallback(
     (signal: AbortSignal) => datasetApi.get(projectId, datasetId, { signal }),
     [projectId, datasetId],
@@ -133,6 +145,10 @@ function DatasetDetailContent({
         </Space>
         <Divider />
         <Tabs
+          // 从标注提交「加入数据集」跳进来时带 episode_ids，需要直接落在
+          // 「版本」页签——预填逻辑在 DatasetVersionsSection 里消费该参数。
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
             {
               key: "policies",

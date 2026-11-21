@@ -72,6 +72,8 @@ export interface DatasetItem {
   episode_id: string;
   episode_version: number;
   episode_lineage_id: string;
+  annotation_submission_id: string;
+  annotation_version: number;
   split: string;
   sample_role: string;
   weight: number;
@@ -122,6 +124,20 @@ export interface QualityPolicy extends PolicyBase {
   require_leakage_pass: boolean;
 }
 
+export interface ExclusionSummaryEntry {
+  code: string;
+  count: number;
+  sample_episode_ids: string[];
+}
+
+export interface SelectionPreviewItem {
+  episode_id: string;
+  episode_version: number;
+  split: string | null;
+  decision: string;
+  reason: string | null;
+}
+
 export interface SelectionPreview {
   candidate_count: number;
   selected_count: number;
@@ -129,7 +145,8 @@ export interface SelectionPreview {
   duplicated_count: number;
   split_counts: Record<string, number>;
   split_preview_status: string;
-  exclusion_summary: Record<string, number>;
+  exclusion_summary: ExclusionSummaryEntry[];
+  items_sample: SelectionPreviewItem[];
   warnings: string[];
   blocking_issues: string[];
   preview_sha256: string;
