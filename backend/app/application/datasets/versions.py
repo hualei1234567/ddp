@@ -348,6 +348,9 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
             source_snapshot_at=now,
             sample_limit=command.sample_limit,
             quality_verdicts=self._quality_verdicts(scope, filters, candidates),
+            # 预演是"按这套策略会选出什么"，不是对已冻结版本的再复算；
+            # 与已存 Hash 比较会把它误判成内容漂移。
+            verify_stored_manifest_hash=False,
         )
         return result.preview
 

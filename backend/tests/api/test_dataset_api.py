@@ -205,6 +205,43 @@ def test_dataset_version_lifecycle_reports_and_freeze(
         session.rollback()
 
 
+def test_dataset_preview_after_validate_not_blocked_by_stored_manifest(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """版本转 READY 后预览仍是预演：不能被已存 Manifest Hash 判成漂移。"""
+    factory, ids = api_db
+    ctx = _setup(factory, ids)
+    editor = ctx["editor"]
+    project_id = ids.project_a
+    dataset_id = ctx["dataset"]["dataset_id"]
+    version_id = ctx["version"]["dataset_version_id"]
+
+    built = editor.post(
+        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/actions/build"),
+        headers={"If-Match": '"1"'},
+        json={"reason": None},
+    )
+    assert built.status_code == 200, built.text
+    validated = editor.post(
+        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/actions/validate"),
+        headers={"If-Match": f'"{built.json()["version"]}"'},
+        json={},
+    )
+    assert validated.status_code == 200, validated.text
+    assert validated.json()["status"] == "READY"
+    assert validated.json()["manifest_sha256"] is not None
+
+    preview = editor.post(
+        url(project_id, f"/datasets/{dataset_id}/versions/{version_id}/selection-preview"),
+        json=_preview_body(ctx["policies"]),
+    )
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["selected_count"] == 10
+    # 逐条样例带决策与原因，前端据此做排除原因跳转。
+    assert {item["decision"] for item in body["items_sample"]} == {"SELECTED"}
+
+
 def test_dataset_freeze_rejects_manifest_readback_mismatch(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:
