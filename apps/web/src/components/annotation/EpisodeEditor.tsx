@@ -1,4 +1,4 @@
-import { Button, Card, Select, Space, Tag, Typography } from "antd";
+import { Alert, Button, Card, Select, Space, Tag, Typography } from "antd";
 import { useCallback, useMemo, useState } from "react";
 
 import type {
@@ -117,6 +117,7 @@ export default function EpisodeEditor({
   return (
     <Card
       size="small"
+      data-testid="episode-editor"
       title={
         <Space wrap>
           <span>{episode.code}</span>
@@ -137,6 +138,15 @@ export default function EpisodeEditor({
           时间范围：{episode.start_time_ns} – {episode.end_time_ns} ns · 时域{" "}
           {episode.time_domain}
         </Typography.Text>
+
+        {episode.calibration_snapshot.length === 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            message="该 Episode 未登记标定快照"
+            description="标注仍可进行；若本任务要求标定后的传感器数据，请先补标定再提交。"
+          />
+        ) : null}
 
         <EpisodeMediaPanel
           projectId={projectId}

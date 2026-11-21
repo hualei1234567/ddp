@@ -425,6 +425,36 @@ function readEpisodeTimeDomain(
   return "UTC";
 }
 
+/**
+ * 纳秒时间戳读取：字符串或整数都接受，但整数必须落在 JS 安全整数范围内。
+ *
+ * 契约（`schemas.stage2.yaml` Episode）写的是 `integer`，真后端也按数字返回；
+ * 而 epoch 纳秒约 1.7e18，超出 `Number.MAX_SAFE_INTEGER`（9.0e15）。因此：
+ * - 字符串原样使用（无损）；
+ * - 安全整数转成字符串（无损）；
+ * - 超出安全范围的数字**报错**，因为 JSON 解析阶段精度已经丢失，
+ *   静默接受会把时间轴定位到错误的时刻。
+ */
+function readNanoseconds(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string {
+  const value = record[key];
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" && Number.isSafeInteger(value)) {
+    return String(value);
+  }
+  if (typeof value === "number") {
+    throw new ContractValidationError(
+      `${path} 超出 JS 安全整数范围，服务端应以字符串返回纳秒时间戳`,
+    );
+  }
+  throw new ContractValidationError(`${path} 必须是纳秒整数或数字字符串`);
+}
+
 export function parseEpisode(value: unknown, path = "Episode"): Episode {
   const record = asRecord(value, path);
   const timeBase = parseTimeBase(record.time_base, `${path}.time_base`);
@@ -434,9 +464,10 @@ export function parseEpisode(value: unknown, path = "Episode"): Episode {
     `${path}.calibration_snapshot`,
     parseCalibrationSnapshotItem,
   );
-  if (calibrationSnapshot.length === 0) {
-    throw new ContractValidationError(`${path}.calibration_snapshot 不能为空`);
-  }
+  // 允许为空：后端 `EpisodeOut.calibration_snapshot` 默认空数组，公开数据集
+  // 与尚未走标定流程的 Episode 都没有标定快照。此前这里要求非空，导致真实
+  // 数据在标注台全部解析失败（「部分数据加载失败 … unknown」）。界面用
+  // 「未登记标定」显式提示，而不是让整个 Episode 不可用。
   // 真后端 EpisodeOut 不重复返回 raw_asset_ids；关系通过血缘端点查询。
   // 缺失时返回空数组，避免把“未返回”误判为契约错误。
   const rawAssetIds = readUuidArrayOrEmpty(
@@ -473,9 +504,13 @@ export function parseEpisode(value: unknown, path = "Episode"): Episode {
       `${path}.sensor_ids`,
     ),
     raw_asset_ids: rawAssetIds,
-    start_time_ns: readString(record, "start_time_ns", `${path}.start_time_ns`),
-    end_time_ns: readString(record, "end_time_ns", `${path}.end_time_ns`),
-    duration_ns: readString(record, "duration_ns", `${path}.duration_ns`),
+    start_time_ns: readNanoseconds(
+      record,
+      "start_time_ns",
+      `${path}.start_time_ns`,
+    ),
+    end_time_ns: readNanoseconds(record, "end_time_ns", `${path}.end_time_ns`),
+    duration_ns: readNanoseconds(record, "duration_ns", `${path}.duration_ns`),
     time_domain: readEpisodeTimeDomain(record, timeBase, `${path}.time_domain`),
     time_base: timeBase,
     canonical_schema_version: readString(
