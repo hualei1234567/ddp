@@ -1,0 +1,40 @@
+{
+  "source": {
+    "dataset_id": "amandlek/robomimic",
+    "dataset_revision": "74fa018461f479cd9fd15b924a16103012096203",
+    "dataset_license": "MIT",
+    "gated": false,
+    "file_path": "v1.5/lift/ph/demo_v15.hdf5",
+    "file_size_bytes": 36699586,
+    "file_sha256": "68f2a8cfe2502de1224f0708fb82e46da07abce108c63e721d72fc1618272f37",
+    "retrieved_at": "2026-11-21",
+    "schema_reference": "https://github.com/ARISE-Initiative/robomimic/blob/master/docs/datasets/robomimic_v0.1.md"
+  },
+  "observed_structure": {
+    "dataset_count": 6008,
+    "group_count": 1802,
+    "attribute_count": 402,
+    "link_count": 0,
+    "top_level_entries": ["data", "mask"],
+    "sample_paths": [
+      {
+        "path": "/data/demo_0/actions",
+        "shape": [59, 7],
+        "dtype": "float64",
+        "compression": null,
+        "chunks": null
+      },
+      {
+        "path": "/data/demo_0/controller_info/enabled",
+        "shape": [253, 1],
+        "dtype": "bool",
+        "compression": null,
+        "chunks": null
+      }
+    ]
+  },
+  "notes": [
+    "该文件为 RoboMimic 原始演示集（raw），不含渲染后的 observation 图像。",
+    "公开数据不含现场序列号、固件、标定与物理时钟；本探测只证明结构可读，不证明硬件已联调。"
+  ]
+}
