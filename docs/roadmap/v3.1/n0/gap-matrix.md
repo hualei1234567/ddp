@@ -98,7 +98,7 @@
 | Canonical 实体无数据库持久化 | `MISSING` | 无对应表 / repository |
 | 产物仅 `output_refs` JSON 数组，无 Artifact 目录 | `MISSING` | `backend/app/infrastructure/db/models/processing.py:58-65` |
 | `DATA_CLEANING` 使用 `SkippedStage` | `MISSING` | `backend/app/application/processing/stages.py:144-149` |
-| Canonical 版本分裂 `1.0.0-draft` vs `1.0.0` | 风险 | `episode_materialization.py:75` vs `data-platform/ddp_data/canonical/v1.py:36` |
+| Canonical 版本分裂 `1.0.0-draft` vs `1.0.0` | 已消除（V31-004，2026-11-22） | 导入物化改为引用 `ddp_data.canonical.v1.SCHEMA_VERSION`（`episode_materialization.py`）；防漂移测试 `tests/unit/test_episode_status_alignment.py`。历史 `-draft` 数据按 ADR-0038 §2.4 有意保留 |
 | `pipeline.py` 头部注释称仅两阶段实现（已过时） | 文档债 | `backend/app/application/processing/pipeline.py:7-12` |
 
 ## 5. AnnotationTask 创建与指定标注人
@@ -197,8 +197,8 @@
 | 把同步质检 API 当成完整自动质检 | 高 | 缺异步编排与规则版本 |
 | 把 LeRobot 元数据导出宣传为训练格式兼容 | 高 | 代码已固定 `UNVERIFIED`，文案必须一致 |
 | 文档状态漂移 | 中高 | `docs/roadmap/v2.1/n0/risk-list.md:72` 仍称 CaptureSession 未关联产物 |
-| Canonical 版本分裂 | 中 | `1.0.0-draft` 与 `1.0.0` 并存 |
-| `COMPLETED` 绕过 Accepted 语义 | 中高 | 可能纳入未正式验收的 Episode |
+| Canonical 版本分裂 | 已消除 | 版本号单一来源（ADR-0038）；历史数据保留原值属溯源事实 |
+| `COMPLETED` 绕过 Accepted 语义 | 中 | ADR-0038 §2.1 裁决 `COMPLETED` 可进 Dataset Builder（状态机保证其质量结论为 PASS）；数据库兜底由 V31-030 补 |
 
 ## 10. 与 V2.1 能力矩阵的关系
 

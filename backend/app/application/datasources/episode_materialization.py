@@ -44,6 +44,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from uuid import UUID
 
+from ddp_data.canonical.v1 import SCHEMA_VERSION as CANONICAL_SCHEMA_VERSION
+
 from app.application.datasources.ports import (
     DataSourceImportRepository,
     MediaAssetRepository,
@@ -73,7 +75,9 @@ IMPORT_TIME_BASE: Mapping[str, object] = {
     "sync_status": "DEGRADED",
 }
 
-IMPORT_CANONICAL_SCHEMA_VERSION = "ddp.canonical/1.0.0-draft"
+# 导入产物必须能被正式 Canonical 契约读取（ADR-0038 §2.5）：版本号只有
+# ``ddp_data.canonical.v1.SCHEMA_VERSION`` 一个来源，不写死字符串副本。
+IMPORT_CANONICAL_SCHEMA_VERSION = CANONICAL_SCHEMA_VERSION
 IMPORT_PIPELINE_ID = "data_source_import"
 IMPORT_PIPELINE_VERSION = "1.0.0"
 # 复用 N3 的 episode-boundary 规则，不另立一套编号。

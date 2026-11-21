@@ -116,6 +116,8 @@ V31-025、V31-026（独立，可并行）
 | D5 | LeRobot 导出是否必须通过官方 Loader 验证才允许标记可交付 | 影响 V31-042 验收门槛 |
 
 > 以上五项属于“不同选择会产出不同工作”的决策，按 `CLAUDE.md` 任务标准流程需先确认。
+>
+> **D1 / D3 已裁决（2026-11-22，ADR-0038）**：`COMPLETED` 允许进入 Dataset Builder 与标注抽样（状态机保证其质量结论为 PASS）；Canonical 正式版本为 `ddp.canonical/1.0.0`，导入层改为引用 `SCHEMA_VERSION`，历史 `-draft` 数据不迁移。D2 / D4 / D5 待各自任务开工时裁决。
 
 ## 6. 本 DAG 明确不含
 
