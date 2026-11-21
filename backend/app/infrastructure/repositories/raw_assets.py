@@ -139,6 +139,38 @@ class SqlRawAssetRepository:
         )
         return self._from_row(row) if row is not None else None
 
+    def attach_capture_session_if_absent(
+        self,
+        scope: ProjectScope,
+        asset_id: UUID,
+        *,
+        capture_session_id: UUID,
+    ) -> bool:
+        """去重命中既有资产时补写采集会话归属（V31-001）。
+
+        语义：资产只记一个来源会话。已有时保留最早归属，不覆盖——这是
+        可追溯性的权威值；只有当原值为空（历史导入、首次上传未带会话）时
+        才补写，并返回是否真的写入。
+
+        ``WHERE capture_session_id IS NULL`` 让并发补写天然幂等：两个请求
+        同时到达时只有一个能成功，另一个读到已写入的值。
+        """
+        result = self._session.execute(
+            update(RawAssetModel)
+            .where(
+                RawAssetModel.id == asset_id,
+                RawAssetModel.project_id == scope.project_id,
+                RawAssetModel.capture_session_id.is_(None),
+            )
+            .values(
+                capture_session_id=capture_session_id,
+                updated_at=datetime.now(UTC),
+                updated_by=scope.actor_id,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        return result.rowcount > 0
+
     def list(
         self,
         scope: ProjectScope,

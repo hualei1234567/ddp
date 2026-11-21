@@ -273,6 +273,21 @@ class UploadCompletionService:
             now=utcnow(),
         )
         dedup_cleanup_pending = False
+        if (
+            deduplicated
+            and completing.capture_session_id is not None
+            and asset.capture_session_id is None
+        ):
+            # 内容去重命中历史资产（如首次导入未带会话）：补写本次会话归属，
+            # 否则本批素材不会出现在该会话的产物列表里。已有归属时保留最早值。
+            if self._assets.attach_capture_session_if_absent(
+                scope,
+                asset.asset_id,
+                capture_session_id=completing.capture_session_id,
+            ):
+                refreshed = self._assets.get(scope, asset.asset_id)
+                if refreshed is not None:
+                    asset = refreshed
         if deduplicated and asset.object_key != completing.object_key:
             # 内容重复时新对象不再保留；删除失败交给后台清理重试。
             dedup_cleanup_pending = not self._safe_delete(completing.object_key)

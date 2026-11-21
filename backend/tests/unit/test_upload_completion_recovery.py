@@ -66,6 +66,9 @@ class _AssetRepo:
     def find_active_by_content(self, *args: object, **kwargs: object) -> None:
         return None
 
+    def attach_capture_session_if_absent(self, *args: object, **kwargs: object) -> bool:
+        return False
+
 
 class _Storage:
     def list_parts(self, object_key: str, upload_id: str) -> list[StoredPart]:
