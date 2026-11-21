@@ -64,6 +64,9 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKEND_DIR = REPO_ROOT / "backend"
+# ``app.main`` 的导入链会到达 ``ddp_data``（导入物化引用 Canonical 版本常量），
+# 而 data-platform 是独立的纯数据能力包、不装进 backend 的 venv。
+DATA_PLATFORM_DIR = REPO_ROOT / "data-platform"
 CONTRACT_FILE = REPO_ROOT / "packages" / "contracts" / "openapi.yaml"
 # 契约与实现之间已确认无害的字段级差异基线。
 #
@@ -352,8 +355,9 @@ def _request_schema(operation: object, base: Base) -> tuple[object, Base]:
 # 运行时侧
 # --------------------------------------------------------------------------- #
 def load_runtime_openapi() -> dict[str, object]:
-    if str(BACKEND_DIR) not in sys.path:
-        sys.path.insert(0, str(BACKEND_DIR))
+    for path in (DATA_PLATFORM_DIR, BACKEND_DIR):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
     # ``app.main`` 导入时就 ``create_app()``，而 ``Settings`` 默认 env 是
     # production——缺少 DDP_ENV 时安全配置守卫会拒启动（RuntimeError），
     # 本地 ``make check`` 在没有 .env 的机器上会整步失败。本检查只读路由表，

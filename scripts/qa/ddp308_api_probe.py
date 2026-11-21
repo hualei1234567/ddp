@@ -35,6 +35,9 @@ BACKEND = ROOT / "backend"
 QA_DIR = Path(__file__).resolve().parent
 EVIDENCE = ROOT / "docs" / "testing" / "evidence" / "2026-11-08-ddp-308"
 sys.path.insert(0, str(BACKEND))
+# ``app.main`` 的导入链会到达 ``ddp_data``（导入物化引用 Canonical 版本常量），
+# 而 data-platform 不装进 backend 的 venv。
+sys.path.insert(0, str(ROOT / "data-platform"))
 sys.path.insert(0, str(QA_DIR))
 
 from ddp308_db_probe import PG_TEMPLATE, create_database, drop_database  # noqa: E402
