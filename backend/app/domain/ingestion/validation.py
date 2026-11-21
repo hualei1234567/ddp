@@ -90,6 +90,7 @@ _HDF5_MAGIC = b"\x89HDF\r\n\x1a\n"
 HDF5_MAX_SIGNATURE_OFFSET = 1024 * 1024
 HDF5_DETECTION_BYTES = HDF5_MAX_SIGNATURE_OFFSET + len(_HDF5_MAGIC)
 _SQLITE_MAGIC = b"SQLite format 3\x00"
+_ROSBAG1_MAGIC = b"#ROSBAG V2.0\n"
 _ZIP_MAGIC = b"PK\x03\x04"
 _PARQUET_MAGIC = b"PAR1"
 
@@ -271,7 +272,7 @@ def detect_format(prefix: bytes, suffix: bytes = b"") -> RawAssetFormat | None:
         return RawAssetFormat.MCAP
     if _has_hdf5_signature(prefix):
         return RawAssetFormat.HDF5
-    if prefix.startswith(_SQLITE_MAGIC):
+    if prefix.startswith((_SQLITE_MAGIC, _ROSBAG1_MAGIC)):
         return RawAssetFormat.ROSBAG2
     if prefix.startswith(_ZIP_MAGIC):
         return RawAssetFormat.ZIP

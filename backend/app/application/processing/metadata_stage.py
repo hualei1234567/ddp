@@ -69,7 +69,13 @@ MAX_PARQUET_COLUMNS = 512
 
 #: 本阶段支持的格式；其余格式显式失败或跳过，不默认成功。
 SUPPORTED_FORMATS = frozenset(
-    {RawAssetFormat.MP4, RawAssetFormat.PARQUET, RawAssetFormat.MCAP, RawAssetFormat.HDF5}
+    {
+        RawAssetFormat.MP4,
+        RawAssetFormat.PARQUET,
+        RawAssetFormat.MCAP,
+        RawAssetFormat.HDF5,
+        RawAssetFormat.ROSBAG2,
+    }
 )
 
 MP4_ADAPTER_ID = "mp4.ffprobe_readonly"
@@ -163,14 +169,15 @@ class MetadataExtractionHandler:
             return StageOutcome(
                 status=ProcessingStepStatus.SKIPPED.value,
                 log_summary=(
-                    "跳过：输入中没有可解析格式" f"（支持 MP4/Parquet/MCAP/HDF5，实际为 {formats}）"
+                    "跳过：输入中没有可解析格式"
+                    f"（支持 MP4/Parquet/MCAP/HDF5/ROS Bag，实际为 {formats}）"
                 ),
             )
         if unsupported:
             formats = "、".join(sorted(set(unsupported)))
             raise StageFailure(
                 "metadata_format_unsupported",
-                f"存在不支持的对象格式：{formats}（支持 MP4/Parquet/MCAP/HDF5）",
+                f"存在不支持的对象格式：{formats}（支持 MP4/Parquet/MCAP/HDF5/ROS Bag）",
                 retryable=False,
             )
 
@@ -490,7 +497,9 @@ def _extract_payload(
         return _extract_parquet(path)
     if raw_format is RawAssetFormat.MCAP:
         return _extract_mcap(path)
-    return _extract_hdf5(path)
+    if raw_format is RawAssetFormat.HDF5:
+        return _extract_hdf5(path)
+    return _extract_rosbag(path)
 
 
 def _extract_mp4(path: Path) -> tuple[str, str, dict[str, object]]:
@@ -540,6 +549,23 @@ def _extract_hdf5(path: Path) -> tuple[str, str, dict[str, object]]:
     return ADAPTER_ID, ADAPTER_VERSION, hdf5_stage_payload(structure)
 
 
+def _extract_rosbag(path: Path) -> tuple[str, str, dict[str, object]]:
+    from ddp_data.rosbag import (
+        ADAPTER_ID,
+        ADAPTER_VERSION,
+        RosbagProbeError,
+        read_rosbag_structure,
+    )
+
+    from app.application.processing.rosbag_metadata import rosbag_stage_payload
+
+    try:
+        structure = read_rosbag_structure(path)
+    except RosbagProbeError as exc:
+        raise _probe_failure("ROS Bag", exc) from exc
+    return ADAPTER_ID, ADAPTER_VERSION, rosbag_stage_payload(structure)
+
+
 def _parquet_payload(preview: object) -> dict[str, object]:
     columns = preview.columns  # type: ignore[attr-defined]
     if len(columns) > MAX_PARQUET_COLUMNS:
@@ -576,7 +602,12 @@ def _parquet_payload(preview: object) -> dict[str, object]:
 def _probe_failure(raw_format: str, exc: Exception) -> StageFailure:
     """把解析器异常映射为稳定失败码；摘要只含格式与错误码，不回显路径。"""
     code = str(getattr(exc, "code", "probe_failed"))
-    if code in {"ffprobe_unavailable", "mcap_unavailable", "hdf5_unavailable"}:
+    if code in {
+        "ffprobe_unavailable",
+        "mcap_unavailable",
+        "hdf5_unavailable",
+        "rosbag_unavailable",
+    }:
         return StageFailure(
             "metadata_probe_unavailable",
             f"{raw_format} 元数据探测不可用（{code}）",
