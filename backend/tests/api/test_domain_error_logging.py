@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import gc
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -175,6 +176,10 @@ def test_unexpected_error_returns_internal_error_with_request_id() -> None:
     client = _build_probe_app(boom)
     with _capture_app_main_logs() as captured, client:
         response = client.get("/test/probe")
+    # TestClient 已关闭；在本用例的局部 warning filter 仍生效时回收 Starlette
+    # 500 路径遗留的 AnyIO stream，避免 __del__ 延迟到下一个无关测试的 setup。
+    del client
+    gc.collect()
 
     assert response.status_code == 500
     error = response.json()["error"]
@@ -205,6 +210,8 @@ def test_database_unavailable_returns_503_not_500() -> None:
     client = _build_probe_app(db_down)
     with _capture_app_main_logs() as captured, client:
         response = client.get("/test/probe")
+    del client
+    gc.collect()
 
     assert response.status_code == 503
     error = response.json()["error"]

@@ -47,6 +47,7 @@ from app.application.processing.ports import (
     StageArtifactStore,
 )
 from app.application.processing.quality_stage import QualityCheckHandler
+from app.application.processing.segmentation_stage import EpisodeSegmentationHandler
 from app.application.processing.time_alignment_stage import TimeAlignmentHandler
 from app.application.processing.use_cases import (
     PROCESSING_RUN_REQUESTED_EVENT,
@@ -57,6 +58,7 @@ from app.application.quality.registry import default_registry
 from app.application.quality.use_cases import QualityRunUseCases
 from app.core.config import Settings, get_settings
 from app.core.logging import bind_trace, configure_logging, trace_from_event_payload
+from app.domain.episodes.segmentation_rules import build_segmentation_rule_registry
 from app.domain.identity.models import ProjectScope
 from app.domain.processing.enums import ProcessingRunStatus
 from app.domain.processing.errors import (
@@ -325,6 +327,11 @@ class ProcessingRunWorker:
             episode_assets=SqlEpisodeRawAssetRepository(session),
             calibrations=SqlCalibrationRecordRepository(session),
         )
+        episode_segmentation = EpisodeSegmentationHandler(
+            episodes=SqlEpisodeRepository(session),
+            episode_assets=SqlEpisodeRawAssetRepository(session),
+            rules=build_segmentation_rule_registry(),
+        )
         return ProcessingPipeline(
             runs,
             SqlProcessingRunStepRepository(session),
@@ -335,6 +342,7 @@ class ProcessingRunWorker:
                 format_parsing=format_parsing,
                 time_alignment=time_alignment,
                 calibration_validation=calibration_validation,
+                episode_segmentation=episode_segmentation,
                 quality_check=quality_check,
             ),
             session,

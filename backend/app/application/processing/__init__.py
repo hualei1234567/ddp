@@ -23,6 +23,10 @@ from app.application.processing.quality_stage import (
     QualityCheckHandler,
     resolve_episode_ids,
 )
+from app.application.processing.segmentation_stage import (
+    MAX_SEGMENTATION_EPISODES,
+    EpisodeSegmentationHandler,
+)
 from app.application.processing.time_alignment_stage import (
     TIME_ALIGNMENT_REPORT_SCHEMA_VERSION,
     TimeAlignmentHandler,
@@ -38,11 +42,13 @@ __all__ = [
     "MAX_AUTO_QUALITY_EPISODES",
     "MAX_CALIBRATION_EPISODES",
     "MAX_METADATA_OBJECTS",
+    "MAX_SEGMENTATION_EPISODES",
     "PROCESSING_RUN_REQUESTED_EVENT",
     "TIME_ALIGNMENT_REPORT_SCHEMA_VERSION",
     "CalibrationValidationHandler",
     "ConcurrentRunUpdate",
     "EpisodeQualityGateway",
+    "EpisodeSegmentationHandler",
     "FormatParsingHandler",
     "MetadataExtractionHandler",
     "NewProcessingRun",

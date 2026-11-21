@@ -14,9 +14,12 @@
 - ``CALIBRATION_VALIDATION`` 由
   :mod:`app.application.processing.calibration_stage` 实现，校验 Episode 冻结快照
   与项目内权威标定记录一致，不把当前状态变化误判为历史快照失效；
-- 其余两个阶段（``EPISODE_SEGMENTATION`` / ``DATA_CLEANING``）仍**没有真实实现**，
-  :class:`SkippedStage` 显式 SKIPPED 并写明原因——把未实现写成 ``SUCCEEDED``
-  会让"处理完成"变成谎话，也会让下游误以为已有产物。
+- ``EPISODE_SEGMENTATION`` 由
+  :mod:`app.application.processing.segmentation_stage` 实现，对既有 Episode 的冻结
+  规则版本做可追溯性检查，不在缺少规则参数时伪造重新切片；
+- ``DATA_CLEANING`` 仍**没有真实实现**，:class:`SkippedStage` 显式 SKIPPED 并写明
+  原因——把未实现写成 ``SUCCEEDED`` 会让"处理完成"变成谎话，也会让下游误以为
+  已有产物。
 
 阶段处理器是纯函数式对象：输入 :class:`StageContext`，返回
 :class:`StageOutcome`；可预期失败抛 :class:`StageFailure`，由编排器脱敏落库。
@@ -141,10 +144,6 @@ class FileValidationHandler:
 #: 无真实实现阶段的跳过原因。逐阶段写明"缺什么、依赖哪个任务"，方便前端与
 #: 排障一眼看出"为什么这条流水线没有产出"，而不是只看到一个笼统的 SKIPPED。
 STAGE_SKIP_REASONS: Mapping[ProcessingStage, str] = {
-    ProcessingStage.EPISODE_SEGMENTATION: (
-        "切片入口在导入链路（POST /data-source-imports/{id}/episodes），"
-        "帧级切片依赖 N3 多模态 Pipeline，本阶段尚未接线"
-    ),
     ProcessingStage.DATA_CLEANING: (
         "清洗规则尚未接入处理运行（缺少规则集版本与清洗产物落库语义），本阶段没有真实实现"
     ),
@@ -158,9 +157,10 @@ def default_handlers(
     format_parsing: StageHandler,
     time_alignment: StageHandler,
     calibration_validation: StageHandler,
+    episode_segmentation: StageHandler,
     quality_check: StageHandler,
 ) -> dict[ProcessingStage, StageHandler]:
-    """默认阶段表：六个阶段有真实落点，其余两个显式 SKIPPED。
+    """默认阶段表：七个阶段有真实落点，DATA_CLEANING 显式 SKIPPED。
 
     各真实处理器必须由组合根显式注入：静默回退到 SKIPPED 会让“阶段没接线”
     在生产里看起来像“没有需要处理的对象”。
@@ -171,6 +171,7 @@ def default_handlers(
         ProcessingStage.FORMAT_PARSING: format_parsing,
         ProcessingStage.TIME_ALIGNMENT: time_alignment,
         ProcessingStage.CALIBRATION_VALIDATION: calibration_validation,
+        ProcessingStage.EPISODE_SEGMENTATION: episode_segmentation,
         ProcessingStage.QUALITY_PRE_CHECK: quality_check,
     }
     for stage, reason in STAGE_SKIP_REASONS.items():

@@ -23,6 +23,7 @@ from app.application.processing.pipeline import (
     default_handlers,
 )
 from app.application.processing.quality_stage import QualityCheckHandler
+from app.application.processing.segmentation_stage import EpisodeSegmentationHandler
 from app.application.processing.use_cases import (
     ProcessingRunUseCases,
     ProcessingWorkerUseCases,
@@ -30,6 +31,7 @@ from app.application.processing.use_cases import (
 from app.application.quality.episode_checks import EpisodeQualityChecks
 from app.application.quality.registry import default_registry
 from app.application.quality.use_cases import QualityRunUseCases
+from app.domain.episodes.segmentation_rules import build_segmentation_rule_registry
 from app.domain.identity.models import ProjectScope
 from app.domain.processing.enums import (
     ProcessingRunStatus,
@@ -171,6 +173,11 @@ def _pipeline(
         episode_assets=SqlEpisodeRawAssetRepository(session),
         calibrations=SqlCalibrationRecordRepository(session),
     )
+    episode_segmentation = EpisodeSegmentationHandler(
+        episodes=SqlEpisodeRepository(session),
+        episode_assets=SqlEpisodeRawAssetRepository(session),
+        rules=build_segmentation_rule_registry(),
+    )
     return ProcessingPipeline(
         runs,
         SqlProcessingRunStepRepository(session),
@@ -186,6 +193,7 @@ def _pipeline(
             format_parsing=SkippedStage("质量流水线测试不装配格式解析"),
             time_alignment=SkippedStage("质量流水线测试不装配时间对齐"),
             calibration_validation=calibration_validation,
+            episode_segmentation=episode_segmentation,
             quality_check=quality_check,
         ),
         session,
@@ -260,6 +268,11 @@ def test_pipeline_checks_every_episode_and_persists_rule_version(
         )
         assert calibration_step.status == ProcessingStepStatus.SUCCEEDED.value
         assert "无效 2" in (calibration_step.log_summary or "")
+        segmentation_step = next(
+            step for step in steps if step.stage == ProcessingStage.EPISODE_SEGMENTATION.value
+        )
+        assert segmentation_step.status == ProcessingStepStatus.SUCCEEDED.value
+        assert "不可重放 2" in (segmentation_step.log_summary or "")
         summary = quality_step.log_summary or ""
         assert "检查 2 个 Episode" in summary
         versions = _RULE_VERSION_PATTERN.findall(summary)
