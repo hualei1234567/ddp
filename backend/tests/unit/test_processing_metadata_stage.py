@@ -225,6 +225,58 @@ def test_extracts_mcap_metadata(tmp_path: Path) -> None:
     assert document["metadata"]["channels"][0]["topic"] == "/camera/front"
 
 
+def test_extracts_hdf5_structure_without_dataset_values(tmp_path: Path) -> None:
+    import h5py
+
+    path = tmp_path / "sample.h5"
+    with h5py.File(path, "w") as handle:
+        observations = handle.create_group("observations")
+        observations.create_dataset("actions", data=[[0.123456, 0.654321]])
+        handle.attrs["private_value"] = "must-not-leak"
+
+    ref = f"raw/{_PROJECT_ID}/2026/11/21/{uuid4()}/content.h5"
+    reader = FakeObjectReader({ref: path.read_bytes()})
+    artifacts = FakeArtifactStore()
+
+    outcome = _handler(reader, artifacts, max_object_bytes=2 * 1024 * 1024)(_context((ref,)))
+
+    assert outcome.status == ProcessingStepStatus.SUCCEEDED.value
+    document = json.loads(artifacts.read_bytes(outcome.output_refs[0], max_bytes=256 * 1024))
+    assert document["format"] == "HDF5"
+    assert document["adapter_id"] == "hdf5.structure_readonly"
+    assert document["metadata"]["dataset_count"] == 1
+    assert document["metadata"]["group_count"] == 1
+    assert document["metadata"]["datasets"][0]["path"] == "/observations/actions"
+    serialized = json.dumps(document)
+    assert "0.123456" not in serialized
+    assert "must-not-leak" not in serialized
+
+
+def test_hdf5_stage_bounds_details_without_hiding_total_counts(tmp_path: Path) -> None:
+    import h5py
+
+    path = tmp_path / "many-datasets.h5"
+    with h5py.File(path, "w") as handle:
+        for index in range(300):
+            handle.create_dataset(f"dataset-{index:04d}", data=[index])
+
+    ref = f"raw/{_PROJECT_ID}/2026/11/21/{uuid4()}/content.h5"
+    reader = FakeObjectReader({ref: path.read_bytes()})
+    artifacts = FakeArtifactStore()
+
+    outcome = _handler(reader, artifacts, max_object_bytes=4 * 1024 * 1024)(_context((ref,)))
+    document = json.loads(artifacts.read_bytes(outcome.output_refs[0], max_bytes=256 * 1024))
+    metadata = document["metadata"]
+
+    assert metadata["dataset_count"] == 300
+    assert metadata["details_truncated"] is True
+    assert metadata["omitted_dataset_count"] == 44
+    assert metadata["omitted_group_count"] == 0
+    assert metadata["omitted_link_count"] == 0
+    assert len(metadata["datasets"]) == 256
+    assert len(json.dumps(document).encode()) <= 256 * 1024
+
+
 def test_all_unsupported_formats_are_skipped_with_reason() -> None:
     ref = f"raw/{_PROJECT_ID}/2026/11/19/{uuid4()}/content.bin"
     reader = FakeObjectReader({ref: b"\x00\x01\x02\x03 not a known container"})
@@ -308,6 +360,51 @@ def test_truncated_mcap_is_permanent_failure() -> None:
 
 
 # ---------------------------------------------------------------- 超限
+
+
+def test_corrupt_hdf5_is_permanent_failure() -> None:
+    ref = f"raw/{_PROJECT_ID}/2026/11/21/{uuid4()}/content.h5"
+    reader = FakeObjectReader({ref: b"\x89HDF\r\n\x1a\n" + b"corrupt"})
+
+    with pytest.raises(StageFailure) as excinfo:
+        _handler(reader, FakeArtifactStore())(_context((ref,)))
+
+    assert excinfo.value.error_code == "metadata_probe_failed"
+    assert excinfo.value.retryable is False
+
+
+def test_hdf5_metadata_limit_is_permanent_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ddp_data import hdf5
+
+    def fail_probe(path: Path) -> object:
+        raise hdf5.Hdf5MetadataLimitError("limit")
+
+    monkeypatch.setattr(hdf5, "read_hdf5_structure", fail_probe)
+    ref = f"raw/{_PROJECT_ID}/2026/11/21/{uuid4()}/content.h5"
+    reader = FakeObjectReader({ref: b"\x89HDF\r\n\x1a\n" + b"0" * 64})
+
+    with pytest.raises(StageFailure) as excinfo:
+        _handler(reader, FakeArtifactStore())(_context((ref,)))
+
+    assert excinfo.value.error_code == "metadata_limit_exceeded"
+    assert excinfo.value.retryable is False
+
+
+def test_hdf5_sdk_unavailable_is_retryable(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ddp_data import hdf5
+
+    def fail_probe(path: Path) -> object:
+        raise hdf5.Hdf5UnavailableError("unavailable")
+
+    monkeypatch.setattr(hdf5, "read_hdf5_structure", fail_probe)
+    ref = f"raw/{_PROJECT_ID}/2026/11/21/{uuid4()}/content.h5"
+    reader = FakeObjectReader({ref: b"\x89HDF\r\n\x1a\n" + b"0" * 64})
+
+    with pytest.raises(StageFailure) as excinfo:
+        _handler(reader, FakeArtifactStore())(_context((ref,)))
+
+    assert excinfo.value.error_code == "metadata_probe_unavailable"
+    assert excinfo.value.retryable is True
 
 
 def test_object_exceeding_limit_is_rejected_before_download() -> None:
@@ -452,6 +549,27 @@ def test_format_parsing_keeps_parquet_as_stage_reference_without_fake_episode() 
     assert "未伪造 Episode" in outcome.log_summary
 
 
+def test_format_parsing_keeps_hdf5_as_stage_reference_without_fake_episode() -> None:
+    source_ref = f"raw/{_PROJECT_ID}/2026/11/21/{uuid4()}/content.h5"
+    metadata_ref = metadata_artifact_key(_PROJECT_ID, _RUN_ID, 0, "HDF5")
+    artifacts = FakeArtifactStore()
+    artifacts.put_bytes(
+        metadata_ref,
+        _metadata_document(
+            source_ref=source_ref,
+            raw_format="HDF5",
+            metadata={"dataset_count": 1, "group_count": 1},
+        ),
+    )
+
+    outcome = FormatParsingHandler(artifacts)(_context((source_ref,), output_refs=(metadata_ref,)))
+
+    document = json.loads(artifacts.read_bytes(outcome.output_refs[0], max_bytes=256 * 1024))
+    assert document["kind"] == "HDF5_STAGE_ARTIFACT_REFERENCE"
+    assert document["canonical_episode"] is False
+    assert "episode" not in document
+
+
 def test_format_parsing_without_metadata_is_skipped() -> None:
     outcome = FormatParsingHandler(FakeArtifactStore())(_context(output_refs=()))
 
@@ -505,3 +623,42 @@ def test_artifact_keys_are_project_and_run_scoped() -> None:
     assert canonical_artifact_key(project_id, run_id, 7, kind="reference") == (
         f"processing-run/{project_id}/{run_id}/canonical/0007-reference.json"
     )
+
+
+def test_hdf5_stage_payload_applies_byte_budget_to_long_details() -> None:
+    from app.application.processing.hdf5_metadata import (
+        MAX_HDF5_PAYLOAD_BYTES,
+        hdf5_stage_payload,
+    )
+    from ddp_data.hdf5 import Hdf5DatasetSummary, Hdf5Structure
+
+    datasets = tuple(
+        Hdf5DatasetSummary(
+            path=f"/{index:04d}-" + "x" * 4000,
+            shape=(1,),
+            dtype="float64",
+            compression=None,
+            chunks=None,
+            attributes=(),
+        )
+        for index in range(100)
+    )
+    structure = Hdf5Structure(
+        adapter_id="hdf5.structure_readonly",
+        adapter_version="1.0.0",
+        dataset_count=len(datasets),
+        group_count=0,
+        attribute_count=0,
+        truncated=False,
+        datasets=datasets,
+        groups=(),
+        links=(),
+    )
+
+    payload = hdf5_stage_payload(structure)
+    encoded = json.dumps(payload, ensure_ascii=False).encode()
+
+    assert len(encoded) <= MAX_HDF5_PAYLOAD_BYTES
+    assert payload["details_truncated"] is True
+    assert payload["omitted_dataset_count"] == 100 - len(payload["datasets"])
+    assert 0 < len(payload["datasets"]) < 100
