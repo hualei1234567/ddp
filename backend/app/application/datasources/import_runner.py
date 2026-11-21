@@ -78,6 +78,7 @@ from app.domain.ingestion.enums import (
 from app.domain.ingestion.errors import ConflictError
 from app.domain.ingestion.models import RawAsset
 from app.domain.ingestion.validation import (
+    HDF5_DETECTION_BYTES,
     build_raw_object_key,
     canonical_content_type,
     detect_format,
@@ -681,7 +682,7 @@ def _detect_raw_format(*, data: bytes, content_type: str) -> RawAssetFormat:
     ``Fetcher`` 已校验「内容签名与扩展名一致」，所以这里的兜底不会把
     改名的文件放行。真正的兜底链是：内容签名 → 声明类型 → UNKNOWN。
     """
-    detected = detect_format(data[:64], data[-4:])
+    detected = detect_format(data[:HDF5_DETECTION_BYTES], data[-4:])
     if detected is not None:
         return detected
     declared = _FORMAT_BY_CONTENT_TYPE.get(content_type.split(";")[0].strip().lower())

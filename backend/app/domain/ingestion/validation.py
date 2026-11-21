@@ -87,6 +87,8 @@ DEFAULT_ALLOWED_CONTENT_TYPES: tuple[str, ...] = tuple(CONTENT_TYPE_FORMATS)
 
 _MCAP_MAGIC = b"\x89MCAP0\r\n"
 _HDF5_MAGIC = b"\x89HDF\r\n\x1a\n"
+HDF5_MAX_SIGNATURE_OFFSET = 1024 * 1024
+HDF5_DETECTION_BYTES = HDF5_MAX_SIGNATURE_OFFSET + len(_HDF5_MAGIC)
 _SQLITE_MAGIC = b"SQLite format 3\x00"
 _ZIP_MAGIC = b"PK\x03\x04"
 _PARQUET_MAGIC = b"PAR1"
@@ -267,7 +269,7 @@ def detect_format(prefix: bytes, suffix: bytes = b"") -> RawAssetFormat | None:
     """按内容签名探测格式；无法唯一判定返回 ``None``，不凭扩展名放行。"""
     if prefix.startswith(_MCAP_MAGIC):
         return RawAssetFormat.MCAP
-    if prefix.startswith(_HDF5_MAGIC):
+    if _has_hdf5_signature(prefix):
         return RawAssetFormat.HDF5
     if prefix.startswith(_SQLITE_MAGIC):
         return RawAssetFormat.ROSBAG2
@@ -283,6 +285,15 @@ def detect_format(prefix: bytes, suffix: bytes = b"") -> RawAssetFormat | None:
     if _looks_like_text_csv(prefix):
         return RawAssetFormat.CSV
     return None
+
+
+def _has_hdf5_signature(prefix: bytes) -> bool:
+    """按 HDF5 规范扫描 0 或 512 整数倍偏移的文件签名。"""
+    limit = min(len(prefix), HDF5_DETECTION_BYTES)
+    for offset in range(0, limit - len(_HDF5_MAGIC) + 1, 512):
+        if prefix[offset : offset + len(_HDF5_MAGIC)] == _HDF5_MAGIC:
+            return True
+    return False
 
 
 def _looks_like_text_csv(prefix: bytes) -> bool:

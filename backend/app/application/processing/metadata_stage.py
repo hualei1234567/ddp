@@ -40,7 +40,7 @@ from app.application.processing.stages import (
     is_project_scoped,
 )
 from app.domain.ingestion.enums import RawAssetFormat
-from app.domain.ingestion.validation import detect_format
+from app.domain.ingestion.validation import HDF5_DETECTION_BYTES, detect_format
 from app.domain.processing.enums import ProcessingStepStatus
 
 #: 元数据产物自身的版本；与 Canonical 版本解耦，只约束本阶段的 JSON 结构。
@@ -61,7 +61,7 @@ DEFAULT_MAX_OBJECT_BYTES = 2 * 1024**3
 DEFAULT_MAX_ARTIFACT_BYTES = 256 * 1024
 
 #: 内容签名探测只读文件头尾的小片段，不读取对象本体。
-_DETECTION_PREFIX_BYTES = 64
+_DETECTION_PREFIX_BYTES = HDF5_DETECTION_BYTES
 _DETECTION_SUFFIX_BYTES = 16
 
 #: Parquet 叶子列上限；超过即视为元数据超限，显式失败。
