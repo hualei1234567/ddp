@@ -12,7 +12,6 @@ HTTP：运营页因此拿不到任何真实数字。本测试锁定三件事—�
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from uuid import UUID
 
 from sqlalchemy.orm import Session, sessionmaker
 
