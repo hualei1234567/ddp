@@ -1,0 +1,114 @@
+{
+  "package_name": "DDP V3.1 全链路数据生产闭环建设蓝图包",
+  "version": "3.1",
+  "baseline_sources": [
+    "DDP_具身智能数据闭环平台建设总规范_V1.0_FINAL.md",
+    "DDP_数据接入与样本验收中心_PRD_V1.3_全局复用优先版.md",
+    "DDP_V2.0_N0-N9_下一阶段建设任务蓝图_FINAL.md",
+    "DDP_V2.1_下一阶段建设包_FINAL.zip",
+    "05-现状审计报告-2026-11-14.md (appendix through 2026-11-15)"
+  ],
+  "files": [
+    {
+      "path": "README.md",
+      "size_bytes": 4175,
+      "sha256": "3593cd3048934a77cf0080c7336b16b384bd80222d22fc6deb41784a6a78c925"
+    },
+    {
+      "path": "建设文档/01_V3.1_总建设蓝图.md",
+      "size_bytes": 9125,
+      "sha256": "fe52cadb042d70cb204da662e70b145f6196ca852cce313436bbebf8ea6dde48"
+    },
+    {
+      "path": "建设文档/02_当前模块实现地图与差距矩阵.md",
+      "size_bytes": 6429,
+      "sha256": "d6e0e1a966e5bf4e8e7f61d656d115e19915049329085057a419428599e0ad85"
+    },
+    {
+      "path": "建设文档/03_端侧机器人采集Agent与硬件适配方案.md",
+      "size_bytes": 7270,
+      "sha256": "252e281bf0ba0d6202625b2a6576785441cd7a55a19ffe82c6338381f993ef02"
+    },
+    {
+      "path": "建设文档/04_采集任务与CaptureSession贯通方案.md",
+      "size_bytes": 2985,
+      "sha256": "62ca541183cbe0db890782f171091b0fe612403cb66e5949b2e368e1717884dc"
+    },
+    {
+      "path": "建设文档/05_上传与RawAsset实现方案.md",
+      "size_bytes": 3872,
+      "sha256": "f53e85ecee3c19a5006c0914e49f4c6964964a79a7240156a3292c91fdc5b8af"
+    },
+    {
+      "path": "建设文档/06_Canonical_Adapter_Pipeline_Episode实现方案.md",
+      "size_bytes": 4711,
+      "sha256": "36c2a04508bf794bfcb322d1268539472054fa9deb1f47b7115321b3e88167dd"
+    },
+    {
+      "path": "建设文档/07_标注任务创建分配与工作量管理PRD.md",
+      "size_bytes": 5029,
+      "sha256": "2d936fd9d03f5e00cd1f08548aa33412c1643889c5f9afa4078d72bd39861397"
+    },
+    {
+      "path": "建设文档/08_标注控制台PRD_UIUX与交互实现.md",
+      "size_bytes": 8262,
+      "sha256": "4f0d0cbe392214cf9ac5a85cf369fc2046e42dbe9bb13d9c8033ccbdf81750ae"
+    },
+    {
+      "path": "建设文档/09_LabelSchema与AnnotationResult数据规范.md",
+      "size_bytes": 3659,
+      "sha256": "9d047e1ef256170d894a41154312fe308302a87f9c5a2a7a3626bc3852fd9025"
+    },
+    {
+      "path": "建设文档/10_质量审核返工仲裁闭环.md",
+      "size_bytes": 2455,
+      "sha256": "3a1786809acc894f0dc15f17e6c13ab3419ecb530303c880fb8f2e47924e7902"
+    },
+    {
+      "path": "建设文档/11_DatasetBuilder版本冻结与训练导出.md",
+      "size_bytes": 3401,
+      "sha256": "f8257aaf9a39e7ebd5ef516d3ec46f264a1fc168f3d07039d697efb3af628123"
+    },
+    {
+      "path": "建设文档/12_API事件状态机契约建议.md",
+      "size_bytes": 2923,
+      "sha256": "039c247cc519e41d062f28a84bf88cf629a072b1e644f276dcafb775ae8ad573"
+    },
+    {
+      "path": "建设文档/13_端到端真实链路与验收测试.md",
+      "size_bytes": 3817,
+      "sha256": "a2ab05c0de17504609827466d5bb8678ebf890164475cc93a7c2f88b40f0f596"
+    },
+    {
+      "path": "建设文档/14_权限安全存储与可观测性.md",
+      "size_bytes": 3077,
+      "sha256": "15b40b0ace2b6689916fffbdde4719ea159c479ea320d4b1910190e62a49205b"
+    },
+    {
+      "path": "建设文档/15_信息架构页面与组件复用规范.md",
+      "size_bytes": 2569,
+      "sha256": "98e62b6a1eda68393b427d9eaa4dcbc77f55536df48fe35ff22c8808b33c815f"
+    },
+    {
+      "path": "建设文档/16_V3.1实施WBS依赖DAG与里程碑.md",
+      "size_bytes": 5775,
+      "sha256": "9f041eca32ea7c140aa43be0a7d1d64d736858ec83331dbb86648eef5a4b913f"
+    },
+    {
+      "path": "建设文档/17_Claude_Code_V3.1总执行Prompt.md",
+      "size_bytes": 6083,
+      "sha256": "b99a16966a69e7cc606dcbdcb7d0140ad3fd8f68c565bfec7244696e4c66a04e"
+    },
+    {
+      "path": "建设文档/18_任务卡_PR模板与DoD.md",
+      "size_bytes": 1830,
+      "sha256": "feb4db13866029ac75d744215164ac8ea1d0adffb7151e20b1abc0e70d256ba4"
+    },
+    {
+      "path": "建设文档/19_Manifest样例与核心数据字典.md",
+      "size_bytes": 2763,
+      "sha256": "107186f0dd13baa4f6aa69140b22dea01d383a44a10d42fdf1e02e8c0f036701"
+    }
+  ],
+  "file_count": 20
+}
