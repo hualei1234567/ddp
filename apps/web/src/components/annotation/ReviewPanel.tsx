@@ -1,5 +1,6 @@
 import {
   Alert,
+  AutoComplete,
   Button,
   Card,
   Checkbox,
@@ -18,6 +19,7 @@ import type {
   ReviewIssue,
   ReviewIssueSeverity,
 } from "../../types/annotation";
+import type { ProjectMember } from "../../types/project";
 import { REVIEW_ISSUE_SEVERITY_VALUES } from "../../types/annotation";
 import { formatDateTime } from "../../services/format";
 import IdentifierValue from "../ui/IdentifierValue";
@@ -33,6 +35,12 @@ export interface ReviewActionPayload {
 interface ReviewPanelProps {
   submission: AnnotationSubmission;
   reviews: AnnotationReview[];
+  /** 项目成员：复核人候选；为空时退回手填 UUID。 */
+  candidates: readonly ProjectMember[];
+  /** 服务端认证的当前用户：默认复核人。 */
+  currentUserId: string | null;
+  /** 身份或成员列表读取失败，界面需说明为什么只能手填。 */
+  candidatesDegraded?: boolean;
   busyAction: string | null;
   onCreate: (reviewerId: string) => void;
   onAction: (
@@ -224,12 +232,26 @@ function ReviewCard({
 export default function ReviewPanel({
   submission,
   reviews,
+  candidates,
+  currentUserId,
+  candidatesDegraded = false,
   busyAction,
   onCreate,
   onAction,
 }: ReviewPanelProps) {
-  const [reviewerId, setReviewerId] = useState("");
+  // 默认以当前用户作为复核人：复核人去队列里"领取"自己那一条，而不是
+  // 让操作者去别处复制 UUID。当前用户就是标注人时不能预填（服务端会拒），
+  // 但保留候选列表让操作者改派给其他成员。
+  const selfIsAnnotator = currentUserId === submission.annotator_id;
+  const defaultReviewer = selfIsAnnotator ? "" : (currentUserId ?? "");
+  const [reviewerId, setReviewerId] = useState(defaultReviewer);
   const canCreate = submission.status === "SUBMITTED";
+  const reviewerOptions = candidates
+    .filter((member) => member.user_id !== submission.annotator_id)
+    .map((member) => ({
+      value: member.user_id,
+      label: `${member.display_name}（${member.user_id}）`,
+    }));
 
   return (
     <Space direction="vertical" size={12} className="ddp-stack">
@@ -244,10 +266,13 @@ export default function ReviewPanel({
             />
           ) : null}
           <Space wrap>
-            <Input
-              placeholder="复核人 UUID"
+            <AutoComplete
+              aria-label="复核人"
+              id="annotation-reviewer-id"
+              placeholder="复核人 UUID（默认当前用户）"
               value={reviewerId}
-              onChange={(event) => setReviewerId(event.target.value)}
+              options={reviewerOptions}
+              onChange={setReviewerId}
               style={{ width: 330 }}
               disabled={!canCreate || busyAction !== null}
             />
@@ -261,7 +286,15 @@ export default function ReviewPanel({
             </Button>
           </Space>
           <Typography.Text type="secondary">
-            复核人不得是标注人（{submission.annotator_id}）；服务端会再次校验。
+            {candidatesDegraded
+              ? "身份或成员列表读取失败，当前只能手填复核人 UUID。"
+              : null}
+            {selfIsAnnotator
+              ? "当前用户就是本提交的标注人，服务端会拒绝自审；请选择其他成员。"
+              : null}
+            {!candidatesDegraded && !selfIsAnnotator
+              ? `复核人不得是标注人（${submission.annotator_id}）；服务端会再次校验。`
+              : null}
           </Typography.Text>
         </Space>
       </Card>

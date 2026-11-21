@@ -17,6 +17,7 @@ import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
+import { useAnnotationReviewers } from "../../hooks/useAnnotationReviewers";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
 import { annotationApi } from "../../services/annotation";
@@ -57,6 +58,7 @@ function SubmissionContent({
   );
   const { data, error, loading, refreshing, stale, updatedAt, reload } =
     useRequest(load);
+  const reviewers = useAnnotationReviewers(projectId);
   const phase = resolvePagePhase({
     hasData: data !== null,
     loading,
@@ -312,6 +314,9 @@ function SubmissionContent({
         <ReviewPanel
           submission={data.submission}
           reviews={data.reviews}
+          candidates={reviewers.members}
+          currentUserId={reviewers.currentUserId}
+          candidatesDegraded={reviewers.degraded}
           busyAction={busyAction}
           onCreate={handleCreateReview}
           onAction={(review, action, payload) =>
@@ -322,6 +327,8 @@ function SubmissionContent({
         <ArbitrationPanel
           submission={data.submission}
           arbitrations={data.arbitrations}
+          candidates={reviewers.members}
+          candidatesDegraded={reviewers.degraded}
           busyAction={busyAction}
           onCreate={handleCreateArbitration}
           onAction={handleArbitrationAction}
