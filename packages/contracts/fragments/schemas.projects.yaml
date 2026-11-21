@@ -113,3 +113,19 @@ ProjectMemberRolePatch:
   required: [role]
   properties:
     role: { $ref: "../openapi.yaml#/components/schemas/ProjectRole" }
+
+PlatformRole:
+  type: string
+  enum: [member, admin]
+  description: 平台级角色；只能来自经过签名的令牌声明，请求头不可提升。
+
+CurrentUser:
+  type: object
+  additionalProperties: false
+  required: [user_id, display_name, platform_role]
+  properties:
+    user_id: { type: string, format: uuid }
+    display_name:
+      type: string
+      description: 用户目录中的显示名；目录无此人时端点返回 404，不伪造。
+    platform_role: { $ref: "../openapi.yaml#/components/schemas/PlatformRole" }

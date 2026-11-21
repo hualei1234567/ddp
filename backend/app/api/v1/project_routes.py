@@ -20,6 +20,7 @@ from app.api.deps import CurrentPrincipal, require_platform_admin, require_proje
 from app.api.v1.preconditions import require_expected_version
 from app.api.v1.project_dependencies import ProjectServicesDep
 from app.api.v1.project_schemas import (
+    CurrentUserOut,
     ProjectCreate,
     ProjectMemberAdd,
     ProjectMemberOut,
@@ -37,6 +38,20 @@ from app.domain.identity.models import (
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+# ``/me`` 与项目无关（它回答"我是谁"），但复用同一组依赖与用户目录仓储，
+# 因此挂在本模块而不是新开一个只有一条路由的文件。
+me_router = APIRouter(tags=["platform"])
+
+
+@me_router.get("/me", response_model=CurrentUserOut)
+def get_current_user(
+    principal: CurrentPrincipal,
+    services: ProjectServicesDep,
+) -> CurrentUserOut:
+    """返回已认证主体；身份只来自服务端认证，不接受客户端传入的 user_id。"""
+    profile = services.projects.current_user(principal)
+    return CurrentUserOut.from_domain(profile, principal)
+
 
 ReadContext = Annotated[
     ProjectContext,

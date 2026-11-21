@@ -96,10 +96,25 @@ class ProjectMemberRepository(Protocol):
     def count_owners(self, scope: ProjectScope) -> int: ...
 
 
+@dataclass(frozen=True, slots=True)
+class UserProfile:
+    """用户目录里的最小自述信息；不含邮箱、令牌等敏感字段。"""
+
+    user_id: UUID
+    display_name: str
+
+
 class UserDirectory(Protocol):
-    """用户目录存在性查询；本阶段不提供用户创建/邀请能力。"""
+    """用户目录查询；本阶段不提供用户创建/邀请能力。
+
+    ``get_profile`` 供 ``GET /api/v1/me`` 回显已认证主体：浏览器拿不到令牌里的
+    用户 ID，个人视图只能由服务端给出。``None`` 表示目录里没有该用户，调用方
+    必须如实返回 404，不得隐式创建账号。
+    """
 
     def exists(self, user_id: UUID) -> bool: ...
+
+    def get_profile(self, user_id: UUID) -> UserProfile | None: ...
 
 
 AuditRepository = _AuditRepository
@@ -113,4 +128,5 @@ __all__ = [
     "ProjectRepository",
     "UnitOfWork",
     "UserDirectory",
+    "UserProfile",
 ]

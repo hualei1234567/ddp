@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from app.application.projects.ports import ProjectListing
+from app.application.projects.ports import ProjectListing, UserProfile
 from app.domain.identity.models import ProjectRole, ProjectScope
 from app.domain.identity.projects import Project, ProjectMember, ProjectStatus
 from app.infrastructure.db.models.identity import Project as ProjectModel
@@ -274,13 +274,21 @@ class SqlProjectMemberRepository:
 
 
 class SqlUserDirectory:
-    """用户目录：本阶段只做存在性判定（用户创建/邀请不在范围内）。"""
+    """用户目录：存在性判定与最小自述（用户创建/邀请不在范围内）。"""
 
     def __init__(self, session: Session) -> None:
         self._session = session
 
     def exists(self, user_id: UUID) -> bool:
         return self._session.scalar(select(UserModel.id).where(UserModel.id == user_id)) is not None
+
+    def get_profile(self, user_id: UUID) -> UserProfile | None:
+        row = self._session.execute(
+            select(UserModel.id, UserModel.display_name).where(UserModel.id == user_id)
+        ).first()
+        if row is None:
+            return None
+        return UserProfile(user_id=row.id, display_name=row.display_name)
 
 
 def _member(row: ProjectMemberModel, display_name: str) -> ProjectMember:

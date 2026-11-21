@@ -201,3 +201,18 @@ projectMemberDetail:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+me:
+  get:
+    operationId: getCurrentUser
+    tags: [platform]
+    summary: 当前认证主体
+    description: |
+      只回显服务端已认证的主体（Bearer 令牌或本地 loopback Header）。
+      请求头 / 查询参数里的 `user_id` 一律忽略；用户目录无此人时返回 `404 not_found`，
+      不隐式创建账号，也不返回只有 ID 的裸对象。
+    responses:
+      "200": {description: 当前主体, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/CurrentUser"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}

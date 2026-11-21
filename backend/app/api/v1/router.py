@@ -53,6 +53,7 @@ api_router.include_router(platform.router)
 # 项目管理是平台级入口：``/projects`` 与 ``/projects/{project_id}`` 和
 # ``/projects/{project_id}/<resource>`` 不冲突（路径参数只会匹配单段），
 # 放在业务路由之前是为了保持"平台 → 业务"的阅读顺序。
+api_router.include_router(project_routes.me_router)
 api_router.include_router(project_routes.router)
 api_router.include_router(robots.router)
 api_router.include_router(devices.router)

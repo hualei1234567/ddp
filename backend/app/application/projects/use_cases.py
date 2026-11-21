@@ -53,6 +53,7 @@ from app.application.projects.ports import (
     ProjectRepository,
     UnitOfWork,
     UserDirectory,
+    UserProfile,
 )
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationFailedError
 from app.domain.identity.models import Principal, ProjectRole, ProjectScope
@@ -97,6 +98,19 @@ class ProjectUseCases:
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
+
+    # --- 当前主体 -----------------------------------------------------
+    def current_user(self, principal: Principal) -> UserProfile:
+        """回显已认证主体；只读，不创建账号、不改任何状态。
+
+        令牌里的 ``user_id`` 不保证在用户目录中存在（外部签发），所以这里
+        必须查目录：查不到就 404，而不是凭空返回一个只有 ID 的裸对象——
+        「这个令牌属于谁」是审计与个人视图的基础，不能靠推断。
+        """
+        profile = self._users.get_profile(principal.user_id)
+        if profile is None:
+            raise NotFoundError("当前用户不在用户目录中")
+        return profile
 
     # --- 项目 ---------------------------------------------------------
     def list_projects(

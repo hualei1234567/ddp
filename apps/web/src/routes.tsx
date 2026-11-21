@@ -18,6 +18,7 @@ import AnnotationSchemaListPage from "./pages/annotation/AnnotationSchemaListPag
 import AnnotationSubmissionPage from "./pages/annotation/AnnotationSubmissionPage";
 import AnnotationTaskCreatePage from "./pages/annotation/AnnotationTaskCreatePage";
 import AnnotationTaskDetailPage from "./pages/annotation/AnnotationTaskDetailPage";
+import AnnotationMyTasksPage from "./pages/annotation/AnnotationMyTasksPage";
 import AnnotationTaskListPage from "./pages/annotation/AnnotationTaskListPage";
 import AnnotationWorkbenchPage from "./pages/annotation/AnnotationWorkbenchPage";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage";
@@ -185,6 +186,7 @@ export default function AppRoutes() {
         <Route path="assets" element={<RawAssetListPage />} />
         <Route path="raw-assets/:assetId" element={<RawAssetDetailPage />} />
         <Route path="annotation" element={<AnnotationIndexRedirect />} />
+        <Route path="annotation/my-tasks" element={<AnnotationMyTasksPage />} />
         <Route path="annotation-tasks" element={<AnnotationTaskListPage />} />
         <Route
           path="annotation-tasks/new"

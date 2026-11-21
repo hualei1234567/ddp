@@ -13,6 +13,7 @@ import {
   PartitionOutlined,
   ReadOutlined,
   RobotOutlined,
+  ScheduleOutlined,
   SafetyCertificateOutlined,
   TagsOutlined,
   TeamOutlined,
@@ -122,6 +123,15 @@ export const navSections: NavSection[] = [
         label: "Episode 管理",
         description: "查看切片结果、元数据与数据血缘。",
         icon: createElement(PartitionOutlined),
+        available: true,
+      },
+      {
+        // 个人队列排在标注中心之前：标注人每天打开的是「我的任务」，
+        // 任务/批次管理是管理员视角。
+        path: "/annotation/my-tasks",
+        label: "我的任务",
+        description: "按当前认证身份聚合各项目的待办分配，可直接领取进入工作台。",
+        icon: createElement(ScheduleOutlined),
         available: true,
       },
       {

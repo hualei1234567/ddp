@@ -9,6 +9,7 @@ from app.application.projects.ports import (
     ProjectRepository,
     UnitOfWork,
     UserDirectory,
+    UserProfile,
 )
 from app.application.projects.use_cases import ProjectUseCases
 
@@ -22,4 +23,5 @@ __all__ = [
     "ProjectUseCases",
     "UnitOfWork",
     "UserDirectory",
+    "UserProfile",
 ]
