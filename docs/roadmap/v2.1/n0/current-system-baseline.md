@@ -64,7 +64,8 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 
 `data-platform/ddp_data/`：`huggingface/`（hub_client、adapter、importer）、
 `lerobot/parser.py`、`adapters/{registry,builtin}.py`、`media/mp4.py`、
-`parquet/`（官方 PyArrow 23.0.1 只读 footer）、`canonical/`。
+`parquet/`（官方 PyArrow 23.0.1 只读 footer）、`mcap/`（官方 mcap 1.6.0 只读
+header/summary）、`hdf5/`（官方 h5py 3.16.0 只读结构）、`canonical/`。
 
 `backend/app/workers/`：`outbox`、`datasources`、`ingestion_jobs`、`exports`、
 `domain_sweeps`、`usage_snapshots`、`maintenance`。
@@ -148,7 +149,7 @@ episodes、governance、identity、ingestion、locations、modelops、projects�
 | Episode 级自动质检 | **VERIFIED**（N4-005：`application/quality/episode_checks.py` + 处理流水线 QUALITY 阶段逐 Episode 质检） |
 | Processing Pipeline（八阶段） | **PARTIAL**（FILE_VALIDATION / METADATA_EXTRACTION / FORMAT_PARSING / TIME_ALIGNMENT / CALIBRATION_VALIDATION / EPISODE_SEGMENTATION / QUALITY_PRE_CHECK 七阶段真实执行；N4-014 分段阶段只检查运行关联 Episode 的冻结规则版本能否由权威注册表追溯，手工/历史标签如实计为“不可重放”，不创建 Episode、不猜测规则参数、不冒充已重新切片；DATA_CLEANING 继续显式 SKIPPED） |
 | Canonical Frame / SensorStream / Action / Observation | **PARTIAL**（N3-001 `data-platform/ddp_data/canonical/` 只读契约；无生产者、无持久化，ADR-0035 有意不建表） |
-| Parquet / MCAP / ROS Bag / HDF5 字段级解析 | **PARTIAL**（Parquet footer 与 MCAP 元数据只读已实现；ROS Bag / HDF5 **MISSING**；均未接入导入链路） |
+| Parquet / MCAP / ROS Bag / HDF5 字段级解析 | **PARTIAL**（Parquet footer、MCAP 元数据、HDF5 结构只读已实现；ROS Bag **MISSING**；HDF5 只读结构不含数据集值；均未接入导入链路。N3-006 以 RoboMimic v1.5 固定 revision 真实样例复验：6008 数据集 / 1802 组，SHA256 与 HF etag 一致） |
 | 六类质量报告 UI | **VERIFIED**（N2-006/N4-008：导入审看页展示服务端六类摘要、整体结论与 findings 分页筛选，可自动发现最近运行、URL 深链回看并下钻媒体资产；INCOMPLETE / NOT_APPLICABLE 不误报通过；Loading/Empty/Error/Forbidden/Partial/Stale/Disabled 已覆盖；2026-11-21 专项 6 files / 74 tests passed） |
 | 性能基线（100/1K/10K episodes） | **PARTIAL**（本机只读场景已测，见 `docs/operations/性能基线-DDP-V21-N8-002-2026-11-19.md`；staging/生产 **BLOCKED**） |
 | staging / 生产发布 | **BLOCKED** |

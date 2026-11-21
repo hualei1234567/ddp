@@ -82,6 +82,8 @@
 | RK-59 | DROID 官方 GitHub 硬件仓库未声明许可证，且公开资料没有现场序列号、固件、标定与物理时钟；把公开型号清单误当真机联调会形成虚假闭环 | `droid/hardware.py`；`fixtures/public/droid-hardware/facts.json`；`test_public_droid_hardware.py` | 中 | P1 | 只记录固定 commit/blob/SHA 的事实与 provenance，不复制或执行远端代码；未知字段保持 NULL/NONE；状态保持 PARTIAL / HARDWARE BLOCKED，硬件到位后补在环验收 | 数据 / 设备 |
 | RK-60 | Processing 标定阶段若把“校验器执行成功”误写成“标定有效”，会让无标定的公开数据或无法回查的外部快照被虚假放行 | `application/processing/calibration_stage.py`；`test_processing_calibration_stage.py` | 中 | P1 | N4-013 只验证快照可追溯性并分开统计一致/无效/缺失；不生成标定参数、不要求历史记录当前 ACTIVE；数据集准入继续由既有 CALIBRATION_MISSING / CALIBRATION_INVALID 门禁决定 | 后端 / 数据 |
 | RK-61 | Episode 只冻结 `segmentation_rule_version`，未冻结规则参数；把版本可追溯误写成“可完整重放”会伪造分段闭环 | `domain/episodes/models.py`；`application/processing/segmentation_stage.py`；`test_processing_segmentation_stage.py` | 中 | P1 | N4-014 只报告注册版本可追溯与手工/历史标签不可重放，明确未执行重新切片；后续如需完整重放，先以兼容迁移冻结 method + parameters，历史值保持 UNKNOWN，禁止推测回填 | 后端 / 数据 |
+| RK-62 | HDF5 探测只读结构、不解码数据集值；把“结构可读”误当成“观测/动作语义已验证”会形成虚假闭环 | `data-platform/ddp_data/hdf5/metadata.py`；`test_hdf5_probe.py`；`test_hdf5_real_public_sample.py` | 中 | P1 | N3-006 摘要只含路径/shape/dtype/compression/chunks/属性名，明确不含数据集值与属性值；真实公开样例仅证明结构可读，不证明标定、物理时钟或硬件在环；ROS Bag 仍 MISSING | 数据 / 后端 |
+| RK-63 | 导入链路的格式识别只拿文件前 64 字节做魔数匹配，HDF5 的 user block 会让签名落在 512 整数倍偏移，被误判为 UNKNOWN | `domain/ingestion/validation.py::detect_format`；`import_runner.py:684`；`upload_completion.py:596` | 中 | P2 | N3-006 的结构探测器已按规范支持 user block 偏移；导入链路要覆盖同一情况需改调用方从“前 64 字节”改为“按偏移取样”，涉及上传/导入两处语义，留作独立任务；在此之前带 user block 的 HDF5 仍会被判 UNKNOWN 并走既有隔离路径 | 后端 |
 
 ## 5. 产品与验收口径
 
