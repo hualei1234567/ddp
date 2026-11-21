@@ -10,7 +10,7 @@ import { expect, test } from "@playwright/test";
  * `IN_PROGRESS` 的分配（见 `scripts/e2e/` 的真实链路种子）。未提供环境时
  * 整组 skipped，不会把"没跑"当成"通过"。
  */
-import { skipWithoutEnv } from "./support";
+import { skipWithoutSeed } from "./support";
 
 /** 页面上同时存在多个已挂载但隐藏的下拉；只操作当前展开的那一个。 */
 function visibleDropdown(page: import("@playwright/test").Page) {
@@ -26,7 +26,12 @@ function read(name: string): string {
 }
 
 test.describe("关键路径：标注控制台", () => {
-  skipWithoutEnv();
+  // 本组需要真实栈种子（含 Manifest 的 Episode + 一条 IN_PROGRESS 分配）：
+  // 本地栈模式按设计不提供，缺种子时显式 skipped，报告里能看见原因。
+  skipWithoutSeed(
+    ["DDP_E2E_ANNOTATION_ASSIGNMENT_ID", "DDP_E2E_ANNOTATION_TASK_ID"],
+    "标注控制台需要真实栈标注链路种子，见 scripts/e2e/README.md",
+  );
 
   test("我的任务 → 工作台 → 轨迹与片段 → 提交", async ({ page }) => {
     const projectId = read("DDP_E2E_PROJECT_ID");

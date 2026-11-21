@@ -9,6 +9,7 @@ required、nullable 完全一致，却仍被报成"未声明 response_model"。
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -98,6 +99,11 @@ def parity_report(parity):
     依赖，因此这个 fixture 在那里**明确跳过**而不是报 ImportError——测试文件
     其余纯函数用例不依赖后端，不该被一起带红。
     """
+    # ``app.main`` 导入时就会 ``create_app()``，而 ``Settings`` 默认 env 是
+    # production——缺少 DDP_ENV 时被安全配置守卫拒启动（RuntimeError，不是
+    # ImportError），本地 ``make check`` 在没有 .env 的机器上会整条报错。
+    # 本用例只读路由表，不连库、不连对象存储，按本地环境构建即可。
+    os.environ.setdefault("DDP_ENV", "local")
     try:
         import app.main  # noqa: F401 - 只探测后端依赖是否可用
     except ImportError:

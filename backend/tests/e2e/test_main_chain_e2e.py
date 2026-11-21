@@ -86,9 +86,14 @@ class FakeArtifactInspector(ArtifactInspector):
 def chain(e2e_env: E2EEnv) -> Iterator[dict[str, Any]]:
     """把主链一次性搭起来；各用例只做断言，不再重复昂贵的链路构建。"""
     factory, ids = e2e_env.factory, e2e_env.ids
-    editor = make_client(factory, ids.editor_a)
-    owner = make_client(factory, ids.owner_a)
-    viewer = make_client(factory, ids.viewer_a)
+    # 导入 Worker 与 API 共用同一个对象存储替身：冻结要写 Manifest 并回读校验
+    # （V31-040），训练交付还要再读同一个对象。API 客户端不注入替身时，CI 里
+    # 没有 MinIO，冻结会 503 object_storage_unavailable——链路本身没问题，
+    # 是测试没把外部基础设施替换完整。
+    store = InMemoryObjectStore()
+    editor = make_client(factory, ids.editor_a, object_storage=store)
+    owner = make_client(factory, ids.owner_a, object_storage=store)
+    viewer = make_client(factory, ids.viewer_a, object_storage=store)
 
     # ---- 1. 登记数据源 + 创建导入任务 ----
     code = f"hf-e2e-{uuid4().hex[:8]}"
@@ -96,7 +101,6 @@ def chain(e2e_env: E2EEnv) -> Iterator[dict[str, Any]]:
     assert import_job["status"] == "PENDING"
 
     # ---- 2. 导入执行：真实 DataSourceImportWorker + 真实 ImportRunner ----
-    store = InMemoryObjectStore()
     with pytest.MonkeyPatch.context() as patch:
         install_object_store(patch, store)
         worker_result = run_import_worker(factory, MediaTransport())

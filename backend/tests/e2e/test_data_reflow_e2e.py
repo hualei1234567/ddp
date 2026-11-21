@@ -56,6 +56,7 @@ from tests.e2e.reflow_support import (
 from tests.e2e.support import (
     EXPECTED_EPISODES,
     MODEL_ADAPTER_SECRET,
+    InMemoryObjectStore,
     episode_action,
     model_version_payload,
     post_adapter_callback,
@@ -73,7 +74,7 @@ def _kitchen(gaps: dict[str, Any]) -> dict[str, Any]:
     return next(item for item in gaps["items"] if item["dimension_value"] == "kitchen")
 
 
-def _model_clients(factory: Any, ids: Any) -> tuple[Any, Any]:
+def _model_clients(factory: Any, ids: Any, store: InMemoryObjectStore) -> tuple[Any, Any]:
     settings = Settings(
         env="local",
         model_adapter_shared_secrets={"mock": MODEL_ADAPTER_SECRET},
@@ -82,18 +83,18 @@ def _model_clients(factory: Any, ids: Any) -> tuple[Any, Any]:
         rate_limit_enabled=False,
     )
     inspector = FakeInspector(128, ARTIFACT_SHA)
-    editor = make_client(factory, ids.editor_a, settings_override=settings)
-    owner = make_client(factory, ids.owner_a, settings_override=settings)
+    editor = make_client(factory, ids.editor_a, object_storage=store, settings_override=settings)
+    owner = make_client(factory, ids.owner_a, object_storage=store, settings_override=settings)
     for client in (editor, owner):
         client.app.dependency_overrides[get_artifact_inspector] = lambda: inspector
     return editor, owner
 
 
-def _plain_clients(factory: Any, ids: Any) -> tuple[Any, Any]:
+def _plain_clients(factory: Any, ids: Any, store: InMemoryObjectStore) -> tuple[Any, Any]:
     settings = Settings(env="local", rate_limit_enabled=False)
     return (
-        make_client(factory, ids.editor_a, settings_override=settings),
-        make_client(factory, ids.owner_a, settings_override=settings),
+        make_client(factory, ids.editor_a, object_storage=store, settings_override=settings),
+        make_client(factory, ids.owner_a, object_storage=store, settings_override=settings),
     )
 
 
@@ -105,8 +106,10 @@ def test_requirement_to_new_data_to_retrain_to_retest_closes_gap(chain: dict[str
     model_version_id = chain["model_version"]["model_version_id"]
     dataset_id = UUID(chain["dataset"]["dataset_id"])
     evaluated_version_id = chain["version_id"]
-    editor, owner = _plain_clients(factory, ids)
-    model_client, model_owner = _model_clients(factory, ids)
+    # 同一实例贯穿导入 Worker 与 API：冻结写 Manifest、交付回读走的都是它。
+    store = InMemoryObjectStore()
+    editor, owner = _plain_clients(factory, ids, store)
+    model_client, model_owner = _model_clients(factory, ids, store)
 
     # ---- 1. 缺口：目标 20，当前实测 10，建议补采 10 ----
     feedback = editor.post(
@@ -159,7 +162,11 @@ def test_requirement_to_new_data_to_retrain_to_retest_closes_gap(chain: dict[str
 
     # ---- 3. 新采集：第二个数据源 → 真实导入 Worker → 新 Episode ACCEPTED ----
     batch = import_reflow_batch(
-        editor, factory, project_id, code=f"hf-reflow-{feedback_body['feedback_id'][:8]}"
+        editor,
+        factory,
+        project_id,
+        code=f"hf-reflow-{feedback_body['feedback_id'][:8]}",
+        store=store,
     )
     new_episode_ids: list[UUID] = batch["episode_ids"]
     assert len(new_episode_ids) == REFLOW_EXPECTED_EPISODES
