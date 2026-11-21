@@ -87,6 +87,7 @@ def test_content_signature_detection_and_compatibility() -> None:
     assert detect_format(b"\x00" * (1024 * 1024 + 512) + hdf5_magic) is None
     assert detect_format(b"\x00" * 513 + hdf5_magic) is None
     assert detect_format(b"SQLite format 3\x00") is RawAssetFormat.ROSBAG2
+    assert detect_format(b"#ROSBAG V2.0\n") is RawAssetFormat.ROSBAG2
     assert detect_format(b"PK\x03\x04") is RawAssetFormat.ZIP
     assert detect_format(b"\x00\x00\x00\x18ftypmp42") is RawAssetFormat.MP4
     assert detect_format(b"PAR1" + b"x" * 8, b"PAR1") is RawAssetFormat.PARQUET
