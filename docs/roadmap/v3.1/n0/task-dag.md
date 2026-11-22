@@ -67,7 +67,7 @@
 | ID | 任务 | 依赖 | 变更面 |
 |---|---|---|---|
 | V31-040 | 冻结时 Manifest 写对象存储 + 回读校验 + `manifest_key/sha256` 原子落库 | V31-004 | 应用层 + 存储端口 |
-| V31-041 | `ExportFormat` 扩展 Canonical（契约 + worker strategy + UI 选项） | V31-017 | 契约 + 领域 + worker + UI |
+| V31-041 | `ExportFormat` 扩展 Canonical（契约 + worker strategy + UI 选项） | V31-017 | 契约 + 领域 + worker + UI | **后端已完成（2026-11-22）**：`ExportFormat.CANONICAL` + 格式↔版本成对校验 + sidecar 声明格式；契约 1.30.0（stage4 枚举与 export-job schema）。前端选项未做。ADR-0046 |
 | V31-042 | LeRobot 导出从“元数据 profile”升级到可被固定版本 Loader 加载 | V31-017、V31-018 | `domain/datasets/exporting.py` + 测试 |
 | V31-043 | 审核 → Dataset Builder 前端闭环（加入数据集、条目回链、排除原因跳转） | V31-024 | 前端 |
 | V31-044 | 真实数据端到端验收：`HDF5/rosbag → Episode → 指定标注人 → 标注 → 审核 → 冻结 → 导出 → 加载` | V31-012、V31-022、V31-040、V31-042 | `scripts/e2e` |

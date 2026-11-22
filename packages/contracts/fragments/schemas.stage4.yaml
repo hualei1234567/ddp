@@ -35,7 +35,12 @@ ExportJobStatus:
 
 ExportFormat:
   type: string
-  enum: [LE_ROBOT]
+  enum: [LE_ROBOT, CANONICAL]
+  description: |
+    训练导出格式。`LE_ROBOT` 是 LeRobot 元数据 profile（帧级映射未实现，
+    `verification_status` 固定 `UNVERIFIED`）；`CANONICAL` 是平台自己的规范
+    格式（Canonical JSON + NDJSON），语义不同，下游据此判断能否直接喂给
+    LeRobot Loader。未知格式返回 `export_format_unsupported`。
 
 TrainingRequestStatus:
   type: string
