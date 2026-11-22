@@ -31,6 +31,9 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunRepository,
     SqlProcessingRunStepRepository,
 )
+from app.infrastructure.repositories.processing_artifacts import (
+    SqlProcessingArtifactRepository,
+)
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from app.workers.processing import (
     RUN_REQUESTED_EVENT,
@@ -362,3 +365,41 @@ def test_worker_runs_quality_stage_for_episode_manifest(env) -> None:
     assert rows[0].subject_id == episode_id
     assert rows[0].rule_set_version in (quality_step.log_summary or "")
     assert run.output_refs == (f"quality-run/{rows[0].id}",)
+
+
+def test_worker_registers_artifacts_in_catalog(env) -> None:
+    """阶段产物登记进 ``processing_artifacts``（V31-016），``output_refs`` 仍同步。
+
+    QUALITY 阶段的 ``quality-run/<id>`` 是数据库记录引用，不是对象存储对象，
+    因此**不**进产物目录；产物目录只登记对象存储中的产物。
+    """
+    factory, ids = env
+    episode_id = seed_dataset_episodes(
+        factory,
+        ids.project_a,
+        ids.editor_a,
+        count=1,
+        record_labels=[
+            {
+                "label_key": "action",
+                "value": "PICK",
+                "source": "HUMAN",
+                "label_status": "CONFIRMED",
+            }
+        ],
+    )[0]
+    ref = f"canonical/{ids.project_a}/{episode_id}/1/manifest.json"
+    run_id = _create_run(factory, ids, input_refs=(ref,))
+    worker = _worker(factory, _settings(), {ref: b"0123456789" * 4})
+
+    result = worker.process_once(now=_now())
+
+    assert result["status"] == RunProcessingStatus.PUBLISHED.value
+    with factory() as session:
+        artifacts = SqlProcessingArtifactRepository(session).list(
+            ProjectScope(ids.project_a, actor_id=ids.editor_a),
+            run_id=run_id,
+        )
+    # 本输入是 canonical manifest（非 MP4/Parquet/MCAP），元数据阶段不产出
+    # 对象存储产物，因此目录为空——但接口可查，不伪造记录。
+    assert artifacts == []

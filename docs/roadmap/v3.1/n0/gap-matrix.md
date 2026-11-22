@@ -96,7 +96,7 @@
 | 导入成功不自动触发 Episode 物化，需手工 API | 已消除（V31-014，2026-11-22） | `backend/app/workers/datasources.py` 消费投递类 `datasource.import.succeed`（测试：`tests/workers/test_datasource_episode_worker.py`）；手工端点保留为重放入口 |
 | SensorStream / Observation / Action 无真实生产 | `MISSING` | 仅有类型定义与构造测试 |
 | Canonical 实体无数据库持久化 | `MISSING` | 无对应表 / repository |
-| 产物仅 `output_refs` JSON 数组，无 Artifact 目录 | `MISSING` | `backend/app/infrastructure/db/models/processing.py:58-65` |
+| 产物仅 `output_refs` JSON 数组，无 Artifact 目录 | 已消除（V31-016，2026-11-22） | 新增 `processing_artifacts` 表（迁移 0069）+ 领域 `ProcessingArtifact` + 仓储 + `GET .../processing-runs/{id}/artifacts`。阶段产出登记类型/阶段/尝试/Schema 版本/内容类型/字节数/SHA256/来源输入；`output_refs` 退化为兼容投影。测试：`tests/unit/test_processing_artifacts_domain.py`、`test_processing_artifacts_repository.py`、`test_processing_artifact_registration.py`、`tests/api/test_processing_artifacts_api.py` |
 | `DATA_CLEANING` 使用 `SkippedStage` | `MISSING` | `backend/app/application/processing/stages.py:144-149` |
 | Canonical 版本分裂 `1.0.0-draft` vs `1.0.0` | 已消除（V31-004，2026-11-22） | 导入物化改为引用 `ddp_data.canonical.v1.SCHEMA_VERSION`（`episode_materialization.py`）；防漂移测试 `tests/unit/test_episode_status_alignment.py`。历史 `-draft` 数据按 ADR-0038 §2.4 有意保留 |
 | `pipeline.py` 头部注释称仅两阶段实现（已过时） | 文档债 | `backend/app/application/processing/pipeline.py:7-12` |

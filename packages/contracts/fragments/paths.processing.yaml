@@ -122,6 +122,50 @@ processingRunSteps:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+processingRunArtifacts:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: listProcessingRunArtifacts
+    tags: [processing]
+    summary: 处理运行产物目录
+    description: |
+      返回该运行产出的对象目录（V31-016）。只读：产物由 Worker 在阶段
+      收尾时登记，客户端不能伪造。运行不存在或跨项目返回 404。
+
+      产物数量受阶段数 × 尝试数约束，天然有界，因此不做游标分页
+      （`next_cursor` 恒为 `null`）。
+    parameters:
+      - name: stage
+        in: query
+        required: false
+        description: 按阶段过滤。
+        schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingStage" }
+      - name: attempt
+        in: query
+        required: false
+        description: 按执行尝试过滤。
+        schema: { type: integer, minimum: 1 }
+      - name: kind
+        in: query
+        required: false
+        description: 按产物类型过滤。
+        schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingArtifactKind" }
+    responses:
+      "200":
+        description: 产物目录
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ProcessingArtifactPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 processingRunActions:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"

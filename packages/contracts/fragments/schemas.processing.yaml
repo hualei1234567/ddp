@@ -203,6 +203,79 @@ ProcessingRunStepPage:
       items: { $ref: "../openapi.yaml#/components/schemas/ProcessingRunStep" }
     next_cursor: { type: [string, "null"] }
 
+ProcessingArtifactKind:
+  type: string
+  enum: [METADATA, CANONICAL, TIME_ALIGNMENT_REPORT]
+  description: |
+    产物类型。只登记**对象存储中的产物**：`QUALITY_PRE_CHECK` 的
+    `quality-run/<id>` 是数据库记录引用（质量结论已落 `quality_runs` 表），
+    不是对象存储对象，因此不在此列。
+
+ProcessingArtifact:
+  type: object
+  additionalProperties: false
+  required:
+    - artifact_id
+    - run_id
+    - stage
+    - attempt
+    - kind
+    - object_key
+    - schema_version
+    - content_type
+    - size_bytes
+    - created_at
+    - created_by
+  description: |
+    运行产物目录的一条记录（V31-016）。只读：产物由 Worker 在阶段收尾时
+    登记，客户端不能伪造。`object_key` 是服务端生成的存储 key，前端不应
+    自行拼接或改写。
+  properties:
+    artifact_id: { type: string, format: uuid }
+    run_id: { type: string, format: uuid }
+    stage: { $ref: "../openapi.yaml#/components/schemas/ProcessingStage" }
+    attempt:
+      type: integer
+      minimum: 1
+      description: 执行尝试序号；与运行 `attempt` 对齐，重试会递增。
+    kind: { $ref: "../openapi.yaml#/components/schemas/ProcessingArtifactKind" }
+    object_key:
+      type: string
+      minLength: 1
+      maxLength: 1024
+      description: 服务端生成的对象存储 key。
+    schema_version:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: 产物自身的 Schema 版本；与 Canonical 版本解耦。
+    content_type: { type: string, minLength: 1, maxLength: 128 }
+    size_bytes: { type: integer, minimum: 0 }
+    checksum_sha256:
+      type: [string, "null"]
+      pattern: "^[0-9a-f]{64}$"
+      description: 内容摘要；部分阶段产物无稳定摘要（仅引用）时为 `null`。
+    source_ref:
+      type: [string, "null"]
+      maxLength: 1024
+      description: 产物来源输入对象；无单一来源时为 `null`。
+    created_at: { type: string, format: date-time }
+    created_by: { type: [string, "null"], format: uuid }
+
+ProcessingArtifactPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/ProcessingArtifact" }
+    next_cursor:
+      type: [string, "null"]
+      description: |
+        恒为 `null`：产物数量受阶段数 × 尝试数约束，天然有界，因此不做
+        游标分页。字段保留是为了与其它分页响应同形。
+
 ProcessingRunPage:
   type: object
   required: [items, next_cursor]

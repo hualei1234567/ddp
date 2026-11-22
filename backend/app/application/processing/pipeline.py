@@ -36,6 +36,7 @@ from uuid import UUID
 
 from app.application.observability_redaction import sanitize_log_message
 from app.application.processing.ports import (
+    ProcessingArtifactRepository,
     ProcessingRunRepository,
     ProcessingStepRepository,
     UnitOfWork,
@@ -53,6 +54,7 @@ from app.application.processing.stages import (
 from app.application.processing.use_cases import ProcessingWorkerUseCases
 from app.domain.common.ids import new_id
 from app.domain.identity.models import ProjectScope
+from app.domain.processing.artifacts import ProcessingArtifact
 from app.domain.processing.enums import (
     STAGE_SEQUENCE,
     ProcessingRunStatus,
@@ -109,12 +111,17 @@ class ProcessingPipeline:
         worker: ProcessingWorkerUseCases,
         handlers: Mapping[ProcessingStage, StageHandler],
         uow: UnitOfWork,
+        *,
+        artifacts: ProcessingArtifactRepository | None = None,
     ) -> None:
         self._runs = runs
         self._steps = steps
         self._worker = worker
         self._handlers = handlers
         self._uow = uow
+        #: 产物目录（V31-016）。为 ``None`` 时阶段产物只进 ``output_refs``，
+        #: 用于只验证编排语义的测试；生产装配必须显式注入。
+        self._artifacts = artifacts
 
     def execute(
         self,
@@ -316,6 +323,55 @@ class ProcessingPipeline:
             actor_id=scope.actor_id,
         )
         self._steps.upsert(scope, finished)
+        self._register_artifacts(scope, step, outcome, now=now)
+
+    def _register_artifacts(
+        self,
+        scope: ProjectScope,
+        step: ProcessingStep,
+        outcome: StageOutcome,
+        *,
+        now: datetime,
+    ) -> None:
+        """把阶段产物登记进目录（V31-016）。
+
+        与步骤收尾同事务：步骤说成功、目录却没有产物，会让"产物在哪"变成
+        只能翻对象存储才能回答的问题。``(run, stage, attempt, kind, key)``
+        唯一，重复执行同一阶段（崩溃恢复）会跳过已登记行而不是撞唯一键。
+        """
+        if self._artifacts is None or not outcome.artifacts:
+            return
+        existing = {
+            (item.kind, item.object_key)
+            for item in self._artifacts.list(
+                scope,
+                run_id=step.run_id,
+                stage=step.stage,
+                attempt=step.attempt,
+            )
+        }
+        for description in outcome.artifacts:
+            if (description.kind.value, description.object_key) in existing:
+                continue
+            self._artifacts.add(
+                scope,
+                ProcessingArtifact(
+                    artifact_id=new_id(),
+                    project_id=step.project_id,
+                    run_id=step.run_id,
+                    stage=step.stage,
+                    attempt=step.attempt,
+                    kind=description.kind.value,
+                    object_key=description.object_key,
+                    schema_version=description.schema_version,
+                    content_type=description.content_type,
+                    size_bytes=description.size_bytes,
+                    checksum_sha256=description.checksum_sha256,
+                    source_ref=description.source_ref,
+                    created_at=now,
+                    created_by=scope.actor_id,
+                ),
+            )
 
     def _fail_stage(
         self,

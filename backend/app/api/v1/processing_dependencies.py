@@ -22,6 +22,9 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunRepository,
     SqlProcessingRunStepRepository,
 )
+from app.infrastructure.repositories.processing_artifacts import (
+    SqlProcessingArtifactRepository,
+)
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 
 ReadScope = Annotated[ProjectScope, Depends(get_project_scope)]
@@ -33,6 +36,7 @@ ExpectedVersion = Annotated[int, Depends(require_expected_version)]
 class ProcessingServices:
     runs: ProcessingRunUseCases
     worker: ProcessingWorkerUseCases
+    artifacts: SqlProcessingArtifactRepository
 
 
 def get_processing_services(session: DbSession) -> ProcessingServices:
@@ -55,6 +59,8 @@ def get_processing_services(session: DbSession) -> ProcessingServices:
             audit=SqlAuditRepository(session),
             outbox=SqlOutboxRepository(session),
         ),
+        # 产物目录只读：登记由 Worker 在阶段收尾时完成（V31-016）。
+        artifacts=SqlProcessingArtifactRepository(session),
     )
 
 

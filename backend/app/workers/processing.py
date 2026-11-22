@@ -95,6 +95,9 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunRepository,
     SqlProcessingRunStepRepository,
 )
+from app.infrastructure.repositories.processing_artifacts import (
+    SqlProcessingArtifactRepository,
+)
 from app.infrastructure.repositories.quality import SqlQualityRunRepository
 from app.infrastructure.storage.processing_objects import (
     S3InputObjectInspector,
@@ -346,6 +349,8 @@ class ProcessingRunWorker:
                 quality_check=quality_check,
             ),
             session,
+            # 阶段产物登记进一等目录（V31-016）；``output_refs`` 退化为兼容投影。
+            artifacts=SqlProcessingArtifactRepository(session),
         )
 
     def _force_fail(
