@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/canonical/action.v1.schema.json",
+  "title": "DDP Canonical Action v1",
+  "description": "动作序列/动作指令的声明；数值本体可放对象存储。至少需要 start_time_ns 或 end_time_ns 之一，且 end 不早于 start（领域层强制）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "action_id",
+    "episode_key",
+    "action_type",
+    "missing_fields"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "ddp.canonical/1.0.0"
+    },
+    "action_id": {
+      "type": "string"
+    },
+    "episode_key": {
+      "type": "string"
+    },
+    "action_type": {
+      "type": "string"
+    },
+    "start_time_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "end_time_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "values": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "number"
+      }
+    },
+    "unit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "frame_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "joint_names": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "action_schema_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "frame_index": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "missing_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "action_schema_ref",
+          "confidence",
+          "end_time_ns",
+          "frame_id",
+          "frame_index",
+          "joint_names",
+          "source",
+          "start_time_ns",
+          "unit",
+          "values"
+        ]
+      },
+      "uniqueItems": true
+    }
+  }
+}

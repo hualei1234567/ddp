@@ -22,6 +22,9 @@ from app.application.collection.ports import (
     IdempotencyRepository,
     OutboxRepository,
 )
+from app.application.episodes.canonical_version import (
+    ensure_writable_canonical_schema_version,
+)
 from app.application.episodes.commands import (
     CreateEpisodeCommand,
     EpisodeActionCommand,
@@ -151,6 +154,10 @@ class EpisodeService:
         # application/episodes/segmentation.py）。放在幂等重放之后：重放的结果
         # 不该因为规则集合变化而失败。
         validate_segmentation_rule(command.segmentation, self._segmentation_rules)
+        # ADR-0038 §2.6：写入入口只接受正式 Canonical 版本。历史行上的
+        # ``-draft`` 是溯源事实，读取时不拒绝；但新写入必须能被共享 JSON Schema
+        # 读取，否则接上 schema 那天这条数据会立刻失效。
+        ensure_writable_canonical_schema_version(command.canonical_schema_version)
 
         raw_asset_ids = _unique_uuids(command.raw_asset_ids)
         if not 1 <= len(raw_asset_ids) <= 64:

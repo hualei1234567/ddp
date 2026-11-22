@@ -173,6 +173,10 @@ data-platform/ddp_data/canonical/
 4. **用 Pydantic / JSON Schema 生成模型**：暂缓。当前无新增依赖批准；dataclass
    + 显式校验已满足契约与测试需求。若未来需要跨语言 Schema，再评估
    `packages/contracts` 侧生成。
+   > **已落地（V31-017，ADR-0040）**：共享 JSON Schema 由
+   > `ddp_data.canonical.json_schema` 从 `*_FIELDS` 生成，产物在
+   > `packages/contracts/schemas/canonical-v1/` 并逐字节锁死。
+   > 未引入新依赖，dataclass 仍是唯一权威。
 
 ## 10. 影响、风险与回滚
 
