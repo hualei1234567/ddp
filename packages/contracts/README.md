@@ -85,6 +85,7 @@ Dataset/TrainingRequest 血缘与 DatasetVersion PATCH 未实现，不在本快�
 | `baselines/` | 自包含冻结基线（由脚本生成，禁止手工编辑） |
 | `reports/` | 冻结/兼容性检查报告（由脚本生成） |
 | `schemas/*.json` | 可复用 JSON Schema（错误体、阶段 3/4/5 响应对象、状态机与错误码注册表） |
+| `schemas/canonical-v1/*.json` | **生成产物**：Canonical v1 六个实体的 JSON Schema，由 `scripts/export_canonical_schemas.py` 从 `data-platform/ddp_data/canonical/v1.py` 的字段声明导出。**禁止手改**——`check.sh` 与 CI 做逐字节比对（ADR-0040） |
 
 `openapi.yaml` 通过相对 `$ref` 引用 `fragments/`。Redocly 与 oasdiff 的输入始终是
 `packages/contracts/openapi.yaml`；基线脚本会用 Redocly bundle 生成自包含文件。

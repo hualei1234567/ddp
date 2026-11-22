@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from app.infrastructure.db.models.ingestion import RawAssetModel
+from ddp_data.canonical.v1 import SCHEMA_VERSION
 from sqlalchemy import update
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -106,7 +107,9 @@ def episode_payload(
         },
         "time_base": time_base(),
         "calibration_snapshot": calibration_snapshot(),
-        "canonical_schema_version": "ddp.canonical/1.0.0-draft",
+        # 新写入必须用正式版本（ADR-0038 §2.6）；直接写库的历史夹具保留
+        # ``-draft``，因为那记录的是"这行按哪一版映射出来"的溯源事实。
+        "canonical_schema_version": SCHEMA_VERSION,
         "pipeline_id": "parser",
         "pipeline_version": "1.0.0",
         "code": code,

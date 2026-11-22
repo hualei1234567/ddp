@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/canonical/sensor-stream.v1.schema.json",
+  "title": "DDP Canonical SensorStream v1",
+  "description": "非视频传感器流（IMU / 关节 / 力/力矩等）的声明。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stream_id",
+    "missing_fields"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "ddp.canonical/1.0.0"
+    },
+    "stream_id": {
+      "type": "string"
+    },
+    "sensor_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sensor_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "modality": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sample_rate_hz": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "channel_names": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "unit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "quantity_kind": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "frame_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "frame_convention": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "duration_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "sample_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "storage_reference": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "checksum": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "calibration_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "calibration_version": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "missing_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "calibration_id",
+          "calibration_version",
+          "channel_names",
+          "checksum",
+          "duration_ns",
+          "frame_convention",
+          "frame_id",
+          "modality",
+          "quantity_kind",
+          "sample_count",
+          "sample_rate_hz",
+          "sensor_name",
+          "sensor_type",
+          "storage_reference",
+          "unit"
+        ]
+      },
+      "uniqueItems": true
+    }
+  }
+}

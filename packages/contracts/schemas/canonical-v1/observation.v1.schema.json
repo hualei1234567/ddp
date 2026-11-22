@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/canonical/observation.v1.schema.json",
+  "title": "DDP Canonical Observation v1",
+  "description": "一次传感器观测的声明；payload 由引用指向，不内联大数据。至少需要 timestamp_ns 或 source_time_ns 之一（领域层强制）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "observation_id",
+    "episode_key",
+    "observation_type",
+    "missing_fields"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "ddp.canonical/1.0.0"
+    },
+    "observation_id": {
+      "type": "string"
+    },
+    "episode_key": {
+      "type": "string"
+    },
+    "observation_type": {
+      "type": "string"
+    },
+    "stream_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sensor_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "frame_index": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "timestamp_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "source_time_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "sequence": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "frame_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "calibration_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "calibration_version": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "unit": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "quantity_kind": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "shape": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "integer"
+      }
+    },
+    "dtype": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "encoding": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "payload_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "checksum": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "valid": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "invalid_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "quality_flags": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "missing_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "calibration_id",
+          "calibration_version",
+          "checksum",
+          "dtype",
+          "encoding",
+          "frame_id",
+          "frame_index",
+          "invalid_reason",
+          "payload_ref",
+          "quality_flags",
+          "quantity_kind",
+          "sensor_id",
+          "sequence",
+          "shape",
+          "source_time_ns",
+          "stream_id",
+          "timestamp_ns",
+          "unit",
+          "valid"
+        ]
+      },
+      "uniqueItems": true
+    }
+  }
+}
