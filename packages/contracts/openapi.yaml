@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.30.0
+  version: 1.31.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -211,8 +211,14 @@ info:
       `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
       本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
       `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
-    - `1.30.0` **质检批量重跑与差异报告（V31-033）**：新增两个操作。
-      `POST /quality-runs/batch` 为一组 Episode 各排一次质检（只入队，
+    - `1.31.0` **导出产物可加载范围（V31-042 切片 1）**：`ExportJob` 响应新增
+      `loadable_scope`（`METADATA_ONLY` / `FRAMES`，开放枚举）。该字段由
+      `format` 派生（当前两种格式均为 `METADATA_ONLY`），描述产物结构上是否
+      含逐帧 `observation.*` / `action` 列；与 `verification_status` 正交——
+      scope 是结构内容，verification 是 Loader 实测结论，结构合规不等于可
+      加载、更不等于可训练。客户端必须容忍未知取值。全部为增量：仅新增响应
+      字段，无既有字段变更，无数据库迁移。
+    - `1.30.0` **质检批量重跑与差异报告（V31-033）**：新增两个操作。`POST /quality-runs/batch` 为一组 Episode 各排一次质检（只入队，
       `lifecycle=QUEUED`，**无结论**；响应使用独立的 `QueuedQualityRun`
       schema，避免把缺省 `status` 读成"检查通过"）。空列表、重复对象、
       超过 1000 个对象返回 422；整批同一事务入队。
@@ -330,7 +336,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.30.0
+  version: 1.31.0
   stages:
     device:
       version: ddp.device/1.0.0

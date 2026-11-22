@@ -179,10 +179,40 @@ class ExportFormat(StrEnum):
 
 
 class ExportVerificationStatus(StrEnum):
-    """真实 LeRobot Loader 验证前固定 UNVERIFIED，不得宣称已兼容。"""
+    """Loader 验证结论，由真实 LeRobot Loader 实测决定，不得凭结构合规宣称。
+
+    与 :class:`ExportLoadableScope` 正交：``loadable_scope`` 描述产物结构上
+    包含什么（元数据 / 逐帧），``verification_status`` 描述 Loader 是否真的
+    加载成功过。结构合规不等于可加载，更不等于可训练。
+    """
 
     UNVERIFIED = "UNVERIFIED"
     VERIFIED_BY_LOADER = "VERIFIED_BY_LOADER"
+
+
+class ExportLoadableScope(StrEnum):
+    """导出产物在结构上的可加载范围（V31-042 切片 1，契约开放枚举）。
+
+    - ``METADATA_ONLY``：产物含 LeRobot 必需元数据文件，但不含逐帧
+      ``observation.*`` / ``action`` 列，只能被 Loader 读出 episode 结构，
+      不能直接用于训练；
+    - ``FRAMES``：含逐帧特征列，具备直接训练的结构条件（仍须 Loader 实测
+      通过后才可置 ``verification_status = VERIFIED_BY_LOADER``）。
+
+    客户端必须容忍未知取值（取值集合随逐帧链路落地可增长）。
+    """
+
+    METADATA_ONLY = "METADATA_ONLY"
+    FRAMES = "FRAMES"
+
+
+#: 每种导出格式的当前产物范围。在逐帧数据链路（V31-044）落地前，
+#: LE_ROBOT 与 CANONICAL 产物都只到元数据层；此处是唯一事实来源，
+#: 导出侧与 API 序列化都从这里派生，禁止各写一份导致漂移。
+EXPORT_FORMAT_LOADABLE_SCOPE: dict[ExportFormat, ExportLoadableScope] = {
+    ExportFormat.LE_ROBOT: ExportLoadableScope.METADATA_ONLY,
+    ExportFormat.CANONICAL: ExportLoadableScope.METADATA_ONLY,
+}
 
 
 class ExclusionCode(StrEnum):
