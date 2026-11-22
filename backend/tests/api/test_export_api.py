@@ -179,7 +179,9 @@ def test_export_worker_success_manifest_and_download(
     detail = editor.get(url(ids.project_a, f"/exports/{job_id}")).json()
     assert detail["status"] == "SUCCEEDED"
     assert detail["attempt"] == 1
-    assert detail["artifact_count"] == 6
+    assert (
+        detail["artifact_count"] == 18
+    )  # 6 DDP 自有（含权威 info.json）+ tasks/stats + 10 episode parquet（10 Episode）
     assert detail["total_bytes"] > 0
     assert detail["aggregate_sha256"].startswith("sha256:")
     assert detail["artifact_manifest_sha256"].startswith("sha256:")
@@ -189,23 +191,30 @@ def test_export_worker_success_manifest_and_download(
     assert manifest.status_code == 200, manifest.text
     body = manifest.json()
     assert body["export_job_id"] == job_id
-    assert body["artifact_count"] == 6
+    assert body["artifact_count"] == 18
     assert body["aggregate_sha256"] == detail["aggregate_sha256"]
     assert body["verification_status"] == "UNVERIFIED"
     paths = {item["path"] for item in body["artifacts"]}
     assert paths == {
+        # V31-041 既有 DDP 自有产物（保留）
         "meta/info.json",
         "meta/episodes.jsonl",
         "meta/media.jsonl",
         "data/episodes.jsonl",
         "meta/ddp_divisions.json",
         "ddp/sidecar.json",
+        # V31-042 切片 3 新增：LeRobot v2.1 结构合规必需文件（该测试 10 个 Episode）
+        "meta/tasks.jsonl",
+        "meta/stats.json",
+        *[f"data/chunk-000/episode_{i:06d}.parquet" for i in range(10)],
     }
     for item in body["artifacts"]:
         assert item["sha256"].startswith("sha256:")
         object_key = f"{detail['output_prefix']}{item['path']}"
         assert storage.objects[object_key] is not None
-        assert storage.sha256(object_key) == item["sha256"]
+        assert (
+            storage.sha256(object_key) == item["sha256"]
+        ), f"哈希不一致 path={item['path']} content_type={item['content_type']}"
 
     divisions_key = f"{detail['output_prefix']}meta/ddp_divisions.json"
     assert b'"train"' in storage.objects[divisions_key]

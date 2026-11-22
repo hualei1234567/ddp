@@ -42,13 +42,11 @@ def test_same_input_produces_identical_bytes() -> None:
     """方案 §4.2 硬要求：同输入两次产出字节一致。"""
     episodes = make_episodes(3)
     first = write_lerobot_metadata(
-        repo_id="ddp/demo",
         episodes=episodes,
         dataset_version_id="v-1",
         created_at_iso="2026-11-23T00:00:00+00:00",
     )
     second = write_lerobot_metadata(
-        repo_id="ddp/demo",
         episodes=list(reversed(episodes)),
         dataset_version_id="v-1",
         created_at_iso="2026-11-23T00:00:00+00:00",
@@ -61,28 +59,50 @@ def test_same_input_produces_identical_bytes() -> None:
 def test_row_order_does_not_change_episode_index_assignment() -> None:
     """episode_index 由排序后位置决定，与调用方传入顺序无关。"""
     one = write_lerobot_metadata(
-        repo_id="r", episodes=make_episodes(3), dataset_version_id="v", created_at_iso="t"
+        episodes=make_episodes(3), dataset_version_id="v", created_at_iso="t"
     )
     two = write_lerobot_metadata(
-        repo_id="r",
         episodes=list(reversed(make_episodes(3))),
         dataset_version_id="v",
         created_at_iso="t",
     )
-    info_one = json.loads(next(a for a in one if a.path == "meta/info.json").data)
-    info_two = json.loads(next(a for a in two if a.path == "meta/info.json").data)
-    assert info_one["total_episodes"] == info_two["total_episodes"] == 3
+    # info.json 不再由 writer 产出：顺序无关性改由 parquet 集合与 stats 断言。
+    assert [a.path for a in one] == [a.path for a in two]
+    assert all(a.data == b.data for a, b in zip(one, two, strict=True))
+    stats_one = json.loads(next(a for a in one if a.path == "meta/stats.json").data)
+    stats_two = json.loads(next(a for a in two if a.path == "meta/stats.json").data)
+    assert stats_one["length"]["count"] == stats_two["length"]["count"] == [3.0]
 
 
 # ---- 结构合规 ----
 
 
-def test_info_json_has_lerobot_required_keys() -> None:
+def test_writer_does_not_produce_info_json() -> None:
+    """info.json 由 backend 权威生成（DDP 自有键 + LeRobot 必需键合并），
+    writer 不得产出同名文件造成双条目（切片 3 接线时的真实缺陷，回归守卫）。"""
     artifacts = write_lerobot_metadata(
-        repo_id="ddp/demo",
         episodes=make_episodes(2),
         dataset_version_id="v-1",
         created_at_iso="2026-11-23T00:00:00+00:00",
+    )
+    assert not any(a.path == "meta/info.json" for a in artifacts)
+    assert {a.path for a in artifacts} >= {"meta/tasks.jsonl", "meta/stats.json"}
+
+
+def test_features_declare_episode_level_columns_only() -> None:
+    """backend info 合并 LeRobot 键后：features 显式只含 episode 级列。"""
+    from datetime import datetime
+
+    from app.domain.datasets.enums import Split
+    from app.domain.datasets.exporting import build_export_artifacts
+
+    from tests.unit.test_export_domain import make_item, make_job, make_version
+
+    artifacts = build_export_artifacts(
+        make_job(),
+        make_version(),
+        (make_item(0, Split.TRAIN), make_item(1, Split.TEST)),
+        created_at=datetime(2026, 11, 9, 12, 0),
     )
     info = json.loads(next(a for a in artifacts if a.path == "meta/info.json").data)
     for key in (
@@ -98,28 +118,18 @@ def test_info_json_has_lerobot_required_keys() -> None:
     ):
         assert key in info, f"info.json 缺 LeRobot 必需键 {key}"
     assert info["codebase_version"] == LEROBOT_CODEBASE_VERSION
-    assert info["total_episodes"] == 2
-    assert info["data_path"] == "data/chunk-{chunk:03d}/episode_{episode:06d}.parquet"
-
-
-def test_features_declare_episode_level_columns_only() -> None:
-    """features 显式只含 episode 级列；逐帧模态缺失是声明的事实。"""
-    artifacts = write_lerobot_metadata(
-        repo_id="r", episodes=make_episodes(2), dataset_version_id="v", created_at_iso="t"
-    )
-    info = json.loads(next(a for a in artifacts if a.path == "meta/info.json").data)
     features = info["features"]
     assert set(features) == {"episode_index", "task_index", "length", "split"}
     assert not any(key.startswith("observation.") for key in features)
     assert not any(key.startswith("action") for key in features)
-    assert info["ddp"]["loadable_scope"] == "METADATA_ONLY"
-    assert info["ddp"]["verification_status"] == "UNVERIFIED"
-    assert info["ddp"]["frame_level_mapping"] is False
+    assert info["loadable_scope"] == "METADATA_ONLY"
+    assert info["verification_status"] == "UNVERIFIED"
+    assert info["frame_level_mapping"] is False
 
 
 def test_tasks_jsonl_has_placeholder_task() -> None:
     artifacts = write_lerobot_metadata(
-        repo_id="r", episodes=make_episodes(2), dataset_version_id="v", created_at_iso="t"
+        episodes=make_episodes(2), dataset_version_id="v", created_at_iso="t"
     )
     tasks_raw = next(a for a in artifacts if a.path == "meta/tasks.jsonl").data.decode("utf-8")
     tasks = [json.loads(line) for line in tasks_raw.splitlines()]
@@ -129,7 +139,7 @@ def test_tasks_jsonl_has_placeholder_task() -> None:
 def test_stats_json_exists_with_episode_level_stats() -> None:
     episodes = [make_episode(0, length=10), make_episode(1, length=30)]
     artifacts = write_lerobot_metadata(
-        repo_id="r", episodes=episodes, dataset_version_id="v", created_at_iso="t"
+        episodes=episodes, dataset_version_id="v", created_at_iso="t"
     )
     stats = json.loads(next(a for a in artifacts if a.path == "meta/stats.json").data)
     assert stats["length"]["min"] == [10]
@@ -142,7 +152,7 @@ def test_per_episode_parquet_layout_and_content() -> None:
     """v2.1 布局：每 Episode 一个 parquet，只含 episode 级列，行数=1。"""
     episodes = [make_episode(0), make_episode(1, split="validation")]
     artifacts = write_lerobot_metadata(
-        repo_id="r", episodes=episodes, dataset_version_id="v", created_at_iso="t"
+        episodes=episodes, dataset_version_id="v", created_at_iso="t"
     )
     parquet_artifacts = [a for a in artifacts if a.path.startswith("data/chunk-")]
     assert len(parquet_artifacts) == 2
@@ -173,7 +183,7 @@ def test_chunking_crosses_directory_at_episodes_per_chunk() -> None:
         }
     )
     artifacts = write_lerobot_metadata(
-        repo_id="r", episodes=episodes, dataset_version_id="v", created_at_iso="t"
+        episodes=episodes, dataset_version_id="v", created_at_iso="t"
     )
     paths = {a.path for a in artifacts if a.path.startswith("data/")}
     assert "data/chunk-000/episode_000000.parquet" in paths
@@ -186,14 +196,14 @@ def test_chunking_crosses_directory_at_episodes_per_chunk() -> None:
 def test_videos_directory_is_not_produced() -> None:
     """媒体未按 LeRobot 布局落盘，绝不虚构 videos/ 产物。"""
     artifacts = write_lerobot_metadata(
-        repo_id="r", episodes=make_episodes(1), dataset_version_id="v", created_at_iso="t"
+        episodes=make_episodes(1), dataset_version_id="v", created_at_iso="t"
     )
     assert not any(a.path.startswith("videos/") for a in artifacts)
 
 
 def test_empty_episodes_rejected() -> None:
     with pytest.raises(ValueError, match="不得为空"):
-        write_lerobot_metadata(repo_id="r", episodes=[], dataset_version_id="v", created_at_iso="t")
+        write_lerobot_metadata(episodes=[], dataset_version_id="v", created_at_iso="t")
 
 
 def test_required_paths_helper() -> None:
