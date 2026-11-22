@@ -142,6 +142,29 @@ def _seed_business_rows(
                 )
             )
 
+        # 排队中的运行没有结论：不进入"按结论的运行数"，也不能以 None 状态出现。
+        session.add(
+            QualityRunModel(
+                id=uuid4(),
+                project_id=ids.project_a,
+                subject_type="EPISODE",
+                subject_id=uuid4(),
+                rule_set_version=_RULE_SET,
+                status=None,
+                score=None,
+                finding_count=0,
+                error_count=0,
+                warn_count=0,
+                category_summary={},
+                started_at=None,
+                finished_at=None,
+                created_by=ids.editor_a,
+                lifecycle="QUEUED",
+                attempt=1,
+                max_attempts=3,
+            )
+        )
+
         for status, attempts, available_at in (
             ("PENDING", 0, now - timedelta(seconds=120)),
             ("PENDING", 1, now - timedelta(seconds=30)),
@@ -205,10 +228,12 @@ def _seed_business_rows(
 def test_business_metrics_exist_and_match_database(
     metrics_app: tuple[TestClient, ApiIds],
     api_db: tuple[sessionmaker[Session], ApiIds],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     client, ids = metrics_app
     factory, _ = api_db
     last_success = _seed_business_rows(factory, ids)
+    caplog.set_level(logging.WARNING, logger="ddp.metrics")
 
     response = client.get("/metrics")
     assert response.status_code == 200
@@ -234,6 +259,11 @@ def test_business_metrics_exist_and_match_database(
     assert _status(body, "ddp_quality_runs", "PASSED") == 1.0
     assert _status(body, "ddp_quality_runs", "FAILED") == 1.0
     assert _status(body, "ddp_quality_runs", "INCOMPLETE") == 1.0
+    # 未完成（无结论）的运行不进入按结论计数，也不触发"未知状态"告警。
+    assert 'ddp_quality_runs{status="None"}' not in body
+    assert 'ddp_quality_runs{status="null"}' not in body
+    assert "未知的运行生命周期" not in caplog.text
+    assert "领域枚举之外的状态值" not in caplog.text
 
     # outbox：只有到期未投递的 PENDING 计入积压；未来事件不计。
     assert _sample(body, "ddp_outbox_due_events ") == 2.0

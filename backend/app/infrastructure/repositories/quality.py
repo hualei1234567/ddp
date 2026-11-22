@@ -1,8 +1,16 @@
 """质量运行 SQL 仓储。
 
-所有查询强制项目作用域；运行与 finding 都只追加，不提供更新/删除。
-``add`` 在同一事务内写入运行与全部 finding：任一条失败整体回滚，不会留下
-"有运行、没结论"的半成品。
+所有查询强制项目作用域。
+
+写入语义分两类：
+
+- ``add`` 追加一次**已产出结论**的运行（连同全部 findings，同事务）；
+- 生命周期（排队/执行/失败/重投）尚未开放写入：V31-030 只落地领域状态机与
+  表结构，执行编排在 V31-031 的 Worker 里接入。
+
+读取语义只有一种：**结论视图**。``get`` / ``list`` /
+``latest_for_subjects`` 只认 ``lifecycle = 'SUCCEEDED'`` 的行。未完成的运行
+没有结论，把它们放进结论视图会让 "status is NULL" 被调用方读成 "通过"。
 """
 
 from __future__ import annotations
@@ -18,8 +26,10 @@ from app.domain.identity.models import ProjectScope
 from app.domain.quality.enums import (
     QualityCategory,
     QualityFindingStatus,
+    QualityRunLifecycle,
     QualitySubjectType,
 )
+from app.domain.quality.errors import DomainValidationError
 from app.domain.quality.models import QualityFinding, QualityRun
 from app.infrastructure.db.models.quality import (
     QualityFindingModel,
@@ -61,10 +71,15 @@ def _run(row: QualityRunModel) -> QualityRun:
         category_summary={
             str(key): dict(value) for key, value in dict(row.category_summary).items()
         },
-        started_at=as_utc(row.started_at),  # type: ignore[arg-type]
-        finished_at=as_utc(row.finished_at),  # type: ignore[arg-type]
+        started_at=as_utc(row.started_at) if row.started_at is not None else None,
+        finished_at=as_utc(row.finished_at) if row.finished_at is not None else None,
         created_at=as_utc(row.created_at),  # type: ignore[arg-type]
         created_by=row.created_by,
+        lifecycle=row.lifecycle,
+        attempt=row.attempt,
+        max_attempts=row.max_attempts,
+        error_code=row.error_code,
+        error_summary=row.error_summary,
     )
 
 
@@ -73,7 +88,18 @@ class SqlQualityRunRepository:
         self._session = session
 
     def add(self, scope: ProjectScope, run: QualityRun) -> QualityRun:
+        """追加一次已产出结论的运行。
+
+        未完成的运行没有 ``status`` / 起止时间，不能走本方法：它们由执行编排
+        写入（V31-031）。这里显式拒绝，避免"半成品"绕过状态机进入结论视图。
+        """
         scope.ensure(run.project_id)
+        if run.lifecycle is not QualityRunLifecycle.SUCCEEDED:
+            raise DomainValidationError(
+                f"只能追加已产出结论的运行；{run.lifecycle.value} 由执行编排写入"
+            )
+        if run.status is None:
+            raise DomainValidationError("已产出结论的运行必须有 status")
         self._session.add(
             QualityRunModel(
                 id=run.run_id,
@@ -91,6 +117,11 @@ class SqlQualityRunRepository:
                 finished_at=run.finished_at,
                 created_at=run.created_at,
                 created_by=run.created_by,
+                lifecycle=run.lifecycle.value,
+                attempt=run.attempt,
+                max_attempts=run.max_attempts,
+                error_code=run.error_code,
+                error_summary=run.error_summary,
             )
         )
         self._session.flush()
@@ -117,10 +148,12 @@ class SqlQualityRunRepository:
         return run
 
     def get(self, scope: ProjectScope, run_id: UUID) -> QualityRun | None:
+        """读一条**结论**；未完成的运行不属于结论视图（返回 ``None``）。"""
         row = self._session.scalar(
             select(QualityRunModel).where(
                 QualityRunModel.id == run_id,
                 QualityRunModel.project_id == scope.project_id,
+                QualityRunModel.lifecycle == QualityRunLifecycle.SUCCEEDED.value,
             )
         )
         return _run(row) if row is not None else None
@@ -138,6 +171,7 @@ class SqlQualityRunRepository:
             QualityRunModel.project_id == scope.project_id,
             QualityRunModel.subject_type == subject_type.value,
             QualityRunModel.subject_id == subject_id,
+            QualityRunModel.lifecycle == QualityRunLifecycle.SUCCEEDED.value,
         )
         after_clause = keyset_after_desc(
             QualityRunModel,
@@ -163,10 +197,11 @@ class SqlQualityRunRepository:
         subject_type: QualitySubjectType,
         subject_ids: Sequence[UUID],
     ) -> tuple[QualityRun, ...]:
-        """每个对象取最新一次运行；一次查询完成，避免逐条 N+1。
+        """每个对象取最新一次**结论**；一次查询完成，避免逐条 N+1。
 
         排序口径与 :meth:`list` 一致：``created_at`` 倒序、``id`` 倒序。
-        项目过滤在子查询与外层查询各做一次，跨项目 ID 不会命中。
+        项目过滤在子查询与外层查询各做一次，跨项目 ID 不会命中。未完成的
+        运行不参与排名——"最新一次还没算完"不能顶掉"上一次的结论"。
         """
         if not subject_ids:
             return ()
@@ -187,6 +222,7 @@ class SqlQualityRunRepository:
                 QualityRunModel.project_id == scope.project_id,
                 QualityRunModel.subject_type == subject_type.value,
                 QualityRunModel.subject_id.in_(list(subject_ids)),
+                QualityRunModel.lifecycle == QualityRunLifecycle.SUCCEEDED.value,
             )
             .subquery()
         )

@@ -129,7 +129,11 @@ def _distribution(
 ) -> dict[str, int]:
     with _read_transaction(session):
         rows = session.execute(
-            select(model.status, func.count()).group_by(model.status),
+            # 质量运行的生命周期与结论正交：未完成的运行没有 ``status``，
+            # 不计入"按结论的运行数"，也不该在每次抓取时打一条警告。
+            select(model.status, func.count())
+            .where(model.status.is_not(None))
+            .group_by(model.status),
         ).all()
     counts: dict[str, int] = {}
     for raw_status, count in rows:

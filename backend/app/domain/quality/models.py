@@ -1,8 +1,13 @@
 """质量运行与结论实体。
 
-两张表/两个实体都**只追加**：一次质量检查是不可变的事实记录，"改结论"的
-正确做法是重跑（新 run），而不是编辑旧 run。因此这里不引入 ``version`` /
+**结论**是只追加的事实：一次质量检查算出的结果不可变，"改结论"的正确做法
+是重跑（新 run），而不是编辑旧 run。因此这里不引入 ``version`` /
 ``updated_at`` 这类会暗示"可更新"的字段。
+
+**生命周期**（V31-030）在成功前会推进：``QualityRun`` 除了结论，还携带
+``lifecycle`` / ``attempt`` / ``error_*``。状态迁移只经 ``mark_*`` 方法，
+每条边在 :data:`~app.domain.quality.enums.QUALITY_RUN_TRANSITIONS` 中显式
+声明；未完成的运行没有任何结论字段。
 
 口径：
 
@@ -19,23 +24,29 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
 from app.domain.quality.enums import (
+    QUALITY_RUN_TRANSITIONS,
     QualityCategory,
     QualityFindingStatus,
+    QualityRunLifecycle,
     QualityRunStatus,
     QualitySeverity,
     QualitySubjectType,
     coerce_category,
     coerce_finding_status,
+    coerce_lifecycle,
     coerce_run_status,
     coerce_severity,
     coerce_subject_type,
 )
-from app.domain.quality.errors import DomainValidationError
+from app.domain.quality.errors import (
+    DomainValidationError,
+    InvalidQualityRunTransitionError,
+)
 from app.domain.quality.rules import is_sha256_version
 
 RULE_ID_MAX_LENGTH = 64
@@ -73,6 +84,24 @@ def _aware(value: datetime, field_name: str) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise DomainValidationError(f"{field_name} 必须带时区")
     return value.astimezone(UTC)
+
+
+def _optional_code(value: object, field_name: str, *, max_length: int = 64) -> str | None:
+    """可空的技术标识：``None`` 原样保留，空串视为"没填"而拒绝。
+
+    与 :func:`_optional_text` 的区别：后者把 ``None`` 折叠成空串，会把
+    "没有错误"与"错误码写成空串"混为一谈；执行失败的错误码必须能区分。
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise DomainValidationError(f"{field_name} 必须是字符串")
+    text = value.strip()
+    if not text:
+        raise DomainValidationError(f"{field_name} 不得为空字符串")
+    if len(text) > max_length:
+        raise DomainValidationError(f"{field_name} 超过 {max_length} 字符")
+    return text
 
 
 def _uuid(value: object, field_name: str) -> UUID:
@@ -247,11 +276,20 @@ class QualityFinding:
 
 @dataclass(frozen=True, slots=True)
 class QualityRun:
-    """一次质量运行。
+    """一次质量运行：生命周期 +（成功时）结论。
+
+    ``lifecycle`` 回答"这次运行走到哪一步"，``status`` 回答"算出来的结论是
+    什么"。两者**正交**：``QUEUED`` / ``RUNNING`` / ``RETRYING`` 没有结论，
+    ``FAILED`` 指**执行失败**（没有可信结论），只有 ``SUCCEEDED`` 才携带
+    ``status`` / ``score`` / 各类计数与 ``category_summary``。
 
     ``category_summary`` 是六类聚合结果的物化快照（含 ``OVERALL``）。把聚合
     结果随运行一起落库，查询详情时不必重新扫描全部 findings；finding 明细
     仍可通过子资源分页读取。
+
+    默认 ``lifecycle=SUCCEEDED`` 保持既有调用方语义不变：此前构造
+    ``QualityRun`` 的地方都是在描述"已经算完的结论"。生命周期只经
+    :meth:`mark_running` 等方法迁移，构造器不接受任意字段组合冒充迁移结果。
     """
 
     run_id: UUID
@@ -259,16 +297,21 @@ class QualityRun:
     subject_type: QualitySubjectType | str
     subject_id: UUID
     rule_set_version: str
-    status: QualityRunStatus | str
+    status: QualityRunStatus | str | None
     score: float | None
     finding_count: int
     error_count: int
     warn_count: int
     category_summary: Mapping[str, Mapping[str, object]]
-    started_at: datetime
-    finished_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
     created_at: datetime
     created_by: UUID
+    lifecycle: QualityRunLifecycle | str = QualityRunLifecycle.SUCCEEDED
+    attempt: int = 1
+    max_attempts: int = 1
+    error_code: str | None = None
+    error_summary: str | None = None
     findings: tuple[QualityFinding, ...] = field(default=())
 
     def __post_init__(self) -> None:
@@ -277,7 +320,173 @@ class QualityRun:
         object.__setattr__(self, "subject_type", coerce_subject_type(self.subject_type))
         if not is_sha256_version(self.rule_set_version):
             raise DomainValidationError("rule_set_version 必须是 sha256:<64 hex>")
+        lifecycle = coerce_lifecycle(self.lifecycle)
+        object.__setattr__(self, "lifecycle", lifecycle)
+        for name in ("attempt", "max_attempts"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise DomainValidationError(f"{name} 必须是正整数")
+        if self.attempt > self.max_attempts:
+            raise DomainValidationError("attempt 不得大于 max_attempts")
+        object.__setattr__(self, "created_at", _aware(self.created_at, "created_at"))
+        object.__setattr__(self, "error_code", _optional_code(self.error_code, "error_code"))
+        object.__setattr__(
+            self,
+            "error_summary",
+            _optional_code(self.error_summary, "error_summary", max_length=1000),
+        )
+        findings = tuple(self.findings)
+        for finding in findings:
+            if not isinstance(finding, QualityFinding):
+                raise DomainValidationError("findings 只能包含 QualityFinding")
+            if finding.project_id != self.project_id or finding.run_id != self.run_id:
+                raise DomainValidationError("finding 的项目或运行与所属运行不一致")
+        object.__setattr__(self, "findings", findings)
+        if lifecycle is QualityRunLifecycle.SUCCEEDED:
+            self._validate_conclusion()
+        else:
+            self._validate_unfinished(lifecycle)
+
+    # ------------------------------------------------------------------ #
+    # 构造入口
+    # ------------------------------------------------------------------ #
+
+    @classmethod
+    def queued(
+        cls,
+        *,
+        run_id: UUID,
+        project_id: UUID,
+        subject_type: QualitySubjectType | str,
+        subject_id: UUID,
+        rule_set_version: str,
+        created_at: datetime,
+        created_by: UUID,
+        max_attempts: int = 1,
+        attempt: int = 1,
+    ) -> QualityRun:
+        """一次"待执行"的运行：没有结论、没有开始/结束时间。"""
+        return cls(
+            run_id=run_id,
+            project_id=project_id,
+            subject_type=subject_type,
+            subject_id=subject_id,
+            rule_set_version=rule_set_version,
+            status=None,
+            score=None,
+            finding_count=0,
+            error_count=0,
+            warn_count=0,
+            category_summary={},
+            started_at=None,
+            finished_at=None,
+            created_at=created_at,
+            created_by=created_by,
+            lifecycle=QualityRunLifecycle.QUEUED,
+            attempt=attempt,
+            max_attempts=max_attempts,
+        )
+
+    # ------------------------------------------------------------------ #
+    # 生命周期迁移（只走状态机，不可跳步）
+    # ------------------------------------------------------------------ #
+
+    def mark_running(self, *, now: datetime) -> QualityRun:
+        self._require_target(QualityRunLifecycle.RUNNING)
+        return replace(
+            self,
+            lifecycle=QualityRunLifecycle.RUNNING,
+            started_at=self.started_at or _aware(now, "now"),
+            finished_at=None,
+        )
+
+    def mark_succeeded(
+        self,
+        *,
+        status: QualityRunStatus | str,
+        score: float | None,
+        finding_count: int,
+        error_count: int,
+        warn_count: int,
+        category_summary: Mapping[str, Mapping[str, object]],
+        finished_at: datetime,
+        findings: tuple[QualityFinding, ...] = (),
+    ) -> QualityRun:
+        self._require_target(QualityRunLifecycle.SUCCEEDED)
+        if self.started_at is None:
+            raise DomainValidationError("未开始的运行不能直接产出结论")
+        return replace(
+            self,
+            lifecycle=QualityRunLifecycle.SUCCEEDED,
+            status=status,
+            score=score,
+            finding_count=finding_count,
+            error_count=error_count,
+            warn_count=warn_count,
+            category_summary=category_summary,
+            finished_at=finished_at,
+            findings=findings,
+            # 重投后成功：上一次执行的失败信息只是历史，不能跟着结论落库。
+            error_code=None,
+            error_summary=None,
+        )
+
+    def mark_failed(self, *, error_code: str, error_summary: str, now: datetime) -> QualityRun:
+        self._require_target(QualityRunLifecycle.FAILED)
+        if self.started_at is None:
+            raise DomainValidationError("未开始的运行不能标记为执行失败")
+        return replace(
+            self,
+            lifecycle=QualityRunLifecycle.FAILED,
+            finished_at=_aware(now, "now"),
+            error_code=error_code,
+            error_summary=error_summary,
+        )
+
+    def schedule_retry(self, *, now: datetime) -> QualityRun:
+        """把一次执行失败重投；重投次数受 ``max_attempts`` 约束。"""
+        self._require_target(QualityRunLifecycle.RETRYING)
+        if self.attempt >= self.max_attempts:
+            raise InvalidQualityRunTransitionError(
+                f"{self.lifecycle.value}（已用 {self.attempt}/{self.max_attempts} 次）",
+                QualityRunLifecycle.RETRYING,
+            )
+        return replace(
+            self,
+            lifecycle=QualityRunLifecycle.RETRYING,
+            attempt=self.attempt + 1,
+            finished_at=None,
+        )
+
+    def mark_cancelled(self, *, now: datetime) -> QualityRun:
+        self._require_target(QualityRunLifecycle.CANCELLED)
+        return replace(
+            self,
+            lifecycle=QualityRunLifecycle.CANCELLED,
+            finished_at=_aware(now, "now"),
+        )
+
+    # ------------------------------------------------------------------ #
+    # 内部校验
+    # ------------------------------------------------------------------ #
+
+    def _require_target(self, target: QualityRunLifecycle) -> None:
+        if target not in QUALITY_RUN_TRANSITIONS[self.lifecycle]:
+            raise InvalidQualityRunTransitionError(self.lifecycle, target)
+
+    def _validate_conclusion(self) -> None:
+        if self.status is None:
+            raise DomainValidationError("SUCCEEDED 的运行必须给出结论 status")
         object.__setattr__(self, "status", coerce_run_status(self.status))
+        if self.error_code is not None or self.error_summary is not None:
+            raise DomainValidationError("已产出结论的运行不得携带执行错误信息")
+        for name in ("started_at", "finished_at"):
+            value = getattr(self, name)
+            if value is None:
+                raise DomainValidationError(f"已产出结论的运行必须有 {name}")
+            object.__setattr__(self, name, _aware(value, name))
+        if self.finished_at < self.started_at:  # type: ignore[operator]
+            raise DomainValidationError("finished_at 不得早于 started_at")
         for name in ("finding_count", "error_count", "warn_count"):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -296,18 +505,46 @@ class QualityRun:
         if missing:
             raise DomainValidationError(f"category_summary 缺少类别：{'、'.join(missing)}")
         object.__setattr__(self, "category_summary", summary)
-        object.__setattr__(self, "started_at", _aware(self.started_at, "started_at"))
-        object.__setattr__(self, "finished_at", _aware(self.finished_at, "finished_at"))
-        object.__setattr__(self, "created_at", _aware(self.created_at, "created_at"))
-        if self.finished_at < self.started_at:
-            raise DomainValidationError("finished_at 不得早于 started_at")
-        findings = tuple(self.findings)
-        for finding in findings:
-            if not isinstance(finding, QualityFinding):
-                raise DomainValidationError("findings 只能包含 QualityFinding")
-            if finding.project_id != self.project_id or finding.run_id != self.run_id:
-                raise DomainValidationError("finding 的项目或运行与所属运行不一致")
-        object.__setattr__(self, "findings", findings)
+
+    def _validate_unfinished(self, lifecycle: QualityRunLifecycle) -> None:
+        if self.status is not None or self.score is not None:
+            raise DomainValidationError("未产出结论的运行不得携带 status / score")
+        if self.finding_count or self.error_count or self.warn_count:
+            raise DomainValidationError("未产出结论的运行不得携带计数")
+        if dict(self.category_summary):
+            raise DomainValidationError("未产出结论的运行不得携带类别聚合")
+        if self.findings:
+            raise DomainValidationError("未产出结论的运行不得携带 findings")
+
+        for name in ("started_at", "finished_at"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, _aware(value, name))
+
+        settled = lifecycle in {QualityRunLifecycle.FAILED, QualityRunLifecycle.CANCELLED}
+        if settled and self.finished_at is None:
+            raise DomainValidationError(f"{lifecycle.value} 的运行必须有 finished_at")
+        if not settled and self.finished_at is not None:
+            raise DomainValidationError(f"{lifecycle.value} 的运行不得有 finished_at")
+
+        if lifecycle is QualityRunLifecycle.QUEUED:
+            if self.started_at is not None:
+                raise DomainValidationError("QUEUED 的运行不得有 started_at")
+            if self.error_code is not None or self.error_summary is not None:
+                raise DomainValidationError("QUEUED 的运行不得携带执行错误信息")
+        elif lifecycle is QualityRunLifecycle.RUNNING:
+            if self.started_at is None:
+                raise DomainValidationError("RUNNING 的运行必须有 started_at")
+            # 重投后的执行保留上一次失败的 error_code，作为"为什么又跑一遍"的
+            # 依据；产出结论时由 mark_succeeded 清空。
+        elif lifecycle is QualityRunLifecycle.RETRYING:
+            if self.started_at is None:
+                raise DomainValidationError("RETRYING 的运行必须有 started_at")
+        elif lifecycle is QualityRunLifecycle.FAILED:
+            if self.started_at is None:
+                raise DomainValidationError("FAILED 的运行必须有 started_at")
+            if self.error_code is None or self.error_summary is None:
+                raise DomainValidationError("FAILED 的运行必须记录 error_code 与 error_summary")
 
 
 def finding_drafts_from_iterable(

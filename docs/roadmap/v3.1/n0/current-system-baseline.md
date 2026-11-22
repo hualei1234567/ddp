@@ -23,11 +23,12 @@
 |---|---|---|
 | OpenAPI 版本 | `1.26.0` | `packages/contracts/openapi.yaml:4` |
 | 契约路径总数 | 239 | `grep -cE '^  /api/v1/' packages/contracts/openapi.yaml` |
-| Alembic head | `0068` | `cd backend && .venv/bin/alembic heads` |
-| 最近迁移 | `0066_capture_sessions.py`、`0067_training_dry_run_status.py`、`0068_capture_session_artifacts.py` | `backend/migrations/versions/` |
+| Alembic head | `0070` | `cd backend && .venv/bin/alembic heads` |
+| 最近迁移 | `0069_processing_artifacts.py`、`0070_quality_run_lifecycle.py` | `backend/migrations/versions/` |
 | 迁移规范 | 新增可回滚 Alembic，不改历史迁移 | `CLAUDE.md` §四 |
 
-V3.1 蓝图包中提到的 `packages/contracts` / `backend/migrations` 均**未**需要在此轮变更。
+V3.1 蓝图包本身未要求改动 `packages/contracts`；`backend/migrations` 已随
+V31-016（0069）与 V31-030（0070）推进，OpenAPI 契约版本保持 `1.26.0`。
 
 ## 3. 质量门禁真实结果
 
