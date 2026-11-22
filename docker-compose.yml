@@ -257,6 +257,28 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  quality-worker:
+    # 质检运行 Worker（V31-031）：消费 quality.run.requested（投递类），
+    # 按生命周期推进 QUEUED → RUNNING → SUCCEEDED/FAILED，失败退避重投。
+    #
+    # 没有这个服务时，入队的质量运行只会停在 QUEUED、事件永久 PENDING——
+    # 与导入/处理 Worker 缺失时同一种缺陷形态。
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-quality-worker
+    command: ["python", "-m", "app.workers.quality"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   domain-worker:
     # 领域巡检 Worker：标注租约过期 + 采集任务数据检查。
     #

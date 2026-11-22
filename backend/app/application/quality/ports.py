@@ -12,7 +12,12 @@ from typing import Protocol
 from uuid import UUID
 
 from app.domain.identity.models import ProjectScope
-from app.domain.quality.enums import QualityCategory, QualityFindingStatus, QualitySubjectType
+from app.domain.quality.enums import (
+    QualityCategory,
+    QualityFindingStatus,
+    QualityRunLifecycle,
+    QualitySubjectType,
+)
 from app.domain.quality.models import (
     QualityFinding,
     QualityFindingDraft,
@@ -26,9 +31,32 @@ class UnitOfWork(Protocol):
 
 
 class QualityRunRepository(Protocol):
-    """质量运行仓储：只追加，不提供更新/删除。"""
+    """质量运行仓储。
+
+    **结论**只追加（``add``）；**生命周期**会推进同一行（``enqueue`` 入队后由
+    ``transition`` 按状态机前进）。结论视图（``get`` / ``list`` /
+    ``latest_for_subjects``）只认 ``SUCCEEDED``，执行编排走 ``find_any``。
+    """
 
     def add(self, scope: ProjectScope, run: QualityRun) -> QualityRun: ...
+
+    def enqueue(self, scope: ProjectScope, run: QualityRun) -> QualityRun:
+        """写入排队中的运行；只接受 ``QUEUED``。"""
+        ...
+
+    def find_any(self, scope: ProjectScope, run_id: UUID) -> QualityRun | None:
+        """按 ID 读任意生命周期；返回 ``None`` 表示不存在或跨项目。"""
+        ...
+
+    def transition(
+        self,
+        scope: ProjectScope,
+        run: QualityRun,
+        *,
+        expected: QualityRunLifecycle,
+    ) -> QualityRun:
+        """以 ``lifecycle`` 做 CAS 推进状态；并发冲突抛 ``QualityRunConflictError``。"""
+        ...
 
     def get(self, scope: ProjectScope, run_id: UUID) -> QualityRun | None: ...
 

@@ -241,6 +241,13 @@ class Settings(BaseSettings):
     export_worker_retry_base_seconds: float = Field(default=5.0, gt=0)
     export_worker_retry_max_seconds: float = Field(default=300.0, gt=0)
 
+    # 质检 worker（V31-031）：消费 quality.run.requested，按生命周期推进运行。
+    # 重投上限与退避口径与校验/导出 worker 一致，避免同仓三套重试语义。
+    quality_worker_poll_interval_seconds: float = Field(default=1.0, gt=0)
+    quality_worker_max_attempts: int = Field(default=5, ge=1, le=100)
+    quality_worker_retry_base_seconds: float = Field(default=5.0, gt=0)
+    quality_worker_retry_max_seconds: float = Field(default=300.0, gt=0)
+
     # 维护 worker（阶段 8）：定时备份 + 保留/清扫。
     # 默认全部关闭——运维能力不应在未显式启用时自动改动机器上的数据。
     maintenance_enabled: bool = False
@@ -608,6 +615,11 @@ class Settings(BaseSettings):
             problems.append(
                 "DDP_EXPORT_WORKER_RETRY_MAX_SECONDS 不得小于 "
                 "DDP_EXPORT_WORKER_RETRY_BASE_SECONDS"
+            )
+        if self.quality_worker_retry_max_seconds < self.quality_worker_retry_base_seconds:
+            problems.append(
+                "DDP_QUALITY_WORKER_RETRY_MAX_SECONDS 不得小于 "
+                "DDP_QUALITY_WORKER_RETRY_BASE_SECONDS"
             )
         return problems
 

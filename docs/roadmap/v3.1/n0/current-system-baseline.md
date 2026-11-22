@@ -73,6 +73,13 @@ EXIT_CODE=0
 
 文件规模约束：500 行触发评审，800 行原则拆分；函数 50 行有效逻辑。
 
+当前已超 500 行评审阈值的相关文件（2026-11-22 实测，均未拆分，登记为债务）：
+
+- `backend/app/application/quality/use_cases.py` 597 行（V31-031 新增入队与
+  执行编排；拆分需先移出事实加载/聚合，另立重构任务）；
+- `backend/app/domain/quality/models.py` 568 行（拆分需同步 14 处 import）；
+- `backend/app/workers/datasources.py` 570 行。
+
 ## 5. 前端路由事实（节选，非“占位页”）
 
 `apps/web/src/routes.tsx`：

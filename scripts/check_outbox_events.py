@@ -45,6 +45,8 @@ DISPATCH_EVENTS = {
     "ingestion.job.created": "backend/app/workers/ingestion_jobs.py",
     # N4-002：创建处理运行即投递，由八阶段编排 Worker 消费。
     "processing.run.requested": "backend/app/workers/processing.py",
+    # V31-031：质检运行入队即投递，由质检 Worker 领取执行。
+    "quality.run.requested": "backend/app/workers/quality.py",
 }
 
 # 事件名允许段内连字符：设备域生命周期动作名沿用 API 路径写法
