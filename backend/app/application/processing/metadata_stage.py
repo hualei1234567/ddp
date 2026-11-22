@@ -21,6 +21,7 @@ Parquet/MCAP 只产出“阶段产物引用”并显式标注 ``canonical_episod
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -34,6 +35,7 @@ from app.application.processing.ports import (
     StageArtifactStore,
 )
 from app.application.processing.stages import (
+    StageArtifact,
     StageContext,
     StageFailure,
     StageOutcome,
@@ -41,6 +43,7 @@ from app.application.processing.stages import (
 )
 from app.domain.ingestion.enums import RawAssetFormat
 from app.domain.ingestion.validation import HDF5_DETECTION_BYTES, detect_format
+from app.domain.processing.artifacts import ProcessingArtifactKind
 from app.domain.processing.enums import ProcessingStepStatus
 
 #: 元数据产物自身的版本；与 Canonical 版本解耦，只约束本阶段的 JSON 结构。
@@ -181,7 +184,7 @@ class MetadataExtractionHandler:
                 retryable=False,
             )
 
-        output_refs = self._write_artifacts(context, extracted)
+        output_refs, artifacts = self._write_artifacts(context, extracted)
         counts = _format_counts(item[2] for item in extracted)
         return StageOutcome(
             status=ProcessingStepStatus.SUCCEEDED.value,
@@ -189,6 +192,7 @@ class MetadataExtractionHandler:
                 f"提取 {len(extracted)} 个对象元数据（{counts}），" f"产物 {len(output_refs)} 个"
             ),
             output_refs=output_refs,
+            artifacts=artifacts,
         )
 
     def _object_size(self, ref: str) -> int | None:
@@ -249,8 +253,9 @@ class MetadataExtractionHandler:
         self,
         context: StageContext,
         extracted: list[tuple[int, str, RawAssetFormat, int, str, str, dict[str, object]]],
-    ) -> tuple[str, ...]:
+    ) -> tuple[tuple[str, ...], tuple[StageArtifact, ...]]:
         output_refs: list[str] = []
+        artifacts: list[StageArtifact] = []
         for index, ref, raw_format, size, adapter_id, adapter_version, payload in extracted:
             key = metadata_artifact_key(
                 context.run.project_id,
@@ -267,18 +272,27 @@ class MetadataExtractionHandler:
                 "object_size_bytes": size,
                 "metadata": payload,
             }
+            data = _serialize(document, max_bytes=self._max_artifact_bytes)
             try:
-                self._artifacts.put_bytes(
-                    key,
-                    _serialize(document, max_bytes=self._max_artifact_bytes),
-                )
+                self._artifacts.put_bytes(key, data)
             except ObjectInspectionError as exc:
                 raise StageFailure(
                     "object_storage_unavailable",
                     "对象存储不可用，无法写入元数据产物",
                 ) from exc
             output_refs.append(key)
-        return tuple(output_refs)
+            artifacts.append(
+                StageArtifact(
+                    kind=ProcessingArtifactKind.METADATA,
+                    object_key=key,
+                    schema_version=METADATA_SCHEMA_VERSION,
+                    content_type="application/json",
+                    size_bytes=len(data),
+                    checksum_sha256=hashlib.sha256(data).hexdigest(),
+                    source_ref=ref,
+                )
+            )
+        return tuple(output_refs), tuple(artifacts)
 
 
 class FormatParsingHandler:
@@ -307,6 +321,7 @@ class FormatParsingHandler:
             )
 
         output_refs: list[str] = []
+        artifacts: list[StageArtifact] = []
         video_count = 0
         reference_count = 0
         for index, ref in enumerate(metadata_refs):
@@ -342,17 +357,26 @@ class FormatParsingHandler:
                     kind="reference",
                 )
                 reference_count += 1
+            data = _serialize(artifact, max_bytes=self._max_artifact_bytes)
             try:
-                self._artifacts.put_bytes(
-                    key,
-                    _serialize(artifact, max_bytes=self._max_artifact_bytes),
-                )
+                self._artifacts.put_bytes(key, data)
             except ObjectInspectionError as exc:
                 raise StageFailure(
                     "object_storage_unavailable",
                     "对象存储不可用，无法写入格式解析产物",
                 ) from exc
             output_refs.append(key)
+            artifacts.append(
+                StageArtifact(
+                    kind=ProcessingArtifactKind.CANONICAL,
+                    object_key=key,
+                    schema_version=str(artifact["schema_version"]),
+                    content_type="application/json",
+                    size_bytes=len(data),
+                    checksum_sha256=hashlib.sha256(data).hexdigest(),
+                    source_ref=str(source_ref),
+                )
+            )
 
         return StageOutcome(
             status=ProcessingStepStatus.SUCCEEDED.value,
@@ -361,6 +385,7 @@ class FormatParsingHandler:
                 f"{reference_count} 个表/消息流保留阶段产物引用（未伪造 Episode）"
             ),
             output_refs=tuple(output_refs),
+            artifacts=tuple(artifacts),
         )
 
 

@@ -90,6 +90,7 @@ from app.infrastructure.db.models.ingestion import (
 from app.infrastructure.db.models.jobs import IngestionJobModel
 from app.infrastructure.db.models.locations import LocationModel
 from app.infrastructure.db.models.processing import (
+    ProcessingArtifactModel,
     ProcessingRunModel,
     ProcessingRunStepModel,
 )
@@ -168,6 +169,7 @@ __all__ = [
     "LineageNodeRefModel",
     "LocationModel",
     "OutboxEvent",
+    "ProcessingArtifactModel",
     "ProcessingRunModel",
     "ProcessingRunStepModel",
     "Project",

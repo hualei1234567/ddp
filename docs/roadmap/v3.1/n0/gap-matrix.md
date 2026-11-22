@@ -92,11 +92,12 @@
 |---|---|---|
 | ProcessingRun 输入是裸对象 key，非 RawAsset ID | 已消除（V31-015，2026-11-22） | `POST /processing-runs` 接受 `raw_asset_id`（与 `input_refs` 二选一），服务端解析对象 key 并校验 `VALID`/`ARCHIVED`；跨项目统一 404。测试：`tests/api/test_processing_run_raw_asset.py` |
 | Processing 未复用 AdapterRegistry，另有一套格式 switch | `MISSING` | `metadata_stage.py:490-502` vs `data-platform/ddp_data/adapters/registry.py` |
-| Pipeline `EPISODE_SEGMENTATION` 只核验已有 Episode，不切片不创建 | `PARTIAL` | `backend/app/application/processing/segmentation_stage.py:39-79` |
+| Pipeline `EPISODE_SEGMENTATION` 只核验已有 Episode，不切片不创建 | 已消除（V31-018，2026-11-22；范围：单文件 MP4） | 输入是 RawAsset 且元数据产物给出 `duration_ms` 时按 `episode-boundary/1.0.0` 创建 Episode（`application/processing/episode_boundaries.py` + `segmentation_stage.py`，落库经 `EpisodeService.create`，稳定 code 幂等）；其余格式如实 `SKIPPED` 并写明"可能是多 Episode 容器，缺少明确边界声明"。测试：`tests/unit/test_processing_episode_boundaries.py`、`test_processing_segmentation_stage.py`、`test_processing_segmentation_pipeline.py`、`tests/workers/test_processing_worker_segmentation.py` |
+| 多 Episode 容器（MCAP / ROS Bag / HDF5 / Parquet）没有可用的 Episode 边界声明来源 | `MISSING` | 导入链路 `raw_metadata` 只有 `episode_key`/`source_path`/`camera`/`source_fps`，无时间边界；HDF5 结构摘要只有路径与属性名。在这些格式补齐边界前置条件（上游给出显式分段声明）前，处理链路不把它们整段当成一个 Episode |
 | 导入成功不自动触发 Episode 物化，需手工 API | 已消除（V31-014，2026-11-22） | `backend/app/workers/datasources.py` 消费投递类 `datasource.import.succeed`（测试：`tests/workers/test_datasource_episode_worker.py`）；手工端点保留为重放入口 |
 | SensorStream / Observation / Action 无真实生产 | `MISSING` | 仅有类型定义与构造测试 |
 | Canonical 实体无数据库持久化 | `MISSING` | 无对应表 / repository |
-| 产物仅 `output_refs` JSON 数组，无 Artifact 目录 | `MISSING` | `backend/app/infrastructure/db/models/processing.py:58-65` |
+| 产物仅 `output_refs` JSON 数组，无 Artifact 目录 | 已消除（V31-016，2026-11-22） | 新增 `processing_artifacts` 表（迁移 0069）+ 领域 `ProcessingArtifact` + 仓储 + `GET .../processing-runs/{id}/artifacts`。阶段产出登记类型/阶段/尝试/Schema 版本/内容类型/字节数/SHA256/来源输入；`output_refs` 退化为兼容投影。测试：`tests/unit/test_processing_artifacts_domain.py`、`test_processing_artifacts_repository.py`、`test_processing_artifact_registration.py`、`tests/api/test_processing_artifacts_api.py` |
 | `DATA_CLEANING` 使用 `SkippedStage` | `MISSING` | `backend/app/application/processing/stages.py:144-149` |
 | Canonical 版本分裂 `1.0.0-draft` vs `1.0.0` | 已消除（V31-004，2026-11-22） | 导入物化改为引用 `ddp_data.canonical.v1.SCHEMA_VERSION`（`episode_materialization.py`）；防漂移测试 `tests/unit/test_episode_status_alignment.py`。历史 `-draft` 数据按 ADR-0038 §2.4 有意保留 |
 | Canonical 无跨语言共享 Schema；写入入口接受任意版本字符串 | 已消除（V31-017，2026-11-22） | 新增生成器 `ddp_data/canonical/json_schema.py` + 导出脚本 `scripts/export_canonical_schemas.py`，产物 `packages/contracts/schemas/canonical-v1/`（6 个实体）；`EpisodeService.create` 用 `SUPPORTED_SCHEMA_VERSIONS` 白名单拒绝未知版本（`application/episodes/canonical_version.py`）。测试：`tests/unit/test_canonical_json_schema.py`（33 条）、`tests/api/test_episodes_api.py`（白名单 2 条）。ADR-0040 |

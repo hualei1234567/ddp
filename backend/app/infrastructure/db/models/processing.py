@@ -28,6 +28,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.domain.processing.artifacts import ProcessingArtifactKind
 from app.domain.processing.enums import (
     ProcessingRunStatus,
     ProcessingStage,
@@ -43,6 +44,7 @@ from app.infrastructure.db.base import Base
 _STATUS_VALUES = ", ".join(repr(item.value) for item in ProcessingRunStatus)
 _STAGE_VALUES = ", ".join(repr(item.value) for item in ProcessingStage)
 _STEP_STATUS_VALUES = ", ".join(repr(item.value) for item in ProcessingStepStatus)
+_ARTIFACT_KIND_VALUES = ", ".join(repr(item.value) for item in ProcessingArtifactKind)
 _JSON_TYPE = JSON().with_variant(JSONB, "postgresql")
 
 
@@ -269,4 +271,83 @@ class ProcessingRunStepModel(Base):
     )
 
 
-__all__ = ["ProcessingRunModel", "ProcessingRunStepModel"]
+class ProcessingArtifactModel(Base):
+    """运行产物目录（V31-016）。
+
+    ``output_refs`` 只有 key，无法回答"哪个阶段、哪次尝试、什么类型、多大、
+    摘要是否一致"；本表是权威记录，``output_refs`` 退化为兼容投影。
+
+    唯一键 ``(run_id, stage, attempt, kind, object_key)``：同一阶段同一次
+    尝试对同一对象只登记一次；重试换 ``attempt``，历史产物保留可查。
+    跨项目由 ``project_id`` 列 + 复合外键 ``(project_id, run_id)`` 强制，
+    绕过应用层直接插行也写不出跨项目引用。
+
+    ``ON DELETE CASCADE``：运行是产物的生命周期边界，删除运行即删除其
+    产物记录（对象存储中的对象由保留策略处理，不在本表职责内）。
+    """
+
+    __tablename__ = "processing_artifacts"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    run_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("processing_runs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    object_key: Mapped[str] = mapped_column(String(1024), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: 内容摘要；部分阶段产物无稳定摘要（仅引用）时为 NULL。
+    checksum_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: 产物来源输入对象（``raw/<project>/<asset>``）；无单一来源时为 NULL。
+    source_ref: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+    created_by: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "stage",
+            "attempt",
+            "kind",
+            "object_key",
+            name="uq_processing_artifacts_run_stage_attempt_kind_key",
+        ),
+        CheckConstraint(f"stage IN ({_STAGE_VALUES})", name="stage_allowed"),
+        CheckConstraint(
+            f"kind IN ({_ARTIFACT_KIND_VALUES})",
+            name="kind_allowed",
+        ),
+        CheckConstraint("attempt >= 1", name="attempt_positive"),
+        CheckConstraint("size_bytes >= 0", name="size_bytes_non_negative"),
+        CheckConstraint(
+            "checksum_sha256 IS NULL OR length(checksum_sha256) = 64",
+            name="checksum_sha256_length",
+        ),
+        Index(
+            "ix_processing_artifacts_project_run_created_at",
+            "project_id",
+            "run_id",
+            "created_at",
+        ),
+    )
+
+
+__all__ = ["ProcessingArtifactModel", "ProcessingRunModel", "ProcessingRunStepModel"]
