@@ -155,3 +155,143 @@ describe("AnnotationTimeline", () => {
     expect(screen.queryByTestId("annotation-timeline-playhead")).toBeNull();
   });
 });
+
+// ---- V31-045 切片 B：片段边界拖拽与删除（蓝图 §6） ----
+
+describe("AnnotationTimeline 片段边界编辑", () => {
+  const BASE = {
+    durationSeconds: 100,
+    playheadSeconds: 0,
+  };
+
+  function stubSegmentRects() {
+    // 片段块与边缘把手都需要 getBoundingClientRect
+    document.querySelectorAll("[data-testid^=timeline-segment-]").forEach((el) => {
+      el.getBoundingClientRect = () => ({
+        left: 0, top: 0, right: 100, bottom: 30, width: 100, height: 30,
+        x: 0, y: 0, toJSON: () => ({}),
+      } as DOMRect);
+    });
+    document.querySelectorAll("[data-testid^=segment-edge-]").forEach((el) => {
+      el.getBoundingClientRect = () => ({
+        left: 0, top: 0, right: 6, bottom: 30, width: 6, height: 30,
+        x: 0, y: 0, toJSON: () => ({}),
+      } as DOMRect);
+    });
+  }
+
+  it("提供 segmentId 时渲染边缘把手与删除按钮", () => {
+    render(
+      <AnnotationTimeline
+        {...BASE}
+        segments={[
+          { key: "s1", label: "抓取", segmentId: "seg-1", startSeconds: 10, endSeconds: 30 },
+        ]}
+        onSegmentResize={vi.fn()}
+        onSegmentDelete={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("segment-edge-start-seg-1")).toBeTruthy();
+    expect(screen.getByTestId("segment-edge-end-seg-1")).toBeTruthy();
+    expect(screen.getByTestId("segment-delete-seg-1")).toBeTruthy();
+  });
+
+  it("未提供 onSegmentResize 时把手不渲染（只读兼容）", () => {
+    render(
+      <AnnotationTimeline
+        {...BASE}
+        segments={[
+          { key: "s1", label: "抓取", segmentId: "seg-1", startSeconds: 10, endSeconds: 30 },
+        ]}
+      />,
+    );
+    expect(screen.queryByTestId("segment-edge-start-seg-1")).toBeNull();
+    expect(screen.queryByTestId("segment-delete-seg-1")).toBeNull();
+  });
+
+  it("拖拽终点边界触发 onSegmentResize（新 end 由指针位置决定）", async () => {
+    const onSegmentResize = vi.fn();
+    render(
+      <AnnotationTimeline
+        {...BASE}
+        segments={[
+          { key: "s1", label: "抓取", segmentId: "seg-1", startSeconds: 10, endSeconds: 30 },
+        ]}
+        onSegmentResize={onSegmentResize}
+      />,
+    );
+    stubSegmentRects();
+    const track = screen.getByTestId("annotation-timeline");
+    track.getBoundingClientRect = () => ({
+      left: 0, top: 0, right: 100, bottom: 34, width: 100, height: 34,
+      x: 0, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    // jsdom 无 PointerEvent：手工构造带 pointer 属性的合成事件并直发 React 处理器。
+    // 先拿到边缘把手的 React onPointerDown：React 把处理器挂在根节点，
+    // 这里直接 fireEvent.pointerDown 让 testing-library 走 React 事件系统。
+    const edge = screen.getByTestId("segment-edge-end-seg-1");
+    edge.getBoundingClientRect = () => ({
+      left: 30, top: 0, right: 36, bottom: 30, width: 6, height: 30,
+      x: 30, y: 0, toJSON: () => ({}),
+    } as DOMRect);
+    fireEvent.pointerDown(edge, { clientX: 30, pointerId: 1, button: 0 });
+    // 主轨道 pointermove 到 60/100 → 新 end = 60
+    fireEvent.pointerMove(track, { clientX: 60, pointerId: 1 });
+    fireEvent.pointerUp(track, { clientX: 60, pointerId: 1 });
+    expect(onSegmentResize).toHaveBeenCalledWith("seg-1", 10, 60);
+  });
+
+  it("点击删除按钮透传 segmentId（确认对话框由调用方负责，蓝图 §6）", async () => {
+    const user = userEvent.setup();
+    const onSegmentDelete = vi.fn();
+    render(
+      <AnnotationTimeline
+        {...BASE}
+        segments={[
+          { key: "s1", label: "抓取", segmentId: "seg-1", startSeconds: 10, endSeconds: 30 },
+        ]}
+        onSegmentDelete={onSegmentDelete}
+      />,
+    );
+    await user.click(screen.getByTestId("segment-delete-seg-1"));
+    expect(onSegmentDelete).toHaveBeenCalledWith("seg-1");
+  });
+});
+
+// ---- V31-046 切片 D：AI 建议轨道（虚线边框 + AI 徽标，不可拖拽/删除） ----
+
+describe("AnnotationTimeline AI 建议轨道", () => {
+  it("AI 片段渲染 AI 徽标且不提供编辑把手（采纳走 AiSuggestionPanel）", () => {
+    render(
+      <AnnotationTimeline
+        durationSeconds={100}
+        playheadSeconds={0}
+        segments={[
+          {
+            key: "ai-1",
+            label: "segment.pick (82%)",
+            segmentId: "sg-1",
+            startSeconds: 5,
+            endSeconds: 20,
+            aiSuggestion: true,
+          },
+          {
+            key: "h1",
+            label: "人工片段",
+            segmentId: "sg-2",
+            startSeconds: 40,
+            endSeconds: 60,
+          },
+        ]}
+        onSegmentResize={vi.fn()}
+        onSegmentDelete={vi.fn()}
+      />,
+    );
+    // AI 片段：有徽标、无把手
+    expect(screen.getByTestId("timeline-segment-sg-1").textContent).toContain("AI");
+    expect(screen.queryByTestId("segment-edge-start-sg-1")).toBeNull();
+    expect(screen.queryByTestId("segment-delete-sg-1")).toBeNull();
+    // 人工片段：有把手
+    expect(screen.getByTestId("segment-edge-start-sg-2")).toBeTruthy();
+  });
+});
