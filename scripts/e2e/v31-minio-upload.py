@@ -28,7 +28,11 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 ROOT = Path(__file__).resolve().parents[2]
+# ``app.main`` 的导入链会到达 ``ddp_data``（导入物化引用 Canonical 版本常量），
+# 而 data-platform 不装进 backend 的 venv；与 ``scripts/check.sh`` 的
+# ``PYTHONPATH=backend:data-platform`` 保持一致。
 sys.path.insert(0, str(ROOT / "backend"))
+sys.path.insert(0, str(ROOT / "data-platform"))
 
 
 def _apply_default_env() -> None:

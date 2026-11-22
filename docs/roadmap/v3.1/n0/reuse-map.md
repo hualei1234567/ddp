@@ -108,7 +108,7 @@
 |---|---|---|
 | `ddp_data.adapters.registry.AdapterRegistry` | 统一格式能力注册（detect / inspect / parse / canonicalize） | Processing 目前未接入，另有一套 switch |
 | `ddp_data.hdf5` / `ddp_data.rosbag` / `ddp_data.mcap` / `ddp_data.parquet` | 只读探测 | 已复用 |
-| `ddp_data.canonical.v1` | Canonical 正式类型 | 与导入层 `1.0.0-draft` 版本分裂需统一 |
+| `ddp_data.canonical.v1` | Canonical 正式类型 | 导入层已改为引用 `SCHEMA_VERSION`（ADR-0038），无版本副本 |
 | `ddp_data.canonical.projection` | Legacy → Canonical 投影 | 暂无生产调用方 |
 | `ddp_data.lerobot` | LeRobot 解析 | 与导出方向需区分 |
 

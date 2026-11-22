@@ -23,6 +23,7 @@ SCRIPT_PATH = Path(__file__).resolve()
 WEB_ROOT = SCRIPT_PATH.parents[1]
 REPO_ROOT = SCRIPT_PATH.parents[3]
 BACKEND_DIR = REPO_ROOT / "backend"
+DATA_PLATFORM_DIR = REPO_ROOT / "data-platform"
 BACKEND_PYTHON = BACKEND_DIR / ".venv" / "bin" / "python"
 SNAPSHOT_PATH = (
     WEB_ROOT / "src" / "services" / "__fixtures__" / "deviceContract.snapshot.json"
@@ -60,8 +61,12 @@ def _load_backend():
     os.environ["DDP_ENV"] = "local"
     os.environ.pop("DDP_LOCAL_HEADER_AUTH", None)
     os.environ["DDP_CONTRACT_NO_REEXEC"] = "1"
-    if str(BACKEND_DIR) not in sys.path:
-        sys.path.insert(0, str(BACKEND_DIR))
+    # ``app.main`` 的导入链会到达 ``ddp_data``（导入物化引用 Canonical 版本
+    # 常量），而 data-platform 是独立的纯数据能力包、不装进 backend 的 venv。
+    # 与 ``scripts/check.sh`` 的 ``PYTHONPATH=backend:data-platform`` 保持一致。
+    for path in (BACKEND_DIR, DATA_PLATFORM_DIR):
+        if str(path) not in sys.path:
+            sys.path.insert(0, str(path))
 
     from app.api.deps import get_current_principal
     from app.application.devices import calibrations as calibrations_module
