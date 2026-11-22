@@ -129,6 +129,7 @@ def test_enqueue_writes_queued_run_and_dispatch_event(factory: sessionmaker[Sess
         run = _use_cases(session).enqueue(
             scope,
             NewQualityRun(subject_type=QualitySubjectType.EPISODE, subject_id=episode_id),
+            now=NOW,
             max_attempts=3,
         )
         session.commit()
@@ -154,6 +155,7 @@ def test_worker_executes_queued_run_to_conclusion(factory: sessionmaker[Session]
         run = _use_cases(session).enqueue(
             scope,
             NewQualityRun(subject_type=QualitySubjectType.EPISODE, subject_id=episode_id),
+            now=NOW,
         )
         session.commit()
 
@@ -192,6 +194,7 @@ def test_worker_routes_conclusion_to_submission(factory: sessionmaker[Session]) 
         run = _use_cases(session).enqueue(
             scope,
             NewQualityRun(subject_type=QualitySubjectType.EPISODE, subject_id=episode_id),
+            now=NOW,
         )
         session.commit()
         run_id = run.run_id
@@ -220,6 +223,7 @@ def test_worker_retries_then_dead_letters_on_repeated_failure(
         run = _use_cases(session).enqueue(
             scope,
             NewQualityRun(subject_type=QualitySubjectType.EPISODE, subject_id=episode_id),
+            now=NOW,
             max_attempts=2,
         )
         session.commit()
@@ -322,6 +326,7 @@ def test_worker_does_not_fail_run_claimed_by_another_worker(
         run = _use_cases(session).enqueue(
             scope,
             NewQualityRun(subject_type=QualitySubjectType.EPISODE, subject_id=episode_id),
+            now=NOW,
             max_attempts=3,
         )
         session.commit()
@@ -355,6 +360,7 @@ def test_dead_letter_for_run_owned_by_another_worker_keeps_it_running(
         run = _use_cases(session).enqueue(
             scope,
             NewQualityRun(subject_type=QualitySubjectType.EPISODE, subject_id=episode_id),
+            now=NOW,
         )
         session.commit()
         _use_cases(session).start(scope, run.run_id, now=NOW - timedelta(seconds=5))
@@ -393,6 +399,7 @@ def test_redelivered_event_for_finished_run_is_published_not_dead_letter(
         run = _use_cases(session).enqueue(
             scope,
             NewQualityRun(subject_type=QualitySubjectType.EPISODE, subject_id=episode_id),
+            now=NOW,
         )
         session.commit()
 
