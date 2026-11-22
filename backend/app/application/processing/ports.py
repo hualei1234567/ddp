@@ -16,6 +16,7 @@ from typing import Protocol
 from uuid import UUID
 
 from app.domain.identity.models import ProjectScope
+from app.domain.processing.artifacts import ProcessingArtifact
 from app.domain.processing.models import ProcessingRun
 from app.domain.processing.steps import ProcessingStep
 
@@ -142,6 +143,24 @@ class ProcessingStepRepository(Protocol):
     ) -> list[ProcessingStep]: ...
 
 
+class ProcessingArtifactRepository(Protocol):
+    """产物目录（V31-016）：登记与按运行列出；跨项目读取返回空列表。"""
+
+    def add(self, scope: ProjectScope, artifact: ProcessingArtifact) -> ProcessingArtifact: ...
+
+    def list(
+        self,
+        scope: ProjectScope,
+        *,
+        run_id: UUID,
+        stage: str | None = None,
+        attempt: int | None = None,
+        kind: str | None = None,
+    ) -> list[ProcessingArtifact]: ...
+
+    def get(self, scope: ProjectScope, artifact_id: UUID) -> ProcessingArtifact | None: ...
+
+
 __all__ = [
     "InputObjectInspector",
     "InputObjectReader",
@@ -149,6 +168,7 @@ __all__ = [
     "ObjectInspectionError",
     "ObjectMissingError",
     "ObjectTooLargeError",
+    "ProcessingArtifactRepository",
     "ProcessingRunRepository",
     "ProcessingStepRepository",
     "StageArtifactStore",

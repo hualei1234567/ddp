@@ -34,6 +34,7 @@ from typing import Protocol
 
 from app.application.processing.ports import InputObjectInspector, ObjectInspectionError
 from app.domain.identity.models import ProjectScope
+from app.domain.processing.artifacts import ProcessingArtifactKind
 from app.domain.processing.enums import (
     STAGE_SEQUENCE,
     ProcessingStage,
@@ -62,10 +63,32 @@ class StageContext:
 
 
 @dataclass(frozen=True, slots=True)
+class StageArtifact:
+    """阶段产物的**描述**；落库由编排器在同一事务内完成（V31-016）。
+
+    阶段是纯函数：它知道产物的类型、key、Schema 版本、内容类型、字节数与
+    摘要，但**不**知道项目/运行/尝试/操作者——这些由编排器从上下文补齐。
+    这样阶段无需依赖仓储，也不会因为"忘了传 project_id"而写出跨项目行。
+    """
+
+    kind: ProcessingArtifactKind
+    object_key: str
+    schema_version: str
+    content_type: str
+    size_bytes: int
+    checksum_sha256: str | None = None
+    #: 产物来源输入对象；无单一来源时为 ``None``。
+    source_ref: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class StageOutcome:
     status: str
     log_summary: str
+    #: 兼容投影：既有调用方与契约仍读 ``output_refs``。
     output_refs: tuple[str, ...] = ()
+    #: 产物描述：编排器据此登记 ``processing_artifacts``（V31-016）。
+    artifacts: tuple[StageArtifact, ...] = ()
 
 
 class StageHandler(Protocol):
@@ -186,6 +209,7 @@ __all__ = [
     "STAGE_SKIP_REASONS",
     "FileValidationHandler",
     "SkippedStage",
+    "StageArtifact",
     "StageContext",
     "StageFailure",
     "StageHandler",

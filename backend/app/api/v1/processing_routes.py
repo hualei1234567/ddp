@@ -25,7 +25,11 @@ from app.api.v1.processing_dependencies import (
     ReadScope,
     WriteScope,
 )
-from app.api.v1.processing_response_models import ProcessingRunOut, ProcessingRunStepOut
+from app.api.v1.processing_response_models import (
+    ProcessingArtifactOut,
+    ProcessingRunOut,
+    ProcessingRunStepOut,
+)
 from app.api.v1.processing_schemas import ProcessingRunCreate
 from app.api.v1.schemas import PageOut
 from app.application.processing.commands import NewProcessingRun
@@ -117,6 +121,36 @@ def list_processing_run_steps(
     return PageOut(
         items=[ProcessingRunStepOut.from_domain(item) for item in page.items],
         next_cursor=page.next_cursor,
+    )
+
+
+@router.get("/{run_id}/artifacts", response_model=PageOut[ProcessingArtifactOut])
+def list_processing_run_artifacts(
+    run_id: UUID,
+    scope: ReadScope,
+    services: ProcessingServicesDep,
+    stage: ProcessingStage | None = None,
+    attempt: Annotated[int | None, Query(ge=1)] = None,
+    kind: Annotated[str | None, Query(max_length=64)] = None,
+) -> PageOut[ProcessingArtifactOut]:
+    """列出该运行的产物目录（V31-016）。
+
+    只读：产物由 Worker 在阶段收尾时登记，客户端不能伪造。运行不存在或
+    跨项目一律 404（不泄露存在性）。产物数量受阶段数 × 尝试数约束，天然
+    有界，因此不做游标分页。
+    """
+    # 运行存在性先校验：否则空产物列表会与"运行不存在"无法区分。
+    services.runs.get(scope, run_id)
+    items = services.artifacts.list(
+        scope,
+        run_id=run_id,
+        stage=stage.value if stage is not None else None,
+        attempt=attempt,
+        kind=kind,
+    )
+    return PageOut(
+        items=[ProcessingArtifactOut.from_domain(item) for item in items],
+        next_cursor=None,
     )
 
 

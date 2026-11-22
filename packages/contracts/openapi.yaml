@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.28.0
+  version: 1.29.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -211,6 +211,14 @@ info:
       `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
       本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
       `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
+    - `1.29.0` **处理运行产物目录（V31-016）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/processing-runs/{run_id}/artifacts`，
+      返回该运行产出的对象目录（类型 / 阶段 / 尝试 / Schema 版本 / 内容类型 /
+      字节数 / SHA256 / 来源输入）。产物由 Worker 在阶段收尾时登记，客户端
+      不能伪造；运行不存在或跨项目统一 `404 resource_not_found`。产物数量受
+      阶段数 × 尝试数约束，天然有界，因此 `next_cursor` 恒为 `null`。
+      `ProcessingRun.output_refs` 退化为兼容投影，既有调用方不变。
+      全部为增量：仅新增路径与 schema，无既有路径/字段变更。
     - `1.25.0` **项目级逾期汇总（N6-002 收尾）**：新增只读端点
       `GET /api/v1/projects/{project_id}/annotation-overdue-summary`，返回本项目
       逾期任务总数、按优先级/状态分布、最早期逾期时间与 SLA 分桶
@@ -311,7 +319,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.28.0
+  version: 1.29.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -969,6 +977,8 @@ paths:
     $ref: "./fragments/paths.processing.yaml#/processingRunDetail"
   /api/v1/projects/{project_id}/processing-runs/{run_id}/steps:
     $ref: "./fragments/paths.processing.yaml#/processingRunSteps"
+  /api/v1/projects/{project_id}/processing-runs/{run_id}/artifacts:
+    $ref: "./fragments/paths.processing.yaml#/processingRunArtifacts"
   /api/v1/projects/{project_id}/processing-runs/{run_id}/actions/{action}:
     $ref: "./fragments/paths.processing.yaml#/processingRunActions"
   # --- N4-004 统一质量引擎 ---
@@ -1511,6 +1521,9 @@ components:
     ProcessingStepStatus: {$ref: "./fragments/schemas.processing.yaml#/ProcessingStepStatus"}
     ProcessingRunStep: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunStep"}
     ProcessingRunStepPage: {$ref: "./fragments/schemas.processing.yaml#/ProcessingRunStepPage"}
+    ProcessingArtifactKind: {$ref: "./fragments/schemas.processing.yaml#/ProcessingArtifactKind"}
+    ProcessingArtifact: {$ref: "./fragments/schemas.processing.yaml#/ProcessingArtifact"}
+    ProcessingArtifactPage: {$ref: "./fragments/schemas.processing.yaml#/ProcessingArtifactPage"}
     QualityCategory: {$ref: "./fragments/schemas.quality.yaml#/QualityCategory"}
     QualityCategoryStatus: {$ref: "./fragments/schemas.quality.yaml#/QualityCategoryStatus"}
     QualityFindingStatus: {$ref: "./fragments/schemas.quality.yaml#/QualityFindingStatus"}

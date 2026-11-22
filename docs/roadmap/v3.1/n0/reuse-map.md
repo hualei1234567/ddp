@@ -118,7 +118,7 @@
 |---|---|
 | 1 端侧 Agent + CaptureSession | CaptureSession **复用**；Agent **必须新建**（仓库内无等价物） |
 | 2 上传 / 断点续传 / RawAsset / MinIO | 全部 **复用**；只补测试与真实 MinIO 验收 |
-| 3 解析 / Canonical / Episode / Pipeline | 编排与探测 **复用**；Artifact 目录与 Canonical 持久化 **需新增** |
+| 3 解析 / Canonical / Episode / Pipeline | 编排与探测 **复用**；Artifact 目录已新增（V31-016：`processing_artifacts` 表 + 领域 + 仓储 + 只读 API）；Canonical 持久化 **需新增** |
 | 4 AnnotationTask 与指定标注人 | 全部 **复用**；只补 E2E |
 | 5 标注控制台 | 外壳与结构化编辑 **复用**；媒体标注 **必须新建** |
 | 6 质检 / 审核 / 返工 / 仲裁 | 审核返工仲裁 **复用**；异步质检编排 **需扩展** |

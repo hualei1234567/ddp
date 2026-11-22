@@ -18,6 +18,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.domain.processing.artifacts import ProcessingArtifact
 from app.domain.processing.models import ProcessingRun
 from app.domain.processing.steps import ProcessingStep
 
@@ -107,4 +108,46 @@ class ProcessingRunOut(BaseModel):
         )
 
 
-__all__ = ["ProcessingRunOut", "ProcessingRunStepOut"]
+class ProcessingArtifactOut(BaseModel):
+    """产物目录的一条记录（V31-016）。
+
+    只读：产物由 Worker 在阶段收尾时登记，客户端不能伪造。``object_key``
+    是服务端生成的存储 key，前端不应自行拼接或改写。
+    """
+
+    artifact_id: UUID
+    run_id: UUID
+    stage: str
+    attempt: int
+    kind: str
+    object_key: str
+    schema_version: str
+    content_type: str
+    size_bytes: int
+    checksum_sha256: str | None = None
+    source_ref: str | None = None
+    created_at: datetime
+    created_by: UUID | None = None
+
+    @classmethod
+    def from_domain(cls, artifact: ProcessingArtifact) -> ProcessingArtifactOut:
+        if artifact.created_at is None:
+            raise ValueError("产物记录缺少 created_at")
+        return cls(
+            artifact_id=artifact.artifact_id,
+            run_id=artifact.run_id,
+            stage=artifact.stage,
+            attempt=artifact.attempt,
+            kind=artifact.kind,
+            object_key=artifact.object_key,
+            schema_version=artifact.schema_version,
+            content_type=artifact.content_type,
+            size_bytes=artifact.size_bytes,
+            checksum_sha256=artifact.checksum_sha256,
+            source_ref=artifact.source_ref,
+            created_at=artifact.created_at,
+            created_by=artifact.created_by,
+        )
+
+
+__all__ = ["ProcessingArtifactOut", "ProcessingRunOut", "ProcessingRunStepOut"]

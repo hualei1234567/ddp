@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from uuid import UUID
 
@@ -11,10 +12,16 @@ from app.application.processing.ports import (
     ObjectMissingError,
     StageArtifactStore,
 )
-from app.application.processing.stages import StageContext, StageFailure, StageOutcome
+from app.application.processing.stages import (
+    StageArtifact,
+    StageContext,
+    StageFailure,
+    StageOutcome,
+)
 from app.domain.episodes.sync_analysis import analyze_stream_sync
 from app.domain.episodes.sync_drift import SyncDriftError
 from app.domain.episodes.time_alignment_manifest import parse_time_alignment_manifest
+from app.domain.processing.artifacts import ProcessingArtifactKind
 from app.domain.processing.enums import ProcessingStepStatus
 
 TIME_ALIGNMENT_REPORT_SCHEMA_VERSION = "ddp.processing.time-alignment-report/1.0.0"
@@ -100,11 +107,12 @@ class TimeAlignmentHandler:
             context.run.project_id,
             context.run.run_id,
         )
-        self._write_report(output_ref, document)
+        artifact = self._write_report(output_ref, document, source_ref=source_ref)
         return StageOutcome(
             status=ProcessingStepStatus.SUCCEEDED.value,
             log_summary=f"分析 {len(groups)} 个时间对齐分组，产出 1 个只读报告",
             output_refs=(output_ref,),
+            artifacts=(artifact,),
         )
 
     def _load_manifest(self, ref: str):
@@ -155,7 +163,13 @@ class TimeAlignmentHandler:
                 retryable=False,
             ) from exc
 
-    def _write_report(self, ref: str, document: dict[str, object]) -> None:
+    def _write_report(
+        self,
+        ref: str,
+        document: dict[str, object],
+        *,
+        source_ref: str,
+    ) -> StageArtifact:
         data = json.dumps(document, ensure_ascii=False, sort_keys=True).encode("utf-8")
         if len(data) > self._max_artifact_bytes:
             raise StageFailure(
@@ -170,6 +184,15 @@ class TimeAlignmentHandler:
                 "object_storage_unavailable",
                 "对象存储不可用，无法写入时间对齐报告",
             ) from exc
+        return StageArtifact(
+            kind=ProcessingArtifactKind.TIME_ALIGNMENT_REPORT,
+            object_key=ref,
+            schema_version=TIME_ALIGNMENT_REPORT_SCHEMA_VERSION,
+            content_type="application/json",
+            size_bytes=len(data),
+            checksum_sha256=hashlib.sha256(data).hexdigest(),
+            source_ref=source_ref,
+        )
 
 
 __all__ = [
