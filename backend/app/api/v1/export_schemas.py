@@ -71,6 +71,7 @@ def export_job_out(job: ExportJob) -> dict[str, Any]:
         "log_ref": job.log_ref,
         "verification_status": _value(job.verification_status),
         "verification_evidence_ref": job.verification_evidence_ref,
+        "loadable_scope": _value(job.loadable_scope),
         "allowed_actions": sorted(job.allowed_actions),
         "version": job.row_version,
         "created_at": _iso(job.created_at),

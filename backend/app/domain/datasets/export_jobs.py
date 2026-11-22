@@ -11,14 +11,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from app.domain.datasets.canonical import sha256_value
 from app.domain.datasets.enums import (
+    EXPORT_FORMAT_LOADABLE_SCOPE,
     ExportFormat,
     ExportJobStatus,
+    ExportLoadableScope,
     ExportVerificationStatus,
 )
 from app.domain.datasets.errors import (
@@ -92,6 +94,9 @@ class ExportJob:
     log_ref: str | None = None
     verification_status: ExportVerificationStatus | str = ExportVerificationStatus.UNVERIFIED
     verification_evidence_ref: str | None = None
+    #: 产物结构范围由格式唯一派生（见 ``EXPORT_FORMAT_LOADABLE_SCOPE``），
+    #: 不落库、不接受外部赋值，避免与格式漂移。
+    loadable_scope: ExportLoadableScope = field(init=False, default=None)  # type: ignore[assignment]
     row_version: int = 1
     created_at: datetime | None = None
     updated_at: datetime | None = None
@@ -99,6 +104,11 @@ class ExportJob:
     updated_by: UUID | None = None
 
     def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "loadable_scope",
+            EXPORT_FORMAT_LOADABLE_SCOPE[coerce_format(self.format)],
+        )
         for name in ("export_job_id", "project_id", "dataset_version_id", "requested_by"):
             required_uuid(getattr(self, name), name)
         object.__setattr__(

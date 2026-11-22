@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
 from app.domain.datasets.canonical import sha256_text
 from app.domain.datasets.enums import (
+    EXPORT_FORMAT_LOADABLE_SCOPE,
     DatasetVersionStatus,
     ExportJobStatus,
     ExportVerificationStatus,
@@ -513,3 +515,51 @@ def test_media_ref_rejects_bad_location_and_hash() -> None:
             sha256=SHA,
             size_bytes=1,
         )
+
+
+# ---- V31-042 切片 1：loadable_scope 由格式派生，与 verification_status 正交 ----
+
+
+def test_loadable_scope_is_derived_from_format() -> None:
+    """LE_ROBOT 与 CANONICAL 当前产物都只到元数据层，scope 必须一致派生。"""
+    from app.domain.datasets.enums import ExportFormat, ExportLoadableScope
+
+    assert make_job().loadable_scope is ExportLoadableScope.METADATA_ONLY
+    assert (
+        make_job(format="CANONICAL", format_version="ddp.canonical/1.0.0").loadable_scope
+        is ExportLoadableScope.METADATA_ONLY
+    )
+    assert EXPORT_FORMAT_LOADABLE_SCOPE[ExportFormat.LE_ROBOT] is ExportLoadableScope.METADATA_ONLY
+
+
+def test_loadable_scope_is_not_settable() -> None:
+    """scope 是派生值：dataclass init=False，外部无法注入与格式矛盾的值。"""
+    import dataclasses
+
+    from app.domain.datasets.enums import ExportLoadableScope
+
+    job = make_job()
+    with pytest.raises(AttributeError):
+        job.loadable_scope = ExportLoadableScope.FRAMES  # type: ignore[misc]
+    field = dataclasses.fields(job)
+    assert all(f.name != "loadable_scope" or f.init is False for f in field)
+
+
+def test_loadable_scope_survives_replace_and_matches_format() -> None:
+    """replace 换格式后 scope 必须跟着换，不允许出现 CANONICAL+旧scope。"""
+    from app.domain.datasets.enums import ExportLoadableScope
+
+    job = make_job()
+    switched = replace(job, format="CANONICAL", format_version="ddp.canonical/1.0.0")
+    assert switched.loadable_scope is ExportLoadableScope.METADATA_ONLY
+    assert switched.format != job.format
+
+
+def test_loadable_scope_independent_of_verification_status() -> None:
+    """scope 与 verification 正交：即使将来 Loader 验证通过，scope 仍由结构决定。"""
+    from app.domain.datasets.enums import ExportLoadableScope, ExportVerificationStatus
+
+    job = make_job()
+    assert job.loadable_scope is ExportLoadableScope.METADATA_ONLY
+    verified = replace(job, verification_status=ExportVerificationStatus.VERIFIED_BY_LOADER)
+    assert verified.loadable_scope is ExportLoadableScope.METADATA_ONLY

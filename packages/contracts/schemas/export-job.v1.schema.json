@@ -23,6 +23,7 @@
     "max_attempts",
     "timeout_seconds",
     "verification_status",
+    "loadable_scope",
     "version",
     "created_at",
     "updated_at"
@@ -60,9 +61,15 @@
     "verification_status": {
       "type": "string",
       "enum": ["UNVERIFIED", "VERIFIED_BY_LOADER"],
-      "description": "在真实 LeRobot Loader 验证前必须为 UNVERIFIED；不得宣称已兼容。"
+      "description": "由真实 LeRobot Loader 实测决定：加载成功前必须为 UNVERIFIED，结构合规不等于可加载，不得宣称已兼容。"
     },
     "verification_evidence_ref": {"type": ["string", "null"], "maxLength": 1024},
+    "loadable_scope": {
+      "type": "string",
+      "enum": ["METADATA_ONLY", "FRAMES"],
+      "x-extensible-enum": ["METADATA_ONLY", "FRAMES"],
+      "description": "产物在结构上的可加载范围（V31-042）：METADATA_ONLY=只含元数据、无逐帧 observation/action 列，不能直接训练；FRAMES=含逐帧特征列，具备直接训练的结构条件。取值集合随逐帧链路落地可增长，客户端必须容忍未知取值。该字段由 format 派生，与 verification_status 正交：scope 描述结构内容，verification 描述 Loader 实测结论。"
+    },
     "allowed_actions": {"type": "array", "items": {"type": "string", "maxLength": 64}, "uniqueItems": true},
     "version": {"type": "integer", "minimum": 1},
     "created_at": {"$ref": "#/$defs/date_time"},

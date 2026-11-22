@@ -439,6 +439,7 @@ class ExportJobOut(BaseModel):
     log_ref: str | None = None
     verification_status: str
     verification_evidence_ref: str | None = None
+    loadable_scope: str
     allowed_actions: list[str] = []
     version: int
     created_at: datetime
