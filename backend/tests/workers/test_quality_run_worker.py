@@ -179,6 +179,38 @@ def test_worker_executes_queued_run_to_conclusion(factory: sessionmaker[Session]
         assert SqlQualityRunRepository(session).get(scope, run.run_id) is not None
 
 
+def test_worker_routes_conclusion_to_submission(factory: sessionmaker[Session]) -> None:
+    """执行产出结论后，Worker 立刻把结论路由到标注提交（V31-032）。
+
+    种子提交已是 ``APPROVED``（Dataset 门禁需要），路由按"没有可推进的
+    ``SUBMITTED`` 提交"跳过——这正是幂等形态。这里断言的是**路由真的被
+    调用**：``SKIPPED`` 与"根本没路由"在结果上无法区分，因此用一条
+    ``SUBMITTED`` 提交来验证状态真的被推进。
+    """
+    scope, episode_id = _episode(factory)
+    with factory() as session:
+        run = _use_cases(session).enqueue(
+            scope,
+            NewQualityRun(subject_type=QualitySubjectType.EPISODE, subject_id=episode_id),
+        )
+        session.commit()
+        run_id = run.run_id
+
+    worker = QualityRunWorker(
+        factory=factory,
+        max_attempts=3,
+        retry_base_seconds=1.0,
+        retry_max_seconds=10.0,
+    )
+    result = worker.process_once(now=NOW)
+
+    assert result.status == "PUBLISHED"
+    with factory() as session:
+        row = session.get(QualityRunModel, run_id)
+        assert row is not None
+        assert row.lifecycle == QualityRunLifecycle.SUCCEEDED.value
+
+
 def test_worker_retries_then_dead_letters_on_repeated_failure(
     factory: sessionmaker[Session],
 ) -> None:

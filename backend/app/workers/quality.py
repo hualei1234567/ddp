@@ -39,7 +39,9 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.application.annotation.submissions import AnnotationSubmissionUseCases
 from app.application.quality.registry import default_registry
+from app.application.quality.routing import QualityRoutingStatus, QualityRoutingUseCases
 from app.application.quality.use_cases import QualityRunUseCases
 from app.core.config import Settings, get_settings
 from app.core.logging import configure_logging
@@ -56,8 +58,27 @@ from app.domain.quality.errors import (
 from app.domain.quality.models import QualityRun
 from app.infrastructure.db.models.quality import QualityRunModel
 from app.infrastructure.db.session import create_session_factory, get_engine
+from app.infrastructure.repositories.annotation_assignments import (
+    SqlAnnotationAssignmentRepository,
+)
+from app.infrastructure.repositories.annotation_audit import (
+    SqlAnnotationAuditRepository,
+    SqlAnnotationIdempotencyRepository,
+    SqlAnnotationOutboxRepository,
+)
+from app.infrastructure.repositories.annotation_batches import SqlAnnotationBatchRepository
+from app.infrastructure.repositories.annotation_directory import (
+    SqlEpisodeDirectory,
+    SqlMemberDirectory,
+)
 from app.infrastructure.repositories.annotation_results import (
+    SqlAnnotationArbitrationRepository,
     SqlAnnotationRecordRepository,
+    SqlAnnotationReviewRepository,
+    SqlAnnotationSubmissionRepository,
+)
+from app.infrastructure.repositories.annotation_sample_sets import (
+    SqlAnnotationSampleSetRepository,
 )
 from app.infrastructure.repositories.annotation_schemas import (
     SqlAnnotationSchemaRepository,
@@ -119,6 +140,34 @@ Executor = Callable[[Session, ProjectScope, UUID, datetime], QualityRun]
 
 def _default_executor(session: Session, scope: ProjectScope, run_id: UUID, now: datetime):
     return _use_cases(session).conclude(scope, run_id, now=now)
+
+
+def _routing_use_cases(session: Session) -> QualityRoutingUseCases:
+    """与 HTTP 依赖注入同构装配；路由只复用既有提交用例。"""
+    records = SqlAnnotationRecordRepository(session)
+    submissions = AnnotationSubmissionUseCases(
+        SqlAnnotationSubmissionRepository(session),
+        records,
+        SqlAnnotationAssignmentRepository(session),
+        SqlAnnotationBatchRepository(session),
+        SqlAnnotationTaskRepository(session),
+        SqlAnnotationReviewRepository(session),
+        SqlAnnotationArbitrationRepository(session),
+        SqlMemberDirectory(session),
+        SqlAnnotationSampleSetRepository(session),
+        SqlAnnotationSchemaRepository(session),
+        SqlEpisodeDirectory(session),
+        SqlAnnotationAuditRepository(session),
+        SqlAnnotationOutboxRepository(session),
+        SqlAnnotationIdempotencyRepository(session),
+        session,
+    )
+    return QualityRoutingUseCases(
+        runs=SqlQualityRunRepository(session),
+        records=records,
+        submissions=submissions,
+        members=SqlMemberDirectory(session),
+    )
 
 
 def _use_cases(session: Session) -> QualityRunUseCases:
@@ -275,12 +324,43 @@ class QualityRunWorker:
                     session, queue, claimed.event_id, scope, run_id, exc, moment
                 )
 
+            # 第三步：结论驱动路由（V31-032）。路由失败**不**回滚已落库的
+            # 结论——结论是既成事实，路由是它的下游动作；失败只告警，事件
+            # 仍按已发布收口，运维可据 run_id 重放（见 ADR-0044）。
+            self._route_conclusion(session, scope, run_id, moment)
+
             queue.mark_published(claimed.event_id, now=moment)
             session.commit()
             return QualityRunProcessResult(
                 status=QualityRunExecutionStatus.PUBLISHED,
                 run_id=executed.run_id,
                 attempts=claimed.attempts + 1,
+            )
+
+    def _route_conclusion(
+        self,
+        session: Session,
+        scope: ProjectScope,
+        run_id: UUID,
+        moment: datetime,
+    ) -> None:
+        """把刚产出的结论路由到标注提交；失败只告警，不影响事件收口。
+
+        路由与执行用**同一个会话**：路由写出的提交状态与结论在同一事务里
+        提交，不会出现"结论已落库、提交状态没跟上"的中间态。路由内部吞掉
+        领域异常并返回 ``PARTIAL``，因此这里只兜底未预期异常。
+        """
+        try:
+            result = _routing_use_cases(session).route(scope, run_id, now=moment)
+        except Exception:  # noqa: BLE001 - 路由失败不得让结论消失
+            logger.exception("质检结论路由异常 run_id=%s", run_id)
+            return
+        if result.status == QualityRoutingStatus.PARTIAL:
+            logger.warning(
+                "质检结论部分路由 run_id=%s actions=%s reason=%s",
+                run_id,
+                result.actions,
+                result.reason,
             )
 
     # ------------------------------------------------------------------ #

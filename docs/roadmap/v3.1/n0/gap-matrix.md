@@ -171,10 +171,16 @@
     （`DISPATCH_EVENTS` 已登记、`docker-compose.yml` 有 `quality-worker`）。
     测试：`tests/unit/test_quality_run_execution_repository.py`（8）、
     `tests/workers/test_quality_run_worker.py`（6）。
+  - 已消除（V31-032，2026-11-22）：结论驱动路由
+    `domain/quality/routing.py`（结论 → 动作序列判定表）+
+    `application/quality/routing.py`（编排，复用既有提交用例，以项目负责人
+    身份执行，按状态机逐级推进）；Worker 在结论落库后路由，失败只告警。
+    ADR-0044。测试：`tests/unit/test_quality_routing_rules.py`（12）、
+    `tests/unit/test_quality_routing_use_cases.py`（8）、
+    `tests/workers/test_quality_run_worker.py`（10）。
   - 仍缺：HTTP 异步入口（`POST /quality/runs` 只有同步模式，排队运行需
-    `QualityRunOut` 之外的新响应模型）；结论驱动路由（V31-032）；批量重跑
-    与差异报告（V31-033）。生命周期查询入口出现前，`QUEUED`/`RUNNING`
-    只能查库。
+    `QualityRunOut` 之外的新响应模型）；批量重跑与差异报告（V31-033）。
+    生命周期查询入口出现前，`QUEUED`/`RUNNING` 只能查库。
 - `backend/app/domain/annotation/enums.py:499-504` 明确其与业务写入同事务；
   该同步路径尚未改造（改造属于 V31-031）。
 - 风险：提交事务被质检规则拖长（在 V31-031 前仍然存在）。
