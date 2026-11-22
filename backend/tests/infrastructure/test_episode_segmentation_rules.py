@@ -23,6 +23,7 @@ from app.domain.episodes.segmentation_rules import (
 )
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.episodes import EpisodeModel
+from ddp_data.canonical.v1 import SCHEMA_VERSION
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -57,7 +58,7 @@ def _rule_command(
         ),
         time_base=time_base(),
         calibration_snapshot=calibration_snapshot(),
-        canonical_schema_version="ddp.canonical/1.0.0-draft",
+        canonical_schema_version=SCHEMA_VERSION,
         pipeline_id="parser",
         pipeline_version="1.0.0",
     )

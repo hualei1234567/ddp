@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/canonical/video-stream.v1.schema.json",
+  "title": "DDP Canonical VideoStream v1",
+  "description": "视频/相机流的一条声明；媒体本体在对象存储。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "stream_id",
+    "missing_fields"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "ddp.canonical/1.0.0"
+    },
+    "stream_id": {
+      "type": "string"
+    },
+    "camera_name": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "camera_name_raw": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "modality": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "media_format": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "storage_reference": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "excerpt_start_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "duration_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "fps": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "frame_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "width": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "height": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1
+    },
+    "size_bytes": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "checksum": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "encoding": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dropped_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "missing_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "camera_name",
+          "camera_name_raw",
+          "checksum",
+          "dropped_count",
+          "duration_ns",
+          "encoding",
+          "excerpt_start_ns",
+          "fps",
+          "frame_count",
+          "height",
+          "media_format",
+          "modality",
+          "size_bytes",
+          "storage_reference",
+          "width"
+        ]
+      },
+      "uniqueItems": true
+    }
+  }
+}

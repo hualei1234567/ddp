@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/canonical/episode.v1.schema.json",
+  "title": "DDP Canonical Episode v1",
+  "description": "Episode 级 Canonical：保留既有字段，并用 ID 引用下层实体。video_stream_ids 承接既有 media_assets；episode_id / project_id 由服务端分配。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "episode_key",
+    "task_name",
+    "instruction",
+    "video_stream_ids",
+    "missing_fields"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "ddp.canonical/1.0.0"
+    },
+    "episode_key": {
+      "type": "string"
+    },
+    "task_name": {
+      "type": "string"
+    },
+    "instruction": {
+      "type": "string"
+    },
+    "environment": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "setting": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "episode_seconds": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "source_fps": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "has_wrist": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "raw": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "video_stream_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sensor_stream_ids": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "action_ids": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "observation_ids": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "frame_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "episode_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "start_time_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "end_time_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "missing_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "action_ids",
+          "end_time_ns",
+          "environment",
+          "episode_id",
+          "episode_seconds",
+          "frame_count",
+          "has_wrist",
+          "observation_ids",
+          "project_id",
+          "raw",
+          "sensor_stream_ids",
+          "setting",
+          "source_fps",
+          "start_time_ns"
+        ]
+      },
+      "uniqueItems": true
+    }
+  }
+}

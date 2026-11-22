@@ -213,6 +213,11 @@ jobs:
         run: npm ci --prefix apps/web
       - name: 真实后端设备契约快照
         run: npm --prefix apps/web run contract:check
+      - name: Canonical JSON Schema 与字段声明一致（阻断）
+        # 生成产物由 scripts/export_canonical_schemas.py 从
+        # data-platform/ddp_data/canonical/v1.py 的字段声明导出；
+        # 手改生成文件会让消费者读到的 schema 与领域校验脱节。
+        run: python3 scripts/export_canonical_schemas.py --check
       - name: OpenAPI lint（Redocly）
         env:
           # DDP-214：锁定到具体版本。`@redocly/cli@1` 是主版本范围，1.x 每次

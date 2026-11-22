@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ddp.local/schemas/canonical/frame.v1.schema.json",
+  "title": "DDP Canonical Frame v1",
+  "description": "帧级时间锚点；帧数据本体不内联，只存引用与时间信息。至少需要 timestamp_ns 或 source_time_ns 之一（跨字段约束由领域层强制）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "frame_index",
+    "missing_fields"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "ddp.canonical/1.0.0"
+    },
+    "frame_index": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sequence": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "timestamp_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "source_time_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "source_time_domain": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "clock_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "time_base_ref": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "uncertainty_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "observation_ids": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "is_dropped": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "drop_reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "missing_fields": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "clock_id",
+          "drop_reason",
+          "is_dropped",
+          "observation_ids",
+          "sequence",
+          "source_time_domain",
+          "source_time_ns",
+          "time_base_ref",
+          "timestamp_ns",
+          "uncertainty_ns"
+        ]
+      },
+      "uniqueItems": true
+    }
+  }
+}

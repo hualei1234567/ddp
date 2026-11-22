@@ -100,6 +100,7 @@
 | 产物仅 `output_refs` JSON 数组，无 Artifact 目录 | 已消除（V31-016，2026-11-22） | 新增 `processing_artifacts` 表（迁移 0069）+ 领域 `ProcessingArtifact` + 仓储 + `GET .../processing-runs/{id}/artifacts`。阶段产出登记类型/阶段/尝试/Schema 版本/内容类型/字节数/SHA256/来源输入；`output_refs` 退化为兼容投影。测试：`tests/unit/test_processing_artifacts_domain.py`、`test_processing_artifacts_repository.py`、`test_processing_artifact_registration.py`、`tests/api/test_processing_artifacts_api.py` |
 | `DATA_CLEANING` 使用 `SkippedStage` | `MISSING` | `backend/app/application/processing/stages.py:144-149` |
 | Canonical 版本分裂 `1.0.0-draft` vs `1.0.0` | 已消除（V31-004，2026-11-22） | 导入物化改为引用 `ddp_data.canonical.v1.SCHEMA_VERSION`（`episode_materialization.py`）；防漂移测试 `tests/unit/test_episode_status_alignment.py`。历史 `-draft` 数据按 ADR-0038 §2.4 有意保留 |
+| Canonical 无跨语言共享 Schema；写入入口接受任意版本字符串 | 已消除（V31-017，2026-11-22） | 新增生成器 `ddp_data/canonical/json_schema.py` + 导出脚本 `scripts/export_canonical_schemas.py`，产物 `packages/contracts/schemas/canonical-v1/`（6 个实体）；`EpisodeService.create` 用 `SUPPORTED_SCHEMA_VERSIONS` 白名单拒绝未知版本（`application/episodes/canonical_version.py`）。测试：`tests/unit/test_canonical_json_schema.py`（33 条）、`tests/api/test_episodes_api.py`（白名单 2 条）。ADR-0040 |
 | `pipeline.py` 头部注释称仅两阶段实现（已过时） | 文档债 | `backend/app/application/processing/pipeline.py:7-12` |
 
 ## 5. AnnotationTask 创建与指定标注人

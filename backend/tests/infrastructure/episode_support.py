@@ -31,6 +31,7 @@ from app.infrastructure.repositories.episodes import (
 from app.infrastructure.repositories.ingestion_jobs import SqlIngestionJobRepository
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
+from ddp_data.canonical.v1 import SCHEMA_VERSION
 from sqlalchemy.orm import Session
 
 SHA_A = f"sha256:{'a' * 64}"
@@ -79,7 +80,7 @@ def create_command(
         ),
         time_base=time_base(),
         calibration_snapshot=calibration_snapshot(),
-        canonical_schema_version="ddp.canonical/1.0.0-draft",
+        canonical_schema_version=SCHEMA_VERSION,
         pipeline_id="parser",
         pipeline_version="1.0.0",
         code=code,

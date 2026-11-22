@@ -482,3 +482,51 @@ def test_archive_is_reachable_from_completed(
     assert body["status"] == "ARCHIVED"
     # ARCHIVED 是终态：不再下发任何动作按钮。
     assert body["allowed_actions"] == []
+
+
+def test_create_rejects_unsupported_canonical_schema_version(
+    episode_api: tuple[Any, ApiIds, UUID],
+) -> None:
+    """写入入口只接受正式 Canonical 版本（ADR-0038 §2.6）。
+
+    历史行上的 ``1.0.0-draft`` 是溯源事实、读取时不拒绝；但**新写入**必须落在
+    ``SUPPORTED_SCHEMA_VERSIONS`` 内，否则共享 JSON Schema 一接上就会拒绝这条数据。
+    """
+    client, ids, asset_id, _factory = episode_api
+    response = client.post(
+        project_url(ids.project_a, "/episodes"),
+        json=episode_payload(
+            asset_id,
+            code="EP-API-BAD-VERSION",
+            canonical_schema_version="ddp.canonical/1.0.0-draft",
+        ),
+        headers={"Idempotency-Key": "episode-bad-version-0001"},
+    )
+
+    assert response.status_code == 422, response.text
+    error = response.json()["error"]
+    assert error["code"] == "validation_failed"
+    assert "ddp.canonical/1.0.0-draft" in error["message"]
+
+
+def test_create_accepts_every_supported_canonical_schema_version(
+    episode_api: tuple[Any, ApiIds, UUID],
+) -> None:
+    """白名单不是"只认一个字符串"，而是"逐个接受 ``SUPPORTED_SCHEMA_VERSIONS``"。"""
+    from ddp_data.canonical.v1 import SUPPORTED_SCHEMA_VERSIONS
+
+    client, ids, asset_id, _factory = episode_api
+    for index, version in enumerate(sorted(SUPPORTED_SCHEMA_VERSIONS)):
+        response = client.post(
+            project_url(ids.project_a, "/episodes"),
+            json=episode_payload(
+                asset_id,
+                code=f"EP-API-VERSION-{index}",
+                start_time_ns=index * 10_000,
+                end_time_ns=(index + 1) * 10_000,
+                canonical_schema_version=version,
+            ),
+            headers={"Idempotency-Key": f"episode-version-{index:04d}"},
+        )
+        assert response.status_code == 201, (version, response.text)
+        assert response.json()["canonical_schema_version"] == version
