@@ -59,7 +59,7 @@
 |---|---|---|---|---|
 | V31-030 | 质检运行状态机（`QUEUED/RUNNING/SUCCEEDED/FAILED/RETRYING/CANCELLED`） | V31-016（Artifact 语义） | 领域 + 迁移 | **已完成（2026-11-22）**：生命周期与结论正交拆列（迁移 0070），结论视图只认 `SUCCEEDED`；Worker 接线留给 V31-031 |
 | V31-031 | 提交事件 → Outbox → 质检 Worker（幂等 + 重试 + 死信） | V31-030 | worker | **执行链路已完成（2026-11-22）**：enqueue/start/conclude + CAS 仓储、`workers/quality.py`、compose 服务、DISPATCH_EVENTS 登记；HTTP 异步入口与生命周期查询留给后续切片 / V31-032 |
-| V31-032 | 结论驱动路由（自动转审核 / 自动返工），规则版本快照 | V31-031 | 应用层 | — |
+| V31-032 | 结论驱动路由（自动转审核 / 自动返工），规则版本快照 | V31-031 | 应用层 | **已完成（2026-11-22）**：`domain/quality/routing.py` 判定表 + `application/quality/routing.py` 编排；路由以项目负责人身份复用既有提交用例，按状态机逐级推进（`FAILED` → 转审核 → 驳回 → 返工）；Worker 在结论落库后路由，失败只告警不回滚结论。ADR-0044 |
 | V31-033 | 质检批量重跑与差异报告 | V31-032 | API + UI | — |
 
 ### M5 训练可交付

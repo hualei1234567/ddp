@@ -77,6 +77,8 @@ EXIT_CODE=0
 
 - `backend/app/application/quality/use_cases.py` 597 行（V31-031 新增入队与
   执行编排；拆分需先移出事实加载/聚合，另立重构任务）；
+- `backend/app/workers/quality.py` 639 行（V31-031/032 执行 + 路由编排；
+  拆分需先抽出失败路径与装配，另立重构任务）；
 - `backend/app/domain/quality/models.py` 568 行（拆分需同步 14 处 import）；
 - `backend/app/workers/datasources.py` 570 行。
 
