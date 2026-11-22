@@ -202,10 +202,13 @@ describe("SubmissionMediaPanel", () => {
       expect.anything(),
     );
     // 记录起点是 1s，时间轴播放头应定位到该记录起点而非 0。
+    // 元素出现不等于定位已完成：播放头在后续 effect 里更新，必须等属性就位。
     const timeline = await screen.findByTestId("annotation-timeline", undefined, {
       timeout: ASYNC_CHAIN_TIMEOUT_MS,
     });
-    expect(timeline.getAttribute("aria-valuenow")).toBe("1");
+    await waitFor(() => {
+      expect(timeline.getAttribute("aria-valuenow")).toBe("1");
+    });
     // 标签片段（1s–3s）必须渲染到时间轴上，供复核定位。
     expect(screen.getByTitle(/grasp_segment/)).toBeInTheDocument();
   });
