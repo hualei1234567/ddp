@@ -370,6 +370,10 @@ def build_export_artifacts(
     }
     sidecar = {
         "schema_version": "ddp.export.sidecar/1.0.0",
+        # 格式与版本必须出现在 sidecar 里：下游据此判断"这份产物是什么"，
+        # 不能只从任务表推断（sidecar 会随产物一起流转）。
+        "format": job.format.value if hasattr(job.format, "value") else str(job.format),
+        "format_version": job.format_version,
         "export_job_id": str(job.export_job_id),
         "dataset_version_id": str(version.dataset_version_id),
         "dataset_version": version.dataset_version,

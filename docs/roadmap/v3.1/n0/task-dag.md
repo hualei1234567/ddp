@@ -67,9 +67,9 @@
 | ID | 任务 | 依赖 | 变更面 |
 |---|---|---|---|
 | V31-040 | 冻结时 Manifest 写对象存储 + 回读校验 + `manifest_key/sha256` 原子落库 | V31-004 | 应用层 + 存储端口 |
-| V31-041 | `ExportFormat` 扩展 Canonical（契约 + worker strategy + UI 选项） | V31-017 | 契约 + 领域 + worker + UI |
-| V31-042 | LeRobot 导出从“元数据 profile”升级到可被固定版本 Loader 加载 | V31-017、V31-018 | `domain/datasets/exporting.py` + 测试 |
-| V31-043 | 审核 → Dataset Builder 前端闭环（加入数据集、条目回链、排除原因跳转） | V31-024 | 前端 |
+| V31-041 | `ExportFormat` 扩展 Canonical（契约 + worker strategy + UI 选项） | V31-017 | 契约 + 领域 + worker + UI | **已完成（2026-11-22）**：`ExportFormat.CANONICAL` + 格式↔版本成对校验 + sidecar 声明格式；契约 1.30.0（stage4 枚举与 export-job schema，均以 `x-extensible-enum` 声明可增长），兼容性检查登记为开放枚举；前端导出表单新增格式选择并自动带出配对版本。ADR-0046 |
+| V31-042 | LeRobot 导出从“元数据 profile”升级到可被固定版本 Loader 加载 | V31-017、V31-018 | `domain/datasets/exporting.py` + 测试 | **方案已定、未实施**：见 [V31-042-方案-LeRobot导出可加载.md](V31-042-方案-LeRobot导出可加载.md)。现状产物是元数据 profile（缺 `tasks.jsonl`/`stats.json`/parquet/`videos/`），推荐先做「v2.1 结构合规 + `loadable_scope: METADATA_ONLY`」，复用 `data-platform/ddp_data/lerobot/` 与 `ddp_data/parquet/`，不在 backend 引入 pyarrow；真实 Loader 跑通前 `verification_status` 必须保持 `UNVERIFIED` |
+| V31-043 | 审核 → Dataset Builder 前端闭环（加入数据集、条目回链、排除原因跳转） | V31-024 | 前端 | **已完成（2026-11-22）**：审计确认三项能力均已实现并有测试——`DatasetLinkagePanel` 以 `APPROVED`/`RESOLVED_APPROVED` 门禁「加入数据集」并跳转带 `episode_ids` 的构建入口；`DatasetVersionsSection` 读取 `episode_ids` 预填选择过滤条件；`SelectionPreviewDetails` 渲染 `exclusion_summary` 排除原因。测试：`DatasetLinkagePanel.dom.test.tsx`（3 条）、`DatasetVersionsSection.dom.test.tsx`（2 条）、`SelectionPreviewDetails.dom.test.tsx` |
 | V31-044 | 真实数据端到端验收：`HDF5/rosbag → Episode → 指定标注人 → 标注 → 审核 → 冻结 → 导出 → 加载` | V31-012、V31-022、V31-040、V31-042 | `scripts/e2e` |
 
 ## 3. 依赖图

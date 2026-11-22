@@ -18,6 +18,25 @@ from app.domain.datasets.errors import (
 from app.domain.datasets.validation import non_negative_int, text_value
 
 EXPORT_FORMAT_VERSION_LE_ROBOT = "ddp.lerobot/1.0.0"
+EXPORT_FORMAT_VERSION_CANONICAL = "ddp.canonical/1.0.0"
+
+#: 每个格式**唯一**对应的版本。交叉组合（例如 CANONICAL + lerobot 版本）
+#: 必须拒绝：``format_version`` 是下游判断"这份产物是什么"的依据，写错
+#: 会让 Loader 用错解析器。
+EXPORT_FORMAT_VERSIONS: dict[ExportFormat, str] = {
+    ExportFormat.LE_ROBOT: EXPORT_FORMAT_VERSION_LE_ROBOT,
+    ExportFormat.CANONICAL: EXPORT_FORMAT_VERSION_CANONICAL,
+}
+
+
+def expected_format_version(export_format: ExportFormat) -> str:
+    """返回该格式对应的版本；未知格式显式拒绝。"""
+    try:
+        return EXPORT_FORMAT_VERSIONS[export_format]
+    except KeyError as exc:
+        raise ExportFormatUnsupportedError(f"不支持的导出格式：{export_format}") from exc
+
+
 IDEMPOTENCY_KEY_MIN_LENGTH = 8
 IDEMPOTENCY_KEY_MAX_LENGTH = 128
 CONFIG_MAX_BYTES = 64 * 1024
@@ -66,7 +85,7 @@ def coerce_format(value: object) -> ExportFormat:
     try:
         return value if isinstance(value, ExportFormat) else ExportFormat(value)
     except ValueError as exc:
-        raise ExportFormatUnsupportedError("仅支持 LE_ROBOT 导出格式") from exc
+        raise ExportFormatUnsupportedError("仅支持 LE_ROBOT / CANONICAL 导出格式") from exc
 
 
 def text_limit(field_name: str) -> int:
@@ -77,11 +96,14 @@ def text_limit(field_name: str) -> int:
 
 __all__ = [
     "CONFIG_MAX_BYTES",
+    "EXPORT_FORMAT_VERSION_CANONICAL",
     "EXPORT_FORMAT_VERSION_LE_ROBOT",
+    "EXPORT_FORMAT_VERSIONS",
     "IDEMPOTENCY_KEY_MAX_LENGTH",
     "IDEMPOTENCY_KEY_MIN_LENGTH",
     "coerce_format",
     "config_payload",
+    "expected_format_version",
     "optional_non_negative",
     "safe_output_prefix",
     "text_limit",

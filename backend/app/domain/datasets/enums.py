@@ -164,9 +164,18 @@ class ExportJobStatus(StrEnum):
 
 
 class ExportFormat(StrEnum):
-    """阶段 4 P0 仅支持 LE_ROBOT；未知格式必须显式拒绝。"""
+    """训练导出格式。
+
+    - ``LE_ROBOT``：LeRobot 元数据 profile（``frame_level_mapping: false``，
+      ``verification_status: UNVERIFIED``——尚未通过真实 Loader 验证）；
+    - ``CANONICAL``：平台自己的规范格式（Canonical JSON + NDJSON），
+      语义与 LeRobot 不同，下游据此判断能否直接喂给 LeRobot Loader。
+
+    未知格式必须显式拒绝，不得静默回退。
+    """
 
     LE_ROBOT = "LE_ROBOT"
+    CANONICAL = "CANONICAL"
 
 
 class ExportVerificationStatus(StrEnum):

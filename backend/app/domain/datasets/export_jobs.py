@@ -35,6 +35,7 @@ from app.domain.datasets.export_validation import (
     IDEMPOTENCY_KEY_MIN_LENGTH,
     coerce_format,
     config_payload,
+    expected_format_version,
     optional_non_negative,
     safe_output_prefix,
     text_limit,
@@ -105,8 +106,13 @@ class ExportJob:
             "format",
             coerce_format(self.format),
         )
-        if self.format_version != EXPORT_FORMAT_VERSION_LE_ROBOT:
-            raise ExportFormatVersionUnsupportedError("仅支持 ddp.lerobot/1.0.0")
+        # 格式与版本必须成对：``format_version`` 是下游判断"这份产物是什么"
+        # 的依据，交叉组合（CANONICAL + lerobot 版本）会让 Loader 用错解析器。
+        expected_version = expected_format_version(self.format)
+        if self.format_version != expected_version:
+            raise ExportFormatVersionUnsupportedError(
+                f"格式 {self.format.value} 必须使用版本 {expected_version}"
+            )
         for name, limit in (
             ("exporter_id", 100),
             ("exporter_version", 100),

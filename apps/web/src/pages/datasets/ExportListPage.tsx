@@ -24,6 +24,7 @@ import { useProjectId } from "../../hooks/useProjectId";
 import { datasetApi, type ExportCreateInput } from "../../services/datasets";
 import { presentExportStatus } from "../../services/datasetPresentation";
 import { exportDetailPath } from "../../services/datasetUrl";
+import { defaultFormatVersion, exportFormatOptions } from "../../services/exportFormat";
 import { resolvePagePhase } from "../../services/pagePhase";
 import { EXPORT_JOB_STATUS_VALUES, type ExportJob } from "../../types/dataset";
 
@@ -48,8 +49,8 @@ function CreateExportModal({
       setSubmitting(true);
       await datasetApi.createExport(projectId, {
         ...values,
-        format: "LE_ROBOT",
-        format_version: values.format_version || "ddp.lerobot/1.0.0",
+        format: values.format,
+        format_version: values.format_version,
         config: {},
       });
       messageApi.success("导出任务已创建（QUEUED）");
@@ -92,8 +93,20 @@ function CreateExportModal({
           <Form.Item name="mapping_version" label="字段映射版本" initialValue="ddp.lerobot.mapping/1.0.0" rules={[{ required: true }]}>
             <Input maxLength={100} />
           </Form.Item>
-          <Form.Item name="format_version" label="格式版本" initialValue="ddp.lerobot/1.0.0">
-            <Input maxLength={64} />
+          <Form.Item
+            name="format"
+            label="导出格式"
+            initialValue="LE_ROBOT"
+            rules={[{ required: true, message: "请选择导出格式" }]}
+            extra="格式与版本成对：切换格式会自动带出对应版本，交叉组合会被服务端拒绝。"
+          >
+            <Select options={exportFormatOptions(undefined)} onChange={(value: string) => {
+              // 格式与版本必须成对，切换格式时同步版本，避免用户手工拼出交叉组合。
+              form.setFieldValue("format_version", defaultFormatVersion(value) ?? "");
+            }} />
+          </Form.Item>
+          <Form.Item name="format_version" label="格式版本" initialValue="ddp.lerobot/1.0.0" rules={[{ required: true }]}>
+            <Input maxLength={64} disabled />
           </Form.Item>
         </Form>
         <Typography.Text type="secondary">
