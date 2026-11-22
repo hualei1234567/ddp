@@ -155,9 +155,19 @@
 
 ### Gap
 
-- **异步自动质检编排 `PARTIAL`**：无“提交后自动触发”、无运行状态机、无重试/死信、
-  无规则版本快照。`backend/app/domain/annotation/enums.py:499-504` 明确其与业务写入同事务。
-- 风险：提交事务被质检规则拖长。
+- **异步自动质检编排 `PARTIAL`**：无“提交后自动触发”、无重试/死信。
+  - 已消除（V31-030，2026-11-22）：质检运行生命周期
+    `lifecycle`（`QUEUED/RUNNING/SUCCEEDED/FAILED/RETRYING/CANCELLED`）与结论
+    `status` 正交拆列（迁移 0070），领域状态机 + 数据库 CHECK 双向兜底；
+    结论视图（`get/list/latest_for_subjects`）只认 `SUCCEEDED`。ADR-0042。
+    测试：`tests/unit/test_quality_run_lifecycle.py`、
+    `test_quality_run_repository_lifecycle.py`、
+    `tests/migrations/test_quality_run_lifecycle_migration.py`。
+  - 仍缺：提交事件 → Outbox → 质检 Worker（V31-031）、结论驱动路由（V31-032）、
+    批量重跑与差异报告（V31-033）。V31-031 之前排队中的运行无 API 可查。
+- `backend/app/domain/annotation/enums.py:499-504` 明确其与业务写入同事务；
+  该同步路径尚未改造（改造属于 V31-031）。
+- 风险：提交事务被质检规则拖长（在 V31-031 前仍然存在）。
 
 ## 8. Dataset Builder、版本冻结、Manifest 与训练导出
 
@@ -199,7 +209,7 @@
 | 把 LeRobot 元数据导出宣传为训练格式兼容 | 高 | 代码已固定 `UNVERIFIED`，文案必须一致 |
 | 文档状态漂移 | 中高 | `docs/roadmap/v2.1/n0/risk-list.md:72` 仍称 CaptureSession 未关联产物 |
 | Canonical 版本分裂 | 已消除 | 版本号单一来源（ADR-0038）；历史数据保留原值属溯源事实 |
-| `COMPLETED` 绕过 Accepted 语义 | 中 | ADR-0038 §2.1 裁决 `COMPLETED` 可进 Dataset Builder（状态机保证其质量结论为 PASS）；数据库兜底由 V31-030 补 |
+| `COMPLETED` 绕过 Accepted 语义 | 中 | ADR-0038 §2.1 裁决 `COMPLETED` 可进 Dataset Builder（状态机保证其质量结论为 PASS）；门禁仍只读最新质量结论，未增加额外的数据库级兜底（原计划挂在 V31-030，实际 V31-030 只处理质量运行生命周期） |
 
 ## 10. 与 V2.1 能力矩阵的关系
 

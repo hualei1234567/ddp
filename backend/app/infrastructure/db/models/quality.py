@@ -1,7 +1,12 @@
-"""统一质量引擎 ORM 模型（N4-004）。
+"""统一质量引擎 ORM 模型（N4-004 / V31-030）。
 
-两张表都**只追加**：一次质量运行是不可变事实，"改结论"是重跑新 run。
-因此不引入 ``version`` / ``updated_at`` / ``updated_by``，避免暗示可更新。
+``quality_findings`` 只追加：一次质量运行的结论明细是不可变事实。
+
+``quality_runs`` 的**结论**同样只追加——"改结论"是重跑新 run（不引入
+``version`` / ``updated_at``）；但 **生命周期**（排队 → 执行 → 成功/失败 →
+重投/取消）会推进同一行，因此该行在成功前是可变的，由 ``lifecycle`` +
+``attempt`` 描述。两个事实分列：``lifecycle`` 说"走到哪一步"，``status``
+说"结论是什么"，只有 ``SUCCEEDED`` 有结论。
 
 项目隔离在数据库层兜底：findings 到 runs 的复合外键带 ``project_id``，
 跨项目拼 ID 直接失败，不依赖应用层自觉。``subject_id`` 是多态引用
@@ -34,6 +39,7 @@ from sqlalchemy.types import JSON
 from app.domain.quality.enums import (
     QualityCategory,
     QualityFindingStatus,
+    QualityRunLifecycle,
     QualityRunStatus,
     QualitySeverity,
     QualitySubjectType,
@@ -43,6 +49,36 @@ from app.infrastructure.db.base import Base
 _JSON_TYPE = JSON().with_variant(JSONB, "postgresql")
 _SHA_CHECK = "length({column}) = 71 AND substr({column}, 1, 7) = 'sha256:'"
 _SCORE_CHECK = "score IS NULL OR (score >= 0 AND score <= 1)"
+#: 结论只对 ``SUCCEEDED`` 存在；未完成的行 ``status`` 必须为空。
+_STATUS_CHECK = (
+    f"status IS NULL OR status IN ({', '.join(repr(i.value) for i in QualityRunStatus)})"
+)
+#: 未完成的行可以不写时间；写了就必须有终点不早于起点。
+_FINISHED_CHECK = "finished_at IS NULL OR started_at IS NULL OR finished_at >= started_at"
+#: 执行错误信息成对出现，避免只有错误码没有说明（或反之）。
+_ERROR_PAIR_CHECK = (
+    "(error_code IS NULL AND error_summary IS NULL)"
+    " OR (error_code IS NOT NULL AND error_summary IS NOT NULL)"
+)
+#: 生命周期决定哪些列必须有值。把这条不变量放在数据库，任何绕过领域层
+#: 的写入都写不出"QUEUED 却有结论"的行。
+_LIFECYCLE_FIELDS_CHECK = (
+    "(lifecycle = 'QUEUED'"
+    " AND status IS NULL AND started_at IS NULL"
+    " AND finished_at IS NULL AND error_code IS NULL)"
+    " OR (lifecycle IN ('RUNNING', 'RETRYING')"
+    " AND status IS NULL AND started_at IS NOT NULL AND finished_at IS NULL)"
+    " OR (lifecycle = 'SUCCEEDED'"
+    " AND status IS NOT NULL AND started_at IS NOT NULL AND finished_at IS NOT NULL"
+    " AND error_code IS NULL)"
+    " OR (lifecycle = 'FAILED'"
+    " AND status IS NULL AND started_at IS NOT NULL AND finished_at IS NOT NULL"
+    " AND error_code IS NOT NULL)"
+    # 取消可能发生在重投之后：保留上一次失败原因（成对约束仍由
+    # error_fields_paired 兜底），不强制清空。
+    " OR (lifecycle = 'CANCELLED'"
+    " AND status IS NULL AND finished_at IS NOT NULL)"
+)
 
 
 def _values(enum_type: type) -> str:
@@ -61,7 +97,7 @@ class QualityRunModel(Base):
     subject_type: Mapped[str] = mapped_column(String(32), nullable=False)
     subject_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
     rule_set_version: Mapped[str] = mapped_column(String(71), nullable=False)
-    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    status: Mapped[str | None] = mapped_column(String(16), nullable=True)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     finding_count: Mapped[int] = mapped_column(Integer, nullable=False)
     error_count: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -70,8 +106,24 @@ class QualityRunModel(Base):
         _JSON_TYPE,
         nullable=False,
     )
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    finished_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # 生命周期与结论正交：``lifecycle`` 说"走到哪一步"，``status`` 说"结论是什么"。
+    # 默认 ``SUCCEEDED`` 兼容 0070 之前的写入方（它们落库的都是已算完的结论）。
+    lifecycle: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default=QualityRunLifecycle.SUCCEEDED.value,
+        server_default=text("'SUCCEEDED'"),
+    )
+    attempt: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    max_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default=text("1")
+    )
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_summary: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -89,9 +141,10 @@ class QualityRunModel(Base):
             f"subject_type IN ({_values(QualitySubjectType)})",
             name="subject_type_allowed",
         ),
+        CheckConstraint(_STATUS_CHECK, name="status_allowed"),
         CheckConstraint(
-            f"status IN ({_values(QualityRunStatus)})",
-            name="status_allowed",
+            f"lifecycle IN ({_values(QualityRunLifecycle)})",
+            name="lifecycle_allowed",
         ),
         CheckConstraint(
             _SHA_CHECK.format(column="rule_set_version"),
@@ -105,7 +158,12 @@ class QualityRunModel(Base):
             name="fail_counts_within_findings",
         ),
         CheckConstraint(_SCORE_CHECK, name="score_range"),
-        CheckConstraint("finished_at >= started_at", name="finished_after_started"),
+        CheckConstraint(_FINISHED_CHECK, name="finished_after_started"),
+        CheckConstraint("attempt >= 1", name="attempt_positive"),
+        CheckConstraint("max_attempts >= 1", name="max_attempts_positive"),
+        CheckConstraint("attempt <= max_attempts", name="attempt_within_max"),
+        CheckConstraint(_ERROR_PAIR_CHECK, name="error_fields_paired"),
+        CheckConstraint(_LIFECYCLE_FIELDS_CHECK, name="lifecycle_fields_consistent"),
         Index(
             "ix_quality_runs_project_subject_created",
             "project_id",

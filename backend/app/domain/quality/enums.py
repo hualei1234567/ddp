@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import StrEnum
 
 from app.domain.quality.errors import DomainValidationError
@@ -85,6 +86,63 @@ class QualityRunStatus(StrEnum):
     INCOMPLETE = "INCOMPLETE"
 
 
+class QualityRunLifecycle(StrEnum):
+    """异步质检的运行状态，与结论（:class:`QualityRunStatus`）**正交**。
+
+    为什么必须分开：``PASSED`` / ``FAILED`` / ``INCOMPLETE`` 都是"已经算完"
+    的结论；把它们与 ``QUEUED`` / ``RUNNING`` 混进一个枚举，读取方只能靠
+    字符串白名单猜"这一行到底算完了没有"，而任何遗漏都会让"没算完"被当成
+    "通过"。分成两个事实后，查询结论的入口可以只认 ``SUCCEEDED``，
+    未完成的行永远进不了结论视图。
+    """
+
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    RETRYING = "RETRYING"
+    CANCELLED = "CANCELLED"
+
+
+#: 允许的状态迁移。**只允许这些边**，其余一律拒绝：
+#: - ``QUEUED`` 只能进入执行或取消，不能直接跳到结论（否则"没跑"= "通过"）；
+#: - ``FAILED`` 只能重投，不能凭空成功；
+#: - ``SUCCEEDED`` / ``CANCELLED`` 是终态。
+QUALITY_RUN_TRANSITIONS: Mapping[QualityRunLifecycle, frozenset[QualityRunLifecycle]] = {
+    QualityRunLifecycle.QUEUED: frozenset(
+        {QualityRunLifecycle.RUNNING, QualityRunLifecycle.CANCELLED}
+    ),
+    QualityRunLifecycle.RUNNING: frozenset(
+        {
+            QualityRunLifecycle.SUCCEEDED,
+            QualityRunLifecycle.FAILED,
+            QualityRunLifecycle.CANCELLED,
+        }
+    ),
+    QualityRunLifecycle.RETRYING: frozenset(
+        {QualityRunLifecycle.RUNNING, QualityRunLifecycle.CANCELLED}
+    ),
+    QualityRunLifecycle.FAILED: frozenset({QualityRunLifecycle.RETRYING}),
+    QualityRunLifecycle.SUCCEEDED: frozenset(),
+    QualityRunLifecycle.CANCELLED: frozenset(),
+}
+
+#: 终态：不再接受任何迁移。
+TERMINAL_LIFECYCLES: frozenset[QualityRunLifecycle] = frozenset(
+    {QualityRunLifecycle.SUCCEEDED, QualityRunLifecycle.CANCELLED}
+)
+
+
+def coerce_lifecycle(value: QualityRunLifecycle | str) -> QualityRunLifecycle:
+    if isinstance(value, QualityRunLifecycle):
+        return value
+    try:
+        return QualityRunLifecycle(value)
+    except ValueError as exc:
+        allowed = "、".join(item.value for item in QualityRunLifecycle)
+        raise DomainValidationError(f"未知的运行生命周期：{value!r}（允许：{allowed}）") from exc
+
+
 class QualitySubjectType(StrEnum):
     """质量检查的对象类型。
 
@@ -157,15 +215,19 @@ def coerce_subject_type(value: QualitySubjectType | str) -> QualitySubjectType:
 
 __all__ = [
     "PUBLIC_SUBJECT_TYPES",
+    "QUALITY_RUN_TRANSITIONS",
     "RULE_CATEGORIES",
+    "TERMINAL_LIFECYCLES",
     "QualityCategory",
     "QualityCategoryStatus",
     "QualityFindingStatus",
+    "QualityRunLifecycle",
     "QualityRunStatus",
     "QualitySeverity",
     "QualitySubjectType",
     "coerce_category",
     "coerce_finding_status",
+    "coerce_lifecycle",
     "coerce_run_status",
     "coerce_severity",
     "coerce_subject_type",

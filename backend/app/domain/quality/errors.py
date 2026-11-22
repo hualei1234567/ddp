@@ -33,6 +33,19 @@ class ResourceNotFoundError(QualityDomainError):
         super().__init__(f"{resource}不存在或不可见")
 
 
+class InvalidQualityRunTransitionError(QualityDomainError):
+    """非法的运行生命周期迁移。
+
+    沿用父类的 ``validation_failed``（422 语义）：调用方拿到了一个不允许的
+    状态迁移，属于请求/编排错误，不是服务端规则缺陷。
+    """
+
+    def __init__(self, current: object, target: object) -> None:
+        self.current = current
+        self.target = target
+        super().__init__(f"质量运行不允许从 {current} 迁移到 {target}")
+
+
 class QualityEngineError(RuntimeError):
     """规则源与声明不一致、规则返回了非法结果等服务端缺陷。
 
@@ -42,6 +55,7 @@ class QualityEngineError(RuntimeError):
 
 __all__ = [
     "DomainValidationError",
+    "InvalidQualityRunTransitionError",
     "QualityDomainError",
     "QualityEngineError",
     "ResourceNotFoundError",

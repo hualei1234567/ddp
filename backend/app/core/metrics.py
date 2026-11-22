@@ -168,7 +168,10 @@ def business_gauge_specs() -> tuple[BusinessGaugeSpec, ...]:
         ),
         BusinessGaugeSpec(
             name=QUALITY_RUNS_GAUGE,
-            help_text="按结论的质量运行数量（采集时查库；FAILED/INCOMPLETE 即可核算失败与未完成）",
+            help_text=(
+                "按结论的质量运行数量（采集时查库；只统计已产出结论的 SUCCEEDED 运行，"
+                "FAILED/INCOMPLETE 即可核算失败与未完成）"
+            ),
             statuses=tuple(status.value for status in QualityRunStatus),
         ),
     )
