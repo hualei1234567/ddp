@@ -44,10 +44,9 @@ from uuid import UUID
 
 from app.application.episodes.ports import EpisodeRawAssetRepository
 from app.application.processing.ports import UnitOfWork
+from app.application.processing.refs import manifest_episode_id, raw_asset_id_from_ref
 from app.application.processing.stages import StageContext, StageFailure, StageOutcome
-from app.domain.episodes.validation import MANIFEST_KEY_PATTERN
 from app.domain.identity.models import ProjectScope
-from app.domain.ingestion.validation import validate_raw_object_key
 from app.domain.processing.enums import ProcessingStepStatus
 from app.domain.quality.enums import QualityRunStatus
 from app.domain.quality.errors import (
@@ -87,30 +86,6 @@ class EpisodeQualityGateway(Protocol):
     ) -> None: ...
 
 
-def _manifest_episode_id(ref: str, project_id: str) -> UUID | None:
-    """从本项目 Canonical manifest Key 解析 Episode ID；非该形态返回 ``None``。"""
-    if MANIFEST_KEY_PATTERN.fullmatch(ref) is None:
-        return None
-    parts = ref.split("/")
-    if parts[1] != project_id:
-        return None
-    return UUID(parts[2])
-
-
-def _raw_asset_id(ref: str, project_id: str) -> UUID | None:
-    """从本项目 RawAsset Key 解析资产 ID；非该形态返回 ``None``。
-
-    Key 结构由 ``domain.ingestion.validation.validate_raw_object_key`` 的权威
-    正则约束：``raw/<project>/YYYY/MM/DD/<asset_id>/content.<ext>``。
-    """
-    if not validate_raw_object_key(ref):
-        return None
-    parts = ref.split("/")
-    if parts[1] != project_id:
-        return None
-    return UUID(parts[5])
-
-
 def resolve_episode_ids(
     scope: ProjectScope,
     refs: Iterable[str],
@@ -127,11 +102,11 @@ def resolve_episode_ids(
             ordered.append(episode_id)
 
     for ref in refs:
-        episode_id = _manifest_episode_id(ref, project_id)
+        episode_id = manifest_episode_id(ref, project_id)
         if episode_id is not None:
             _add(episode_id)
             continue
-        asset_id = _raw_asset_id(ref, project_id)
+        asset_id = raw_asset_id_from_ref(ref, project_id)
         if asset_id is None:
             continue
         for link in episode_assets.list_for_asset(scope, asset_id):

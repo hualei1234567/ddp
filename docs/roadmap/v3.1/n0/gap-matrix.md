@@ -92,7 +92,8 @@
 |---|---|---|
 | ProcessingRun 输入是裸对象 key，非 RawAsset ID | 已消除（V31-015，2026-11-22） | `POST /processing-runs` 接受 `raw_asset_id`（与 `input_refs` 二选一），服务端解析对象 key 并校验 `VALID`/`ARCHIVED`；跨项目统一 404。测试：`tests/api/test_processing_run_raw_asset.py` |
 | Processing 未复用 AdapterRegistry，另有一套格式 switch | `MISSING` | `metadata_stage.py:490-502` vs `data-platform/ddp_data/adapters/registry.py` |
-| Pipeline `EPISODE_SEGMENTATION` 只核验已有 Episode，不切片不创建 | `PARTIAL` | `backend/app/application/processing/segmentation_stage.py:39-79` |
+| Pipeline `EPISODE_SEGMENTATION` 只核验已有 Episode，不切片不创建 | 已消除（V31-018，2026-11-22；范围：单文件 MP4） | 输入是 RawAsset 且元数据产物给出 `duration_ms` 时按 `episode-boundary/1.0.0` 创建 Episode（`application/processing/episode_boundaries.py` + `segmentation_stage.py`，落库经 `EpisodeService.create`，稳定 code 幂等）；其余格式如实 `SKIPPED` 并写明"可能是多 Episode 容器，缺少明确边界声明"。测试：`tests/unit/test_processing_episode_boundaries.py`、`test_processing_segmentation_stage.py`、`test_processing_segmentation_pipeline.py`、`tests/workers/test_processing_worker_segmentation.py` |
+| 多 Episode 容器（MCAP / ROS Bag / HDF5 / Parquet）没有可用的 Episode 边界声明来源 | `MISSING` | 导入链路 `raw_metadata` 只有 `episode_key`/`source_path`/`camera`/`source_fps`，无时间边界；HDF5 结构摘要只有路径与属性名。在这些格式补齐边界前置条件（上游给出显式分段声明）前，处理链路不把它们整段当成一个 Episode |
 | 导入成功不自动触发 Episode 物化，需手工 API | 已消除（V31-014，2026-11-22） | `backend/app/workers/datasources.py` 消费投递类 `datasource.import.succeed`（测试：`tests/workers/test_datasource_episode_worker.py`）；手工端点保留为重放入口 |
 | SensorStream / Observation / Action 无真实生产 | `MISSING` | 仅有类型定义与构造测试 |
 | Canonical 实体无数据库持久化 | `MISSING` | 无对应表 / repository |

@@ -26,6 +26,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from uuid import UUID
 
+from ddp_data.canonical.v1 import SCHEMA_VERSION as CANONICAL_SCHEMA_VERSION
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.application.ingestion.ports import ClaimedValidationEvent
@@ -56,6 +57,7 @@ from app.application.processing.use_cases import (
 from app.application.quality.episode_checks import EpisodeQualityChecks
 from app.application.quality.registry import default_registry
 from app.application.quality.use_cases import QualityRunUseCases
+from app.composition.episodes import build_episode_service
 from app.core.config import Settings, get_settings
 from app.core.logging import bind_trace, configure_logging, trace_from_event_payload
 from app.domain.episodes.segmentation_rules import build_segmentation_rule_registry
@@ -67,6 +69,10 @@ from app.domain.processing.errors import (
 )
 from app.domain.processing.models import ERROR_SUMMARY_MAX_LENGTH
 from app.infrastructure.db.session import create_session_factory, get_engine
+from app.infrastructure.processing.episode_creation import ProcessingEpisodeCreator
+from app.infrastructure.processing.metadata_documents import (
+    ProcessingMetadataDocumentReader,
+)
 from app.infrastructure.repositories.annotation_results import (
     SqlAnnotationRecordRepository,
 )
@@ -334,6 +340,19 @@ class ProcessingRunWorker:
             episodes=SqlEpisodeRepository(session),
             episode_assets=SqlEpisodeRawAssetRepository(session),
             rules=build_segmentation_rule_registry(),
+            # V31-018：没有边界读取器与创建器时，阶段只能做追溯检查——那会让
+            # "有明确边界的原始输入"静默不产出 Episode。两者在此成对装配。
+            metadata_reader=ProcessingMetadataDocumentReader(
+                SqlProcessingArtifactRepository(session),
+                self._artifacts,
+                max_document_bytes=self._settings.processing_metadata_max_artifact_bytes,
+            ),
+            creator=ProcessingEpisodeCreator(
+                # Worker 不经 HTTP 幂等层：幂等由稳定 code 承担（重跑先按 code 命中）。
+                service=build_episode_service(session, with_idempotency=False),
+                episodes=SqlEpisodeRepository(session),
+                canonical_schema_version=CANONICAL_SCHEMA_VERSION,
+            ),
         )
         return ProcessingPipeline(
             runs,
