@@ -38,7 +38,7 @@
 | V31-015 | ProcessingRun 接受 `raw_asset_id` 并校验 `VALID` | V31-004 | API + 领域校验 | 保持 `input_refs` 兼容 |
 | V31-016 | `processing_artifacts` 产物目录表 + 领域契约 | V31-004、V31-015 | 迁移 + 领域 + worker | 替换 `output_refs` 堆叠 |
 | V31-017 | Canonical 正式版本收敛 + 共享 JSON Schema | V31-004 | `packages/contracts` + `ddp_data` | 需 Single Owner |
-| V31-018 | Pipeline `EPISODE_SEGMENTATION` 在存在明确边界时创建 Episode | V31-016、V31-017 | 应用层 | 无边界必须 SKIPPED/BLOCKED，禁止伪造 |
+| V31-018 | Pipeline `EPISODE_SEGMENTATION` 在存在明确边界时创建 Episode | V31-016、V31-017 | 应用层 | 无边界必须 SKIPPED/BLOCKED，禁止伪造。**已完成（2026-11-22）**：单文件 MP4 按 `[0, duration_ms)` 建 Episode；容器格式如实 SKIPPED |
 
 ### M3 标注可用
 
