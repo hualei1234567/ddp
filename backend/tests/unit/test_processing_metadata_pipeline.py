@@ -88,6 +88,7 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunStepRepository,
 )
 from app.infrastructure.repositories.quality import SqlQualityRunRepository
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import seed_identity
@@ -217,6 +218,7 @@ def _use_cases(session: Session) -> ProcessingRunUseCases:
         session,
         audit=SqlAuditRepository(session),
         outbox=SqlOutboxRepository(session),
+        raw_assets=SqlRawAssetRepository(session),
     )
 
 

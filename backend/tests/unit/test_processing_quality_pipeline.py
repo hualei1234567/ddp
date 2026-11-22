@@ -70,6 +70,7 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunStepRepository,
 )
 from app.infrastructure.repositories.quality import SqlQualityRunRepository
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -209,6 +210,7 @@ def _session_services(factory: sessionmaker[Session]) -> tuple[Session, Processi
         session,
         audit=SqlAuditRepository(session),
         outbox=SqlOutboxRepository(session),
+        raw_assets=SqlRawAssetRepository(session),
     )
     return session, use_cases
 

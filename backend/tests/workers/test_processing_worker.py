@@ -31,6 +31,7 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunRepository,
     SqlProcessingRunStepRepository,
 )
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from app.workers.processing import (
     RUN_REQUESTED_EVENT,
     ProcessingRunWorker,
@@ -125,6 +126,7 @@ def _create_run(
             session,
             audit=SqlAuditRepository(session),
             outbox=SqlOutboxRepository(session),
+            raw_assets=SqlRawAssetRepository(session),
         )
         run = use_cases.create(
             ProjectScope(ids.project_a, actor_id=ids.editor_a),

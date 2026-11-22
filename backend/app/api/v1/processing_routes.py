@@ -76,6 +76,7 @@ def create_processing_run(
         NewProcessingRun(
             pipeline_version=payload.pipeline_version,
             input_refs=tuple(payload.input_refs),
+            raw_asset_id=payload.raw_asset_id,
         ),
         # 透传请求 ID，Worker 才能把异步执行链路与发起请求对齐。
         request_id=request_id(request),

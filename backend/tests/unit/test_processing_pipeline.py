@@ -45,6 +45,7 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunRepository,
     SqlProcessingRunStepRepository,
 )
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import seed_identity
@@ -89,6 +90,7 @@ def _session_services(
         session,
         audit=SqlAuditRepository(session),
         outbox=SqlOutboxRepository(session),
+        raw_assets=SqlRawAssetRepository(session),
     )
     return (
         session,
