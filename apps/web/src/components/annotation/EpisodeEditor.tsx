@@ -10,6 +10,7 @@ import { formatPlaybackClock, nsToRelativeSeconds } from "../../services/media";
 import type { LabelDefinition } from "../../types/annotation";
 import type { Episode } from "../../types/collection";
 import IdentifierValue from "../ui/IdentifierValue";
+import type { AiSuggestion } from "../../services/annotationAiParsers";
 import type { TimelineSegment } from "./AnnotationTimeline";
 import EpisodeMediaPanel from "./EpisodeMediaPanel";
 import SchemaForm from "./SchemaForm";
@@ -22,6 +23,8 @@ interface EpisodeEditorProps {
   errors: Record<string, string>;
   disabled: boolean;
   onChange: (labelKey: string, value: DraftFieldValue) => void;
+  /** 当前 Episode 的 AI 建议（时间轴叠加显示；采纳走 AiSuggestionPanel）。 */
+  aiSuggestions?: readonly AiSuggestion[];
 }
 
 const TEMPORAL_TYPES = new Set(["TIME_RANGE", "ACTION_SEGMENT"]);
@@ -71,6 +74,7 @@ export default function EpisodeEditor({
   errors,
   disabled,
   onChange,
+  aiSuggestions = [],
 }: EpisodeEditorProps) {
   const [playheadSeconds, setPlayheadSeconds] = useState(0);
   const [pendingRange, setPendingRange] = useState<{
@@ -87,6 +91,45 @@ export default function EpisodeEditor({
     () => timelineSegments(definitions, values),
     [definitions, values],
   );
+
+  // V31-046 切片 D：AI 建议叠加轨道。只有 kind=temporal_segment 且 span 可
+  // 定位的建议才进时间轴；非法/非片段建议直接跳过，不伪造位置。采纳流程
+  // 不在这里——AiSuggestionPanel 是唯一确认入口，时间轴只做可视化。
+  const aiSegments = useMemo(() => {
+    const result: TimelineSegment[] = [];
+    for (const suggestion of aiSuggestions) {
+      const value = suggestion.suggested_value as
+        | { kind?: string; span?: { start_time_ns?: number; end_time_ns?: number } }
+        | null;
+      if (
+        !value ||
+        value.kind !== "temporal_segment" ||
+        typeof value.span?.start_time_ns !== "number" ||
+        typeof value.span?.end_time_ns !== "number"
+      ) {
+        continue;
+      }
+      const start = nsToRelativeSeconds(
+        value.span.start_time_ns,
+        episode.start_time_ns,
+      );
+      const end = nsToRelativeSeconds(
+        value.span.end_time_ns,
+        episode.start_time_ns,
+      );
+      if (start === null || end === null || end <= start) {
+        continue;
+      }
+      result.push({
+        key: `ai-${suggestion.suggestion_id}`,
+        label: `${suggestion.label_key} (${Math.round(suggestion.confidence * 100)}%)`,
+        startSeconds: start,
+        endSeconds: end,
+        aiSuggestion: true,
+      });
+    }
+    return result;
+  }, [aiSuggestions, episode.start_time_ns]);
 
   const handleSeek = useCallback((seconds: number) => {
     setPlayheadSeconds(Math.max(0, seconds));
@@ -153,7 +196,7 @@ export default function EpisodeEditor({
           episode={episode}
           playheadSeconds={playheadSeconds}
           onSeek={handleSeek}
-          segments={segments}
+          segments={[...segments, ...aiSegments]}
           canSelectRange={!disabled && temporalDefinitions.length > 0}
           onSelectRangeNs={handleSelectRange}
         />

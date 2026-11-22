@@ -9,6 +9,7 @@ import type {
 import type { Episode } from "../types/collection";
 import { ApiError } from "./api";
 import type { AnnotationApi } from "./annotation";
+import type { AiSuggestion } from "./annotationAiParsers";
 import {
   buildSubmissionRecords,
   type BuiltRecords,
@@ -33,6 +34,8 @@ export interface WorkbenchData {
   existingDraft: AnnotationSubmission | null;
   /** 当前分配的最新提交版本，用于展示“已提交，等待复核”等状态。 */
   latestSubmission: AnnotationSubmission | null;
+  /** AI 预标注建议（按最新提交挂靠；无提交时为空。加载失败不阻塞工作台）。 */
+  aiSuggestions: AiSuggestion[];
 }
 
 export interface WorkbenchLoadResult {
@@ -176,6 +179,27 @@ export async function loadAnnotationWorkbench(
       }
     }
 
+    // V31-046 切片 D：AI 建议按最新提交挂靠。无提交=无建议挂靠点，空数组；
+    // 加载失败只记 partialError，不阻塞工作台主链。
+    let aiSuggestions: AiSuggestion[] = [];
+    if (latestSubmission !== null) {
+      try {
+        const page = await api.listAiSuggestions(
+          projectId,
+          latestSubmission.submission_id,
+          { signal },
+        );
+        aiSuggestions = page.items;
+      } catch (caught) {
+        if (!signal.aborted) {
+          partialErrors.push({
+            scope: "AI 建议",
+            error: asApiError(caught, "AI 建议加载失败"),
+          });
+        }
+      }
+    }
+
     return {
       data: {
         assignment,
@@ -186,6 +210,7 @@ export async function loadAnnotationWorkbench(
         episodes,
         existingDraft,
         latestSubmission,
+        aiSuggestions,
       },
       error: null,
       partialErrors,

@@ -135,14 +135,16 @@
 
 | 缺口 | 状态 |
 |---|---|
-| 视频播放 / 逐帧 / 倍速 / 时间轴 | `MISSING`（`apps/web/src/components/annotation` 与 `pages/annotation` 中无 video/player/timeline 引用） |
-| `TIME_RANGE` / `ACTION_SEGMENT` 时间轴编辑器 | `MISSING` |
-| `FRAME` / `OBJECT_TRACK` 框选与轨迹工具 | `MISSING` |
-| 审核 / 仲裁中的媒体证据上下文 | `UNVERIFIED` |
-| 浏览器—真实后端全链 E2E | `UNVERIFIED` |
+| 视频播放 / 逐帧 / 倍速 / 时间轴 | 已消除（V31-045 切片 A，2026-11-23）：`MediaPreview` 提供倍速 0.25x–2x、帧步进（1/25s）、`←/→` ±1s、`,/.` 逐帧快捷键、播放时钟；组件测试 12 条。此前 `AnnotationTimeline`/`EpisodeMediaPanel`/`MediaPreview` 已存在（本表旧判断"无引用"与代码不符） |
+| `TIME_RANGE` / `ACTION_SEGMENT` 时间轴编辑器 | 已消除（V31-045 切片 B，2026-11-23）：时间轴支持拖拽框选→填入标签、片段边界拖拽调整（`onSegmentResize`）、删除按钮（确认由调用方负责）；`AnnotationTimeline` 测试 11 条。此前拖拽框选已存在（本表旧判断"MISSING"过时） |
+| `FRAME` / `OBJECT_TRACK` 框选与轨迹工具 | 部分：轨迹行编辑器已有（E2E 覆盖"新增轨迹"）；帧级框选画布仍未做 |
+| 审核 / 仲裁中的媒体证据上下文 | 已消除（V31-024 核实，2026-11-23）：`AnnotationSubmissionPage` 同页挂载 `SubmissionMediaPanel` + `ReviewPanel` + `ArbitrationPanel`，复核人从复核队列进入同一页面审看媒体证据；E2E 覆盖复核领取→通过 |
+| 浏览器—真实后端全链 E2E | `VERIFIED`（`e2e/annotation-console.spec.ts`：任务→工作台→框选→轨迹→提交→复核→通过全链；V31-045 新增播放控制 E2E） |
+| AI 建议时间轴叠加 | 已消除（V31-046 切片 D，2026-11-23）：时间轴渲染 AI 建议轨道（虚线+AI 徽标+置信度），采纳/修订仍以 `AiSuggestionPanel` 为唯一入口 |
 
-> 结论修正：`docs/roadmap/v3.1/blueprint/README.md` 中“完整标注控制台未完成”的判断
-> **已不成立**；准确表述是“结构化标注闭环已完成，媒体标注能力待补齐”。
+> 结论修正（2026-11-23 二次更新）：`docs/roadmap/v3.1/blueprint/README.md` 中"完整标注控制台未完成"的判断
+> **已不成立**；本表 2026-11-22 的"媒体标注能力 MISSING"判断**亦已过时**——时间轴拖拽框选/片段填入/
+> 轨迹编辑器/全链 E2E 在 V31-027 轮次已落地，V31-045 补齐播放控制与片段边界编辑。
 
 ## 7. 自动质检、人工审核、返工、仲裁
 

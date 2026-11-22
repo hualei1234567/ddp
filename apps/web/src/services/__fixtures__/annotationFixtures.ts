@@ -454,4 +454,5 @@ export const workbenchDataFixture: WorkbenchData = {
   episodes: [episodeFixture],
   existingDraft: null,
   latestSubmission: null,
+  aiSuggestions: [],
 };

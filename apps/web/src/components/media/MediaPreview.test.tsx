@@ -195,3 +195,105 @@ describe("MediaPreview", () => {
     expect(screen.getAllByText(/5\.0 s/).length).toBeGreaterThan(0);
   });
 });
+
+// ---- V31-045 切片 A：倍速 / 帧步进 / 快捷键（蓝图 §5 播放控制） ----
+
+describe("MediaPreview 播放控制", () => {
+  it("渲染倍速按钮组且默认 1x 高亮", async () => {
+    getDownloadUrl.mockResolvedValue({
+      url: "https://media.test/signed.mp4",
+      expires_at: null,
+    });
+    render(
+      <MediaPreview
+        projectId={PROJECT_ID}
+        asset={playableAsset()}
+        startTimeNs={0}
+        endTimeNs={10_000_000_000}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("media-preview-video")).toBeDefined(),
+    );
+    for (const value of ["0.25", "0.5", "1", "1.5", "2"]) {
+      expect(screen.getByTestId(`media-rate-${value}`)).toBeTruthy();
+    }
+    // 默认 1x 是 primary；0.25x 不是
+    expect(
+      screen.getByTestId("media-rate-1").className.includes("primary"),
+    ).toBe(true);
+    expect(
+      screen.getByTestId("media-rate-0.25").className.includes("primary"),
+    ).toBe(false);
+  });
+
+  it("点击倍速按钮调用 video.playbackRate", async () => {
+    getDownloadUrl.mockResolvedValue({
+      url: "https://media.test/signed.mp4",
+      expires_at: null,
+    });
+    const user = userEvent.setup();
+    render(
+      <MediaPreview
+        projectId={PROJECT_ID}
+        asset={playableAsset()}
+        startTimeNs={0}
+        endTimeNs={10_000_000_000}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("media-preview-video")).toBeTruthy(),
+    );
+    const video = screen.getByTestId(
+      "media-preview-video",
+    ) as HTMLVideoElement;
+    Object.defineProperty(video, "playbackRate", {
+      writable: true,
+      value: 1,
+    });
+    await user.click(screen.getByTestId("media-rate-0.5"));
+    expect(video.playbackRate).toBe(0.5);
+  });
+
+  it("帧步进按钮按 1/25s 移动 currentTime 并受时长上界约束", async () => {
+    getDownloadUrl.mockResolvedValue({
+      url: "https://media.test/signed.mp4",
+      expires_at: null,
+    });
+    const user = userEvent.setup();
+    render(
+      <MediaPreview
+        projectId={PROJECT_ID}
+        asset={playableAsset()}
+        startTimeNs={0}
+        endTimeNs={10_000_000_000}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("media-preview-video")).toBeTruthy(),
+    );
+    const video = screen.getByTestId(
+      "media-preview-video",
+    ) as HTMLVideoElement;
+    Object.defineProperty(video, "currentTime", {
+      writable: true,
+      value: 0,
+      configurable: true,
+    });
+    Object.defineProperty(video, "duration", {
+      writable: true,
+      value: 10,
+      configurable: true,
+    });
+    await user.click(screen.getByText("帧 ›"));
+    expect(video.currentTime).toBeCloseTo(1 / 25, 6);
+    // 连续后退到 0 不得越界
+    Object.defineProperty(video, "currentTime", {
+      writable: true,
+      value: 0.001,
+      configurable: true,
+    });
+    await user.click(screen.getByText("‹ 帧"));
+    expect(video.currentTime).toBeGreaterThanOrEqual(0);
+  });
+});

@@ -1,4 +1,5 @@
 import { Space, Typography } from "antd";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent, PointerEvent } from "react";
 
@@ -12,6 +13,10 @@ export interface TimelineSegment {
   endSeconds: number;
   /** 同一标签的多个片段用不同色调区分；不参与业务语义。 */
   tone?: "primary" | "warning" | "success";
+  /** 片段业务标识：提供后可拖拽边界调整与删除（蓝图 §6）。 */
+  segmentId?: string;
+  /** AI 建议片段：虚线边框+「AI」徽标，与人工片段显式区分（蓝图 §7：预标注必须显式标识）。 */
+  aiSuggestion?: boolean;
 }
 
 export interface AnnotationTimelineProps {
@@ -23,6 +28,14 @@ export interface AnnotationTimelineProps {
   onSeek?: (seconds: number) => void;
   /** 拖拽选区回调：给出选区起止（相对秒，已排序）。 */
   onSelectRange?: (startSeconds: number, endSeconds: number) => void;
+  /** 拖拽已有片段边界：segmentId + 新起止（相对秒）。蓝图 §6 片段边界编辑。 */
+  onSegmentResize?: (
+    segmentId: string,
+    startSeconds: number,
+    endSeconds: number,
+  ) => void;
+  /** 删除片段：由调用方弹出确认（蓝图 §6：删除需确认或可撤销）。 */
+  onSegmentDelete?: (segmentId: string) => void;
   disabled?: boolean;
 }
 
@@ -40,6 +53,9 @@ const TONE_COLORS: Record<NonNullable<TimelineSegment["tone"]>, string> = {
   success: "rgba(82, 196, 26, 0.4)",
 };
 
+/** AI 建议轨道专用色：紫色系，与人工三色显式区分。 */
+const AI_TONE = "rgba(114, 46, 209, 0.32)";
+
 /**
  * Episode 时间轴：展示片段、播放位置，支持点击定位与拖拽选区。
  *
@@ -50,6 +66,8 @@ export default function AnnotationTimeline({
   durationSeconds,
   playheadSeconds,
   segments = [],
+  onSegmentResize,
+  onSegmentDelete,
   onSeek,
   onSelectRange,
   disabled = false,
@@ -60,7 +78,7 @@ export default function AnnotationTimeline({
   const interactive = !disabled && durationSeconds > 0;
 
   const ratioFromEvent = useCallback(
-    (event: PointerEvent<HTMLDivElement>): number | null => {
+    (event: PointerEvent<Element>): number | null => {
       const element = trackRef.current;
       if (!element) {
         return null;
@@ -147,6 +165,70 @@ export default function AnnotationTimeline({
     [durationSeconds, interactive, onSeek, playheadSeconds],
   );
 
+  // ---- V31-045 切片 B：片段边界拖拽 ----
+  // resizeTarget 记录 (segmentId, 'start'|'end')；拖拽期间用临时值渲染。
+  const [resizeTarget, setResizeTarget] = useState<{
+    segmentId: string;
+    edge: "start" | "end";
+  } | null>(null);
+  const [previewRange, setPreviewRange] = useState<{
+    start: number;
+    end: number;
+  } | null>(null);
+
+  const handleSegmentEdgeDown = useCallback(
+    (
+      event: ReactPointerEvent<Element>,
+      segment: TimelineSegment,
+      edge: "start" | "end",
+    ) => {
+      if (!interactive || !onSegmentResize || !segment.segmentId) {
+        return;
+      }
+      event.stopPropagation();
+      event.preventDefault();
+      const ratio = ratioFromEvent(event);
+      if (ratio === null) {
+        return;
+      }
+      setResizeTarget({ segmentId: segment.segmentId, edge });
+      setPreviewRange({ start: segment.startSeconds, end: segment.endSeconds });
+      setAnchorRatio(ratio);
+      setCursorRatio(ratio);
+    },
+    [interactive, onSegmentResize, ratioFromEvent],
+  );
+
+  // 拖拽期间 pointermove/pointerup 的段内拦截：主轨道的 handlePointerMove
+  // 只更新 cursorRatio，这里在 pointerup 时判定是 resize 还是普通选区。
+  const handleResizePointerUp = useCallback(() => {
+    if (!resizeTarget || !previewRange || anchorRatio === null || cursorRatio === null) {
+      return;
+    }
+    const grabbed = ratioToSeconds(cursorRatio, durationSeconds);
+    const next =
+      resizeTarget.edge === "start"
+        ? { start: Math.min(grabbed, previewRange.end), end: previewRange.end }
+        : { start: previewRange.start, end: Math.max(grabbed, previewRange.start) };
+    if (next.end - next.start > 0) {
+      onSegmentResize?.(resizeTarget.segmentId, next.start, next.end);
+    }
+    setResizeTarget(null);
+    setPreviewRange(null);
+    setAnchorRatio(null);
+    setCursorRatio(null);
+  }, [anchorRatio, cursorRatio, durationSeconds, onSegmentResize, previewRange, resizeTarget]);
+
+  const handleSegmentDelete = useCallback(
+    (segment: TimelineSegment) => {
+      if (!interactive || !onSegmentDelete || !segment.segmentId) {
+        return;
+      }
+      onSegmentDelete(segment.segmentId);
+    },
+    [interactive, onSegmentDelete],
+  );
+
   const selection = useMemo(() => {
     if (anchorRatio === null || cursorRatio === null) {
       return null;
@@ -176,8 +258,14 @@ export default function AnnotationTimeline({
         data-testid="annotation-timeline"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
+        onPointerUp={() => {
+          handleResizePointerUp();
+          handlePointerUp();
+        }}
+        onPointerCancel={() => {
+          handleResizePointerUp();
+          handlePointerUp();
+        }}
         onKeyDown={handleKeyDown}
         style={{
           position: "relative",
@@ -193,9 +281,15 @@ export default function AnnotationTimeline({
           ? segments.map((segment) => {
               const left = clamp(segment.startSeconds / durationSeconds, 0, 1);
               const right = clamp(segment.endSeconds / durationSeconds, 0, 1);
+              const resizable =
+                interactive &&
+                Boolean(onSegmentResize && segment.segmentId && !segment.aiSuggestion);
+              const deletable =
+                interactive && Boolean(onSegmentDelete && segment.segmentId && !segment.aiSuggestion);
               return (
                 <div
                   key={segment.key}
+                  data-testid={`timeline-segment-${segment.segmentId ?? segment.key}`}
                   title={`${segment.label} ${formatPlaybackClock(segment.startSeconds)} – ${formatPlaybackClock(segment.endSeconds)}`}
                   style={{
                     position: "absolute",
@@ -203,10 +297,99 @@ export default function AnnotationTimeline({
                     bottom: 4,
                     left: `${left * 100}%`,
                     width: `${Math.max(right - left, 0) * 100}%`,
-                    background: TONE_COLORS[segment.tone ?? "primary"],
+                    background: segment.aiSuggestion
+                      ? AI_TONE
+                      : TONE_COLORS[segment.tone ?? "primary"],
                     borderRadius: 3,
+                    border: segment.aiSuggestion ? "1.5px dashed rgba(114, 46, 209, 0.9)" : undefined,
+                    cursor: resizable ? "grab" : undefined,
                   }}
-                />
+                >
+                  {segment.aiSuggestion ? (
+                    <span
+                      style={{
+                        position: "absolute",
+                        left: 2,
+                        top: -8,
+                        fontSize: 9,
+                        background: "rgba(114, 46, 209, 0.92)",
+                        color: "#fff",
+                        borderRadius: 2,
+                        padding: "0 3px",
+                        lineHeight: "14px",
+                      }}
+                    >
+                      AI
+                    </span>
+                  ) : null}
+                  {resizable ? (
+                    <>
+                      <span
+                        role="button"
+                        aria-label={`调整片段起点：${segment.label}`}
+                        data-testid={`segment-edge-start-${segment.segmentId}`}
+                        onPointerDown={(event) =>
+                          handleSegmentEdgeDown(event, segment, "start")
+                        }
+                        style={{
+                          position: "absolute",
+                          left: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 6,
+                          cursor: "ew-resize",
+                          background: "rgba(255,255,255,0.65)",
+                        }}
+                      />
+                      <span
+                        role="button"
+                        aria-label={`调整片段终点：${segment.label}`}
+                        data-testid={`segment-edge-end-${segment.segmentId}`}
+                        onPointerDown={(event) =>
+                          handleSegmentEdgeDown(event, segment, "end")
+                        }
+                        style={{
+                          position: "absolute",
+                          right: 0,
+                          top: 0,
+                          bottom: 0,
+                          width: 6,
+                          cursor: "ew-resize",
+                          background: "rgba(255,255,255,0.65)",
+                        }}
+                      />
+                    </>
+                  ) : null}
+                  {deletable ? (
+                    <button
+                      type="button"
+                      aria-label={`删除片段：${segment.label}`}
+                      data-testid={`segment-delete-${segment.segmentId}`}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleSegmentDelete(segment);
+                      }}
+                      style={{
+                        position: "absolute",
+                        right: resizable ? 8 : 2,
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        border: "none",
+                        background: "rgba(0,0,0,0.45)",
+                        color: "#fff",
+                        borderRadius: 3,
+                        width: 14,
+                        height: 14,
+                        lineHeight: "12px",
+                        fontSize: 10,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
               );
             })
           : null}

@@ -133,7 +133,7 @@ jobs:
       # 本地栈模式覆盖上传 / 动作栏 / 复核 4 条用例；标注控制台按设计需要
       # 真实栈种子（含 Manifest 的 Episode + IN_PROGRESS 分配，见
       # scripts/e2e/README.md），缺种子时必须是**具名 skipped**而不是静默通过。
-      - name: 校验结构化 E2E 结果（4 passed / 1 skipped：标注控制台待真实栈种子）
+      - name: 校验结构化 E2E 结果（4 passed / 2 skipped：两条标注控制台用例待真实栈种子）
         if: always()
         working-directory: apps/web
         run: |
@@ -166,11 +166,18 @@ jobs:
           const passed = statuses.filter((status) => status === "passed").length;
           const skipped = statuses.filter((status) => status === "skipped").length;
           console.log(JSON.stringify({ passed, skipped, statuses, skippedSpecs }));
-          if (passed !== 4 || skipped !== 1 || statuses.length !== 5) process.exit(1);
-          // 唯一允许 skipped 的必须是标注控制台（真实栈种子在 CI 本地栈模式不可得）。
-          // 其他任何用例静默跳过都会让本步骤失败，避免"没跑"被算作"通过"。
-          if (!skippedSpecs.some((file) => String(file).endsWith("annotation-console.spec.ts"))) {
-            console.error("skipped 的用例不是预期的标注控制台：", skippedSpecs);
+          // V31-045 新增播放控制用例（同样依赖真实栈种子，本地栈 skipped）。
+          // 只有显式白名单里的 spec 才允许 skipped；其他任何用例静默跳过
+          // 都会让本步骤失败，避免"没跑"被算作"通过"。
+          if (passed !== 4 || skipped !== 2 || statuses.length !== 6) process.exit(1);
+          const SKIPPABLE = [
+            "annotation-console.spec.ts",
+          ];
+          const unexpected = skippedSpecs.filter(
+            (file) => !SKIPPABLE.some((name) => String(file).endsWith(name)),
+          );
+          if (unexpected.length > 0) {
+            console.error("skipped 的用例不在白名单内：", unexpected);
             process.exit(1);
           }
           NODE

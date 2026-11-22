@@ -457,6 +457,7 @@ export default function WorkbenchBody({
                     onChange={(labelKey, value) =>
                       onFieldChange(episode.episode_id, labelKey, value)
                     }
+                    aiSuggestions={data.aiSuggestions}
                   />
                 ))}
               </Space>

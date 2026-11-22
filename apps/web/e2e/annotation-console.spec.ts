@@ -141,3 +141,50 @@ test.describe("关键路径：标注控制台", () => {
     await expect(page.getByText("复核：已通过")).toBeVisible({ timeout: 30_000 });
   });
 });
+
+test.describe("关键路径：标注控制台播放控制（V31-045 切片 A）", () => {
+  skipWithoutSeed(
+    ["DDP_E2E_ANNOTATION_ASSIGNMENT_ID", "DDP_E2E_ANNOTATION_TASK_ID"],
+    "播放控制需要真实栈标注链路种子",
+  );
+
+  test("工作台媒体面板提供倍速/帧步进/时钟，键盘逐帧生效", async ({
+    page,
+  }) => {
+    const assignmentId = read("DDP_E2E_ANNOTATION_ASSIGNMENT_ID");
+    const projectId = read("DDP_E2E_PROJECT_ID");
+    await page.goto(
+      `/annotation/workbench/${assignmentId}?project_id=${projectId}`,
+    );
+    const video = page.getByTestId("media-preview-video");
+    await expect(video).toBeVisible({ timeout: 30_000 });
+
+    // 倍速：点击 0.5x 后 video.playbackRate 生效
+    await page.getByTestId("media-rate-0.5").click();
+    await expect
+      .poll(() => video.evaluate((el) => el.playbackRate), { timeout: 5_000 })
+      .toBe(0.5);
+    await page.getByTestId("media-rate-1").click();
+    await expect
+      .poll(() => video.evaluate((el) => el.playbackRate), { timeout: 5_000 })
+      .toBe(1);
+
+    // 帧步进按钮：currentTime 以 1/25s 移动
+    const before = await video.evaluate((el) => el.currentTime);
+    await page.getByText("帧 ›").click();
+    const after = await video.evaluate((el) => el.currentTime);
+    expect(after - before).toBeCloseTo(1 / 25, 3);
+
+    // 快捷键：句点逐帧、右箭头跳 1s
+    await video.focus();
+    await page.keyboard.press(".");
+    const frameStepped = await video.evaluate((el) => el.currentTime);
+    expect(frameStepped - after).toBeCloseTo(1 / 25, 3);
+    await page.keyboard.press("ArrowRight");
+    const arrowStepped = await video.evaluate((el) => el.currentTime);
+    expect(arrowStepped - frameStepped).toBeCloseTo(1, 2);
+
+    // 时钟显示
+    await expect(page.getByTestId("media-clock")).toBeVisible();
+  });
+});
