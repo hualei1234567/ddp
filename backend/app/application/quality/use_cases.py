@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -69,6 +70,9 @@ _REQUESTED_EVENT_TYPE = "quality.run.requested"
 MAX_SUBJECT_ASSETS = 1000
 #: 单个 Episode 参与质检的标注记录上限；超限拒绝而不是截断后宣称通过。
 MAX_SUBJECT_RECORDS = 2000
+#: 单次批量重跑的对象上限。与单个对象的资产/记录上限同口径：超过即拒绝，
+#: 避免一次请求把无界数量的运行塞进队列。
+MAX_BATCH_SUBJECTS = 1000
 
 
 def _utcnow() -> datetime:
@@ -177,6 +181,49 @@ class QualityRunUseCases:
             dispatch=True,
         )
         return created
+
+    def rerun_batch(
+        self,
+        scope: ProjectScope,
+        subject_ids: Sequence[UUID],
+        *,
+        max_attempts: int = 1,
+        now: datetime | None = None,
+    ) -> tuple[QualityRun, ...]:
+        """为一组 Episode 各排一次质检，返回按入参顺序的运行。
+
+        复用 :meth:`enqueue` 的入队语义（``QUEUED`` + ``quality.run.requested``
+        事件），不另立第二套路径。调用方负责提交事务：整批要么全部入队、
+        要么全部回滚，不出现"排了一半"的中间态。
+
+        **空列表与重复对象都拒绝**：静默成功会让"重跑 0 条"看起来像已完成；
+        重复对象会产生两条运行，同一对象被检查两次，差异报告也会出现两条
+        同键结论。两者都是调用方错误，直接拒绝比猜测意图安全。
+        """
+        subjects = tuple(subject_ids)
+        if not subjects:
+            raise DomainValidationError("批量重跑至少需要一个对象")
+        if len(subjects) > MAX_BATCH_SUBJECTS:
+            raise DomainValidationError(
+                f"批量重跑对象数 {len(subjects)} 超过上限 {MAX_BATCH_SUBJECTS}"
+            )
+        if len(set(subjects)) != len(subjects):
+            raise DomainValidationError("批量重跑的对象列表存在重复")
+        runs = tuple(
+            self.enqueue(
+                scope,
+                NewQualityRun(
+                    subject_type=QualitySubjectType.EPISODE,
+                    subject_id=subject_id,
+                ),
+                max_attempts=max_attempts,
+                now=now,
+            )
+            for subject_id in subjects
+        )
+        # 整批一次提交：要么全部入队，要么全部回滚，不出现"排了一半"。
+        self._uow.commit()
+        return runs
 
     def start(
         self,
@@ -594,4 +641,9 @@ class QualityRunUseCases:
         )
 
 
-__all__ = ["MAX_SUBJECT_ASSETS", "MAX_SUBJECT_RECORDS", "QualityRunUseCases"]
+__all__ = [
+    "MAX_BATCH_SUBJECTS",
+    "MAX_SUBJECT_ASSETS",
+    "MAX_SUBJECT_RECORDS",
+    "QualityRunUseCases",
+]

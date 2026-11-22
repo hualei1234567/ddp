@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.29.0
+  version: 1.30.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -211,6 +211,17 @@ info:
       `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
       本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
       `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
+    - `1.30.0` **质检批量重跑与差异报告（V31-033）**：新增两个操作。
+      `POST /quality-runs/batch` 为一组 Episode 各排一次质检（只入队，
+      `lifecycle=QUEUED`，**无结论**；响应使用独立的 `QueuedQualityRun`
+      schema，避免把缺省 `status` 读成"检查通过"）。空列表、重复对象、
+      超过 1000 个对象返回 422；整批同一事务入队。
+      `GET /quality-runs/{baseline_run_id}/diff/{candidate_run_id}` 返回差异
+      报告：按 `rule_id + subject_ref` 对齐，逐条分类为
+      `NEW` / `RESOLVED` / `UNCHANGED` / `CHANGED`。两次运行必须检查同一
+      对象、且都处于 `SUCCEEDED`，否则 422；`has_regression` 只把 `NEW`
+      算作回归。全部为增量：仅新增路径与 schema，无既有路径/字段变更，
+      无数据库迁移。
     - `1.29.0` **处理运行产物目录（V31-016）**：新增只读端点
       `GET /api/v1/projects/{project_id}/processing-runs/{run_id}/artifacts`，
       返回该运行产出的对象目录（类型 / 阶段 / 尝试 / Schema 版本 / 内容类型 /
@@ -319,7 +330,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.29.0
+  version: 1.30.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -988,6 +999,11 @@ paths:
     $ref: "./fragments/paths.quality.yaml#/qualityRunDetail"
   /api/v1/projects/{project_id}/quality-runs/{run_id}/findings:
     $ref: "./fragments/paths.quality.yaml#/qualityRunFindings"
+  # V31-033：批量重跑与差异报告
+  /api/v1/projects/{project_id}/quality-runs/batch:
+    $ref: "./fragments/paths.quality.yaml#/qualityRunBatch"
+  /api/v1/projects/{project_id}/quality-runs/{baseline_run_id}/diff/{candidate_run_id}:
+    $ref: "./fragments/paths.quality.yaml#/qualityRunDiff"
   # --- 审计日志只读查询（owner / 平台管理员）---
   /api/v1/projects/{project_id}/audit-logs:
     $ref: "./fragments/paths.audit.yaml#/auditLogs"
@@ -1536,6 +1552,10 @@ components:
     QualityRun: {$ref: "./fragments/schemas.quality.yaml#/QualityRun"}
     QualityRunFindingPage: {$ref: "./fragments/schemas.quality.yaml#/QualityRunFindingPage"}
     QualityRunPage: {$ref: "./fragments/schemas.quality.yaml#/QualityRunPage"}
+    QueuedQualityRun: {$ref: "./fragments/schemas.quality.yaml#/QueuedQualityRun"}
+    QualityRunBatchCreate: {$ref: "./fragments/schemas.quality.yaml#/QualityRunBatchCreate"}
+    QualityFindingDiff: {$ref: "./fragments/schemas.quality.yaml#/QualityFindingDiff"}
+    QualityRunDiff: {$ref: "./fragments/schemas.quality.yaml#/QualityRunDiff"}
     AssetKind: {$ref: "./fragments/schemas.asset_catalog.yaml#/AssetKind"}
     AssetCatalogEntry: {$ref: "./fragments/schemas.asset_catalog.yaml#/AssetCatalogEntry"}
     AssetCatalogEntryPage: {$ref: "./fragments/schemas.asset_catalog.yaml#/AssetCatalogEntryPage"}

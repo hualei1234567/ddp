@@ -209,3 +209,100 @@ QualityRunFindingPage:
       type: array
       items: { $ref: "../openapi.yaml#/components/schemas/QualityRunFinding" }
     next_cursor: { type: [string, "null"] }
+
+QueuedQualityRun:
+  type: object
+  additionalProperties: false
+  required:
+    - run_id
+    - project_id
+    - subject_type
+    - subject_id
+    - rule_set_version
+    - lifecycle
+    - max_attempts
+    - created_at
+    - created_by
+  properties:
+    run_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    subject_type: { $ref: "../openapi.yaml#/components/schemas/QualitySubjectType" }
+    subject_id: { type: string, format: uuid }
+    rule_set_version:
+      type: string
+      pattern: "^sha256:[0-9a-f]{64}$"
+      description: 入队时固化的规则声明内容 SHA。
+    lifecycle:
+      type: string
+      enum: [QUEUED, RUNNING, SUCCEEDED, FAILED, RETRYING, CANCELLED]
+      description: 排队中的运行固定为 `QUEUED`；其余取值出现在后续查询入口。
+    max_attempts: { type: integer, minimum: 1 }
+    created_at: { type: string, format: date-time }
+    created_by: { type: string, format: uuid }
+  description: |
+    已入队但尚未执行的运行。**没有结论字段**：`status` / `score` / 六类聚合
+    在排队阶段不存在，客户端不得把缺省读成"检查通过"。
+
+QualityRunBatchCreate:
+  type: object
+  additionalProperties: false
+  required: [subject_type, subject_ids]
+  properties:
+    subject_type:
+      type: string
+      enum: [EPISODE]
+      description: 只接受 Episode；导入任务的批量重跑没有业务场景。
+    subject_ids:
+      type: array
+      minItems: 1
+      maxItems: 1000
+      items: { type: string, format: uuid }
+      description: 不得重复；重复会产生两条运行，同一对象被检查两次。
+
+QualityFindingDiff:
+  type: object
+  additionalProperties: false
+  required: [rule_id, subject_ref, kind]
+  properties:
+    rule_id: { type: string, minLength: 1, maxLength: 64 }
+    subject_ref:
+      type: string
+      maxLength: 128
+      description: 同一规则作用于多个对象时的对象标识；对象级结论为空字符串。
+    kind:
+      type: string
+      enum: [NEW, RESOLVED, UNCHANGED, CHANGED]
+    baseline_status:
+      type: [string, "null"]
+      enum: [PASS, FAIL, NOT_APPLICABLE, ERROR, null]
+    candidate_status:
+      type: [string, "null"]
+      enum: [PASS, FAIL, NOT_APPLICABLE, ERROR, null]
+
+QualityRunDiff:
+  type: object
+  additionalProperties: false
+  required:
+    - baseline_run_id
+    - candidate_run_id
+    - findings
+    - new_count
+    - resolved_count
+    - unchanged_count
+    - changed_count
+    - has_regression
+  properties:
+    baseline_run_id: { type: string, format: uuid }
+    candidate_run_id: { type: string, format: uuid }
+    findings:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/QualityFindingDiff" }
+    new_count: { type: integer, minimum: 0 }
+    resolved_count: { type: integer, minimum: 0 }
+    unchanged_count: { type: integer, minimum: 0 }
+    changed_count: { type: integer, minimum: 0 }
+    has_regression:
+      type: boolean
+      description: |
+        只把 `NEW` 算作回归。`CHANGED` 可能是修好也可能是变坏，需要看具体
+        状态，不计入回归。

@@ -25,4 +25,21 @@ class QualityRunCreate(BaseModel):
     categories: list[QualityCategory] | None = Field(default=None, min_length=1)
 
 
-__all__ = ["PublicQualitySubjectType", "QualityRunCreate"]
+class QualityRunBatchCreate(BaseModel):
+    """批量重跑：为一组 Episode 各排一次质检。
+
+    只接受 ``EPISODE``：导入任务的批量重跑没有业务场景（一次导入本身就是
+    一个对象），放开只会让调用方误以为支持。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject_type: Literal["EPISODE"]
+    subject_ids: list[UUID] = Field(min_length=1, max_length=1000)
+
+
+__all__ = [
+    "PublicQualitySubjectType",
+    "QualityRunBatchCreate",
+    "QualityRunCreate",
+]

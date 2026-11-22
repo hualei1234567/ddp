@@ -178,9 +178,16 @@
     ADR-0044。测试：`tests/unit/test_quality_routing_rules.py`（12）、
     `tests/unit/test_quality_routing_use_cases.py`（8）、
     `tests/workers/test_quality_run_worker.py`（10）。
-  - 仍缺：HTTP 异步入口（`POST /quality/runs` 只有同步模式，排队运行需
-    `QualityRunOut` 之外的新响应模型）；批量重跑与差异报告（V31-033）。
-    生命周期查询入口出现前，`QUEUED`/`RUNNING` 只能查库。
+  - 已消除（V31-033，2026-11-22）：批量重跑
+    `POST /quality-runs/batch`（只入队，响应 `QueuedQualityRun` 无结论）与
+    差异报告 `GET /quality-runs/{baseline}/diff/{candidate}`（按
+    `rule_id + subject_ref` 对齐，四类：NEW/RESOLVED/UNCHANGED/CHANGED）。
+    领域判定 `domain/quality/diff.py`，契约 1.30.0。测试：
+    `tests/unit/test_quality_run_diff.py`（11）、
+    `tests/unit/test_quality_batch_rerun_diff.py`（10）、
+    `tests/api/test_quality_batch_rerun_diff_api.py`（9）。
+  - 仍缺：前端批量重跑与差异报告入口；生命周期查询入口出现前，
+    `QUEUED`/`RUNNING` 只能查库（批量端点已能返回排队事实）。
 - `backend/app/domain/annotation/enums.py:499-504` 明确其与业务写入同事务；
   该同步路径尚未改造（改造属于 V31-031）。
 - 风险：提交事务被质检规则拖长（在 V31-031 前仍然存在）。

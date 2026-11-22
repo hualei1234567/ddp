@@ -15,6 +15,7 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.domain.quality.diff import DiffKind, QualityRunDiff
 from app.domain.quality.enums import QualityCategory
 from app.domain.quality.models import QualityFinding, QualityRun
 
@@ -104,8 +105,90 @@ class QualityRunOut(BaseModel):
         )
 
 
+class QueuedQualityRunOut(BaseModel):
+    """已入队但尚未执行的运行。
+
+    与 :class:`QualityRunOut` 的差别是**没有结论**：``status`` / ``score`` /
+    六类聚合 / 起止时间都为空。契约里单列一个模型，避免让调用方以为
+    ``status=null`` 是"检查通过"——那正是 ADR-0042 要消除的误读。
+    """
+
+    run_id: UUID
+    project_id: UUID
+    subject_type: str
+    subject_id: UUID
+    rule_set_version: str
+    lifecycle: str
+    max_attempts: int
+    created_at: datetime
+    created_by: UUID
+
+    @classmethod
+    def from_domain(cls, run: QualityRun) -> QueuedQualityRunOut:
+        return cls(
+            run_id=run.run_id,
+            project_id=run.project_id,
+            subject_type=run.subject_type.value,
+            subject_id=run.subject_id,
+            rule_set_version=run.rule_set_version,
+            lifecycle=run.lifecycle.value,
+            max_attempts=run.max_attempts,
+            created_at=run.created_at,
+            created_by=run.created_by,
+        )
+
+
+class QualityFindingDiffOut(BaseModel):
+    rule_id: str
+    subject_ref: str
+    kind: str
+    baseline_status: str | None = None
+    candidate_status: str | None = None
+
+
+class QualityRunDiffOut(BaseModel):
+    baseline_run_id: UUID
+    candidate_run_id: UUID
+    findings: list[QualityFindingDiffOut]
+    new_count: int
+    resolved_count: int
+    unchanged_count: int
+    changed_count: int
+    has_regression: bool
+
+    @classmethod
+    def from_domain(cls, diff: QualityRunDiff) -> QualityRunDiffOut:
+        counts = diff.counts
+        return cls(
+            baseline_run_id=diff.baseline_run_id,  # type: ignore[arg-type]
+            candidate_run_id=diff.candidate_run_id,  # type: ignore[arg-type]
+            findings=[
+                QualityFindingDiffOut(
+                    rule_id=item.rule_id,
+                    subject_ref=item.subject_ref,
+                    kind=item.kind.value,
+                    baseline_status=(
+                        item.baseline_status.value if item.baseline_status is not None else None
+                    ),
+                    candidate_status=(
+                        item.candidate_status.value if item.candidate_status is not None else None
+                    ),
+                )
+                for item in diff.findings
+            ],
+            new_count=counts[DiffKind.NEW],
+            resolved_count=counts[DiffKind.RESOLVED],
+            unchanged_count=counts[DiffKind.UNCHANGED],
+            changed_count=counts[DiffKind.CHANGED],
+            has_regression=diff.has_regression,
+        )
+
+
 __all__ = [
     "QualityCategorySummaryOut",
+    "QualityFindingDiffOut",
     "QualityFindingOut",
+    "QualityRunDiffOut",
     "QualityRunOut",
+    "QueuedQualityRunOut",
 ]

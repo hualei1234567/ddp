@@ -32,7 +32,18 @@ from tests.e2e.support import (
 )
 
 SUCCEED_EVENT = "datasource.import.succeed"
-BASE = datetime(2026, 11, 22, 9, 0, tzinfo=UTC)
+
+
+def _base() -> datetime:
+    """时间基准必须**晚于**事件创建时刻。
+
+    ``_imported_chain`` 通过 HTTP 创建事件，``available_at`` 取的是真实
+    时钟。写死一个日历时刻会让整个文件在该时刻之后必然失败（事件"还没到
+    可见时间"，Worker 领不到，返回 IDLE）；模块级常量又会在用例之间冻结，
+    前一条用例耗时越多，后一条越容易踩到边界。每次调用取当前时刻 + 1 秒，
+    既保证可见，也保留各步骤之间的相对顺序。
+    """
+    return datetime.now(UTC) + timedelta(seconds=1)
 
 
 def _imported_chain(
@@ -46,7 +57,7 @@ def _imported_chain(
     editor = make_client(factory, ids.editor_a)
     _source, job = register_import_chain(editor, ids.project_a, code=code)
     install_object_store(monkeypatch, InMemoryObjectStore())
-    result = run_import_worker(factory, MediaTransport(), now=BASE)
+    result = run_import_worker(factory, MediaTransport(), now=_base())
     assert result["status"] == "PUBLISHED", result
     assert result["episodes"] == EXPECTED_EPISODES, result
     return job
@@ -77,7 +88,7 @@ def test_succeed_event_materializes_episodes_without_manual_api(
     # 导入成功事件还没被消费：手工端点没调用过，Episode 仍为 0。
     assert _episode_count(factory, ids.project_a) == 0
 
-    result = run_import_worker(factory, MediaTransport(), now=BASE + timedelta(seconds=2))
+    result = run_import_worker(factory, MediaTransport(), now=_base() + timedelta(seconds=2))
 
     assert result["status"] == "PUBLISHED", result
     assert result["event"] == "episodes", result
@@ -110,7 +121,7 @@ def test_duplicate_succeed_event_does_not_duplicate_episodes(
 ) -> None:
     factory, ids = api_db
     _imported_chain(factory, ids, monkeypatch, code=f"hf-dup-{uuid4().hex[:6]}")
-    first = run_import_worker(factory, MediaTransport(), now=BASE + timedelta(seconds=2))
+    first = run_import_worker(factory, MediaTransport(), now=_base() + timedelta(seconds=2))
     assert first["created"] == EXPECTED_EPISODES, first
 
     # 重复投递：把已发布事件退回 PENDING，模拟 outbox 至少一次语义。
@@ -121,11 +132,11 @@ def test_duplicate_succeed_event_does_not_duplicate_episodes(
                 OutboxEvent.project_id == ids.project_a,
                 OutboxEvent.event_type == SUCCEED_EVENT,
             )
-            .values(status="PENDING", published_at=None, attempts=0, available_at=BASE)
+            .values(status="PENDING", published_at=None, attempts=0, available_at=_base())
         )
         session.commit()
 
-    again = run_import_worker(factory, MediaTransport(), now=BASE + timedelta(seconds=4))
+    again = run_import_worker(factory, MediaTransport(), now=_base() + timedelta(seconds=4))
 
     assert again["status"] == "PUBLISHED", again
     assert again["event"] == "episodes", again
@@ -151,7 +162,7 @@ def test_succeed_event_for_unfinished_import_goes_dead_letter(
                 OutboxEvent.project_id == ids.project_a,
                 OutboxEvent.event_type == "datasource.import_requested",
             )
-            .values(status="PUBLISHED", published_at=BASE)
+            .values(status="PUBLISHED", published_at=_base())
         )
         session.add(
             OutboxEvent(
@@ -164,13 +175,13 @@ def test_succeed_event_for_unfinished_import_goes_dead_letter(
                 status="PENDING",
                 dispatch=True,
                 attempts=0,
-                available_at=BASE,
-                created_at=BASE,
+                available_at=_base(),
+                created_at=_base(),
             )
         )
         session.commit()
 
-    result = run_import_worker(factory, MediaTransport(), now=BASE + timedelta(seconds=2))
+    result = run_import_worker(factory, MediaTransport(), now=_base() + timedelta(seconds=2))
 
     assert result["status"] == "DEAD_LETTER", result
     assert result["event"] == "episodes", result
@@ -201,7 +212,7 @@ def test_transient_materialize_failure_is_retried(
         raise RuntimeError("数据库连接抖动")
 
     monkeypatch.setattr(worker_module, "build_episode_materializer", _boom)
-    result = run_import_worker(factory, MediaTransport(), now=BASE + timedelta(seconds=2))
+    result = run_import_worker(factory, MediaTransport(), now=_base() + timedelta(seconds=2))
 
     assert result["status"] == "RETRIED", result
     assert result["event"] == "episodes", result

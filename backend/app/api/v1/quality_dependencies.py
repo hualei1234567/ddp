@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import Depends
 
 from app.api.deps import DbSession, get_project_scope, get_write_scope
+from app.application.quality.diff import QualityRunDiffUseCases
 from app.application.quality.registry import default_registry
 from app.application.quality.use_cases import QualityRunUseCases
 from app.domain.identity.models import ProjectScope
@@ -45,6 +46,7 @@ WriteScope = Annotated[ProjectScope, Depends(get_write_scope)]
 @dataclass(frozen=True, slots=True)
 class QualityServices:
     runs: QualityRunUseCases
+    diff: QualityRunDiffUseCases
 
 
 def get_quality_services(session: DbSession) -> QualityServices:
@@ -64,7 +66,10 @@ def get_quality_services(session: DbSession) -> QualityServices:
         outbox=SqlOutboxRepository(session),
         uow=session,
     )
-    return QualityServices(runs=runs)
+    return QualityServices(
+        runs=runs,
+        diff=QualityRunDiffUseCases(runs=SqlQualityRunRepository(session)),
+    )
 
 
 QualityServicesDep = Annotated[QualityServices, Depends(get_quality_services)]

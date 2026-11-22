@@ -21,8 +21,13 @@ from app.api.v1.quality_dependencies import (
     ReadScope,
     WriteScope,
 )
-from app.api.v1.quality_models import QualityFindingOut, QualityRunOut
-from app.api.v1.quality_schemas import QualityRunCreate
+from app.api.v1.quality_models import (
+    QualityFindingOut,
+    QualityRunDiffOut,
+    QualityRunOut,
+    QueuedQualityRunOut,
+)
+from app.api.v1.quality_schemas import QualityRunBatchCreate, QualityRunCreate
 from app.api.v1.schemas import PageOut
 from app.application.quality.commands import NewQualityRun
 from app.domain.quality.enums import (
@@ -81,6 +86,45 @@ def create_quality_run(
     )
     run = services.runs.run(scope, command)
     return QualityRunOut.from_domain(run)
+
+
+@router.post(
+    "/batch",
+    response_model=list[QueuedQualityRunOut],
+    status_code=201,
+)
+def rerun_quality_runs_batch(
+    payload: QualityRunBatchCreate,
+    scope: WriteScope,
+    services: QualityServicesDep,
+) -> list[QueuedQualityRunOut]:
+    """批量重跑：为一组 Episode 各排一次质检（``QUEUED``）。
+
+    与 ``POST /quality-runs`` 的区别只有执行时机：本端点只入队，由质检
+    Worker 领取执行；单次端点仍在请求线程里同步算完。空列表、重复对象、
+    超过上限由用例拒绝并映射为 ``validation_failed``。
+    """
+    runs = services.runs.rerun_batch(scope, payload.subject_ids)
+    return [QueuedQualityRunOut.from_domain(run) for run in runs]
+
+
+@router.get(
+    "/{baseline_run_id}/diff/{candidate_run_id}",
+    response_model=QualityRunDiffOut,
+)
+def compare_quality_runs(
+    baseline_run_id: UUID,
+    candidate_run_id: UUID,
+    scope: ReadScope,
+    services: QualityServicesDep,
+) -> QualityRunDiffOut:
+    """比对两次运行的结论（差异报告）。
+
+    两次运行必须检查同一对象；任一运行未产出结论时拒绝（没有可信结论就
+    没有可比性）。运行不存在或跨项目返回 404。
+    """
+    diff = services.diff.compare(scope, baseline_run_id, candidate_run_id)
+    return QualityRunDiffOut.from_domain(diff)
 
 
 @router.get("/{run_id}", response_model=QualityRunOut)

@@ -136,3 +136,76 @@ qualityRunFindings:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+qualityRunBatch:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: rerunQualityRunsBatch
+    tags: [quality]
+    summary: 批量重跑（为一组 Episode 各排一次质检）
+    description: |
+      与 `POST /quality-runs` 的区别只有执行时机：本端点**只入队**，由质检
+      Worker 领取执行；单次端点仍在请求线程里同步算完。响应是排队中的运行
+      列表（`lifecycle=QUEUED`），**没有结论**——调用方不得把缺省 `status`
+      读成"检查通过"。
+
+      只接受 `EPISODE`：导入任务的批量重跑没有业务场景。空列表、重复对象、
+      超过 1000 个对象返回 422 `validation_failed`；整批在同一事务里入队，
+      不存在"排了一半"的中间态。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/QualityRunBatchCreate" }
+    responses:
+      "201":
+        description: 已入队的运行（无结论）
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "../openapi.yaml#/components/schemas/QueuedQualityRun" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+qualityRunDiff:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: baseline_run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    - name: candidate_run_id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  get:
+    operationId: compareQualityRuns
+    tags: [quality]
+    summary: 两次质量运行的差异报告
+    description: |
+      按 `rule_id + subject_ref` 对齐两次运行的结论，逐条分类为
+      `NEW` / `RESOLVED` / `UNCHANGED` / `CHANGED`。`subject_ref` 区分同一
+      规则作用于多个对象，只用 `rule_id` 会把"记录 A 通过、记录 B 失败"
+      错算成规则状态变化。
+
+      两次运行必须检查**同一对象**，否则返回 422 `validation_failed`；
+      任一运行未产出结论（`lifecycle != SUCCEEDED`）同样拒绝——没有可信
+      结论就没有可比性。运行不存在或跨项目返回 404。
+
+      `has_regression` 只把 `NEW` 算作回归：`CHANGED` 可能是修好也可能是
+      变坏，需要看具体状态。
+    responses:
+      "200":
+        description: 差异报告
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/QualityRunDiff" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
