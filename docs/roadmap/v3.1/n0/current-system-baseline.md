@@ -53,6 +53,10 @@ EXIT_CODE=0
 
 注意边界：
 
+- 时间耦合缺陷（2026-11-22 已修）：`tests/workers/test_datasource_episode_worker.py`
+  曾把时间基准写死为 `2026-11-22 09:00 UTC`，而事件 `available_at` 取真实
+  时钟——UTC 09:00 之后整个文件必然失败（Worker 领不到事件，返回 `IDLE`）。
+  已改为每次调用取 `now + 1s`，并做变异验证（还原硬编码时刻后 3 条失败）。
 - 后端 pytest 中存在 `s`（skip）项，包括需要外部真实文件的 HDF5 / ROS Bag 公开样例测试
   （`backend/tests/unit/test_hdf5_real_public_sample.py`、`test_rosbag_real_public_sample.py`）。
   **跳过不等于通过真实数据验收。**
@@ -79,6 +83,8 @@ EXIT_CODE=0
   执行编排；拆分需先移出事实加载/聚合，另立重构任务）；
 - `backend/app/workers/quality.py` 639 行（V31-031/032 执行 + 路由编排；
   拆分需先抽出失败路径与装配，另立重构任务）；
+- `backend/tests/unit/test_quality_batch_rerun_diff.py` 381 行（V31-033
+  批量重跑与差异报告编排；夹具与断言同文件，拆分价值有限）；
 - `backend/app/domain/quality/models.py` 568 行（拆分需同步 14 处 import）；
 - `backend/app/workers/datasources.py` 570 行。
 
