@@ -48,10 +48,12 @@ from app.domain.quality.aggregation import summarize_findings
 from app.domain.quality.enums import (
     QualityCategory,
     QualityFindingStatus,
+    QualityRunLifecycle,
     QualitySubjectType,
 )
 from app.domain.quality.errors import (
     DomainValidationError,
+    InvalidQualityRunTransitionError,
     QualityEngineError,
     ResourceNotFoundError,
 )
@@ -60,6 +62,8 @@ from app.domain.quality.rules import compute_rule_set_version
 
 _RESOURCE_TYPE = "QUALITY_RUN"
 _EVENT_TYPE = "quality.run.completed"
+#: 投递类：入队后由质检 Worker 领取执行（V31-031）。
+_REQUESTED_EVENT_TYPE = "quality.run.requested"
 #: 单个对象的资产硬上限：超过即拒绝，避免 HTTP 线程处理无界数据，也避免
 #: 分页截断后把"只检查了前 1000 条"当成"全部通过"。
 MAX_SUBJECT_ASSETS = 1000
@@ -114,12 +118,168 @@ class QualityRunUseCases:
         self._uow.commit()
         return created
 
+    def enqueue(
+        self,
+        scope: ProjectScope,
+        command: NewQualityRun,
+        *,
+        max_attempts: int = 1,
+        now: datetime | None = None,
+    ) -> QualityRun:
+        """把一次质检**排进队列**（``QUEUED``），不计算、不提交。
+
+        与 :meth:`run` 的区别只有执行时机：``run`` 在请求线程里同步算完并落
+        ``SUCCEEDED``；本方法只登记"要检查谁"，由 Worker 领取后执行。
+
+        规则集版本在入队时固化：它由**规则声明**决定，与对象数据无关，因此
+        入队即可确定。执行时若声明已变（版本不一致），说明排队期间规则集被
+        替换过，本次运行按失败处理而不是用新规则算旧版本。
+
+        入队与 ``quality.run.requested`` 事件在同一事务里写入，调用方负责提交；
+        这样"排了队却没人消费"与"事件已投递但运行不存在"都不会出现。
+        """
+        run = QualityRun.queued(
+            run_id=new_id(),
+            project_id=scope.project_id,
+            subject_type=command.subject_type,
+            subject_id=command.subject_id,
+            rule_set_version=self._registry.rule_set_version_for(command.subject_type),
+            created_at=now or _utcnow(),
+            created_by=scope.actor_id,
+            max_attempts=max_attempts,
+        )
+        created = self._runs.enqueue(scope, run)
+        record_change(
+            self._audit,
+            self._outbox,
+            scope,
+            resource_type=_RESOURCE_TYPE,
+            resource_id=created.run_id,
+            action="enqueue",
+            from_status=None,
+            to_status=created.lifecycle.value,
+            reason=None,
+            request_id=None,
+            details={
+                "subject_type": created.subject_type.value,
+                "subject_id": str(created.subject_id),
+                "rule_set_version": created.rule_set_version,
+                "max_attempts": created.max_attempts,
+            },
+            event_type=_REQUESTED_EVENT_TYPE,
+            event_payload={
+                "run_id": str(created.run_id),
+                "subject_type": created.subject_type.value,
+                "subject_id": str(created.subject_id),
+                "rule_set_version": created.rule_set_version,
+            },
+            occurred_at=created.created_at,
+            dispatch=True,
+        )
+        return created
+
+    def start(
+        self,
+        scope: ProjectScope,
+        run_id: UUID,
+        *,
+        now: datetime | None = None,
+    ) -> QualityRun:
+        """领取一次排队中的运行：``QUEUED``（或重投后的 ``RETRYING``）→ ``RUNNING``。
+
+        只做状态推进，**不提交**；调用方（Worker）负责提交，使 ``RUNNING``
+        成为执行开始前的持久事实——规则实现崩溃时运行仍停在 ``RUNNING``，
+        失败路径才能把它推进到 ``FAILED`` 并留下开始时间。若与执行计算放在
+        同一未提交事务里，回滚会把 ``RUNNING`` 一起抹掉，运行退回 ``QUEUED``，
+        而状态机不允许 ``QUEUED → FAILED``（未开始不能算失败），失败就无法落库。
+        """
+        current = self._runs.find_any(scope, run_id)
+        if current is None:
+            raise ResourceNotFoundError("质量运行", run_id)
+        moment = now or _utcnow()
+        return self._runs.transition(
+            scope,
+            current.mark_running(now=moment),
+            expected=current.lifecycle,
+        )
+
+    def conclude(
+        self,
+        scope: ProjectScope,
+        run_id: UUID,
+        *,
+        now: datetime | None = None,
+    ) -> QualityRun:
+        """执行一次已领取（``RUNNING``）的运行并落结论：``RUNNING → SUCCEEDED``。
+
+        规则计算复用 :meth:`prepare` 的同一套事实加载与聚合，不新写第二套实现。
+        规则实现异常由调用方捕获后调用运行失败/重投，本方法不吞异常——"没算
+        出来"必须留下 ``FAILED`` 与原因，不能降级成 ``INCOMPLETE``（后者是
+        "算过但无结论"）。
+        """
+        running = self._runs.find_any(scope, run_id)
+        if running is None:
+            raise ResourceNotFoundError("质量运行", run_id)
+        if running.lifecycle is not QualityRunLifecycle.RUNNING:
+            raise InvalidQualityRunTransitionError(running.lifecycle, QualityRunLifecycle.SUCCEEDED)
+        moment = now or _utcnow()
+        prepared = self.prepare(
+            scope,
+            NewQualityRun(
+                subject_type=running.subject_type,
+                subject_id=running.subject_id,
+            ),
+            now=moment,
+            # findings 必须挂在排队运行的 id 下；用新 id 会被领域校验拒绝。
+            run_id=running.run_id,
+        )
+        if prepared.rule_set_version != running.rule_set_version:
+            raise QualityEngineError(
+                "规则集在排队期间发生变化："
+                f"入队时 {running.rule_set_version}，执行时 {prepared.rule_set_version}；"
+                "请重新入队，不能用新规则产出旧版本的结论"
+            )
+        succeeded = running.mark_succeeded(
+            status=prepared.status,
+            score=prepared.score,
+            finding_count=prepared.finding_count,
+            error_count=prepared.error_count,
+            warn_count=prepared.warn_count,
+            category_summary=prepared.category_summary,
+            finished_at=prepared.finished_at,
+            findings=prepared.findings,
+        )
+        created = self._runs.transition(
+            scope,
+            succeeded,
+            expected=QualityRunLifecycle.RUNNING,
+        )
+        self._record(scope, created, request_id=None, occurred_at=created.finished_at)
+        return created
+
+    def execute_queued(
+        self,
+        scope: ProjectScope,
+        run_id: UUID,
+        *,
+        now: datetime | None = None,
+    ) -> QualityRun:
+        """在**同一事务**里完成 ``QUEUED → RUNNING → SUCCEEDED``。
+
+        等价于 :meth:`start` + :meth:`conclude`，供不需要"执行已开始"这一
+        持久事实的调用方使用（例如单进程内联执行）。Worker 走两步：先提交
+        ``RUNNING``，再执行计算，否则失败回滚会把开始时间一起抹掉。
+        """
+        self.start(scope, run_id, now=now)
+        return self.conclude(scope, run_id, now=now)
+
     def prepare(
         self,
         scope: ProjectScope,
         command: NewQualityRun,
         *,
         now: datetime | None = None,
+        run_id: UUID | None = None,
     ) -> QualityRun:
         """只读取事实并计算结论，**不写库、不提交**。
 
@@ -127,12 +287,16 @@ class QualityRunUseCases:
         并把阶段推进一起提交；因此把"计算"与"落库"拆开，由调用方决定
         事务边界（见 :meth:`persist`）。规则、版本固化与聚合口径与
         :meth:`run` 完全一致，不存在第二套实现。
+
+        ``run_id`` 供执行已排队的运行时传入——findings 必须挂在**那条**运行
+        名下，否则领域校验会以"finding 的项目或运行与所属运行不一致"拒绝。
+        不传则新造一个（同步入口）。
         """
         started_at = now or _utcnow()
         facts = self._load_facts(scope, command.subject_type, command.subject_id)
         rule_set_version, drafts = self._evaluate(scope, facts, command.categories)
 
-        run_id = new_id()
+        run_id = run_id or new_id()
         created_at = _utcnow()
         findings = tuple(
             QualityFinding.from_draft(

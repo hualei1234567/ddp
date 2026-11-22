@@ -164,8 +164,17 @@
     测试：`tests/unit/test_quality_run_lifecycle.py`、
     `test_quality_run_repository_lifecycle.py`、
     `tests/migrations/test_quality_run_lifecycle_migration.py`。
-  - 仍缺：提交事件 → Outbox → 质检 Worker（V31-031）、结论驱动路由（V31-032）、
-    批量重跑与差异报告（V31-033）。V31-031 之前排队中的运行无 API 可查。
+  - 已消除（V31-031 切片一/二，2026-11-22）：执行写入
+    `SqlQualityRunRepository.enqueue/find_any/transition`（CAS，ADR-0043），
+    用例 `QualityRunUseCases.enqueue/start/conclude`，Worker
+    `backend/app/workers/quality.py` 消费 `quality.run.requested`
+    （`DISPATCH_EVENTS` 已登记、`docker-compose.yml` 有 `quality-worker`）。
+    测试：`tests/unit/test_quality_run_execution_repository.py`（8）、
+    `tests/workers/test_quality_run_worker.py`（6）。
+  - 仍缺：HTTP 异步入口（`POST /quality/runs` 只有同步模式，排队运行需
+    `QualityRunOut` 之外的新响应模型）；结论驱动路由（V31-032）；批量重跑
+    与差异报告（V31-033）。生命周期查询入口出现前，`QUEUED`/`RUNNING`
+    只能查库。
 - `backend/app/domain/annotation/enums.py:499-504` 明确其与业务写入同事务；
   该同步路径尚未改造（改造属于 V31-031）。
 - 风险：提交事务被质检规则拖长（在 V31-031 前仍然存在）。

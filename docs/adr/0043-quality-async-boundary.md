@@ -52,6 +52,22 @@ V3.1 任务卡 V31-031 写的是"提交事件 → Outbox → 质检 Worker（幂
 5. **并发由 CAS 兜底**：`transition` 以 `lifecycle` 做比较并交换，两个 Worker
    领取同一运行后只有先到者成功，后到者抛 `QualityRunConflictError` 并重读。
 
+### 3.1 Worker 的事务边界：`RUNNING` 先提交再计算
+
+异步执行必须让"执行已开始"成为**持久事实**，因此 Worker 拆成两段事务：
+
+1. `QualityRunUseCases.start` 推进 `QUEUED`（或重投后的 `RETRYING`）→ `RUNNING`，
+   **立即提交**；
+2. `conclude` 读取事实、计算结论，再以 CAS 推进 `RUNNING → SUCCEEDED`，提交。
+
+反例是"领取与计算同处一个未提交事务"：规则实现崩溃时回滚会把 `RUNNING`
+一起抹掉，运行退回 `QUEUED`，而领域状态机不允许 `QUEUED → FAILED`
+（`mark_failed` 要求 `started_at` 非空——未开始不能算失败）。结果是失败无法
+落库，事件反复重投直到死信，运行永远停在排队态，人工无从判断它到底跑没跑过。
+
+这条约束只适用于需要"失败可落库"的异步路径；同步入口仍然一次事务算完即
+提交，`execute_queued` 保留给同事务内联执行的调用方。
+
 ## 4. 后果
 
 - `QualityRunRepository` 端口新增 `enqueue` / `find_any` / `transition`，
