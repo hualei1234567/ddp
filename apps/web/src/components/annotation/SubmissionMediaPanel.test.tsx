@@ -8,6 +8,10 @@ import type { AnnotationRecord } from "../../types/annotation";
 import { episodeFixture } from "../../services/__fixtures__/collectionFixtures";
 import SubmissionMediaPanel from "./SubmissionMediaPanel";
 
+// 本文件的用例要等"Episode → 血缘 → 资产 → 签名地址"多段串行请求结算；
+// 默认 1s 在满载机器上不够，等待上限单独提出来，避免每个断言各写一个魔法数。
+const ASYNC_CHAIN_TIMEOUT_MS = 5_000;
+
 const PROJECT_ID = "22222222-2222-2222-2222-222222222222";
 const EPISODE_ID = "33333333-3333-3333-3333-333333333333";
 const ASSET_ID = "44444444-4444-4444-4444-444444444444";
@@ -174,8 +178,13 @@ describe("SubmissionMediaPanel", () => {
       <SubmissionMediaPanel projectId={PROJECT_ID} records={[record()]} />,
     );
 
+    // 这条断言要等 Episode → 反向血缘 → 资产 → 签名地址四段串行请求依次结算，
+    // 机器满载时 React Testing Library 默认的 1s 上限不够（本地全量单测曾偶发超时）。
+    // 放宽的只是等待上限，断言本身不变：仍然必须出现可播放的 video 元素。
     expect(
-      await screen.findByTestId("media-preview-video"),
+      await screen.findByTestId("media-preview-video", undefined, {
+        timeout: ASYNC_CHAIN_TIMEOUT_MS,
+      }),
     ).toBeInTheDocument();
     expect(getEpisode).toHaveBeenCalledWith(
       PROJECT_ID,
@@ -193,7 +202,9 @@ describe("SubmissionMediaPanel", () => {
       expect.anything(),
     );
     // 记录起点是 1s，时间轴播放头应定位到该记录起点而非 0。
-    const timeline = await screen.findByTestId("annotation-timeline");
+    const timeline = await screen.findByTestId("annotation-timeline", undefined, {
+      timeout: ASYNC_CHAIN_TIMEOUT_MS,
+    });
     expect(timeline.getAttribute("aria-valuenow")).toBe("1");
     // 标签片段（1s–3s）必须渲染到时间轴上，供复核定位。
     expect(screen.getByTitle(/grasp_segment/)).toBeInTheDocument();
