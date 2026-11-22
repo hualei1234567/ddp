@@ -7,6 +7,7 @@ HTTP 线程不执行任何产物读写。
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -362,9 +363,12 @@ class ExportExecutionService:
             content_type=artifact.content_type,
         )
         readback = b"".join(self._storage.stream_object(object_key, chunk_size=self._chunk_size))
+        # V31-042：产物含二进制 parquet，统一按字节哈希校验——与
+        # ExportArtifactSpec.sha256（bytes 直接哈希）同口径；utf-8 文本的
+        # 字节哈希与原 sha256_text(text) 等价，既有产物校验不变。
         if (
             len(readback) != artifact.size_bytes
-            or sha256_text(readback.decode("utf-8")) != artifact.sha256
+            or "sha256:" + hashlib.sha256(readback).hexdigest() != artifact.sha256
         ):
             raise ExportArtifactVerifyFailedError(f"产物校验失败：{artifact.path}")
 

@@ -251,19 +251,28 @@ def test_lerobot_metadata_artifacts_are_deterministic_and_hashed() -> None:
     assert [item.sha256 for item in first] == [item.sha256 for item in second]
     assert all(item.sha256.startswith("sha256:") for item in first)
     assert {item.path for item in first} == {
+        # V31-041 既有 DDP 自有产物（保留，内部消费者依赖）
         "meta/info.json",
         "meta/episodes.jsonl",
         "meta/media.jsonl",
         "data/episodes.jsonl",
         "meta/ddp_divisions.json",
         "ddp/sidecar.json",
+        # V31-042 切片 3 新增：LeRobot v2.1 结构合规必需文件
+        "meta/tasks.jsonl",
+        "meta/stats.json",
+        "data/chunk-000/episode_000000.parquet",
+        "data/chunk-000/episode_000001.parquet",
+        "data/chunk-000/episode_000002.parquet",
     }
     assert all(item.size_bytes == len(item.data) for item in first)
 
     aggregate = aggregate_sha256(first)
     assert aggregate == aggregate_sha256(second)
     manifest = build_artifact_manifest(job, first, aggregate=aggregate)
-    assert manifest["artifact_count"] == 6
+    assert (
+        manifest["artifact_count"] == 11
+    )  # 6 个 DDP 自有（含权威 info.json）+ tasks/stats + 3 个 episode parquet
     assert manifest["total_bytes"] == sum(item.size_bytes for item in first)
     assert manifest["aggregate_sha256"] == aggregate
     assert manifest["verification_status"] == "UNVERIFIED"
@@ -316,7 +325,10 @@ def _source_records(artifacts: tuple[ExportArtifactSpec, ...]) -> dict[str, list
         artifact.path: [
             json.loads(line) for line in artifact.data.decode("utf-8").splitlines() if line
         ]
+        # V31-042：LE_ROBOT 产物新增二进制 parquet（data/chunk-*），只参与
+        # 清单/Hash 断言，不进 NDJSON 行解析。
         for artifact in artifacts
+        if artifact.content_type != "application/x-parquet"
     }
 
 

@@ -22,14 +22,19 @@ NDJSON 与 ``meta/episodes.jsonl`` 同一套 RFC 8785 规范化口径，任何�
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from ddp_data.lerobot.export_writer import TASK_PLACEHOLDER, write_lerobot_metadata
+
 from app.domain.datasets.canonical import canonical_json, plain, sha256_text, validate_sha256
+from app.domain.datasets.enums import ExportFormat
 from app.domain.datasets.export_jobs import ExportJob
+from app.domain.datasets.export_validation import coerce_format
 from app.domain.datasets.models import DatasetItem, DatasetVersion
 
 JSON_CONTENT_TYPE = "application/json"
@@ -79,7 +84,9 @@ class ExportArtifactSpec:
 
     @property
     def sha256(self) -> str:
-        return sha256_text(self.data.decode("utf-8"))
+        # 二进制产物（parquet）与文本产物统一按字节哈希：utf-8 文本的字节
+        # 哈希与 sha256_text(text) 完全等价，既有产物 hash 值不变。
+        return "sha256:" + hashlib.sha256(self.data).hexdigest()
 
     def to_entry(self) -> dict[str, object]:
         return {
@@ -263,6 +270,80 @@ def _jsonl_bytes(rows: Iterable[Mapping[str, object]]) -> bytes:
     return "".join(canonical_json(plain(row)) + "\n" for row in rows).encode("utf-8")
 
 
+def _merge_lerobot_info_keys(
+    info: dict[str, object],
+    episodes: Sequence[Mapping[str, object]],
+) -> None:
+    """把 LeRobot v2.1 必需键合并进 backend 权威 info（原地）。
+
+    keys 与 ``data-platform/ddp_data/lerobot/export_writer.py`` 的口径一致：
+    ``codebase_version`` 固定 v2.1（写入侧对齐版本，见方案 §6 风险表）；
+    ``features`` 只声明 episode 级列——逐帧模态缺失是**声明的事实**；
+    ``fps`` 写 0（无真实帧率事实，不虚构）；``ddp`` 子对象承载
+    ``loadable_scope``（切片 1 契约）与 ``verification_status`` 双标注。
+    """
+    from ddp_data.lerobot.export_writer import LEROBOT_CODEBASE_VERSION
+
+    total_frames = sum(int(row.get("length", 0) or 0) for row in episodes)
+    episode_level_features = {
+        "episode_index": {"dtype": "int64", "shape": [1]},
+        "task_index": {"dtype": "int64", "shape": [1]},
+        "length": {"dtype": "int64", "shape": [1]},
+        "split": {"dtype": "string", "shape": [1]},
+    }
+    info.update(
+        {
+            "codebase_version": LEROBOT_CODEBASE_VERSION,
+            "robot_type": "ddp-metadata",
+            "total_episodes": len(episodes),
+            "total_frames": total_frames,
+            "total_tasks": 1,
+            "total_videos": 0,
+            "total_endorsements": 0,
+            "chunks_size": 1,
+            "fps": 0,
+            "splits": {
+                split: f"file://{split}_chunk"
+                for split in sorted({str(row.get("split", "train")) for row in episodes})
+            },
+            "data_path": "data/chunk-{chunk:03d}/episode_{episode:06d}.parquet",
+            "video_path": (
+                "videos/{chunk:03d}/{video_key}/chunk_{chunk:03d}/episode_{episode:06d}.mp4"
+            ),
+            "features": episode_level_features,
+            "loadable_scope": "METADATA_ONLY",
+        }
+    )
+
+
+def _writer_episode_rows(
+    ordered: Sequence[DatasetItem],
+    training_rows: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """把 DDP Episode 事实映射成 writer 需要的 episode 级行。
+
+    - ``length``：有 ``duration_ns`` 时按 25 fps 换算的帧数下取（仅作结构
+      声明用途，写进 ``info.json`` 的 ``total_frames``；无真实帧率事实，不
+      宣称精确帧数）；缺失时 0——writer 会写出合法但空的 episode 行；
+    - ``task``：占位任务（方案 §3.2-A：元数据导出无真实任务语义）；
+    - ``split``：来自 DatasetItem 划分。
+    """
+    rows: list[dict[str, object]] = []
+    for item, training in zip(ordered, training_rows, strict=True):
+        duration_ns = training.get("duration_ns")
+        length = int(duration_ns // 1_000_000_000 * 25) if duration_ns else 0
+        rows.append(
+            {
+                "episode_id": str(item.episode_id),
+                "episode_version": item.episode_version,
+                "task": TASK_PLACEHOLDER,
+                "length": length,
+                "split": item.split.value if hasattr(item.split, "value") else str(item.split),
+            }
+        )
+    return rows
+
+
 def build_export_artifacts(
     job: ExportJob,
     version: DatasetVersion,
@@ -359,6 +440,13 @@ def build_export_artifacts(
                 "labels": [dict(label) for label in labels],
             }
         )
+    # V31-042：LE_ROBOT 时先算 writer episode 行并合并 LeRobot 必需键进
+    # info（必须在 _json_bytes(info) 序列化**之前**），再由下方 artifacts
+    # 构建追加 writer 产物。CANONICAL 不受影响。
+    writer_episodes: list[dict[str, object]] = []
+    if coerce_format(job.format) is ExportFormat.LE_ROBOT:
+        writer_episodes = _writer_episode_rows(ordered, training_rows)
+        _merge_lerobot_info_keys(info, writer_episodes)
     divisions = {
         "dataset_version_id": str(version.dataset_version_id),
         "divisions": split_members,
@@ -397,7 +485,7 @@ def build_export_artifacts(
         "verification_status": "UNVERIFIED",
         "created_at": created_at.isoformat(),
     }
-    artifacts = (
+    artifacts = [
         ExportArtifactSpec(
             path="meta/info.json",
             data=_json_bytes(info),
@@ -435,7 +523,28 @@ def build_export_artifacts(
             content_type=NDJSON_CONTENT_TYPE,
             episode_refs=episode_refs,
         ),
-    )
+    ]
+
+    # V31-042 切片 3：LE_ROBOT 产物升级为 v2.1 结构合规 —— 在既有 DDP 自有
+    # 产物**之上**追加 LeRobot 必需文件（tasks/stats/episode parquet）。
+    # 既有 NDJSON 训练表与 sidecar 是 DDP 内部消费者依赖，原样保留不删。
+    # writer 只在 LE_ROBOT 时接线：CANONICAL 是平台自有格式，语义不同。
+    # meta/info.json 的 LeRobot 必需键在下方 info 构建处合并（backend 权威）。
+    if writer_episodes:
+        written = write_lerobot_metadata(
+            episodes=writer_episodes,
+            dataset_version_id=str(version.dataset_version_id),
+            created_at_iso=created_at.isoformat(),
+        )
+        artifacts.extend(
+            ExportArtifactSpec(
+                path=item.path,
+                data=item.data,
+                content_type=item.content_type,
+                episode_refs=episode_refs,
+            )
+            for item in written
+        )
     return tuple(sorted(artifacts, key=lambda artifact: artifact.path))
 
 

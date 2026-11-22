@@ -70,7 +70,6 @@ TASK_PLACEHOLDER = "ddp.metadata-export/1.0.0"
 class WriterInput(NamedTuple):
     """写入器的全部输入；字段顺序即构造顺序，禁止无默认值放后面。"""
 
-    repo_id: str
     episodes: tuple[Mapping[str, object], ...]
     dataset_version_id: str
     created_at_iso: str
@@ -145,67 +144,6 @@ def _parquet_bytes(rows: Sequence[Mapping[str, object]]) -> bytes:
     return sink.getvalue()
 
 
-def _feature_entries(episodes: Sequence[Mapping[str, object]]) -> dict[str, object]:
-    """``info.features``：只声明 episode 级列，逐帧模态显式缺失。
-
-    LeRobot 的 features 值对象含 ``dtype`` / ``shape``；episode 级列按官方
-    v2.1 的 ``1`` 维标量声明。不含 ``observation.*`` / ``action`` 是**声明的
-    事实**，不是省略——下游据 ``loadable_scope=METADATA_ONLY`` 判断不能训练。
-    """
-    features: dict[str, object] = {}
-    for column, column_type in EPISODE_COLUMNS:
-        features[column] = {
-            "dtype": "int64" if column_type == "int64" else "string",
-            "shape": [1],
-        }
-    return features
-
-
-def _build_info(
-    *,
-    repo_id: str,
-    episodes: Sequence[Mapping[str, object]],
-    dataset_version_id: str,
-    created_at_iso: str,
-    total_frames: int,
-    chunks_size: int,
-) -> dict[str, object]:
-    """组装 meta/info.json：DDP 自有键与 LeRobot 必需键并存。"""
-    total_episodes = len(episodes)
-    task_names = sorted(
-        {str(row.get("task", TASK_PLACEHOLDER)) for row in episodes}
-    ) or [TASK_PLACEHOLDER]
-    split_counts: dict[str, int] = {}
-    for row in episodes:
-        split = str(row.get("split", "train"))
-        split_counts[split] = split_counts.get(split, 0) + 1
-    return {
-        # ---- LeRobot v2.1 必需键 ----
-        "codebase_version": LEROBOT_CODEBASE_VERSION,
-        "robot_type": "ddp-metadata",
-        "total_episodes": total_episodes,
-        "total_frames": total_frames,
-        "total_tasks": len(task_names),
-        "total_videos": 0,
-        "total_endorsements": 0,
-        "chunks_size": chunks_size,
-        "fps": 0,
-        "splits": {split: f"file://{split}_chunk" for split in sorted(split_counts)},
-        "data_path": "data/chunk-{chunk:03d}/episode_{episode:06d}.parquet",
-        "video_path": "videos/{chunk:03d}/{video_key}/chunk_{chunk:03d}/episode_{episode:06d}.mp4",
-        "features": _feature_entries(episodes),
-        # ---- DDP 自有键（保留既有消费者依赖） ----
-        "ddp": {
-            "dataset_version_id": dataset_version_id,
-            "loadable_scope": "METADATA_ONLY",
-            "verification_status": "UNVERIFIED",
-            "frame_level_mapping": False,
-            "created_at": created_at_iso,
-            "note": "结构合规的元数据导出：无逐帧 observation/action 列，不能直接用于训练。",
-        },
-    }
-
-
 def _build_tasks(episodes: Sequence[Mapping[str, object]]) -> list[dict[str, object]]:
     """meta/tasks.jsonl：task_index → task 文本。当前只有占位任务。"""
     task_names = sorted(
@@ -269,7 +207,6 @@ def _split_counts(episodes: Sequence[Mapping[str, object]]) -> dict[str, int]:
 
 def write_lerobot_metadata(
     *,
-    repo_id: str,
     episodes: Sequence[Mapping[str, object]],
     dataset_version_id: str,
     created_at_iso: str,
@@ -296,26 +233,13 @@ def write_lerobot_metadata(
     if missing_chunk:
         raise ValueError("episode_index 不得为负")
 
-    total_frames = sum(int(row.get("length", 0) or 0) for row in ordered)
-    chunks_size = max(1, -(-(len(ordered)) // EPISODES_PER_CHUNK))
-
-    info = _build_info(
-        repo_id=repo_id,
-        episodes=ordered,
-        dataset_version_id=dataset_version_id,
-        created_at_iso=created_at_iso,
-        total_frames=total_frames,
-        chunks_size=chunks_size,
-    )
     tasks = _build_tasks(ordered)
     stats = _build_stats(ordered)
 
     artifacts: list[WrittenArtifact] = [
-        WrittenArtifact(
-            path="meta/info.json",
-            data=_json_bytes(info),
-            content_type=JSON_CONTENT_TYPE,
-        ),
+        # 注意：不产出 meta/info.json —— backend 的 exporting.py 已有承载
+        # DDP 自有键的 info.json（权威单一事实源）；LeRobot 必需键由 backend
+        # 侧合并进该文件（见 backend exporting.py），避免同名双条目。
         WrittenArtifact(
             path="meta/tasks.jsonl",
             data=_jsonl_bytes(tasks),
