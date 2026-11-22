@@ -75,12 +75,17 @@ fi
 # x-extensible-enum 明示客户端必须容忍未知关系；新增取值不是破坏性变更。
 # ExternalStatus：外部训练状态随 Adapter 增长（最近新增 DRY_RUN 演练终态），
 # 契约已用 x-extensible-enum 明示客户端必须容忍未知状态；新增取值不是破坏性变更。
+# ExportFormat：导出格式随接入方增长（V31-041 新增 CANONICAL），契约已用
+# x-extensible-enum 明示客户端必须容忍未知格式；新增取值不是破坏性变更。
 # 说明：oasdiff 的 `--err-ignore` 在 `breaking` 子命令下实测无效（连 `.*` 都不忽略），
 # 因此用预处理而不是忽略规则。1.37.0 与 CI 的 1.38.0 行为一致。
-OPEN_ENUMS="ErrorCode LineageNodeType LineageRelation ExternalStatus"
+OPEN_ENUMS="ErrorCode LineageNodeType LineageRelation ExternalStatus ExportFormat"
 # 部分响应直接引用独立 JSON Schema 文件（不经过 fragments），上面的顶层 schema
 # 预处理覆盖不到；同样只能显式列出，格式 `<相对 contracts 的路径>:<属性名>`。
-OPEN_ENUM_JSON_PROPERTIES="schemas/external-training-reference.v1.schema.json:external_status"
+# export-job 的 format / format_version：两者都是可增长取值集合。基线里
+# format_version 用的是 `const`（单一取值），当前用 `enum`（多取值）——归一化
+# 必须同时处理 `const` 与 `enum`，否则「const 被删」仍会被判破坏性变更。
+OPEN_ENUM_JSON_PROPERTIES="schemas/external-training-reference.v1.schema.json:external_status schemas/export-job.v1.schema.json:format schemas/export-job.v1.schema.json:format_version"
 prepare_open_enums() {
   local root="$1"
   python3 - "$root" "$OPEN_ENUMS" "$OPEN_ENUM_JSON_PROPERTIES" <<'PYEOF'
@@ -102,8 +107,12 @@ for fragment in sorted((root / "fragments").glob("*.yaml")):
     changed = False
     for name in wanted & set(document):
         schema = document[name]
-        if isinstance(schema, dict) and "enum" in schema:
+        # 归一化必须同时处理 `enum` 与 `const`：基线里某些字段是单一 `const`
+        # 取值，当前已扩展成 `enum`。只处理 `enum` 会漏掉「const 被删」这条
+        # 误报（oasdiff 的 response-property-const-removed）。
+        if isinstance(schema, dict) and ("enum" in schema or "const" in schema):
             schema.pop("enum", None)
+            schema.pop("const", None)
             schema.pop("x-extensible-enum", None)
             schema["type"] = "string"
             changed = True
@@ -121,9 +130,13 @@ for item in json_props:
     if not isinstance(properties, dict):
         continue
     prop = properties.get(property_name)
-    if isinstance(prop, dict) and "enum" in prop:
+    if isinstance(prop, dict) and ("enum" in prop or "const" in prop):
         prop.pop("enum", None)
+        prop.pop("const", None)
         prop.pop("x-extensible-enum", None)
+        # 只补缺失的 type：这些属性本就声明 string。若强行覆盖，未来把它们
+        # 改成 `["string", "null"]` 的可空性变化会被掩盖。
+        prop.setdefault("type", "string")
         schema_path.write_text(
             json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
         )

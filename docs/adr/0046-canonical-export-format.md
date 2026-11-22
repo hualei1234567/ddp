@@ -69,20 +69,43 @@ EXPORT_FORMAT_VERSIONS = {
 新增 `CANONICAL` 不得放宽 `PARQUET` 等未知格式的拒绝——错误码仍是
 `export_format_unsupported`。
 
+### 3.5 格式取值集合声明为开放集合
+
+`ExportFormat` 与 `ExportJob.format` / `ExportJob.format_version` 在契约里
+用 `x-extensible-enum` 声明「取值可增长，客户端必须容忍未知值」。同时在
+`packages/contracts/scripts/check-compatibility.sh` 的开放枚举清单里显式登记，
+理由与此前 `ErrorCode` / `LineageRelation` / `ExternalStatus` 一致：这类集合的
+**取值增长**按设计不是破坏性变更，否则每新增一种格式都会让 oasdiff 对每个引用
+操作各报一条 error，把真正的破坏性变更埋掉。
+
+**没有放宽什么**：脚本的归一化只作用于「已被显式列出的属性」，且归一后仍会
+捕获结构变化。变异验证已确认——删掉 `output_prefix` 这个响应字段后，检查产出
+5 条 `response-required-property-removed`，依然失败。
+
+**同时修正了归一化的一个既有盲区**：此前脚本只处理 `enum`，而基线里
+`format_version` 用的是 `const`（单一取值）。基线 `const` → 当前 `enum` 的演进
+若只归一 `enum`，会残留一条 `response-property-const-removed` 误报。现在
+`const` 与 `enum` 一并归一。
+
 ## 4. 后果
 
 - `ExportFormat` 新增 `CANONICAL`；`export_validation.py` 新增
   `EXPORT_FORMAT_VERSIONS` 与 `expected_format_version()`。
 - `ExportJob.__post_init__` 改用映射校验，不再硬编码 LeRobot 版本。
 - 契约：`schemas.stage4.yaml` 的 `ExportFormat` 枚举与
-  `export-job.v1.schema.json` 的 `format` / `format_version` 同步扩展。
+  `export-job.v1.schema.json` 的 `format` / `format_version` 同步扩展，
+  并加 `x-extensible-enum` 声明取值可增长。
+- 兼容性检查脚本：`ExportFormat` 与 `export-job` 的两个属性登记进开放枚举
+  清单；归一化同时处理 `const` 与 `enum`。
 - 不新增表、不新增迁移、不新增错误码。
-- 前端导出格式选项与 V31-042（真实 LeRobot Loader 兼容）不在本 ADR 范围。
+- 前端：导出表单新增格式选择，切换格式自动带出配对版本（版本框只读），
+  未知格式如实回显而不冒充已知格式。
+- V31-042（真实 LeRobot Loader 兼容）不在本 ADR 范围。
 
 ## 5. 残余风险
 
 | 风险 | 说明 |
 |---|---|
 | Canonical 产物尚无真实消费者 | 格式已就绪，但还没有 Canonical Loader；由 V31-044 端到端验收覆盖 |
-| 前端未提供格式选择 | 契约已就绪，前端入口另立任务 |
 | LeRobot 仍 `UNVERIFIED` | 本 ADR 不改变这一点；V31-042 才做真实 Loader 兼容 |
+| 开放枚举清单需人工维护 | 清单靠注释写明理由，新增可增长集合时必须显式登记；漏登记会让兼容性检查误报，而不是漏报（失败方向是安全的） |

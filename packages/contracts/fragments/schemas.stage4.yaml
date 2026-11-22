@@ -36,6 +36,9 @@ ExportJobStatus:
 ExportFormat:
   type: string
   enum: [LE_ROBOT, CANONICAL]
+  # x-extensible-enum 声明意图：导出格式是可增长取值集合（V31-041 新增
+  # CANONICAL），客户端必须容忍未知格式并回退到「不支持」而非默认成功。
+  x-extensible-enum: [LE_ROBOT, CANONICAL]
   description: |
     训练导出格式。`LE_ROBOT` 是 LeRobot 元数据 profile（帧级映射未实现，
     `verification_status` 固定 `UNVERIFIED`）；`CANONICAL` 是平台自己的规范
