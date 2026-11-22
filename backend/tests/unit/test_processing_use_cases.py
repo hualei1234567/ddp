@@ -33,6 +33,7 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunRepository,
     SqlProcessingRunStepRepository,
 )
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -68,6 +69,7 @@ def _services(
             session,
             audit=SqlAuditRepository(session),
             outbox=SqlOutboxRepository(session),
+            raw_assets=SqlRawAssetRepository(session),
         ),
         ProcessingWorkerUseCases(
             repository,

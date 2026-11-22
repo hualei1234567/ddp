@@ -22,6 +22,7 @@ from app.infrastructure.repositories.processing import (
     SqlProcessingRunRepository,
     SqlProcessingRunStepRepository,
 )
+from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 
 ReadScope = Annotated[ProjectScope, Depends(get_project_scope)]
 WriteScope = Annotated[ProjectScope, Depends(get_write_scope)]
@@ -45,6 +46,8 @@ def get_processing_services(session: DbSession) -> ProcessingServices:
             # "永远不会被执行"的运行，因此这里显式装配，不提供默认值。
             audit=SqlAuditRepository(session),
             outbox=SqlOutboxRepository(session),
+            # ``raw_asset_id`` 解析要读资产记录并校验状态（V31-015）。
+            raw_assets=SqlRawAssetRepository(session),
         ),
         worker=ProcessingWorkerUseCases(
             runs,

@@ -20,6 +20,7 @@ from app.application.audit import (
     OutboxRepository,
     record_change,
 )
+from app.application.ingestion.ports import RawAssetRepository
 from app.application.observability_redaction import sanitize_log_message
 from app.application.processing.commands import NewProcessingRun
 from app.application.processing.ports import (
@@ -29,6 +30,7 @@ from app.application.processing.ports import (
 )
 from app.domain.common.ids import new_id
 from app.domain.identity.models import ProjectScope
+from app.domain.ingestion.enums import RAW_ASSET_STREAM_USABLE_STATUSES, RawAssetStatus
 from app.domain.processing.enums import (
     PUBLIC_PROCESSING_ACTIONS,
     ProcessingRunAction,
@@ -45,6 +47,19 @@ from app.domain.processing.state_machines import validate_action_name
 from app.domain.processing.steps import ProcessingStep
 
 _NOT_FOUND_MESSAGE = "处理运行不存在或不属于当前项目"
+
+#: 可作为处理输入的 RawAsset 状态（V31-015）。
+#:
+#: 复用 ``ingestion.enums.RAW_ASSET_STREAM_USABLE_STATUSES`` 的语义：``VALID``
+#: 已通过校验，``ARCHIVED`` 是曾经有效的历史资产。``QUARANTINED`` /
+#: ``REJECTED`` / ``TOMBSTONED`` 明确不能进入处理流水线。
+_USABLE_RAW_ASSET_STATUSES: frozenset[str] = RAW_ASSET_STREAM_USABLE_STATUSES
+
+
+def _status_text(status: object) -> str:
+    """枚举或字符串都转成稳定文本；只用于错误消息，不参与判定。"""
+    return status.value if isinstance(status, RawAssetStatus) else str(status)
+
 
 #: 审计/outbox 里的资源类型短名；只做留痕，不作为任何状态来源。
 PROCESSING_RUN_RESOURCE_TYPE = "PROCESSING_RUN"
@@ -87,12 +102,14 @@ class ProcessingRunUseCases:
         *,
         audit: AuditRepository,
         outbox: OutboxRepository,
+        raw_assets: RawAssetRepository,
     ) -> None:
         self._runs = runs
         self._steps = steps
         self._uow = uow
         self._audit = audit
         self._outbox = outbox
+        self._raw_assets = raw_assets
 
     def create(
         self,
@@ -107,7 +124,7 @@ class ProcessingRunUseCases:
             run_id=new_id(),
             project_id=scope.project_id,
             pipeline_version=command.pipeline_version,
-            input_refs=command.input_refs,
+            input_refs=self._resolve_input_refs(scope, command),
             status=ProcessingRunStatus.CREATED.value,
             created_at=moment,
             updated_at=moment,
@@ -144,6 +161,34 @@ class ProcessingRunUseCases:
         )
         self._uow.commit()
         return created
+
+    def _resolve_input_refs(
+        self,
+        scope: ProjectScope,
+        command: NewProcessingRun,
+    ) -> tuple[str, ...]:
+        """把命令输入解析成对象引用（V31-015）。
+
+        ``raw_asset_id`` 与 ``input_refs`` 二选一：同时给或都不给都是调用方
+        错误，直接拒绝而不是"取其一"——静默选择会让调用方以为另一个生效了。
+
+        ``raw_asset_id`` 走项目隔离的仓储读取：跨项目资产表现为不存在，
+        与 ``GET /raw-assets/{id}`` 的口径一致，不泄露它在别的项目里存在。
+        """
+        has_refs = bool(command.input_refs)
+        if command.raw_asset_id is not None and has_refs:
+            raise DomainValidationError("raw_asset_id 与 input_refs 只能二选一")
+        if command.raw_asset_id is None:
+            if not has_refs:
+                raise DomainValidationError("必须提供 raw_asset_id 或 input_refs")
+            return command.input_refs
+
+        asset = self._raw_assets.get(scope, command.raw_asset_id)
+        if asset is None:
+            raise ResourceNotFoundError("原始资产不存在或不属于当前项目")
+        if asset.status not in _USABLE_RAW_ASSET_STATUSES:
+            raise DomainValidationError(f"原始资产状态 {_status_text(asset.status)} 不可用于处理")
+        return (asset.object_key,)
 
     def list(
         self,
