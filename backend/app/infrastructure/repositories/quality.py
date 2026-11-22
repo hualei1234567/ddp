@@ -19,17 +19,22 @@ from collections.abc import Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.domain.identity.models import ProjectScope
 from app.domain.quality.enums import (
+    QUALITY_RUN_TRANSITIONS,
     QualityCategory,
     QualityFindingStatus,
     QualityRunLifecycle,
     QualitySubjectType,
 )
-from app.domain.quality.errors import DomainValidationError
+from app.domain.quality.errors import (
+    DomainValidationError,
+    InvalidQualityRunTransitionError,
+    QualityRunConflictError,
+)
 from app.domain.quality.models import QualityFinding, QualityRun
 from app.infrastructure.db.models.quality import (
     QualityFindingModel,
@@ -87,6 +92,49 @@ class SqlQualityRunRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    @staticmethod
+    def _model(run: QualityRun) -> QualityRunModel:
+        return QualityRunModel(
+            id=run.run_id,
+            project_id=run.project_id,
+            subject_type=run.subject_type.value,
+            subject_id=run.subject_id,
+            rule_set_version=run.rule_set_version,
+            status=run.status.value if run.status is not None else None,
+            score=run.score,
+            finding_count=run.finding_count,
+            error_count=run.error_count,
+            warn_count=run.warn_count,
+            category_summary={key: dict(value) for key, value in run.category_summary.items()},
+            started_at=run.started_at,
+            finished_at=run.finished_at,
+            created_at=run.created_at,
+            created_by=run.created_by,
+            lifecycle=run.lifecycle.value,
+            attempt=run.attempt,
+            max_attempts=run.max_attempts,
+            error_code=run.error_code,
+            error_summary=run.error_summary,
+        )
+
+    @staticmethod
+    def _finding_model(finding: QualityFinding) -> QualityFindingModel:
+        return QualityFindingModel(
+            id=finding.finding_id,
+            project_id=finding.project_id,
+            run_id=finding.run_id,
+            category=finding.category.value,
+            rule_id=finding.rule_id,
+            rule_version=finding.rule_version,
+            severity=finding.severity.value,
+            status=finding.status.value,
+            subject_ref=finding.subject_ref,
+            message=finding.message,
+            evidence=dict(finding.evidence) if finding.evidence is not None else None,
+            score=finding.score,
+            created_at=finding.created_at,
+        )
+
     def add(self, scope: ProjectScope, run: QualityRun) -> QualityRun:
         """追加一次已产出结论的运行。
 
@@ -100,14 +148,73 @@ class SqlQualityRunRepository:
             )
         if run.status is None:
             raise DomainValidationError("已产出结论的运行必须有 status")
-        self._session.add(
-            QualityRunModel(
-                id=run.run_id,
-                project_id=run.project_id,
-                subject_type=run.subject_type.value,
-                subject_id=run.subject_id,
-                rule_set_version=run.rule_set_version,
-                status=run.status.value,
+        self._session.add(self._model(run))
+        self._session.flush()
+        for finding in run.findings:
+            scope.ensure(finding.project_id)
+            self._session.add(self._finding_model(finding))
+        self._session.flush()
+        return run
+
+    def enqueue(self, scope: ProjectScope, run: QualityRun) -> QualityRun:
+        """写入一次**待执行**的运行（``QUEUED``）。
+
+        与 :meth:`add` 互补：``add`` 是"已经有结论，直接追加"，本方法是
+        "先排队，执行结果稍后由 :meth:`transition` 推进"。两者都不接受对方
+        的生命周期，避免一条 SQL 同时产出"没跑却有结论"的行。
+        """
+        scope.ensure(run.project_id)
+        if run.lifecycle is not QualityRunLifecycle.QUEUED:
+            raise DomainValidationError(
+                f"只能入队 QUEUED 的运行；{run.lifecycle.value} 请走 add / transition"
+            )
+        if run.findings:
+            raise DomainValidationError("排队的运行不得携带 findings")
+        self._session.add(self._model(run))
+        self._session.flush()
+        return run
+
+    def find_any(self, scope: ProjectScope, run_id: UUID) -> QualityRun | None:
+        """按 ID 读取**任意生命周期**的运行；执行编排用，结论视图仍走 :meth:`get`。"""
+        row = self._session.scalar(
+            select(QualityRunModel).where(
+                QualityRunModel.id == run_id,
+                QualityRunModel.project_id == scope.project_id,
+            )
+        )
+        return _run(row) if row is not None else None
+
+    def transition(
+        self,
+        scope: ProjectScope,
+        run: QualityRun,
+        *,
+        expected: QualityRunLifecycle,
+    ) -> QualityRun:
+        """按状态机推进一行，用 ``lifecycle`` 做比较并交换（CAS）。
+
+        ``expected`` 是调用方读到的当前状态。行已被别的执行者推进时（例如两个
+        Worker 同时领到同一任务），``WHERE lifecycle = expected`` 命中 0 行，
+        抛 :class:`QualityRunConflictError`——幂等靠调用方重新读取再判断，
+        不靠覆盖写。迁移边必须在 ``QUALITY_RUN_TRANSITIONS`` 内，跳步直接拒绝。
+        """
+        scope.ensure(run.project_id)
+        if not isinstance(expected, QualityRunLifecycle):
+            expected = QualityRunLifecycle(expected)
+        if run.lifecycle is expected:
+            raise InvalidQualityRunTransitionError(expected, run.lifecycle)
+        if run.lifecycle not in QUALITY_RUN_TRANSITIONS[expected]:
+            raise InvalidQualityRunTransitionError(expected, run.lifecycle)
+        result = self._session.execute(
+            update(QualityRunModel)
+            .where(
+                QualityRunModel.id == run.run_id,
+                QualityRunModel.project_id == scope.project_id,
+                QualityRunModel.lifecycle == expected.value,
+            )
+            .values(
+                lifecycle=run.lifecycle.value,
+                status=run.status.value if run.status is not None else None,
                 score=run.score,
                 finding_count=run.finding_count,
                 error_count=run.error_count,
@@ -115,35 +222,17 @@ class SqlQualityRunRepository:
                 category_summary={key: dict(value) for key, value in run.category_summary.items()},
                 started_at=run.started_at,
                 finished_at=run.finished_at,
-                created_at=run.created_at,
-                created_by=run.created_by,
-                lifecycle=run.lifecycle.value,
                 attempt=run.attempt,
                 max_attempts=run.max_attempts,
                 error_code=run.error_code,
                 error_summary=run.error_summary,
             )
         )
-        self._session.flush()
+        if result.rowcount != 1:
+            raise QualityRunConflictError(run.run_id, expected)
         for finding in run.findings:
             scope.ensure(finding.project_id)
-            self._session.add(
-                QualityFindingModel(
-                    id=finding.finding_id,
-                    project_id=finding.project_id,
-                    run_id=finding.run_id,
-                    category=finding.category.value,
-                    rule_id=finding.rule_id,
-                    rule_version=finding.rule_version,
-                    severity=finding.severity.value,
-                    status=finding.status.value,
-                    subject_ref=finding.subject_ref,
-                    message=finding.message,
-                    evidence=dict(finding.evidence) if finding.evidence is not None else None,
-                    score=finding.score,
-                    created_at=finding.created_at,
-                )
-            )
+            self._session.add(self._finding_model(finding))
         self._session.flush()
         return run
 

@@ -46,6 +46,24 @@ class InvalidQualityRunTransitionError(QualityDomainError):
         super().__init__(f"质量运行不允许从 {current} 迁移到 {target}")
 
 
+class QualityRunConflictError(QualityDomainError):
+    """并发写入：目标行已被其他执行者推进，本次迁移的前提不再成立。
+
+    不复用 :class:`InvalidQualityRunTransitionError`：那是"这条边本来就不该
+    走"，属于编排错误；这里是"这条边本来可以走，但行已经不是我以为的状态"，
+    属于并发冲突，调用方应重新读取而不是修正调用。
+
+    ``version_conflict`` 是既有的契约错误码（409），本域不新增命名空间。
+    """
+
+    code = "version_conflict"
+
+    def __init__(self, run_id: object, expected: object) -> None:
+        self.run_id = run_id
+        self.expected = expected
+        super().__init__(f"质量运行 {run_id} 已不在 {expected} 状态，请重新读取后再试")
+
+
 class QualityEngineError(RuntimeError):
     """规则源与声明不一致、规则返回了非法结果等服务端缺陷。
 
@@ -58,5 +76,6 @@ __all__ = [
     "InvalidQualityRunTransitionError",
     "QualityDomainError",
     "QualityEngineError",
+    "QualityRunConflictError",
     "ResourceNotFoundError",
 ]
