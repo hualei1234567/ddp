@@ -1,0 +1,153 @@
+{
+  "export_job_id": "00000000-0000-0000-0000-00000000000a",
+  "format": "LE_ROBOT",
+  "format_version": "ddp.lerobot/1.0.0",
+  "exporter_version": "1.0.0",
+  "mapping_version": "ddp.lerobot/1.0.0",
+  "config_sha256": "sha256:8c07c5526c78b58ffcfb0360130b18a682d516d76914d92caf3df62cfa9d1a52",
+  "artifact_count": 11,
+  "total_bytes": 8345,
+  "artifacts": [
+    {
+      "path": "data/chunk-000/episode_000000.parquet",
+      "size_bytes": 845,
+      "sha256": "sha256:025ba45c03e7dad4fc8184db0361823842fa2f2503db7336607d627b2d9f9fa5",
+      "content_type": "application/x-parquet",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": false
+    },
+    {
+      "path": "data/chunk-000/episode_000001.parquet",
+      "size_bytes": 870,
+      "sha256": "sha256:51efa70957b5d1049a4bdd47e75943b3dc5b9b9f67d70c7b3a4fae846ab5c08a",
+      "content_type": "application/x-parquet",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": false
+    },
+    {
+      "path": "data/chunk-000/episode_000002.parquet",
+      "size_bytes": 840,
+      "sha256": "sha256:ce8e18d18679096d1a9f7840b2dd7097a48fb70ff9ef88a516ad1445c3add9c6",
+      "content_type": "application/x-parquet",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": false
+    },
+    {
+      "path": "data/episodes.jsonl",
+      "size_bytes": 739,
+      "sha256": "sha256:c29709a4fd05b358116232a2e67504675dc70780599806d2361cdd7373bae56e",
+      "content_type": "application/x-ndjson",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": false
+    },
+    {
+      "path": "ddp/sidecar.json",
+      "size_bytes": 1685,
+      "sha256": "sha256:7c9a893c67588f86959c5c2c68324bee8534376ce83efe8460bbd0939b102b09",
+      "content_type": "application/json",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": true
+    },
+    {
+      "path": "meta/ddp_divisions.json",
+      "size_bytes": 271,
+      "sha256": "sha256:bae0feab4576bd36cedd9f17fa89b4cb0ddb294357b784b8d5496fb7fc2186f8",
+      "content_type": "application/json",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": false
+    },
+    {
+      "path": "meta/episodes.jsonl",
+      "size_bytes": 1627,
+      "sha256": "sha256:fc948c3f80b05efa86c73d84c8bedb702d4b4452e6a64555b1f08e92c0eefb8a",
+      "content_type": "application/x-ndjson",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": false
+    },
+    {
+      "path": "meta/info.json",
+      "size_bytes": 1184,
+      "sha256": "sha256:64999b1f0e7aaeefd6fac3300f8908e9a2e322c55556df9515e8031f14d74623",
+      "content_type": "application/json",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": false
+    },
+    {
+      "path": "meta/media.jsonl",
+      "size_bytes": 0,
+      "sha256": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "content_type": "application/x-ndjson",
+      "episode_refs": [],
+      "time_range": null,
+      "sidecar": false
+    },
+    {
+      "path": "meta/stats.json",
+      "size_bytes": 232,
+      "sha256": "sha256:7dd5be475dd0ac0867be54bbd9323e23c53c30ea00701eaf2b00ffb7e297b81b",
+      "content_type": "application/json",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": false
+    },
+    {
+      "path": "meta/tasks.jsonl",
+      "size_bytes": 52,
+      "sha256": "sha256:deacff1281a3cdb1f75b393d5e8a7458f409f3f0299d1a9c22d653425f147fa0",
+      "content_type": "application/x-ndjson",
+      "episode_refs": [
+        "00000000-0000-0000-0000-0000000000c8",
+        "00000000-0000-0000-0000-0000000000c9",
+        "00000000-0000-0000-0000-0000000000ca"
+      ],
+      "time_range": null,
+      "sidecar": false
+    }
+  ],
+  "aggregate_sha256": "sha256:c92b30f4a2cbe17ebd3d05397adfc797a3e419e1e8ce7d3401814393fcd93ff3",
+  "verification_status": "UNVERIFIED"
+}
