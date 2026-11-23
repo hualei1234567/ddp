@@ -1,0 +1,22 @@
+[project]
+name = "ddp-edge-agent-core"
+version = "0.1.0"
+description = "DDP Edge Agent 本地核心库（Spool / Manifest / Adapter / Preflight / 上传驱动），与服务端 API 无关"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["edge_agent", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error"]
