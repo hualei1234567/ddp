@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.32.0
+  version: 1.33.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -521,6 +521,8 @@ tags:
     description: 到货批次、片段人工裁决与只追加验收核验账本
   - name: processing
     description: 处理运行实体、七态状态机与阶段/产物引用（八阶段编排属 N4-002）
+  - name: edge-agents
+    description: 端侧采集 Agent 配对、心跳、纯拉取任务派发与 Lease 互斥（V31-011 / ADR-0047）
 paths:
   /health:
     $ref: "./fragments/paths.stage1.yaml#/health"
@@ -1024,6 +1026,29 @@ paths:
     $ref: "./fragments/paths.audit.yaml#/auditLogs"
   /api/v1/projects/{project_id}/audit-logs/{resource_type}/{resource_id}:
     $ref: "./fragments/paths.audit.yaml#/auditLogResourceTimeline"
+  # --- V31-011 Edge Capture Agent（ADR-0047 纯拉取模式）---
+  /api/v1/projects/{project_id}/edge-agents/pairing-tokens:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentPairingTokens"
+  /api/v1/projects/{project_id}/edge-agents:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgents"
+  /api/v1/projects/{project_id}/edge-agents/{agent_id}:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentDetail"
+  /api/v1/projects/{project_id}/edge-agents/{agent_id}/revoke:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentRevoke"
+  /api/v1/projects/{project_id}/edge-agents/{agent_id}/dispatch:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentDispatch"
+  /api/v1/projects/{project_id}/edge-agents/{agent_id}/rotate-token:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentRotateToken"
+  /api/v1/projects/{project_id}/edge-agents/{agent_id}/leases/{lease_id}/reclaim:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentLeaseReclaim"
+  /api/v1/edge-agents/pair:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentPair"
+  /api/v1/edge-agents/{agent_id}/heartbeat:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentHeartbeat"
+  /api/v1/edge-agents/{agent_id}/leases:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentLeases"
+  /api/v1/edge-agents/{agent_id}/assignments:
+    $ref: "./fragments/paths.edge_agents.yaml#/edgeAgentAssignments"
 components:
   securitySchemes:
     bearerAuth:
@@ -1609,3 +1634,25 @@ components:
     SupplierPortfolioTotals: {$ref: "./fragments/schemas.stage6.yaml#/SupplierPortfolioTotals"}
     SupplierPortfolioEntry: {$ref: "./fragments/schemas.stage6.yaml#/SupplierPortfolioEntry"}
     SupplierPortfolio: {$ref: "./fragments/schemas.stage6.yaml#/SupplierPortfolio"}
+    EdgeAgentStatus: {$ref: "./fragments/schemas.edge_agents.yaml#/EdgeAgentStatus"}
+    EdgeAgentConnectivity: {$ref: "./fragments/schemas.edge_agents.yaml#/EdgeAgentConnectivity"}
+    AgentLeaseStatus: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentLeaseStatus"}
+    AgentLeaseReleaseReason: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentLeaseReleaseReason"}
+    PairingTokenCreate: {$ref: "./fragments/schemas.edge_agents.yaml#/PairingTokenCreate"}
+    PairingTokenIssued: {$ref: "./fragments/schemas.edge_agents.yaml#/PairingTokenIssued"}
+    AgentHeartbeatSummary: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentHeartbeatSummary"}
+    AgentLease: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentLease"}
+    EdgeAgent: {$ref: "./fragments/schemas.edge_agents.yaml#/EdgeAgent"}
+    EdgeAgentPage: {$ref: "./fragments/schemas.edge_agents.yaml#/EdgeAgentPage"}
+    EdgeAgentDetail: {$ref: "./fragments/schemas.edge_agents.yaml#/EdgeAgentDetail"}
+    AgentRevokeRequest: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentRevokeRequest"}
+    AgentDispatchRequest: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentDispatchRequest"}
+    AgentLeaseReclaimRequest: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentLeaseReclaimRequest"}
+    EdgeAgentTokenRotated: {$ref: "./fragments/schemas.edge_agents.yaml#/EdgeAgentTokenRotated"}
+    AgentPairRequest: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentPairRequest"}
+    AgentPairResponse: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentPairResponse"}
+    AgentHeartbeatRequest: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentHeartbeatRequest"}
+    AgentHeartbeatResponse: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentHeartbeatResponse"}
+    AgentLeaseRequest: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentLeaseRequest"}
+    AgentAssignment: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentAssignment"}
+    AgentAssignmentList: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentAssignmentList"}

@@ -1,0 +1,335 @@
+# V31-011 Edge Capture Agent Schema（ADR-0047 纯拉取模式）。
+
+EdgeAgentStatus:
+  type: string
+  enum: [PAIRED, ACTIVE, REVOKED]
+
+EdgeAgentConnectivity:
+  type: string
+  enum: [ONLINE, DELAYED, OFFLINE]
+
+AgentLeaseStatus:
+  type: string
+  enum: [ACTIVE, EXPIRED, RELEASED]
+
+AgentLeaseReleaseReason:
+  type: string
+  enum:
+    - COMPLETED
+    - RELEASED_BY_AGENT
+    - FAILED
+    - EXPIRED
+    - AGENT_REVOKED
+    - ADMIN_RECLAIMED
+
+PairingTokenCreate:
+  type: object
+  required: [robot_id, display_name]
+  additionalProperties: false
+  properties:
+    robot_id: {type: string, format: uuid}
+    display_name: {type: string, minLength: 1, maxLength: 128}
+    device_ids: {type: array, items: {type: string, format: uuid}, maxItems: 64}
+    ttl_seconds: {type: [integer, "null"], minimum: 1, maximum: 86400}
+
+PairingTokenIssued:
+  type: object
+  required:
+    - token_id
+    - project_id
+    - robot_id
+    - display_name
+    - device_ids
+    - pairing_token
+    - created_at
+    - expires_at
+  additionalProperties: false
+  properties:
+    token_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    robot_id: {type: string, format: uuid}
+    display_name: {type: string}
+    device_ids: {type: array, items: {type: string, format: uuid}}
+    pairing_token: {type: string}
+    created_at: {type: string, format: date-time}
+    expires_at: {type: string, format: date-time}
+
+AgentHeartbeatSummary:
+  type: object
+  required:
+    - reported_at
+    - received_at
+    - agent_version
+    - os
+    - arch
+    - adapter_versions
+    - disk_free_bytes
+    - network_reachable
+    - current_session_id
+    - spool_pending_count
+    - spool_pending_bytes
+    - upload_queue_depth
+    - last_error
+  additionalProperties: false
+  properties:
+    reported_at: {type: string, format: date-time}
+    received_at: {type: string, format: date-time}
+    agent_version: {type: string}
+    os: {type: string}
+    arch: {type: string}
+    adapter_versions: {type: object, additionalProperties: {type: string}}
+    disk_free_bytes: {type: integer, minimum: 0}
+    network_reachable: {type: boolean}
+    current_session_id: {type: [string, "null"], format: uuid}
+    spool_pending_count: {type: integer, minimum: 0}
+    spool_pending_bytes: {type: integer, minimum: 0}
+    upload_queue_depth: {type: integer, minimum: 0}
+    last_error: {type: [string, "null"]}
+
+AgentLease:
+  type: object
+  required:
+    - lease_id
+    - project_id
+    - agent_id
+    - capture_session_id
+    - device_ids
+    - status
+    - acquired_at
+    - expires_at
+    - last_renewed_at
+    - released_at
+    - release_reason
+    - release_note
+  additionalProperties: false
+  properties:
+    lease_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    agent_id: {type: string, format: uuid}
+    capture_session_id: {type: string, format: uuid}
+    device_ids: {type: array, items: {type: string, format: uuid}}
+    status: {$ref: "#/AgentLeaseStatus"}
+    acquired_at: {type: string, format: date-time}
+    expires_at: {type: string, format: date-time}
+    last_renewed_at: {type: string, format: date-time}
+    released_at: {type: [string, "null"], format: date-time}
+    release_reason:
+      anyOf:
+        - {$ref: "#/AgentLeaseReleaseReason"}
+        - {type: "null"}
+    release_note: {type: [string, "null"]}
+
+EdgeAgent:
+  type: object
+  required:
+    - agent_id
+    - project_id
+    - display_name
+    - robot_id
+    - device_ids
+    - status
+    - connectivity
+    - dispatch_paused
+    - agent_version
+    - os_arch
+    - token_generation
+    - token_rotated_at
+    - paired_at
+    - activated_at
+    - last_seen_at
+    - revoked_at
+    - revoke_reason
+    - latest_heartbeat
+  additionalProperties: false
+  properties:
+    agent_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    display_name: {type: string}
+    robot_id: {type: string, format: uuid}
+    device_ids: {type: array, items: {type: string, format: uuid}}
+    status: {$ref: "#/EdgeAgentStatus"}
+    connectivity: {$ref: "#/EdgeAgentConnectivity"}
+    dispatch_paused: {type: boolean}
+    agent_version: {type: [string, "null"]}
+    os_arch: {type: [string, "null"]}
+    token_generation: {type: integer, minimum: 1}
+    token_rotated_at: {type: [string, "null"], format: date-time}
+    paired_at: {type: string, format: date-time}
+    activated_at: {type: [string, "null"], format: date-time}
+    last_seen_at: {type: [string, "null"], format: date-time}
+    revoked_at: {type: [string, "null"], format: date-time}
+    revoke_reason: {type: [string, "null"]}
+    latest_heartbeat:
+      anyOf:
+        - {$ref: "#/AgentHeartbeatSummary"}
+        - {type: "null"}
+
+EdgeAgentPage:
+  type: object
+  required: [items, next_cursor]
+  additionalProperties: false
+  properties:
+    items: {type: array, items: {$ref: "#/EdgeAgent"}}
+    next_cursor: {type: [string, "null"]}
+
+EdgeAgentDetail:
+  allOf:
+    - {$ref: "#/EdgeAgent"}
+    - type: object
+      required: [active_leases]
+      properties:
+        active_leases: {type: array, items: {$ref: "#/AgentLease"}}
+
+AgentRevokeRequest:
+  type: object
+  required: [reason]
+  additionalProperties: false
+  properties:
+    reason: {type: string, minLength: 1, maxLength: 1000}
+
+AgentDispatchRequest:
+  type: object
+  required: [paused]
+  additionalProperties: false
+  properties:
+    paused: {type: boolean}
+    reason: {type: [string, "null"], maxLength: 1000}
+
+AgentLeaseReclaimRequest:
+  type: object
+  required: [reason]
+  additionalProperties: false
+  properties:
+    reason: {type: string, minLength: 1, maxLength: 1000}
+
+EdgeAgentTokenRotated:
+  type: object
+  required: [agent_id, token_generation, token_rotated_at, agent_token]
+  additionalProperties: false
+  properties:
+    agent_id: {type: string, format: uuid}
+    token_generation: {type: integer, minimum: 1}
+    token_rotated_at: {type: string, format: date-time}
+    agent_token: {type: string}
+
+AgentPairRequest:
+  type: object
+  required: [pairing_token]
+  additionalProperties: false
+  properties:
+    pairing_token: {type: string, minLength: 1, maxLength: 128}
+    agent_version: {type: [string, "null"], maxLength: 64}
+    os: {type: [string, "null"], maxLength: 64}
+    arch: {type: [string, "null"], maxLength: 32}
+
+AgentPairResponse:
+  type: object
+  required:
+    - agent_id
+    - project_id
+    - robot_id
+    - display_name
+    - device_ids
+    - agent_token
+    - heartbeat_interval_seconds
+    - lease_ttl_seconds
+    - capture_grace_seconds
+  additionalProperties: false
+  properties:
+    agent_id: {type: string, format: uuid}
+    project_id: {type: string, format: uuid}
+    robot_id: {type: string, format: uuid}
+    display_name: {type: string}
+    device_ids: {type: array, items: {type: string, format: uuid}}
+    agent_token: {type: string}
+    heartbeat_interval_seconds: {type: integer, minimum: 1}
+    lease_ttl_seconds: {type: integer, minimum: 1}
+    capture_grace_seconds: {type: integer, minimum: 1}
+
+AgentHeartbeatRequest:
+  type: object
+  required:
+    - reported_at
+    - version
+    - os
+    - arch
+    - disk_free_bytes
+    - network_reachable
+    - spool_pending_count
+    - spool_pending_bytes
+    - upload_queue_depth
+  additionalProperties: false
+  properties:
+    reported_at: {type: string, format: date-time}
+    version: {type: string, minLength: 1, maxLength: 64}
+    os: {type: string, minLength: 1, maxLength: 64}
+    arch: {type: string, minLength: 1, maxLength: 32}
+    adapter_versions: {type: object, additionalProperties: {type: string}}
+    disk_free_bytes: {type: integer, minimum: 0}
+    network_reachable: {type: boolean}
+    current_session_id: {type: [string, "null"], format: uuid}
+    spool_pending_count: {type: integer, minimum: 0}
+    spool_pending_bytes: {type: integer, minimum: 0}
+    upload_queue_depth: {type: integer, minimum: 0}
+    last_error: {type: [string, "null"], maxLength: 1000}
+    renew_lease_ids: {type: [array, "null"], items: {type: string, format: uuid}}
+
+AgentHeartbeatResponse:
+  type: object
+  required:
+    - agent_id
+    - status
+    - received_at
+    - dispatch_paused
+    - renewed_leases
+    - expired_lease_ids
+  additionalProperties: false
+  properties:
+    agent_id: {type: string, format: uuid}
+    status: {$ref: "#/EdgeAgentStatus"}
+    received_at: {type: string, format: date-time}
+    dispatch_paused: {type: boolean}
+    renewed_leases: {type: array, items: {$ref: "#/AgentLease"}}
+    expired_lease_ids: {type: array, items: {type: string, format: uuid}}
+
+AgentLeaseRequest:
+  type: object
+  additionalProperties: false
+  properties:
+    action: {type: string, enum: [acquire, release], default: acquire}
+    capture_session_id: {type: [string, "null"], format: uuid}
+    device_ids: {type: [array, "null"], items: {type: string, format: uuid}, maxItems: 64}
+    lease_id: {type: [string, "null"], format: uuid}
+    release_reason: {type: [string, "null"], maxLength: 32}
+    release_note: {type: [string, "null"], maxLength: 500}
+
+AgentAssignment:
+  type: object
+  required:
+    - capture_session_id
+    - code
+    - status
+    - task_id
+    - batch_id
+    - robot_id
+    - location_id
+    - active_lease_id
+  additionalProperties: false
+  properties:
+    capture_session_id: {type: string, format: uuid}
+    code: {type: string}
+    status: {type: string}
+    task_id: {type: [string, "null"], format: uuid}
+    batch_id: {type: [string, "null"], format: uuid}
+    robot_id: {type: [string, "null"], format: uuid}
+    location_id: {type: [string, "null"], format: uuid}
+    active_lease_id: {type: [string, "null"], format: uuid}
+
+AgentAssignmentList:
+  type: object
+  required: [agent_id, dispatch_paused, items]
+  additionalProperties: false
+  properties:
+    agent_id: {type: string, format: uuid}
+    dispatch_paused: {type: boolean}
+    items: {type: array, items: {$ref: "#/AgentAssignment"}}

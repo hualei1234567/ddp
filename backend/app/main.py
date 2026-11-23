@@ -22,6 +22,7 @@ from app.api.errors import (
     dataset_error_to_app,
     datasource_error_to_app,
     domain_error_to_app,
+    edge_agent_error_to_app,
     episode_error_to_app,
     governance_error_to_app,
     ingestion_error_to_app,
@@ -49,6 +50,7 @@ from app.domain.collection.errors import CollectionDomainError
 from app.domain.datasets.errors import DatasetDomainError
 from app.domain.datasources.errors import DataSourceDomainError
 from app.domain.devices.errors import DeviceDomainError
+from app.domain.edge_agents.errors import EdgeAgentDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.governance.errors import GovernanceDomainError
 from app.domain.identity.errors import CrossProjectAccessError
@@ -336,6 +338,18 @@ def create_app() -> FastAPI:
         exc: QualityDomainError,
     ) -> JSONResponse:
         error = quality_error_to_app(exc)
+        _log_domain_error(request, exc, error)
+        return JSONResponse(
+            status_code=error.status_code,
+            content=_error_payload(request, error),
+        )
+
+    @app.exception_handler(EdgeAgentDomainError)
+    async def handle_edge_agent_domain_error(
+        request: Request,
+        exc: EdgeAgentDomainError,
+    ) -> JSONResponse:
+        error = edge_agent_error_to_app(exc)
         _log_domain_error(request, exc, error)
         return JSONResponse(
             status_code=error.status_code,

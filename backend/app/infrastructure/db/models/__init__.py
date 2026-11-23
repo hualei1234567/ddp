@@ -68,6 +68,12 @@ from app.infrastructure.db.models.devices import (
     Robot,
     Sensor,
 )
+from app.infrastructure.db.models.edge_agents import (
+    AgentHeartbeatModel,
+    AgentTaskLeaseModel,
+    EdgeAgentModel,
+    EdgeAgentPairingTokenModel,
+)
 from app.infrastructure.db.models.episodes import (
     DataLineageEdgeModel,
     EpisodeModel,
@@ -153,8 +159,12 @@ __all__ = [
     "DatasetQualityReportModel",
     "DatasetSplitPolicyModel",
     "DatasetVersionModel",
+    "AgentHeartbeatModel",
+    "AgentTaskLeaseModel",
     "DeliveryBatchModel",
     "Device",
+    "EdgeAgentModel",
+    "EdgeAgentPairingTokenModel",
     "EpisodeModel",
     "EpisodeRawAssetModel",
     "ExportJobModel",

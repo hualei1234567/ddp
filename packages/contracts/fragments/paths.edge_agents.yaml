@@ -1,0 +1,274 @@
+# V31-011 Edge Capture Agent 路径片段（管理面 + Agent 纯拉取面）。
+
+edgeAgentPairingTokens:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: issueEdgeAgentPairingToken
+    tags: [edge-agents]
+    summary: 生成一次性 Edge Agent 配对凭证
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/PairingTokenCreate"}
+    responses:
+      "201":
+        description: 一次性配对凭证（仅返回一次）
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/PairingTokenIssued"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
+edgeAgents:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listEdgeAgents
+    tags: [edge-agents]
+    summary: 查询项目内 Edge Agent 列表（含在线/延迟/离线状态与最新心跳摘要）
+    parameters:
+      - name: status
+        in: query
+        required: false
+        schema: {$ref: "../openapi.yaml#/components/schemas/EdgeAgentStatus"}
+      - name: robot_id
+        in: query
+        required: false
+        schema: {type: string, format: uuid}
+      - $ref: "../openapi.yaml#/components/parameters/Cursor"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: Edge Agent 分页
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/EdgeAgentPage"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
+edgeAgentDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: agent_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  get:
+    operationId: getEdgeAgent
+    tags: [edge-agents]
+    summary: 查询 Edge Agent 详情（含心跳与活跃 Lease）
+    responses:
+      "200":
+        description: Edge Agent 详情
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/EdgeAgentDetail"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+
+edgeAgentRevoke:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: agent_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  post:
+    operationId: revokeEdgeAgent
+    tags: [edge-agents]
+    summary: 撤销 Edge Agent 并立即失效其所有活跃 Lease
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/AgentRevokeRequest"}
+    responses:
+      "200":
+        description: 已撤销的 Edge Agent
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/EdgeAgent"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
+edgeAgentDispatch:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: agent_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  post:
+    operationId: updateEdgeAgentDispatch
+    tags: [edge-agents]
+    summary: 暂停或恢复 Edge Agent 新任务派发
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/AgentDispatchRequest"}
+    responses:
+      "200":
+        description: 更新后的 Edge Agent
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/EdgeAgent"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
+edgeAgentRotateToken:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: agent_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  post:
+    operationId: rotateEdgeAgentToken
+    tags: [edge-agents]
+    summary: 轮换 Edge Agent 专属令牌
+    responses:
+      "200":
+        description: 新的 Agent 令牌（仅返回一次）
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/EdgeAgentTokenRotated"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+
+edgeAgentLeaseReclaim:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: agent_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+    - name: lease_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  post:
+    operationId: reclaimEdgeAgentLease
+    tags: [edge-agents]
+    summary: 管理员强制回收 Lease（必填原因并审计）
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/AgentLeaseReclaimRequest"}
+    responses:
+      "200":
+        description: 已回收的 Lease
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/AgentLease"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
+edgeAgentPair:
+  post:
+    operationId: pairEdgeAgent
+    tags: [edge-agents]
+    summary: Agent 提交一次性配对凭证换取专属身份与令牌
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/AgentPairRequest"}
+    responses:
+      "201":
+        description: 配对成功，返回 Agent 身份与专属令牌（仅返回一次）
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/AgentPairResponse"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
+edgeAgentHeartbeat:
+  parameters:
+    - name: agent_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  post:
+    operationId: postEdgeAgentHeartbeat
+    tags: [edge-agents]
+    summary: Agent 上报心跳并续租活跃 Lease
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/AgentHeartbeatRequest"}
+    responses:
+      "200":
+        description: 心跳已记录
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/AgentHeartbeatResponse"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
+edgeAgentLeases:
+  parameters:
+    - name: agent_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  post:
+    operationId: manageEdgeAgentLease
+    tags: [edge-agents]
+    summary: Agent 申请或释放任务 Lease（互斥冲突返回 409）
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/AgentLeaseRequest"}
+    responses:
+      "200":
+        description: 申请或释放后的 Lease
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/AgentLease"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "409": {$ref: "../openapi.yaml#/components/responses/Conflict"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
+edgeAgentAssignments:
+  parameters:
+    - name: agent_id
+      in: path
+      required: true
+      schema: {type: string, format: uuid}
+  get:
+    operationId: getEdgeAgentAssignments
+    tags: [edge-agents]
+    summary: Agent 拉取分配给本 Agent 的待执行 CaptureSession
+    responses:
+      "200":
+        description: 可执行任务列表（暂停派发时返回空列表）
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/AgentAssignmentList"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
