@@ -16,15 +16,20 @@ import type {
   QualityFindingStatus,
   QualityRuleCategory,
   QualityRun,
+  QualityRunBatchCreateInput,
   QualityRunCreateInput,
+  QualityRunDiffReport,
   QualityRunFinding,
   QualitySubjectType,
+  QueuedQualityRun,
 } from "../types/qualityRun";
 import { apiClient, type ApiClient } from "./api";
 import {
   parseQualityRun,
+  parseQualityRunDiff,
   parseQualityRunFindingPage,
   parseQualityRunPage,
+  parseQueuedQualityRun,
 } from "./qualityRunParsers";
 import {
   assertPageScope,
@@ -84,6 +89,29 @@ export interface QualityRunApi {
     runId: string,
     options?: QualityFindingListOptions,
   ): Promise<CursorPage<QualityRunFinding>>;
+  /**
+   * 批量重跑：为一组 Episode 各排一次质检（V31-033 / FR-026）。
+   *
+   * 返回的是**排队回执**（`QueuedQualityRun`，无结论），不是检查结果；
+   * 空列表在前端拦截，重复对象去重后提交（服务端对重复返回 422）。
+   */
+  batchCreateRuns(
+    projectId: string,
+    input: QualityRunBatchCreateInput,
+    options?: QualityRunRequestOptions,
+  ): Promise<QueuedQualityRun[]>;
+  /**
+   * 两次运行的差异报告（V31-033 / FR-027）。
+   *
+   * 服务端按 `rule_id + subject_ref` 对齐并分四类；任一侧未产出结论
+   * 或两次运行检查不同对象时返回 422，由调用方按 API 错误展示。
+   */
+  getRunDiff(
+    projectId: string,
+    baselineRunId: string,
+    candidateRunId: string,
+    options?: QualityRunRequestOptions,
+  ): Promise<QualityRunDiffReport>;
 }
 
 export function createQualityRunApi(client: ApiClient): QualityRunApi {
@@ -187,6 +215,79 @@ export function createQualityRunApi(client: ApiClient): QualityRunApi {
           return page;
         },
       });
+    },
+
+    async batchCreateRuns(projectId, input, options) {
+      // 空列表在服务端是 422；前端提前拦截，避免把「没选对象」当成
+      // 「重跑完成」。重复对象去重：服务端对重复返回 422，会拒绝整批。
+      const subjectIds = [...new Set(input.subject_ids)];
+      if (subjectIds.length === 0) {
+        throw new ContractValidationError(
+          "批量重跑至少需要选择一个 Episode 对象",
+        );
+      }
+      const queued = await client.request(runPath(projectId, "/batch"), {
+        method: "POST",
+        signal: options?.signal,
+        body: {
+          subject_type: input.subject_type,
+          subject_ids: subjectIds,
+        },
+        validate: (value) => {
+          if (!Array.isArray(value)) {
+            throw new ContractValidationError("排队回执响应必须是数组");
+          }
+          if (value.length === 0) {
+            // 契约要求 1..1000；入队 0 条的「成功」只会让人误以为重跑完成。
+            throw new ContractValidationError(
+              "排队回执不能是空数组（入队 0 条视为响应缺陷）",
+            );
+          }
+          const items = value.map((item, index) =>
+            assertProjectScope(
+              parseQueuedQualityRun(item, `排队回执[${index}]`),
+              projectId,
+              "排队回执",
+            ),
+          );
+          const requested = new Set(subjectIds);
+          items.forEach((item, index) => {
+            if (!requested.has(item.subject_id)) {
+              throw new ContractValidationError(
+                `排队回执[${index}].subject_id 不在请求的对象集合内`,
+              );
+            }
+          });
+          return items;
+        },
+      });
+      return queued;
+    },
+
+    async getRunDiff(projectId, baselineRunId, candidateRunId, options) {
+      return client.get(
+        runPath(
+          projectId,
+          `/${requireIdentifier(baselineRunId, "baseline_run_id")}/diff/${requireIdentifier(candidateRunId, "candidate_run_id")}`,
+        ),
+        {
+          signal: options?.signal,
+          validate: (value) => {
+            const report = parseQualityRunDiff(value);
+            if (report.baseline_run_id !== baselineRunId) {
+              throw new ContractValidationError(
+                "质量差异报告.baseline_run_id 与请求不一致",
+              );
+            }
+            if (report.candidate_run_id !== candidateRunId) {
+              throw new ContractValidationError(
+                "质量差异报告.candidate_run_id 与请求不一致",
+              );
+            }
+            return report;
+          },
+        },
+      );
     },
   };
 }
