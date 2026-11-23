@@ -79,6 +79,10 @@ class UploadSessionGoneError(GatewayError):
     """服务端 UploadSession 已过期/中止/不存在：只能重建 Session。"""
 
 
+class AuthRejectedError(GatewayError):
+    """Agent 身份被服务端拒绝（token 失效/被撤销/配对过期）：不可重试，需重新配对。"""
+
+
 class GatewayPermanentError(GatewayError):
     """不可重试的服务端拒绝（校验失败、权限、状态冲突等）。"""
 
