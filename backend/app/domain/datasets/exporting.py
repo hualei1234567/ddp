@@ -72,6 +72,7 @@ def _artifact_verification_status(export_format: ExportFormat | str) -> str:
         return ExportVerificationStatus.VERIFIED_BY_LOADER.value
     return ExportVerificationStatus.UNVERIFIED.value
 
+
 # 标签键 -> 训练列 的确定性映射。
 #
 # ``label_key`` 由各项目的标注 Schema 定义，不是固定枚举；这里只登记仓库里

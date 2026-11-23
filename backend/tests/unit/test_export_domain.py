@@ -268,9 +268,7 @@ def test_lerobot_metadata_artifacts_are_deterministic_and_hashed() -> None:
         "data/chunk-000/episode_000002.parquet",
     }
     # data/ 目录净化守卫：仅允许 .parquet 文件，防止官方默认构造扫描失败
-    assert all(
-        item.path.endswith(".parquet") for item in first if item.path.startswith("data/")
-    )
+    assert all(item.path.endswith(".parquet") for item in first if item.path.startswith("data/"))
     assert all(item.size_bytes == len(item.data) for item in first)
 
     aggregate = aggregate_sha256(first)

@@ -137,7 +137,9 @@ def _parquet_bytes(rows: Sequence[Mapping[str, object]]) -> bytes:
             arrays.append(pa.array([int(v or 0) for v in values], type=pa.int64()))
             fields.append(pa.field(column, pa.int64()))
         elif column_type == "float32":
-            arrays.append(pa.array([float(v or 0.0) for v in values], type=pa.float32()))
+            arrays.append(
+                pa.array([float(v or 0.0) for v in values], type=pa.float32())
+            )
             fields.append(pa.field(column, pa.float32()))
         else:
             arrays.append(pa.array([str(v) for v in values], type=pa.string()))
@@ -236,8 +238,12 @@ def _build_episodes_stats(
             {
                 "episode_index": ep_index,
                 "stats": {
-                    "episode_index": _scalar_feature_stats([float(ep_index)], as_int=True),
-                    "task_index": _scalar_feature_stats([float(task_index)], as_int=True),
+                    "episode_index": _scalar_feature_stats(
+                        [float(ep_index)], as_int=True
+                    ),
+                    "task_index": _scalar_feature_stats(
+                        [float(task_index)], as_int=True
+                    ),
                     "length": _scalar_feature_stats([float(length)], as_int=True),
                     "timestamp": _scalar_feature_stats([timestamp], as_int=False),
                 },
