@@ -36,10 +36,11 @@
 
 | 任务 | FR | 内容 | 状态 |
 |---|---|---|---|
-| V31-010 | — | ADR-0047：Agent 协议边界冻结（纯拉取、零入站、无命令通道） | ✅ ADR 已落盘（`docs/adr/0047-edge-agent-pull-mode.md`） |
-| V31-011 | FR-001~003 | `edge_agents` / `agent_heartbeats` / `agent_task_leases` 表与配对/心跳/Lease/assignments API | 未开工（下一步） |
-| V31-012 | FR-004~008 | Agent 运行时：Preflight、Filesystem Export Adapter、Spool、Manifest、上传 | 未开工（依赖 V31-011） |
-| V31-013 | FR-007/008 | 断网恢复与幂等续传验收 | 未开工（依赖 V31-012） |
+| V31-010 | — | ADR-0047：Agent 协议边界冻结（纯拉取、零入站、无命令通道） | ✅ 已合并（PR #90） |
+| V31-011 | FR-001~003 | `edge_agents` / `agent_heartbeats` / `agent_task_leases` / 配对凭证 表 + 配对/心跳/Lease/assignments API + Agent 专属鉴权 + 契约 | 🔄 PR #93（CI 中；已修域映射计数断言） |
+| V31-012a | FR-004~008 | 端侧本地核心：Spool（SQLite WAL + 崩溃恢复）、Manifest、FilesystemExportAdapter、Preflight 引擎、可续传上传驱动 | ✅ 已合并（PR #92）：41 测试；`HARDWARE_CAPTURE_NOT_TESTED` |
+| V31-012b | FR-007/008 | 真实 DDP HTTP 网关（标准库 urllib）+ 端到端联调（崩溃续传/重签/幂等） | 🔄 PR #94（61 测试；修复真实 fd 泄漏） |
+| V31-013 | FR-007/008 | 断网恢复与幂等续传验收 | 待 V31-011 + V31-012b 合并后收口 |
 
 ## S3 真实传感器数据物化 —— 未开工（依赖 S2）
 
@@ -55,7 +56,7 @@ FR-021/022；FR-023 已 VERIFIED。
 
 | FR | 内容 | 状态 |
 |---|---|---|
-| FR-030 | Split 防泄漏按 Session/Subject/Scene 分组 | 未开工（P1） |
+| FR-030 | Split 防泄漏按 Session/Subject/Scene 分组 | 🔄 **PR #95**：新增采集会话/受试对象两个维度（默认开启、纳入 policy_sha256），6 条测试 |
 | FR-034/035 | Loader 实测 | **已实测：BLOCKED 维持**（见 S1）；解除路径 = 修复 9 类结构缺口后重测 |
 | FR-036/037 | 训练真实连接器/回调 | BLOCKED（外部 API 未提供） |
 
