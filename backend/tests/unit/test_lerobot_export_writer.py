@@ -9,6 +9,7 @@ import pytest
 from ddp_data.lerobot.export_writer import (
     EPISODES_PER_CHUNK,
     LEROBOT_CODEBASE_VERSION,
+    NOMINAL_METADATA_FPS,
     required_lerobot_paths,
     write_lerobot_metadata,
 )
@@ -71,7 +72,7 @@ def test_row_order_does_not_change_episode_index_assignment() -> None:
     assert all(a.data == b.data for a, b in zip(one, two, strict=True))
     stats_one = json.loads(next(a for a in one if a.path == "meta/stats.json").data)
     stats_two = json.loads(next(a for a in two if a.path == "meta/stats.json").data)
-    assert stats_one["length"]["count"] == stats_two["length"]["count"] == [3.0]
+    assert stats_one["length"]["count"] == stats_two["length"]["count"] == [3]
 
 
 # ---- 结构合规 ----
@@ -86,11 +87,16 @@ def test_writer_does_not_produce_info_json() -> None:
         created_at_iso="2026-11-23T00:00:00+00:00",
     )
     assert not any(a.path == "meta/info.json" for a in artifacts)
-    assert {a.path for a in artifacts} >= {"meta/tasks.jsonl", "meta/stats.json"}
+    assert {a.path for a in artifacts} >= {
+        "meta/tasks.jsonl",
+        "meta/episodes.jsonl",
+        "meta/episodes_stats.jsonl",
+        "meta/stats.json",
+    }
 
 
 def test_features_declare_episode_level_columns_only() -> None:
-    """backend info 合并 LeRobot 键后：features 显式只含 episode 级列。"""
+    """backend info 合并 LeRobot 键后：features 显式只含 episode 级列（含 timestamp）。"""
     from datetime import datetime
 
     from app.domain.datasets.enums import Split
@@ -118,13 +124,22 @@ def test_features_declare_episode_level_columns_only() -> None:
     ):
         assert key in info, f"info.json 缺 LeRobot 必需键 {key}"
     assert info["codebase_version"] == LEROBOT_CODEBASE_VERSION
+    assert info["chunks_size"] == EPISODES_PER_CHUNK
+    assert info["fps"] == NOMINAL_METADATA_FPS
+    assert info["fps"] > 0
+    assert info["total_frames"] == 2
+    assert info["data_path"] == "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet"
     features = info["features"]
-    assert set(features) == {"episode_index", "task_index", "length", "split"}
+    assert set(features) == {"episode_index", "task_index", "length", "timestamp", "split"}
     assert not any(key.startswith("observation.") for key in features)
     assert not any(key.startswith("action") for key in features)
     assert info["loadable_scope"] == "METADATA_ONLY"
-    assert info["verification_status"] == "UNVERIFIED"
+    assert info["verification_status"] == "VERIFIED_BY_LOADER"
     assert info["frame_level_mapping"] is False
+    assert info["ddp"]["fps_source"] == "NOMINAL_METADATA_ONLY"
+    assert info["ddp"]["loader_probe"]["lerobot_version"] == "0.3.3"
+    assert info["ddp"]["loader_probe"]["loadable_scope"] == "METADATA_ONLY"
+    assert info["ddp"]["loader_probe"]["frame_level_read"] == "NOT_CLAIMED_METADATA_ONLY"
 
 
 def test_tasks_jsonl_has_placeholder_task() -> None:
@@ -136,20 +151,48 @@ def test_tasks_jsonl_has_placeholder_task() -> None:
     assert tasks == [{"task_index": 0, "task": "put object on table"}]
 
 
+def test_episodes_and_episodes_stats_jsonl_conform_to_v21() -> None:
+    """meta/episodes.jsonl 与 meta/episodes_stats.jsonl 符合官方 v2.1 schema。"""
+    episodes = [make_episode(0, length=1), make_episode(1, split="validation", length=1)]
+    artifacts = write_lerobot_metadata(
+        episodes=episodes, dataset_version_id="v", created_at_iso="t"
+    )
+    ep_raw = next(a for a in artifacts if a.path == "meta/episodes.jsonl").data.decode("utf-8")
+    ep_rows = [json.loads(line) for line in ep_raw.splitlines()]
+    assert ep_rows == [
+        {"episode_index": 0, "length": 1, "tasks": ["put object on table"]},
+        {"episode_index": 1, "length": 1, "tasks": ["put object on table"]},
+    ]
+
+    stats_raw = next(a for a in artifacts if a.path == "meta/episodes_stats.jsonl").data.decode(
+        "utf-8"
+    )
+    stats_rows = [json.loads(line) for line in stats_raw.splitlines()]
+    assert [row["episode_index"] for row in stats_rows] == [0, 1]
+    for row in stats_rows:
+        for feature in ("episode_index", "task_index", "length", "timestamp"):
+            feat_stats = row["stats"][feature]
+            assert set(feat_stats) == {"min", "max", "mean", "std", "count"}
+            assert all(isinstance(v, list) and len(v) == 1 for v in feat_stats.values())
+
+
 def test_stats_json_exists_with_episode_level_stats() -> None:
     episodes = [make_episode(0, length=10), make_episode(1, length=30)]
     artifacts = write_lerobot_metadata(
         episodes=episodes, dataset_version_id="v", created_at_iso="t"
     )
     stats = json.loads(next(a for a in artifacts if a.path == "meta/stats.json").data)
+    assert "per_split" not in stats
+    assert set(stats) == {"episode_index", "task_index", "length", "timestamp"}
     assert stats["length"]["min"] == [10]
     assert stats["length"]["max"] == [30]
-    assert stats["length"]["total"] == [40.0]
-    assert stats["per_split"]["train"]["episodes"] == 2
+    assert stats["length"]["mean"] == [20.0]
+    assert stats["length"]["std"] == [10.0]
+    assert stats["length"]["count"] == [2]
 
 
 def test_per_episode_parquet_layout_and_content() -> None:
-    """v2.1 布局：每 Episode 一个 parquet，只含 episode 级列，行数=1。"""
+    """v2.1 布局：每 Episode 一个 parquet，只含 episode 级列（含 timestamp），行数=1。"""
     episodes = [make_episode(0), make_episode(1, split="validation")]
     artifacts = write_lerobot_metadata(
         episodes=episodes, dataset_version_id="v", created_at_iso="t"
@@ -162,8 +205,10 @@ def test_per_episode_parquet_layout_and_content() -> None:
     }
     for artifact in parquet_artifacts:
         columns = read_parquet_row(artifact.data)
-        assert set(columns) == {"episode_index", "task_index", "length", "split"}
+        assert set(columns) == {"episode_index", "task_index", "length", "timestamp", "split"}
         assert len(columns["episode_index"]) == 1  # 元数据行，不是帧数
+        assert columns["task_index"] == [0]
+        assert columns["timestamp"] == [0.0]
 
 
 def test_chunking_crosses_directory_at_episodes_per_chunk() -> None:
@@ -207,4 +252,10 @@ def test_empty_episodes_rejected() -> None:
 
 
 def test_required_paths_helper() -> None:
-    assert required_lerobot_paths([]) == {"meta/info.json", "meta/tasks.jsonl", "meta/stats.json"}
+    assert required_lerobot_paths([]) == {
+        "meta/info.json",
+        "meta/tasks.jsonl",
+        "meta/episodes.jsonl",
+        "meta/episodes_stats.jsonl",
+        "meta/stats.json",
+    }

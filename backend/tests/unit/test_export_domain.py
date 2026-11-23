@@ -251,31 +251,35 @@ def test_lerobot_metadata_artifacts_are_deterministic_and_hashed() -> None:
     assert [item.sha256 for item in first] == [item.sha256 for item in second]
     assert all(item.sha256.startswith("sha256:") for item in first)
     assert {item.path for item in first} == {
-        # V31-041 既有 DDP 自有产物（保留，内部消费者依赖）
+        # V31-041 既有 DDP 自有产物（保留并消除与 LeRobot 官方路径冲突）
         "meta/info.json",
-        "meta/episodes.jsonl",
+        "meta/ddp_episodes.jsonl",
         "meta/media.jsonl",
-        "data/episodes.jsonl",
+        "ddp/episodes.jsonl",
         "meta/ddp_divisions.json",
         "ddp/sidecar.json",
-        # V31-042 切片 3 新增：LeRobot v2.1 结构合规必需文件
+        # V31-042 切片 3/6：LeRobot v2.1 官方必需文件
         "meta/tasks.jsonl",
+        "meta/episodes.jsonl",
+        "meta/episodes_stats.jsonl",
         "meta/stats.json",
         "data/chunk-000/episode_000000.parquet",
         "data/chunk-000/episode_000001.parquet",
         "data/chunk-000/episode_000002.parquet",
     }
+    # data/ 目录净化守卫：仅允许 .parquet 文件，防止官方默认构造扫描失败
+    assert all(item.path.endswith(".parquet") for item in first if item.path.startswith("data/"))
     assert all(item.size_bytes == len(item.data) for item in first)
 
     aggregate = aggregate_sha256(first)
     assert aggregate == aggregate_sha256(second)
     manifest = build_artifact_manifest(job, first, aggregate=aggregate)
     assert (
-        manifest["artifact_count"] == 11
-    )  # 6 个 DDP 自有（含权威 info.json）+ tasks/stats + 3 个 episode parquet
+        manifest["artifact_count"] == 13
+    )  # 6 个 DDP 自有（含权威 info.json）+ 4 个 LeRobot meta + 3 个 episode parquet
     assert manifest["total_bytes"] == sum(item.size_bytes for item in first)
     assert manifest["aggregate_sha256"] == aggregate
-    assert manifest["verification_status"] == "UNVERIFIED"
+    assert manifest["verification_status"] == "VERIFIED_BY_LOADER"
     entries = manifest["artifacts"]
     assert isinstance(entries, list)
     assert {entry["path"] for entry in entries} == {item.path for item in first}
@@ -286,10 +290,10 @@ def test_lerobot_metadata_artifacts_are_deterministic_and_hashed() -> None:
     assert b'"test"' in divisions.data
     sidecar = next(item for item in first if item.path == "ddp/sidecar.json")
     assert b'"frame_level_mapping":false' in sidecar.data
-    assert b'"verification_status":"UNVERIFIED"' in sidecar.data
+    assert b'"verification_status":"VERIFIED_BY_LOADER"' in sidecar.data
 
 
-# ---- 训练输入索引：meta/media.jsonl 与 data/episodes.jsonl ----
+# ---- 训练输入索引：meta/media.jsonl 与 ddp/episodes.jsonl ----
 
 
 def _label(key: str, value: object) -> dict[str, object]:
@@ -376,7 +380,7 @@ def test_media_index_and_training_table_carry_real_locations_and_labels() -> Non
     assert first_media["content_type"] == "video/mp4"
     assert first_media["asset_id"] == str(UUID(int=400))
 
-    training = rows["data/episodes.jsonl"]
+    training = rows["ddp/episodes.jsonl"]
     assert len(training) == 2
     labelled = training[0]
     assert labelled["episode_id"] == str(UUID(int=200))
@@ -417,7 +421,7 @@ def test_training_table_is_empty_but_valid_without_sources() -> None:
     artifacts = build_export_artifacts(job, version, items, created_at=NOW)
     rows = _source_records(artifacts)
     assert rows["meta/media.jsonl"] == []
-    training = rows["data/episodes.jsonl"]
+    training = rows["ddp/episodes.jsonl"]
     assert len(training) == 1
     assert training[0]["success"] is None
     assert training[0]["action"] is None
@@ -448,7 +452,7 @@ def test_ambiguous_multi_segment_action_is_left_empty() -> None:
 
     training = _source_records(
         build_export_artifacts(job, version, items, created_at=NOW, sources=sources)
-    )["data/episodes.jsonl"]
+    )["ddp/episodes.jsonl"]
     # 多段动作不猜"第一条"，完整标签仍在 labels 里。
     assert training[0]["action"] is None
     assert [
@@ -487,8 +491,8 @@ def test_new_artifacts_change_aggregate_and_manifest_entries() -> None:
     )
     entries = {entry["path"]: entry for entry in manifest["artifacts"]}
     assert entries["meta/media.jsonl"]["content_type"] == "application/x-ndjson"
-    assert entries["data/episodes.jsonl"]["content_type"] == "application/x-ndjson"
-    for path in ("meta/media.jsonl", "data/episodes.jsonl"):
+    assert entries["ddp/episodes.jsonl"]["content_type"] == "application/x-ndjson"
+    for path in ("meta/media.jsonl", "ddp/episodes.jsonl"):
         artifact = next(item for item in labelled if item.path == path)
         assert entries[path]["sha256"] == artifact.sha256
         assert entries[path]["size_bytes"] == artifact.size_bytes
