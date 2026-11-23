@@ -69,6 +69,7 @@ from app.domain.annotation.submission import (
     AnnotationSubmission,
     compute_records_digest,
     validate_record_labels,
+    validate_submission_records,
 )
 from app.domain.identity.models import ProjectScope
 
@@ -693,6 +694,9 @@ class AnnotationSubmissionUseCases:
         definitions = tuple(schema.labels)
         for record in records:
             validate_record_labels(record, definitions)
+        # V4.1 FR-016/017：整个 Submission 视角的层级包含校验（跨 record
+        # 按 Episode 合并片段，避免 L1/L2 分散在不同 record 时误报）。
+        validate_submission_records(records, definitions)
 
     def _assert_schema_snapshot(
         self,
@@ -829,6 +833,9 @@ class AnnotationSubmissionUseCases:
             self._validate_record_bounds(record, bounds.get(episode_id))
             validate_record_labels(record, definitions)
             records.append(record)
+        # V4.1 FR-016/017：创建路径同样按整个提交视角校验层级包含
+        # （`_build_records` 是提交创建的唯一记录构建点）。
+        validate_submission_records(tuple(records), definitions)
         return tuple(records)
 
     def _validate_record_bounds(
