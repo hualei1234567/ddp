@@ -1,23 +1,26 @@
-"""LeRobot 元数据导出产物生成（确定性、无帧级映射）。
+"""LeRobot / Canonical 元数据导出产物生成（确定性、无帧级映射）。
 
-本批生成 ``ddp.lerobot/1.0.0`` 的元数据、训练输入索引与 DDP sidecar：
-- meta/info.json
-- meta/episodes.jsonl          Episode 溯源信息
+本模块生成 ``ddp.lerobot/1.0.0`` 与 ``ddp.canonical/1.0.0`` 的元数据、训练输入索引与
+DDP sidecar：
+- meta/info.json               权威元数据（LE_ROBOT 合并官方 v2.1 必需键与 ddp.loader_probe）
+- meta/episodes.jsonl          LE_ROBOT 为官方 v2.1 schema；CANONICAL 为 DDP Episode 溯源表
+- meta/ddp_episodes.jsonl      LE_ROBOT 时的 DDP Episode 溯源表（消除与官方同名文件冲突）
+- meta/episodes_stats.jsonl    LE_ROBOT 逐 Episode 全数组统计（v2.1 必需）
+- meta/stats.json              LE_ROBOT 聚合全数组统计（不含非法嵌套 dict）
+- meta/tasks.jsonl             LE_ROBOT 任务索引
 - meta/media.jsonl             每个 Episode 每一路视频的媒体位置（一个媒体一行）
-- data/episodes.jsonl          每行一个 Episode 的训练表（标签 + 媒体键）
-- meta/ddp_divisions.json
-- ddp/sidecar.json
+- ddp/episodes.jsonl           每行一个 Episode 的 DDP 训练表（标签 + 媒体键；不混入 data/）
+- meta/ddp_divisions.json      划分成员与 per_split 统计
+- ddp/sidecar.json             DDP 溯源与策略快照
+- data/chunk-000/episode_*.parquet  LE_ROBOT 逐 Episode 元数据 Parquet（仅含 .parquet）
 
-未实现真实 LeRobot 帧级映射、视频/observation/action 对齐与 Loader 兼容性验证；
-因此 ``verification_status`` 固定 ``UNVERIFIED``，不得宣称已兼容 LeRobot 生态。
-所有输出按规范 JSON/NDJSON 生成，相同输入必然得到相同文件清单与 Hash。
-
-为什么训练表用 NDJSON 而不是 Parquet：本仓库目前没有 ``pyarrow`` 依赖，引入它会
-增加约 40MB 的二进制 wheel 与 ``numpy`` 传递依赖，并且会让产物 Hash/回读校验从
-"UTF-8 文本" 改成 "二进制字节"（现有 ``ExportArtifactSpec`` 与 Worker 校验路径都按
-文本口径实现）。本产物只承载元数据（媒体本体仍在对象存储），行数等于 Episode 数，
-NDJSON 与 ``meta/episodes.jsonl`` 同一套 RFC 8785 规范化口径，任何语言都能逐行复算出
-同一个 Hash。若将来确需列式产物，再单独评估 ``pyarrow`` 并把校验口径切换为字节。
+诚实边界：``frame_level_mapping`` 固定 ``False``、``loadable_scope`` 固定
+``METADATA_ONLY``。``LE_ROBOT`` 已在隔离环境通过官方 ``lerobot==0.3.3``
+``LeRobotDataset`` 默认（``episodes=None``）与显式（``episodes=[0,1,2]``）双路构造
+验证（证据见 ``docs/testing/evidence/2026-11-23-lerobot-loader-verify-pass.md``），
+因此 ``LE_ROBOT`` 产物标记 ``verification_status="VERIFIED_BY_LOADER"`` 与
+``frame_level_read="NOT_CLAIMED_METADATA_ONLY"``；``CANONICAL`` 保持 ``UNVERIFIED``。
+所有输出按规范 JSON/NDJSON 与确定性 Parquet 生成，相同输入必然得到相同文件清单与 Hash。
 """
 
 from __future__ import annotations
@@ -29,10 +32,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from ddp_data.lerobot.export_writer import TASK_PLACEHOLDER, write_lerobot_metadata
+from ddp_data.lerobot.export_writer import (
+    EPISODES_PER_CHUNK,
+    LEROBOT_CODEBASE_VERSION,
+    NOMINAL_METADATA_FPS,
+    TASK_PLACEHOLDER,
+    write_lerobot_metadata,
+)
 
 from app.domain.datasets.canonical import canonical_json, plain, sha256_text, validate_sha256
-from app.domain.datasets.enums import ExportFormat
+from app.domain.datasets.enums import ExportFormat, ExportVerificationStatus
 from app.domain.datasets.export_jobs import ExportJob
 from app.domain.datasets.export_validation import coerce_format
 from app.domain.datasets.models import DatasetItem, DatasetVersion
@@ -41,7 +50,27 @@ JSON_CONTENT_TYPE = "application/json"
 NDJSON_CONTENT_TYPE = "application/x-ndjson"
 
 MEDIA_INDEX_PATH = "meta/media.jsonl"
-EPISODE_DATA_PATH = "data/episodes.jsonl"
+#: DDP 自有训练表迁至 ``ddp/episodes.jsonl``，净化 ``data/`` 目录使其仅含
+#: LeRobot parquet 数据文件（保证 ``LeRobotDataset(..., episodes=None)`` 可直接加载）。
+EPISODE_DATA_PATH = "ddp/episodes.jsonl"
+#: LE_ROBOT 导出时 DDP 自有 Episode 溯源表路径（避免与官方 ``meta/episodes.jsonl`` 冲突）。
+DDP_EPISODES_META_PATH = "meta/ddp_episodes.jsonl"
+
+#: 官方 lerobot==0.3.3 Loader 隔离实测元数据（证据见 evidence_ref）。
+LEROBOT_LOADER_PROBE: dict[str, str] = {
+    "lerobot_version": "0.3.3",
+    "codebase_version": LEROBOT_CODEBASE_VERSION,
+    "loadable_scope": "METADATA_ONLY",
+    "frame_level_read": "NOT_CLAIMED_METADATA_ONLY",
+    "evidence_ref": "docs/testing/evidence/2026-11-23-lerobot-loader-verify-pass.md",
+}
+
+
+def _artifact_verification_status(export_format: ExportFormat | str) -> str:
+    """按格式返回产物的验证结论：LE_ROBOT 已通过 lerobot==0.3.3 结构级复测。"""
+    if coerce_format(export_format) is ExportFormat.LE_ROBOT:
+        return ExportVerificationStatus.VERIFIED_BY_LOADER.value
+    return ExportVerificationStatus.UNVERIFIED.value
 
 # 标签键 -> 训练列 的确定性映射。
 #
@@ -277,18 +306,17 @@ def _merge_lerobot_info_keys(
     """把 LeRobot v2.1 必需键合并进 backend 权威 info（原地）。
 
     keys 与 ``data-platform/ddp_data/lerobot/export_writer.py`` 的口径一致：
-    ``codebase_version`` 固定 v2.1（写入侧对齐版本，见方案 §6 风险表）；
-    ``features`` 只声明 episode 级列——逐帧模态缺失是**声明的事实**；
-    ``fps`` 写 0（无真实帧率事实，不虚构）；``ddp`` 子对象承载
-    ``loadable_scope``（切片 1 契约）与 ``verification_status`` 双标注。
+    ``codebase_version`` 固定 v2.1；``features`` 只声明 episode 级列（含官方
+    必需的 ``timestamp``）——逐帧模态缺失是**声明的事实**；``fps`` 使用
+    ``NOMINAL_METADATA_FPS``（=1，满足官方 Loader ``fps > 0`` 数学不变量），
+    并在 ``ddp`` 子对象中显式标注 ``fps_source="NOMINAL_METADATA_ONLY"``。
     """
-    from ddp_data.lerobot.export_writer import LEROBOT_CODEBASE_VERSION
-
-    total_frames = sum(int(row.get("length", 0) or 0) for row in episodes)
+    total_frames = len(episodes)
     episode_level_features = {
         "episode_index": {"dtype": "int64", "shape": [1]},
         "task_index": {"dtype": "int64", "shape": [1]},
         "length": {"dtype": "int64", "shape": [1]},
+        "timestamp": {"dtype": "float32", "shape": [1]},
         "split": {"dtype": "string", "shape": [1]},
     }
     info.update(
@@ -300,18 +328,27 @@ def _merge_lerobot_info_keys(
             "total_tasks": 1,
             "total_videos": 0,
             "total_endorsements": 0,
-            "chunks_size": 1,
-            "fps": 0,
+            "chunks_size": EPISODES_PER_CHUNK,
+            "fps": NOMINAL_METADATA_FPS,
             "splits": {
                 split: f"file://{split}_chunk"
                 for split in sorted({str(row.get("split", "train")) for row in episodes})
             },
-            "data_path": "data/chunk-{chunk:03d}/episode_{episode:06d}.parquet",
+            "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
             "video_path": (
-                "videos/{chunk:03d}/{video_key}/chunk_{chunk:03d}/episode_{episode:06d}.mp4"
+                "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
             ),
             "features": episode_level_features,
             "loadable_scope": "METADATA_ONLY",
+            "ddp": {
+                "loadable_scope": "METADATA_ONLY",
+                "verification_status": info["verification_status"],
+                "fps_source": "NOMINAL_METADATA_ONLY",
+                "nominal_fps": NOMINAL_METADATA_FPS,
+                "episodes_metadata_path": DDP_EPISODES_META_PATH,
+                "episode_data_path": EPISODE_DATA_PATH,
+                "loader_probe": dict(LEROBOT_LOADER_PROBE),
+            },
         }
     )
 
@@ -322,22 +359,22 @@ def _writer_episode_rows(
 ) -> list[dict[str, object]]:
     """把 DDP Episode 事实映射成 writer 需要的 episode 级行。
 
-    - ``length``：有 ``duration_ns`` 时按 25 fps 换算的帧数下取（仅作结构
-      声明用途，写进 ``info.json`` 的 ``total_frames``；无真实帧率事实，不
-      宣称精确帧数）；缺失时 0——writer 会写出合法但空的 episode 行；
+    - ``length``：固定 1，与 METADATA_ONLY 模式下每个 episode parquet 的 1 条
+      元数据记录行严格一致（不伪造逐帧帧数，同时满足官方 Loader 每 episode
+      ``length >= 1`` 且与 parquet 行数一致的数学不变量）；
+    - ``timestamp``：固定 0.0（单条元数据记录的起始时间戳）；
     - ``task``：占位任务（方案 §3.2-A：元数据导出无真实任务语义）；
     - ``split``：来自 DatasetItem 划分。
     """
     rows: list[dict[str, object]] = []
-    for item, training in zip(ordered, training_rows, strict=True):
-        duration_ns = training.get("duration_ns")
-        length = int(duration_ns // 1_000_000_000 * 25) if duration_ns else 0
+    for item, _training in zip(ordered, training_rows, strict=True):
         rows.append(
             {
                 "episode_id": str(item.episode_id),
                 "episode_version": item.episode_version,
                 "task": TASK_PLACEHOLDER,
-                "length": length,
+                "length": 1,
+                "timestamp": 0.0,
                 "split": item.split.value if hasattr(item.split, "value") else str(item.split),
             }
         )
@@ -370,6 +407,7 @@ def build_export_artifacts(
     for values in split_members.values():
         values.sort()
 
+    verification_status = _artifact_verification_status(job.format)
     info = {
         "format": job.format.value if hasattr(job.format, "value") else str(job.format),
         "format_version": job.format_version,
@@ -385,7 +423,7 @@ def build_export_artifacts(
         "total_duration_ns": version.total_duration_ns,
         "canonicalization": "RFC8785_JCS",
         "frame_level_mapping": False,
-        "verification_status": "UNVERIFIED",
+        "verification_status": verification_status,
         "media_index_path": MEDIA_INDEX_PATH,
         "episode_data_path": EPISODE_DATA_PATH,
         "created_at": created_at.isoformat(),
@@ -440,13 +478,18 @@ def build_export_artifacts(
                 "labels": [dict(label) for label in labels],
             }
         )
-    # V31-042：LE_ROBOT 时先算 writer episode 行并合并 LeRobot 必需键进
-    # info（必须在 _json_bytes(info) 序列化**之前**），再由下方 artifacts
-    # 构建追加 writer 产物。CANONICAL 不受影响。
+    is_lerobot = coerce_format(job.format) is ExportFormat.LE_ROBOT
     writer_episodes: list[dict[str, object]] = []
-    if coerce_format(job.format) is ExportFormat.LE_ROBOT:
+    if is_lerobot:
         writer_episodes = _writer_episode_rows(ordered, training_rows)
         _merge_lerobot_info_keys(info, writer_episodes)
+    per_split_stats: dict[str, dict[str, int]] = {}
+    for split_name, members in sorted(split_members.items()):
+        if members:
+            per_split_stats[split_name] = {
+                "episodes": len(members),
+                "frames": len(members),
+            }
     divisions = {
         "dataset_version_id": str(version.dataset_version_id),
         "divisions": split_members,
@@ -455,6 +498,7 @@ def build_export_artifacts(
             "validation": len(split_members.get("validation", [])),
             "test": len(split_members.get("test", [])),
         },
+        "per_split": per_split_stats,
     }
     sidecar = {
         "schema_version": "ddp.export.sidecar/1.0.0",
@@ -482,9 +526,15 @@ def build_export_artifacts(
         "mapping_version": job.mapping_version,
         "config_sha256": job.config_sha256,
         "frame_level_mapping": False,
-        "verification_status": "UNVERIFIED",
+        "verification_status": verification_status,
         "created_at": created_at.isoformat(),
     }
+    if is_lerobot:
+        sidecar["fps_source"] = "NOMINAL_METADATA_ONLY"
+        sidecar["nominal_fps"] = NOMINAL_METADATA_FPS
+        sidecar["per_split"] = per_split_stats
+        sidecar["loader_probe"] = dict(LEROBOT_LOADER_PROBE)
+    episodes_meta_path = DDP_EPISODES_META_PATH if is_lerobot else "meta/episodes.jsonl"
     artifacts = [
         ExportArtifactSpec(
             path="meta/info.json",
@@ -493,7 +543,7 @@ def build_export_artifacts(
             episode_refs=episode_refs,
         ),
         ExportArtifactSpec(
-            path="meta/episodes.jsonl",
+            path=episodes_meta_path,
             data=_jsonl_bytes(episode_rows),
             content_type=NDJSON_CONTENT_TYPE,
             episode_refs=episode_refs,
@@ -580,7 +630,7 @@ def build_artifact_manifest(
         "total_bytes": total_bytes,
         "artifacts": entries,
         "aggregate_sha256": aggregate,
-        "verification_status": "UNVERIFIED",
+        "verification_status": _artifact_verification_status(job.format),
     }
 
 
@@ -593,6 +643,7 @@ def decode_json(data: bytes) -> object:
 
 
 __all__ = [
+    "DDP_EPISODES_META_PATH",
     "EPISODE_DATA_PATH",
     "EpisodeExportSource",
     "EpisodeMediaRef",

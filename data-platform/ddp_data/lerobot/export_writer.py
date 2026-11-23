@@ -1,10 +1,12 @@
-"""LeRobot 导出写入器（V31-042 切片 2）：纯函数组装 LeRobot 必需产物。
+"""LeRobot 导出写入器（V31-042 切片 2/6）：纯函数组装 LeRobot v2.1 必需产物。
 
 **职责边界**
 
-backend 的 ``exporting.py`` 产出 DDP 自有训练表（NDJSON）与 ``ddp/sidecar.json``；
-本模块在其之上**新增** LeRobot 数据集必需的文件，使产物满足 v2.1 结构合规——
-能被 ``LeRobotDataset(repo_id, root=...)`` 识别并读出 episode 结构。放这里
+backend 的 ``exporting.py`` 产出 DDP 自有训练表（``ddp/episodes.jsonl``）、
+Episode 溯源表（``meta/ddp_episodes.jsonl``）与 ``ddp/sidecar.json``；
+本模块在其之上**新增** LeRobot v2.1 数据集必需的文件，使产物满足 v2.1 结构合规——
+能被官方 ``lerobot==0.3.3`` ``LeRobotDataset(repo_id, root=...)`` 直接构造并读出
+episode 结构（默认 ``episodes=None`` 与显式 ``episodes=[...]`` 均可加载）。放这里
 而不放 backend，是因为 parquet 字节由 pyarrow 生成，而该依赖只存在于
 data-platform（backend 禁止引入 pyarrow，见方案 §5）。
 
@@ -14,12 +16,16 @@ data-platform（backend 禁止引入 pyarrow，见方案 §5）。
   ``features`` / ``data_path`` / ``video_path`` / ``chunks_size`` /
   ``total_episodes`` / ``total_tasks`` / ``total_frames`` 等；
 - ``features`` 只声明 episode 级列（``episode_index`` / ``task_index`` /
-  ``length`` / ``split``），显式不含 ``observation.*`` 与 ``action``——DDP
-  没有逐帧存储，绝不虚构逐帧特征；
+  ``length`` / ``timestamp`` / ``split``），显式不含 ``observation.*`` 与
+  ``action``——DDP 没有逐帧存储，绝不虚构逐帧特征；
 - ``meta/tasks.jsonl`` 每行一个任务（当前只有占位任务，task_index=0）；
-- ``meta/stats.json`` 给出 episode 级列的统计（LeRobot 要求该文件存在）；
+- ``meta/episodes.jsonl`` 严格遵守官方 v2.1 schema（``episode_index`` /
+  ``tasks`` / ``length``），每 Episode ``length=1``（对应 parquet 的 1 条元数据行）；
+- ``meta/episodes_stats.jsonl`` 与 ``meta/stats.json`` 均只含官方合法的数组值统计
+  （``min`` / ``max`` / ``mean`` / ``std`` / ``count``），不含非法嵌套 dict；
 - ``data/chunk-000/episode_*.parquet``：每 Episode 一个 parquet，只含
-  episode 级列，无逐帧行——parquet 行数 = 1（元数据行），不是视频帧数；
+  episode 级列（含 ``timestamp=0.0`` 满足 ``check_timestamps_sync``），无逐帧行——
+  parquet 行数 = 1（元数据行），不是视频帧数；``data/`` 下不混入非 parquet 文件；
 - ``videos/`` 不产出：媒体在对象存储，未按 LeRobot 布局落盘，
   ``info.json`` 的 ``video_path`` 指向空布局并不宣称视频可用。
 
@@ -36,6 +42,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import NamedTuple
@@ -51,12 +58,19 @@ LEROBOT_CODEBASE_VERSION = "v2.1"
 #: 当前导出规模小，固定 1000（LeRobot 默认值），不暴露为配置。
 EPISODES_PER_CHUNK = 1000
 
+#: METADATA_ONLY 模式下的名义采样率（1 Hz = 每 episode 1 条元数据记录）。
+#: 官方 lerobot==0.3.3 数学要求 fps > 0（check_timestamps_sync 计算 1.0/fps）；
+#: 该值绝不宣称真实视频帧率，由 info.json / sidecar.json 的
+#: ``fps_source="NOMINAL_METADATA_ONLY"`` 显式标注。
+NOMINAL_METADATA_FPS = 1
+
 #: episode 级 parquet 的列 schema（顺序固定，保证字节确定）。
-#: ``length`` 是该 Episode 的声明帧数（来自元数据），不是 parquet 行数。
+#: ``timestamp`` 固定 float32（官方 check_timestamps_sync 无条件读取该列）。
 EPISODE_COLUMNS: tuple[tuple[str, str], ...] = (
     ("episode_index", "int64"),
     ("task_index", "int64"),
     ("length", "int64"),
+    ("timestamp", "float32"),
     ("split", "string"),
 )
 
@@ -116,20 +130,21 @@ def _parquet_bytes(rows: Sequence[Mapping[str, object]]) -> bytes:
     import pyarrow.parquet as pq
 
     arrays = []
+    fields = []
     for column, column_type in EPISODE_COLUMNS:
         values = [row.get(column) for row in rows]
         if column_type == "int64":
-            arrays.append(pa.array(values, type=pa.int64()))
+            arrays.append(pa.array([int(v or 0) for v in values], type=pa.int64()))
+            fields.append(pa.field(column, pa.int64()))
+        elif column_type == "float32":
+            arrays.append(pa.array([float(v or 0.0) for v in values], type=pa.float32()))
+            fields.append(pa.field(column, pa.float32()))
         else:
             arrays.append(pa.array([str(v) for v in values], type=pa.string()))
+            fields.append(pa.field(column, pa.string()))
     table = pa.table(
         dict(zip((c for c, _ in EPISODE_COLUMNS), arrays, strict=True)),
-        schema=pa.schema(
-            [
-                pa.field(column, pa.int64() if column_type == "int64" else pa.string())
-                for column, column_type in EPISODE_COLUMNS
-            ]
-        ),
+        schema=pa.schema(fields),
     )
     sink = io.BytesIO()
     pq.write_table(
@@ -154,55 +169,101 @@ def _build_tasks(episodes: Sequence[Mapping[str, object]]) -> list[dict[str, obj
     ]
 
 
-def _build_stats(
-    episodes: Sequence[Mapping[str, object]],
-) -> dict[str, object]:
-    """meta/stats.json：episode 级列的最小统计。
+def _scalar_feature_stats(
+    values: Sequence[float],
+    *,
+    as_int: bool,
+) -> dict[str, list[int] | list[float]]:
+    """构造 LeRobot 官方合法的 1D 数组统计（min/max/mean/std/count）。
 
-    LeRobot 要求该文件存在；逐帧统计在无逐帧数据时不存在，只给 episode 级。
-    数值全部取整/取固定精度，保证字节确定。
+    所有值均为长度 1 的数组，满足 ``lerobot.datasets.compute_stats`` 对
+    ``ndim >= 1`` 与 ``count.shape == (1,)`` 的硬校验。
     """
-    lengths = [int(row.get("length", 0) or 0) for row in episodes]
-    total_frames = sum(lengths)
-    n = len(lengths)
-    mean = round(total_frames / n, 6) if n else 0.0
+    n = len(values)
+    if n == 0:
+        zero: int | float = 0 if as_int else 0.0
+        return {
+            "min": [zero],
+            "max": [zero],
+            "mean": [0.0],
+            "std": [0.0],
+            "count": [0],
+        }
+    min_val = min(values)
+    max_val = max(values)
+    mean_val = sum(values) / n
+    variance = sum((v - mean_val) ** 2 for v in values) / n
+    std_val = math.sqrt(variance)
     return {
-        "episode_index": {
-            "min": [0],
-            "max": [
-                max(
-                    (int(row.get("episode_index", 0) or 0) for row in episodes),
-                    default=0,
-                )
-            ],
-        },
-        "length": {
-            "min": [min(lengths) if lengths else 0],
-            "max": [max(lengths) if lengths else 0],
-            "mean": [mean],
-            "count": [float(n)],
-            "total": [float(total_frames)],
-        },
-        "per_split": {
-            split: {
-                "episodes": count,
-                "frames": sum(
-                    int(row.get("length", 0) or 0)
-                    for row in episodes
-                    if str(row.get("split")) == split
-                ),
-            }
-            for split, count in sorted(_split_counts(episodes).items())
-        },
+        "min": [int(min_val) if as_int else round(min_val, 6)],
+        "max": [int(max_val) if as_int else round(max_val, 6)],
+        "mean": [round(mean_val, 6)],
+        "std": [round(std_val, 6)],
+        "count": [n],
     }
 
 
-def _split_counts(episodes: Sequence[Mapping[str, object]]) -> dict[str, int]:
-    counts: dict[str, int] = {}
+def _build_episodes_meta(
+    episodes: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """meta/episodes.jsonl：LeRobot v2.1 官方 schema。
+
+    每行包含 ``episode_index``、``tasks``、``length``。``length`` 固定等于
+    对应 episode parquet 的实际行数（METADATA_ONLY 为 1），确保官方
+    ``get_episode_data_index`` 与 ``check_timestamps_sync`` 数学一致。
+    """
+    return [
+        {
+            "episode_index": int(row["episode_index"]),
+            "tasks": [str(row.get("task", TASK_PLACEHOLDER))],
+            "length": 1,
+        }
+        for row in episodes
+    ]
+
+
+def _build_episodes_stats(
+    episodes: Sequence[Mapping[str, object]],
+) -> list[dict[str, object]]:
+    """meta/episodes_stats.jsonl：v2.1 必需的逐 episode 数组统计。"""
+    rows: list[dict[str, object]] = []
     for row in episodes:
-        split = str(row.get("split", "train"))
-        counts[split] = counts.get(split, 0) + 1
-    return counts
+        ep_index = int(row["episode_index"])
+        task_index = int(row["task_index"])
+        length = int(row.get("length", 1) or 1)
+        timestamp = float(row.get("timestamp", 0.0) or 0.0)
+        rows.append(
+            {
+                "episode_index": ep_index,
+                "stats": {
+                    "episode_index": _scalar_feature_stats([float(ep_index)], as_int=True),
+                    "task_index": _scalar_feature_stats([float(task_index)], as_int=True),
+                    "length": _scalar_feature_stats([float(length)], as_int=True),
+                    "timestamp": _scalar_feature_stats([timestamp], as_int=False),
+                },
+            }
+        )
+    return rows
+
+
+def _build_stats(
+    episodes: Sequence[Mapping[str, object]],
+) -> dict[str, object]:
+    """meta/stats.json：全数组值统计（不含非法嵌套 dict）。
+
+    LeRobot 要求每个特征下的统计键（min/max/mean/std/count）均为数组；
+    per_split 等 DDP 扩展统计改存 ``meta/ddp_divisions.json``，不混入此文件。
+    """
+    ep_indices = [float(int(row["episode_index"])) for row in episodes]
+    task_indices = [float(int(row["task_index"])) for row in episodes]
+    lengths = [float(int(row.get("length", 1) or 1)) for row in episodes]
+    timestamps = [float(row.get("timestamp", 0.0) or 0.0) for row in episodes]
+    return {
+        "episode_index": _scalar_feature_stats(ep_indices, as_int=True),
+        "task_index": _scalar_feature_stats(task_indices, as_int=True),
+        "length": _scalar_feature_stats(lengths, as_int=True),
+        "timestamp": _scalar_feature_stats(timestamps, as_int=False),
+    }
 
 
 def write_lerobot_metadata(
@@ -211,7 +272,7 @@ def write_lerobot_metadata(
     dataset_version_id: str,
     created_at_iso: str,
 ) -> tuple[WrittenArtifact, ...]:
-    """产出 LeRobot 元数据层必需文件（不含 videos/）。
+    """产出 LeRobot v2.1 元数据层必需文件（不含 videos/）。
 
     ``episodes`` 行至少需要：``episode_id``、``episode_index``、``task``、
     ``length``、``split``。行序无关——内部统一按 ``(episode_id, episode_version)``
@@ -234,6 +295,17 @@ def write_lerobot_metadata(
         raise ValueError("episode_index 不得为负")
 
     tasks = _build_tasks(ordered)
+    task_to_index = {str(item["task"]): int(item["task_index"]) for item in tasks}
+    for row in ordered:
+        task_name = str(row.get("task", TASK_PLACEHOLDER))
+        row["task"] = task_name
+        row["task_index"] = task_to_index[task_name]
+        row["timestamp"] = float(row.get("timestamp", 0.0) or 0.0)
+        if row.get("length") is None or int(row["length"]) <= 0:
+            row["length"] = 1
+
+    episodes_meta = _build_episodes_meta(ordered)
+    episodes_stats = _build_episodes_stats(ordered)
     stats = _build_stats(ordered)
 
     artifacts: list[WrittenArtifact] = [
@@ -243,6 +315,16 @@ def write_lerobot_metadata(
         WrittenArtifact(
             path="meta/tasks.jsonl",
             data=_jsonl_bytes(tasks),
+            content_type=NDJSON_CONTENT_TYPE,
+        ),
+        WrittenArtifact(
+            path="meta/episodes.jsonl",
+            data=_jsonl_bytes(episodes_meta),
+            content_type=NDJSON_CONTENT_TYPE,
+        ),
+        WrittenArtifact(
+            path="meta/episodes_stats.jsonl",
+            data=_jsonl_bytes(episodes_stats),
             content_type=NDJSON_CONTENT_TYPE,
         ),
         WrittenArtifact(
@@ -267,8 +349,14 @@ def write_lerobot_metadata(
 
 
 def required_lerobot_paths(episodes: Sequence[Mapping[str, object]]) -> set[str]:
-    """LeRobot 结构合规必需的路径集合（供 Worker 端到端变异验证使用）。"""
-    return {"meta/info.json", "meta/tasks.jsonl", "meta/stats.json"}
+    """LeRobot v2.1 结构合规必需的路径集合（供 Worker 端到端变异验证使用）。"""
+    return {
+        "meta/info.json",
+        "meta/tasks.jsonl",
+        "meta/episodes.jsonl",
+        "meta/episodes_stats.jsonl",
+        "meta/stats.json",
+    }
 
 
 def artifact_sha256(data: bytes) -> str:
