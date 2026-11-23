@@ -1,0 +1,29 @@
+# V4.1 FR-042 运行态运维路径片段（只读聚合视图）。
+
+opsDispatchQueue:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: getOpsDispatchQueue
+    tags: [ops]
+    summary: 投递队列健康快照（积压 / 重试 / 失败分布）
+    description: |
+      只读聚合：一次查询给出本项目投递类事件（`dispatch=true`）的状态分布、
+      重试中数量、最老待处理事件年龄、是否疑似停滞，以及按事件类型聚合的
+      失败计数。不返回任何事件 payload——运维视图只回答"有没有东西卡住"。
+
+      `oldest_pending_age_seconds` 在无待处理事件时返回 `null`（不是 `0`）：
+      0 会被误读成"刚刚卡住"。`stale` 是服务端派生的结论，客户端不必自己
+      比时间。留痕类事件（`dispatch=false`，写入即终态）不计入本口径。
+
+      权限为项目负责人口径（owner 或平台管理员）：队列健康暴露系统内部失败
+      模式，属于运维信息。本端点只读，清理/重投必须走 Worker 运维流程。
+    responses:
+      "200":
+        description: 投递队列健康快照
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/OpsDispatchQueueSnapshot"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}

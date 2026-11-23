@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.32.0
+  version: 1.33.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -211,6 +211,13 @@ info:
       `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
       本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
       `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
+    - `1.33.0` **运行态运维视图（FR-042）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/ops/dispatch-queue`，一次查询返回
+      投递类事件的健康快照：状态分布（PENDING/PUBLISHED/FAILED）、重试中
+      数量、最老待处理年龄、`stale` 派生结论、按事件类型聚合的失败计数。
+      不返回任何事件 payload。`oldest_pending_age_seconds` 在无待处理时为
+      `null` 而非 `0`（0 会被误读成「刚刚卡住」）。权限为项目负责人口径。
+      全部为增量：仅新增路径与 schema，无既有字段变更，无数据库迁移。
     - `1.32.0` **三级语义分层与结果帧标注（V31-047）**：LabelSchema 的
       `label_type` 新增 `OUTCOME_SPAN`（结果帧区间：SUCCESS / PARTIAL_SUCCESS /
       FAILURE / UNKNOWN，失败类型层级 perception / planning / manipulation /
@@ -345,7 +352,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.32.0
+  version: 1.33.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -1020,6 +1027,8 @@ paths:
   /api/v1/projects/{project_id}/quality-runs/{baseline_run_id}/diff/{candidate_run_id}:
     $ref: "./fragments/paths.quality.yaml#/qualityRunDiff"
   # --- 审计日志只读查询（owner / 平台管理员）---
+  /api/v1/projects/{project_id}/ops/dispatch-queue:
+    $ref: "./fragments/paths.ops.yaml#/opsDispatchQueue"
   /api/v1/projects/{project_id}/audit-logs:
     $ref: "./fragments/paths.audit.yaml#/auditLogs"
   /api/v1/projects/{project_id}/audit-logs/{resource_type}/{resource_id}:
@@ -1165,6 +1174,39 @@ components:
     TooManyRequests: {$ref: "./fragments/components.yaml#/responses/TooManyRequests"}
     ServiceUnavailable: {$ref: "./fragments/components.yaml#/responses/ServiceUnavailable"}
   schemas:
+    OpsDispatchQueueSnapshot:
+      type: object
+      additionalProperties: false
+      required:
+        [pending, published, failed, retrying, oldest_pending_age_seconds, stale,
+         failures_by_event_type, generated_at]
+      properties:
+        pending: {type: integer, minimum: 0, description: 待处理（PENDING）事件数}
+        published: {type: integer, minimum: 0, description: 已发布（PUBLISHED）事件数}
+        failed: {type: integer, minimum: 0, description: 失败（FAILED）事件数}
+        retrying:
+          type: integer
+          minimum: 0
+          description: 正在重试的事件数（attempts > 0 且仍 PENDING）
+        oldest_pending_age_seconds:
+          type: [integer, "null"]
+          minimum: 0
+          description: 最老待处理事件距今秒数；无待处理时为 null（不是 0）
+        stale:
+          type: boolean
+          description: 是否疑似停滞（最老待处理超过部署阈值）；无待处理时为 false
+        failures_by_event_type:
+          type: array
+          items: {$ref: "#/components/schemas/OpsDispatchFailureBucket"}
+          description: 按事件类型聚合的失败计数（降序）
+        generated_at: {type: string, format: date-time, description: 快照生成时间（UTC）}
+    OpsDispatchFailureBucket:
+      type: object
+      additionalProperties: false
+      required: [event_type, count]
+      properties:
+        event_type: {type: string, minLength: 1, maxLength: 128}
+        count: {type: integer, minimum: 0}
     ErrorCode: {$ref: "./fragments/schemas.common.yaml#/ErrorCode"}
     ErrorEnvelope: {$ref: "./fragments/schemas.common.yaml#/ErrorEnvelope"}
     HealthResponse: {$ref: "./fragments/schemas.stage1.yaml#/HealthResponse"}
