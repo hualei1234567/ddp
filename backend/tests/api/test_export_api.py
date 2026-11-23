@@ -180,8 +180,8 @@ def test_export_worker_success_manifest_and_download(
     assert detail["status"] == "SUCCEEDED"
     assert detail["attempt"] == 1
     assert (
-        detail["artifact_count"] == 18
-    )  # 6 DDP 自有（含权威 info.json）+ tasks/stats + 10 episode parquet（10 Episode）
+        detail["artifact_count"] == 20
+    )  # 6 DDP 自有（含权威 info.json）+ 4 LeRobot meta + 10 episode parquet（10 Episode）
     assert detail["total_bytes"] > 0
     assert detail["aggregate_sha256"].startswith("sha256:")
     assert detail["artifact_manifest_sha256"].startswith("sha256:")
@@ -191,20 +191,22 @@ def test_export_worker_success_manifest_and_download(
     assert manifest.status_code == 200, manifest.text
     body = manifest.json()
     assert body["export_job_id"] == job_id
-    assert body["artifact_count"] == 18
+    assert body["artifact_count"] == 20
     assert body["aggregate_sha256"] == detail["aggregate_sha256"]
-    assert body["verification_status"] == "UNVERIFIED"
+    assert body["verification_status"] == "VERIFIED_BY_LOADER"
     paths = {item["path"] for item in body["artifacts"]}
     assert paths == {
-        # V31-041 既有 DDP 自有产物（保留）
+        # V31-041 既有 DDP 自有产物（保留并消除与 LeRobot 官方路径冲突）
         "meta/info.json",
-        "meta/episodes.jsonl",
+        "meta/ddp_episodes.jsonl",
         "meta/media.jsonl",
-        "data/episodes.jsonl",
+        "ddp/episodes.jsonl",
         "meta/ddp_divisions.json",
         "ddp/sidecar.json",
-        # V31-042 切片 3 新增：LeRobot v2.1 结构合规必需文件（该测试 10 个 Episode）
+        # V31-042 切片 3/6：LeRobot v2.1 官方必需文件（该测试 10 个 Episode）
         "meta/tasks.jsonl",
+        "meta/episodes.jsonl",
+        "meta/episodes_stats.jsonl",
         "meta/stats.json",
         *[f"data/chunk-000/episode_{i:06d}.parquet" for i in range(10)],
     }
@@ -234,7 +236,7 @@ def test_export_worker_success_manifest_and_download(
         assert row["duration_ns"] == 10_000
         assert row["content_type"] == "application/x-mcap"
 
-    training_key = f"{detail['output_prefix']}data/episodes.jsonl"
+    training_key = f"{detail['output_prefix']}ddp/episodes.jsonl"
     training_rows = [
         json.loads(line) for line in storage.objects[training_key].decode("utf-8").splitlines()
     ]
