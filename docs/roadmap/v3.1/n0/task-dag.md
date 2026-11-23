@@ -21,9 +21,9 @@
 
 | ID | 任务 | 依赖 | 变更面 |
 |---|---|---|---|
-| V31-001 | 修正 `test_upload_session_carries_capture_session_to_raw_asset`：真实分片上传 → ACK → complete → 查 RawAsset → 查 artifacts | 无 | 测试 |
-| V31-002 | CaptureSession 上传专项真实 MinIO 验收（重复 ACK / 重复 complete / 回读复算 SHA256 / URL 过期） | V31-001 | `scripts/e2e`、测试夹具 |
-| V31-003 | 同步基线与文档漂移：`risk-list.md:72`、`pipeline.py:7-12` 注释、本目录 | 无 | 文档 |
+| V31-001 | 修正 `test_upload_session_carries_capture_session_to_raw_asset`：真实分片上传 → ACK → complete → 查 RawAsset → 查 artifacts | 无 | 测试 | **已完成（2026-11-23 核实）**：`test_capture_session_upload_linkage.py` 三条真链路测试（完成写入归属 / 去重上传仍归属 / 去重不窃取归属）；task-dag 备注列此前缺失导致误判为未做 |
+| V31-002 | CaptureSession 上传专项真实 MinIO 验收（重复 ACK / 重复 complete / 回读复算 SHA256 / URL 过期） | V31-001 | `scripts/e2e`、测试夹具 | **已完成（2026-11-23）**：`scripts/e2e/v31-minio-upload.py` 真实 PostgreSQL+MinIO 全链通过，新增四要素验收——重复 ACK 幂等 200、篡改 ETag ACK 409（真实 ListParts 校验）、重复 complete 资产不分叉（幂等重放）、URL TTL 部署口径可观测且不被客户端放大（300s 配置一致，忽略客户端 1s 请求属安全行为）；SHA256 回读与 Range 206 原有步骤保留 |
+| V31-003 | 同步基线与文档漂移：`risk-list.md:72`、`pipeline.py:7-12` 注释、本目录 | 无 | 文档 | **已完成（2026-11-23）**：RK-49 确认已划线闭环；gap-matrix「文档状态漂移」改判已消除；`pipeline.py` 头注释阶段清单与实现一致（八阶段均有真实落点） |
 | V31-004 | 决策记录：`COMPLETED` 是否可进 Dataset Builder；Canonical `1.0.0-draft` vs `1.0.0` 收敛方案 | 无 | ADR |
 
 ### M2 上游贯通
