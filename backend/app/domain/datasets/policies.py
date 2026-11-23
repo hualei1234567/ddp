@@ -277,6 +277,9 @@ class LeakagePolicy:
     scene_grouping_enabled: bool = True
     batch_grouping_enabled: bool = False
     temporal_overlap_enabled: bool = True
+    # V4.1 FR-030：默认开启——同会话/同对象跨划分是最常见也最隐蔽的泄漏。
+    capture_session_grouping_enabled: bool = True
+    subject_grouping_enabled: bool = True
     policy_sha256: str | None = None
     row_version: int = 1
     created_at: datetime | None = None
@@ -336,6 +339,8 @@ class LeakagePolicy:
             "scene_grouping_enabled": self.scene_grouping_enabled,
             "batch_grouping_enabled": self.batch_grouping_enabled,
             "temporal_overlap_enabled": self.temporal_overlap_enabled,
+            "capture_session_grouping_enabled": self.capture_session_grouping_enabled,
+            "subject_grouping_enabled": self.subject_grouping_enabled,
         }
 
     @property

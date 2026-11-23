@@ -47,6 +47,10 @@ class LeakageItem:
     scene_group_id: UUID | None = None
     similarity_group_id: UUID | None = None
     batch_id: UUID | None = None
+    # V4.1 FR-030：采集会话与受试对象分组维度。缺省 None 表示「未知」——
+    # 未知不得当作「不分组」静默跳过（见 check_leakage 的 UNKNOWN 语义）。
+    capture_session_id: UUID | None = None
+    subject_id: UUID | None = None
     start_time_ns: int = 0
     end_time_ns: int = 0
 
@@ -325,6 +329,10 @@ def _soft_rule_enabled(rule: LeakageRule, policy: LeakagePolicy) -> bool:
         return policy.scene_grouping_enabled
     if rule is LeakageRule.BATCH_GROUP_CROSS_SPLIT:
         return policy.batch_grouping_enabled
+    if rule is LeakageRule.CAPTURE_SESSION_CROSS_SPLIT:
+        return policy.capture_session_grouping_enabled
+    if rule is LeakageRule.SUBJECT_CROSS_SPLIT:
+        return policy.subject_grouping_enabled
     if rule is LeakageRule.TEMPORAL_OVERLAP_CROSS_SPLIT:
         return policy.temporal_overlap_enabled
     return True
@@ -342,6 +350,8 @@ def _violations_for_rule(
         LeakageRule.RAW_ASSET_SHA256_CROSS_SPLIT,
         LeakageRule.SCENE_GROUP_CROSS_SPLIT,
         LeakageRule.SIMILARITY_GROUP_CROSS_SPLIT,
+        LeakageRule.CAPTURE_SESSION_CROSS_SPLIT,
+        LeakageRule.SUBJECT_CROSS_SPLIT,
         LeakageRule.DUPLICATE_ANNOTATION,
     }:
         return _group_violations(items, rule, level=level)
@@ -397,6 +407,10 @@ def _group_value(item: LeakageItem, rule: LeakageRule) -> str | None:
         return "|".join(hashes) if hashes else None
     if rule is LeakageRule.SCENE_GROUP_CROSS_SPLIT:
         return str(item.scene_group_id) if item.scene_group_id else None
+    if rule is LeakageRule.CAPTURE_SESSION_CROSS_SPLIT:
+        return str(item.capture_session_id) if item.capture_session_id else None
+    if rule is LeakageRule.SUBJECT_CROSS_SPLIT:
+        return str(item.subject_id) if item.subject_id else None
     if rule is LeakageRule.SIMILARITY_GROUP_CROSS_SPLIT:
         return str(item.similarity_group_id) if item.similarity_group_id else None
     if rule is LeakageRule.DUPLICATE_ANNOTATION:
