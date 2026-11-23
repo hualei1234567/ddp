@@ -29,6 +29,8 @@ const baseProps: EpisodeListBodyProps = {
   stale: false,
   updatedAt: Date.parse("2026-11-08T05:00:00Z"),
   isMobile: false,
+  selectedIds: [],
+  onSelectionChange: () => undefined,
   onRetry: () => undefined,
   onResetFilters: () => undefined,
   onLoadMore: () => undefined,

@@ -6,15 +6,25 @@ import {
   qualityRunFixture,
   qualityRunFindingFixture,
   qualityRunWithCategoryStatus,
+  qualityFindingDiffFixture,
+  qualityRunDiffFixture,
+  queuedQualityRunFixture,
 } from "./__fixtures__/qualityRunFixtures";
 import {
   parseQualityRun,
+  parseQualityRunDiff,
   parseQualityRunFinding,
   parseQualityRunFindingPage,
   parseQualityRunPage,
+  parseQueuedQualityRun,
 } from "./qualityRunParsers";
 import { ContractValidationError } from "./validation";
-import { QUALITY_CATEGORY_VALUES } from "../types/qualityRun";
+import {
+  QUALITY_CATEGORY_VALUES,
+  type QualityDiffKind,
+  type QualityDiffStatus,
+  type QueuedQualityRun,
+} from "../types/qualityRun";
 
 describe("统一质量运行解析", () => {
   it("六类齐全时保留服务端顺序与 null 评分", () => {
@@ -170,5 +180,114 @@ describe("统一质量结论解析", () => {
     expect(() =>
       parseQualityRunPage({ items: [], next_cursor: 42 }),
     ).toThrow(/next_cursor/);
+  });
+});
+
+describe("排队回执解析（V31-033 / FR-026）", () => {
+  it("保留排队事实；响应里没有结论字段，前端不补默认值", () => {
+    const run = parseQueuedQualityRun(queuedQualityRunFixture());
+    expect(run.lifecycle).toBe("QUEUED");
+    expect(run.max_attempts).toBe(1);
+    expect("status" in run).toBe(false);
+    expect("score" in run).toBe(false);
+  });
+
+  it("lifecycle 非法时拒绝（不把未知生命周期渲染成排队）", () => {
+    expect(() =>
+      parseQueuedQualityRun(
+        queuedQualityRunFixture({
+          lifecycle: "PENDING" as unknown as QueuedQualityRun["lifecycle"],
+        }),
+      ),
+    ).toThrow(ContractValidationError);
+  });
+
+  it("缺 run_id 必填字段时显式失败", () => {
+    const fixture: Record<string, unknown> = { ...queuedQualityRunFixture() };
+    delete fixture.run_id;
+    expect(() => parseQueuedQualityRun(fixture)).toThrow(
+      ContractValidationError,
+    );
+  });
+});
+
+describe("质量运行差异报告解析（V31-033 / FR-027）", () => {
+  it("四类差异逐条解析并保留两侧结论", () => {
+    const report = parseQualityRunDiff(qualityRunDiffFixture());
+    expect(report.findings).toHaveLength(4);
+    expect(report.has_regression).toBe(true);
+    const changed = report.findings.find((item) => item.kind === "CHANGED");
+    expect(changed?.baseline_status).toBe("FAIL");
+    expect(changed?.candidate_status).toBe("PASS");
+  });
+
+  it("null 结论保留为 null（NEW 的基线侧没有结论，不补 FAIL）", () => {
+    const report = parseQualityRunDiff(
+      qualityRunDiffFixture({
+        findings: [qualityFindingDiffFixture("NEW")],
+        new_count: 1,
+        resolved_count: 0,
+        unchanged_count: 0,
+        changed_count: 0,
+        has_regression: true,
+      }),
+    );
+    expect(report.findings[0]?.baseline_status).toBeNull();
+    expect(report.findings[0]?.candidate_status).toBe("FAIL");
+  });
+
+  it("未知 kind 直接拒绝", () => {
+    expect(() =>
+      parseQualityRunDiff(
+        qualityRunDiffFixture({
+          findings: [
+            qualityFindingDiffFixture("NEW", {
+              kind: "MERGED" as unknown as QualityDiffKind,
+            }),
+          ],
+        }),
+      ),
+    ).toThrow(ContractValidationError);
+  });
+
+  it("未知结论状态直接拒绝（封闭枚举）", () => {
+    expect(() =>
+      parseQualityRunDiff(
+        qualityRunDiffFixture({
+          findings: [
+            qualityFindingDiffFixture("CHANGED", {
+              candidate_status:
+                "SKIPPED" as unknown as QualityDiffStatus,
+            }),
+          ],
+        }),
+      ),
+    ).toThrow(ContractValidationError);
+  });
+
+  it("四个计数与 findings 分类数不一致时拒绝（防 UI 汇总数撒谎）", () => {
+    expect(() =>
+      parseQualityRunDiff(
+        qualityRunDiffFixture({
+          findings: [qualityFindingDiffFixture("NEW")],
+          new_count: 2,
+        }),
+      ),
+    ).toThrow(ContractValidationError);
+  });
+
+  it("空 findings 与全零计数是合法空差异（重跑前后无变化）", () => {
+    const report = parseQualityRunDiff(
+      qualityRunDiffFixture({
+        findings: [],
+        new_count: 0,
+        resolved_count: 0,
+        unchanged_count: 0,
+        changed_count: 0,
+        has_regression: false,
+      }),
+    );
+    expect(report.findings).toHaveLength(0);
+    expect(report.has_regression).toBe(false);
   });
 });

@@ -13,29 +13,60 @@ import type { CursorPage } from "../types/api";
 import {
   QUALITY_CATEGORY_STATUS_VALUES,
   QUALITY_CATEGORY_VALUES,
+  QUALITY_DIFF_KIND_VALUES,
+  QUALITY_DIFF_STATUS_VALUES,
   QUALITY_FINDING_STATUS_VALUES,
+  QUEUED_QUALITY_RUN_LIFECYCLE_VALUES,
   QUALITY_RUN_STATUS_VALUES,
   QUALITY_SEVERITY_VALUES,
   QUALITY_SUBJECT_TYPE_VALUES,
   type QualityCategorySummary,
+  type QualityDiffStatus,
+  type QualityFindingDiff,
   type QualityRun,
+  type QualityRunDiffReport,
   type QualityRunFinding,
+  type QueuedQualityRun,
 } from "../types/qualityRun";
 import {
   asRecord,
   ContractValidationError,
   parseCursorPage,
+  readBoolean,
   readEnum,
   readInteger,
   readOptionalNumber,
   readOptionalRecord,
   readOptionalString,
+  readPositiveInteger,
   readString,
   readUuid,
 } from "./validation";
 
 /** 契约 `rule_set_version` 的 pattern；与后端内容 SHA 同源。 */
 const RULE_SET_VERSION_PATTERN = /^sha256:[0-9a-f]{64}$/;
+
+/**
+ * 差异条目的单侧结论：允许 null（该侧没有这条结论），出现时必须是
+ * 封闭枚举之一——与 findings 的四态一致，`WARN` 在差异里不存在。
+ */
+function readDiffStatus(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): QualityDiffStatus | null {
+  const value = record[key];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  const matched = QUALITY_DIFF_STATUS_VALUES.find((item) => item === value);
+  if (matched === undefined) {
+    throw new ContractValidationError(
+      `${path} 必须是 PASS / FAIL / NOT_APPLICABLE / ERROR 或 null`,
+    );
+  }
+  return matched;
+}
 
 function readUnitScore(
   record: Record<string, unknown>,
@@ -221,4 +252,116 @@ export function parseQualityRunPage(
   return parseCursorPage(value, path, (item, itemPath) =>
     parseQualityRun(item, itemPath),
   );
+}
+
+// ---------------------------------------------------------------------------
+// V31-033：排队回执与差异报告解析（契约 1.30.0）
+// ---------------------------------------------------------------------------
+
+/**
+ * 排队回执（契约 `QueuedQualityRun`）。
+ *
+ * 该 schema **没有结论字段**是 ADR-0045 的类型事实：解析层不补任何
+ * `status` / `score` 默认值，页面因此无法把「已排队」渲染成「检查通过」。
+ */
+export function parseQueuedQualityRun(
+  value: unknown,
+  path = "排队回执",
+): QueuedQualityRun {
+  const record = asRecord(value, path);
+  return {
+    run_id: readUuid(record, "run_id", `${path}.run_id`),
+    project_id: readUuid(record, "project_id", `${path}.project_id`),
+    subject_type: readEnum(
+      record,
+      "subject_type",
+      `${path}.subject_type`,
+      QUALITY_SUBJECT_TYPE_VALUES,
+    ),
+    subject_id: readUuid(record, "subject_id", `${path}.subject_id`),
+    rule_set_version: readRuleSetVersion(record, path),
+    lifecycle: readEnum(
+      record,
+      "lifecycle",
+      `${path}.lifecycle`,
+      QUEUED_QUALITY_RUN_LIFECYCLE_VALUES,
+    ),
+    max_attempts: readPositiveInteger(
+      record,
+      "max_attempts",
+      `${path}.max_attempts`,
+    ),
+    created_at: readString(record, "created_at", `${path}.created_at`),
+    created_by: readUuid(record, "created_by", `${path}.created_by`),
+  };
+}
+
+/**
+ * 差异条目（契约 `QualityFindingDiff`）。
+ *
+ * 两侧结论允许为 null（该侧没有这条结论）但不允许缺字段或取值越界；
+ * `NOT_APPLICABLE` 与 `PASS` 保持两类，不把「没判」合并进「通过」。
+ */
+export function parseQualityFindingDiff(
+  value: unknown,
+  path = "质量差异条目",
+): QualityFindingDiff {
+  const record = asRecord(value, path);
+  return {
+    rule_id: readString(record, "rule_id", `${path}.rule_id`),
+    subject_ref: readOptionalString(record, "subject_ref", `${path}.subject_ref`) ?? "",
+    kind: readEnum(record, "kind", `${path}.kind`, QUALITY_DIFF_KIND_VALUES),
+    baseline_status: readDiffStatus(record, "baseline_status", `${path}.baseline_status`),
+    candidate_status: readDiffStatus(record, "candidate_status", `${path}.candidate_status`),
+  };
+}
+
+/** 差异报告（契约 `QualityRunDiff`）。 */
+export function parseQualityRunDiff(
+  value: unknown,
+  path = "质量差异报告",
+): QualityRunDiffReport {
+  const record = asRecord(value, path);
+  const baselineRunId = readUuid(
+    record,
+    "baseline_run_id",
+    `${path}.baseline_run_id`,
+  );
+  const candidateRunId = readUuid(
+    record,
+    "candidate_run_id",
+    `${path}.candidate_run_id`,
+  );
+  const rawFindings = record.findings;
+  if (!Array.isArray(rawFindings)) {
+    throw new ContractValidationError(`${path}.findings 必须是数组`);
+  }
+  const findings = rawFindings.map((item, index) =>
+    parseQualityFindingDiff(item, `${path}.findings[${index}]`),
+  );
+  const counts = {
+    NEW: readInteger(record, "new_count", `${path}.new_count`),
+    RESOLVED: readInteger(record, "resolved_count", `${path}.resolved_count`),
+    UNCHANGED: readInteger(record, "unchanged_count", `${path}.unchanged_count`),
+    CHANGED: readInteger(record, "changed_count", `${path}.changed_count`),
+  } as const;
+  // 汇总数与明细一致才放行：否则 UI 顶部的分类计数可能和列表对不上。
+  QUALITY_DIFF_KIND_VALUES.forEach((kind) => {
+    const actual = findings.filter((item) => item.kind === kind).length;
+    if (counts[kind] !== actual) {
+      throw new ContractValidationError(
+        `${path}.${kind.toLowerCase()}_count 与 findings 中 ${kind} 条数不一致`,
+      );
+    }
+  });
+  return {
+    baseline_run_id: baselineRunId,
+    candidate_run_id: candidateRunId,
+    findings,
+    new_count: counts.NEW,
+    resolved_count: counts.RESOLVED,
+    unchanged_count: counts.UNCHANGED,
+    changed_count: counts.CHANGED,
+    has_regression: readBoolean(record, "has_regression", `${path}.has_regression`),
+  };
 }

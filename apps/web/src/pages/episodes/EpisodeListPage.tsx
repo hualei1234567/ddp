@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import CollectionStatusTag from "../../components/collection/CollectionStatusTag";
+import EpisodeBatchRerunButton from "../../components/quality/EpisodeBatchRerunButton";
 import LoadMoreBar from "../../components/devices/LoadMoreBar";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
@@ -214,6 +215,9 @@ export interface EpisodeListBodyProps {
   stale: boolean;
   updatedAt: number | null;
   isMobile: boolean;
+  /** 已勾选的 Episode ID（批量重跑范围）；由容器状态管理。 */
+  selectedIds: string[];
+  onSelectionChange: (ids: string[]) => void;
   onRetry: () => void;
   onResetFilters: () => void;
   onLoadMore: () => void;
@@ -233,6 +237,8 @@ export function EpisodeListBody({
   loadMoreError,
   stale,
   isMobile,
+  selectedIds,
+  onSelectionChange,
   onRetry,
   onResetFilters,
   onLoadMore,
@@ -367,6 +373,11 @@ export function EpisodeListBody({
           dataSource={filteredItems}
           pagination={false}
           scroll={{ x: 1700 }}
+          rowSelection={{
+            selectedRowKeys: selectedIds,
+            onChange: (keys) => onSelectionChange(keys as string[]),
+            selections: true,
+          }}
         />
       );
     }
@@ -395,6 +406,20 @@ export function EpisodeListBody({
         <Space wrap>
           <Tag color="blue">已加载 {items.length} 条 Episode</Tag>
           {notChecked > 0 ? <Tag color="orange">未质检 {notChecked}</Tag> : null}
+          <EpisodeBatchRerunButton
+            projectId={projectId}
+            selectedIds={selectedIds}
+            onQueued={() => onSelectionChange([])}
+          />
+          {selectedIds.length > 0 ? (
+            <Button onClick={() => onSelectionChange([])}>
+              清除选择（{selectedIds.length}）
+            </Button>
+          ) : (
+            <Typography.Text type="secondary">
+              勾选 Episode 后可批量重跑质检（入队，非立即出结论）。
+            </Typography.Text>
+          )}
         </Space>
         <Typography.Text type="secondary">
           {hasMore
@@ -605,6 +630,7 @@ function EpisodeListContent({
     reload,
     loadMore,
   } = useCursorPage(loadEpisodes, (episode) => episode.episode_id);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filteredItems = useMemo(
     () => filterEpisodes(items, filters),
@@ -691,6 +717,8 @@ function EpisodeListContent({
         stale={stale}
         updatedAt={updatedAt}
         isMobile={isMobile}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
         onRetry={reload}
         onResetFilters={resetFilters}
         onLoadMore={loadMore}

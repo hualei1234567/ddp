@@ -16,6 +16,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import CollectionStatusTag from "../../components/collection/CollectionStatusTag";
 import EpisodeActionPanel from "../../components/episodes/EpisodeActionPanel";
 import EpisodeRevisionPanel from "../../components/episodes/EpisodeRevisionPanel";
+import EpisodeQualityPanel from "../../components/quality/EpisodeQualityPanel";
 import LineagePanel from "../../components/episodes/LineagePanel";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import IdentifierValue from "../../components/ui/IdentifierValue";
@@ -360,6 +361,11 @@ function EpisodeDetailBody({
           ]}
         />
       </Card>
+
+      <EpisodeQualityPanel
+        projectId={projectId}
+        episodeId={episode.episode_id}
+      />
 
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={12}>

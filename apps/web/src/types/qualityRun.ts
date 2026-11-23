@@ -133,3 +133,96 @@ export interface QualityRunCreateInput {
   /** 可选类别筛选；`OVERALL` 是派生类别，不能用于筛选规则。 */
   categories?: QualityCategory[] | null;
 }
+
+// ---------------------------------------------------------------------------
+// V31-033 / FR-026：批量重跑（只入队，无结论）
+// ---------------------------------------------------------------------------
+
+/**
+ * 排队中的质量运行（契约 `QueuedQualityRun`）。
+ *
+ * **没有结论字段**：`status` / `score` / 六类聚合 / 起止时间在排队阶段
+ * 不存在。这是独立 schema 的类型事实——前端不得把「入队成功」渲染成
+ * 「检查通过」（ADR-0045 语义红线）。
+ */
+export interface QueuedQualityRun {
+  run_id: string;
+  project_id: string;
+  subject_type: QualitySubjectType;
+  subject_id: string;
+  /** 入队时固化的规则声明内容 SHA（区别于执行时的适用规则集）。 */
+  rule_set_version: string;
+  /** 排队响应固定为 `QUEUED`；其余取值出现在后续查询入口。 */
+  lifecycle: QueuedQualityRunLifecycle;
+  max_attempts: number;
+  created_at: string;
+  created_by: string;
+}
+
+/** 契约 `QueuedQualityRun.lifecycle` 的封闭枚举；未知值解析时拒绝。 */
+export const QUEUED_QUALITY_RUN_LIFECYCLE_VALUES = [
+  "QUEUED",
+  "RUNNING",
+  "SUCCEEDED",
+  "FAILED",
+  "RETRYING",
+  "CANCELLED",
+] as const;
+export type QueuedQualityRunLifecycle =
+  (typeof QUEUED_QUALITY_RUN_LIFECYCLE_VALUES)[number];
+
+/** POST `/quality-runs/batch` 的入参；服务端只接受 EPISODE。 */
+export interface QualityRunBatchCreateInput {
+  subject_type: "EPISODE";
+  /** 1..1000 个 Episode，不得重复；重复在服务端是 422。 */
+  subject_ids: string[];
+}
+
+// ---------------------------------------------------------------------------
+// V31-033 / FR-027：差异报告（按 rule_id + subject_ref 对齐）
+// ---------------------------------------------------------------------------
+
+/** 差异四分类：新增 / 已消除 / 无变化 / 结论变化。 */
+export const QUALITY_DIFF_KIND_VALUES = [
+  "NEW",
+  "RESOLVED",
+  "UNCHANGED",
+  "CHANGED",
+] as const;
+export type QualityDiffKind = (typeof QUALITY_DIFF_KIND_VALUES)[number];
+
+/** 差异条目中的单侧结论；`null` 表示该侧没有这条结论。 */
+export const QUALITY_DIFF_STATUS_VALUES = [
+  "PASS",
+  "FAIL",
+  "NOT_APPLICABLE",
+  "ERROR",
+] as const;
+export type QualityDiffStatus = (typeof QUALITY_DIFF_STATUS_VALUES)[number];
+
+/**
+ * 单条差异（契约 `QualityFindingDiff`）。
+ *
+ * `subject_ref` 区分同一规则作用于多个对象；对象级结论为空字符串，
+ * 展示层用 `—` 表示，不伪造对象名。
+ */
+export interface QualityFindingDiff {
+  rule_id: string;
+  subject_ref: string;
+  kind: QualityDiffKind;
+  baseline_status: QualityDiffStatus | null;
+  candidate_status: QualityDiffStatus | null;
+}
+
+/** 差异报告（契约 `QualityRunDiff`）；四个计数必须与 findings 一致。 */
+export interface QualityRunDiffReport {
+  baseline_run_id: string;
+  candidate_run_id: string;
+  findings: QualityFindingDiff[];
+  new_count: number;
+  resolved_count: number;
+  unchanged_count: number;
+  changed_count: number;
+  /** 只把 `NEW` 算作回归；`CHANGED` 可能是修好也可能是变坏。 */
+  has_regression: boolean;
+}

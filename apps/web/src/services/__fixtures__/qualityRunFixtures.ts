@@ -103,3 +103,87 @@ export function qualityRunFindingFixture(
     ...overrides,
   };
 }
+
+// ---------------------------------------------------------------------------
+// V31-033 / FR-026..028：批量重跑与差异报告夹具
+// ---------------------------------------------------------------------------
+
+import type {
+  QualityFindingDiff,
+  QualityDiffKind,
+  QualityDiffStatus,
+  QueuedQualityRun,
+  QualityRunDiffReport,
+} from "../../types/qualityRun";
+
+export const QUALITY_EPISODE_ID = "66666666-6666-4666-8666-666666666666";
+/** 第二个 Episode 夹具；批量重跑测试用它表达「多个对象」。 */
+export const QUALITY_OTHER_EPISODE_ID_FIXTURE =
+  "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+export const QUALITY_BASELINE_RUN_ID =
+  "77777777-7777-4777-8777-777777777777";
+export const QUALITY_CANDIDATE_RUN_ID =
+  "88888888-8888-4888-8888-888888888888";
+
+/** 排队回执：只描述排队事实，刻意没有 status / score / 六类聚合。 */
+export function queuedQualityRunFixture(
+  overrides: Partial<QueuedQualityRun> = {},
+): QueuedQualityRun {
+  return {
+    run_id: QUALITY_RUN_ID,
+    project_id: QUALITY_PROJECT_ID,
+    subject_type: "EPISODE",
+    subject_id: QUALITY_EPISODE_ID,
+    rule_set_version: QUALITY_RULE_SET_VERSION,
+    lifecycle: "QUEUED",
+    max_attempts: 1,
+    created_at: "2026-11-19T08:00:00Z",
+    created_by: QUALITY_CREATED_BY,
+    ...overrides,
+  };
+}
+
+/** 单条差异；两侧结论默认与 kind 匹配（NEW 只有 candidate 等）。 */
+export function qualityFindingDiffFixture(
+  kind: QualityDiffKind,
+  overrides: Partial<QualityFindingDiff> = {},
+): QualityFindingDiff {
+  const statuses: Record<QualityDiffKind, [QualityDiffStatus | null, QualityDiffStatus | null]> = {
+    NEW: [null, "FAIL"],
+    RESOLVED: ["FAIL", null],
+    UNCHANGED: ["FAIL", "FAIL"],
+    CHANGED: ["FAIL", "PASS"],
+  };
+  const [baseline, candidate] = statuses[kind];
+  return {
+    rule_id: "assets_present",
+    subject_ref: "",
+    kind,
+    baseline_status: baseline,
+    candidate_status: candidate,
+    ...overrides,
+  };
+}
+
+/** 四类差异各一条；计数与 findings 严格一致（解析层校验该一致性）。 */
+export function qualityRunDiffFixture(
+  overrides: Partial<QualityRunDiffReport> = {},
+): QualityRunDiffReport {
+  const findings = [
+    qualityFindingDiffFixture("NEW"),
+    qualityFindingDiffFixture("RESOLVED"),
+    qualityFindingDiffFixture("UNCHANGED"),
+    qualityFindingDiffFixture("CHANGED"),
+  ];
+  return {
+    baseline_run_id: QUALITY_BASELINE_RUN_ID,
+    candidate_run_id: QUALITY_CANDIDATE_RUN_ID,
+    findings,
+    new_count: 1,
+    resolved_count: 1,
+    unchanged_count: 1,
+    changed_count: 1,
+    has_regression: true,
+    ...overrides,
+  };
+}
