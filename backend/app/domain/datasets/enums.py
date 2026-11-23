@@ -117,6 +117,11 @@ class LeakageRule(StrEnum):
     SIMILARITY_GROUP_CROSS_SPLIT = "SIMILARITY_GROUP_CROSS_SPLIT"
     SCENE_GROUP_CROSS_SPLIT = "SCENE_GROUP_CROSS_SPLIT"
     BATCH_GROUP_CROSS_SPLIT = "BATCH_GROUP_CROSS_SPLIT"
+    # V4.1 FR-030：同一采集会话 / 同一受试对象的 Episode 必须整体落在同一划分。
+    # 采集会话意味着同一段连续采集（同一场景同一时段），受试对象意味着同一人/同一
+    # 台机器人的数据——两者跨训练/验证/测试都会让评估虚高。
+    CAPTURE_SESSION_CROSS_SPLIT = "CAPTURE_SESSION_CROSS_SPLIT"
+    SUBJECT_CROSS_SPLIT = "SUBJECT_CROSS_SPLIT"
     TEMPORAL_OVERLAP_CROSS_SPLIT = "TEMPORAL_OVERLAP_CROSS_SPLIT"
     DUPLICATE_ANNOTATION = "DUPLICATE_ANNOTATION"
 
@@ -133,6 +138,8 @@ SOFT_LEAKAGE_RULES: frozenset[LeakageRule] = frozenset(
     {
         LeakageRule.SCENE_GROUP_CROSS_SPLIT,
         LeakageRule.BATCH_GROUP_CROSS_SPLIT,
+        LeakageRule.CAPTURE_SESSION_CROSS_SPLIT,
+        LeakageRule.SUBJECT_CROSS_SPLIT,
         LeakageRule.TEMPORAL_OVERLAP_CROSS_SPLIT,
         LeakageRule.DUPLICATE_ANNOTATION,
     }
