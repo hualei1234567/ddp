@@ -35,6 +35,7 @@ from app.domain.collection.errors import CollectionDomainError
 from app.domain.datasets.errors import DatasetDomainError
 from app.domain.datasources.errors import DataSourceDomainError
 from app.domain.devices.errors import DeviceDomainError
+from app.domain.edge_agents.errors import EdgeAgentDomainError
 from app.domain.episodes.errors import EpisodeDomainError
 from app.domain.governance.errors import GovernanceDomainError
 from app.domain.ingestion.errors import IngestionDomainError
@@ -954,4 +955,33 @@ def quality_error_to_app(exc: QualityDomainError) -> AppError:
         status_by_code=_QUALITY_STATUS_BY_CODE,
         messages=_QUALITY_MESSAGES,
         fallback=_QUALITY_FALLBACK,
+    )
+
+
+_EDGE_AGENT_STATUS_BY_CODE = {
+    "not_authenticated": 401,
+    "forbidden": 403,
+    "resource_not_found": 404,
+    "conflict": 409,
+    "state_transition_invalid": 409,
+    "validation_failed": 422,
+}
+
+_EDGE_AGENT_MESSAGES = {
+    "not_authenticated": "Agent 凭据或配对凭证无效或已过期",
+    "forbidden": "无权访问目标 Edge Agent 资源",
+    "resource_not_found": "Edge Agent 资源不存在或不属于当前项目",
+    "conflict": "该采集会话已有其他活跃 Lease",
+    "state_transition_invalid": "当前 Edge Agent 或 Lease 状态不允许该操作",
+    "validation_failed": "Edge Agent 请求参数或领域规则校验失败",
+}
+_EDGE_AGENT_FALLBACK = "Edge Agent 域规则校验失败"
+
+
+def edge_agent_error_to_app(exc: EdgeAgentDomainError) -> AppError:
+    return _mapped(
+        exc,
+        status_by_code=_EDGE_AGENT_STATUS_BY_CODE,
+        messages=_EDGE_AGENT_MESSAGES,
+        fallback=_EDGE_AGENT_FALLBACK,
     )

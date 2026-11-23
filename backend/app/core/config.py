@@ -248,6 +248,15 @@ class Settings(BaseSettings):
     quality_worker_retry_base_seconds: float = Field(default=5.0, gt=0)
     quality_worker_retry_max_seconds: float = Field(default=300.0, gt=0)
 
+    # Edge Capture Agent 时间策略（V31-011 / ADR-0047）：全部由配置注入。
+    edge_agent_heartbeat_interval_seconds: int = Field(default=30, ge=1, le=3600)
+    edge_agent_offline_after_seconds: int = Field(default=90, ge=2, le=86400)
+    edge_agent_lease_ttl_seconds: int = Field(default=120, ge=5, le=86400)
+    edge_agent_capture_grace_seconds: int = Field(default=60, ge=1, le=3600)
+    edge_agent_pairing_ttl_default_seconds: int = Field(default=900, ge=60, le=86400)
+    edge_agent_pairing_ttl_max_seconds: int = Field(default=3600, ge=60, le=86400)
+    edge_agent_heartbeat_retention_hours: int = Field(default=168, ge=1, le=8760)
+
     # 维护 worker（阶段 8）：定时备份 + 保留/清扫。
     # 默认全部关闭——运维能力不应在未显式启用时自动改动机器上的数据。
     maintenance_enabled: bool = False
@@ -449,6 +458,7 @@ class Settings(BaseSettings):
         problems.extend(self._maintenance_worker_config_problems())
         problems.extend(self._training_adapter_config_problems())
         problems.extend(self._model_adapter_config_problems())
+        problems.extend(self._edge_agent_config_problems())
         if not self.is_local:
             if self.local_header_auth:
                 problems.append(
@@ -711,6 +721,20 @@ class Settings(BaseSettings):
         problems.extend(
             _endpoint_url_problems("DDP_MODEL_ADAPTER_ENDPOINTS", self.model_adapter_endpoints)
         )
+        return problems
+
+    def _edge_agent_config_problems(self) -> list[str]:
+        problems: list[str] = []
+        if self.edge_agent_offline_after_seconds <= self.edge_agent_heartbeat_interval_seconds:
+            problems.append(
+                "DDP_EDGE_AGENT_OFFLINE_AFTER_SECONDS 必须大于 "
+                "DDP_EDGE_AGENT_HEARTBEAT_INTERVAL_SECONDS"
+            )
+        if self.edge_agent_pairing_ttl_default_seconds > self.edge_agent_pairing_ttl_max_seconds:
+            problems.append(
+                "DDP_EDGE_AGENT_PAIRING_TTL_DEFAULT_SECONDS 不得大于 "
+                "DDP_EDGE_AGENT_PAIRING_TTL_MAX_SECONDS"
+            )
         return problems
 
 

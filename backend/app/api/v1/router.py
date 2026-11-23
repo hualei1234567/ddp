@@ -22,6 +22,7 @@ from app.api.v1 import (
     dataset_version_routes,
     datasource_routes,
     devices,
+    edge_agent_routes,
     episodes,
     evaluation_routes,
     export_routes,
@@ -94,3 +95,5 @@ api_router.include_router(governance_routes.router)
 # 数据处理运行（N4-001）：实体与状态机；八阶段编排在 N4-002。
 api_router.include_router(processing_routes.router)
 api_router.include_router(quality_routes.router)
+api_router.include_router(edge_agent_routes.admin_router)
+api_router.include_router(edge_agent_routes.agent_router)
