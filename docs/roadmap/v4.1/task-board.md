@@ -13,7 +13,7 @@
 |---|---|---|
 | 蓝图包入库（18 文件 SHA256 校验 0 差异） | ✅ | PR #85；`docs/roadmap/v4.1/` |
 | 基线复核报告（HEAD/契约/迁移/门禁实跑） | ✅ | `docs/roadmap/v4.1/s0-baseline-and-d2.md` |
-| D2 选项列出 + 推荐方案（纯拉取，等用户批准） | ⏸ **待用户裁决** | 同上 §2 |
+| D2 选项列出 + 推荐方案（纯拉取） | ✅ **用户已批准方案 A（2026-11-23）** | 同上 §2；决策落 ADR-0047 |
 
 ## S1 关闭低依赖缺口 —— ✅ 三线全部完成（2026-11-23）
 
@@ -32,11 +32,14 @@
 
 这 9 项已全部列入 #86 证据报告，作为 V31-042 后续切片的输入。
 
-## S2 Edge Agent 最小可用链 —— ⏸ 待 D2 批准
+## S2 Edge Agent 最小可用链 —— 🔄 进行中（D2 已批准：纯拉取）
 
-| FR | 内容 | 状态 |
-|---|---|---|
-| FR-001~008 | 配对/心跳/Lease/Preflight/Spool/Manifest/续传/回写 | ⏸ 未开工；**D2 选项与推荐（纯拉取）已列于 s0-baseline-and-d2.md §2，等用户批准后写 V31-010 ADR → 开工** |
+| 任务 | FR | 内容 | 状态 |
+|---|---|---|---|
+| V31-010 | — | ADR-0047：Agent 协议边界冻结（纯拉取、零入站、无命令通道） | ✅ ADR 已落盘（`docs/adr/0047-edge-agent-pull-mode.md`） |
+| V31-011 | FR-001~003 | `edge_agents` / `agent_heartbeats` / `agent_task_leases` 表与配对/心跳/Lease/assignments API | 未开工（下一步） |
+| V31-012 | FR-004~008 | Agent 运行时：Preflight、Filesystem Export Adapter、Spool、Manifest、上传 | 未开工（依赖 V31-011） |
+| V31-013 | FR-007/008 | 断网恢复与幂等续传验收 | 未开工（依赖 V31-012） |
 
 ## S3 真实传感器数据物化 —— 未开工（依赖 S2）
 
