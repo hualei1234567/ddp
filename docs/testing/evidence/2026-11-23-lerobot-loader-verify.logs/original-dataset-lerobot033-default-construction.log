@@ -1,0 +1,30 @@
+=== 环境 ===
+lerobot version: 0.3.3
+pyarrow: 26.0.1
+pandas: 3.1.1
+
+=== import LeRobotDataset ===
+import OK: <class 'lerobot.datasets.lerobot_dataset.LeRobotDataset'>
+
+=== 构造 LeRobotDataset ===
+Traceback (most recent call last):
+  File "/private/tmp/load_lerobot_verify.py", line 34, in <module>
+    ds = LeRobotDataset(
+         ^^^^^^^^^^^^^^^
+  File "/private/tmp/lerobot-verify-venv-v21/lib/python3.11/site-packages/lerobot/datasets/lerobot_dataset.py", line 468, in __init__
+    self.meta = LeRobotDatasetMetadata(
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/lerobot-verify-venv-v21/lib/python3.11/site-packages/lerobot/datasets/lerobot_dataset.py", line 94, in __init__
+    self.load_metadata()
+  File "/private/tmp/lerobot-verify-venv-v21/lib/python3.11/site-packages/lerobot/datasets/lerobot_dataset.py", line 107, in load_metadata
+    self.episodes = load_episodes(self.root)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/lerobot-verify-venv-v21/lib/python3.11/site-packages/lerobot/datasets/utils.py", line 221, in load_episodes
+    return {item["episode_index"]: item for item in sorted(episodes, key=lambda x: x["episode_index"])}
+                                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/lerobot-verify-venv-v21/lib/python3.11/site-packages/lerobot/datasets/utils.py", line 221, in <lambda>
+    return {item["episode_index"]: item for item in sorted(episodes, key=lambda x: x["episode_index"])}
+                                                                                   ~^^^^^^^^^^^^^^^^^
+KeyError: 'episode_index'
+
+RESULT: CONSTRUCT_FAILED

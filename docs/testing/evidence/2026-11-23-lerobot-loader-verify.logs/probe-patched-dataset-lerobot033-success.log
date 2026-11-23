@@ -1,0 +1,27 @@
+=== 环境 ===
+lerobot version: 0.3.3
+pyarrow: 26.0.1
+pandas: 3.1.1
+
+=== import LeRobotDataset ===
+import OK: <class 'lerobot.datasets.lerobot_dataset.LeRobotDataset'>
+
+=== 构造 LeRobotDataset ===
+Generating train split: 0 examples [00:00, ? examples/s]Generating train split: 3 examples [00:00, 278.43 examples/s]
+构造成功 (type): LeRobotDataset
+
+=== 元数据读取 ===
+ds.meta.info: {"canonicalization": "RFC8785_JCS", "chunks_size": 1000, "codebase_version": "v2.1", "created_at": "2026-11-23T12:00:00+00:00", "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet", "dataset_version": 1, "dataset_version_id": "00000000-0000-0000-0000-000000000014", "episode_data_path": "data/episodes.jsonl", "features": {"episode_index": {"dtype": "int64", "shape": [1]}, "length": {"dtype": "int64", "shape": [1]}, "split": {"dtype": "string", "shape": [1]}, "task_index": {"dtype": "int64", "shape": [1]}, "timestamp": {"dtype": "float64", "shape": [1]}}, "format": "LE_ROBOT", "format_version": "ddp.lerobot/1.0.0", "fps": 25, "frame_level_mapping": false, "item_count": 3, "loadable_scope": "METADATA_ONLY", "manifest_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "media_index_path": "meta/media.jsonl", "robot_type": "ddp-metadata", "split_counts": {"test": 1, "train": 1, "validation": 1}, "splits": {"TEST": "file://TEST_chunk", "TRAIN": "file://TRAIN_chunk", "VALIDATION": "file://VALIDATION_chunk"}, "total_duration_ns": null, "total_endorsements": 0, "total_episodes": 3, "total_frames": 0, "total_tasks": 1, "total_videos": 0, "verification_status": "UNVERIFIED", "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"}
+ds.meta.total_episodes: 3
+ds.meta.total_frames: 0
+ds.meta.total_tasks: 1
+ds.meta.fps: 25
+
+ds.num_frames: 3
+meta/episodes parquet 读取失败: /tmp/lerobot-dataset-probe/meta/episodes/chunk-000.parquet
+data parquet episode_index 列: [0, 1, 2]
+
+=== 逐帧读取探测（边界外，不作为失败条件）===
+ds[0] 失败（符合 METADATA_ONLY 边界预期）: AttributeError: 'NoneType' object has no attribute 'item'
+
+RESULT: LOADER_VERIFY_OK

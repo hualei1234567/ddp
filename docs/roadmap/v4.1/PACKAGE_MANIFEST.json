@@ -1,0 +1,107 @@
+{
+  "package": "DDP V4.1 功能级全面建设蓝图包",
+  "version": "4.1",
+  "audit_basis": {
+    "audit_report": "DDP V3.1 全面审计报告（2026-11-23）",
+    "git_baseline": "origin/main @ 3d45344",
+    "openapi": "1.32.0 / 244 paths",
+    "alembic_head": "0070",
+    "backend_tests": "2871 passed",
+    "frontend_tests": "1072 passed / 19 skipped",
+    "quality_gate": "scripts/check.sh 9 steps passed"
+  },
+  "principle": "No new top-level modules; complete existing functions based on audit evidence.",
+  "files": [
+    {
+      "path": "README.md",
+      "size_bytes": 1865,
+      "sha256": "b026b3629fce78b09b1ba0fd658250c381f61aaa8790e31cba8f81f120c152e2"
+    },
+    {
+      "path": "功能设计/01_V4.1建设总纲与边界.md",
+      "size_bytes": 2597,
+      "sha256": "a1a068c97b879f7d90e1fb38923d392dd6b11b1ef4c5f766d873b452421445f8"
+    },
+    {
+      "path": "功能设计/02_审计基线与差距核对.md",
+      "size_bytes": 3466,
+      "sha256": "737eadd382d90bb67bb18798aab0d2e1bd1d068f487bcb1cad0eb4b352892dbb"
+    },
+    {
+      "path": "功能设计/03_用户旅程与真实业务状态.md",
+      "size_bytes": 2328,
+      "sha256": "38a8bf428df79cedc8d9cb5729d8f63bc0e76349cc5eff8227d2b173e3d214ce"
+    },
+    {
+      "path": "功能设计/04_端侧采集Agent功能设计.md",
+      "size_bytes": 4076,
+      "sha256": "c8d6ef1b24c9c085d84d41488fad10be36abdaee8b40143ffe6237152e8209b4"
+    },
+    {
+      "path": "功能设计/05_数据解析Canonical与Episode功能设计.md",
+      "size_bytes": 3515,
+      "sha256": "7ba17cd928e953b3c8932e7536acdaed14d6c6b4f3b898936c5bc21c63c0dc87"
+    },
+    {
+      "path": "功能设计/06_标注工作台与三级语义功能设计.md",
+      "size_bytes": 2338,
+      "sha256": "53cbd92bbd5d1766da796ff0e7924c800f7279e30e7b75373513f2ed34711410"
+    },
+    {
+      "path": "功能设计/07_AI自动标注真实运行功能设计.md",
+      "size_bytes": 2093,
+      "sha256": "867a1a637c1a176519169e8a2cc9ef9e211c0ccbc361c07f83b6c8a94acc9085"
+    },
+    {
+      "path": "功能设计/08_质检审核返工与批量重跑功能设计.md",
+      "size_bytes": 2253,
+      "sha256": "bc1b9ccbac7148a883c2fe1f6dbe36cdebf630d60129eb27b2d0fa0a1702b6e1"
+    },
+    {
+      "path": "功能设计/09_Dataset_LeRobot与训练交付功能设计.md",
+      "size_bytes": 3176,
+      "sha256": "a9409dd698b5e4c20c51a81e8f774729da88f025f3092792fb1369adc7f120f8"
+    },
+    {
+      "path": "功能设计/10_现有页面逐页交互功能规格.md",
+      "size_bytes": 3097,
+      "sha256": "f01ca518dcdf718feb4b29e5092047a471ffda21d2852034981e8b8c63bb4586"
+    },
+    {
+      "path": "功能设计/11_API数据一致性事件与版本规则.md",
+      "size_bytes": 2311,
+      "sha256": "180b4f09c4c1cdc86f5fde8d0d8b221fd29fc5bed6c19e3ce019f6ee60ed3664"
+    },
+    {
+      "path": "功能设计/12_权限安全运维恢复与可观测性.md",
+      "size_bytes": 2237,
+      "sha256": "649ba4c85a65a55501f894e03eea2757453f755cb36b56f30f3c0aa35c0e17b6"
+    },
+    {
+      "path": "功能设计/13_功能需求追踪矩阵FR.md",
+      "size_bytes": 3891,
+      "sha256": "c3c1b5f67ff7831ce817a25cdcc792909df2c8a09d041045eb926f0af24d6d48"
+    },
+    {
+      "path": "功能设计/14_V4.1实施顺序与验收门禁.md",
+      "size_bytes": 2271,
+      "sha256": "21e23a5f6ce7469933a69880655c156558f6f1345d0c91cc88602141074a1a91"
+    },
+    {
+      "path": "功能设计/15_测试策略与真实链路验收用例.md",
+      "size_bytes": 2907,
+      "sha256": "014890265e0690c927319cecc010d55a89772a2636db575b6e2a8f722c4d07fa"
+    },
+    {
+      "path": "功能设计/16_风险外部依赖与待决策事项.md",
+      "size_bytes": 1855,
+      "sha256": "7c9dda4a91856b449ea1a840c3af0102cd1e32a1b7471dc3eba37586ad167315"
+    },
+    {
+      "path": "功能设计/17_Claude_Code_V4.1执行总Prompt.md",
+      "size_bytes": 3553,
+      "sha256": "640ada2ca172ff0d45b721a9c758cf2d2a590c33b8b27324f3c3119d83103b48"
+    }
+  ],
+  "file_count": 18
+}
