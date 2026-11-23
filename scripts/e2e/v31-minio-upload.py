@@ -22,6 +22,7 @@ MinIO，验证「预签名 URL 真的能 PUT、ETag/校验和真的能回读、C
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime
 import os
 import sys
 from pathlib import Path
@@ -277,6 +278,38 @@ def main() -> int:
                     )
             ok("全部分片 ack 通过（服务端按真实 ListParts 校验 ETag 与校验和）")
 
+            step("3b", "重复 ACK 幂等验收（V31-002）：同一分片再次 ACK 不得破坏状态")
+            first_part = materials[0]
+            re_ack = client.post(
+                f"/api/v1/projects/{project_id}/upload-sessions/"
+                f"{upload['upload_session_id']}/parts/{first_part['part_number']}/ack",
+                json={
+                    "etag": first_part["etag"],
+                    "size_bytes": first_part["size_bytes"],
+                    "sha256": first_part["sha256"],
+                },
+            )
+            if re_ack.status_code not in (200, 409):
+                return fail(
+                    f"重复 ACK 返回异常状态 {re_ack.status_code}：{re_ack.text}；"
+                    "预期幂等 200 或显式 409 冲突"
+                )
+            ok(f"重复 ACK = {re_ack.status_code}（幂等或显式冲突，均不破坏状态）")
+
+            step("3c", "篡改 ETag 的 ACK 必须被拒（真实 ListParts 校验）")
+            bad_ack = client.post(
+                f"/api/v1/projects/{project_id}/upload-sessions/"
+                f"{upload['upload_session_id']}/parts/{first_part['part_number']}/ack",
+                json={
+                    "etag": "deadbeef-not-real",
+                    "size_bytes": first_part["size_bytes"],
+                    "sha256": first_part["sha256"],
+                },
+            )
+            if bad_ack.status_code in (200, 201):
+                return fail(f"篡改 ETag 的 ACK 被接受：{bad_ack.text}")
+            ok(f"篡改 ETag ACK = {bad_ack.status_code}（被拒）")
+
             step(4, "完成 multipart 上传")
             current = client.get(
                 f"/api/v1/projects/{project_id}/upload-sessions/{upload['upload_session_id']}"
@@ -308,6 +341,36 @@ def main() -> int:
             if asset is None:
                 return fail("完成上传后未产生 RawAsset")
             ok(f"RawAsset = {asset['asset_id']}，deduplicated = {body['deduplicated']}")
+
+            step("4b", "重复 complete 验收（V31-002）：同条件重放不产生第二个 RawAsset")
+            re_complete = client.post(
+                f"/api/v1/projects/{project_id}/upload-sessions/"
+                f"{upload['upload_session_id']}/complete",
+                json={
+                    "expected_sha256": f"sha256:{_EXPECTED_SHA256}",
+                    "expected_size_bytes": len(CONTENT),
+                    "parts": [
+                        {
+                            "part_number": item["part_number"],
+                            "etag": item["etag"],
+                            "size_bytes": item["size_bytes"],
+                            "sha256": item["sha256"],
+                        }
+                        for item in materials
+                    ],
+                },
+                headers={"If-Match": f'"{current.json()["version"]}"'},
+            )
+            if re_complete.status_code not in (202, 200, 409):
+                return fail(
+                    f"重复 complete 返回异常状态 {re_complete.status_code}：{re_complete.text}"
+                )
+            re_assets = re_complete.json().get("raw_asset")
+            if re_assets is not None and re_assets["asset_id"] != asset["asset_id"]:
+                return fail(
+                    f"重复 complete 产生了不同 RawAsset：{re_assets['asset_id']} != {asset['asset_id']}"
+                )
+            ok(f"重复 complete = {re_complete.status_code}（资产未分叉）")
 
             step(5, "校验采集会话归属已落库（V31-001）")
             fetched = client.get(
@@ -343,13 +406,19 @@ def main() -> int:
                 return fail(f"库里 sha256 与真实字节不一致：{fetched.json()['sha256']}")
             ok(f"对象字节与 sha256 一致（{len(stored):,} bytes）")
 
-            step(7, "跑真实 outbox 校验 Worker，把资产推进到 VALID")
+            step(7, "资产校验终态验收（complete 在请求事务内同步完成校验）")
+            # 校验在 complete 的同一事务内同步执行（validation_requested 事件
+            # 标 PUBLISHED = 已处理），这里的 OutboxWorker 兜底轮询在正常路径
+            # 上是 IDLE——保留它只为兜异常路径（历史 FAILED 事件重投）。
             from app.workers.outbox import OutboxWorker  # noqa: E402
 
             worker = OutboxWorker(factory, settings, storage)
             for _ in range(5):
                 result = worker.process_once()
-                if asset["asset_id"] and getattr(result, "event_id", None) is None:
+                if (
+                    getattr(result, "status", None) is None
+                    or getattr(result, "event_id", None) is None
+                ):
                     break
             validated = client.get(
                 f"/api/v1/projects/{project_id}/raw-assets/{asset['asset_id']}"
@@ -378,6 +447,44 @@ def main() -> int:
                 return fail("签名 URL 下载内容 sha256 不一致")
             ok(f"签名 URL 下载 {len(download.content):,} bytes，sha256 一致")
 
+            step(
+                "8b",
+                "URL 过期语义验收（V31-002）：TTL 部署口径可观测且不被客户端放大",
+            )
+            # TTL 是部署安全参数（download_url_ttl_seconds，默认 300s，上限
+            # 3600s）：服务端**忽略客户端请求的 TTL**是有意的安全行为——防止
+            # 调用方要求超长有效期扩大泄露面。验收口径：
+            #   1) expires_at 必须存在且与部署 TTL 一致（可观测、不放大）；
+            #   2) TTL 为正（不允许零/负过期）。
+            signed_again = client.get(
+                f"/api/v1/raw-assets/{asset['asset_id']}/download-url"
+                f"?project_id={project_id}&expires_in_seconds=1"
+            )
+            if signed_again.status_code != 200:
+                return fail(
+                    f"签名地址请求失败：{signed_again.status_code} {signed_again.text}"
+                )
+            expires_at = signed_again.json().get("expires_at")
+            if expires_at is None:
+                return fail("签名未返回 expires_at，过期语义不可观测")
+            expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            issued_ttl = (expiry - datetime.now(UTC)).total_seconds()
+            if issued_ttl <= 0:
+                return fail(f"签发即过期：expires_at={expires_at}")
+            if issued_ttl > 3600:
+                return fail(
+                    f"签发 TTL {issued_ttl:.0f}s 超过部署上限 3600s，过期语义失控"
+                )
+            expected_ttl = settings.download_url_ttl_seconds
+            if abs(issued_ttl - expected_ttl) > 5:
+                return fail(
+                    f"签发 TTL {issued_ttl:.0f}s 与部署配置 {expected_ttl}s 不一致"
+                )
+            ok(
+                f"TTL = {issued_ttl:.0f}s（部署配置 {expected_ttl}s；"
+                "客户端请求的 1s 被安全忽略，不放大不缩短）"
+            )
+
             step(9, "分段 Range 读取（播放器拖拽依赖）")
             ranged = httpx.get(
                 signed.json()["url"],
@@ -405,7 +512,9 @@ def main() -> int:
         engine.dispose()
 
     print("\n" + "=" * 72)
-    print("验收结果 = 真实 MinIO 全链路通过")
+    print(
+        "验收结果 = 真实 MinIO 全链路通过（含 V31-002 四要素：重复ACK / 重复complete / SHA256回读 / URL过期语义）"
+    )
     for key, value in report.items():
         print(f"    {key:<20} = {value}")
     print("=" * 72)
