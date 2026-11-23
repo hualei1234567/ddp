@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+import gc
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
 from edge_agent.manifest.models import CalibrationRef, ClockInfo, ManifestContext
+
+
+@pytest.fixture(autouse=True)
+def _drain_sockets() -> None:
+    """每个测试结束后主动回收未被逐出引用的 socket。
+
+    为什么需要：本服务把 ``ResourceWarning`` 升格为错误（``filterwarnings=error``）。
+    HTTP 测试里 ``http.server`` 的连接 socket 即使显式关闭，也可能在**下一个**
+    测试的 GC 时才真正析构，从而把警告错误地归因到无关测试上（表现为
+    ``test_manifest_deterministic_hash_and_required_fields`` 偶发失败）。
+    在用例边界主动 GC，让 socket 生命周期留在产生它的用例内。
+    """
+    yield
+    gc.collect()
 
 
 class FakeClock:
