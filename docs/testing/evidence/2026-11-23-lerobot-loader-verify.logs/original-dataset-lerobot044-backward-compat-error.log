@@ -1,0 +1,26 @@
+Traceback (most recent call last):
+  File "<string>", line 4, in <module>
+  File "/private/tmp/lerobot-verify-venv/lib/python3.11/site-packages/lerobot/datasets/lerobot_dataset.py", line 733, in __init__
+    self.meta = LeRobotDatasetMetadata(
+                ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/private/tmp/lerobot-verify-venv/lib/python3.11/site-packages/lerobot/datasets/lerobot_dataset.py", line 106, in __init__
+    self.load_metadata()
+  File "/private/tmp/lerobot-verify-venv/lib/python3.11/site-packages/lerobot/datasets/lerobot_dataset.py", line 165, in load_metadata
+    check_version_compatibility(self.repo_id, self._version, CODEBASE_VERSION)
+  File "/private/tmp/lerobot-verify-venv/lib/python3.11/site-packages/lerobot/datasets/utils.py", line 482, in check_version_compatibility
+    raise BackwardCompatibilityError(repo_id, v_check)
+lerobot.datasets.backward_compatibility.BackwardCompatibilityError: 
+The dataset you requested (local/ddp-export) is in 2.1 format.
+
+We introduced a new format since v3.0 which is not backward compatible with v2.1.
+Please, update your dataset to the new format using this command:
+```
+python -m lerobot.datasets.v30.convert_dataset_v21_to_v30 --repo-id=local/ddp-export
+```
+
+If you already have a converted version uploaded to the hub, then this error might be because of
+an older version in your local cache. Consider deleting the cached version and retrying.
+
+If you encounter a problem, contact LeRobot maintainers on [Discord](https://discord.com/invite/s3KuuzsPFb)
+or open an [issue on GitHub](https://github.com/huggingface/lerobot/issues/new/choose).
+
