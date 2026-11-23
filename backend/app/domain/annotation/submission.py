@@ -29,7 +29,12 @@ from app.domain.annotation.errors import (
     SubmissionIncompleteError,
     UnknownLabelError,
 )
-from app.domain.annotation.schema import LabelDefinition
+from app.domain.annotation.schema import (
+    OUTCOME_ERROR_CATEGORIES,
+    OUTCOME_VALUES,
+    SEMANTIC_LEVEL_ORDER,
+    LabelDefinition,
+)
 from app.domain.annotation.state_machines import (
     action_requires_reason,
     record_target,
@@ -645,15 +650,83 @@ def _require_type(definition: LabelDefinition, value: object) -> None:
             if not isinstance(track, Mapping):
                 raise LabelValueInvalidError("OBJECT_TRACK 每个元素必须是对象")
             _require_time_value(spec, track)
+    elif label_type is AnnotationLabelType.OUTCOME_SPAN:
+        _require_outcome_value(spec, value)
     elif label_type is AnnotationLabelType.JSON:
         _validated_json(value)
 
 
-def _require_time_value(spec: Mapping[str, object], value: object) -> None:
+#: OUTCOME_SPAN 值的合法字段（未知字段拒绝，避免拼写错误静默丢语义）。
+_OUTCOME_SPAN_KEYS = frozenset(
+    {"start_time_ns", "end_time_ns", "outcome", "error_category", "error_detail"}
+)
+#: outcome 落在失败/部分成功时必须给失败类型；其余 outcome 的失败类型是冗余信息。
+_FAILURE_OUTCOMES = frozenset({"FAILURE", "PARTIAL_SUCCESS"})
+
+
+def _require_outcome_value(spec: Mapping[str, object], value: object) -> None:
+    """V4.1 FR-018：OUTCOME_SPAN 提交值校验。
+
+    区间与时长复用时间片段规则；``outcome`` / ``error_category`` 先取
+    value_spec 的收窄集合，缺省回退到 schema.py 的全集。失败类 outcome
+    （FAILURE / PARTIAL_SUCCESS）必须提供 ``error_category``；
+    ``error_detail`` 只校验类型，内容宽容（蓝图未要求 SUCCESS 不得携带）。
+    """
     if not isinstance(value, Mapping):
-        raise LabelValueInvalidError("时间片段标签值必须是对象")
+        raise LabelValueInvalidError("OUTCOME_SPAN 标签值必须是对象")
+    unknown = set(value) - _OUTCOME_SPAN_KEYS
+    if unknown:
+        raise LabelValueInvalidError(f"OUTCOME_SPAN 标签值包含未知字段：{sorted(unknown)}")
+    _require_time_value(spec, value, field_prefix="OUTCOME_SPAN")
+    outcome = value.get("outcome")
+    if not isinstance(outcome, str) or outcome not in spec.get("outcome_values", OUTCOME_VALUES):
+        raise LabelValueInvalidError(f"OUTCOME_SPAN outcome 取值非法：{outcome!r}")
+    category = value.get("error_category")
+    if category is not None:
+        if not isinstance(category, str) or category not in spec.get(
+            "error_categories", OUTCOME_ERROR_CATEGORIES
+        ):
+            raise LabelValueInvalidError(f"OUTCOME_SPAN error_category 取值非法：{category!r}")
+    elif outcome in _FAILURE_OUTCOMES:
+        raise LabelValueInvalidError(f"OUTCOME_SPAN outcome={outcome} 必须提供 error_category")
+    detail = value.get("error_detail")
+    if detail is not None and not isinstance(detail, str):
+        raise LabelValueInvalidError("OUTCOME_SPAN error_detail 必须是字符串")
+
+
+def _require_ns_range(start: object, end: object, field_prefix: str) -> None:
+    """V4.1 FR-018：OUTCOME_SPAN 与时间片段共用的纳秒区间形状规则。
+
+    区别于 :func:`check_ns_range`（``DomainValidationError``，Schema 定义期），
+    这里抛 ``LabelValueInvalidError``（提交值校验）。
+    """
+    if not isinstance(start, int) or isinstance(start, bool):
+        raise LabelValueInvalidError(f"{field_prefix} start_time_ns 必须是整数")
+    if not isinstance(end, int) or isinstance(end, bool):
+        raise LabelValueInvalidError(f"{field_prefix} end_time_ns 必须是整数")
+    if start >= end:
+        raise LabelValueInvalidError(
+            f"{field_prefix} 时间区间非法：start_time_ns 必须小于 end_time_ns"
+        )
+
+
+def _require_time_value(
+    spec: Mapping[str, object],
+    value: object,
+    *,
+    field_prefix: str = "时间片段",
+) -> None:
+    """时间片段（TIME_RANGE/ACTION_SEGMENT/OUTCOME_SPAN）共用的取值规则。"""
+    if not isinstance(value, Mapping):
+        raise LabelValueInvalidError(f"{field_prefix} 标签值必须是对象")
     start, end = value.get("start_time_ns"), value.get("end_time_ns")
-    check_ns_range(start, end, "label.time_range")
+    if (start is None) != (end is None):
+        raise LabelValueInvalidError(
+            f"{field_prefix} 标签值必须同时提供 start_time_ns 与 end_time_ns"
+        )
+    if start is None or end is None:
+        raise LabelValueInvalidError(f"{field_prefix} 标签值缺少 start_time_ns / end_time_ns")
+    _require_ns_range(start, end, field_prefix)
     duration = int(end) - int(start)  # type: ignore[arg-type]
     min_duration = spec.get("min_duration_ns")
     max_duration = spec.get("max_duration_ns")
@@ -710,6 +783,105 @@ def validate_record_labels(
     ]
     if missing:
         raise SubmissionIncompleteError("提交缺少必填标签")
+    _check_hierarchy_containment(_hierarchy_spans(record, definitions))
+
+
+def _collect_hierarchy_spans(
+    record: AnnotationRecord,
+    definitions: tuple[LabelDefinition, ...],
+    spans: dict[int, list[tuple[str, int, int]]],
+) -> None:
+    """把单条记录的语义层级时间片段累加进 ``spans``（V4.1 FR-016/017）。
+
+    时间片段标签值在 ``_require_type`` 阶段已通过形状校验，这里只提取区间。
+    """
+    by_key = {definition.label_key: definition for definition in definitions}
+    for label in record.labels:
+        definition = by_key.get(label.label_key)
+        if (
+            definition is None
+            or definition.label_type
+            not in {AnnotationLabelType.TIME_RANGE, AnnotationLabelType.ACTION_SEGMENT}
+            or definition.level not in SEMANTIC_LEVEL_ORDER
+            or not isinstance(label.value, Mapping)
+        ):
+            continue
+        level = SEMANTIC_LEVEL_ORDER[definition.level]
+        spans.setdefault(level, []).append(
+            (
+                label.label_key,
+                int(label.value["start_time_ns"]),  # type: ignore[arg-type]
+                int(label.value["end_time_ns"]),  # type: ignore[arg-type]
+            )
+        )
+
+
+def _hierarchy_spans(
+    record: AnnotationRecord,
+    definitions: tuple[LabelDefinition, ...],
+) -> dict[int, list[tuple[str, int, int]]]:
+    """收集单条记录内各语义层级的时间片段（V4.1 FR-016/017）。"""
+    spans: dict[int, list[tuple[str, int, int]]] = {}
+    _collect_hierarchy_spans(record, definitions, spans)
+    return spans
+
+
+def _check_hierarchy_containment(
+    spans: Mapping[int, list[tuple[str, int, int]]],
+) -> None:
+    """校验 L1⊇L2⊇L3 父子包含（V4.1 FR-016/017）。
+
+    - 子片段必须完整落在**任意一个**同级父片段内（多个父级不要求唯一）；
+    - 子级存在而父级为空同样违规（"L2 存在但无 L1"）；
+    - L1 是根层级，自身不参与包含检查。
+    """
+    for level in sorted(spans, reverse=True):
+        if level <= 1:
+            continue
+        parent_spans = spans.get(level - 1, ())
+        for key, start, end in spans[level]:
+            if not any(p_start <= start and end <= p_end for _, p_start, p_end in parent_spans):
+                if parent_spans:
+                    detail = "；父级片段：" + "、".join(
+                        f"{p_start}-{p_end}" for _, p_start, p_end in parent_spans
+                    )
+                else:
+                    detail = "（父级层没有任何片段）"
+                raise LabelValueInvalidError(
+                    f"标签 {key} 的 {_LEVEL_NAMES[level]}片段 {start}ns-{end}ns "
+                    f"未落在任何 L{level - 1} 片段内{detail}"
+                )
+
+
+_LEVEL_NAMES = {
+    1: "L1 任务",
+    2: "L2 子任务",
+    3: "L3 事件",
+}
+
+
+def validate_submission_records(
+    records: tuple[AnnotationRecord, ...] | list[AnnotationRecord],
+    definitions: tuple[LabelDefinition, ...],
+) -> None:
+    """V4.1 FR-016/017：整个 Submission 视角的层级包含校验。
+
+    同一 Submission 的多条 record 可能各自携带部分层级标签（如一条只写 L1、
+    另一条只写 L2），逐 record 校验会把合法提交误判为"父级缺失"；蓝图要求
+    以整个提交为视角一致判定，因此这里先按 Episode 合并全部片段再校验。
+    调用方仍须对每条 record 先跑 :func:`validate_record_labels`（未知键、
+    类型、必填等单记录规则）。
+    """
+    if not records:
+        return
+    by_episode: dict[object, list[AnnotationRecord]] = {}
+    for record in records:
+        by_episode.setdefault(record.episode_id, []).append(record)
+    for episode_records in by_episode.values():
+        spans: dict[int, list[tuple[str, int, int]]] = {}
+        for record in episode_records:
+            _collect_hierarchy_spans(record, definitions, spans)
+        _check_hierarchy_containment(spans)
 
 
 __all__ = [
@@ -726,4 +898,5 @@ __all__ = [
     "submission_already_decided",
     "submission_visible_to",
     "validate_record_labels",
+    "validate_submission_records",
 ]

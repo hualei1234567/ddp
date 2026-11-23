@@ -178,6 +178,7 @@ from app.domain.annotation.submission import (
     compute_record_sha256,
     compute_records_digest,
     validate_record_labels,
+    validate_submission_records,
 )
 from app.domain.annotation.task import SLA_CLOSED_STATUSES, AnnotationTask, is_overdue
 from app.domain.annotation.workload import CapacityPolicy, WorkloadSummary
@@ -348,4 +349,5 @@ __all__ = [
     "is_overdue",
     "select_quality_candidates",
     "validate_record_labels",
+    "validate_submission_records",
 ]
