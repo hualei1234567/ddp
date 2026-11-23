@@ -35,7 +35,9 @@ class HuggingFaceHubClient:
             ) from exc
         self._api = HfApi(token=token)
 
-    def dataset_info(self, repo_id: str, *, revision: str | None = None) -> DatasetCardInfo:
+    def dataset_info(
+        self, repo_id: str, *, revision: str | None = None
+    ) -> DatasetCardInfo:
         try:
             # ``timeout`` 是 huggingface_hub 0.27 的公开参数；显式传入而不是
             # 依赖全局配置，测试与生产的行为才一致。

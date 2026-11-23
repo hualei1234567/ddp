@@ -35,6 +35,16 @@ from typing import Any
 SCHEMA_VERSION = "embodied_event_graph_v1"
 SEGMENT_LEVELS = ("task", "subtask", "event")
 
+#: 事件图 segment.level → DDP AnnotationLevel 三级语义（V31-047）。
+LEVEL_TO_ANNOTATION_LEVEL = {
+    "task": "SEMANTIC_TASK",
+    "subtask": "SEMANTIC_SUBTASK",
+    "event": "SEMANTIC_EVENT",
+}
+
+#: 参考实现 S5 的结果枚举（OUTCOME_SPAN 取值子集直接兼容）。
+OUTCOME_VALUES = ("SUCCESS", "PARTIAL_SUCCESS", "FAILURE", "UNKNOWN")
+
 #: 事件图允许的复核状态中，只有 auto（尚未人工决定）才作为"建议"灌入。
 SUGGESTABLE_REVIEW_STATES = frozenset({"auto"})
 
@@ -107,6 +117,13 @@ def _entry_rows(
         confidence = _number(item.get("confidence", 1.0), "confidence")
         if not 0.0 <= confidence <= 1.0:
             raise ValueError("confidence 必须落在 [0,1]")
+        # 语义层级优先取事件图条目自带的 level（task/subtask/event →
+        # SEMANTIC_*）；events/language 条目没有该字段时按来源块回退。
+        annotation_level = LEVEL_TO_ANNOTATION_LEVEL.get(
+            str(item.get("level", ""))
+        ) or LEVEL_TO_ANNOTATION_LEVEL.get(
+            {"segment": "task", "event": "event", "language": "task"}.get(level, "")
+        )
         row: dict[str, object] = {
             "label_key": f"{level}.{label}",
             "suggested_value": {
@@ -114,8 +131,65 @@ def _entry_rows(
                 "span": _span_to_value(span, fps),
                 "label": label,
                 "confidence": confidence,
+                # V31-047：显式携带三级语义层级，工作台按此归轨（L1/L2/L3）。
+                "annotation_level": annotation_level,
                 "evidence": _evidence_refs(item),
             },
+            "model_id": model_id,
+            "model_version": model_version,
+            "prompt_version": prompt_version,
+            "confidence": confidence,
+        }
+        if generated_at:
+            row["generated_at"] = generated_at
+        rows.append(row)
+    return rows
+
+
+def _outcome_rows(
+    items: Iterable[Mapping[str, Any]],
+    *,
+    fps: float,
+    model_id: str,
+    model_version: str,
+    prompt_version: str,
+    generated_at: str | None,
+) -> list[dict[str, object]]:
+    """把事件图 ``outcomes``（参考实现 S5 结果块）转成 OUTCOME_SPAN 建议行。
+
+    条目形状：``{"span", "outcome", "error_category"?, "error_detail"?,
+    "confidence", "review_state"?}``。outcome 不在全集内的条目显式失败
+    （不让未知结果标签静默流进人工标注链）。
+    """
+    rows: list[dict[str, object]] = []
+    for item in items:
+        if str(item.get("review_state", "auto")) not in SUGGESTABLE_REVIEW_STATES:
+            continue
+        span = item.get("span")
+        if not isinstance(span, Mapping):
+            raise ValueError("outcome 条目缺 span")
+        outcome = str(item.get("outcome", ""))
+        if outcome not in OUTCOME_VALUES:
+            raise ValueError(f"outcome 取值非法：{outcome}")
+        confidence = _number(item.get("confidence", 1.0), "confidence")
+        if not 0.0 <= confidence <= 1.0:
+            raise ValueError("confidence 必须落在 [0,1]")
+        suggested: dict[str, object] = {
+            "kind": "outcome_span",
+            "span": _span_to_value(span, fps),
+            "outcome": outcome,
+            "confidence": confidence,
+            "annotation_level": "SEMANTIC_TASK",
+        }
+        error_category = item.get("error_category")
+        if error_category is not None:
+            suggested["error_category"] = str(error_category)
+        error_detail = item.get("error_detail")
+        if error_detail is not None:
+            suggested["error_detail"] = str(error_detail)
+        row: dict[str, object] = {
+            "label_key": "outcome.task_result",
+            "suggested_value": suggested,
             "model_id": model_id,
             "model_version": model_version,
             "prompt_version": prompt_version,
@@ -165,6 +239,16 @@ def convert_event_graph_to_suggestions(
         _entry_rows(
             level="event",
             items=graph.get("events", ()) or (),
+            fps=fps,
+            model_id=model_id,
+            model_version=model_version,
+            prompt_version=prompt_version,
+            generated_at=generated_at,
+        )
+    )
+    rows.extend(
+        _outcome_rows(
+            graph.get("outcomes", ()) or (),
             fps=fps,
             model_id=model_id,
             model_version=model_version,

@@ -14,7 +14,8 @@
         },
         "label_type": {
           "title": "Label Type",
-          "type": "string"
+          "type": "string",
+          "description": "标签值类型。 V31-047 新增 OUTCOME_SPAN：结果帧区间（SUCCESS/PARTIAL_SUCCESS/FAILURE/UNKNOWN + 层级失败类型 perception/planning/manipulation/sensing/recording，可在 value_spec 收窄）。"
         },
         "required": {
           "title": "Required",
@@ -22,7 +23,8 @@
         },
         "level": {
           "title": "Level",
-          "type": "string"
+          "type": "string",
+          "description": "标签挂靠层级。V31-047 新增三级语义层级：SEMANTIC_TASK(L1)/SEMANTIC_SUBTASK(L2)/SEMANTIC_EVENT(L3)，父子包含（L1⊇L2⊇L3），同一 Episode 可在三级各自成立标注；与 TASK/EPISODE（对象/聚合归属）语义不同。取值集合可增长，客户端必须容忍未知取值。"
         },
         "visibility": {
           "title": "Visibility",

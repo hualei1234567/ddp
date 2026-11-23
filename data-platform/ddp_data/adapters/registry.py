@@ -126,7 +126,9 @@ CANONICAL_EPISODE_FIELDS: tuple[CanonicalField, ...] = (
     CanonicalField("raw"),
 )
 
-_KNOWN_FIELDS: frozenset[str] = frozenset(item.name for item in CANONICAL_EPISODE_FIELDS)
+_KNOWN_FIELDS: frozenset[str] = frozenset(
+    item.name for item in CANONICAL_EPISODE_FIELDS
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,15 +191,21 @@ class AdapterSpec:
             raise AdapterRegistrationError("version 不能为空：映射规则必须有版本")
         unknown = (self.supported_fields | self.missing_fields) - _KNOWN_FIELDS
         if unknown:
-            raise AdapterRegistrationError(f"声明了未定义的 Canonical 字段：{sorted(unknown)}")
+            raise AdapterRegistrationError(
+                f"声明了未定义的 Canonical 字段：{sorted(unknown)}"
+            )
         overlap = self.supported_fields & self.missing_fields
         if overlap:
-            raise AdapterRegistrationError(f"同一字段不能既声明支持又声明缺失：{sorted(overlap)}")
+            raise AdapterRegistrationError(
+                f"同一字段不能既声明支持又声明缺失：{sorted(overlap)}"
+            )
         undeclared = _KNOWN_FIELDS - self.supported_fields - self.missing_fields
         if undeclared:
             # 必须穷尽声明：否则"缺字段"会被误读成"支持但恰好为空"，
             # 下游无法区分"数据没有"与"Adapter 漏了"。
-            raise AdapterRegistrationError(f"字段声明不完整，未表态的字段：{sorted(undeclared)}")
+            raise AdapterRegistrationError(
+                f"字段声明不完整，未表态的字段：{sorted(undeclared)}"
+            )
 
     @property
     def declared_gaps(self) -> frozenset[str]:
@@ -252,7 +260,8 @@ class AdapterRegistry:
         existing = self._specs.get(spec.adapter_id)
         if existing is not None:
             raise AdapterRegistrationError(
-                f"adapter_id 已注册：{spec.adapter_id}" f"（已有 version={existing.version}）"
+                f"adapter_id 已注册：{spec.adapter_id}"
+                f"（已有 version={existing.version}）"
             )
         self._specs[spec.adapter_id] = spec
         return spec
@@ -268,11 +277,15 @@ class AdapterRegistry:
     def list_specs(self) -> tuple[AdapterSpec, ...]:
         return tuple(self._specs[key] for key in sorted(self._specs))
 
-    def list_by_capability(self, capability: AdapterCapability) -> tuple[AdapterSpec, ...]:
+    def list_by_capability(
+        self, capability: AdapterCapability
+    ) -> tuple[AdapterSpec, ...]:
         """按能力检索已注册 Adapter；结果按 ``adapter_id`` 排序，可复现。"""
         return tuple(spec for spec in self.list_specs() if spec.supports(capability))
 
-    def require_capability(self, adapter_id: str, capability: AdapterCapability) -> AdapterSpec:
+    def require_capability(
+        self, adapter_id: str, capability: AdapterCapability
+    ) -> AdapterSpec:
         """取 Adapter 并要求其具备给定能力；不支持时抛 AdapterCapabilityError。"""
         return self.get(adapter_id).require(capability)
 
@@ -283,7 +296,9 @@ class AdapterRegistry:
         Adapter 必须由调用方显式决定。返回确定性结果只是为了可复现。
         """
         matched = [
-            spec for spec in self._specs.values() if spec.detect is not None and spec.detect(sample)
+            spec
+            for spec in self._specs.values()
+            if spec.detect is not None and spec.detect(sample)
         ]
         if not matched:
             return None

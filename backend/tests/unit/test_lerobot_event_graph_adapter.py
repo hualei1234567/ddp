@@ -122,3 +122,64 @@ def test_output_is_serializable_payload() -> None:
     body = json.loads(json.dumps({"suggestions": rows}, ensure_ascii=False))
     assert len(body["suggestions"]) == len(rows)
     assert body["suggestions"][0]["generated_at"] == "2026-11-23T02:00:00+00:00"
+
+
+# ---- V31-047：三级语义层级 + 结果帧（S5） ----
+
+
+def graph_with_outcomes() -> dict[str, object]:
+    graph = sample_graph()
+    graph["outcomes"] = [
+        {
+            "span": {"start_frame": 40, "end_frame": 90},
+            "outcome": "FAILURE",
+            "error_category": "manipulation",
+            "error_detail": "抓空后滑落",
+            "confidence": 0.66,
+            "review_state": "auto",
+        },
+        {
+            "span": {"start_frame": 0, "end_frame": 39},
+            "outcome": "SUCCESS",
+            "confidence": 0.95,
+            # 已人工决定：跳过
+            "review_state": "approved",
+        },
+    ]
+    return graph
+
+
+def test_outcome_rows_map_to_semantic_task_level() -> None:
+    rows = convert_event_graph_to_suggestions(
+        graph_with_outcomes(), generated_at="2026-11-23T10:00:00+00:00", **MODEL
+    )
+    outcomes = [r for r in rows if r["label_key"] == "outcome.task_result"]
+    assert len(outcomes) == 1  # approved 条目跳过
+    value = outcomes[0]["suggested_value"]
+    assert value["kind"] == "outcome_span"
+    assert value["outcome"] == "FAILURE"
+    assert value["annotation_level"] == "SEMANTIC_TASK"
+    assert value["error_category"] == "manipulation"
+    assert value["error_detail"] == "抓空后滑落"
+    assert value["span"]["start_frame"] == 40
+
+
+def test_segment_rows_carry_annotation_level() -> None:
+    rows = convert_event_graph_to_suggestions(sample_graph(), **MODEL)
+    task = next(r for r in rows if r["label_key"] == "segment.pick_and_place")
+    assert task["suggested_value"]["annotation_level"] == "SEMANTIC_TASK"
+    event = next(r for r in rows if r["label_key"] == "event.contact")
+    assert event["suggested_value"]["annotation_level"] == "SEMANTIC_EVENT"
+
+
+def test_bad_outcome_value_rejected() -> None:
+    graph = sample_graph()
+    graph["outcomes"] = [
+        {
+            "span": {"start_frame": 0, "end_frame": 10},
+            "outcome": "PERFECT",
+            "confidence": 0.9,
+        }
+    ]
+    with pytest.raises(ValueError, match="outcome 取值非法"):
+        convert_event_graph_to_suggestions(graph, **MODEL)

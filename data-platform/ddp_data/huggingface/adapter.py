@@ -70,7 +70,9 @@ class DatasetCardInfo:
 class HfRepoClient(Protocol):
     """读取 HF 元信息的最小协议；生产与测试各给一个实现。"""
 
-    def dataset_info(self, repo_id: str, *, revision: str | None = None) -> DatasetCardInfo:
+    def dataset_info(
+        self, repo_id: str, *, revision: str | None = None
+    ) -> DatasetCardInfo:
         """返回数据集元信息；仓库不存在或无权限时抛异常。"""
         ...
 

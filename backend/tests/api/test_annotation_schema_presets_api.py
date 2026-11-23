@@ -18,6 +18,7 @@ EXPECTED_KEYS = {
     "attributes",
     "quality",
     "scene",
+    "semantic-hierarchy",
     "robot-state",
 }
 
@@ -31,7 +32,7 @@ def _create_payload(preset: dict[str, object], code: str) -> dict[str, object]:
     }
 
 
-def test_list_and_detail_return_seven_readonly_templates(api_db) -> None:
+def test_list_and_detail_return_eight_readonly_templates(api_db) -> None:
     factory, ids = api_db
     viewer = make_client(factory, ids.viewer_a)
 
@@ -40,7 +41,7 @@ def test_list_and_detail_return_seven_readonly_templates(api_db) -> None:
     body = listed.json()
     assert set(body) == {"catalog_version", "items"}
     assert body["catalog_version"].startswith("sha256:")
-    assert len(body["items"]) == 7
+    assert len(body["items"]) == 8
     assert {item["preset_key"] for item in body["items"]} == EXPECTED_KEYS
 
     for item in body["items"]:

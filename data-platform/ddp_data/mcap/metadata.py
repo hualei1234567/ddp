@@ -112,7 +112,9 @@ def read_mcap_metadata(
     except FileNotFoundError:
         raise McapInputError(f"MCAP 文件不存在：{_display_name(candidate)}") from None
     except OSError:
-        raise McapInputError(f"无法访问 MCAP 文件：{_display_name(candidate)}") from None
+        raise McapInputError(
+            f"无法访问 MCAP 文件：{_display_name(candidate)}"
+        ) from None
     if not resolved.is_file():
         raise McapInputError(f"MCAP 路径不是普通文件：{_display_name(candidate)}")
     try:
@@ -151,12 +153,23 @@ def read_mcap_metadata_from(
         raise McapInputError("MCAP 文件读取失败") from None
     bounded = _BoundedReader(handle, max_metadata_bytes)
     try:
-        reader = _mcap_reader.SeekingReader(bounded, record_size_limit=max_metadata_bytes)
+        reader = _mcap_reader.SeekingReader(
+            bounded, record_size_limit=max_metadata_bytes
+        )
         header = reader.get_header()
         summary = reader.get_summary()
     except _mcap_exceptions.RecordLengthLimitExceeded:
-        raise McapMetadataLimitError(f"MCAP 记录长度超过 {max_metadata_bytes} 字节上限") from None
-    except (_mcap_exceptions.McapError, OSError, ValueError, KeyError, IndexError, struct.error):
+        raise McapMetadataLimitError(
+            f"MCAP 记录长度超过 {max_metadata_bytes} 字节上限"
+        ) from None
+    except (
+        _mcap_exceptions.McapError,
+        OSError,
+        ValueError,
+        KeyError,
+        IndexError,
+        struct.error,
+    ):
         # 不链式保留原始异常：SDK 错误可能包含偏移或原始内容。
         raise McapMetadataError("MCAP footer/summary 元数据无法解码") from None
     return _build_metadata(
@@ -174,7 +187,9 @@ def _ensure_sdk() -> None:
         )
 
 
-def _validate_limits(max_metadata_bytes: int, max_channels: int, max_schemas: int) -> None:
+def _validate_limits(
+    max_metadata_bytes: int, max_channels: int, max_schemas: int
+) -> None:
     for value, name in (
         (max_metadata_bytes, "max_metadata_bytes"),
         (max_channels, "max_channels"),
@@ -243,9 +258,13 @@ def _build_metadata(
         "schema",
     )
     if channel_count > max_channels:
-        raise McapMetadataLimitError(f"MCAP channel 数 {channel_count} 超过上限 {max_channels}")
+        raise McapMetadataLimitError(
+            f"MCAP channel 数 {channel_count} 超过上限 {max_channels}"
+        )
     if schema_count > max_schemas:
-        raise McapMetadataLimitError(f"MCAP schema 数 {schema_count} 超过上限 {max_schemas}")
+        raise McapMetadataLimitError(
+            f"MCAP schema 数 {schema_count} 超过上限 {max_schemas}"
+        )
     channels = _channel_summaries(summary.channels, schemas, statistics)
 
     message_count = statistics.message_count if statistics is not None else None
@@ -255,7 +274,9 @@ def _build_metadata(
         start_time = int(statistics.message_start_time)
         end_time = int(statistics.message_end_time)
         if end_time < start_time:
-            raise McapMetadataError("statistics 的 message_end_time 早于 message_start_time")
+            raise McapMetadataError(
+                "statistics 的 message_end_time 早于 message_start_time"
+            )
 
     return McapMetadata(
         profile=profile,
@@ -326,7 +347,9 @@ def _channel_summaries(
                 schema_id=schema_id,
                 schema_name=schema.name if schema is not None else None,
                 schema_encoding=schema.encoding if schema is not None else None,
-                message_count=int(counts.get(channel.id, 0)) if counts is not None else None,
+                message_count=int(counts.get(channel.id, 0))
+                if counts is not None
+                else None,
                 metadata_entry_count=len(channel.metadata),
             )
         )

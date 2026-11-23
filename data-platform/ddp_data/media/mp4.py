@@ -273,7 +273,9 @@ def _resolve_ffprobe(ffprobe_path: str | os.PathLike[str] | None) -> str:
         return str(candidate)
     found = shutil.which("ffprobe")
     if not found:
-        raise ProbeUnavailableError("未找到 ffprobe；MP4 metadata 探测需要 FFmpeg/ffprobe")
+        raise ProbeUnavailableError(
+            "未找到 ffprobe；MP4 metadata 探测需要 FFmpeg/ffprobe"
+        )
     return found
 
 

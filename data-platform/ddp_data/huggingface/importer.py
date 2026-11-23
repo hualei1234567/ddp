@@ -95,7 +95,9 @@ def fetch_file(
     suffix = "." + path.rsplit(".", 1)[-1].lower() if "." in path else ""
     spec = _ALLOWED_SUFFIX.get(suffix)
     if spec is None:
-        raise ImportError_(f"不支持的文件类型：{path}（允许：{sorted(_ALLOWED_SUFFIX)}）")
+        raise ImportError_(
+            f"不支持的文件类型：{path}（允许：{sorted(_ALLOWED_SUFFIX)}）"
+        )
     content_type, check = spec
 
     url = resolve_url(repo_id, revision, path)
@@ -118,8 +120,7 @@ def fetch_file(
     data = b"".join(chunks)
     if not check(data[:64]):
         raise ImportError_(
-            f"文件内容与扩展名不符（{suffix}）：{path}；"
-            "拒绝导入可能被改名的文件"
+            f"文件内容与扩展名不符（{suffix}）：{path}；" "拒绝导入可能被改名的文件"
         )
 
     return FetchedFile(
@@ -131,7 +132,9 @@ def fetch_file(
     )
 
 
-def load_metadata_jsonl(files: dict[str, FetchedFile], path: str) -> list[dict[str, object]]:
+def load_metadata_jsonl(
+    files: dict[str, FetchedFile], path: str
+) -> list[dict[str, object]]:
     """解析 metadata.jsonl；空行跳过，非对象行视为格式错误。"""
     item = files.get(path)
     if item is None:

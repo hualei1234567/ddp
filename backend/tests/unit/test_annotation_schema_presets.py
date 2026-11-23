@@ -1,6 +1,6 @@
 """Schema 预设目录领域单测（N6-001）。
 
-覆盖：七类模板完整性、既有 Schema 校验不被绕过、内容寻址版本、
+覆盖：八类模板完整性、既有 Schema 校验不被绕过、内容寻址版本、
 未知模板语义与注册表防重复。
 """
 
@@ -29,17 +29,18 @@ EXPECTED_KEYS = {
     "attributes",
     "quality",
     "scene",
+    "semantic-hierarchy",
     "robot-state",
 }
 
 
-def test_default_catalog_has_seven_unique_templates() -> None:
+def test_default_catalog_has_eight_unique_templates() -> None:
     registry = default_registry()
 
-    assert len(registry) == 7
+    assert len(registry) == 8
     presets = registry.list_presets()
     assert {preset.key for preset in presets} == EXPECTED_KEYS
-    assert len({preset.key for preset in presets}) == 7
+    assert len({preset.key for preset in presets}) == 8
 
     for preset in presets:
         assert preset.version == PRESET_VERSION
@@ -111,13 +112,16 @@ def test_template_cannot_bypass_schema_rules() -> None:
             labels=duplicate_labels,
         )
 
-    invalid_enum = LabelDefinition(
-        label_key="action_type",
-        label_type=AnnotationLabelType.ENUM,
-        required=True,
-        level=AnnotationLevel.ACTION_SEGMENT,
-        value_spec={},
-    )
+    # V31-047 起类型相关值规范在 LabelDefinition 构造时即校验（失败点从
+    # Schema 聚合层前移到定义层）；两层都必须失败才算防住绕过。
+    with pytest.raises(DomainValidationError):
+        LabelDefinition(
+            label_key="action_type",
+            label_type=AnnotationLabelType.ENUM,
+            required=True,
+            level=AnnotationLevel.ACTION_SEGMENT,
+            value_spec={},
+        )
     with pytest.raises(DomainValidationError):
         SchemaPreset(
             key="broken-enum",
@@ -125,7 +129,42 @@ def test_template_cannot_bypass_schema_rules() -> None:
             description="用于验证模板不绕过枚举取值规则。",
             version="1.0.0",
             annotation_levels=action.annotation_levels,
-            labels=(invalid_enum,),
+            labels=(
+                LabelDefinition(
+                    label_key="action_type",
+                    label_type=AnnotationLabelType.ENUM,
+                    required=True,
+                    level=AnnotationLevel.ACTION_SEGMENT,
+                    value_spec={},
+                ),
+            ),
+        )
+
+    # V31-047：OUTCOME_SPAN 的非法 outcome 集合同样不得绕过。
+    with pytest.raises(DomainValidationError):
+        LabelDefinition(
+            label_key="outcome_span",
+            label_type=AnnotationLabelType.OUTCOME_SPAN,
+            required=True,
+            level=AnnotationLevel.SEMANTIC_TASK,
+            value_spec={"outcome_values": ["SUCCESS", "PERFECT"]},
+        )
+    with pytest.raises(DomainValidationError):
+        SchemaPreset(
+            key="broken-outcome",
+            name="非法结果枚举",
+            description="用于验证模板不绕过 OUTCOME_SPAN 取值规则。",
+            version="1.0.0",
+            annotation_levels=(AnnotationLevel.SEMANTIC_TASK,),
+            labels=(
+                LabelDefinition(
+                    label_key="outcome_span",
+                    label_type=AnnotationLabelType.OUTCOME_SPAN,
+                    required=True,
+                    level=AnnotationLevel.SEMANTIC_TASK,
+                    value_spec={"outcome_values": ["SUCCESS", "PERFECT"]},
+                ),
+            ),
         )
 
 

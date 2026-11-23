@@ -28,6 +28,7 @@ export const ANNOTATION_LABEL_TYPE_VALUES = [
   "ACTION_SEGMENT",
   "OBJECT_TRACK",
   "JSON",
+  "OUTCOME_SPAN",
 ] as const;
 export type AnnotationLabelType = (typeof ANNOTATION_LABEL_TYPE_VALUES)[number];
 
@@ -38,6 +39,9 @@ export const ANNOTATION_LEVEL_VALUES = [
   "ACTION_SEGMENT",
   "FRAME",
   "OBJECT_TRACK",
+  "SEMANTIC_TASK",
+  "SEMANTIC_SUBTASK",
+  "SEMANTIC_EVENT",
 ] as const;
 export type AnnotationLevel = (typeof ANNOTATION_LEVEL_VALUES)[number];
 

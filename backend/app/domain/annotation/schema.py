@@ -58,9 +58,33 @@ _INVALID_VALUE_SPEC_KEYS = frozenset(
         "iou_threshold",
         "max_length",
         "json_schema_ref",
+        # V31-047：OUTCOME_SPAN 的可收窄取值集合（全集见 OUTCOME_VALUES /
+        # OUTCOME_ERROR_CATEGORIES；校验在 _validate_label_type_value）。
+        "outcome_values",
+        "error_categories",
     }
 )
 _ENUM_TYPES = frozenset({AnnotationLabelType.ENUM, AnnotationLabelType.MULTI_ENUM})
+
+#: V31-047：OUTCOME_SPAN 的结果枚举（对齐参考实现 S5 标签体系：
+#: success / partial_success / failure / unknown）。
+OUTCOME_VALUES = ("SUCCESS", "PARTIAL_SUCCESS", "FAILURE", "UNKNOWN")
+
+#: OUTCOME_SPAN 失败类型层级（可扩展；对齐参考实现 S5 五大类）。
+OUTCOME_ERROR_CATEGORIES = (
+    "perception",
+    "planning",
+    "manipulation",
+    "sensing",
+    "recording",
+)
+
+#: 语义层级父子包含（L1⊇L2⊇L3）：子级片段必须落在父级片段内。
+SEMANTIC_LEVEL_ORDER = {
+    AnnotationLevel.SEMANTIC_TASK: 1,
+    AnnotationLevel.SEMANTIC_SUBTASK: 2,
+    AnnotationLevel.SEMANTIC_EVENT: 3,
+}
 
 
 def _now() -> datetime:
@@ -114,6 +138,10 @@ class LabelDefinition:
             ),
         )
         object.__setattr__(self, "value_spec", _validate_value_spec(self.value_spec))
+        # V31-047：类型相关值规范在定义构造时即校验（原只在 AnnotationSchema
+        # 聚合层做），坏配置（如 OUTCOME_SPAN 非法 outcome 集合）在任何入口
+        # ——包括 preset 直接构造 LabelDefinition——都会立刻失败。
+        _validate_label_type_value(self)
         rules = self.quality_rules or ()
         if not isinstance(rules, list | tuple):
             raise DomainValidationError("quality_rules 必须是字符串列表")
@@ -394,11 +422,30 @@ def _validate_label_type_value(definition: LabelDefinition) -> None:
         ref = definition.value_spec.get("json_schema_ref")
         if ref is not None:
             normalized_text(ref, "value_spec.json_schema_ref", max_length=1024)
+    if definition.label_type is AnnotationLabelType.OUTCOME_SPAN:
+        # V31-047：结果帧区间。value_spec 可显式收窄 outcome/失败类型集合，
+        # 未提供时用全集；非法取值在 Schema 发布前就失败，不让坏配置流到
+        # 标注工作台再炸。
+        outcomes = definition.value_spec.get("outcome_values", OUTCOME_VALUES)
+        if not isinstance(outcomes, list | tuple) or not outcomes:
+            raise DomainValidationError("OUTCOME_SPAN 的 outcome_values 必须是非空列表")
+        invalid = [str(v) for v in outcomes if str(v) not in OUTCOME_VALUES]
+        if invalid:
+            raise DomainValidationError(f"OUTCOME_SPAN 的 outcome_values 非法：{invalid}")
+        categories = definition.value_spec.get("error_categories", OUTCOME_ERROR_CATEGORIES)
+        if not isinstance(categories, list | tuple):
+            raise DomainValidationError("OUTCOME_SPAN 的 error_categories 必须是列表")
+        invalid_cat = [str(v) for v in categories if str(v) not in OUTCOME_ERROR_CATEGORIES]
+        if invalid_cat:
+            raise DomainValidationError(f"OUTCOME_SPAN 的 error_categories 非法：{invalid_cat}")
 
 
 __all__ = [
     "AnnotationSchema",
     "LabelDefinition",
+    "OUTCOME_ERROR_CATEGORIES",
+    "OUTCOME_VALUES",
+    "SEMANTIC_LEVEL_ORDER",
     "compute_schema_sha256",
     "schema_snapshot_payload",
 ]

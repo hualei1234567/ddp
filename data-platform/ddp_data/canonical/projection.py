@@ -75,7 +75,9 @@ def project_episode(episode: LegacyCanonicalEpisode) -> EpisodeProjection:
     )
 
 
-def _project_stream(episode_key: str, index: int, asset: CanonicalMediaAsset) -> VideoStream:
+def _project_stream(
+    episode_key: str, index: int, asset: CanonicalMediaAsset
+) -> VideoStream:
     values: dict[str, object] = {
         "stream_id": f"{episode_key}:video:{index}",
         "camera_name": asset.camera or None,
