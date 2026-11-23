@@ -75,7 +75,9 @@ def _as_float(value: object, field_name: str) -> float | None:
         if number < 0:
             raise LeRobotParseError(f"{field_name} 不能为负：{number}")
         return number
-    raise LeRobotParseError(f"{field_name} 必须是数字或 null，得到 {type(value).__name__}")
+    raise LeRobotParseError(
+        f"{field_name} 必须是数字或 null，得到 {type(value).__name__}"
+    )
 
 
 def _as_text(value: object, field_name: str, *, max_length: int) -> str:
@@ -138,7 +140,9 @@ def parse_preview_metadata(
                     excerpt_start_seconds=_as_float(
                         row.get("excerpt_start_seconds"), "excerpt_start_seconds"
                     ),
-                    excerpt_seconds=_as_float(row.get("excerpt_seconds"), "excerpt_seconds"),
+                    excerpt_seconds=_as_float(
+                        row.get("excerpt_seconds"), "excerpt_seconds"
+                    ),
                     source_fps=_as_float(row.get("source_fps"), "source_fps"),
                 )
             )
@@ -146,13 +150,17 @@ def parse_preview_metadata(
         episodes.append(
             CanonicalEpisode(
                 episode_key=key,
-                task_name=_as_text(first.get("task_name"), "task_name", max_length=_TASK_MAX),
+                task_name=_as_text(
+                    first.get("task_name"), "task_name", max_length=_TASK_MAX
+                ),
                 instruction=_as_text(
                     first.get("instruction"), "instruction", max_length=_INSTRUCTION_MAX
                 ),
                 environment=_optional_text(first.get("environment"), "environment"),
                 setting=_optional_text(first.get("setting"), "setting"),
-                episode_seconds=_as_float(first.get("episode_seconds"), "episode_seconds"),
+                episode_seconds=_as_float(
+                    first.get("episode_seconds"), "episode_seconds"
+                ),
                 source_fps=_as_float(first.get("source_fps"), "source_fps"),
                 has_wrist=bool(first.get("has_wrist", False)),
                 media_assets=tuple(assets),

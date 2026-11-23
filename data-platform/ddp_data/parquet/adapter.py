@@ -133,7 +133,9 @@ def summarize_parquet(
     ``expected_columns`` 为 ``None`` 时按识别出的布局使用默认期望列；
     显式传入（包括空序列）时以传入值为准，便于调用方声明自己的列契约。
     """
-    return summarize_metadata(read_parquet_metadata(path), expected_columns=expected_columns)
+    return summarize_metadata(
+        read_parquet_metadata(path), expected_columns=expected_columns
+    )
 
 
 def summarize_metadata(
@@ -149,7 +151,9 @@ def summarize_metadata(
     if len(set(names)) != len(names):
         raise ValueError("expected_columns 中的列名不能重复")
     present = set(top_level)
-    key_columns = {item.name: item.name if item.name in present else None for item in expected}
+    key_columns = {
+        item.name: item.name if item.name in present else None for item in expected
+    }
     missing = frozenset(name for name, actual in key_columns.items() if actual is None)
     missing_required = frozenset(
         item.name for item in expected if item.required and item.name not in present

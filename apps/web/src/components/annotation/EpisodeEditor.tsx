@@ -7,7 +7,7 @@ import type {
   TimeRangeInput,
 } from "../../services/annotationValidation";
 import { formatPlaybackClock, nsToRelativeSeconds } from "../../services/media";
-import type { LabelDefinition } from "../../types/annotation";
+import type { AnnotationLevel, LabelDefinition } from "../../types/annotation";
 import type { Episode } from "../../types/collection";
 import IdentifierValue from "../ui/IdentifierValue";
 import type { AiSuggestion } from "../../services/annotationAiParsers";
@@ -28,6 +28,19 @@ interface EpisodeEditorProps {
 }
 
 const TEMPORAL_TYPES = new Set(["TIME_RANGE", "ACTION_SEGMENT"]);
+
+/** 时间片段标签的轨道归属（V31-047）；非语义层级/结果帧返回 null 进主轨道。 */
+function laneNameForLevel(definition: LabelDefinition): string | null {
+  if (definition.label_type === "OUTCOME_SPAN") {
+    return "outcome";
+  }
+  const semanticLane: Partial<Record<AnnotationLevel, string>> = {
+    SEMANTIC_TASK: "L1",
+    SEMANTIC_SUBTASK: "L2",
+    SEMANTIC_EVENT: "L3",
+  };
+  return semanticLane[definition.level] ?? null;
+}
 
 /** 把草稿里的时间片段转成时间轴片段；非法值直接跳过，不伪造。 */
 function timelineSegments(
@@ -55,6 +68,7 @@ function timelineSegments(
       startSeconds: start,
       endSeconds: end,
       tone: definition.label_type === "ACTION_SEGMENT" ? "warning" : "primary",
+      track: laneNameForLevel(definition) ?? undefined,
     });
   }
   return segments;
@@ -91,6 +105,33 @@ export default function EpisodeEditor({
     () => timelineSegments(definitions, values),
     [definitions, values],
   );
+
+  // V31-047：按标签 level 生成的轨道声明——L1/L2/L3 各一轨，时间片段标签
+  // 在 timelineSegments 里按定义 level 写入 track；结果帧标签单独一轨。
+  const semanticLanes = useMemo(() => {
+    const lanes: { key: string; label: string }[] = [];
+    const laneNames: Record<string, string> = {
+      SEMANTIC_TASK: "L1 任务",
+      SEMANTIC_SUBTASK: "L2 子任务",
+      SEMANTIC_EVENT: "L3 事件",
+    };
+    for (const definition of definitions) {
+      const laneKey = laneNameForLevel(definition);
+      if (laneKey && !lanes.some((lane) => lane.key === laneKey)) {
+        lanes.push({ key: laneKey, label: laneNames[laneKey] ?? laneKey });
+      }
+    }
+    return lanes;
+  }, [definitions]);
+
+  const lanesWithOutcome = useMemo(() => {
+    const hasOutcome = definitions.some(
+      (item) => item.label_type === "OUTCOME_SPAN",
+    );
+    return hasOutcome
+      ? [...semanticLanes, { key: "outcome", label: "结果帧（成功/失败/错误）" }]
+      : semanticLanes;
+  }, [definitions, semanticLanes]);
 
   // V31-046 切片 D：AI 建议叠加轨道。只有 kind=temporal_segment 且 span 可
   // 定位的建议才进时间轴；非法/非片段建议直接跳过，不伪造位置。采纳流程
@@ -197,6 +238,7 @@ export default function EpisodeEditor({
           playheadSeconds={playheadSeconds}
           onSeek={handleSeek}
           segments={[...segments, ...aiSegments]}
+          lanes={lanesWithOutcome}
           canSelectRange={!disabled && temporalDefinitions.length > 0}
           onSelectRangeNs={handleSelectRange}
         />

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.31.0
+  version: 1.32.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -211,6 +211,15 @@ info:
       `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
       本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
       `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
+    - `1.32.0` **三级语义分层与结果帧标注（V31-047）**：LabelSchema 的
+      `label_type` 新增 `OUTCOME_SPAN`（结果帧区间：SUCCESS / PARTIAL_SUCCESS /
+      FAILURE / UNKNOWN，失败类型层级 perception / planning / manipulation /
+      sensing / recording，可在 `value_spec.outcome_values` /
+      `error_categories` 收窄）；`level` 新增三级语义层级
+      `SEMANTIC_TASK`（L1）/ `SEMANTIC_SUBTASK`（L2）/ `SEMANTIC_EVENT`（L3），
+      父子包含（L1⊇L2⊇L3），同一 Episode 可在三级各自成立标注；Schema 预设
+      目录新增 `semantic-hierarchy`。全部为增量：枚举值只增不改，无既有字段
+      变更，无数据库迁移。客户端必须容忍未知枚举取值。
     - `1.31.0` **导出产物可加载范围（V31-042 切片 1）**：`ExportJob` 响应新增
       `loadable_scope`（`METADATA_ONLY` / `FRAMES`，开放枚举）。该字段由
       `format` 派生（当前两种格式均为 `METADATA_ONLY`），描述产物结构上是否
@@ -336,7 +345,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.31.0
+  version: 1.32.0
   stages:
     device:
       version: ddp.device/1.0.0

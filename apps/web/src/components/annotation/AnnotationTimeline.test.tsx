@@ -295,3 +295,58 @@ describe("AnnotationTimeline AI 建议轨道", () => {
     expect(screen.getByTestId("segment-edge-start-sg-2")).toBeTruthy();
   });
 });
+
+// ---- V31-047：多轨道（L1/L2/L3 语义分层 + 结果帧轨道） ----
+
+describe("AnnotationTimeline 多轨道", () => {
+  const LANES = [
+    { key: "L1", label: "L1 任务" },
+    { key: "L2", label: "L2 子任务" },
+    { key: "L3", label: "L3 事件" },
+    { key: "outcome", label: "结果帧" },
+  ] as const;
+
+  it("按 lanes 声明渲染附加轨道行且互不串轨", () => {
+    render(
+      <AnnotationTimeline
+        durationSeconds={100}
+        playheadSeconds={0}
+        lanes={LANES}
+        segments={[
+          { key: "t1", label: "L1 任务", track: "L1", startSeconds: 0, endSeconds: 100, segmentId: "seg-l1" },
+          { key: "s1", label: "L2 子任务", track: "L2", startSeconds: 10, endSeconds: 40, segmentId: "seg-l2" },
+          { key: "e1", label: "L3 事件", track: "L3", startSeconds: 20, endSeconds: 25, segmentId: "seg-l3" },
+          { key: "o1", label: "FAILURE", track: "outcome", startSeconds: 42, endSeconds: 50, segmentId: "seg-o1", tone: "warning" },
+        ]}
+      />,
+    );
+    for (const lane of LANES) {
+      expect(screen.getByTestId(`timeline-lane-${lane.key}`)).toBeTruthy();
+    }
+    expect(screen.getByTestId("timeline-segment-seg-l1")).toBeTruthy();
+    expect(screen.getByTestId("timeline-segment-seg-o1")).toBeTruthy();
+    // 各段落在自己的轨道行内（seg-l1 不在主轨道容器里）
+    const mainTrack = screen.getByTestId("annotation-timeline");
+    expect(mainTrack.querySelector('[data-testid="timeline-segment-seg-l1"]')).toBeNull();
+    expect(
+      screen
+        .getByTestId("timeline-lane-L1")
+        .querySelector('[data-testid="timeline-segment-seg-l1"]'),
+    ).toBeTruthy();
+  });
+
+  it("未声明 lanes 时片段照旧进主轨道（向后兼容）", () => {
+    render(
+      <AnnotationTimeline
+        durationSeconds={100}
+        playheadSeconds={0}
+        segments={[
+          { key: "t1", label: "人工", track: "L1", startSeconds: 0, endSeconds: 50, segmentId: "seg-x" },
+        ]}
+      />,
+    );
+    // L1 未声明 → 追加行；片段可见
+    expect(screen.getByTestId("timeline-lane-L1")).toBeTruthy();
+    expect(screen.getByTestId("timeline-segment-seg-x")).toBeTruthy();
+  });
+});

@@ -179,7 +179,9 @@ class Frame:
     def __post_init__(self) -> None:
         validate_entity(self, FRAME_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
         if self.timestamp_ns is None and self.source_time_ns is None:
-            raise CanonicalFieldError("Frame 必须至少有 timestamp_ns 或 source_time_ns 之一")
+            raise CanonicalFieldError(
+                "Frame 必须至少有 timestamp_ns 或 source_time_ns 之一"
+            )
         if self.is_dropped is True and self.drop_reason is None:
             raise CanonicalFieldError("is_dropped=True 时必须给出 drop_reason")
         if self.is_dropped is False and self.drop_reason is not None:
@@ -224,7 +226,9 @@ class VideoStream:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> Self:
-        return entity_from_dict(cls, data, VIDEO_STREAM_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
+        return entity_from_dict(
+            cls, data, VIDEO_STREAM_FIELDS, SUPPORTED_SCHEMA_VERSIONS
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -252,7 +256,10 @@ class SensorStream:
 
     def __post_init__(self) -> None:
         validate_entity(self, SENSOR_STREAM_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
-        if self.frame_convention is not None and self.frame_convention not in FRAME_CONVENTIONS:
+        if (
+            self.frame_convention is not None
+            and self.frame_convention not in FRAME_CONVENTIONS
+        ):
             raise CanonicalFieldError(
                 f"SensorStream.frame_convention 非法：{self.frame_convention!r}；"
                 f"允许 {sorted(FRAME_CONVENTIONS)}"
@@ -263,7 +270,9 @@ class SensorStream:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> Self:
-        return entity_from_dict(cls, data, SENSOR_STREAM_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
+        return entity_from_dict(
+            cls, data, SENSOR_STREAM_FIELDS, SUPPORTED_SCHEMA_VERSIONS
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -289,7 +298,9 @@ class Action:
     def __post_init__(self) -> None:
         validate_entity(self, ACTION_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
         if self.start_time_ns is None and self.end_time_ns is None:
-            raise CanonicalFieldError("Action 必须至少有 start_time_ns 或 end_time_ns 之一")
+            raise CanonicalFieldError(
+                "Action 必须至少有 start_time_ns 或 end_time_ns 之一"
+            )
         if (
             self.start_time_ns is not None
             and self.end_time_ns is not None
@@ -339,7 +350,9 @@ class Observation:
     def __post_init__(self) -> None:
         validate_entity(self, OBSERVATION_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
         if self.timestamp_ns is None and self.source_time_ns is None:
-            raise CanonicalFieldError("Observation 必须至少有 timestamp_ns 或 source_time_ns 之一")
+            raise CanonicalFieldError(
+                "Observation 必须至少有 timestamp_ns 或 source_time_ns 之一"
+            )
         if self.valid is False and self.invalid_reason is None:
             raise CanonicalFieldError("valid=False 时必须给出 invalid_reason")
 
@@ -348,7 +361,9 @@ class Observation:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> Self:
-        return entity_from_dict(cls, data, OBSERVATION_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
+        return entity_from_dict(
+            cls, data, OBSERVATION_FIELDS, SUPPORTED_SCHEMA_VERSIONS
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

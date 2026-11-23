@@ -22,6 +22,8 @@ interface EpisodeMediaPanelProps {
   segments?: readonly TimelineSegment[];
   /** 从时间轴框选产生的绝对纳秒区间。 */
   onSelectRangeNs?: (startTimeNs: number, endTimeNs: number) => void;
+  /** 轨道声明（V31-047）：L1/L2/L3 语义层 + 结果帧轨，透传给时间轴。 */
+  lanes?: readonly { key: string; label: string }[];
   /** 是否允许框选（只读角色或已提交时关闭）。 */
   canSelectRange: boolean;
 }
@@ -42,6 +44,7 @@ export default function EpisodeMediaPanel({
   onSeek,
   segments,
   onSelectRangeNs,
+  lanes,
   canSelectRange,
 }: EpisodeMediaPanelProps) {
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null);
@@ -147,6 +150,7 @@ export default function EpisodeMediaPanel({
             playheadSeconds={playheadSeconds}
             segments={segments}
             onSeek={onSeek}
+            lanes={lanes}
             onSelectRange={
               canSelectRange && onSelectRangeNs
                 ? (start, end) =>

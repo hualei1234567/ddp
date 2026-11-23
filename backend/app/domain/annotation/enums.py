@@ -36,6 +36,9 @@ class AnnotationLabelType(StrEnum):
     ACTION_SEGMENT = "ACTION_SEGMENT"
     OBJECT_TRACK = "OBJECT_TRACK"
     JSON = "JSON"
+    #: V31-047：结果帧区间标注（成功/部分成功/失败/未知 + 层级失败类型）。
+    #: 值形状见 :func:`schema._validate_label_type_value` 的 OUTCOME_SPAN 规则。
+    OUTCOME_SPAN = "OUTCOME_SPAN"
 
 
 class AnnotationLevel(StrEnum):
@@ -45,6 +48,13 @@ class AnnotationLevel(StrEnum):
     ACTION_SEGMENT = "ACTION_SEGMENT"
     FRAME = "FRAME"
     OBJECT_TRACK = "OBJECT_TRACK"
+    #: V31-047 三级语义层级（对齐参考实现事件图 segment.level 的
+    #: task/subtask/event；L1 包含 L2、L2 包含 L3）。与既有 TASK/EPISODE
+    #: 不同：那两者描述"标签挂在哪个对象/聚合"，这三者描述 Episode 内的
+    #: 层级语义切分——同一素材可在三级各自成立标注。
+    SEMANTIC_TASK = "SEMANTIC_TASK"
+    SEMANTIC_SUBTASK = "SEMANTIC_SUBTASK"
+    SEMANTIC_EVENT = "SEMANTIC_EVENT"
 
 
 class LabelVisibility(StrEnum):

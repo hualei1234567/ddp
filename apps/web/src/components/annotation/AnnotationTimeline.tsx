@@ -17,6 +17,12 @@ export interface TimelineSegment {
   segmentId?: string;
   /** AI 建议片段：虚线边框+「AI」徽标，与人工片段显式区分（蓝图 §7：预标注必须显式标识）。 */
   aiSuggestion?: boolean;
+  /**
+   * 轨道分组键（V31-047）：同轨道片段共享一行，不同轨道垂直分层。
+   * 缺省进主轨道。顺序由调用方传入 lanes 决定；未声明进 lanes 的轨道
+   * 追加在末尾，保证未知轨道可见而不是被吞掉。
+   */
+  track?: string;
 }
 
 export interface AnnotationTimelineProps {
@@ -36,6 +42,8 @@ export interface AnnotationTimelineProps {
   ) => void;
   /** 删除片段：由调用方弹出确认（蓝图 §6：删除需确认或可撤销）。 */
   onSegmentDelete?: (segmentId: string) => void;
+  /** 轨道声明：键 + 显示名，按声明顺序自上而下渲染（V31-047）。 */
+  lanes?: readonly { key: string; label: string }[];
   disabled?: boolean;
 }
 
@@ -68,6 +76,7 @@ export default function AnnotationTimeline({
   segments = [],
   onSegmentResize,
   onSegmentDelete,
+  lanes,
   onSeek,
   onSelectRange,
   disabled = false,
@@ -243,6 +252,40 @@ export default function AnnotationTimeline({
       ? clamp(playheadSeconds / durationSeconds, 0, 1) * 100
       : 0;
 
+  // V31-047：轨道分组。声明顺序优先；片段里出现但未声明的轨道按首次
+  // 出现顺序追加，保证未知轨道可见而不是被吞掉。
+  const laneRows = useMemo(() => {
+    const rows: { key: string; label: string }[] = (lanes ?? []).map((item) => ({
+      ...item,
+    }));
+    const seen = new Set(rows.map((row) => row.key));
+    for (const segment of segments) {
+      const key = segment.track ?? "";
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        rows.push({ key, label: key });
+      }
+    }
+    return rows;
+  }, [lanes, segments]);
+  const laneIndexOf = useCallback(
+    (track: string | undefined) => {
+      if (!track) {
+        return -1;
+      }
+      return laneRows.findIndex((row) => row.key === track);
+    },
+    [laneRows],
+  );
+
+  const mainLaneSegments = segments.filter(
+    (segment) => laneIndexOf(segment.track) === -1,
+  );
+  const extraLanes = laneRows.map((lane) => ({
+    lane,
+    items: segments.filter((segment) => segment.track === lane.key),
+  }));
+
   return (
     <Space direction="vertical" size={6} className="ddp-stack">
       <div
@@ -278,7 +321,7 @@ export default function AnnotationTimeline({
         }}
       >
         {durationSeconds > 0
-          ? segments.map((segment) => {
+          ? mainLaneSegments.map((segment) => {
               const left = clamp(segment.startSeconds / durationSeconds, 0, 1);
               const right = clamp(segment.endSeconds / durationSeconds, 0, 1);
               const resizable =
@@ -422,6 +465,79 @@ export default function AnnotationTimeline({
           />
         ) : null}
       </div>
+      {extraLanes.map(({ lane, items }) => (
+        <div key={lane.key} className="ddp-stack" data-testid={`timeline-lane-${lane.key}`}>
+          <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+            {lane.label}
+          </Typography.Text>
+          <div
+            style={{
+              position: "relative",
+              height: 26,
+              borderRadius: 6,
+              background: "#f5f5f5",
+              overflow: "hidden",
+            }}
+          >
+            {durationSeconds > 0
+              ? items.map((segment) => {
+                  const left = clamp(segment.startSeconds / durationSeconds, 0, 1);
+                  const right = clamp(segment.endSeconds / durationSeconds, 0, 1);
+                  return (
+                    <div
+                      key={segment.key}
+                      data-testid={`timeline-segment-${segment.segmentId ?? segment.key}`}
+                      title={`${segment.label} ${formatPlaybackClock(segment.startSeconds)} – ${formatPlaybackClock(segment.endSeconds)}`}
+                      style={{
+                        position: "absolute",
+                        top: 3,
+                        bottom: 3,
+                        left: `${left * 100}%`,
+                        width: `${Math.max(right - left, 0) * 100}%`,
+                        background: segment.aiSuggestion
+                          ? AI_TONE
+                          : TONE_COLORS[segment.tone ?? "primary"],
+                        borderRadius: 3,
+                        border: segment.aiSuggestion
+                          ? "1.5px dashed rgba(114, 46, 209, 0.9)"
+                          : undefined,
+                      }}
+                    >
+                      {segment.aiSuggestion ? (
+                        <span
+                          style={{
+                            position: "absolute",
+                            left: 2,
+                            top: -7,
+                            fontSize: 9,
+                            background: "rgba(114, 46, 209, 0.92)",
+                            color: "#fff",
+                            borderRadius: 2,
+                            padding: "0 3px",
+                            lineHeight: "13px",
+                          }}
+                        >
+                          AI
+                        </span>
+                      ) : null}
+                    </div>
+                  );
+                })
+              : null}
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: `calc(${playheadPercent}% - 1px)`,
+                width: 2,
+                background: "rgba(250, 84, 28, 0.5)",
+                pointerEvents: "none",
+              }}
+            />
+          </div>
+        </div>
+      ))}
       <Space wrap size={12}>
         <Typography.Text type="secondary">
           {formatPlaybackClock(playheadSeconds)} /{" "}

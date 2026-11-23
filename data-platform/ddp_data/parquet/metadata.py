@@ -105,7 +105,9 @@ def _precheck_footer(handle: BinaryIO, size: int) -> None:
     if metadata_length == 0:
         raise ParquetMetadataError("footer 元数据长度为 0")
     if metadata_length > MAX_METADATA_BYTES:
-        raise ParquetMetadataLimitError(f"footer 元数据长度超过 {MAX_METADATA_BYTES} 字节上限")
+        raise ParquetMetadataLimitError(
+            f"footer 元数据长度超过 {MAX_METADATA_BYTES} 字节上限"
+        )
     if metadata_length > size - _MIN_FILE_BYTES:
         raise NotParquetError("footer 元数据长度超出文件大小")
 

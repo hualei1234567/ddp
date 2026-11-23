@@ -88,7 +88,9 @@ def is_empty(value: object) -> bool:
     return False
 
 
-def normalize_missing_fields(entity: object, specs: Sequence[FieldSpec]) -> tuple[str, ...]:
+def normalize_missing_fields(
+    entity: object, specs: Sequence[FieldSpec]
+) -> tuple[str, ...]:
     """校验并规范化 ``missing_fields``：去重排序，禁未知/必填字段。"""
     raw = entity.missing_fields
     if not isinstance(raw, tuple | list):
@@ -131,14 +133,18 @@ def _validate_types(entity: object, specs: Sequence[FieldSpec]) -> None:
         label = f"{entity_name}.{spec.name}"
         if spec.kind == "text":
             if not isinstance(value, str):
-                raise CanonicalFieldError(f"{label} 必须是字符串，得到 {type(value).__name__}")
+                raise CanonicalFieldError(
+                    f"{label} 必须是字符串，得到 {type(value).__name__}"
+                )
         elif spec.kind == "int":
             _require_int(value, label, spec.minimum)
         elif spec.kind == "number":
             _require_number(value, label, spec.minimum)
         elif spec.kind == "bool":
             if not isinstance(value, bool):
-                raise CanonicalFieldError(f"{label} 必须是布尔值，得到 {type(value).__name__}")
+                raise CanonicalFieldError(
+                    f"{label} 必须是布尔值，得到 {type(value).__name__}"
+                )
         elif spec.kind == "str_tuple":
             _require_tuple(value, label)
             for item in value:
@@ -154,7 +160,9 @@ def _validate_types(entity: object, specs: Sequence[FieldSpec]) -> None:
                 _require_number(item, label, None)
         elif spec.kind == "mapping":
             if not isinstance(value, Mapping):
-                raise CanonicalFieldError(f"{label} 必须是映射，得到 {type(value).__name__}")
+                raise CanonicalFieldError(
+                    f"{label} 必须是映射，得到 {type(value).__name__}"
+                )
 
 
 def _require_tuple(value: object, label: str) -> None:
@@ -202,7 +210,11 @@ def entity_to_dict(entity: object) -> dict[str, object]:
     result: dict[str, object] = {}
     for item in fields(entity):
         value = getattr(entity, item.name)
-        if item.name.endswith("_ns") and isinstance(value, int) and not isinstance(value, bool):
+        if (
+            item.name.endswith("_ns")
+            and isinstance(value, int)
+            and not isinstance(value, bool)
+        ):
             result[item.name] = str(value)
         elif isinstance(value, tuple):
             result[item.name] = list(value)
@@ -221,7 +233,9 @@ def entity_from_dict(
 ) -> Any:
     """严格反序列化：未知字段/版本/类型一律拒绝，不补默认值。"""
     if not isinstance(data, Mapping):
-        raise CanonicalFieldError(f"{cls.__name__}.from_dict 需要映射，得到 {type(data).__name__}")
+        raise CanonicalFieldError(
+            f"{cls.__name__}.from_dict 需要映射，得到 {type(data).__name__}"
+        )
     allowed = {spec.name for spec in specs} | {"schema_version", "missing_fields"}
     unknown = set(data) - allowed
     if unknown:
@@ -246,11 +260,15 @@ def _decode_value(spec: FieldSpec, value: object) -> object:
         return _decode_ns(value, label)
     if spec.kind == "mapping":
         if not isinstance(value, Mapping):
-            raise CanonicalFieldError(f"{label} 必须是映射，得到 {type(value).__name__}")
+            raise CanonicalFieldError(
+                f"{label} 必须是映射，得到 {type(value).__name__}"
+            )
         return dict(value)
     if spec.kind in _TUPLE_KINDS:
         if not isinstance(value, list | tuple):
-            raise CanonicalFieldError(f"{label} 必须是数组，得到 {type(value).__name__}")
+            raise CanonicalFieldError(
+                f"{label} 必须是数组，得到 {type(value).__name__}"
+            )
         items = list(value)
         if spec.kind == "str_tuple":
             return tuple(items)
@@ -263,7 +281,9 @@ def _decode_value(spec: FieldSpec, value: object) -> object:
         return _decode_number(value, label)
     if spec.kind == "bool":
         if not isinstance(value, bool):
-            raise CanonicalFieldError(f"{label} 必须是布尔值，得到 {type(value).__name__}")
+            raise CanonicalFieldError(
+                f"{label} 必须是布尔值，得到 {type(value).__name__}"
+            )
         return value
     if not isinstance(value, str):
         raise CanonicalFieldError(f"{label} 必须是字符串，得到 {type(value).__name__}")
@@ -295,8 +315,12 @@ def _decode_ns(value: object, label: str) -> int:
         try:
             return int(text, 10)
         except ValueError as exc:
-            raise CanonicalFieldError(f"{label} 必须是十进制纳秒字符串，得到 {value!r}") from exc
-    raise CanonicalFieldError(f"{label} 必须是纳秒整数或十进制字符串，得到 {type(value).__name__}")
+            raise CanonicalFieldError(
+                f"{label} 必须是十进制纳秒字符串，得到 {value!r}"
+            ) from exc
+    raise CanonicalFieldError(
+        f"{label} 必须是纳秒整数或十进制字符串，得到 {type(value).__name__}"
+    )
 
 
 def _decode_missing_fields(value: object) -> tuple[str, ...]:

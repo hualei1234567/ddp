@@ -536,11 +536,101 @@ DEFAULT_PRESETS: tuple[SchemaPreset, ...] = (
             ),
         ),
     ),
+    SchemaPreset(
+        key="semantic-hierarchy",
+        name="三级语义分层",
+        description=(
+            "Episode 的 L1 任务 / L2 子任务 / L3 事件三级语义切分（父子包含），"
+            "叠加成功/部分成功/失败/未知结果帧区间与层级失败原因，"
+            "与自动标注事件图三级结构对齐。"
+        ),
+        version=PRESET_VERSION,
+        annotation_levels=(
+            AnnotationLevel.SEMANTIC_TASK,
+            AnnotationLevel.SEMANTIC_SUBTASK,
+            AnnotationLevel.SEMANTIC_EVENT,
+        ),
+        labels=(
+            _label(
+                "task_instruction",
+                AnnotationLabelType.FREE_TEXT,
+                AnnotationLevel.SEMANTIC_TASK,
+                required=True,
+                description="L1 任务指令/描述；一个 Episode 一条。",
+            ),
+            _label(
+                "task_span",
+                AnnotationLabelType.TIME_RANGE,
+                AnnotationLevel.SEMANTIC_TASK,
+                required=True,
+                description="L1 任务起止时段。",
+                value_spec={"min_duration_ns": 1},
+            ),
+            _label(
+                "subtask_label",
+                AnnotationLabelType.STRING,
+                AnnotationLevel.SEMANTIC_SUBTASK,
+                required=True,
+                description="L2 子任务名称（如 approach / grasp / transfer）。",
+            ),
+            _label(
+                "subtask_span",
+                AnnotationLabelType.TIME_RANGE,
+                AnnotationLevel.SEMANTIC_SUBTASK,
+                required=True,
+                description="L2 子任务起止时段；必须落在所属 L1 片段内。",
+                value_spec={"min_duration_ns": 1},
+            ),
+            _label(
+                "event_label",
+                AnnotationLabelType.STRING,
+                AnnotationLevel.SEMANTIC_EVENT,
+                required=False,
+                description="L3 事件名称（如 contact / grasp_success / release）。",
+            ),
+            _label(
+                "event_span",
+                AnnotationLabelType.TIME_RANGE,
+                AnnotationLevel.SEMANTIC_EVENT,
+                required=False,
+                description="L3 事件起止时段；必须落在所属 L2 片段内。",
+                value_spec={"min_duration_ns": 1},
+            ),
+            _label(
+                "outcome_span",
+                AnnotationLabelType.OUTCOME_SPAN,
+                AnnotationLevel.SEMANTIC_TASK,
+                required=True,
+                description=(
+                    "结果帧区间：成功/部分成功/失败/未知；失败时按层级给出"
+                    "失败类型（感知/规划/操作/感知采集/录制）。"
+                ),
+                value_spec={
+                    "outcome_values": ["SUCCESS", "PARTIAL_SUCCESS", "FAILURE", "UNKNOWN"],
+                    "error_categories": [
+                        "perception",
+                        "planning",
+                        "manipulation",
+                        "sensing",
+                        "recording",
+                    ],
+                },
+            ),
+            _label(
+                "outcome_error_detail",
+                AnnotationLabelType.FREE_TEXT,
+                AnnotationLevel.SEMANTIC_TASK,
+                required=False,
+                description="失败原因细节说明；仅复核者可见。",
+                visibility=LabelVisibility.REVIEWER_ONLY,
+            ),
+        ),
+    ),
 )
 
 
 def default_registry() -> SchemaPresetRegistry:
-    """默认七类预设目录；每次返回新实例，避免跨调用共享可变状态。"""
+    """默认预设目录；每次返回新实例，避免跨调用共享可变状态。"""
     return SchemaPresetRegistry(DEFAULT_PRESETS)
 
 
