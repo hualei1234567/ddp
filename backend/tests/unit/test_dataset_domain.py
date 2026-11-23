@@ -622,3 +622,136 @@ def test_waiver_does_not_cover_invalid_calibration() -> None:
 def test_waiver_requires_reason() -> None:
     with pytest.raises(DomainValidationError):
         SelectionFilters.from_mapping({"allow_missing_calibration": True})
+
+
+# ---- V4.1 FR-030：采集会话 / 受试对象分组防泄漏 ----
+
+_CAPTURE_SESSION = UUID(int=8801)
+_SUBJECT = UUID(int=8802)
+
+
+def _grouped_items(
+    assignments: dict[int, Split],
+    *,
+    capture_session_id: UUID | None = None,
+    subject_id: UUID | None = None,
+) -> tuple[LeakageItem, ...]:
+    """同分组维度的 Episode 列表：显式注入 session/subject，其余沿用硬规则可过的值。"""
+    result = []
+    for index, split in assignments.items():
+        result.append(
+            LeakageItem(
+                episode_id=UUID(int=index + 1),
+                # 血缘/内容 Hash 各不相同，确保只有被考察的分组规则能命中
+                episode_lineage_id=uuid4(),
+                manifest_sha256=f"sha256:{index:064x}"[:71],
+                raw_asset_ids=(UUID(int=2000 + index),),
+                raw_asset_hashes=(f"sha256:{index:064x}"[:71],),
+                split=split,
+                annotation_submission_id=UUID(int=9000 + index),
+                annotation_record_digest=f"sha256:{index:064x}"[:71],
+                scene_group_id=None,
+                batch_id=None,
+                capture_session_id=capture_session_id,
+                subject_id=subject_id,
+                start_time_ns=index * 10_000,
+                end_time_ns=index * 10_000 + 500,
+            )
+        )
+    return tuple(result)
+
+
+def _check_with(items: tuple[LeakageItem, ...], rule: LeakageRule):
+    # hard_rules 不允许为空（领域约束），这里保留一条不会命中的硬规则；
+    # 被考察的分组规则一律进 soft_rules，断言只看它是否被检出。
+    policy = leakage_policy(
+        hard_rules=(LeakageRule.EPISODE_LINEAGE_CROSS_SPLIT,),
+        soft_rules=(rule,),
+        waiver_allowed_rules=(rule,),
+        scene_grouping_enabled=False,
+        temporal_overlap_enabled=False,
+    )
+    return check_leakage(
+        items,
+        policy,
+        leakage_report_id=uuid4(),
+        project_id=uuid4(),
+        dataset_version_id=uuid4(),
+        checked_at=NOW,
+        source_snapshot_at=NOW,
+    )
+
+
+def test_capture_session_cross_split_is_detected() -> None:
+    """同一采集会话的 Episode 跨 train/test 必须被识别为泄漏。"""
+    items = _grouped_items({0: Split.TRAIN, 1: Split.TEST}, capture_session_id=_CAPTURE_SESSION)
+    report = _check_with(items, LeakageRule.CAPTURE_SESSION_CROSS_SPLIT)
+    rules = {v.rule for v in report.violations}
+    assert LeakageRule.CAPTURE_SESSION_CROSS_SPLIT in rules
+    assert report.leakage_status in {LeakageStatus.WARN, LeakageStatus.FAIL}
+
+
+def test_subject_cross_split_is_detected() -> None:
+    """同一受试对象的 Episode 跨划分必须被识别。"""
+    items = _grouped_items({0: Split.TRAIN, 1: Split.TEST}, subject_id=_SUBJECT)
+    report = _check_with(items, LeakageRule.SUBJECT_CROSS_SPLIT)
+    rules = {v.rule for v in report.violations}
+    assert LeakageRule.SUBJECT_CROSS_SPLIT in rules
+
+
+def test_same_group_single_split_is_clean() -> None:
+    """整组落在同一划分时不得误报。"""
+    items = _grouped_items(
+        {0: Split.TRAIN, 1: Split.TRAIN},
+        capture_session_id=_CAPTURE_SESSION,
+        subject_id=_SUBJECT,
+    )
+    report = _check_with(items, LeakageRule.CAPTURE_SESSION_CROSS_SPLIT)
+    assert report.violations == ()
+    report = _check_with(items, LeakageRule.SUBJECT_CROSS_SPLIT)
+    assert report.violations == ()
+
+
+def test_missing_group_dimension_does_not_fabricate_violation() -> None:
+    """维度缺失（None）表示「未知」，不得当作「同组」凭空造出违规。"""
+    items = _grouped_items({0: Split.TRAIN, 1: Split.TEST})
+    for rule in (
+        LeakageRule.CAPTURE_SESSION_CROSS_SPLIT,
+        LeakageRule.SUBJECT_CROSS_SPLIT,
+    ):
+        report = _check_with(items, rule)
+        assert report.violations == ()
+
+
+def test_grouping_switch_disables_rule() -> None:
+    """策略关闭分组开关时，即使同组跨划分也不产出违规。"""
+    items = _grouped_items({0: Split.TRAIN, 1: Split.TEST}, capture_session_id=_CAPTURE_SESSION)
+    policy = leakage_policy(
+        hard_rules=(LeakageRule.EPISODE_LINEAGE_CROSS_SPLIT,),
+        soft_rules=(LeakageRule.CAPTURE_SESSION_CROSS_SPLIT,),
+        waiver_allowed_rules=(),
+        scene_grouping_enabled=False,
+        temporal_overlap_enabled=False,
+        capture_session_grouping_enabled=False,
+    )
+    report = check_leakage(
+        items,
+        policy,
+        leakage_report_id=uuid4(),
+        project_id=uuid4(),
+        dataset_version_id=uuid4(),
+        checked_at=NOW,
+        source_snapshot_at=NOW,
+    )
+    assert report.violations == ()
+
+
+def test_grouping_defaults_are_enabled_in_policy() -> None:
+    """FR-030 两条分组默认开启：同会话/同对象跨划分是最隐蔽的泄漏来源。"""
+    policy = leakage_policy()
+    assert policy.capture_session_grouping_enabled is True
+    assert policy.subject_grouping_enabled is True
+    # 序列化进入 policy_sha256：开关状态是策略内容的一部分，改动必须换 Hash。
+    payload = policy._payload()  # noqa: SLF001 - 测试直接校验落盘内容
+    assert payload["capture_session_grouping_enabled"] is True
+    assert payload["subject_grouping_enabled"] is True

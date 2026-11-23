@@ -38,6 +38,7 @@ class ProjectAction(StrEnum):
     DELETE = "delete"
     VALIDATE = "validate"
     MANAGE_MEMBERS = "manage_members"
+    MANAGE_EDGE_AGENTS = "manage_edge_agents"
 
 
 # 显式权限矩阵：未列出的动作一律拒绝，禁止“未知动作默认放行”。
@@ -59,6 +60,7 @@ ROLE_PERMISSIONS: Mapping[ProjectRole, frozenset[ProjectAction]] = MappingProxyT
                 ProjectAction.DELETE,
                 ProjectAction.VALIDATE,
                 ProjectAction.MANAGE_MEMBERS,
+                ProjectAction.MANAGE_EDGE_AGENTS,
             }
         ),
     }
