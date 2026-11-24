@@ -47,6 +47,11 @@ from app.domain.quality.errors import (
     DomainValidationError,
     InvalidQualityRunTransitionError,
 )
+from app.domain.quality.evidence import (
+    EvidenceLocation,
+    parse_evidence_location,
+    split_evidence_location,
+)
 from app.domain.quality.rules import is_sha256_version
 
 RULE_ID_MAX_LENGTH = 64
@@ -136,6 +141,29 @@ def _normalize_evidence(evidence: Mapping[str, object] | None) -> dict[str, obje
     return normalized
 
 
+def _resolve_location(
+    evidence: Mapping[str, object] | None,
+    location: EvidenceLocation | Mapping[str, object] | None,
+) -> tuple[Mapping[str, object] | None, EvidenceLocation | None]:
+    """把定位从两处来源归一：显式字段优先，其次 ``evidence["location"]``。
+
+    两处同时给出且不一致时直接失败：静默取其一会让"界面定位到的区间"与
+    "规则声称的证据区间"分叉，那正是本批次要消除的问题。
+    """
+    inline_location, rest = split_evidence_location(evidence)
+    explicit = parse_evidence_location(location)
+    if explicit is not None and inline_location is not None:
+        if explicit.to_payload() != inline_location.to_payload():
+            raise DomainValidationError(
+                "evidence.location 与 evidence_location 不一致，请只保留一处"
+            )
+    resolved = explicit if explicit is not None else inline_location
+    if rest is None and evidence is not None:
+        # evidence 只包含定位：其余证据为空，按"没有排障信息"处理。
+        rest = None
+    return rest, resolved
+
+
 def _normalize_score(status: QualityFindingStatus, score: float | None) -> float | None:
     if status in {QualityFindingStatus.NOT_APPLICABLE, QualityFindingStatus.ERROR}:
         if score is not None:
@@ -167,6 +195,9 @@ class QualityFindingDraft:
     evidence: Mapping[str, object] | None = None
     score: float | None = None
     subject_ref: str = ""
+    #: 证据定位（时间区间 / 流 / 字段）；规则可把它写在 ``evidence["location"]``
+    #: 里，构造期自动提升，避免同一事实两处存储。
+    evidence_location: EvidenceLocation | Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -195,7 +226,9 @@ class QualityFindingDraft:
             "message",
             _required_text(self.message, "message", max_length=MESSAGE_MAX_LENGTH),
         )
-        object.__setattr__(self, "evidence", _normalize_evidence(self.evidence))
+        evidence, location = _resolve_location(self.evidence, self.evidence_location)
+        object.__setattr__(self, "evidence", _normalize_evidence(evidence))
+        object.__setattr__(self, "evidence_location", location)
         object.__setattr__(self, "score", _normalize_score(status, self.score))
         object.__setattr__(
             self,
@@ -221,6 +254,7 @@ class QualityFinding:
     evidence: Mapping[str, object] | None = None
     score: float | None = None
     subject_ref: str = ""
+    evidence_location: EvidenceLocation | Mapping[str, object] | None = None
 
     def __post_init__(self) -> None:
         for name in ("finding_id", "project_id", "run_id"):
@@ -235,6 +269,7 @@ class QualityFinding:
             evidence=self.evidence,
             score=self.score,
             subject_ref=self.subject_ref,
+            evidence_location=self.evidence_location,
         )
         object.__setattr__(self, "rule_id", draft.rule_id)
         object.__setattr__(self, "rule_version", draft.rule_version)
@@ -245,6 +280,7 @@ class QualityFinding:
         object.__setattr__(self, "evidence", draft.evidence)
         object.__setattr__(self, "score", draft.score)
         object.__setattr__(self, "subject_ref", draft.subject_ref)
+        object.__setattr__(self, "evidence_location", draft.evidence_location)
         object.__setattr__(self, "created_at", _aware(self.created_at, "created_at"))
 
     @classmethod
@@ -270,6 +306,7 @@ class QualityFinding:
             evidence=draft.evidence,
             score=draft.score,
             subject_ref=draft.subject_ref,
+            evidence_location=draft.evidence_location,
             created_at=created_at,
         )
 
@@ -561,6 +598,7 @@ def finding_drafts_from_iterable(
 
 __all__ = [
     "EVIDENCE_MAX_BYTES",
+    "EvidenceLocation",
     "QualityFinding",
     "QualityFindingDraft",
     "QualityRun",

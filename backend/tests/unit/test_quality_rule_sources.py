@@ -12,6 +12,7 @@ from app.application.quality.registry import default_registry
 from app.application.quality.sources.annotations import AnnotationQualityRuleSource
 from app.application.quality.sources.datasets import DatasetQualityRuleSource
 from app.application.quality.sources.imports import ImportQualityRuleSource
+from app.domain.annotation.schema import AnnotationSchema
 from app.domain.annotation.submission import AnnotationRecord, LabelValue
 from app.domain.datasources.media import MediaAsset
 from app.domain.identity.models import ProjectScope
@@ -138,7 +139,8 @@ def test_annotation_source_runs_existing_rules_without_context() -> None:
 
     drafts = AnnotationQualityRuleSource().evaluate(scope, facts)
 
-    assert len(drafts) == 4
+    # V51-010 新增 number_label_within_range，共 5 条；新规则在无边界时"不适用"。
+    assert len(drafts) == 5
     statuses = {(draft.rule_id, draft.status) for draft in drafts}
     assert ("required_labels_present", QualityFindingStatus.NOT_APPLICABLE) in statuses
     assert ("time_range_within_episode", QualityFindingStatus.NOT_APPLICABLE) in statuses
@@ -180,7 +182,7 @@ def test_annotation_source_without_records_is_not_applicable() -> None:
         subject_id=uuid4(),
     )
     drafts = AnnotationQualityRuleSource().evaluate(scope, facts)
-    assert len(drafts) == 4
+    assert len(drafts) == 5
     assert all(draft.status is QualityFindingStatus.NOT_APPLICABLE for draft in drafts)
 
 
@@ -259,3 +261,113 @@ def test_default_registry_versions_are_subject_specific_content_hashes() -> None
         item.rule_id for item in ImportQualityRuleSource.declarations
     }
     assert coerce_subject_type("EPISODE") is QualitySubjectType.EPISODE
+
+
+# ---------------------------------------------------------------------------
+# V51-010：证据定位经统一引擎提升为结构化字段
+# ---------------------------------------------------------------------------
+
+
+def _schema_with_number_bound(scope: ProjectScope) -> AnnotationSchema:
+    from app.domain.annotation.schema import LabelDefinition
+
+    return AnnotationSchema(
+        schema_id=uuid4(),
+        project_id=scope.project_id,
+        schema_lineage_id=uuid4(),
+        schema_version=1,
+        code=f"schema-{uuid4().hex[:8]}",
+        name="数值边界 Schema",
+        description=None,
+        annotation_levels=("EPISODE",),
+        labels=(
+            LabelDefinition(
+                label_key="velocity",
+                label_type="NUMBER",
+                required=False,
+                level="EPISODE",
+                value_spec={"min_value": 0, "max_value": 5},
+            ),
+        ),
+    )
+
+
+def test_annotation_source_promotes_number_violation_location() -> None:
+    """数值越界经规则源后必须带 ``evidence_location``，而不是只躺在自由 JSON 里。"""
+    scope = _scope()
+    schema = _schema_with_number_bound(scope)
+    # 一次 replace 内改完所有影响摘要的字段，并把 record_sha256 置空重算：
+    # 分两次 replace 会让第二次沿用旧摘要，构造期直接拒绝。
+    record = replace(
+        _record(scope),
+        labels=(LabelValue(label_key="velocity", value=9.5),),
+        schema_id=schema.schema_id,
+        record_sha256=None,
+    )
+    facts = QualitySubjectFacts(
+        subject_type=QualitySubjectType.EPISODE,
+        subject_id=record.episode_id,
+        annotation_records=(record,),
+        schemas={schema.schema_id: schema},
+    )
+
+    drafts = AnnotationQualityRuleSource().evaluate(scope, facts)
+
+    draft = next(item for item in drafts if item.rule_id == "number_label_within_range")
+    assert draft.status is QualityFindingStatus.FAIL
+    assert draft.evidence_location is not None
+    assert draft.evidence_location.field_path == "labels.velocity"
+    # 保留键被提升后不残留：同一事实只存一处。
+    assert "location" not in (draft.evidence or {})
+
+
+def test_import_source_promotes_sync_drift_location() -> None:
+    """时间同步超差必须给出可跳转的共同窗口与偏移最大的流。"""
+    scope = _scope()
+    import_id = uuid4()
+    main = replace(
+        _asset(scope, import_id=import_id, camera="main"),
+        excerpt_start_seconds=0.0,
+        excerpt_seconds=10.0,
+    )
+    wrist = replace(
+        _asset(scope, import_id=import_id, camera="wrist"),
+        excerpt_start_seconds=0.1,
+        excerpt_seconds=10.0,
+    )
+    facts = _import_facts(scope, (main, wrist), import_id=import_id)
+
+    drafts = ImportQualityRuleSource().evaluate(scope, facts)
+
+    draft = next(item for item in drafts if item.rule_id == "stream_sync_aligned")
+    assert draft.status is QualityFindingStatus.FAIL
+    assert draft.evidence_location is not None
+    time_range = draft.evidence_location.time_range
+    assert time_range is not None
+    # 共同可见窗口：最晚 start(0.1s) → 最早 end(10.0s)
+    assert time_range.start_time_ns == 100_000_000
+    assert time_range.end_time_ns == 10_000_000_000
+    assert draft.evidence_location.stream_id == "wrist"
+
+
+def test_import_source_sync_pass_has_no_location() -> None:
+    """同步通过时不给定位：没有需要人去时间轴核对的问题。"""
+    scope = _scope()
+    import_id = uuid4()
+    main = replace(
+        _asset(scope, import_id=import_id, camera="main"),
+        excerpt_start_seconds=0.0,
+        excerpt_seconds=10.0,
+    )
+    wrist = replace(
+        _asset(scope, import_id=import_id, camera="wrist"),
+        excerpt_start_seconds=0.0,
+        excerpt_seconds=10.0,
+    )
+    facts = _import_facts(scope, (main, wrist), import_id=import_id)
+
+    drafts = ImportQualityRuleSource().evaluate(scope, facts)
+
+    draft = next(item for item in drafts if item.rule_id == "stream_sync_aligned")
+    assert draft.status is QualityFindingStatus.PASS
+    assert draft.evidence_location is None

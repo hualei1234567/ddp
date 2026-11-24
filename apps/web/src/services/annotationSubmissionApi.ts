@@ -67,7 +67,7 @@ export interface AnnotationSubmissionApi {
   actOnSubmission: (
     projectId: string,
     submissionId: string,
-    action: "submit" | "withdraw",
+    action: "submit" | "withdraw" | "require-rework",
     options: AnnotationWriteOptions,
   ) => Promise<AnnotationSubmission>;
   listSubmissionReviews: (

@@ -2,7 +2,9 @@ import { ReloadOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Space, Table, Tag, Typography } from "antd";
 import type { TableColumnsType } from "antd";
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
+import { buildEpisodeDetailPath } from "../../services/collectionUrl";
 import { ApiError } from "../../services/api";
 import { formatDateTime } from "../../services/format";
 import { qualityRunApi } from "../../services/qualityRuns";
@@ -157,19 +159,30 @@ export default function EpisodeQualityPanel({
     {
       title: "操作",
       key: "actions",
-      width: 140,
-      render: (_value, item) =>
-        baseline !== null && item.run_id !== baseline.run_id ? (
-          <Button
-            size="small"
-            onClick={() => void compare(item.run_id)}
-            loading={diffLoading && diffCandidate === item.run_id}
+      width: 240,
+      render: (_value, item) => (
+        <Space direction="vertical" size={2}>
+          {baseline !== null && item.run_id !== baseline.run_id ? (
+            <Button
+              size="small"
+              onClick={() => void compare(item.run_id)}
+              loading={diffLoading && diffCandidate === item.run_id}
+            >
+              与基线对比
+            </Button>
+          ) : baseline !== null ? (
+            <Tag>基线</Tag>
+          ) : null}
+          {/* V51-010：进入证据定位区，在既有播放器/时间轴上跳转与高亮。
+              没有未通过结论时该页面也会如实显示"没有需要定位的结论"。 */}
+          <Link
+            to={`${buildEpisodeDetailPath(projectId, episodeId)}&qc_run_id=${encodeURIComponent(item.run_id)}`}
+            aria-label={`在 Episode 时间轴定位运行 ${item.run_id} 的证据`}
           >
-            与基线对比
-          </Button>
-        ) : baseline !== null ? (
-          <Tag>基线</Tag>
-        ) : null,
+            查看证据
+          </Link>
+        </Space>
+      ),
     },
   ];
 
