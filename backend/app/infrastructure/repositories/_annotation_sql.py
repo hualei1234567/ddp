@@ -51,7 +51,13 @@ def ensure_expected_version(entity_version: int, expected_version: int) -> None:
         entity_version,
         expected_version,
         invalid=DomainValidationError,
-        conflict=lambda: VersionConflictError("资源"),
+        # FR-019：把两侧版本号带进异常，客户端才能展示"你基于 M、当前 N"
+        # 并据此重新提交；不回显任何业务字段。
+        conflict=lambda: VersionConflictError(
+            "资源",
+            expected_version=expected_version,
+            current_version=entity_version,
+        ),
     )
 
 
@@ -134,7 +140,9 @@ def raise_update_failure(
     )
     if row is None:
         raise ResourceNotFoundError(resource, resource_id)
-    raise VersionConflictError(resource)
+    # FR-019：并发写让 ``WHERE version = expected_version`` 落空时，把重新读到的
+    # 当前版本带给客户端——恢复流需要它来展示差异并基于最新版本重提交。
+    raise VersionConflictError(resource, current_version=getattr(row, "version", None))
 
 
 def json_list_of_str(values: object) -> list[str]:

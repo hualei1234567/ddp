@@ -270,3 +270,35 @@ export function buildWorkbenchRecords(
   }));
   return buildSubmissionRecords(visibleSchema, episodes, values);
 }
+
+/**
+ * 冲突发生时读取服务端**权威最新提交**（含记录内容）。
+ *
+ * 不复用工作台已加载的 `data.latestSubmission`：那份数据是上次加载的快照，
+ * 正是它过期才产生了本次 409。恢复流展示给用户的"服务端最新版本"必须是
+ * 现在的真实状态，否则合并基准还是错的。
+ *
+ * 走「列表找最大版本 → 取详情」两步而不是只读列表：列表按可见性返回，
+ * 但不内联记录内容，差异计算需要 `records`。
+ */
+export async function loadLatestAssignmentSubmission(
+  api: AnnotationApi,
+  projectId: string,
+  taskId: string,
+  assignmentId: string,
+  signal?: AbortSignal,
+): Promise<AnnotationSubmission | null> {
+  const all = await fetchAllCursorPages(
+    (options) => api.listSubmissions(projectId, taskId, { ...options, signal }),
+    (item) => item.submission_id,
+  );
+  const mine = all.filter((item) => item.assignment_id === assignmentId);
+  const latest = latestByVersion(mine);
+  if (latest === null) {
+    return null;
+  }
+  if (latest.records.length > 0) {
+    return latest;
+  }
+  return api.getSubmission(projectId, latest.submission_id, { signal });
+}

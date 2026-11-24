@@ -56,13 +56,30 @@ class ResourceNotFoundError(AnnotationDomainError):
 
 
 class VersionConflictError(AnnotationDomainError):
-    """乐观锁版本不符。"""
+    """乐观锁版本不符。
+
+    FR-019：客户端恢复冲突时必须知道「我基于哪一版、服务端现在是哪一版」，
+    否则只能提示"版本冲突"而无法展示差异或基于最新版本重提交。两个版本号
+    都是请求方本就可见的资源字段（`version` 列），按契约 details_rule 的
+    ``expected/actual`` 口径回显；由 API 层白名单决定是否透传。
+    """
 
     code = "version_conflict"
 
-    def __init__(self, resource: str) -> None:
+    def __init__(
+        self,
+        resource: str,
+        *,
+        expected_version: int | None = None,
+        current_version: int | None = None,
+    ) -> None:
         self.resource = resource
-        super().__init__(f"{resource}版本冲突")
+        details: dict[str, object] = {}
+        if expected_version is not None:
+            details["expected_version"] = expected_version
+        if current_version is not None:
+            details["current_version"] = current_version
+        super().__init__(f"{resource}版本冲突", details=details or None)
 
 
 class ResourceImmutableError(AnnotationDomainError):
