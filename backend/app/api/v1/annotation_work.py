@@ -23,6 +23,8 @@ from app.api.v1.annotation_dependencies import AnnotationUseCasesDep
 from app.api.v1.annotation_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.annotation_work_models import (
     AnnotationAssignmentActionRequest,
+    AnnotationAssignmentCapacityPreviewOut,
+    AnnotationAssignmentCapacityPreviewRequest,
     AnnotationAssignmentCreate,
     AnnotationAssignmentOut,
     AnnotationBatchActionRequest,
@@ -376,6 +378,41 @@ def get_workload(
         capacity=CapacityPolicy(capacity_minutes=settings.annotation_capacity_minutes),
     )
     return AnnotationWorkloadOut.from_domain(summary)
+
+
+@router.post(
+    "/annotation-assignment-capacity-preview",
+    response_model=list[AnnotationAssignmentCapacityPreviewOut],
+)
+def preview_assignment_capacity(
+    payload: AnnotationAssignmentCapacityPreviewRequest,
+    scope: ReadScope,
+    use_cases: AnnotationUseCasesDep,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> list[AnnotationAssignmentCapacityPreviewOut]:
+    """分配前实时负载预览（只读）。
+
+    为什么是 POST 而不是 GET：要一次问多人，UUID 列表放 query string
+    会撞长度与编码边界；但**它没有任何副作用**——用 ``ReadScope`` 而非
+    ``WriteScope`` 就是这条断言的机器可验证形式：viewer 也能预览，
+    预览本身不写库、不落审计、不推进版本、不需要幂等键。
+
+    判定与硬阻断同源（:meth:`CapacityPolicy.exceeded`）：这里返回的
+    ``will_exceed`` 就是"提交时会不会被 409 拒绝"的答案。前端据此给红/黄
+    警示，但**不自行阻断**——是否放行仍由 ``POST /annotation-assignments``
+    的容量策略决定，避免两处各自维护一套阻断规则。
+    """
+    previews = use_cases.assignments.preview_assignment_capacity(
+        scope,
+        assignee_ids=tuple(payload.assignee_ids),
+        planned_item_count=payload.planned_item_count,
+        planned_minutes=payload.planned_minutes,
+        capacity=CapacityPolicy(
+            max_open_items=settings.annotation_max_open_items,
+            max_planned_minutes=settings.annotation_max_planned_minutes,
+        ),
+    )
+    return [AnnotationAssignmentCapacityPreviewOut.from_domain(item) for item in previews]
 
 
 @router.post(

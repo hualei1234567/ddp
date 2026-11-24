@@ -10,6 +10,7 @@ from app.application.annotation.audit import record_change
 from app.application.annotation.commands import NewAnnotationAssignment
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
 from app.application.annotation.ports import (
+    ZERO_OPEN_PLANNED,
     AnnotationAssignmentRepository,
     AnnotationBatchRepository,
     AnnotationTaskRepository,
@@ -43,7 +44,11 @@ from app.domain.annotation.state_machines import (
     assert_assignment_action,
     validate_action_name,
 )
-from app.domain.annotation.workload import CapacityPolicy, WorkloadSummary
+from app.domain.annotation.workload import (
+    AssignmentCapacityPreview,
+    CapacityPolicy,
+    WorkloadSummary,
+)
 from app.domain.identity.models import ProjectScope
 
 _RESOURCE_TYPE = "ANNOTATION_ASSIGNMENT"
@@ -425,6 +430,60 @@ class AnnotationAssignmentUseCases:
         )
         return replace(summary, status=summary.effective_status)
 
+    def preview_assignment_capacity(
+        self,
+        scope: ProjectScope,
+        *,
+        assignee_ids: tuple[UUID, ...],
+        planned_item_count: int,
+        planned_minutes: int,
+        capacity: CapacityPolicy | None = None,
+    ) -> list[AssignmentCapacityPreview]:
+        """分配前实时负载预览（只读，不落库、不写审计、不推进版本）。
+
+        这是 :meth:`_assert_capacity` 的**同源只读视图**：两边都用
+        :meth:`CapacityPolicy.exceeded` 判定，都按"未结束分配的计划项数/计划
+        工时"取占用量，因此"预览说会超"与"提交被拒"不会各说各话。唯一的
+        差别是预览一次算多人（批量聚合），且不抛错——它要回答"会不会超"，
+        而不是替调用方阻断。
+
+        人员资格照旧校验（非项目成员 404），与 :meth:`workload` 一致：
+        预览不能成为成员枚举的旁路。
+        """
+        if capacity is None:
+            capacity = CapacityPolicy()
+        if not assignee_ids:
+            raise DomainValidationError("assignee_ids 不得为空")
+        # 去重但保持顺序：同一人重复传入不应被算两次，也不应悄悄改顺序
+        # （前端按选择顺序展示）。
+        ordered: list[UUID] = []
+        seen: set[UUID] = set()
+        for assignee_id in assignee_ids:
+            if assignee_id in seen:
+                continue
+            seen.add(assignee_id)
+            ordered.append(assignee_id)
+            if not self._members.user_is_member(scope, assignee_id):
+                raise ResourceNotFoundError("项目成员", assignee_id)
+        totals = self._assignments.sum_open_planned_by_assignee(
+            scope,
+            assignee_ids=tuple(ordered),
+        )
+        previews: list[AssignmentCapacityPreview] = []
+        for assignee_id in ordered:
+            open_totals = totals.get(assignee_id, ZERO_OPEN_PLANNED)
+            previews.append(
+                AssignmentCapacityPreview(
+                    assignee_id=assignee_id,
+                    capacity=capacity,
+                    open_item_count=open_totals.planned_item_count,
+                    open_planned_minutes=open_totals.planned_minutes,
+                    planned_item_count=planned_item_count,
+                    planned_minutes=planned_minutes,
+                )
+            )
+        return previews
+
     def _assert_not_already_assigned(
         self,
         scope: ProjectScope,
@@ -544,23 +603,37 @@ class AnnotationAssignmentUseCases:
         capacity: CapacityPolicy | None,
         exclude_assignment_id: UUID | None = None,
     ) -> None:
+        """硬阻断：判定规则唯一来源是 :meth:`CapacityPolicy.exceeded`。
+
+        分配前预览走同一个方法，因此不存在"预览一套、提交另一套"的漂移。
+        按需取数（先看该上限是否配置）是为了不为一台只配了项数上限的部署
+        多发一条分钟聚合查询。
+        """
         if capacity is None:
             return
+        # 逐项判定并保持原有的惰性取数：先看项数上限，未触发才去查工时聚合，
+        # 避免为一次注定被拒的分配多发一条查询。
         if capacity.max_open_items is not None:
-            used = self._assignments.sum_open_planned_items(
+            open_items = self._assignments.sum_open_planned_items(
                 scope,
                 assignee_id=assignee_id,
                 exclude_assignment_id=exclude_assignment_id,
             )
-            if used + planned_items > capacity.max_open_items:
+            if "max_open_items" in capacity.exceeded(
+                open_item_count=open_items,
+                planned_item_count=planned_items,
+            ):
                 raise AssignmentCapacityExceededError("分配超过人员容量，需 AM 审批")
         if capacity.max_planned_minutes is not None:
-            used_minutes = self._assignments.sum_open_planned_minutes(
+            open_minutes = self._assignments.sum_open_planned_minutes(
                 scope,
                 assignee_id=assignee_id,
                 exclude_assignment_id=exclude_assignment_id,
             )
-            if used_minutes + planned_minutes > capacity.max_planned_minutes:
+            if "max_planned_minutes" in capacity.exceeded(
+                open_planned_minutes=open_minutes,
+                planned_minutes=planned_minutes,
+            ):
                 raise AssignmentCapacityExceededError("分配工时超过人员容量，需 AM 审批")
 
     def _assert_member(self, scope: ProjectScope, user_id: UUID) -> None:

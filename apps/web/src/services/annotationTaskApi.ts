@@ -6,6 +6,10 @@
  */
 import type { CursorPage } from "../types/api";
 import type {
+  AssignmentCapacityPreview,
+  AssignmentCapacityPreviewRequest,
+} from "../types/annotationCapacityPreview";
+import type {
   AnnotationAssignment,
   AnnotationBatch,
   AnnotationTask,
@@ -16,6 +20,7 @@ import type { AnnotationOverdueSummary } from "../types/annotationOverdue";
 import type { AnnotationWorkload } from "../types/annotationWorkload";
 import type { WithAllowedActions } from "./annotationAllowedActions";
 import type { ApiClient } from "./api";
+import { parseAssignmentCapacityPreviewList } from "./annotationCapacityPreviewParsers";
 import { parseAnnotationOverdueSummary } from "./annotationOverdueParsers";
 import { parseAnnotationWorkload } from "./annotationWorkloadParsers";
 import { parseDoubleAnnotationConsistency } from "./annotationRecordParsers";
@@ -118,6 +123,18 @@ export interface AnnotationTaskApi {
     query: WorkloadQuery,
     options?: DetailRequestOptions,
   ) => Promise<AnnotationWorkload>;
+  /**
+   * 分配前的实时容量预览（只读，FR-020）。
+   *
+   * 选中被分配人就查，不等提交；一次请求算多人（服务端一条聚合查询）。
+   * 返回的 `will_exceed` 与提交时的 409 同源，但**本层不阻断提交**——
+   * 是否放行由服务端 `CapacityPolicy` 决定。
+   */
+  previewAssignmentCapacity: (
+    projectId: string,
+    request: AssignmentCapacityPreviewRequest,
+    options?: DetailRequestOptions,
+  ) => Promise<AssignmentCapacityPreview[]>;
   actOnTask: (
     projectId: string,
     taskId: string,
@@ -277,6 +294,41 @@ export function createAnnotationTaskApi(client: ApiClient): AnnotationTaskApi {
           return workload;
         },
       });
+    },
+
+    async previewAssignmentCapacity(projectId, request, options) {
+      if (request.assignee_ids.length === 0) {
+        // 空列表服务端会 422；在客户端先拦是为了让调用方看见"没选人"
+        // 而不是一个语义模糊的校验错误。
+        return [];
+      }
+      return client.request(
+        projectPath(projectId, "/annotation-assignment-capacity-preview"),
+        {
+          method: "POST",
+          signal: options?.signal,
+          body: {
+            assignee_ids: request.assignee_ids.map((assigneeId) =>
+              requireIdentifier(assigneeId, "assignee_id"),
+            ),
+            planned_item_count: request.planned_item_count,
+            planned_minutes: request.planned_minutes,
+          },
+          validate: (value) => {
+            const previews = parseAssignmentCapacityPreviewList(value);
+            const requested = new Set(request.assignee_ids);
+            for (const preview of previews) {
+              if (!requested.has(preview.assignee_id)) {
+                // 服务端返回了没被请求的人：口径被破坏，不能静默展示。
+                throw new ContractValidationError(
+                  "容量预览.assignee_id 不在请求的人员集合内",
+                );
+              }
+            }
+            return previews;
+          },
+        },
+      );
     },
 
     async actOnTask(projectId, taskId, action, options) {

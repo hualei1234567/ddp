@@ -60,6 +60,7 @@ describe("标注写入口抽屉", () => {
     const html = renderToStaticMarkup(
       <AssignmentCreateDrawer
         open
+        projectId="11111111-1111-7111-8111-111111111111"
         batches={[]}
         onClose={noop}
         onSubmit={() => Promise.resolve()}
