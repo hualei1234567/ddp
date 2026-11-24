@@ -130,10 +130,12 @@ jobs:
       - name: 运行本地全栈 E2E
         working-directory: apps/web
         run: DDP_E2E_MINIO_PORT=9000 npm run e2e:local
-      # 本地栈模式覆盖上传 / 动作栏 / 复核 4 条用例；标注控制台按设计需要
-      # 真实栈种子（含 Manifest 的 Episode + IN_PROGRESS 分配，见
+      # 本地栈模式覆盖上传 / 动作栏 / 复核 / RBAC 多角色共 11 条用例；标注控制台
+      # 按设计需要真实栈种子（含 Manifest 的 Episode + IN_PROGRESS 分配，见
       # scripts/e2e/README.md），缺种子时必须是**具名 skipped**而不是静默通过。
-      - name: 校验结构化 E2E 结果（4 passed / 2 skipped：两条标注控制台用例待真实栈种子）
+      # RBAC 用例（rbac.spec.ts，V51-013）必须全部 passed：多角色种子由
+      # seed_e2e.py 提供，本地栈不跳过任何一条。
+      - name: 校验结构化 E2E 结果（11 passed / 2 skipped：两条标注控制台用例待真实栈种子）
         if: always()
         working-directory: apps/web
         run: |
@@ -167,9 +169,11 @@ jobs:
           const skipped = statuses.filter((status) => status === "skipped").length;
           console.log(JSON.stringify({ passed, skipped, statuses, skippedSpecs }));
           // V31-045 新增播放控制用例（同样依赖真实栈种子，本地栈 skipped）。
+          // V51-013 的 rbac.spec.ts 不在此白名单内：它的多角色种子由
+          // seed_e2e.py 在同一套本地栈里提供，任何一条被 skipped 都应失败。
           // 只有显式白名单里的 spec 才允许 skipped；其他任何用例静默跳过
           // 都会让本步骤失败，避免"没跑"被算作"通过"。
-          if (passed !== 4 || skipped !== 2 || statuses.length !== 6) process.exit(1);
+          if (passed !== 11 || skipped !== 2 || statuses.length !== 13) process.exit(1);
           const SKIPPABLE = [
             "annotation-console.spec.ts",
           ];

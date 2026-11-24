@@ -1,7 +1,8 @@
 # 前端关键路径 E2E（DDP-V21-N8-007）
 
 使用官方 `@playwright/test`（版本固定在 `apps/web/package.json`），覆盖三条关键路径：
-**上传**、**审核**、**动作条**。
+**上传**、**审核**、**动作条**，以及 V51-013 的 **RBAC 多角色越权** 用例组
+（`e2e/rbac.spec.ts`，7 条）。
 
 ## 无环境时明确跳过
 
@@ -42,6 +43,51 @@ DDP_E2E_IMPORT_ID=<导入任务 UUID> \
 DDP_E2E_MCAP_PATH=</absolute/path/to/valid.mcap> \
 npm run e2e
 ```
+
+RBAC 用例组还需要第二项目与多角色种子（`seed_e2e.py` 的 `E2E_IDS` 输出）：
+
+```bash
+DDP_E2E_PROJECT_B_ID=<隔离对照项目 UUID> \
+DDP_E2E_ANNOTATOR_ID=<editor 成员 UUID> \
+DDP_E2E_VIEWER_ID=<viewer 成员 UUID> \
+DDP_E2E_OUTSIDER_ID=<对照项目 owner UUID> \
+DDP_E2E_TASK_B_ID=<对照项目任务 UUID> \
+DDP_E2E_SCHEMA_A_ID=<项目 A Schema UUID> \
+DDP_E2E_SCHEMA_B_ID=<项目 B Schema UUID> \
+DDP_E2E_DATASET_A_ID=<项目 A 数据集 UUID> \
+DDP_E2E_DATASET_B_ID=<项目 B 数据集 UUID> \
+DDP_E2E_DATASET_VERSION_A_ID=<项目 A 版本 UUID> \
+DDP_E2E_DATASET_VERSION_B_ID=<项目 B 版本 UUID> \
+DDP_E2E_JWT_SECRET=<与后端一致的 HS256 密钥> \
+npm run e2e
+```
+
+## RBAC 多角色用例（V51-013）
+
+`e2e/rbac.spec.ts` 覆盖蓝图 `15_RBAC多角色浏览器E2E.md` §3 的场景：
+登录后列表范围、改 URL 里的 `project_id`、直接访问未授权资源、跨项目资源 ID
+猜测、只读/编辑角色不能管理与删除、复核职责分离、会话过期后敏感操作失败。
+
+**每个用例都同时断言 UI 行为与服务端拒绝**：先用浏览器走真实页面路径，再用
+页面同源 `request` 直连 API 断言 403/404，并对"授权身份可读 / 越权身份被拒"
+做成对断言——只断言后者时，404 也可能因为资源不存在而出现，证明不了隔离。
+
+数据由**同一套种子** `seed_e2e.py` 提供（`_seed_rbac_identity` /
+`_seed_task_b` / `_seed_annotation_schema` / `_seed_dataset`），不另建种子体系：
+
+| 项目 | 成员（仓库既有 `ProjectRole`） | 资源 |
+| --- | --- | --- |
+| A `11111111-…` | `88888888-…` owner、`99999999-…` owner、`12121212-…` editor、`13131313-…` viewer | 采集任务、标注 Schema、数据集 + 版本 |
+| B `aaaaaaaa-…` | 仅 `14141414-…` owner | 采集任务、标注 Schema、数据集 + 版本 |
+
+A 的任何成员都不是 B 的成员，因此"拿 A 的身份访问 B"必须被服务端拒绝。
+角色只用仓库既有的 viewer / editor / owner，**不新增角色**（映射关系以
+`ROLE_PERMISSIONS` 为准）。
+
+会话过期用例需要与后端共用同一组 HS256 参数：`run-local-stack.sh` 以
+`DDP_E2E_JWT_SECRET` / `DDP_E2E_JWT_ISSUER` / `DDP_E2E_JWT_AUDIENCE`
+注入 Playwright，并把同一组值传给临时后端。默认值是**本地栈占位符**
+（后端 local 环境默认值），不是真实凭据；外接已有环境时需显式提供。
 
 ## 安全边界
 
