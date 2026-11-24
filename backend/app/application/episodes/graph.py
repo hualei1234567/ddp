@@ -29,6 +29,7 @@ from app.application.episodes.provenance import (
     RawAssetOrigin,
     SourceProvenanceResolver,
 )
+from app.application.episodes.session_provenance import SessionProvenanceResolver
 from app.domain.episodes.enums import LineageDirection, LineageNodeType
 from app.domain.episodes.errors import DomainValidationError
 from app.domain.episodes.lineage import LineageEdge
@@ -83,9 +84,13 @@ class LineageGraphService:
         self,
         lineage: LineageRepository,
         provenance: SourceProvenanceResolver,
+        sessions: SessionProvenanceResolver | None = None,
     ) -> None:
         self._lineage = lineage
         self._provenance = provenance
+        # 上传会话链投影；None 表示调用方没有装配（既有单测/装配保持可用），
+        # 此时只是不展开 UPLOADED_BY 投影边，不改变其他节点的行为。
+        self._sessions = sessions
 
     def query(
         self,
@@ -237,7 +242,7 @@ class LineageGraphService:
         direction: LineageDirection,
         limit: int,
     ) -> list[LineageEdge]:
-        """复用数据源链只读投影；投影本身已按层批量查询。"""
+        """复用数据源链 / 上传会话链只读投影；两者都已按层批量查询。"""
         source_ids = [
             node_id for node_type, node_id in frontier if node_type is LineageNodeType.DATA_SOURCE
         ]
@@ -248,6 +253,11 @@ class LineageGraphService:
         ]
         asset_ids = [
             node_id for node_type, node_id in frontier if node_type is LineageNodeType.RAW_ASSET
+        ]
+        session_ids = [
+            node_id
+            for node_type, node_id in frontier
+            if node_type is LineageNodeType.UPLOAD_SESSION
         ]
         # 投影查询的 limit 与本次剩余边预算一致，避免在硬上限之外再静默截断；
         # 真正超出时由 ``_incident_edges`` 的统一排序与 ``truncated`` 表达。
@@ -266,6 +276,10 @@ class LineageGraphService:
                         scope, import_ids=import_ids, limit=bounded
                     )
                 )
+            if asset_ids and self._sessions is not None:
+                edges.extend(
+                    self._sessions.asset_to_session_edges(scope, asset_ids=asset_ids, limit=bounded)
+                )
         if direction in (LineageDirection.IN, LineageDirection.BOTH):
             if asset_ids:
                 edges.extend(
@@ -277,6 +291,12 @@ class LineageGraphService:
                 edges.extend(
                     self._provenance.source_to_import_edges(
                         scope, import_ids=import_ids, limit=bounded
+                    )
+                )
+            if session_ids and self._sessions is not None:
+                edges.extend(
+                    self._sessions.asset_to_session_edges(
+                        scope, session_ids=session_ids, limit=bounded
                     )
                 )
         return edges

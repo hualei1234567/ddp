@@ -29,6 +29,7 @@ from app.api.v1.lineage_schemas import (
 )
 from app.application.episodes.graph import MAX_GRAPH_CURSOR_LENGTH, MAX_GRAPH_DEPTH, MAX_GRAPH_LIMIT
 from app.domain.episodes.enums import LineageDirection, LineageNodeType
+from app.domain.episodes.errors import ResourceNotFoundError
 from app.domain.identity.models import ProjectScope
 
 router = APIRouter(tags=["lineage"])
@@ -135,8 +136,8 @@ def get_lineage_graph(
 
     - ``direction``：``OUT`` 下游 / ``IN`` 上游 / ``BOTH`` 两侧；
     - ``depth`` 硬上限 3，节点与边另有服务端硬上限，触顶时 ``truncated=true``；
-    - ``DATA_SOURCE`` / ``DATA_SOURCE_IMPORT`` 是只读投影节点，先用权威仓储
-      确认归属；跨项目一律 404，不泄露存在性；
+    - ``DATA_SOURCE`` / ``DATA_SOURCE_IMPORT`` / ``UPLOAD_SESSION`` 是只读投影
+      节点，先用权威仓储确认归属；跨项目一律 404，不泄露存在性；
     - 其他节点未登记时返回空图（``root_found=false``）而不是 404——节点尚未
       进入血缘图是正常中间态，用状态码差异反而会变成存在性探针。
     """
@@ -146,6 +147,12 @@ def get_lineage_graph(
         root_verified = True
     elif node_type is LineageNodeType.DATA_SOURCE_IMPORT:
         data_sources.get_import(scope, node_id)
+        root_verified = True
+    elif node_type is LineageNodeType.UPLOAD_SESSION:
+        # 上传会话同样是只读投影节点（事实在 ``upload_sessions`` +
+        # ``raw_asset_links``），必须先确认归属，否则跨项目查询会变成探针。
+        if use_cases.sessions is None or not use_cases.sessions.session_exists(scope, node_id):
+            raise ResourceNotFoundError("上传会话", node_id)
         root_verified = True
     page = use_cases.lineage_graph.query(
         scope,
