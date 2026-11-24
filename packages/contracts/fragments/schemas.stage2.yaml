@@ -720,3 +720,64 @@ MaterializedEpisode:
       minItems: 1
       uniqueItems: true
       items: { type: string, format: uuid }
+
+FrozenDatasetReference:
+  type: object
+  description: |
+    一个「引用了该对象且曾经冻结」的数据集版本（V51-017）。`frozen` 恒为
+    `true`——后端只返回冻结过的版本，显式给出是为了让响应自解释，客户端不必
+    从 `status` 反推"冻结过没有"。
+  required: [dataset_version_id, dataset_id, dataset_version, dataset_code, status, frozen, frozen_at, episode_count]
+  additionalProperties: false
+  properties:
+    dataset_version_id: {type: string, format: uuid}
+    dataset_id: {type: string, format: uuid}
+    dataset_version: {type: integer, minimum: 1}
+    dataset_code: {type: [string, "null"]}
+    status:
+      type: string
+      enum: [FROZEN, SUPERSEDED, ARCHIVED]
+      description: |
+        当前生命周期状态。`SUPERSEDED` / `ARCHIVED` 同样是**冻结过**的版本，
+        其引用仍受保护。
+    frozen: {type: boolean, enum: [true]}
+    frozen_at: {type: string, format: date-time}
+    episode_count:
+      type: integer
+      minimum: 0
+      description: 该版本中经由目标对象引用到的 Episode 数（去重）。
+
+ReferenceImpact:
+  type: object
+  description: |
+    销毁前的引用影响预览（只读）。`deletion_blocked` 是服务端派生结论，
+    客户端不必自己按 `dataset_version_count > 0` 推断——那会把业务规则复制到
+    前端。`derived=true` 表示结论是沿派生关系推断的（完整血缘请查
+    `/raw-assets/{id}/lineage`）。
+  required: [target_kind, target_id, protected, dataset_version_count, episode_count, references, deletion_blocked, blocked_reason, allowed_alternatives, derived]
+  additionalProperties: false
+  properties:
+    target_kind:
+      type: string
+      enum: [RAW_ASSET, PROCESSING_ARTIFACT]
+    target_id: {type: string, format: uuid}
+    protected: {type: boolean}
+    dataset_version_count: {type: integer, minimum: 0}
+    episode_count: {type: integer, minimum: 0}
+    references:
+      type: array
+      items: {$ref: "#/FrozenDatasetReference"}
+    deletion_blocked:
+      type: boolean
+      description: 是否禁止销毁内容；恒等于 `protected`（无引用才允许销毁）。
+    blocked_reason:
+      type: [string, "null"]
+      enum: [raw_asset_referenced_by_frozen_dataset, null]
+      description: 稳定的阻断原因码；未阻断时为 `null`。
+    allowed_alternatives:
+      type: array
+      description: 蓝图允许的替代路径（当前恒为归档）。
+      items: {type: string, enum: [archive]}
+    derived:
+      type: boolean
+      description: 结论是否沿派生关系推断（而非直接引用边）。

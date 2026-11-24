@@ -27,6 +27,7 @@ from app.application.datasets.versions import DatasetVersionUseCases
 from app.application.episodes.lineage import LineageService
 from app.application.episodes.provenance import SourceProvenanceResolver
 from app.application.episodes.session_provenance import SessionProvenanceResolver
+from app.application.retention.use_cases import ReferenceImpactUseCases
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
@@ -49,6 +50,7 @@ from app.infrastructure.repositories.datasource_provenance import (
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.quality import SqlQualityRunRepository
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
+from app.infrastructure.repositories.retention import SqlReferenceImpactRepository
 from app.infrastructure.repositories.session_provenance import (
     SqlSessionProvenanceRepository,
 )
@@ -121,6 +123,9 @@ def get_dataset_use_cases(
             storage=storage,
             lineage=lineage,
             quality_gate=quality_gate,
+            # V51-017：冻结侧并发协议——锁本版本引用到的资产行，并拒绝
+            # 冻结引用了已丢弃内容的资产。与 RawAsset 销毁路径共享行锁。
+            retention=ReferenceImpactUseCases(SqlReferenceImpactRepository(session)),
         ),
         lineage=LineageService(
             SqlLineageRepository(session),

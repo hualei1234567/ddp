@@ -236,6 +236,9 @@ _INGESTION_STATUS_BY_CODE = {
     "object_storage_unavailable": 503,
     "object_missing": 404,
     "asset_not_usable": 422,
+    # V51-017：被冻结数据集版本引用时禁止销毁内容。请求本身合法，
+    # 拒绝原因是资源状态冲突（与 version_conflict 同一语义族），故 409。
+    "raw_asset_referenced_by_frozen_dataset": 409,
     "job_not_retryable": 409,
     "job_timeout": 409,
     "idempotency_key_reused": 409,
@@ -262,6 +265,10 @@ _INGESTION_MESSAGES = {
     "object_storage_unavailable": "对象存储暂不可用，请稍后重试",
     "object_missing": "对象存储中的内容不存在",
     "asset_not_usable": "原始资产当前状态不可用于该操作",
+    "raw_asset_referenced_by_frozen_dataset": (
+        "原始资产被已冻结的数据集版本引用，销毁内容会使这些版本不可复现；"
+        "请改用归档（ARCHIVED）路径"
+    ),
     "job_not_retryable": "接入任务已达到最大重试次数，不能重试",
     "job_timeout": "接入任务尚未超过超时阈值",
     "idempotency_key_reused": "同一幂等键对应了不同请求体",

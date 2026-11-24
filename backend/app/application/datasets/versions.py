@@ -30,6 +30,7 @@ from app.application.datasets.ports import (
 from app.application.datasets.quality_gate import EpisodeQualityGate
 from app.application.datasets.version_actions import DatasetVersionActionsMixin
 from app.application.datasets.version_common import _utcnow, _uuid
+from app.application.retention.use_cases import ReferenceImpactUseCases
 from app.domain.datasets.canonical import sha256_text
 from app.domain.datasets.enums import (
     DatasetStatus,
@@ -72,6 +73,7 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         storage: ExportObjectStorage,
         lineage: DatasetVersionLineageRecorder | None = None,
         quality_gate: EpisodeQualityGate | None = None,
+        retention: ReferenceImpactUseCases | None = None,
     ) -> None:
         self._datasets = datasets
         self._versions = versions
@@ -92,6 +94,10 @@ class DatasetVersionUseCases(DatasetVersionActionsMixin):
         self._lineage = lineage
         # Episode 统一质量门禁读取器；``min_quality_score`` 启用时才真正查询。
         self._quality_gate = quality_gate
+        # V51-017：冻结侧的并发协议（锁本版本引用到的资产行 + 拒绝引用
+        # 已丢弃内容）。允许为 None 以保持既有纯策略单测构造签名兼容；
+        # 生产装配一定注入，见 ``api/v1/dataset_dependencies.py``。
+        self._retention = retention
 
     # ---- 读取 ----
     def get_dataset(self, scope: ProjectScope, dataset_id: UUID) -> Dataset:
