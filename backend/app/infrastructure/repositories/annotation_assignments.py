@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID
@@ -9,7 +10,7 @@ from uuid import UUID
 from sqlalchemy import case, exists, func, select, update
 from sqlalchemy.orm import Session
 
-from app.application.annotation.ports import WorkloadAggregate
+from app.application.annotation.ports import OpenPlannedTotals, WorkloadAggregate
 from app.domain.annotation.assignment import AnnotationAssignment
 from app.domain.annotation.errors import DomainValidationError
 from app.domain.identity.models import ProjectScope
@@ -287,6 +288,39 @@ class SqlAnnotationAssignmentRepository:
         if exclude_assignment_id is not None:
             statement = statement.where(AnnotationAssignmentModel.id != exclude_assignment_id)
         return int(self._session.scalar(statement) or 0)
+
+    def sum_open_planned_by_assignee(
+        self,
+        scope: ProjectScope,
+        *,
+        assignee_ids: tuple[UUID, ...],
+        exclude_assignment_id: UUID | None = None,
+    ) -> Mapping[UUID, OpenPlannedTotals]:
+        """一条 ``GROUP BY assignee_id`` 聚合，替代按人循环的 N+1。"""
+        if not assignee_ids:
+            return {}
+        statement = (
+            select(
+                AnnotationAssignmentModel.assignee_id,
+                func.coalesce(func.sum(AnnotationAssignmentModel.planned_item_count), 0),
+                func.coalesce(func.sum(AnnotationAssignmentModel.planned_minutes), 0),
+            )
+            .where(
+                AnnotationAssignmentModel.project_id == scope.project_id,
+                AnnotationAssignmentModel.assignee_id.in_(set(assignee_ids)),
+                AnnotationAssignmentModel.status.in_(_OPEN_STATUSES),
+            )
+            .group_by(AnnotationAssignmentModel.assignee_id)
+        )
+        if exclude_assignment_id is not None:
+            statement = statement.where(AnnotationAssignmentModel.id != exclude_assignment_id)
+        return {
+            row[0]: OpenPlannedTotals(
+                planned_item_count=int(row[1] or 0),
+                planned_minutes=int(row[2] or 0),
+            )
+            for row in self._session.execute(statement)
+        }
 
     def add_event(
         self,

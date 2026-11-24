@@ -108,6 +108,21 @@ class WorkloadAggregate:
     total_minutes: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class OpenPlannedTotals:
+    """某人员"进行中"分配的计划项数与计划工时。
+
+    与 :meth:`AnnotationAssignmentRepository.sum_open_planned_items` /
+    ``sum_open_planned_minutes`` 同一口径，只是合并成一次批量查询后的载体。
+    """
+
+    planned_item_count: int = 0
+    planned_minutes: int = 0
+
+
+ZERO_OPEN_PLANNED = OpenPlannedTotals()
+
+
 class AnnotationSchemaRepository(Protocol):
     def add(self, scope: ProjectScope, schema: AnnotationSchema) -> AnnotationSchema: ...
 
@@ -364,6 +379,24 @@ class AnnotationAssignmentRepository(Protocol):
         assignee_id: UUID,
         exclude_assignment_id: UUID | None = None,
     ) -> int: ...
+
+    def sum_open_planned_by_assignee(
+        self,
+        scope: ProjectScope,
+        *,
+        assignee_ids: tuple[UUID, ...],
+        exclude_assignment_id: UUID | None = None,
+    ) -> Mapping[UUID, OpenPlannedTotals]:
+        """批量版：一次聚合返回每个人员的进行中计划项数与计划工时。
+
+        分配前预览必须一次算出多人负载（N+1 会让"选中即查"变成十几条
+        查询）。未出现在结果里的人员表示当前没有任何进行中分配；返回
+        ``0`` 与"没有记录"在这里语义相同（都是"没有占用量"），因此调用方
+        用 ``.get(assignee_id, ZERO)`` 取值即可，不需要额外区分。口径与
+        :meth:`sum_open_planned_items` / :meth:`sum_open_planned_minutes`
+        完全一致（同 ``_OPEN_STATUSES`` 集合、同项目隔离），不另写一套规则。
+        """
+        ...
 
     def add_event(
         self,
