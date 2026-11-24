@@ -284,6 +284,78 @@ AnnotationAssignmentActionRequest:
     submitted_item_count: {type: [integer, "null"], minimum: 0}
     approved_item_count: {type: [integer, "null"], minimum: 0}
 
+AnnotationAssignmentCapacityPreviewRequest:
+  type: object
+  additionalProperties: false
+  required: [assignee_ids]
+  properties:
+    assignee_ids:
+      type: array
+      minItems: 1
+      maxItems: 50
+      items: {type: string, format: uuid}
+      description: 待预览的人员；重复项按首次出现去重，返回顺序与首次出现一致。
+    planned_item_count:
+      type: integer
+      minimum: 0
+      default: 0
+      description: 本次拟分配的计划项数；0 表示只看现状。
+    planned_minutes:
+      type: integer
+      minimum: 0
+      default: 0
+      description: 本次拟分配的计划工时（分钟）；0 表示只看现状。
+
+AnnotationAssignmentCapacityPreview:
+  type: object
+  additionalProperties: false
+  required:
+    [assignee_id, open_item_count, open_planned_minutes, planned_item_count,
+     planned_minutes, projected_item_count, projected_planned_minutes,
+     max_open_items, max_planned_minutes, item_capacity_ratio,
+     minutes_capacity_ratio, will_exceed, exceeds_open_items,
+     exceeds_planned_minutes, status]
+  properties:
+    assignee_id: {type: string, format: uuid}
+    open_item_count:
+      type: integer
+      minimum: 0
+      description: 当前进行中分配（ASSIGNED/CLAIMED/IN_PROGRESS/SUBMITTED）的计划项数之和。
+    open_planned_minutes:
+      type: integer
+      minimum: 0
+      description: 当前进行中分配的计划工时之和（分钟）。
+    planned_item_count: {type: integer, minimum: 0, description: 本次拟分配项数（回显）。}
+    planned_minutes: {type: integer, minimum: 0, description: 本次拟分配工时（回显）。}
+    projected_item_count:
+      type: integer
+      minimum: 0
+      description: "`open_item_count + planned_item_count`。"
+    projected_planned_minutes:
+      type: integer
+      minimum: 0
+      description: "`open_planned_minutes + planned_minutes`。"
+    max_open_items:
+      type: [integer, "null"]
+      minimum: 0
+      description: 部署配置的进行中项数上限；`null` 表示未配置，不是 0。
+    max_planned_minutes:
+      type: [integer, "null"]
+      minimum: 0
+      description: 部署配置的进行中计划工时上限；`null` 表示未配置，不是 0。
+    item_capacity_ratio:
+      type: [number, "null"]
+      description: "`projected_item_count / max_open_items`；上限未配置或为 0 时为 `null`。"
+    minutes_capacity_ratio:
+      type: [number, "null"]
+      description: "`projected_planned_minutes / max_planned_minutes`；上限未配置或为 0 时为 `null`。"
+    will_exceed:
+      type: boolean
+      description: 本次分配后是否将突破任一已配置上限；与提交时 409 的判定同源。
+    exceeds_open_items: {type: boolean, description: 是否将突破项数上限。}
+    exceeds_planned_minutes: {type: boolean, description: 是否将突破工时上限。}
+    status: {type: string, enum: [NORMAL, AT_CAPACITY, OVER_CAPACITY]}
+
 AnnotationSubmissionCreate:
   type: object
   required: [assignment_id, records]

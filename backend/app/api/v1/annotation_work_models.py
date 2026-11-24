@@ -22,7 +22,7 @@ from app.domain.annotation.state_machines import (
     allowed_task_actions,
 )
 from app.domain.annotation.task import AnnotationTask, is_overdue
-from app.domain.annotation.workload import WorkloadSummary
+from app.domain.annotation.workload import AssignmentCapacityPreview, WorkloadSummary
 
 
 class AnnotationTaskCreate(BaseModel):
@@ -376,6 +376,68 @@ class AnnotationWorkloadOut(BaseModel):
             status=_value(workload.status),
             missing_semantics=_value(workload.missing_semantics),
             source_version=workload.source_version,
+        )
+
+
+class AnnotationAssignmentCapacityPreviewRequest(BaseModel):
+    """分配前实时负载预览的请求体（只读，不落库）。
+
+    与创建分配共享同一组计划字段，但**允许一次问多人**：分配抽屉里选中
+    被分配人就要立刻看到负载，逐人请求会变成 N+1。`planned_item_count` /
+    `planned_minutes` 是"本次要派多少"，缺省 0 表示只看现状。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    assignee_ids: list[UUID] = Field(min_length=1, max_length=50)
+    planned_item_count: int = Field(default=0, ge=0)
+    planned_minutes: int = Field(default=0, ge=0)
+
+
+class AnnotationAssignmentCapacityPreviewOut(BaseModel):
+    """单个人员的容量预览。
+
+    `capacity_*` 为 `null` 表示部署未配置该上限，此时对应比率为 `null`、
+    `will_exceed` 恒为 false —— "没配上限"与"配了 0"是两件事，不能混同。
+    """
+
+    assignee_id: UUID
+    open_item_count: int
+    open_planned_minutes: int
+    planned_item_count: int
+    planned_minutes: int
+    projected_item_count: int
+    projected_planned_minutes: int
+    max_open_items: int | None
+    max_planned_minutes: int | None
+    item_capacity_ratio: float | None
+    minutes_capacity_ratio: float | None
+    will_exceed: bool
+    exceeds_open_items: bool
+    exceeds_planned_minutes: bool
+    status: str
+
+    @classmethod
+    def from_domain(
+        cls,
+        preview: AssignmentCapacityPreview,
+    ) -> AnnotationAssignmentCapacityPreviewOut:
+        return cls(
+            assignee_id=preview.assignee_id,
+            open_item_count=preview.open_item_count,
+            open_planned_minutes=preview.open_planned_minutes,
+            planned_item_count=preview.planned_item_count,
+            planned_minutes=preview.planned_minutes,
+            projected_item_count=preview.projected_item_count,
+            projected_planned_minutes=preview.projected_planned_minutes,
+            max_open_items=preview.capacity.max_open_items,
+            max_planned_minutes=preview.capacity.max_planned_minutes,
+            item_capacity_ratio=preview.item_capacity_ratio,
+            minutes_capacity_ratio=preview.minutes_capacity_ratio,
+            will_exceed=preview.will_exceed,
+            exceeds_open_items=preview.exceeds_open_items,
+            exceeds_planned_minutes=preview.exceeds_planned_minutes,
+            status=_value(preview.status),
         )
 
 

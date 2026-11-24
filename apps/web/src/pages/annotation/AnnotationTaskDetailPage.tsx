@@ -393,6 +393,7 @@ function TaskDetailContent({
       />
       <AssignmentCreateDrawer
         open={createAssignmentOpen}
+        projectId={projectId}
         batches={batchesForAssignment}
         onClose={() => setCreateAssignmentOpen(false)}
         onSubmit={handleCreateAssignment}

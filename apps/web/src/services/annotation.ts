@@ -55,6 +55,11 @@ export type {
 } from "./annotationTaskApi";
 
 export type {
+  AssignmentCapacityPreview,
+  AssignmentCapacityPreviewRequest,
+} from "../types/annotationCapacityPreview";
+
+export type {
   QualitySampleActionOptions,
   QualitySampleCreateInput,
   QualitySamplePlanCandidate,
