@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from uuid import UUID, uuid4
@@ -31,6 +31,7 @@ from app.domain.ingestion.content_validation import (
 )
 from app.domain.ingestion.enums import RawAssetStatus
 from app.domain.ingestion.errors import (
+    ConflictError,
     DomainValidationError,
     ObjectNotFoundError,
     ResourceNotFoundError,
@@ -46,6 +47,8 @@ class ValidationOutcome(StrEnum):
     VALID = "VALID"
     QUARANTINED = "QUARANTINED"
     SKIPPED = "SKIPPED"
+    #: 内容与已存在的活跃资产完全相同：本资产被墓碑化并指向已有资产。
+    DUPLICATE = "DUPLICATE"
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +59,16 @@ class ValidationResult:
     to_status: str
     quarantine_codes: tuple[str, ...] = ()
     version: int | None = None
+    #: ``DUPLICATE`` 时指向保留下来的活跃资产。
+    duplicate_of_asset_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _AppliedDecision:
+    """``_apply_decision`` 的返回：落库后的资产 + 可选的「已存在同内容资产」指针。"""
+
+    asset: RawAsset
+    duplicate_of_asset_id: UUID | None = None
 
 
 class RawAssetValidationService:
@@ -125,7 +138,8 @@ class RawAssetValidationService:
                 actual=digest,
             )
 
-        saved = self._apply_decision(scope, asset, decision, now=occurred_at)
+        applied = self._apply_decision(scope, asset, decision, now=occurred_at)
+        saved = applied.asset
         self._record(
             scope,
             saved,
@@ -135,6 +149,16 @@ class RawAssetValidationService:
             request_id=request_id,
             now=occurred_at,
         )
+        if applied.duplicate_of_asset_id is not None:
+            return ValidationResult(
+                asset_id=saved.asset_id,
+                outcome=ValidationOutcome.DUPLICATE,
+                from_status=from_status,
+                to_status=saved.status.value,
+                quarantine_codes=saved.quarantine_codes,
+                version=saved.version,
+                duplicate_of_asset_id=applied.duplicate_of_asset_id,
+            )
         return ValidationResult(
             asset_id=saved.asset_id,
             outcome=(ValidationOutcome.VALID if decision.valid else ValidationOutcome.QUARANTINED),
@@ -151,7 +175,23 @@ class RawAssetValidationService:
         decision: ValidationDecision,
         *,
         now: datetime,
-    ) -> RawAsset:
+    ) -> _AppliedDecision:
+        """落库校验结论；内容与已有活跃资产冲突时降级为重复而非失败。
+
+        为什么需要这条降级
+        ------------------
+        ``uq_raw_assets_project_content_active`` 保证「同项目相同内容的活跃资产
+        只有一个」。但内容去重在上传完成时按 ``(sha256, size_bytes)`` 查一次，
+        两个请求**并发**完成上传时可以双双查不到对方，于是各自留下一个
+        VALIDATING 资产；等到校验转 VALID 时第二个必然撞索引。
+
+        这曾表现为 outbox 事件永久 FAILED（``UniqueViolation``），把「这次上传
+        的内容库里已经有一份了」误报成「校验失败」。正确处理是把它识别为重复：
+        保留先到的那份活跃资产，本次资产墓碑化并指向它，下载继续走已有资产。
+
+        冲突判定放在这里而不是仓储层：仓储只负责把 IntegrityError 翻成
+        ConflictError，**语义**（这是重复、该指向谁）属于用例。
+        """
         if decision.valid:
             updated = asset.mark_valid(now=now)
         else:
@@ -160,7 +200,33 @@ class RawAssetValidationService:
                 reason=decision.reason or "内容校验未通过",
                 now=now,
             )
-        return self._assets.save(scope, updated, expected_version=asset.version)
+        try:
+            return _AppliedDecision(
+                asset=self._assets.save(scope, updated, expected_version=asset.version),
+                duplicate_of_asset_id=None,
+            )
+        except ConflictError:
+            # 已有活跃资产占着这份内容：把本次资产墓碑化并指过去。
+            existing = self._assets.find_active_by_content(
+                scope, sha256=asset.sha256, size_bytes=asset.size_bytes
+            )
+            if existing is None or existing.asset_id == asset.asset_id:
+                # 查不到对端（例如并发方随后又变更状态）：仍然失败，
+                # 不静默吞掉——"内容冲突却说不出是谁"必须暴露给人看。
+                raise
+            tombstoned = self._assets.save(
+                scope,
+                replace(
+                    asset.apply_action(
+                        "tombstone",
+                        {"reason": "内容与已有资产重复，已墓碑化并指向该资产"},
+                        now=now,
+                    ),
+                    duplicate_of_asset_id=existing.asset_id,
+                ),
+                expected_version=asset.version,
+            )
+            return _AppliedDecision(asset=tombstoned, duplicate_of_asset_id=existing.asset_id)
 
     def _record(
         self,

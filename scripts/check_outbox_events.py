@@ -400,12 +400,57 @@ def main() -> int:
             print(f"  - {line}", file=sys.stderr)
         return 1
 
+    # 4) 白名单语义自洽：源码里凡是 dispatch=True 的事件都必须有消费者，
+    #    这一条已由第 3 步覆盖。这里再做一次**运行时数据**校验（可选）：
+    #    设置 ``DDP_OUTBOX_DB_CHECK=1`` 时连库检查是否仍有「留痕类停在 PENDING」
+    #    的历史脏数据——那是 V4.1 之前 enqueue 无条件写 PENDING 的遗留，
+    #    会让队列健康视图把「没有消费者」误报成「积压」。
+    problems.extend(_runtime_data_problems())
+
     print(
         "\noutbox 事件自检通过：投递类都有消费者、测试与文档登记；"
         "源码中无 f-string 事件类型。\n"
         "（留痕类不逐条校验是否写进归类文档——文档只登记投递类与共用事件语义。）"
     )
     return 0
+
+
+def _runtime_data_problems() -> list[str]:
+    """可选的运行时数据校验：留痕类不得停留在 PENDING。
+
+    为什么放在这里而不是迁移里：迁移只修一次历史；这条校验保证**将来**任何
+    路径若把留痕类写成 PENDING，都能被 CI 或运维发现。默认关闭（需要真实
+    数据库连接），通过环境变量 ``DDP_OUTBOX_DB_CHECK=1`` 开启。
+    """
+    import os
+
+    if os.environ.get("DDP_OUTBOX_DB_CHECK") != "1":
+        return []
+    database_url = os.environ.get("DDP_DATABASE_URL")
+    if not database_url:
+        return []
+
+    try:
+        import sqlalchemy as sa
+
+        engine = sa.create_engine(database_url)
+        with engine.connect() as connection:
+            rows = connection.execute(
+                sa.text(
+                    "SELECT event_type, COUNT(*) FROM outbox_events "
+                    "WHERE dispatch = false AND status = 'PENDING' "
+                    "GROUP BY event_type ORDER BY 2 DESC"
+                )
+            ).fetchall()
+        engine.dispose()
+    except Exception as exc:  # noqa: BLE001 - 校验脚本：连不上就明确报"未验证"
+        return [f"运行时 outbox 数据校验无法执行（{type(exc).__name__}: {exc}）"]
+
+    return [
+        f"留痕类 {event_type} 有 {count} 条停在 PENDING：留痕类不应等待投递，"
+        "请执行 alembic upgrade head（迁移 0072 会回填为 RECORDED）"
+        for event_type, count in rows
+    ]
 
 
 if __name__ == "__main__":
