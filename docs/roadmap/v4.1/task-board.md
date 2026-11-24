@@ -78,14 +78,18 @@ FR-021/022；FR-023 已 VERIFIED。
 | FR-034/035 | Loader 实测 | **已实测：BLOCKED 维持**（见 S1）；解除路径 = 修复 9 类结构缺口后重测 |
 | FR-036/037 | 训练真实连接器/回调 | BLOCKED（外部 API 未提供） |
 
-## S6 Staging / Pilot / Release —— 部分推进
+## S6 运维化与 P1 收口 —— 四项 P1 已闭环（2026-11-24）
 
 | FR | 内容 | 状态 |
 |---|---|---|
-| FR-042 | 运行监控 | 🔄 **PR #97**：新增只读投递队列健康快照端点（积压/重试/失败分布，不返回 payload），8 条测试；Prometheus /metrics 已有 |
+| FR-042 | 运行监控 | ✅ 已合并（PR #97）：只读投递队列健康快照端点（积压/重试/失败分布，不返回 payload），8 条测试 |
+| **FR-019** | 标注冲突恢复 | ✅ 已合并（PR #107）：**409 携带 expected_version/current_version 双版本**；前端冲突弹窗 + **复制草稿** + **逐项人工合并**（默认保留我的，点「采用服务端」才替换）+ **刷新不丢输入**（本地快照）。50 条测试（前端 46 + 后端 4） |
+| **FR-020** | 分配负载提示 | ✅ 已合并（PR #104）：新增只读预览端点 `POST /annotation-assignment-capacity-preview`（批量、单次 GROUP BY 无 N+1）；抽屉选中人即时展示当前/投影/上限/占比/超限。**提示不阻断**，最终由服务端 CapacityPolicy 裁决。39 条测试。契约 1.34.0 |
+| **FR-040** | 全链路 Lineage E2E | 🟡 **保持 PARTIAL（诚实）**：PR #108 完成真实栈 E2E + 修 3 个真缺陷（UPLOADED_BY 无生产者、limit 被突破、版本血缘丢 raw_asset_sources）。8 段中 **7 段 PASS**，Dataset→Session 段因真实库无数据 UNVERIFIABLE。升级需补采集链路数据或收窄验收口径 |
+| **FR-043** | 备份恢复演练 | ✅ 已合并（PR #103）：三处状态（PG/MinIO/**Spool 首次纳入**）+ **RPO/RTO 量化**（RTO 实测 10s）+ Runbook（含真实故障恢复步骤）。11 条结构性校验。**修复真 bug**：RPO 锚点原用不存在的 `audit_logs.updated_at`，导致校验恒通过 |
 | FR-038 | Staging | BLOCKED（未提供 staging 主机/网络/Secrets） |
 | FR-039 | 真实硬件 Pilot | BLOCKED（无采集硬件） |
-| FR-040/041/043/044/045 | 全链路 Lineage / P1 风险收敛 / 恢复演练 / 角色权限 E2E / 保留保护 | 未开工 |
+| FR-041/044/045 | P1 风险收敛 / 角色权限 E2E / 保留保护 | 未开工（P1 剩余项） |
 
 
 ---
