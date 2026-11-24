@@ -16,6 +16,7 @@ from app.application.ingestion import (
     UploadPolicy,
     UploadSessionUseCases,
 )
+from app.application.retention.use_cases import ReferenceImpactUseCases
 from app.core.config import Settings, get_settings
 from app.domain.ingestion.validation import DEFAULT_ALLOWED_CONTENT_TYPES
 from app.infrastructure.repositories.collection_audit import (
@@ -28,6 +29,7 @@ from app.infrastructure.repositories.raw_assets import (
     SqlRawAssetLinkRepository,
     SqlRawAssetRepository,
 )
+from app.infrastructure.repositories.retention import SqlReferenceImpactRepository
 from app.infrastructure.repositories.upload_sessions import (
     SqlUploadPartChecksumBindingRepository,
     SqlUploadPartRepository,
@@ -42,6 +44,9 @@ SettingsDep = Annotated[Settings, Depends(get_settings)]
 class UploadUseCases:
     uploads: UploadSessionUseCases
     assets: RawAssetUseCases
+    #: V51-017 只读引用影响预览。与 assets 共享同一个 session/事务边界，
+    #: 但它是独立用例对象：预览不写状态，不该走资产动作的幂等/审计路径。
+    references: ReferenceImpactUseCases
 
 
 @lru_cache(maxsize=2)
@@ -100,7 +105,11 @@ def get_upload_use_cases(
             outbox=SqlOutboxRepository(session),
             idempotency=SqlIdempotencyRepository(session),
             uow=session,
+            # V51-017：销毁内容前的事务级引用阻断（蓝图 §20.4 要求不能只靠
+            # 前端按钮）。装配在同一 session/事务里，锁与写共享事务边界。
+            retention=ReferenceImpactUseCases(SqlReferenceImpactRepository(session)),
         ),
+        references=ReferenceImpactUseCases(SqlReferenceImpactRepository(session)),
     )
 
 

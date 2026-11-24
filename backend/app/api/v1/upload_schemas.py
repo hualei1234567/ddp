@@ -18,6 +18,7 @@ from app.application.ingestion.ports import (
 )
 from app.domain.ingestion.models import RawAsset, UploadPart, UploadSession
 from app.domain.ingestion.validation import required_part_count
+from app.domain.retention.models import FrozenDatasetReference, ReferenceImpact
 
 _SHA256_PATTERN = r"^sha256:[0-9a-f]{64}$"
 _FORMAT_PATTERN = r"^(MCAP|ROSBAG2|HDF5|MP4|PARQUET|CSV|JSON|ZIP|UNKNOWN)$"
@@ -373,6 +374,83 @@ def _session_out(
         updated_at=session.updated_at,
         created_by=session.created_by,
     )
+
+
+class FrozenDatasetReferenceOut(BaseModel):
+    """一个「引用了该资产且曾经冻结」的数据集版本（V51-017）。
+
+    ``frozen`` 恒为 ``true``（后端只返回冻结过的版本），显式给出是为了让
+    响应自解释，客户端不必从 ``status`` 反推"冻结过没有"。
+    """
+
+    dataset_version_id: UUID
+    dataset_id: UUID
+    dataset_version: int
+    dataset_code: str | None
+    status: str
+    frozen: bool
+    frozen_at: datetime
+    episode_count: int
+
+    @classmethod
+    def from_domain(cls, item: FrozenDatasetReference) -> FrozenDatasetReferenceOut:
+        return cls(
+            dataset_version_id=item.dataset_version_id,
+            dataset_id=item.dataset_id,
+            dataset_version=item.dataset_version,
+            dataset_code=item.dataset_code,
+            status=item.status,
+            frozen=item.frozen,
+            frozen_at=item.frozen_at,
+            episode_count=item.episode_count,
+        )
+
+
+class ReferenceImpactOut(BaseModel):
+    """销毁前的引用影响预览（只读，不落库、不改状态）。
+
+    ``blocked`` 是服务端派生结论：该对象当前**是否会被引用保护阻断销毁**。
+    客户端不必自己按 ``dataset_version_count > 0`` 推断——那会把"有没有
+    销毁动作"的业务规则复制到前端。``deletion_blocked`` 为 ``true`` 时
+    ``blocked_reason`` 给出稳定原因码，可直接用于 UI 文案分派。
+    """
+
+    target_kind: str
+    target_id: UUID
+    protected: bool
+    dataset_version_count: int
+    episode_count: int
+    references: list[FrozenDatasetReferenceOut]
+    #: 是否禁止物理删除/内容销毁；恒等于 ``protected``（无引用才允许销毁）。
+    deletion_blocked: bool
+    #: 稳定的阻断原因码；未阻断时为 ``null``。
+    blocked_reason: str | None
+    #: 蓝图允许的替代路径（当前恒为归档）。
+    allowed_alternatives: list[str]
+    #: 结论是否**派生**而来（ProcessingArtifact 无直接引用边，只能沿
+    #: ``source_ref`` 反推）。客户端据此把结论标注为"由来源推断"。
+    derived: bool
+
+    @classmethod
+    def from_domain(
+        cls,
+        impact: ReferenceImpact,
+        *,
+        derived: bool = False,
+    ) -> ReferenceImpactOut:
+        blocked = impact.protected
+        return cls(
+            target_kind=impact.target_kind.value,
+            target_id=impact.target_id,
+            protected=blocked,
+            dataset_version_count=impact.dataset_version_count,
+            episode_count=impact.episode_count,
+            references=[FrozenDatasetReferenceOut.from_domain(item) for item in impact.references],
+            deletion_blocked=blocked,
+            blocked_reason=("raw_asset_referenced_by_frozen_dataset" if blocked else None),
+            allowed_alternatives=["archive"] if blocked else [],
+            derived=derived,
+        )
 
 
 def _value(value: object) -> str:

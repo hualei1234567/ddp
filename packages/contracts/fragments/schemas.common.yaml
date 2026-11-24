@@ -38,6 +38,7 @@ ErrorCode:
     - object_storage_unavailable
     - object_missing
     - asset_not_usable
+    - raw_asset_referenced_by_frozen_dataset
     - job_not_retryable
     - job_timeout
     - episode_overlap_conflict
