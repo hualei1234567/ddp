@@ -28,6 +28,7 @@ from app.application.collection.ports import (
 from app.application.ingestion.ports import RawAssetRepository
 from app.application.ingestion.raw_asset_validation import VALIDATION_EVENT_TYPE
 from app.application.ingestion.upload_audit import make_outbox_event
+from app.application.retention.use_cases import ReferenceImpactUseCases
 from app.domain.identity.models import ProjectScope
 from app.domain.ingestion.enums import PUBLIC_RAW_ASSET_ACTIONS, RawAssetStatus
 from app.domain.ingestion.errors import (
@@ -51,8 +52,14 @@ class RawAssetUseCases:
         outbox: OutboxRepository | None = None,
         idempotency: IdempotencyRepository | None = None,
         uow: UnitOfWork | None = None,
+        retention: ReferenceImpactUseCases | None = None,
     ) -> None:
         self._assets = assets
+        # V51-017：冻结引用保护。允许为 None 以保持既有纯读/纯动作单测的
+        # 构造签名兼容；生产装配一定注入（见 upload_dependencies）。
+        # 为 None 时**不阻断**，这是"未装配"而非"放过"——与
+        # DatasetVersionUseCases 的 lineage/quality_gate 可选依赖同一口径。
+        self._retention = retention
         self._audit = audit
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency) if idempotency is not None else None
@@ -144,6 +151,13 @@ class RawAssetUseCases:
         current = self.get_asset(scope, asset_id)
         if current.version != expected_version:
             raise VersionConflictError("原始资产")
+
+        # V51-017 核心红线：销毁内容前先锁资产行、持锁重算冻结引用，
+        # 有引用即拒绝。必须在写事务内（此处），不能挪到 API 层——否则
+        # 锁在调用返回时释放，"查完→别人冻结→继续删"的窗口重新打开。
+        # 非销毁动作（archive 等）在这里直接返回，不付锁与查询代价。
+        if self._retention is not None:
+            self._retention.assert_destroy_allowed(scope, asset_id, action=action)
 
         from_status = current.status.value
         updated = current.apply_action(action, body_in, now=now)

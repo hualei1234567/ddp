@@ -397,6 +397,14 @@ class DatasetVersionActionsMixin:
             raise LeakageCheckUnknownError("泄漏检查未知，按失败关闭")
         if current.train_count < 1 or current.validation_count < 1:
             raise InsufficientDataError("训练或验证划分为空")
+        # V51-017：冻结侧的并发协议。锁住本版本引用到的资产行，再校验其中
+        # 没有已丢弃内容（TOMBSTONED / REJECTED）。这与 RawAsset 销毁路径
+        # 争夺同一批行锁，因此"删除进行中时冻结"会阻塞到删除事务结束，
+        # 随后读到已销毁状态并失败；反之"冻结进行中时删除"同理。
+        # 必须在任何写（manifest 落盘/状态变更）之前，否则会出现"冻结已
+        # 提交但引用已失效"的中间态。
+        if self._retention is not None:
+            self._retention.assert_freeze_allowed(scope, version_id)
         manifest = self._verify_manifest(scope, current)
         manifest_key, manifest_sha256 = self._persist_manifest(manifest)
         previous = self._versions.latest_frozen(scope, dataset_id)

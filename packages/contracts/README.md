@@ -21,8 +21,10 @@
 | `1.6.0` | 在 `1.5.0` 基础上补齐设备域已实现字段（G-20：`frame_id`/`frame_convention`、`calibration_version`/Profile 快照） | 已发布 |
 | `1.7.0` | 在 `1.6.0` 基础上增量加入 G-01 端点：`/robots` 全套与 `/calibration-profiles` | 已发布 |
 | `1.8.0` | 在 `1.7.0` 基础上增量加入 N3–N9 已实现端点：采集素材四实体、标注质量检查与 AI 预标注建议、DatasetVersion 血缘；并补齐 `training-deliveries[].requirement_match`、`data-gaps[].items[].coverage_source` 与错误码 `training_delivery_requirement_unmet`；另收录质量检查「提交即自动执行」语义与 AI 建议采纳统计 `.../ai-suggestions/agreement` | 已发布（v0.2.0） |
-| `1.35.0` | 在 `1.34.0` 基础上增量加入 QC 证据定位（V51-010 / FR-025）：`QualityRunFinding.evidence_location` 与 `QualityEvidenceLocation` / `QualityEvidenceTimeRange`，配合迁移 0073 的四列 | 当前 |
-| `1.9.0` | 在 `1.8.0` 基础上增量补齐采集素材写路径（四类素材各 PATCH / `actions/{action}` / DELETE，共 12 个操作），状态机 `DRAFT → ACTIVE → ARCHIVED` 完整可达；解除 `1.8.0` 中「状态恒为 DRAFT」的限制 | 当前 |
+| `1.9.0` | 在 `1.8.0` 基础上增量补齐采集素材写路径（四类素材各 PATCH / `actions/{action}` / DELETE，共 12 个操作），状态机 `DRAFT → ACTIVE → ARCHIVED` 完整可达；解除 `1.8.0` 中「状态恒为 DRAFT」的限制 | 已发布 |
+| `1.10.0`–`1.34.0` | 各阶段增量（训练执行方式、Episode 检索参数、导入中心可观测性、处理运行、质量批量重跑、Edge Agent、血缘分页、负载提示等）；逐版说明见 `openapi.yaml` 的 `info.description` | 已发布 |
+| `1.35.0` | 在 `1.34.0` 基础上增量加入 QC 证据定位（V51-010 / FR-025）：`QualityRunFinding.evidence_location` 与 `QualityEvidenceLocation` / `QualityEvidenceTimeRange`，配合迁移 0073 的四列 | 已发布 |
+| `1.36.0` | 在 `1.35.0` 基础上**新增 Frozen Dataset 引用保护（V51-017 / FR-045）**：只读端点 `GET .../raw-assets/{asset_id}/reference-impact`、`ReferenceImpact` / `FrozenDatasetReference` schema，以及动作端点在被冻结版本引用时返回 `409 raw_asset_referenced_by_frozen_dataset`（`tombstone` / `reject-quarantined` 阻断，`archive` 放行）。纯增量：无路径/字段删除，无数据库迁移 | 当前 |
 | `ddp.device/1.0.0` | 阶段 1 设备域冻结目标 | 已批准 |
 | `ddp.stage2/1.0.0` | 阶段 2 契约冻结版本 | v1.0 FROZEN |
 | `ddp.stage3/1.0.0` | 阶段 3 标注契约冻结版本 | v1.0 FROZEN |

@@ -152,3 +152,21 @@ class JobTimeoutError(IngestionDomainError):
 
 class AssetNotUsableError(IngestionDomainError):
     code = "asset_not_usable"
+
+
+class RawAssetReferencedByFrozenDatasetError(IngestionDomainError):
+    """被冻结数据集版本引用，禁止销毁资产内容（V51-017）。
+
+    为什么放在 ingestion 域而不是新建的 ``retention`` 域：抛出点是
+    ``RawAssetUseCases.apply_action``，其 HTTP 语义应由 ingestion 域的异常
+    处理器统一裁决（``app/api/errors.py`` 的 ``_INGESTION_STATUS_BY_CODE``
+    与 ``with_details=True`` 的 details 透传）。放进新域会得到 422 兜底码
+    ``validation_failed``，把"状态冲突"误报成"字段校验失败"。
+
+    为什么 409 而不是 422：请求本身合法（资产存在、动作在状态机里可达），
+    拒绝原因是**当前资源状态冲突**——与 ``version_conflict`` /
+    ``state_transition_invalid`` 同一语义族。``retryable=false``：重试同样
+    会失败，客户端必须改用 ``archive`` 路径或先处理引用它的数据集版本。
+    """
+
+    code = "raw_asset_referenced_by_frozen_dataset"

@@ -328,6 +328,41 @@ rawAssetDetail:
       "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
       "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+rawAssetReferenceImpact:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AssetId"
+  get:
+    operationId: getRawAssetReferenceImpact
+    tags: [raw-assets]
+    summary: 销毁前的引用影响预览（只读，冻结数据集引用保护）
+    description: |
+      回答"如果我销毁这个 RawAsset 的内容，会毁掉哪些已冻结数据集版本的可复现性"：
+
+      引用链 `DatasetVersion(冻结) → DatasetItem → Episode → RawAsset`。返回
+      受影响的版本数、每个版本的编号/状态/冻结时间/Episode 数，以及服务端派生
+      结论 `deletion_blocked`。
+
+      **冻结判定看 `frozen_at` 而非 `status`**：被新版本取代（`SUPERSEDED`）
+      或归档（`ARCHIVED`）的冻结版本同样是可复现证据，必须继续计入影响。
+
+      **只读**：不落库、不改状态、不加锁。跨项目资产统一 404，不泄露存在性。
+
+      权限为项目读权限：知道"哪些数据集版本依赖这个文件"是排障与合规审阅的
+      正常需求。真正阻断销毁的校验在动作端点内部（事务级 + 行锁），不是本端点
+      的职责——本端点只负责"让人先看见"。
+    responses:
+      "200":
+        description: 引用影响预览
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/ReferenceImpact"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
 rawAssetActions:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"

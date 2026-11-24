@@ -22,6 +22,7 @@ from app.api.v1.upload_schemas import (
     CompleteUploadResponse,
     RawAssetActionRequest,
     RawAssetOut,
+    ReferenceImpactOut,
     UploadPartAckOut,
     UploadPartAckRequest,
     UploadPartListOut,
@@ -262,6 +263,33 @@ def get_raw_asset(
     use_cases: UploadUseCasesDep,
 ) -> RawAssetOut:
     return RawAssetOut.from_domain(use_cases.assets.get_asset(scope, asset_id))
+
+
+@router.get(
+    "/raw-assets/{asset_id}/reference-impact",
+    response_model=ReferenceImpactOut,
+)
+def get_raw_asset_reference_impact(
+    asset_id: UUID,
+    scope: ReadScope,
+    use_cases: UploadUseCasesDep,
+) -> ReferenceImpactOut:
+    """销毁前的引用影响预览（只读）。
+
+    回答"如果我删除/墓碑这个资产，会毁掉哪些已冻结数据集版本的可复现性"：
+
+    - 引用链 ``DatasetVersion(冻结) → DatasetItem → Episode → RawAsset``；
+    - 返回受影响的版本数、每个版本的编号/状态/冻结时间/Episode 数；
+    - ``deletion_blocked`` 是服务端派生结论，客户端不必自己推断。
+
+    **不落库、不改状态**。冻结判定看 ``frozen_at`` 而非 ``status``：被新版本
+    取代（``SUPERSEDED``）或归档（``ARCHIVED``）的冻结版本同样是可复现证据，
+    必须继续计入影响。
+
+    权限为项目读权限：知道"哪些数据集版本依赖这个文件"是排障与合规审阅的
+    正常需求，不构成敏感信息。跨项目资产统一 404，不泄露存在性。
+    """
+    return ReferenceImpactOut.from_domain(use_cases.references.preview_raw_asset(scope, asset_id))
 
 
 @router.post("/raw-assets/{asset_id}/actions/{action}", response_model=RawAssetOut)

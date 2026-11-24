@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.35.0
+  version: 1.36.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -211,6 +211,22 @@ info:
       `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
       本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
       `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
+    - `1.36.0` **Frozen Dataset 引用保护（V51-017 / FR-045）**：新增只读端点
+      `GET /api/v1/projects/{project_id}/raw-assets/{asset_id}/reference-impact`。
+      语义要点：
+      * **冻结判定看 `frozen_at` 而非 `status`**：被取代（`SUPERSEDED`）或归档
+        （`ARCHIVED`）的冻结版本同样是已冻结版本的可复现证据，必须继续计入影响。
+        按 `status = 'FROZEN'` 判定会让保护在这两个状态下静默消失。
+      * `deletion_blocked` / `blocked_reason` 是服务端派生结论，客户端不必按
+        `dataset_version_count > 0` 自行推断——那是把业务规则复制到前端。
+      * 本端点**只读**：不落库、不改状态、不加锁。真正的事务级阻断在
+        `POST .../raw-assets/{asset_id}/actions/{action}` 内部：`tombstone` /
+        `reject-quarantined`（内容销毁）在行锁内重算引用，有冻结引用则返回
+        `409 raw_asset_referenced_by_frozen_dataset` 并携带引用证据；
+        `archive`（内容保留）永不被阻断，是蓝图允许的合规退场路径。
+      * 新增 `reference-impact` 端点、`ReferenceImpact` / `FrozenDatasetReference`
+        schema 与错误码 `raw_asset_referenced_by_frozen_dataset`。全部为增量：
+        无路径/字段删除，无数据库迁移（所需的四个索引均已存在）。
     - `1.35.0` **QC 证据定位（V51-010 / FR-025）**：`QualityRunFinding` 新增
       可选字段 `evidence_location`，并新增 `QualityEvidenceLocation` /
       `QualityEvidenceTimeRange` 两个 schema。此前质量结论只能把定位信息塞进
@@ -386,7 +402,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.35.0
+  version: 1.36.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -683,6 +699,8 @@ paths:
     $ref: "./fragments/paths.stage2.yaml#/rawAssets"
   /api/v1/projects/{project_id}/raw-assets/{asset_id}:
     $ref: "./fragments/paths.stage2.yaml#/rawAssetDetail"
+  /api/v1/projects/{project_id}/raw-assets/{asset_id}/reference-impact:
+    $ref: "./fragments/paths.stage2.yaml#/rawAssetReferenceImpact"
   /api/v1/projects/{project_id}/raw-assets/{asset_id}/actions/{action}:
     $ref: "./fragments/paths.stage2.yaml#/rawAssetActions"
   /api/v1/raw-assets/{asset_id}/lineage:
@@ -1341,6 +1359,8 @@ components:
     RawAsset: {$ref: "./fragments/schemas.stage2.yaml#/RawAsset"}
     RawAssetActionRequest: {$ref: "./fragments/schemas.stage2.yaml#/RawAssetActionRequest"}
     RawAssetPage: {$ref: "./fragments/schemas.stage2.yaml#/RawAssetPage"}
+    FrozenDatasetReference: {$ref: "./fragments/schemas.stage2.yaml#/FrozenDatasetReference"}
+    ReferenceImpact: {$ref: "./fragments/schemas.stage2.yaml#/ReferenceImpact"}
     DownloadUrlResponse: {$ref: "./fragments/schemas.stage2.yaml#/DownloadUrlResponse"}
     LineageNodeType: {$ref: "./fragments/schemas.stage2.yaml#/LineageNodeType"}
     LineageRelation: {$ref: "./fragments/schemas.stage2.yaml#/LineageRelation"}

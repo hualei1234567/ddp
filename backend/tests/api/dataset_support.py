@@ -326,7 +326,11 @@ def seed_dataset_episodes(
                     batch_id=None,
                     upload_session_id=None,
                     original_filename=f"{prefix}-{index}.mcap",
-                    object_key=f"raw/{project_id}/{asset_id}/content.mcap",
+                    # Key 必须符合领域权威规范
+                    # ``raw/<project>/YYYY/MM/DD/<asset>/content.<ext>``：
+                    # 资产动作/下载等路径会用 validate_raw_object_key 复算，
+                    # 用简化 Key 会让"状态可迁移"与"Key 合法"两个结论互相矛盾。
+                    object_key=f"raw/{project_id}/2026/11/09/{asset_id}/content.mcap",
                     size_bytes=1024 + index,
                     content_type="application/x-mcap",
                     format="MCAP",
