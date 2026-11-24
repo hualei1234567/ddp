@@ -12,6 +12,7 @@ from app.application.collection.ports import AuditRepository, OutboxRepository
 from app.application.episodes.commands import AppendLineageEdgeCommand
 from app.application.episodes.ports import LineageRepository, UnitOfWork
 from app.application.episodes.provenance import RawAssetOrigin, SourceProvenanceResolver
+from app.application.episodes.session_provenance import SessionProvenanceResolver
 from app.domain.episodes.enums import LineageNodeType, LineageRelation
 from app.domain.episodes.errors import (
     DomainValidationError,
@@ -24,11 +25,19 @@ from app.domain.identity.models import ProjectScope
 MAX_DEPTH = 5
 MAX_LIMIT = 100
 
-# 只读投影节点类型：事实存在数据源表里，永远不在 lineage_node_refs 里登记。
-PROJECTED_NODE_TYPES = frozenset({LineageNodeType.DATA_SOURCE, LineageNodeType.DATA_SOURCE_IMPORT})
+# 只读投影节点类型：事实存在数据源表 / 上传会话表里，永远不在
+# ``lineage_node_refs`` 里登记。
+PROJECTED_NODE_TYPES = frozenset(
+    {
+        LineageNodeType.DATA_SOURCE,
+        LineageNodeType.DATA_SOURCE_IMPORT,
+        LineageNodeType.UPLOAD_SESSION,
+    }
+)
 
 # 可能通过投影边参与遍历的节点类型。RAW_ASSET 虽会登记，但它挂着
-# 「导入任务产出了我」这条投影边，所以"节点未登记"不能直接判定为无边。
+# 「导入任务产出了我」「上传会话登记了我」这两条投影边，所以"节点未登记"
+# 不能直接判定为无边。
 PROJECTION_ENDPOINT_TYPES = PROJECTED_NODE_TYPES | {LineageNodeType.RAW_ASSET}
 
 
@@ -48,13 +57,16 @@ class LineageService:
         outbox: OutboxRepository,
         uow: UnitOfWork,
         provenance: SourceProvenanceResolver,
+        sessions: SessionProvenanceResolver | None = None,
     ) -> None:
         self._lineage = lineage
         self._audit = audit
         self._outbox = outbox
         self._uow = uow
-        # 数据源链是读时投影，不写血缘表；见 application/episodes/provenance.py。
+        # 数据源链 / 上传会话链都是读时投影，不写血缘表；
+        # 见 application/episodes/provenance.py 与 session_provenance.py。
         self._provenance = provenance
+        self._sessions = sessions
 
     def register_node(
         self,
@@ -174,9 +186,11 @@ class LineageService:
         遍历同时走两类边，方向语义一致：
 
         - 持久化边：``data_lineage_edges``；
-        - 数据源链投影边（只读、不落库）：``DATA_SOURCE --PRODUCED-->
-          DATA_SOURCE_IMPORT --PRODUCED--> RAW_ASSET``，由
-          ``data_source_media_assets`` 的既有外键在遍历时展开。
+        - 投影边（只读、不落库）：
+          ``DATA_SOURCE --PRODUCED--> DATA_SOURCE_IMPORT --PRODUCED-->
+          RAW_ASSET``（由 ``data_source_media_assets`` 的外键展开）与
+          ``RAW_ASSET --UPLOADED_BY--> UPLOAD_SESSION``（由
+          ``raw_asset_links`` 展开）。
 
         投影按 BFS 层批量查询（每层最多两次），不随节点数增加而线性增加。
         返回的 ``raw_asset_sources`` 是本次遍历中出现的每条 RawAsset 的
@@ -214,23 +228,35 @@ class LineageService:
         for _level in range(depth):
             if not frontier or len(edges) >= limit:
                 break
-            projected = self._projected_edges(scope, frontier, direction, limit)
+            projected = self._projected_edges(scope, frontier, direction, limit, edges_so_far=edges)
             next_frontier: list[tuple[LineageNodeType, UUID]] = []
+            budget_hit = False
             for current in frontier:
+                if len(edges) >= limit:
+                    # 预算用尽必须立刻停止本层：此前只跳出内层边循环，外层
+                    # 仍会为每个剩余节点再塞一条边，导致返回条数超过 limit
+                    # （实测 limit=20 返回 22 条），违反"limit 是本页边数"的契约。
+                    budget_hit = True
+                    break
                 batch = [
                     *self._persisted_edges(scope, current, direction, limit),
                     *projected.get(current, ()),
                 ]
                 for edge in batch:
-                    if edge.edge_id not in seen_edges:
-                        seen_edges.add(edge.edge_id)
-                        edges.append(edge)
-                        if len(edges) >= limit:
-                            break
+                    if edge.edge_id in seen_edges:
+                        continue
+                    seen_edges.add(edge.edge_id)
+                    edges.append(edge)
+                    if len(edges) >= limit:
+                        break
                 for neighbour in _neighbours(batch, direction):
                     if neighbour not in visited:
                         visited.add(neighbour)
                         next_frontier.append(neighbour)
+            if budget_hit:
+                # 预算耗尽时本层邻接不完整，不能再往下扩一层（否则下一层
+                # 会在残缺前沿上继续，结果既不是"到头的完整图"也不是可解释的截断）。
+                break
             frontier = next_frontier
         asset_ids = [
             node_id for node_type, node_id in visited if node_type is LineageNodeType.RAW_ASSET
@@ -262,8 +288,20 @@ class LineageService:
         frontier: list[tuple[LineageNodeType, UUID]],
         direction: str,
         limit: int,
+        *,
+        edges_so_far: list[LineageEdge] | None = None,
     ) -> dict[tuple[LineageNodeType, UUID], list[LineageEdge]]:
-        """按当前层节点批量展开数据源链，返回「入口节点 -> 边」映射。"""
+        """按当前层节点批量展开数据源链与上传会话链，返回「入口节点 -> 边」映射。
+
+        投影边也要计入 ``limit`` 预算：此前只按持久化边计数，导致同一层
+        命中的投影边可以突破 ``limit``（反向 3 跳返回 100 条边却混进 82 条
+        投影边，超出部分静默丢弃，调用方无法判断"是到头了还是被截断"）。
+        ``edges_so_far`` 是调用方已收集的边，用于把剩余预算传给投影查询；
+        不传时按 ``limit`` 全量取（兼容既有调用方）。
+        """
+        budget = limit if edges_so_far is None else max(0, limit - len(edges_so_far))
+        if budget <= 0:
+            return {}
         result: dict[tuple[LineageNodeType, UUID], list[LineageEdge]] = {}
         source_ids = [
             node for node_type, node in frontier if node_type is LineageNodeType.DATA_SOURCE
@@ -271,33 +309,50 @@ class LineageService:
         import_ids = [
             node for node_type, node in frontier if node_type is LineageNodeType.DATA_SOURCE_IMPORT
         ]
+        session_ids = [
+            node for node_type, node in frontier if node_type is LineageNodeType.UPLOAD_SESSION
+        ]
+        asset_ids = [node for node_type, node in frontier if node_type is LineageNodeType.RAW_ASSET]
         if direction == "forward":
             if source_ids:
                 for edge in self._provenance.source_to_import_edges(
-                    scope, source_ids=source_ids, limit=limit
+                    scope, source_ids=source_ids, limit=budget
                 ):
                     result.setdefault((LineageNodeType.DATA_SOURCE, edge.from_node_id), []).append(
                         edge
                     )
             if import_ids:
                 for edge in self._provenance.import_to_asset_edges(
-                    scope, import_ids=import_ids, limit=limit
+                    scope, import_ids=import_ids, limit=budget
                 ):
                     result.setdefault(
                         (LineageNodeType.DATA_SOURCE_IMPORT, edge.from_node_id), []
                     ).append(edge)
+            if asset_ids and self._sessions is not None:
+                for edge in self._sessions.asset_to_session_edges(
+                    scope, asset_ids=asset_ids, limit=budget
+                ):
+                    result.setdefault((LineageNodeType.RAW_ASSET, edge.from_node_id), []).append(
+                        edge
+                    )
             return result
-        asset_ids = [node for node_type, node in frontier if node_type is LineageNodeType.RAW_ASSET]
         if asset_ids:
             for edge in self._provenance.import_to_asset_edges(
-                scope, asset_ids=asset_ids, limit=limit
+                scope, asset_ids=asset_ids, limit=budget
             ):
                 result.setdefault((LineageNodeType.RAW_ASSET, edge.to_node_id), []).append(edge)
         if import_ids:
             for edge in self._provenance.source_to_import_edges(
-                scope, import_ids=import_ids, limit=limit
+                scope, import_ids=import_ids, limit=budget
             ):
                 result.setdefault((LineageNodeType.DATA_SOURCE_IMPORT, edge.to_node_id), []).append(
+                    edge
+                )
+        if session_ids and self._sessions is not None:
+            for edge in self._sessions.asset_to_session_edges(
+                scope, session_ids=session_ids, limit=budget
+            ):
+                result.setdefault((LineageNodeType.UPLOAD_SESSION, edge.to_node_id), []).append(
                     edge
                 )
         return result

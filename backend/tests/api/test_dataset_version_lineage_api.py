@@ -23,6 +23,7 @@ from tests.api.dataset_support import (
     url,
     version_payload,
 )
+from tests.api.ddp310_support import episode_payload, project_url, seed_valid_asset
 
 
 def _ready_version(
@@ -330,3 +331,71 @@ def test_version_without_lineage_node_returns_empty_not_404(
         f"/versions/{uuid4()}/lineage"
     )
     assert missing.status_code == 404
+
+
+def test_version_lineage_returns_raw_asset_sources(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """反向 2 跳出现的 RawAsset 必须带回来源结论，不能只给边。
+
+    回归（FR-040 E2E 发现）：本端点此前用 ``traverse()`` 只取边，把
+    ``LineageService.trace()`` 已解析好的 ``raw_asset_sources`` 直接丢掉。
+    后果是「这个版本的数据最初从哪个数据源来」只能靠调用方自己从投影边的
+    ``metadata`` 反推，与契约里该字段的语义矛盾，也让 FR-040 的
+    Dataset → 数据源追溯在**版本血缘端点**上不可用（其余三个端点正常）。
+
+    夹具说明：``seed_dataset_episodes`` 直接落库、**不写血缘边**，因此这里用
+    真实 ``POST /episodes`` 建一条带 ``RAW_ASSET --SEGMENTED_INTO--> EPISODE``
+    边的 Episode 来验证「反向 2 跳能拿到资产来源」这条路径本身。
+    """
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    asset_id = seed_valid_asset(factory, ids.project_a, ids.editor_a, label="source")
+    created = editor.post(
+        project_url(ids.project_a, "/episodes"),
+        json=episode_payload(asset_id, code="EP-SOURCES-001"),
+        headers={"Idempotency-Key": "lineage-sources-001"},
+    )
+    assert created.status_code == 201, created.text
+    episode_id = UUID(created.json()["episode_id"])
+
+    # 反向 1 跳（版本 ← Episode）能查到边；反向 2 跳才能到资产。
+    with factory() as session:
+        edges = list(
+            session.scalars(
+                select(DataLineageEdgeModel).where(
+                    DataLineageEdgeModel.project_id == ids.project_a,
+                    DataLineageEdgeModel.relation == "SEGMENTED_INTO",
+                    DataLineageEdgeModel.to_node_id == episode_id,
+                )
+            )
+        )
+    assert [edge.from_node_id for edge in edges] == [asset_id]
+
+    # 直接对 Episode 走反向 2 跳：Episode ← RawAsset；来源结论必须非空。
+    response = editor.get(
+        f"/api/v1/episodes/{episode_id}/lineage",
+        params={
+            "project_id": str(ids.project_a),
+            "direction": "reverse",
+            "depth": 2,
+            "limit": 100,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    sources = {item["raw_asset_id"]: item for item in body["raw_asset_sources"]}
+    assert str(asset_id) in sources
+    # 手工上传资产没有外部数据源——这是正常状态，不是缺失。
+    assert sources[str(asset_id)]["status"] == "NO_EXTERNAL_SOURCE"
+    assert sources[str(asset_id)]["data_sources"] == []
+
+    # 版本血缘端点（反向 1 跳）不涉及 RawAsset，来源列表为空是正确结果。
+    ctx = _ready_version(factory, ids, count=10)
+    version_base = (
+        f"/api/v1/projects/{ids.project_a}/datasets/{ctx['dataset']['dataset_id']}"
+        f"/versions/{ctx['version']['dataset_version_id']}/lineage"
+    )
+    shallow = ctx["editor"].get(f"{version_base}?direction=reverse&depth=1&limit=100")
+    assert shallow.status_code == 200, shallow.text
+    assert shallow.json()["raw_asset_sources"] == []

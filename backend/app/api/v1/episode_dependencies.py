@@ -16,6 +16,7 @@ from app.api.deps import DbSession
 from app.api.v1.upload_dependencies import ObjectStorageDep, SettingsDep
 from app.application.episodes import EpisodeService, LineageGraphService, LineageService
 from app.application.episodes.provenance import SourceProvenanceResolver
+from app.application.episodes.session_provenance import SessionProvenanceResolver
 from app.application.ingestion import RawAssetDownloadUseCases, RawAssetUseCases
 from app.composition.episodes import (
     build_episode_service as build_episode_service,
@@ -32,6 +33,9 @@ from app.infrastructure.repositories.datasource_provenance import (
 )
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
+from app.infrastructure.repositories.session_provenance import (
+    SqlSessionProvenanceRepository,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +45,9 @@ class EpisodeUseCases:
     lineage_graph: LineageGraphService
     assets: RawAssetUseCases
     downloads: RawAssetDownloadUseCases
+    # 上传会话是只读投影节点：图查询以它为根之前，必须先用权威仓储确认
+    # "这个会话存在且属于当前项目"，否则跨项目探测会变成存在性探针。
+    sessions: SqlSessionProvenanceRepository | None = None
 
 
 def build_lineage_service(session: DbSession) -> LineageService:
@@ -60,6 +67,7 @@ def build_lineage_service(session: DbSession) -> LineageService:
             SqlSourceProvenanceRepository(session),
             SqlRawAssetRepository(session),
         ),
+        SessionProvenanceResolver(SqlSessionProvenanceRepository(session)),
     )
 
 
@@ -75,6 +83,7 @@ def build_lineage_graph_service(session: DbSession) -> LineageGraphService:
             SqlSourceProvenanceRepository(session),
             SqlRawAssetRepository(session),
         ),
+        SessionProvenanceResolver(SqlSessionProvenanceRepository(session)),
     )
 
 
@@ -97,6 +106,7 @@ def get_episode_use_cases(
             session,
             url_ttl_seconds=settings.download_url_ttl_seconds,
         ),
+        sessions=SqlSessionProvenanceRepository(session),
     )
 
 

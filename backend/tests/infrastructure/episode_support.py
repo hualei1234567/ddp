@@ -12,6 +12,7 @@ from app.application.episodes.commands import (
 from app.application.episodes.episodes import EpisodeService
 from app.application.episodes.lineage import LineageService
 from app.application.episodes.provenance import SourceProvenanceResolver
+from app.application.episodes.session_provenance import SessionProvenanceResolver
 from app.application.ingestion.commands import CreateIngestionJobCommand
 from app.application.ingestion.jobs import IngestionJobService
 from app.domain.episodes.models import Episode, Segmentation
@@ -31,6 +32,9 @@ from app.infrastructure.repositories.episodes import (
 from app.infrastructure.repositories.ingestion_jobs import SqlIngestionJobRepository
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
+from app.infrastructure.repositories.session_provenance import (
+    SqlSessionProvenanceRepository,
+)
 from ddp_data.canonical.v1 import SCHEMA_VERSION
 from sqlalchemy.orm import Session
 
@@ -169,6 +173,7 @@ def build_services(
             SqlSourceProvenanceRepository(session),
             raw_assets,
         ),
+        SessionProvenanceResolver(SqlSessionProvenanceRepository(session)),
     )
     return episode_service, job_service, lineage_service
 

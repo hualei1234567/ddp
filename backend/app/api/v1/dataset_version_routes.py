@@ -37,7 +37,7 @@ from app.api.v1.dataset_schemas import (
     version_out,
 )
 from app.api.v1.governance_dependencies import EnforceDatasetVersionCreateQuota
-from app.api.v1.lineage_schemas import LineageEdgeOut, LineageResponse
+from app.api.v1.lineage_schemas import LineageResponse, build_lineage_response
 from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import DatasetReadScope, DatasetVersionReadScope
 from app.application.datasets.commands import (
@@ -157,8 +157,13 @@ def get_version_lineage(
     ``direction=forward`` 从版本继续往下游走（当前阶段只有 DatasetVersion
     节点，返回空是正确结果，不是缺失实现）。
 
-    遍历复用 ``LineageService.traverse``（BFS、``MAX_DEPTH=5``、边去重），
-    不在此另写图遍历。
+    遍历复用 ``LineageService.trace``（BFS、``MAX_DEPTH=5``、边去重，含数据源链与
+    上传会话链只读投影），不在此另写图遍历。
+
+    返回里的 ``raw_asset_sources`` 是「这些资产最初从哪来」的直接答案，
+    **不能丢**：用 ``traverse`` 只取边会把服务端已解析好的来源结论丢掉，
+    调用方只能自己从投影边的 ``metadata`` 里反推（FR-040 的
+    Dataset → 数据源追溯正是靠这个字段）。因此这里调用 ``trace``。
 
     版本存在但尚未转 READY 时，血缘节点还没登记（节点在 validate 转 READY
     时才写）。此时返回空图，而不是 404——资源确实存在，只是还没有血缘，
@@ -166,7 +171,7 @@ def get_version_lineage(
     """
     # 先校验版本属于当前项目；之后即使血缘节点未登记，也只能返回空图。
     use_cases.versions.get(scope, dataset_id, version_id)
-    edges = use_cases.lineage.traverse(
+    trace = use_cases.lineage.trace(
         scope,
         node_type=LineageNodeType.DATASET_VERSION,
         node_id=version_id,
@@ -176,10 +181,7 @@ def get_version_lineage(
         # 版本归属已由上面的权威查询确认，节点未登记是合法中间态。
         require_node=False,
     )
-    return LineageResponse(
-        items=[LineageEdgeOut.from_domain(edge) for edge in edges],
-        direction=direction,
-    )
+    return build_lineage_response(trace, direction)
 
 
 @router.post(

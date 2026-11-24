@@ -26,6 +26,7 @@ from app.application.datasets.quality_gate import EpisodeQualityGate
 from app.application.datasets.versions import DatasetVersionUseCases
 from app.application.episodes.lineage import LineageService
 from app.application.episodes.provenance import SourceProvenanceResolver
+from app.application.episodes.session_provenance import SessionProvenanceResolver
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.repositories.dataset_audit import (
     SqlDatasetAuditRepository,
@@ -48,6 +49,9 @@ from app.infrastructure.repositories.datasource_provenance import (
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.quality import SqlQualityRunRepository
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
+from app.infrastructure.repositories.session_provenance import (
+    SqlSessionProvenanceRepository,
+)
 
 ReadScope = Annotated[ProjectScope, Depends(get_project_scope)]
 WriteScope = Annotated[ProjectScope, Depends(get_write_scope)]
@@ -129,6 +133,7 @@ def get_dataset_use_cases(
                 SqlSourceProvenanceRepository(session),
                 SqlRawAssetRepository(session),
             ),
+            SessionProvenanceResolver(SqlSessionProvenanceRepository(session)),
         ),
     )
 
