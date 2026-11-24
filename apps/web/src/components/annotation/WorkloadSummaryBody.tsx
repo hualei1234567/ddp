@@ -10,6 +10,7 @@
 import { Alert, Descriptions, Space, Tag, Typography } from "antd";
 
 import { formatDateTime } from "../../services/format";
+import { formatMinutes, formatRatio } from "../../services/workloadPresentation";
 import type { ApiError } from "../../services/api";
 import type {
   AnnotationWorkload,
@@ -46,22 +47,6 @@ export interface WorkloadSummaryBodyProps {
   onRetry: () => void;
   /** 服务端成员目录里的显示名；缺失时退回 user_id。 */
   assigneeLabel: string;
-}
-
-function formatMinutes(minutes: number): string {
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  if (hours === 0) {
-    return `${rest} 分钟`;
-  }
-  return rest === 0 ? `${hours} 小时` : `${hours} 小时 ${rest} 分钟`;
-}
-
-function formatRatio(ratio: number | null): string {
-  if (ratio === null) {
-    return "未配置容量，不计算利用率";
-  }
-  return `${(ratio * 100).toFixed(1)}%`;
 }
 
 export function WorkloadSummaryBody({
@@ -148,7 +133,7 @@ export function WorkloadSummaryBody({
             : formatMinutes(data.capacity_minutes)}
         </Descriptions.Item>
         <Descriptions.Item label="利用率">
-          {formatRatio(data.utilization_ratio)}
+          {formatRatio(data.utilization_ratio, "未配置容量，不计算利用率")}
         </Descriptions.Item>
         <Descriptions.Item label="聚合口径">
           <Typography.Text code>{data.source_version}</Typography.Text>

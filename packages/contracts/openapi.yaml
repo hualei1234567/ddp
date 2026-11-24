@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.33.0
+  version: 1.34.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -211,6 +211,22 @@ info:
       `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
       本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
       `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
+    - `1.34.0` **分配前实时负载提示（FR-020）**：新增只读端点
+      `POST /api/v1/projects/{project_id}/annotation-assignment-capacity-preview`。
+      工作量后端与 `CapacityPolicy` 硬阻断此前已实现，但分配抽屉打开时看不到
+      被分配人当前已有多少活，只能提交后等 `409`。本端点给
+      `assignee_ids[] + planned_item_count/planned_minutes`，一次返回每人：
+      当前进行中分配的计划项数与计划工时、部署配置的项数/工时上限、分配后
+      投影值与占比、`will_exceed`/`exceeds_open_items`/`exceeds_planned_minutes`
+      与派生 `status`。判定与提交时的硬阻断**同源**（`CapacityPolicy.exceeded`），
+      因此 `will_exceed` 就是"提交会不会被拒"的答案；但它是**提示不是阻断**：
+      是否放行仍由 `POST /annotation-assignments` 决定，客户端不得据此自行
+      拦截，也不承诺自动均衡。用 `POST` 是因为要批量问多人（UUID 列表放 query
+      会撞长度/编码边界），但**无副作用**：不写库、不落审计、不推进版本、
+      不需要幂等键，权限按只读校验（viewer 也可预览）。上限未配置时
+      `max_*` 与对应比率为 `null` 且 `will_exceed` 恒为 false——"没配上限"
+      不等于"容量为 0"；正好等于上限是 `AT_CAPACITY`（不阻断）。全部为增量：
+      仅新增路径与 schema，无既有字段变更，无数据库迁移。
     - `1.33.0` **运行态运维视图（FR-042）**：新增只读端点
       `GET /api/v1/projects/{project_id}/ops/dispatch-queue`，一次查询返回
       投递类事件的健康快照：状态分布（PENDING/PUBLISHED/FAILED）、重试中
@@ -352,7 +368,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.33.0
+  version: 1.34.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -707,6 +723,8 @@ paths:
     $ref: "./fragments/paths.stage3.yaml#/annotationAssignments"
   /api/v1/projects/{project_id}/annotation-workload:
     $ref: "./fragments/paths.stage3.yaml#/annotationWorkload"
+  /api/v1/projects/{project_id}/annotation-assignment-capacity-preview:
+    $ref: "./fragments/paths.stage3.yaml#/annotationAssignmentCapacityPreview"
   /api/v1/projects/{project_id}/annotation-assignments/{assignment_id}:
     $ref: "./fragments/paths.stage3.yaml#/annotationAssignmentDetail"
   /api/v1/projects/{project_id}/annotation-assignments/{assignment_id}/actions/{action}:
@@ -1382,6 +1400,8 @@ components:
     AnnotationBatchActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationBatchActionRequest"}
     AnnotationAssignmentCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationAssignmentCreate"}
     AnnotationAssignmentActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationAssignmentActionRequest"}
+    AnnotationAssignmentCapacityPreviewRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationAssignmentCapacityPreviewRequest"}
+    AnnotationAssignmentCapacityPreview: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationAssignmentCapacityPreview"}
     AnnotationSubmissionCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSubmissionCreate"}
     AnnotationSubmissionActionRequest: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationSubmissionActionRequest"}
     AnnotationReviewCreate: {$ref: "./fragments/schemas.stage3.yaml#/AnnotationReviewCreate"}

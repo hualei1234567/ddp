@@ -1031,3 +1031,42 @@ annotationWorkload:
       "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
       "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+annotationAssignmentCapacityPreview:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: previewAnnotationAssignmentCapacity
+    tags: [annotation-assignments]
+    summary: 分配前人员容量预览（只读，不落库）
+    description: |
+      分配抽屉选中被分配人时调用：给定人员集合与「本次要派多少」，返回每人
+      当前进行中分配的计划项数/计划工时、配置上限、分配后占比与是否将超容量。
+
+      为什么用 POST 而不是 GET：一次要问多人，UUID 列表放 query 会撞长度与
+      编码边界；本操作**没有任何副作用**——不写库、不落审计、不推进版本、
+      不需要幂等键，权限按只读校验（viewer 也能预览）。
+
+      判定与提交时的硬阻断同源（`CapacityPolicy.exceeded`）：`will_exceed`
+      就是「提交会不会 409」的答案。但本端点是**提示**不是**阻断**：是否放行
+      仍由 `POST /annotation-assignments` 决定，客户端不得据此自行拦截，也不
+      得宣称会自动均衡负载。`max_*` 为 `null` 表示该上限未配置，此时对应比率
+      为 `null`、`will_exceed` 恒为 false——"没配上限"不等于"容量为 0"。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/AnnotationAssignmentCapacityPreviewRequest"}
+    responses:
+      "200":
+        description: 逐人容量预览（顺序与请求的 assignee_ids 一致）
+        content:
+          application/json:
+            schema:
+              type: array
+              items: {$ref: "../openapi.yaml#/components/schemas/AnnotationAssignmentCapacityPreview"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
