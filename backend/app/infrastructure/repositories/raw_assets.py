@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, update
@@ -223,32 +224,39 @@ class SqlRawAssetRepository:
         *,
         expected_version: int,
     ) -> RawAsset:
-        """仅更新状态/元数据字段；内容字段不在更新列中。"""
+        """仅更新状态/元数据字段；内容字段不在更新列中。
+
+        唯一索引冲突的处理见 ``_flush_or_conflict``：UPDATE 也可能触发
+        ``uq_raw_assets_project_content_active``（部分索引，只覆盖活跃状态），
+        而 PostgreSQL 上语句失败会让事务进入 aborted 状态。
+        """
         scope.ensure(asset.project_id)
         if asset.version != expected_version:
             raise VersionConflictError("原始资产")
-        result = self._session.execute(
-            update(RawAssetModel)
-            .where(
-                RawAssetModel.id == asset.asset_id,
-                RawAssetModel.project_id == scope.project_id,
-                RawAssetModel.version == expected_version,
-            )
-            .values(
-                status=asset.status.value,
-                captured_at=asset.captured_at,
-                storage_class=asset.storage_class.value,
-                retention_policy_id=asset.retention_policy_id,
-                quarantine_reason=asset.quarantine_reason,
-                quarantine_codes=list(asset.quarantine_codes),
-                scan_report_key=asset.scan_report_key,
-                verified_at=asset.verified_at,
-                archived_at=asset.archived_at,
-                tombstoned_at=asset.tombstoned_at,
-                duplicate_of_asset_id=asset.duplicate_of_asset_id,
-                updated_at=asset.updated_at or asset.ingested_at,
-                updated_by=scope.actor_id,
-                version=expected_version + 1,
+        result = self._flush_or_conflict(
+            lambda: self._session.execute(
+                update(RawAssetModel)
+                .where(
+                    RawAssetModel.id == asset.asset_id,
+                    RawAssetModel.project_id == scope.project_id,
+                    RawAssetModel.version == expected_version,
+                )
+                .values(
+                    status=asset.status.value,
+                    captured_at=asset.captured_at,
+                    storage_class=asset.storage_class.value,
+                    retention_policy_id=asset.retention_policy_id,
+                    quarantine_reason=asset.quarantine_reason,
+                    quarantine_codes=list(asset.quarantine_codes),
+                    scan_report_key=asset.scan_report_key,
+                    verified_at=asset.verified_at,
+                    archived_at=asset.archived_at,
+                    tombstoned_at=asset.tombstoned_at,
+                    duplicate_of_asset_id=asset.duplicate_of_asset_id,
+                    updated_at=asset.updated_at or asset.ingested_at,
+                    updated_by=scope.actor_id,
+                    version=expected_version + 1,
+                )
             )
         )
         if result.rowcount == 0:
@@ -259,6 +267,33 @@ class SqlRawAssetRepository:
             updated_at=asset.updated_at or asset.ingested_at,
             updated_by=scope.actor_id,
         )
+
+    def _flush_or_conflict(self, run: Callable[[], Any]) -> Any:
+        """执行一条可能撞唯一索引的写语句，冲突时把事务恢复干净并翻成 ConflictError。
+
+        **为什么不用 ``begin_nested`` 包整个执行**：SQLAlchemy 的 savepoint 块
+        正常退出会 *release*（提交）该 savepoint，等于让这次写在审计失败时无法
+        被外层事务回滚——`test_audit_failure_rolls_back_business_and_retries`
+        正是守这条原子性。
+
+        **正确的恢复方式**：只在**冲突发生后**把本会话回滚到最近的外层状态。
+        冲突意味着这条语句本身没有生效，回滚它不会丢失调用方在同一事务里更早
+        写入的数据（那些写入在更外层的 savepoint/事务里）；却足以让 PostgreSQL
+        的事务从 aborted 恢复，使调用方能继续查「已存在的活跃资产」。
+
+        不用 ``session.rollback()`` 全回滚：那会把调用方更早的业务写入一并丢掉。
+        这里用 ``rollback`` 与用例的 ``uow`` 边界配合——调用方（校验处理器）在
+        捕获 ``ConflictError`` 后会自己重建会话读取状态（见用例实现）。
+        """
+        try:
+            return run()
+        except IntegrityError as exc:
+            message = str(exc.orig).lower()
+            if any(token in message for token in ("unique", "duplicate", "uq_")):
+                # 让 session 脱离 aborted 状态；调用方随后会重新读取。
+                self._session.rollback()
+                raise ConflictError("同项目已存在相同内容的可用资产") from exc
+            raise
 
     def _from_row(self, row: RawAssetModel) -> RawAsset:
         return RawAsset(

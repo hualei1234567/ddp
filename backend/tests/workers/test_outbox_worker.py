@@ -612,3 +612,55 @@ def test_worker_generates_marked_trace_when_event_has_no_request_id(
         assert validated is not None
         assert validated.payload["request_id"] == trace_id
     assert trace_id_var.get() is None
+
+
+def test_content_duplicate_is_tombstoned_not_failed(
+    worker_harness: WorkerHarness,
+) -> None:
+    """同项目相同内容的两个活跃资产：第二个必须降级为墓碑，而不是让事件失败。
+
+    背景（真实事故）：上传完成时的内容去重按 (sha256, size_bytes) 查一次，
+    两个请求并发完成时可以双双查不到对方，于是都留下 VALIDATING 资产；
+    校验转 VALID 时第二个撞 ``uq_raw_assets_project_content_active``，
+    表现为 outbox 事件永久 FAILED（UniqueViolation）——把「内容已存在」
+    误报成「校验失败」。
+    """
+    harness = worker_harness
+
+    # 先落一个已校验通过的活跃资产（占住这份内容）。
+    winner = _seed_asset(harness)
+    _enqueue_validation(harness, winner)
+    assert harness.worker().process_once(now=NOW).status is ProcessingStatus.PUBLISHED
+    assert _asset_row(harness, winner.asset_id).status == "VALID"
+
+    # 再来一个完全相同内容的 VALIDATING 资产（模拟并发漏网）。
+    loser = _seed_asset(harness)
+    _enqueue_validation(harness, loser)
+    result = harness.worker().process_once(now=NOW)
+
+    # 事件必须成功（不是 FAILED），资产被墓碑化并指向已有资产。
+    assert result.status is ProcessingStatus.PUBLISHED, result.error
+    loser_row = _asset_row(harness, loser.asset_id)
+    assert loser_row.status == "TOMBSTONED"
+    assert loser_row.duplicate_of_asset_id == winner.asset_id
+    # 胜者保持 VALID，内容仍可下载。
+    assert _asset_row(harness, winner.asset_id).status == "VALID"
+    # 审计仍留痕（墓碑动作不是静默丢弃）。
+    assert _count(harness, AuditLog) >= 1
+
+
+def test_content_duplicate_in_other_project_is_not_deduped(
+    worker_harness: WorkerHarness,
+) -> None:
+    """内容唯一索引是项目级的：不同项目的相同内容互不影响，必须都能 VALID。"""
+    harness = worker_harness
+    first = _seed_asset(harness)
+    second = _seed_asset(harness, project_id=harness.project_b, user_id=harness.user_b)
+
+    _enqueue_validation(harness, first)
+    assert harness.worker().process_once(now=NOW).status is ProcessingStatus.PUBLISHED
+    _enqueue_validation(harness, second, project_id=harness.project_b, actor_user_id=harness.user_b)
+    assert harness.worker().process_once(now=NOW).status is ProcessingStatus.PUBLISHED
+
+    assert _asset_row(harness, first.asset_id).status == "VALID"
+    assert _asset_row(harness, second.asset_id).status == "VALID"
