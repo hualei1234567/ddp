@@ -1,0 +1,145 @@
+{
+  "package": "DDP V5.1 全面建设蓝图包",
+  "version": "5.1",
+  "audit_source": "DDP V4.1 全面审计报告（2026-11-24）",
+  "audit_baseline": "origin/main @ c71c72a",
+  "principle": "真实数据生产闭环；不新增顶层业务模块；复用 V4.1 VERIFIED 能力",
+  "markdown_count": 27,
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2958,
+      "sha256": "8a5d4e8b318ab8ff757591782e4a6434100937a971e854379a6df72842775b13"
+    },
+    {
+      "path": "建设设计/01_V5.1建设纲领与范围.md",
+      "bytes": 2763,
+      "sha256": "0b24cb54f2c6869c20a69d414e8a83b504ec301b0f6c80a04d74a9e68dbf0f03"
+    },
+    {
+      "path": "建设设计/02_V4.1审计基线与V5.1状态继承.md",
+      "bytes": 3377,
+      "sha256": "7808324f97f67f5f5fce61637f9397b346acc2a9474028cc9e49bce2726acdca"
+    },
+    {
+      "path": "建设设计/03_痛点地图与根因分析.md",
+      "bytes": 2699,
+      "sha256": "7d4337069b5ac523e2cacc5dd958bafdc67d88cddd060509a5e155ce8143afaa"
+    },
+    {
+      "path": "建设设计/04_目标业务闭环与服务指标.md",
+      "bytes": 2440,
+      "sha256": "5da8ffa690d0e23a27f6c5297056d33b2a5d46bf1ec69e0f46911462dd40a5d8"
+    },
+    {
+      "path": "建设设计/05_真实数据样本准入与格式适配.md",
+      "bytes": 2621,
+      "sha256": "25589f7a86078d8895549ead47da2b6976ffaa6a82a2cdff62a370f46e9985c0"
+    },
+    {
+      "path": "建设设计/06_SensorStream_Observation_Action物化设计.md",
+      "bytes": 3596,
+      "sha256": "b5be2dc6fccdad878774ed897a9f613bb2afcf9c32ecbee384158f03d163a170"
+    },
+    {
+      "path": "建设设计/07_多流时间同步标定与坐标系.md",
+      "bytes": 2123,
+      "sha256": "7e821c513571de2b7e17d06d6fffedb683f082002939428cca2e7e060e88e0a9"
+    },
+    {
+      "path": "建设设计/08_Episode物化分段与步骤级恢复.md",
+      "bytes": 2080,
+      "sha256": "9e4e12bfb9c4c50d1a08c01cd10219733d8b4ac51187448ae708c92a5f6e7cfb"
+    },
+    {
+      "path": "建设设计/09_DATA_CLEANING确定性清洗设计.md",
+      "bytes": 2460,
+      "sha256": "f70080af817196a51c95c6d7aea4161025b97cf520e74bbe62142066e3e816ae"
+    },
+    {
+      "path": "建设设计/10_数据质量证据与QC增强.md",
+      "bytes": 1468,
+      "sha256": "86d0806b5416bbc07f2e5017a321279087c5395d8db3674faa48101a9b45c768"
+    },
+    {
+      "path": "建设设计/11_标注冲突恢复与工作台效率.md",
+      "bytes": 1532,
+      "sha256": "d44bcb2121fb89932e847a699a83fa4f34e189a6dae3b9ec16dc46e9d136aabc"
+    },
+    {
+      "path": "建设设计/12_标注工作量分配与人员负载提示.md",
+      "bytes": 1387,
+      "sha256": "666bf52ec3f651f2c83ca049d6c47074bb93ea13f6f926fb30f7b5b0f7651278"
+    },
+    {
+      "path": "建设设计/13_Dataset与LeRobot逐帧训练就绪.md",
+      "bytes": 2669,
+      "sha256": "48dfd7a8130c1911f9f51439c679175508c287884f1031df2a15ff5cd59f2acc"
+    },
+    {
+      "path": "建设设计/14_Lineage全链路血缘设计.md",
+      "bytes": 1677,
+      "sha256": "70c332f27ed5ad5256b7b4769420fdd173693761376e03f751542a415bf00a40"
+    },
+    {
+      "path": "建设设计/15_RBAC多角色浏览器E2E.md",
+      "bytes": 1559,
+      "sha256": "957417777b9f482b7430bf6349bba209a48e17a6f38d066a26aa1a81f9be0a13"
+    },
+    {
+      "path": "建设设计/16_PG_MinIO_Spool恢复演练.md",
+      "bytes": 1726,
+      "sha256": "5a760863b5cbd1bd179ee2ee8727e26ba8585b0ff85ab003dda41c273be0fc6e"
+    },
+    {
+      "path": "建设设计/17_Staging与真实硬件Pilot.md",
+      "bytes": 1802,
+      "sha256": "c2a9f4df924d68cec8ad4fbc1c10e5599bfc568b9f7cdf398019ff2ebae4ab11"
+    },
+    {
+      "path": "建设设计/18_AI推理与训练平台外部依赖门禁.md",
+      "bytes": 1396,
+      "sha256": "8d3e06b80c95ca3f0db40724e6164031e3043fa2a53459ba20d8d4e014d2e8e7"
+    },
+    {
+      "path": "建设设计/19_运行监控与数据运营指标.md",
+      "bytes": 1631,
+      "sha256": "bb7a5eb8cf73d2a48ea335ed68f2a01c118220c6871d3c6b2ee75f4f94df3dce"
+    },
+    {
+      "path": "建设设计/20_API数据版本与工程治理.md",
+      "bytes": 1602,
+      "sha256": "7679006d6f76e71e61f71747d901a619af742f8255597dc5198b304f0a257d50"
+    },
+    {
+      "path": "建设设计/21_V5.1功能需求追踪矩阵.md",
+      "bytes": 2607,
+      "sha256": "17ad994e636ffeb80dff8ac82e0402a6608d2625268181dd6d636030fab6c06e"
+    },
+    {
+      "path": "建设设计/22_实施顺序依赖DAG与里程碑.md",
+      "bytes": 2114,
+      "sha256": "bfa72f39d58c2a3c69033e27b6352896bf99254ca14b29c2ee6d995855873989"
+    },
+    {
+      "path": "建设设计/23_测试策略与验收用例.md",
+      "bytes": 2101,
+      "sha256": "759f415a13f9cbb356dd9ac45c0a61449533340b156380f7f035cbce56206f45"
+    },
+    {
+      "path": "建设设计/24_风险依赖与待决策.md",
+      "bytes": 2081,
+      "sha256": "f3a3664cd1b1ac4eb9293c8b908ab91e057cf280df05a9d055748ef6f100e2a6"
+    },
+    {
+      "path": "建设设计/25_Claude_Code_V5.1执行总Prompt.md",
+      "bytes": 3689,
+      "sha256": "6b098427097cf386d85e58289d20f313ed458168a2da59adecaa6450b778d96c"
+    },
+    {
+      "path": "建设设计/26_首批开发任务拆解.md",
+      "bytes": 3476,
+      "sha256": "02fb80c3f6951134b3a7c174f2b009cc57b662cb4a6d3b7ff53fc8a4dfe8a571"
+    }
+  ]
+}
