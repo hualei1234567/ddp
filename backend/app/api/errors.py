@@ -461,6 +461,10 @@ _ANNOTATION_DETAILS_SAFE_CODES = frozenset(
         "annotation_item_already_assigned",
         "annotation_submission_already_decided",
         "annotation_review_required",
+        # FR-019 冲突恢复：details 只含 expected_version / current_version，
+        # 两者都是请求方本就读得到的资源版本号（契约 details_rule 的
+        # expected/actual 口径），不含业务字段或跨项目信息。
+        "version_conflict",
     }
 )
 
