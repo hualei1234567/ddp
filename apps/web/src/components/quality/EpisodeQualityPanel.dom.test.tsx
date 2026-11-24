@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -56,7 +57,12 @@ const historyPage = {
 };
 
 function renderPanel() {
-  return render(<EpisodeQualityPanel projectId="p1" episodeId={QUALITY_EPISODE_ID} />);
+  // 面板内含「查看证据」链接（V51-010），需要 Router 上下文。
+  return render(
+    <MemoryRouter>
+      <EpisodeQualityPanel projectId="p1" episodeId={QUALITY_EPISODE_ID} />
+    </MemoryRouter>,
+  );
 }
 
 describe("EpisodeQualityPanel 运行历史", () => {
@@ -175,5 +181,24 @@ describe("EpisodeQualityPanel 重跑与失败项重试（FR-026 / FR-028）", ()
     expect(
       screen.getByRole("checkbox", { name: /只重试失败项/ }),
     ).toBeChecked();
+  });
+});
+
+describe("V51-010 证据定位入口", () => {
+  it("每条运行都给出「查看证据」深链，指向 Episode 页并带上 qc_run_id", async () => {
+    listRuns.mockResolvedValue(historyPage);
+
+    renderPanel();
+
+    const links = await screen.findAllByRole("link", { name: /定位运行.*的证据/ });
+    expect(links.length).toBe(historyPage.items.length);
+    expect(links[0]).toHaveAttribute(
+      "href",
+      expect.stringContaining(`qc_run_id=${QUALITY_BASELINE_RUN_ID}`),
+    );
+    // 深链必须落在 Episode 详情页（播放器与时间轴在那里，蓝图 §1 不新建播放器）。
+    expect(links[0]!.getAttribute("href")).toContain(
+      `/episodes/${QUALITY_EPISODE_ID}`,
+    );
   });
 });

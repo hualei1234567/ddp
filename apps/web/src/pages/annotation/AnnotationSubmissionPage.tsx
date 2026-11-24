@@ -1,6 +1,6 @@
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Divider, Space, Typography } from "antd";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import AiSuggestionPanel from "../../components/annotation/AiSuggestionPanel";
@@ -13,6 +13,7 @@ import ReviewPanel, {
   type ReviewActionPayload,
 } from "../../components/annotation/ReviewPanel";
 import SubmissionMediaPanel from "../../components/annotation/SubmissionMediaPanel";
+import SubmissionQcEvidenceSection from "../../components/quality/SubmissionQcEvidenceSection";
 import SubmissionSummary from "../../components/annotation/SubmissionSummary";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageContainer from "../../components/ui/PageContainer";
@@ -38,6 +39,7 @@ import type { AiSuggestion } from "../../services/annotationAiParsers";
 import type {
   AnnotationArbitration,
   ArbitrationDecision,
+  ReviewIssue,
 } from "../../types/annotation";
 
 function SubmissionContent({
@@ -59,6 +61,16 @@ function SubmissionContent({
   );
   const { data, error, loading, refreshing, stale, updatedAt, reload } =
     useRequest(load);
+  // 统一质量运行以 Episode 为对象：从提交记录里派生去重后的 Episode 列表。
+  // 不在渲染期反复去重（每次渲染都会新数组），用 useMemo 固定引用。
+  const episodeIds = useMemo(() => {
+    const seen = new Set<string>();
+    for (const record of data?.records ?? []) {
+      seen.add(record.episode_id);
+    }
+    return [...seen];
+  }, [data]);
+
   const reviewers = useAnnotationReviewers(projectId);
   const phase = resolvePagePhase({
     hasData: data !== null,
@@ -139,6 +151,31 @@ function SubmissionContent({
     } finally {
       setBusySuggestionId(null);
     }
+  };
+
+  const handleRequireRework = (input: {
+    reason: string;
+    issues: ReviewIssue[];
+  }) => {
+    if (!data) {
+      return;
+    }
+    // 走既有 require-rework 动作：QC 证据只写进 reason/issues，不改变
+    // 状态机、权限与版本校验（蓝图 §5：QC 不代替 Reviewer）。
+    void runAction(
+      "submission:require-rework",
+      () =>
+        annotationApi.actOnSubmission(
+          projectId,
+          submissionId,
+          "require-rework",
+          {
+            version: data.submission.version,
+            reason: input.reason,
+          },
+        ),
+      `返工要求已提交（附带 ${input.issues.length} 条 QC 证据）。`,
+    );
   };
 
   const handleCreateReview = (reviewerId: string) => {
@@ -310,6 +347,14 @@ function SubmissionContent({
           onAdopt={handleAdoptSuggestion}
           onRevise={handleReviseSuggestion}
           onReload={reload}
+        />
+        <Divider orientation="left">QC 证据与返工依据</Divider>
+        <SubmissionQcEvidenceSection
+          projectId={projectId}
+          submission={data.submission}
+          episodeIds={episodeIds}
+          onRequireRework={handleRequireRework}
+          busy={busyAction === "submission:require-rework"}
         />
         <Divider orientation="left">复核</Divider>
         <ReviewPanel

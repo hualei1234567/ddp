@@ -26,6 +26,15 @@ interface EpisodeMediaPanelProps {
   lanes?: readonly { key: string; label: string }[];
   /** 是否允许框选（只读角色或已提交时关闭）。 */
   canSelectRange: boolean;
+  /**
+   * QC 证据高亮区间（V51-010）：相对 Episode 起点的秒。
+   * 只做只读高亮，不改变框选/播放交互。
+   */
+  evidenceRange?: { startSeconds: number; endSeconds: number } | null;
+  /** 证据所属媒体流；用于在时间轴上标注，并优先选中同机位的可播放资产。 */
+  evidenceStreamId?: string | null;
+  /** 时间轴上方要展示的证据说明（例如规则与阈值）；未提供时不渲染。 */
+  evidenceSummary?: React.ReactNode;
 }
 
 const deps = { lineage: lineageApi, assets: rawAssetsApi };
@@ -46,6 +55,9 @@ export default function EpisodeMediaPanel({
   onSelectRangeNs,
   lanes,
   canSelectRange,
+  evidenceRange = null,
+  evidenceStreamId = null,
+  evidenceSummary = null,
 }: EpisodeMediaPanelProps) {
   const [activeAssetId, setActiveAssetId] = useState<string | null>(null);
 
@@ -144,6 +156,8 @@ export default function EpisodeMediaPanel({
           />
         ) : null}
 
+        {evidenceSummary}
+
         {durationSeconds !== null && durationSeconds > 0 ? (
           <AnnotationTimeline
             durationSeconds={durationSeconds}
@@ -151,6 +165,8 @@ export default function EpisodeMediaPanel({
             segments={segments}
             onSeek={onSeek}
             lanes={lanes}
+            evidenceRange={evidenceRange}
+            evidenceStreamId={evidenceStreamId}
             onSelectRange={
               canSelectRange && onSelectRangeNs
                 ? (start, end) =>

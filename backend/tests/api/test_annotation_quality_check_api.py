@@ -89,12 +89,13 @@ def test_run_quality_check_persists_run_and_findings(
     assert body["error_count"] == 0
     assert body["rule_set_version"].startswith("sha256:")
     assert len(body["rule_set_version"]) == 71
-    # 4 条默认规则 × 1 条记录
-    assert len(body["findings"]) == 4
+    # 5 条默认规则 × 1 条记录（V51-010 新增 number_label_within_range）
+    assert len(body["findings"]) == 5
     rule_ids = {item["rule_id"] for item in body["findings"]}
     assert rule_ids == {
         "ai_label_confidence_low",
         "duplicate_label_keys",
+        "number_label_within_range",
         "required_labels_present",
         "time_range_within_episode",
     }
@@ -106,11 +107,14 @@ def test_run_quality_check_persists_run_and_findings(
     assert by_rule["time_range_within_episode"]["passed"] is None
     assert by_rule["required_labels_present"]["passed"] is True
     assert by_rule["duplicate_label_keys"]["passed"] is True
+    # 该 Schema 无数值边界：新规则如实"无结论"，不得当作通过。
+    assert by_rule["number_label_within_range"]["passed"] is None
 
     # 提交时已自动产生 1 条，本次手动重跑又新增 1 条：结论只追加，不改写。
     with factory() as session:
         assert session.scalar(select(func.count()).select_from(AnnotationQualityRun)) == 2
-        assert session.scalar(select(func.count()).select_from(AnnotationQualityFinding)) == 8
+        # 5 条规则 × 2 次运行
+        assert session.scalar(select(func.count()).select_from(AnnotationQualityFinding)) == 10
         # 最新一条是本次手动重跑的，内容与响应一致。
         latest = session.scalars(
             select(AnnotationQualityRun).order_by(AnnotationQualityRun.created_at.desc())
@@ -175,7 +179,8 @@ def test_quality_check_is_append_only_and_listed_newest_first(
 
     with factory() as session:
         assert session.scalar(select(func.count()).select_from(AnnotationQualityRun)) == 3
-        assert session.scalar(select(func.count()).select_from(AnnotationQualityFinding)) == 12
+        # 5 条规则 × 3 次运行（V51-010 新增 number_label_within_range）
+        assert session.scalar(select(func.count()).select_from(AnnotationQualityFinding)) == 15
 
 
 def test_quality_check_list_paginates_with_cursor(

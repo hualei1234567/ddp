@@ -28,6 +28,7 @@ import type {
   QualityCategorySummary,
   QualityRuleCategory,
   QualityRun,
+  QualityRunFinding,
   QualitySeverity,
 } from "../../types/qualityRun";
 import ApiErrorState from "../ui/ApiErrorState";
@@ -59,6 +60,12 @@ export interface QualityRunReportProps {
   onLoadMoreFindings: () => void;
   /** 导入媒体资产页；结论下钻复用既有页面，不新建详情页。 */
   assetsHref: string;
+  /**
+   * Episode 证据定位深链（V51-010）：检查对象是 Episode 时给出，
+   * 指向 `/episodes/{id}?qc_run_id=...`。导入/数据集版本没有播放器，
+   * 不传即可——界面会如实不渲染该列链接。
+   */
+  evidenceHref?: ((finding: QualityRunFinding) => string) | null;
   /** 非当前导入的运行（深链进入其他对象）时禁用下钻与重跑。 */
   disabledReason?: string | null;
 }
@@ -186,6 +193,7 @@ export default function QualityRunReport({
   onRun,
   onLoadMoreFindings,
   assetsHref,
+  evidenceHref = null,
   disabledReason = null,
 }: QualityRunReportProps) {
   const rerunButton = (
@@ -314,6 +322,7 @@ export default function QualityRunReport({
           onReload={onReload}
           onLoadMore={onLoadMoreFindings}
           assetsHref={assetsHref}
+          evidenceHref={evidenceHref}
         />
         <Typography.Text type="secondary">
           质量结论由服务端规则判定并以只追加记录保存；本页不重新计算，也不把

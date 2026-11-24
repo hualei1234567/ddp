@@ -107,6 +107,29 @@ export interface QualityRun {
   created_by: string;
 }
 
+/**
+ * 证据时间区间（契约 `QualityEvidenceTimeRange`）。
+ *
+ * 起止是**十进制字符串**而不是 number：纳秒约 `1.8e18`，超出 `2^53`，
+ * 浏览器 `JSON.parse` 会把数字静默改值——定位到错误时间点比不定位更糟。
+ */
+export interface QualityEvidenceTimeRange {
+  start_time_ns: string;
+  end_time_ns: string;
+}
+
+/**
+ * 一条质量结论的证据定位（契约 `QualityEvidenceLocation`，V51-010 / FR-025）。
+ *
+ * 三个维度相互独立且都可空；整体为 `null` 表示"无法定位"，界面必须如实
+ * 说明，不得渲染成"定位到 0 时刻"。
+ */
+export interface QualityEvidenceLocation {
+  time_range: QualityEvidenceTimeRange | null;
+  stream_id: string | null;
+  field_path: string | null;
+}
+
 export interface QualityRunFinding {
   finding_id: string;
   run_id: string;
@@ -121,6 +144,11 @@ export interface QualityRunFinding {
   message: string;
   /** 结构化排障信息；契约未约束内部字段，前端原样展示。 */
   evidence: Record<string, unknown> | null;
+  /**
+   * 证据定位（V51-010）：时间区间 / 媒体流 / 字段路径。
+   * `null` 表示该结论无法定位——界面必须单独表达，不能当作"定位到 0 时刻"。
+   */
+  evidence_location: QualityEvidenceLocation | null;
   /** PASS=1.0 / FAIL=0.0；NOT_APPLICABLE 与 ERROR 为 null。 */
   score: number | null;
   created_at: string;

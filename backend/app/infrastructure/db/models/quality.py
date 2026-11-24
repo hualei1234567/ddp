@@ -20,6 +20,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
+    BigInteger,
     CheckConstraint,
     DateTime,
     Float,
@@ -199,6 +200,13 @@ class QualityFindingModel(Base):
     )
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     evidence: Mapped[dict[str, object] | None] = mapped_column(_JSON_TYPE, nullable=True)
+    # V51-010 证据定位：三列全部可空。空字符串会把"对象级结论"与
+    # "证据流是空串"混为一谈，因此缺失一律用 NULL。
+    # 纳秒用 BIGINT：超过 2^53 的整数放进浮点列会被静默改值。
+    evidence_start_time_ns: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    evidence_end_time_ns: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    evidence_stream_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    evidence_field_path: Mapped[str | None] = mapped_column(String(256), nullable=True)
     # NULL 表示"没有结论"（NOT_APPLICABLE / ERROR），不能当作 0 或 1 参与平均。
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -235,6 +243,14 @@ class QualityFindingModel(Base):
             name="status_allowed",
         ),
         CheckConstraint(_SCORE_CHECK, name="score_range"),
+        # 只有一半的区间是无意义数据：写入即失败，不留给前端半个区间。
+        CheckConstraint(
+            "(evidence_start_time_ns IS NULL AND evidence_end_time_ns IS NULL)"
+            " OR (evidence_start_time_ns IS NOT NULL"
+            " AND evidence_end_time_ns IS NOT NULL"
+            " AND evidence_start_time_ns < evidence_end_time_ns)",
+            name="evidence_time_range_consistent",
+        ),
         CheckConstraint(
             "(status IN ('NOT_APPLICABLE', 'ERROR') AND score IS NULL) OR "
             "(status IN ('PASS', 'FAIL') AND score IS NOT NULL)",
