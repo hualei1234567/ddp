@@ -44,6 +44,16 @@ export interface AnnotationTimelineProps {
   onSegmentDelete?: (segmentId: string) => void;
   /** 轨道声明：键 + 显示名，按声明顺序自上而下渲染（V31-047）。 */
   lanes?: readonly { key: string; label: string }[];
+  /**
+   * QC 证据高亮区间（V51-010 / FR-025）：相对 Episode 起点的秒。
+   *
+   * 与拖拽选区（`selection`）**视觉与语义都不同**：选区是"我正在框一段要填给
+   * 标签"的输入态，证据高亮是"服务端规则指出的问题区间"的只读态。两者同时
+   * 存在时各画各的，不合并——把证据画成选区会让人以为问题区间可以直接提交。
+   */
+  evidenceRange?: { startSeconds: number; endSeconds: number } | null;
+  /** 证据所属媒体流；用于在时间轴上标注"这条证据对应哪一路"。 */
+  evidenceStreamId?: string | null;
   disabled?: boolean;
 }
 
@@ -77,6 +87,8 @@ export default function AnnotationTimeline({
   onSegmentResize,
   onSegmentDelete,
   lanes,
+  evidenceRange = null,
+  evidenceStreamId = null,
   onSeek,
   onSelectRange,
   disabled = false,
@@ -251,6 +263,24 @@ export default function AnnotationTimeline({
     durationSeconds > 0
       ? clamp(playheadSeconds / durationSeconds, 0, 1) * 100
       : 0;
+
+  // 证据高亮：非法区间（倒置/零宽/NaN）直接不画。画一个零宽块读起来像
+  // "证据在这一帧"，那是没有依据的结论。
+  const evidence = useMemo(() => {
+    if (durationSeconds <= 0 || evidenceRange === null) {
+      return null;
+    }
+    const { startSeconds, endSeconds } = evidenceRange;
+    if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds)) {
+      return null;
+    }
+    const left = clamp(startSeconds / durationSeconds, 0, 1);
+    const right = clamp(endSeconds / durationSeconds, 0, 1);
+    if (right <= left) {
+      return null;
+    }
+    return { left, right };
+  }, [durationSeconds, evidenceRange]);
 
   // V31-047：轨道分组。声明顺序优先；片段里出现但未声明的轨道按首次
   // 出现顺序追加，保证未知轨道可见而不是被吞掉。
@@ -436,6 +466,33 @@ export default function AnnotationTimeline({
               );
             })
           : null}
+        {evidence ? (
+          <div
+            data-testid="annotation-timeline-evidence"
+            role="img"
+            aria-label={`QC 证据区间 ${formatPlaybackClock(
+              evidenceRange?.startSeconds ?? 0,
+            )} – ${formatPlaybackClock(evidenceRange?.endSeconds ?? 0)}${
+              evidenceStreamId ? `，媒体流 ${evidenceStreamId}` : ""
+            }`}
+            title={
+              evidenceStreamId
+                ? `QC 证据区间 · 媒体流 ${evidenceStreamId}`
+                : "QC 证据区间"
+            }
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: `${evidence.left * 100}%`,
+              width: `${(evidence.right - evidence.left) * 100}%`,
+              background: "rgba(207, 19, 34, 0.16)",
+              borderLeft: "2px solid #cf1322",
+              borderRight: "2px solid #cf1322",
+              pointerEvents: "none",
+            }}
+          />
+        ) : null}
         {selection ? (
           <div
             data-testid="annotation-timeline-selection"

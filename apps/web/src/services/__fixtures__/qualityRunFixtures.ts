@@ -98,6 +98,7 @@ export function qualityRunFindingFixture(
     subject_ref: "",
     message: "共 39 条媒体资产",
     evidence: null,
+    evidence_location: null,
     score: 1,
     created_at: "2026-11-18T08:00:01Z",
     ...overrides,

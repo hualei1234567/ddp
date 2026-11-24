@@ -94,6 +94,51 @@ QualityCategorySummary:
       maximum: 1
       description: 可判定结论的平均分；没有可判定结论时为 null。
 
+QualityEvidenceTimeRange:
+  type: object
+  additionalProperties: false
+  required: [start_time_ns, end_time_ns]
+  properties:
+    start_time_ns:
+      type: string
+      pattern: "^-?[0-9]+$"
+      description: |
+        证据区间的绝对起始纳秒，十进制字符串。用字符串而非整数：纳秒约
+        `1.8e18`，超出 JSON 数字在浏览器中的精确表示范围（`2^53`），写成
+        数字会被静默改值，定位到错误时间点。
+    end_time_ns:
+      type: string
+      pattern: "^-?[0-9]+$"
+      description: 证据区间的绝对结束纳秒；必须严格大于 `start_time_ns`。
+  description: |
+    证据覆盖的绝对时间区间（起止纳秒）。区间由规则给出，前端只用于
+    播放器跳转与时间轴高亮，不参与任何质量判定。
+
+QualityEvidenceLocation:
+  type: object
+  additionalProperties: false
+  required: [time_range, stream_id, field_path]
+  properties:
+    time_range:
+      oneOf:
+        - { $ref: "../openapi.yaml#/components/schemas/QualityEvidenceTimeRange" }
+        - { type: "null" }
+      description: 证据时间区间；没有时间维度的结论（例如"缺少必填标签"）为 null。
+    stream_id:
+      type: [string, "null"]
+      maxLength: 128
+      description: |
+        证据所属的媒体流（机位/轨道）。对象级结论或与流无关的结论为 null；
+        空字符串不被接受——"没有流"与"流 ID 是空串"必须区分。
+    field_path:
+      type: [string, "null"]
+      maxLength: 256
+      description: 证据指向被检查对象的哪个字段（如 `labels.velocity`、`time_range`）。
+  description: |
+    一条质量结论的证据定位（V51-010 / FR-025）。三字段相互独立且都可空，
+    但整体不为 null 时至少要有一个非空维度；接口用 `null` 表示"该结论无法
+    定位"，界面必须如实展示"无定位"，不得凭空选位置跳转。
+
 QualityRunFinding:
   type: object
   additionalProperties: false
@@ -129,6 +174,13 @@ QualityRunFinding:
       type: [object, "null"]
       additionalProperties: true
       description: 结构化排障信息（阈值、缺失项、报告摘要等），不含跨项目标识。
+    evidence_location:
+      oneOf:
+        - { $ref: "../openapi.yaml#/components/schemas/QualityEvidenceLocation" }
+        - { type: "null" }
+      description: |
+        该条结论的证据定位（V51-010）：时间区间 / 媒体流 / 字段路径。
+        `null` 表示无法定位，客户端不得把它渲染成"定位到 0 时刻"。
     score:
       type: [number, "null"]
       minimum: 0

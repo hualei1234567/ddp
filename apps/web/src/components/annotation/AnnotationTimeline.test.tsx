@@ -350,3 +350,93 @@ describe("AnnotationTimeline 多轨道", () => {
     expect(screen.getByTestId("timeline-segment-seg-x")).toBeTruthy();
   });
 });
+
+describe("QC 证据高亮（V51-010）", () => {
+  it("证据区间渲染为独立高亮块，与拖拽选区互不混淆", () => {
+    render(
+      <AnnotationTimeline
+        durationSeconds={10}
+        playheadSeconds={0}
+        evidenceRange={{ startSeconds: 2, endSeconds: 5 }}
+        evidenceStreamId="wrist"
+      />,
+    );
+
+    const evidence = screen.getByTestId("annotation-timeline-evidence");
+    expect(evidence).toBeInTheDocument();
+    // 左 20%、宽 30%：2s–5s / 10s。
+    expect(evidence.style.left).toBe("20%");
+    expect(evidence.style.width).toBe("30%");
+    expect(evidence).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("wrist"),
+    );
+    // 没有选区时不渲染选区块。
+    expect(
+      screen.queryByTestId("annotation-timeline-selection"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("没有证据区间时不渲染高亮块", () => {
+    render(<AnnotationTimeline durationSeconds={10} playheadSeconds={0} />);
+
+    expect(
+      screen.queryByTestId("annotation-timeline-evidence"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("零宽或倒置区间不渲染：不画假高亮", () => {
+    const { rerender } = render(
+      <AnnotationTimeline
+        durationSeconds={10}
+        playheadSeconds={0}
+        evidenceRange={{ startSeconds: 3, endSeconds: 3 }}
+      />,
+    );
+    expect(
+      screen.queryByTestId("annotation-timeline-evidence"),
+    ).not.toBeInTheDocument();
+
+    rerender(
+      <AnnotationTimeline
+        durationSeconds={10}
+        playheadSeconds={0}
+        evidenceRange={{ startSeconds: 6, endSeconds: 2 }}
+      />,
+    );
+    expect(
+      screen.queryByTestId("annotation-timeline-evidence"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("越界区间被裁剪到 0..duration，不溢出时间轴", () => {
+    render(
+      <AnnotationTimeline
+        durationSeconds={10}
+        playheadSeconds={0}
+        evidenceRange={{ startSeconds: -5, endSeconds: 15 }}
+      />,
+    );
+
+    const evidence = screen.getByTestId("annotation-timeline-evidence");
+    expect(evidence.style.left).toBe("0%");
+    expect(evidence.style.width).toBe("100%");
+  });
+
+  it("证据高亮是只读的：点击不会触发框选回调", () => {
+    const onSelectRange = vi.fn();
+    render(
+      <AnnotationTimeline
+        durationSeconds={10}
+        playheadSeconds={0}
+        evidenceRange={{ startSeconds: 2, endSeconds: 5 }}
+        onSeek={() => undefined}
+        onSelectRange={onSelectRange}
+      />,
+    );
+
+    const evidence = screen.getByTestId("annotation-timeline-evidence");
+    // pointerEvents:none：证据块自身不接收指针事件。
+    expect(evidence.style.pointerEvents).toBe("none");
+  });
+});
