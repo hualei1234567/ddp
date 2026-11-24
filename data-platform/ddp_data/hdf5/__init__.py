@@ -29,6 +29,15 @@ from ddp_data.hdf5.metadata import (
     MAX_TEXT_LENGTH,
     read_hdf5_structure_from,
 )
+from ddp_data.hdf5.payload import (
+    MAX_SLICE_BYTES,
+    MAX_SLICE_ELEMENTS,
+    Hdf5AttributeValue,
+    Hdf5DatasetPayload,
+    detect_hdf5_payload,
+    read_hdf5_attributes,
+    read_hdf5_dataset_slice,
+)
 from ddp_data.hdf5.models import (
     Hdf5DatasetSummary,
     Hdf5GroupSummary,
@@ -44,8 +53,12 @@ __all__ = [
     "MAX_ATTRIBUTES",
     "MAX_DATASETS",
     "MAX_GROUPS",
+    "MAX_SLICE_BYTES",
+    "MAX_SLICE_ELEMENTS",
     "MAX_METADATA_BYTES",
     "MAX_TEXT_LENGTH",
+    "Hdf5AttributeValue",
+    "Hdf5DatasetPayload",
     "Hdf5DatasetSummary",
     "Hdf5GroupSummary",
     "Hdf5InputError",
@@ -58,6 +71,9 @@ __all__ = [
     "Hdf5UnavailableError",
     "NotHdf5Error",
     "detect_hdf5",
+    "detect_hdf5_payload",
+    "read_hdf5_attributes",
+    "read_hdf5_dataset_slice",
     "read_hdf5_structure",
     "read_hdf5_structure_from",
 ]
