@@ -224,11 +224,12 @@ def test_episode_run_uses_annotation_rules_and_reports_all_categories(api_db) ->
     # 无导入媒体资产 → 导入规则不适用；不标成通过。
     assert categories["INTEGRITY"]["finding_count"] == 4
     assert categories["INTEGRITY"]["status"] == "NOT_APPLICABLE"
-    # 标注规则按 Episode 汇总；必填标签与重复键两条通过，另两条缺上下文。
+    # 标注规则按 Episode 汇总（V51-010 新增 number_label_within_range，共 5 条）；
+    # 必填标签与重复键两条通过，其余三条缺上下文。
     annotation = categories["ANNOTATION"]
-    assert annotation["finding_count"] == 4
+    assert annotation["finding_count"] == 5
     assert annotation["pass_count"] == 2
-    assert annotation["not_applicable_count"] == 2
+    assert annotation["not_applicable_count"] == 3
     assert annotation["status"] == "PASS"
     assert categories["METADATA"]["status"] == "NOT_APPLICABLE"
     assert categories["OVERALL"]["status"] == "PASS"
@@ -265,11 +266,11 @@ def test_findings_pagination_and_filters(api_db) -> None:
 
     annotation = editor.get(base, params={"category": "ANNOTATION"})
     assert annotation.status_code == 200
-    assert len(annotation.json()["items"]) == 4
+    assert len(annotation.json()["items"]) == 5
     assert all(item["category"] == "ANNOTATION" for item in annotation.json()["items"])
 
     not_applicable = editor.get(base, params={"status": "NOT_APPLICABLE"})
-    assert len(not_applicable.json()["items"]) == 9
+    assert len(not_applicable.json()["items"]) == 10
 
     # OVERALL 是派生类别，不落 finding。
     overall = editor.get(base, params={"category": "OVERALL"})

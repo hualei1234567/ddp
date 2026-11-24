@@ -48,9 +48,19 @@ export interface QualityRunFindingsTableProps {
   onLoadMore: () => void;
   /** 导入媒体资产页；结论下钻复用既有页面，不新建详情页。 */
   assetsHref: string;
+  /**
+   * 检查对象是 Episode 时给出「在时间轴定位证据」的链接（V51-010）。
+   *
+   * 只有 Episode 才有播放器与时间轴可定位；导入/数据集版本没有，传 null
+   * 让界面如实不显示入口，而不是给一个点了没反应的按钮。
+   */
+  evidenceHref?: ((finding: QualityRunFinding) => string) | null;
 }
 
-function findingColumns(assetsHref: string): TableColumnsType<QualityRunFinding> {
+function findingColumns(
+  assetsHref: string,
+  evidenceHref: ((finding: QualityRunFinding) => string) | null,
+): TableColumnsType<QualityRunFinding> {
   return [
     {
       title: "类别",
@@ -117,6 +127,42 @@ function findingColumns(assetsHref: string): TableColumnsType<QualityRunFinding>
       ),
     },
     {
+      title: "证据定位",
+      key: "evidence",
+      width: 200,
+      render: (_value, finding) => {
+        const location = finding.evidence_location;
+        if (location === null) {
+          return (
+            <Typography.Text type="secondary">
+              无可定位证据
+            </Typography.Text>
+          );
+        }
+        const dimensions = [
+          location.time_range === null ? null : "时间区间",
+          location.stream_id === null ? null : `流 ${location.stream_id}`,
+          location.field_path === null ? null : location.field_path,
+        ].filter((item): item is string => item !== null);
+        const jump =
+          evidenceHref !== null && finding.status !== "PASS"
+            ? evidenceHref(finding)
+            : null;
+        return (
+          <Space direction="vertical" size={0}>
+            <Typography.Text type="secondary">
+              {dimensions.join(" · ")}
+            </Typography.Text>
+            {jump !== null ? (
+              <Link to={jump} aria-label={`在 Episode 时间轴定位 ${finding.rule_id} 的证据`}>
+                在时间轴定位
+              </Link>
+            ) : null}
+          </Space>
+        );
+      },
+    },
+    {
       title: "说明",
       dataIndex: "message",
       render: (value: string) => <Typography.Text>{value}</Typography.Text>,
@@ -139,6 +185,7 @@ export default function QualityRunFindingsTable({
   onReload,
   onLoadMore,
   assetsHref,
+  evidenceHref = null,
 }: QualityRunFindingsTableProps) {
   const visible = filterFindingsBySeverity(findings.items, severity);
   const severityFilterNarrowsLoaded =
@@ -207,7 +254,7 @@ export default function QualityRunFindingsTable({
         rowKey="finding_id"
         size="small"
         loading={findings.loading || findings.refreshing}
-        columns={findingColumns(assetsHref)}
+        columns={findingColumns(assetsHref, evidenceHref)}
         dataSource={visible}
         pagination={false}
         scroll={{ x: 1200 }}

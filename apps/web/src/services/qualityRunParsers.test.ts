@@ -11,6 +11,8 @@ import {
   queuedQualityRunFixture,
 } from "./__fixtures__/qualityRunFixtures";
 import {
+  parseQualityEvidenceLocation,
+  parseQualityEvidenceTimeRange,
   parseQualityRun,
   parseQualityRunDiff,
   parseQualityRunFinding,
@@ -289,5 +291,107 @@ describe("质量运行差异报告解析（V31-033 / FR-027）", () => {
     );
     expect(report.findings).toHaveLength(0);
     expect(report.has_regression).toBe(false);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// V51-010：证据定位解析
+// ---------------------------------------------------------------------------
+
+describe("证据定位解析（V51-010）", () => {
+  it("缺失 evidence_location 解析为 null（不是空对象）", () => {
+    const raw = qualityRunFindingFixture();
+    // 模拟旧服务端：完全没有该字段。
+    delete (raw as unknown as Record<string, unknown>).evidence_location;
+
+    const finding = parseQualityRunFinding(raw);
+
+    expect(finding.evidence_location).toBeNull();
+  });
+
+  it("完整定位三字段原样保留，纳秒保持字符串", () => {
+    const finding = parseQualityRunFinding(
+      qualityRunFindingFixture({
+        evidence_location: {
+          time_range: {
+            start_time_ns: "1763510400000000000",
+            end_time_ns: "1763510405000000000",
+          },
+          stream_id: "wrist",
+          field_path: "streams",
+        },
+      }),
+    );
+
+    expect(finding.evidence_location).toEqual({
+      time_range: {
+        start_time_ns: "1763510400000000000",
+        end_time_ns: "1763510405000000000",
+      },
+      stream_id: "wrist",
+      field_path: "streams",
+    });
+  });
+
+  it("三字段全空的对象被拒绝：无法定位时应返回 null", () => {
+    expect(() =>
+      parseQualityEvidenceLocation({
+        time_range: null,
+        stream_id: null,
+        field_path: null,
+      }),
+    ).toThrow(ContractValidationError);
+  });
+
+  it("倒置时间区间被拒绝", () => {
+    expect(() =>
+      parseQualityEvidenceTimeRange({
+        start_time_ns: "200",
+        end_time_ns: "100",
+      }),
+    ).toThrow(ContractValidationError);
+  });
+
+  it("非整数的纳秒字符串被拒绝（浮点会丢精度）", () => {
+    expect(() =>
+      parseQualityEvidenceTimeRange({
+        start_time_ns: "1.5",
+        end_time_ns: "200",
+      }),
+    ).toThrow(ContractValidationError);
+    expect(() =>
+      parseQualityEvidenceTimeRange({
+        start_time_ns: "1e9",
+        end_time_ns: "2e9",
+      }),
+    ).toThrow(ContractValidationError);
+  });
+
+  it("未知字段被拒绝：契约 additionalProperties=false", () => {
+    expect(() =>
+      parseQualityEvidenceLocation({
+        time_range: null,
+        stream_id: "main",
+        field_path: null,
+      }),
+    ).not.toThrow();
+  });
+
+  it("只有流或只有字段的定位是合法的", () => {
+    expect(
+      parseQualityEvidenceLocation({
+        time_range: null,
+        stream_id: "main",
+        field_path: null,
+      }).stream_id,
+    ).toBe("main");
+    expect(
+      parseQualityEvidenceLocation({
+        time_range: null,
+        stream_id: null,
+        field_path: "labels.velocity",
+      }).field_path,
+    ).toBe("labels.velocity");
   });
 });

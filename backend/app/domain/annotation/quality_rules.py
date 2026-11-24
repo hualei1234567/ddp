@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from uuid import UUID
 
 from app.domain.annotation.enums import (
+    AnnotationLabelType,
     LabelValueSource,
     QualityCheckStatus,
     QualityRuleSeverity,
@@ -35,6 +36,7 @@ from app.domain.annotation.validation import (
     optional_text,
     positive_int,
 )
+from app.domain.quality.evidence import EVIDENCE_LOCATION_KEY
 
 RULE_ID_MAX_LENGTH = 64
 RULE_DESCRIPTION_MAX_LENGTH = 500
@@ -230,10 +232,14 @@ def evaluate_required_labels(record: AnnotationRecord, context: RuleContext) -> 
             passed=True,
             message=f"必填标签齐全（共 {len(context.definitions)} 项定义）",
         )
+    evidence: dict[str, object] = {"missing_label_keys": missing}
+    # V51-010：只有缺少一个标签时能唯一定位；多个缺失不伪造单一字段路径。
+    if len(missing) == 1:
+        evidence[EVIDENCE_LOCATION_KEY] = {"field_path": f"labels.{missing[0]}"}
     return RuleOutcome(
         passed=False,
         message=f"缺少 {len(missing)} 个必填标签：{', '.join(missing)}",
-        evidence={"missing_label_keys": missing},
+        evidence=evidence,
     )
 
 
@@ -264,6 +270,12 @@ def evaluate_time_range_within_episode(
     end = int(record.time_range["end_time_ns"])  # type: ignore[arg-type]
     episode_start, episode_end = int(bounds[0]), int(bounds[1])
     evidence = {
+        # V51-010：定位到记录声明的时间区间。区间本身是合法的（起<止 由实体层
+        # 强制），但可能越界——界面据此高亮该区间并跳到起点。
+        EVIDENCE_LOCATION_KEY: {
+            "time_range": {"start_time_ns": start, "end_time_ns": end},
+            "field_path": "time_range",
+        },
         "episode_start_time_ns": episode_start,
         "episode_end_time_ns": episode_end,
         "record_start_time_ns": start,
@@ -315,6 +327,11 @@ def evaluate_ai_label_confidence(
             evidence={"threshold": threshold},
         )
     evidence: dict[str, object] = {"threshold": threshold}
+    # V51-010：置信度问题没有时间维度，只定位到字段；多标签时字段路径是列表
+    # 无法表达，因此只给单个标签时才写 field_path（多标签交给 below_threshold）。
+    offending_keys = [label.label_key for label in low] + unscored
+    if len(offending_keys) == 1:
+        evidence[EVIDENCE_LOCATION_KEY] = {"field_path": f"labels.{offending_keys[0]}"}
     if low:
         evidence["below_threshold"] = [
             {"label_key": label.label_key, "confidence": float(label.confidence or 0.0)}
@@ -349,10 +366,103 @@ def evaluate_duplicate_label_keys(
         return RuleOutcome(passed=True, message="标签键无重复")
     ordered = sorted(duplicates)
     pairs = [{"normalized_key": key, "label_keys": duplicates[key]} for key in ordered]
+    evidence: dict[str, object] = {"duplicates": pairs}
+    # V51-010：只有一组重复时能唯一定位到字段；多组不伪造单一 field_path。
+    if len(pairs) == 1:
+        evidence[EVIDENCE_LOCATION_KEY] = {"field_path": f"labels.{ordered[0]}"}
     return RuleOutcome(
         passed=False,
         message=f"存在 {len(pairs)} 组重复标签键：{', '.join(ordered)}",
-        evidence={"duplicates": pairs},
+        evidence=evidence,
+    )
+
+
+def evaluate_number_label_within_range(
+    record: AnnotationRecord,
+    context: RuleContext,
+) -> RuleOutcome:
+    """数值标签必须落在 Schema 声明的 ``min_value`` / ``max_value`` 内（V51-010）。
+
+    ## 为什么在提交校验之外再判一次
+
+    ``submission._require_type`` 在**写入**时已经拦过越界值，本规则覆盖的是
+    存量的、绕过创建路径写入的记录（导入回填、直接 SQL 修数据、Schema 事后
+    收紧边界）。质检是对已落库数据的独立复核，不能假设写入路径永远正确
+    ——这与 ``time_range_within_episode`` 的存在理由完全一致。
+
+    ## 证据定位
+
+    越界是**单字段**问题，因此 ``field_path`` 能唯一定位到 ``labels.<key>``；
+    若记录声明了顶层 ``time_range``，一并给出时间区间，让界面能跳到该时刻。
+    没有 ``time_range`` 时不编造区间——界面应显示"仅字段定位"。
+    """
+    bounds: dict[str, tuple[float | None, float | None]] = {}
+    for definition in context.definitions:
+        if definition.label_type is not AnnotationLabelType.NUMBER:
+            continue
+        spec = definition.value_spec
+        low = spec.get("min_value")
+        high = spec.get("max_value")
+        if low is None and high is None:
+            continue
+        bounds[definition.label_key] = (
+            float(low) if low is not None else None,
+            float(high) if high is not None else None,
+        )
+    if not bounds:
+        return RuleOutcome(
+            passed=True,
+            applicable=False,
+            message="Schema 未声明数值标签边界，无法判定越界",
+        )
+    violations: list[dict[str, object]] = []
+    for label in record.labels:
+        limit = bounds.get(label.label_key)
+        if limit is None:
+            continue
+        value = label.value
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            # 类型错误由写入路径与 Schema 校验负责；这里不能把"类型不对"
+            # 当成"越界"，否则会给出错误的定位与阈值解释。
+            continue
+        low, high = limit
+        number = float(value)
+        if (low is not None and number < low) or (high is not None and number > high):
+            violations.append(
+                {
+                    "label_key": label.label_key,
+                    "value": number,
+                    "min_value": low,
+                    "max_value": high,
+                }
+            )
+    if not violations:
+        return RuleOutcome(passed=True, message=f"数值标签均在声明边界内（{len(bounds)} 项）")
+    # 输出排序：规则要求确定性（同输入必同输出），列表顺序不能取决于标签录入顺序。
+    violations.sort(key=lambda item: str(item["label_key"]))
+    first = violations[0]
+    evidence: dict[str, object] = {
+        "violations": violations,
+        "expected": {"min_value": first["min_value"], "max_value": first["max_value"]},
+        "actual": first["value"],
+        "threshold": {
+            "min_value": first["min_value"],
+            "max_value": first["max_value"],
+        },
+    }
+    location: dict[str, object] = {"field_path": f"labels.{first['label_key']}"}
+    record_range = record.time_range
+    if record_range is not None:
+        location["time_range"] = {
+            "start_time_ns": int(record_range["start_time_ns"]),  # type: ignore[arg-type]
+            "end_time_ns": int(record_range["end_time_ns"]),  # type: ignore[arg-type]
+        }
+    evidence[EVIDENCE_LOCATION_KEY] = location
+    keys = "、".join(str(item["label_key"]) for item in violations)
+    return RuleOutcome(
+        passed=False,
+        message=f"{len(violations)} 个数值标签越界：{keys}",
+        evidence=evidence,
     )
 
 
@@ -396,6 +506,13 @@ DEFAULT_RULES: tuple[QualityRule, ...] = (
         evaluator=evaluate_ai_label_confidence,
     ),
     QualityRule(
+        rule_id="number_label_within_range",
+        version=1,
+        severity=QualityRuleSeverity.ERROR,
+        description="Schema 声明了 min_value/max_value 的数值标签必须落在边界内",
+        evaluator=evaluate_number_label_within_range,
+    ),
+    QualityRule(
         rule_id="duplicate_label_keys",
         version=1,
         severity=QualityRuleSeverity.ERROR,
@@ -431,6 +548,7 @@ __all__ = [
     "default_registry",
     "evaluate_ai_label_confidence",
     "evaluate_duplicate_label_keys",
+    "evaluate_number_label_within_range",
     "evaluate_required_labels",
     "evaluate_time_range_within_episode",
     "resolve_status",

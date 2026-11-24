@@ -22,6 +22,8 @@ import {
   QUALITY_SUBJECT_TYPE_VALUES,
   type QualityCategorySummary,
   type QualityDiffStatus,
+  type QualityEvidenceLocation,
+  type QualityEvidenceTimeRange,
   type QualityFindingDiff,
   type QualityRun,
   type QualityRunDiffReport,
@@ -199,6 +201,66 @@ export function parseQualityRun(value: unknown, path = "质量运行"): QualityR
  * `status` 与 `score` 的一致性由服务端保证；前端只校验取值范围，
  * **不**根据 `status` 反推或改写 `score`（那会复制领域判定）。
  */
+/** 纳秒字符串：只接受十进制整数形态；出现小数或科学计数法说明生产方写错了。 */
+const NANOSECOND_PATTERN = /^-?[0-9]+$/;
+
+function readNanosecondString(
+  record: Record<string, unknown>,
+  key: string,
+  path: string,
+): string {
+  const value = readString(record, key, path);
+  if (!NANOSECOND_PATTERN.test(value)) {
+    throw new ContractValidationError(`${path} 必须是十进制整数纳秒字符串`);
+  }
+  return value;
+}
+
+/**
+ * 证据时间区间（契约 `QualityEvidenceTimeRange`）。
+ *
+ * 起止必须 `start < end`：只有一端、或倒置的区间都是缺陷数据，宁可解析失败
+ * 也不要让时间轴渲染出一个负宽度的高亮块。
+ */
+export function parseQualityEvidenceTimeRange(
+  value: unknown,
+  path = "证据时间区间",
+): QualityEvidenceTimeRange {
+  const record = asRecord(value, path);
+  const start = readNanosecondString(record, "start_time_ns", `${path}.start_time_ns`);
+  const end = readNanosecondString(record, "end_time_ns", `${path}.end_time_ns`);
+  if (BigInt(start) >= BigInt(end)) {
+    throw new ContractValidationError(`${path}.start_time_ns 必须小于 end_time_ns`);
+  }
+  return { start_time_ns: start, end_time_ns: end };
+}
+
+/**
+ * 证据定位（契约 `QualityEvidenceLocation`，V51-010）。
+ *
+ * 三个维度相互独立且都可空，但整体存在时至少要有一个非空维度——三者全空的
+ * 对象是缺陷数据：服务端应返回 `null` 表达"无法定位"。
+ */
+export function parseQualityEvidenceLocation(
+  value: unknown,
+  path = "证据定位",
+): QualityEvidenceLocation {
+  const record = asRecord(value, path);
+  const rawRange = readOptionalRecord(record, "time_range", `${path}.time_range`);
+  const time_range =
+    rawRange === null
+      ? null
+      : parseQualityEvidenceTimeRange(rawRange, `${path}.time_range`);
+  const stream_id = readOptionalString(record, "stream_id", `${path}.stream_id`);
+  const field_path = readOptionalString(record, "field_path", `${path}.field_path`);
+  if (time_range === null && stream_id === null && field_path === null) {
+    throw new ContractValidationError(
+      `${path} 不能三个维度全空：无法定位时应返回 null`,
+    );
+  }
+  return { time_range, stream_id, field_path };
+}
+
 export function parseQualityRunFinding(
   value: unknown,
   path = "质量结论",
@@ -230,9 +292,21 @@ export function parseQualityRunFinding(
     subject_ref: readOptionalString(record, "subject_ref", `${path}.subject_ref`) ?? "",
     message: readString(record, "message", `${path}.message`),
     evidence: readOptionalRecord(record, "evidence", `${path}.evidence`),
+    evidence_location: readEvidenceLocation(record, `${path}.evidence_location`),
     score: readUnitScore(record, "score", `${path}.score`),
     created_at: readString(record, "created_at", `${path}.created_at`),
   };
+}
+
+function readEvidenceLocation(
+  record: Record<string, unknown>,
+  path: string,
+): QualityEvidenceLocation | null {
+  const value = record.evidence_location;
+  if (value === undefined || value === null) {
+    return null;
+  }
+  return parseQualityEvidenceLocation(value, path);
 }
 
 export function parseQualityRunFindingPage(
