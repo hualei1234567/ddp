@@ -35,12 +35,30 @@ from app.domain.quality.errors import (
     InvalidQualityRunTransitionError,
     QualityRunConflictError,
 )
+from app.domain.quality.evidence import EvidenceLocation, EvidenceTimeRange
 from app.domain.quality.models import QualityFinding, QualityRun
 from app.infrastructure.db.models.quality import (
     QualityFindingModel,
     QualityRunModel,
 )
 from app.infrastructure.repositories._sql_support import as_utc, keyset_after_desc
+
+
+def _finding_location(row: QualityFindingModel) -> EvidenceLocation | None:
+    """把三列定位还原成领域对象；三列全空表示"没有可定位的证据"。"""
+    time_range: EvidenceTimeRange | None = None
+    if row.evidence_start_time_ns is not None and row.evidence_end_time_ns is not None:
+        time_range = EvidenceTimeRange(
+            start_time_ns=row.evidence_start_time_ns,
+            end_time_ns=row.evidence_end_time_ns,
+        )
+    if time_range is None and not row.evidence_stream_id and not row.evidence_field_path:
+        return None
+    return EvidenceLocation(
+        time_range=time_range,
+        stream_id=row.evidence_stream_id or None,
+        field_path=row.evidence_field_path or None,
+    )
 
 
 def _finding(row: QualityFindingModel) -> QualityFinding:
@@ -57,6 +75,7 @@ def _finding(row: QualityFindingModel) -> QualityFinding:
         evidence=dict(row.evidence) if row.evidence is not None else None,
         score=float(row.score) if row.score is not None else None,
         subject_ref=row.subject_ref,
+        evidence_location=_finding_location(row),
         created_at=as_utc(row.created_at),  # type: ignore[arg-type]
     )
 
@@ -119,6 +138,8 @@ class SqlQualityRunRepository:
 
     @staticmethod
     def _finding_model(finding: QualityFinding) -> QualityFindingModel:
+        location = finding.evidence_location
+        time_range = location.time_range if location is not None else None
         return QualityFindingModel(
             id=finding.finding_id,
             project_id=finding.project_id,
@@ -132,6 +153,14 @@ class SqlQualityRunRepository:
             message=finding.message,
             evidence=dict(finding.evidence) if finding.evidence is not None else None,
             score=finding.score,
+            evidence_start_time_ns=(
+                time_range.start_time_ns if isinstance(time_range, EvidenceTimeRange) else None
+            ),
+            evidence_end_time_ns=(
+                time_range.end_time_ns if isinstance(time_range, EvidenceTimeRange) else None
+            ),
+            evidence_stream_id=location.stream_id if location is not None else None,
+            evidence_field_path=location.field_path if location is not None else None,
             created_at=finding.created_at,
         )
 

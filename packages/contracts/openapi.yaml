@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.35.0
+  version: 1.36.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -211,7 +211,7 @@ info:
       `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
       本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
       `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
-    - `1.35.0` **Frozen Dataset 引用保护（V51-017 / FR-045）**：新增只读端点
+    - `1.36.0` **Frozen Dataset 引用保护（V51-017 / FR-045）**：新增只读端点
       `GET /api/v1/projects/{project_id}/raw-assets/{asset_id}/reference-impact`。
       语义要点：
       * **冻结判定看 `frozen_at` 而非 `status`**：被取代（`SUPERSEDED`）或归档
@@ -227,6 +227,24 @@ info:
       * 新增 `reference-impact` 端点、`ReferenceImpact` / `FrozenDatasetReference`
         schema 与错误码 `raw_asset_referenced_by_frozen_dataset`。全部为增量：
         无路径/字段删除，无数据库迁移（所需的四个索引均已存在）。
+    - `1.35.0` **QC 证据定位（V51-010 / FR-025）**：`QualityRunFinding` 新增
+      可选字段 `evidence_location`，并新增 `QualityEvidenceLocation` /
+      `QualityEvidenceTimeRange` 两个 schema。此前质量结论只能把定位信息塞进
+      自由 JSON 的 `evidence`，客户端无法可靠地取出"跳转到哪个时间、高亮哪一路
+      流"；任何一条规则改了键名，界面就静默定位失败。`evidence_location` 把三个
+      维度提升为契约字段：`time_range`（起止绝对纳秒）、`stream_id`（媒体流）、
+      `field_path`（被检查字段）。纳秒用**十进制字符串**而不是整数：纳秒约
+      `1.8e18`，超出 JSON 数字在浏览器中的精确表示范围（`2^53`），写成数字会被
+      JSON.parse 静默改值，定位到错误时刻。三字段相互独立且都可空，整体为
+      `null` 表示"该结论无法定位"——客户端必须如实展示，不得渲染成"定位到 0
+      时刻"。服务端把定位落在 `quality_findings` 的四个独立列上（迁移 0073），
+      不再依赖自由 JSON：`evidence_start_time_ns`/`evidence_end_time_ns`
+      用 BIGINT（浮点会改值），`evidence_stream_id`/`evidence_field_path` 用
+      可空字符串（空串会把"对象级结论"与"证据流是空串"混为一谈），并有
+      `evidence_time_range_consistent` 约束保证起止同时存在且起点早于终点。
+      语义红线：QC 只提供证据与建议，不代替 Reviewer——`evidence_location`
+      不携带任何审核结论，也不改变既有 Accept/Rework/Arbitration 状态机。
+      全部为增量：新字段可选、新增 schema、无路径/字段删除，无必填性收紧。
     - `1.34.0` **分配前实时负载提示（FR-020）**：新增只读端点
       `POST /api/v1/projects/{project_id}/annotation-assignment-capacity-preview`。
       工作量后端与 `CapacityPolicy` 硬阻断此前已实现，但分配抽屉打开时看不到
@@ -384,7 +402,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.35.0
+  version: 1.36.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -1671,6 +1689,8 @@ components:
     QualityRunCreate: {$ref: "./fragments/schemas.quality.yaml#/QualityRunCreate"}
     QualityCategorySummary: {$ref: "./fragments/schemas.quality.yaml#/QualityCategorySummary"}
     QualityRunFinding: {$ref: "./fragments/schemas.quality.yaml#/QualityRunFinding"}
+    QualityEvidenceTimeRange: {$ref: "./fragments/schemas.quality.yaml#/QualityEvidenceTimeRange"}
+    QualityEvidenceLocation: {$ref: "./fragments/schemas.quality.yaml#/QualityEvidenceLocation"}
     QualityRun: {$ref: "./fragments/schemas.quality.yaml#/QualityRun"}
     QualityRunFindingPage: {$ref: "./fragments/schemas.quality.yaml#/QualityRunFindingPage"}
     QualityRunPage: {$ref: "./fragments/schemas.quality.yaml#/QualityRunPage"}

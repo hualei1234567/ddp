@@ -34,6 +34,7 @@ from app.domain.annotation.quality_rules import (
     default_registry,
     evaluate_ai_label_confidence,
     evaluate_duplicate_label_keys,
+    evaluate_number_label_within_range,
     evaluate_required_labels,
     evaluate_time_range_within_episode,
     resolve_status,
@@ -133,6 +134,13 @@ def test_required_labels_without_definitions_is_not_applicable() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _without_location(evidence: object) -> object:
+    """断言"除定位外的证据"：定位结构由 V51-010 单独测试。"""
+    if not isinstance(evidence, dict):
+        return evidence
+    return {key: value for key, value in evidence.items() if key != "location"}
+
+
 def test_time_range_inside_episode_bounds_passes() -> None:
     episode_id = uuid4()
     record = make_record(
@@ -144,7 +152,12 @@ def test_time_range_inside_episode_bounds_passes() -> None:
     outcome = evaluate_time_range_within_episode(record, context)
 
     assert outcome.passed is True
+    # V51-010：证据带定位（记录声明的区间 + 字段路径），供界面跳转/高亮。
     assert outcome.evidence == {
+        "location": {
+            "time_range": {"start_time_ns": 1_200, "end_time_ns": 1_800},
+            "field_path": "time_range",
+        },
         "episode_start_time_ns": 1_000,
         "episode_end_time_ns": 2_000,
         "record_start_time_ns": 1_200,
@@ -354,8 +367,10 @@ def test_duplicate_label_keys_case_and_space_folded() -> None:
 
     assert outcome.passed is False
     # 实体层已 trim 标签键，因此这里看到的是 "Action" 而非 " Action "。
+    # V51-010：单组重复时能唯一定位到字段；多组不伪造单一 field_path。
     assert outcome.evidence == {
-        "duplicates": [{"normalized_key": "action", "label_keys": ["Action", "action"]}]
+        "duplicates": [{"normalized_key": "action", "label_keys": ["Action", "action"]}],
+        "location": {"field_path": "labels.action"},
     }
 
 
@@ -364,12 +379,13 @@ def test_duplicate_label_keys_case_and_space_folded() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_default_registry_has_four_sorted_rules_with_stable_version() -> None:
+def test_default_registry_has_five_sorted_rules_with_stable_version() -> None:
+    """V51-010 新增 number_label_within_range：数值流越界证据定位。"""
     registry = default_registry()
     ids = [rule.rule_id for rule in registry.list_rules()]
 
     assert ids == sorted(ids)
-    assert len(registry) == 4
+    assert len(registry) == 5
     assert registry.version == default_registry().version
     assert registry.version.startswith("sha256:")
     assert len(registry.version) == 71
@@ -650,3 +666,124 @@ def test_reading_legacy_ai_label_without_confidence_still_works() -> None:
     legacy = make_record(labels=[{"label_key": "action", "value": "PICK", "source": "AI_ASSISTED"}])
     assert legacy.labels[0].source is LabelValueSource.AI_ASSISTED
     assert legacy.labels[0].confidence is None
+
+
+# ---------------------------------------------------------------------------
+# V51-010：数值流越界证据（FR-025 三类证据之二）
+# ---------------------------------------------------------------------------
+
+
+def _number_definitions() -> tuple[LabelDefinition, ...]:
+    return (
+        LabelDefinition(
+            label_key="velocity",
+            label_type=AnnotationLabelType.NUMBER,
+            required=False,
+            level=AnnotationLevel.EPISODE,
+            value_spec={"min_value": 0, "max_value": 5},
+        ),
+        LabelDefinition(
+            label_key="battery",
+            label_type=AnnotationLabelType.NUMBER,
+            required=False,
+            level=AnnotationLevel.EPISODE,
+            value_spec={"min_value": 0, "max_value": 100, "unit": "%"},
+        ),
+    )
+
+
+def test_number_label_within_range_passes_when_all_values_inside() -> None:
+    record = make_record(labels=[{"label_key": "velocity", "value": 3}])
+
+    outcome = evaluate_number_label_within_range(
+        record, RuleContext(definitions=_number_definitions())
+    )
+
+    assert outcome.passed is True
+    assert outcome.applicable is True
+
+
+def test_number_label_within_range_fails_with_field_and_expected_actual() -> None:
+    """越界结论必须能定位到字段，并给出期望/实际/阈值供人核对。"""
+    record = make_record(labels=[{"label_key": "velocity", "value": 9.5}])
+
+    outcome = evaluate_number_label_within_range(
+        record, RuleContext(definitions=_number_definitions())
+    )
+
+    assert outcome.passed is False
+    assert outcome.evidence is not None
+    # 定位：单字段越界可唯一定位
+    assert outcome.evidence["location"] == {"field_path": "labels.velocity"}
+    # 解释性事实：期望/实际/阈值都由规则给出，前端不自己算
+    assert outcome.evidence["actual"] == 9.5
+    assert outcome.evidence["expected"] == {"min_value": 0.0, "max_value": 5.0}
+    assert outcome.evidence["threshold"] == {"min_value": 0.0, "max_value": 5.0}
+
+
+def test_number_label_within_range_includes_record_time_range_when_present() -> None:
+    """记录声明了 time_range 时，数值越界证据同时给出时间定位。"""
+    record = make_record(
+        labels=[{"label_key": "velocity", "value": -1}],
+        time_range={"start_time_ns": 1_000, "end_time_ns": 2_000},
+    )
+
+    outcome = evaluate_number_label_within_range(
+        record, RuleContext(definitions=_number_definitions())
+    )
+
+    assert outcome.evidence is not None
+    assert outcome.evidence["location"] == {
+        "field_path": "labels.velocity",
+        "time_range": {"start_time_ns": 1_000, "end_time_ns": 2_000},
+    }
+
+
+def test_number_label_within_range_is_not_applicable_without_bounds() -> None:
+    """Schema 没声明边界时"没有结论"，绝不能当成通过。"""
+    definitions = (
+        LabelDefinition(
+            label_key="velocity",
+            label_type=AnnotationLabelType.NUMBER,
+            required=False,
+            level=AnnotationLevel.EPISODE,
+        ),
+    )
+    record = make_record(labels=[{"label_key": "velocity", "value": 9.5}])
+
+    outcome = evaluate_number_label_within_range(record, RuleContext(definitions=definitions))
+
+    assert outcome.applicable is False
+    assert outcome.evidence is None
+
+
+def test_number_label_within_range_ignores_non_numeric_values() -> None:
+    """类型不对不归本规则判：那是 Schema 校验的职责，误报会给出错误定位。"""
+    record = make_record(labels=[{"label_key": "velocity", "value": "fast"}])
+
+    outcome = evaluate_number_label_within_range(
+        record, RuleContext(definitions=_number_definitions())
+    )
+
+    assert outcome.passed is True
+    assert outcome.evidence is None
+
+
+def test_number_label_within_range_sorts_multiple_violations() -> None:
+    """多条越界时输出排序，保证同输入同输出（确定性要求）。"""
+    record = make_record(
+        labels=[
+            {"label_key": "velocity", "value": 9.5},
+            {"label_key": "battery", "value": 120},
+        ]
+    )
+
+    outcome = evaluate_number_label_within_range(
+        record, RuleContext(definitions=_number_definitions())
+    )
+
+    assert outcome.evidence is not None
+    keys = [item["label_key"] for item in outcome.evidence["violations"]]
+    assert keys == sorted(keys)
+    # 多字段时只定位排序第一项，不伪造单一 field_path 覆盖全部
+    assert outcome.evidence["location"] == {"field_path": "labels.battery"}

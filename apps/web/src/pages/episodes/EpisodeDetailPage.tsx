@@ -11,11 +11,12 @@ import {
 } from "antd";
 import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import CollectionStatusTag from "../../components/collection/CollectionStatusTag";
 import EpisodeActionPanel from "../../components/episodes/EpisodeActionPanel";
 import EpisodeRevisionPanel from "../../components/episodes/EpisodeRevisionPanel";
+import EpisodeQcEvidenceSection from "../../components/quality/EpisodeQcEvidenceSection";
 import EpisodeQualityPanel from "../../components/quality/EpisodeQualityPanel";
 import LineagePanel from "../../components/episodes/LineagePanel";
 import ApiErrorState from "../../components/ui/ApiErrorState";
@@ -25,6 +26,8 @@ import PageState from "../../components/ui/PageState";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
+import { qualityRunApi } from "../../services/qualityRuns";
+import { ApiError } from "../../services/api";
 import { collectionsApi } from "../../services/collections";
 import {
   buildEpisodeDetailPath,
@@ -32,6 +35,7 @@ import {
   buildRawAssetDetailPath,
   buildTaskDetailPath,
 } from "../../services/collectionUrl";
+import { readIdQuery } from "../../services/annotationUrl";
 import {
   formatNanoseconds,
   getEpisodeStatus,
@@ -52,10 +56,13 @@ function EpisodeDetailBody({
   projectId,
   episode,
   online,
+  qcRunId,
 }: {
   projectId: string;
   episode: Episode;
   online: boolean;
+  /** URL `qc_run_id`：从质量运行详情/导入质检深链过来的证据运行。 */
+  qcRunId: string | null;
 }) {
   const navigate = useNavigate();
   const [busy, setBusy] = useState<"action" | "revision" | null>(null);
@@ -367,6 +374,14 @@ function EpisodeDetailBody({
         episodeId={episode.episode_id}
       />
 
+      {qcRunId !== null ? (
+        <QcEvidenceLoader
+          projectId={projectId}
+          episode={episode}
+          runId={qcRunId}
+        />
+      ) : null}
+
       <Row gutter={[16, 16]}>
         <Col xs={24} xl={12}>
           <EpisodeActionPanel
@@ -410,12 +425,80 @@ function EpisodeDetailBody({
   );
 }
 
+/**
+ * 读取 URL 指定的质量运行，再交给证据定位区。
+ *
+ * 为什么要先取 run 再取 findings：findings 只给结论，**不给** `rule_set_version`
+ * 这类解释"本次用的是哪版规则"的元数据；缺了它，证据面板无法回答
+ * "这条结论是旧规则判的还是新规则判的"。两个请求都走同一 project 作用域。
+ */
+function QcEvidenceLoader({
+  projectId,
+  episode,
+  runId,
+}: {
+  projectId: string;
+  episode: Episode;
+  runId: string;
+}) {
+  const load = useCallback(
+    (signal: AbortSignal) =>
+      qualityRunApi.getRun(projectId, runId, { signal }),
+    [projectId, runId],
+  );
+  const { data, error, loading, reload } = useRequest(load);
+
+  if (loading) {
+    return (
+      <Card title="QC 证据定位（时间轴 / 流 / 字段）">
+        <PageState
+          compact
+          variant="loading"
+          title="正在读取质量运行"
+          description="读取运行元数据与结论明细。"
+        />
+      </Card>
+    );
+  }
+  if (error !== null && data === null) {
+    return (
+      <Card title="QC 证据定位（时间轴 / 流 / 字段）">
+        <ApiErrorState
+          compact
+          error={
+            error instanceof ApiError
+              ? error
+              : new ApiError({
+                  kind: "network",
+                  message: "质量运行读取失败。",
+                  cause: error,
+                })
+          }
+          onRetry={reload}
+        />
+      </Card>
+    );
+  }
+  if (data === null) {
+    return null;
+  }
+  return (
+    <EpisodeQcEvidenceSection
+      projectId={projectId}
+      episode={episode}
+      run={data}
+    />
+  );
+}
+
 function EpisodeDetailContent({
   projectId,
   episodeId,
+  qcRunId,
 }: {
   projectId: string;
   episodeId: string;
+  qcRunId: string | null;
 }) {
   const online = useOnlineStatus();
   const load = useCallback(
@@ -488,6 +571,7 @@ function EpisodeDetailContent({
           projectId={projectId}
           episode={data}
           online={online}
+          qcRunId={qcRunId}
         />
       </Space>
     );
@@ -516,7 +600,10 @@ function EpisodeDetailContent({
 export default function EpisodeDetailPage() {
   const projectId = useProjectId();
   const { episodeId } = useParams<{ episodeId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  // 只读深链参数：空串按"未提供"处理，避免把 `?qc_run_id=` 当成一个 ID。
+  const qcRunId = readIdQuery(searchParams, "qc_run_id");
 
   if (!projectId) {
     return (
@@ -554,9 +641,10 @@ export default function EpisodeDetailPage() {
 
   return (
     <EpisodeDetailContent
-      key={`${projectId}:${episodeId}`}
+      key={`${projectId}:${episodeId}:${qcRunId ?? ""}`}
       projectId={projectId}
       episodeId={episodeId}
+      qcRunId={qcRunId}
     />
   );
 }
