@@ -365,7 +365,13 @@ class AnnotationSubmissionUseCases:
         action_name = validate_action_name(action, family="submission")
         current = self.get(scope, submission_id)
         if current.version != expected_version:
-            raise VersionConflictError("标注提交")
+            # FR-019：恢复流要知道"我基于哪一版、服务端现在是哪一版"，
+            # 否则前端只能提示"版本冲突"而无法展示差异或按最新版本重提交。
+            raise VersionConflictError(
+                "标注提交",
+                expected_version=expected_version,
+                current_version=current.version,
+            )
         assert_submission_action(current.status, action_name)
         if (
             action_name

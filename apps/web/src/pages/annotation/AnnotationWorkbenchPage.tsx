@@ -1,14 +1,16 @@
 import { ArrowLeftOutlined, ReloadOutlined } from "@ant-design/icons";
 import { Button, Space, Tag, Typography } from "antd";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import AnnotationConflictModal from "../../components/annotation/AnnotationConflictModal";
 import OverdueSummaryCard from "../../components/annotation/OverdueSummaryCard";
 import WorkbenchBody from "../../components/annotation/WorkbenchBody";
 import PageContainer from "../../components/ui/PageContainer";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useAnnotationDraft } from "../../hooks/useAnnotationDraft";
 import { useAnnotationWorkbench } from "../../hooks/useAnnotationWorkbench";
+import { useWorkbenchConflictFlow } from "../../hooks/useWorkbenchConflictFlow";
 import { useOnlineStatus } from "../../hooks/useOnlineStatus";
 import { useProjectId } from "../../hooks/useProjectId";
 import { annotationApi } from "../../services/annotation";
@@ -56,6 +58,41 @@ function WorkbenchContent({
     schema: data?.schema ?? null,
     episodes: data?.episodes ?? [],
   });
+
+  // FR-019：冲突恢复编排收在 `useWorkbenchConflictFlow`（页面只做渲染）。
+  const conflict = useWorkbenchConflictFlow({
+    projectId,
+    assignmentId,
+    taskId: data?.task.task_id ?? "",
+    taskCode: data?.task.code ?? "",
+    assignmentIdForCreate: data?.assignment.assignment_id ?? "",
+    dataSource,
+    schema: data?.schema ?? null,
+    episodes: data?.episodes ?? [],
+    readValues: () => draft.values,
+    applyValues: draft.replaceValues,
+    latestSubmission: data?.latestSubmission ?? null,
+    setFeedback,
+    reload: workbench.reload,
+    resetDraft: draft.resetDraft,
+    setBusyAction,
+  });
+  const recovery = conflict.recovery;
+
+  // FR-019「不丢数据」：刷新后若存在未合并冲突快照，恢复冲突当时的输入。
+  // 只在 ready 后跑一次；没有快照时完全不影响既有行为。
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    if (restored || !draft.ready || data === null) {
+      return;
+    }
+    setRestored(true);
+    const snapshot = conflict.restore();
+    if (snapshot !== null) {
+      // 冲突现场的「我的版本」优先于常规自动保存：后者可能已被后续编辑覆盖。
+      draft.replaceValues(snapshot.mine);
+    }
+  }, [conflict, data, draft, restored]);
 
   const hiddenRequiredLabels = useMemo(
     () => (data ? hasHiddenRequiredLabels(data.schema) : false),
@@ -143,12 +180,16 @@ function WorkbenchContent({
       return;
     }
     setBusyAction("submit");
+    // 记录本次请求实际使用的 If-Match 版本：冲突兜底提示要用它，
+    // 不能等失败后再去猜（那时服务端版本已经变了）。
+    let sentSubmissionVersion = 0;
     try {
       const created = await annotationApi.createSubmission(projectId, {
         assignment_id: data.assignment.assignment_id,
         records: built.records,
         data_source: dataSource,
       });
+      sentSubmissionVersion = created.version;
       await annotationApi.actOnSubmission(
         projectId,
         created.submission_id,
@@ -162,14 +203,17 @@ function WorkbenchContent({
       setValidationAttempted(false);
       reloadAll();
     } catch (caught) {
-      setFeedback(describeAnnotationActionError(caught));
-      // 先立即落盘再刷新，避免刷新导致的草稿重载覆盖最近输入。
+      // 先立即落盘再判断冲突类型，避免后续刷新覆盖最近输入。
       draft.flushDraft();
-      reloadAll();
+      const recovered = await conflict.enter(caught, sentSubmissionVersion);
+      if (!recovered) {
+        setFeedback(describeAnnotationActionError(caught));
+        reloadAll();
+      }
     } finally {
       setBusyAction(null);
     }
-  }, [data, dataSource, disabledReason, draft, online, projectId, reloadAll]);
+  }, [data, dataSource, disabledReason, draft, online, projectId, reloadAll, conflict]);
 
   const handleSubmitDraft = useCallback(async () => {
     const submission = data?.existingDraft;
@@ -185,12 +229,16 @@ function WorkbenchContent({
       setFeedback(annotationSuccess("服务端草稿已提交，等待复核。"));
       reloadAll();
     } catch (caught) {
-      setFeedback(describeAnnotationActionError(caught));
-      reloadAll();
+      // 服务端草稿同样可能被他人推进版本：走同一套冲突恢复流。
+      const recovered = await conflict.enter(caught, submission.version);
+      if (!recovered) {
+        setFeedback(describeAnnotationActionError(caught));
+        reloadAll();
+      }
     } finally {
       setBusyAction(null);
     }
-  }, [data, projectId, reloadAll]);
+  }, [data, conflict, projectId, reloadAll]);
 
   const handleWithdrawDraft = useCallback(async () => {
     const submission = data?.existingDraft;
@@ -207,11 +255,14 @@ function WorkbenchContent({
       setFeedback(annotationSuccess("服务端草稿已撤回，可重新填写。"));
       reloadAll();
     } catch (caught) {
-      setFeedback(describeAnnotationActionError(caught));
+      const recovered = await conflict.enter(caught, submission.version);
+      if (!recovered) {
+        setFeedback(describeAnnotationActionError(caught));
+      }
     } finally {
       setBusyAction(null);
     }
-  }, [data, projectId, reloadAll]);
+  }, [data, conflict, projectId, reloadAll]);
 
   const title = data ? (
     <Space wrap>
@@ -296,6 +347,36 @@ function WorkbenchContent({
           )
         }
       />
+      {/*
+        FR-019 冲突恢复对话框：只在检测到 409 时出现。
+        关闭它不会丢数据——打开时快照已落盘，刷新后由恢复 effect 重新进入。
+      */}
+      <AnnotationConflictModal
+        open={recovery.phase !== "idle" && recovery.context !== null}
+        context={recovery.context}
+        mine={draft.values}
+        episodes={data?.episodes ?? []}
+        busy={busyAction === "resubmit"}
+        initialChoices={recovery.choices}
+        onCopyDraft={recovery.copyDraft}
+        onApplyMerged={(merged) => void conflict.applyMerged(merged)}
+        onRefreshFromServer={() => {
+          conflict.discard();
+          setFeedback({
+            kind: "warning",
+            title: "已放弃合并并要求刷新",
+            description:
+              "本地冲突快照已清除；如需保留输入，请刷新前先复制草稿。服务端内容不会被本页覆盖。",
+          });
+          reloadAll();
+        }}
+        onDismiss={recovery.dismiss}
+      />
+      {recovery.persistenceWarning !== null ? (
+        <Typography.Paragraph type="danger">
+          {recovery.persistenceWarning}
+        </Typography.Paragraph>
+      ) : null}
     </PageContainer>
   );
 }
