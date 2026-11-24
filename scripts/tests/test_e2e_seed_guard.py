@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 MODULE_PATH = (
@@ -46,15 +49,37 @@ def test_database_url_rejects_non_temporary_or_remote_database(
 
 
 def test_rbac_seed_uses_existing_project_roles_only() -> None:
-    """V51-013 不新增角色：种子里的角色必须落在仓库既有 ``ProjectRole`` 内。"""
-    from app.domain.identity.models import ProjectRole
+    """V51-013 不新增角色：种子里的角色必须落在仓库既有 ``ProjectRole`` 内。
+
+    **为什么静态读源文件而不是 import app**：CI 的 security job 只装
+    ``pytest / pip-audit / pyyaml``，**不装后端依赖**（见 .github/workflows/ci.yml
+    的「安装检查工具」步骤）。此前这里写 ``from app.domain.identity.models import
+    ProjectRole``，本地有完整 venv 所以全绿，CI 上 ``ModuleNotFoundError: app``。
+    守卫测试属于"扫描仓库"而非"运行后端"，应静态解析源码，不引入后端运行时依赖。
+    """
+    roles_source = REPO_ROOT / "backend" / "app" / "domain" / "identity" / "models.py"
+    text = roles_source.read_text(encoding="utf-8")
+
+    # ProjectRole 枚举的成员值：形如 `    OWNER = "owner"` 的行
+    # 枚举体：从 `class ProjectRole(...):` 到下一个顶层 `class` 或文件末尾
+    role_block = re.search(
+        r"^class ProjectRole\b[^\n]*:\n(.*?)(?=^class |\Z)",
+        text,
+        re.DOTALL | re.MULTILINE,
+    )
+    assert role_block, "未能在 models.py 中定位 ProjectRole 枚举"
+    existing_roles = set(re.findall(r'=\s*"([a-z_]+)"', role_block.group(1)))
+    assert existing_roles, "ProjectRole 枚举中未解析出任何角色值"
 
     declared = {
         "owner",  # 提交人 / 审核人 / 对照项目 B 负责人
         "editor",  # 标注人
         "viewer",  # 只读成员
     }
-    assert declared <= {role.value for role in ProjectRole}
+    assert declared <= existing_roles, (
+        f"种子声明了仓库不存在的角色：{declared - existing_roles}；"
+        f"既有角色为 {sorted(existing_roles)}"
+    )
 
 
 def test_rbac_seed_covers_two_projects_and_isolated_members() -> None:
