@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 17 张卡片**：DRAFT 0 / ACTIVE 17 / SUPERSEDED 0 / DEPRECATED 0
+**总计 20 张卡片**：DRAFT 0 / ACTIVE 20 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 17 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 20 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -29,7 +29,7 @@
 |---|---|---|---|---|
 | [MEM-SOP-001](sop/MEM-SOP-001-real-sample-admission.md) | 真实样本准入检查清单（GATE-0） | ACTIVE | 1 | `fixture`, `gate`, `golden-path`, `hdf5`, `sample`, `sha256`, `sop` |
 
-## INC · 事故与缺陷复盘（11）
+## INC · 事故与缺陷复盘（14）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -44,6 +44,9 @@
 | [MEM-INC-009](incidents/MEM-INC-009-parallel-check-contention.md) | 多个 check.sh 并发跑同一 PostgreSQL 会互相污染 | ACTIVE | **3** | `flaky`, `minio`, `parallel`, `postgres`, `test-contention`, `time-sensitive`, `worktree` |
 | [MEM-INC-010](incidents/MEM-INC-010-payload-length-vs-shape.md) | 区分「实际读取行数」与「数据集总行数」 | ACTIVE | 1 | `chunked-read`, `data-fabrication`, `hdf5`, `off-by-n`, `shape`, `slice` |
 | [MEM-INC-011](incidents/MEM-INC-011-pipeline-version-conflict.md) | 绕过用例直接建 Run 会导致 Pipeline 版本冲突 | ACTIVE | 1 | `boundary`, `bypass`, `optimistic-lock`, `pipeline`, `processing-run`, `version-conflict` |
+| [MEM-INC-012](incidents/MEM-INC-012-enum-multi-table-check-constraints.md) | 新增阶段与产物枚举值必须同步全部相关表的 CHECK 约束 | ACTIVE | 1 | `check-constraint`, `enum`, `migration`, `postgres`, `processing-run`, `stage`, `stream-extraction` |
+| [MEM-INC-013](incidents/MEM-INC-013-alembic-pg-sqlite-constraint-pitfalls.md) | PostgreSQL 与 SQLite 双库迁移的 Schema 限定、同名约束与冒号绑定陷阱 | ACTIVE | 1 | `alembic`, `check-constraint`, `dialect`, `migration`, `postgres`, `schema`, `sqlalchemy`, `sqlite` |
+| [MEM-INC-014](incidents/MEM-INC-014-canonical-per-entity-version-slicing.md) | Canonical 多版本演进必须按「实体 × 版本」双向裁剪字段表并重导出 Schema | ACTIVE | 1 | `backward-compatibility`, `canonical`, `deserialization`, `json-schema`, `schema-evolution`, `serialization`, `v1.1` |
 
 ## CHG · 变更记录（1）
 
@@ -81,16 +84,19 @@
 - `2^53`：MEM-INC-008
 - `adapter`：MEM-DEC-001
 - `adr`：MEM-DEC-001
+- `alembic`：MEM-INC-013
 - `assertion`：MEM-INC-005
 - `backfill`：MEM-CHG-001
 - `backup`：MEM-OPS-001
 - `backup-restore`：MEM-INC-002
+- `backward-compatibility`：MEM-INC-014
 - `bigint`：MEM-INC-008
 - `boundary`：MEM-INC-011
 - `budget`：MEM-INC-007
 - `bypass`：MEM-INC-011
+- `canonical`：MEM-INC-014
 - `capability`：MEM-DEC-001
-- `check-constraint`：MEM-INC-003
+- `check-constraint`：MEM-INC-003, MEM-INC-012, MEM-INC-013
 - `chunked-read`：MEM-INC-010
 - `ci`：MEM-INC-005
 - `claim-boundary`：MEM-REQ-001
@@ -100,11 +106,13 @@
 - `data-fix`：MEM-CHG-001
 - `db-constraint`：MEM-INC-006
 - `dead-code`：MEM-INC-006
+- `deserialization`：MEM-INC-014
+- `dialect`：MEM-INC-013
 - `dispatch`：MEM-INC-003
 - `dpo`：MEM-DEC-002
 - `drill`：MEM-INC-002, MEM-OPS-001
 - `e2e`：MEM-INC-005
-- `enum`：MEM-DEC-001
+- `enum`：MEM-DEC-001, MEM-INC-012
 - `fixture`：MEM-INC-004, MEM-SOP-001
 - `flaky`：MEM-INC-005, MEM-INC-009
 - `format`：MEM-DEC-001
@@ -117,6 +125,7 @@
 - `invariant`：MEM-OPS-001
 - `json`：MEM-INC-008
 - `json-label`：MEM-DEC-002
+- `json-schema`：MEM-INC-014
 - `lerobot`：MEM-REQ-001
 - `level`：MEM-DEC-001
 - `limit`：MEM-INC-007
@@ -124,7 +133,7 @@
 - `magic-number`：MEM-INC-005
 - `mcap`：MEM-INC-004
 - `metadata-only`：MEM-REQ-001
-- `migration`：MEM-CHG-001, MEM-INC-003
+- `migration`：MEM-CHG-001, MEM-INC-003, MEM-INC-012, MEM-INC-013
 - `minio`：MEM-INC-009, MEM-OPS-001
 - `nanosecond`：MEM-INC-008
 - `off-by-n`：MEM-INC-010
@@ -137,10 +146,10 @@
 - `pending`：MEM-CHG-001
 - `pipeline`：MEM-INC-011
 - `position-bias`：MEM-DEC-002
-- `postgres`：MEM-INC-003, MEM-INC-009, MEM-OPS-001
+- `postgres`：MEM-INC-003, MEM-INC-009, MEM-INC-012, MEM-INC-013, MEM-OPS-001
 - `precision`：MEM-INC-008
 - `preference`：MEM-DEC-002
-- `processing-run`：MEM-INC-011
+- `processing-run`：MEM-INC-011, MEM-INC-012
 - `projection`：MEM-INC-006, MEM-INC-007
 - `raw_asset`：MEM-INC-001
 - `recorded`：MEM-CHG-001
@@ -151,7 +160,9 @@
 - `rto`：MEM-OPS-001
 - `sample`：MEM-INC-004, MEM-SOP-001
 - `savepoint`：MEM-INC-001
-- `schema`：MEM-DEC-002
+- `schema`：MEM-DEC-002, MEM-INC-013
+- `schema-evolution`：MEM-INC-014
+- `serialization`：MEM-INC-014
 - `session`：MEM-INC-006
 - `sha256`：MEM-INC-004, MEM-SOP-001
 - `shape`：MEM-INC-010
@@ -160,13 +171,18 @@
 - `sop`：MEM-SOP-001
 - `spool`：MEM-OPS-001
 - `sql`：MEM-INC-002
+- `sqlalchemy`：MEM-INC-013
+- `sqlite`：MEM-INC-013
+- `stage`：MEM-INC-012
 - `status`：MEM-INC-003, MEM-REQ-001
+- `stream-extraction`：MEM-INC-012
 - `synthetic`：MEM-INC-004
 - `test-contention`：MEM-INC-009
 - `time-sensitive`：MEM-INC-009
 - `timestamp`：MEM-INC-008
 - `training-ready`：MEM-REQ-001
 - `unique-index`：MEM-INC-001
+- `v1.1`：MEM-INC-014
 - `version-conflict`：MEM-INC-011
 - `worker`：MEM-INC-001
 - `worktree`：MEM-INC-009

@@ -136,6 +136,8 @@ def _action(**overrides: object) -> Action:
         "confidence": 0.9,
         "action_schema_ref": "ddp.action.joint_target/1.0.0",
         "frame_index": 0,
+        # 显式 1.0：本 fixture 构造 1.0 完整形态，避免被 1.1 新增字段规则影响
+        "schema_version": "ddp.canonical/1.0.0",
         "missing_fields": (),
     }
     values.update(overrides)
@@ -166,6 +168,9 @@ def _observation(**overrides: object) -> Observation:
         "valid": True,
         "invalid_reason": None,
         "quality_flags": ("OK",),
+        # 显式 1.0：本 fixture 构造 1.0 完整形态（所有 1.0 字段都有值），
+        # 避免被 1.1 新增字段（parser_version 等）的缺失规则影响。
+        "schema_version": "ddp.canonical/1.0.0",
         "missing_fields": ("invalid_reason",),
     }
     values.update(overrides)
@@ -415,3 +420,66 @@ def test_field_lists_are_declared_per_entity() -> None:
         (EPISODE_FIELDS, "episode_key"),
     ):
         assert required in {spec.name for spec in fields if spec.required}
+
+
+def test_canonical_1_1_observation_and_action_fields_and_1_0_compat() -> None:
+    """ADR-0049：1.1 补齐 Observation/Action 必需字段，且真实 1.0 字典（不含 1.1 键）仍可读。"""
+    # 1) 真实 1.0 字典（完全不含 1.1 新增键）必须可被 from_dict 读取，且不抛未知/缺失字段错误
+    obs_1_0_dict = _observation().to_dict()
+    assert "parser_version" not in obs_1_0_dict
+    assert "timestamp_raw_ns" not in obs_1_0_dict
+    assert "dtype" in obs_1_0_dict  # Observation 1.0 既有字段必须保留
+    restored_obs = Observation.from_dict(obs_1_0_dict)
+    assert restored_obs.schema_version == "ddp.canonical/1.0.0"
+    assert restored_obs.parser_version is None
+    assert restored_obs.dtype == "float32"
+
+    act_1_0_dict = _action().to_dict()
+    assert "semantics_version" not in act_1_0_dict
+    assert "dtype" not in act_1_0_dict  # Action 1.0 无 dtype
+    restored_act = Action.from_dict(act_1_0_dict)
+    assert restored_act.schema_version == "ddp.canonical/1.0.0"
+    assert restored_act.semantics_version is None
+
+    # 2) 1.0 字典若混入 1.1 才有的字段，必须作为未知字段拒绝（版本边界严格）
+    bad_1_0 = dict(act_1_0_dict)
+    bad_1_0["semantics_version"] = "v1"
+    with pytest.raises(CanonicalFieldError, match="未知字段"):
+        Action.from_dict(bad_1_0)
+
+    # 3) 1.1 完整形态往返（含新增双时间戳、validity、source_index/offset、parser_version 等）
+    obs_1_1 = _observation(
+        schema_version="ddp.canonical/1.1.0",
+        timestamp_raw_ns=100,
+        timestamp_normalized_ns=105,
+        validity="VALID",
+        parser_version="hdf5-robomimic/1.0.0",
+        source_index=0,
+        source_offset=4096,
+        transform_provenance="identity",
+        missing_fields=("invalid_reason",),
+    )
+    obs_payload = obs_1_1.to_dict()
+    assert obs_payload["timestamp_raw_ns"] == "100"
+    assert obs_payload["timestamp_normalized_ns"] == "105"
+    assert Observation.from_dict(obs_payload) == obs_1_1
+
+    act_1_1 = _action(
+        schema_version="ddp.canonical/1.1.0",
+        timestamp_raw_ns=100,
+        timestamp_normalized_ns=100,
+        dtype="float32",
+        validity="VALID",
+        parser_version="hdf5-robomimic/1.0.0",
+        source_index=0,
+        source_offset=8192,
+        semantics_version="robomimic_hdf5_v1.5/1",
+        missing_fields=(),
+    )
+    act_payload = act_1_1.to_dict()
+    assert act_payload["timestamp_raw_ns"] == "100"
+    assert Action.from_dict(act_payload) == act_1_1
+
+    # 4) 1.1 空新增字段若未在 missing_fields 声明，必须报错
+    with pytest.raises(CanonicalFieldError, match="未在 missing_fields 中声明"):
+        _action(schema_version="ddp.canonical/1.1.0", missing_fields=())
