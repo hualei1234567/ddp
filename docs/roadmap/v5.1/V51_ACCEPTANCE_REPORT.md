@@ -20,7 +20,7 @@
 
 ---
 
-## 二、7 个 PR 交付清单
+## 二、7 个 PR 交付清单（早间批次）
 
 | PR | 类型 | 内容 | 关键成果 |
 |---|---|---|---|
@@ -31,6 +31,19 @@
 | **#122** | feat | **LeRobot 逐帧导出** | **GATE-2 PASS**：`METADATA_ONLY` → `LOADER_FRAME` |
 | **#123** | docs | 全链路证据 + 部署验证 | 迁移 0069→0073 + 6 项检查全过 |
 | **#124** | docs | 记忆批次 3 | Pipeline 版本冲突教训 |
+
+## 二·补、当日下午 6 个 PR 交付清单（对照 §8 P0/P1 全部闭环）
+
+> 基线 `6a7f266 → 17a684b`（2026-11-25 下午，`git log --oneline 4344352..17a684b`）。
+
+| PR | 类型 | 内容 | 闭环的 §8 事项 | 证据 |
+|---|---|---|---|---|
+| **#126** | fix | 补齐 `processing_*` 四类枚举 CHECK 约束（迁移 **0074**） | **P0** Worker `process_once()` 落库 ✅ | 修复后单次 `process_once()` 完整跑通 9 个阶段，`processing_runs.status=SUCCEEDED`，**落库 66 条 `processing_artifacts`**（含 3 个真实逐帧 NDJSON）；MEM-INC-012 |
+| **#127** | feat | ADR-0048 Adapter 六级能力分级矩阵落地 | **P1** Adapter 六级能力矩阵 ✅ | `data-platform/ddp_data/capability.py` + `scripts/check_adapter_capability.py` + 403 行单测 |
+| **#128** | feat | 多 Episode 逐帧 LeRobot 数据集组装 + NDJSON 桥接验证 | **P1** 多 Episode 逐帧数据集 ✅ | 5 个真实 demo `[59,58,57,55,51]` 共 **280 帧**，官方 `lerobot==0.3.3` 全集+子集双模式 PASS（`docs/testing/evidence/2026-11-25-lerobot-frame-verify/`） |
+| **#129** | feat | Canonical 1.1 补齐 Observation/Action 字段（ADR-0049 扩展）+ 记忆星云同步脚本 | **P0** Observation/Action 字段补齐 ✅ | `_ADDED_IN_1_1_BY_ENTITY` 按实体裁剪；`action.v1.schema.json` / `observation.v1.schema.json` 重导出；MEM-INC-012/013/014 入库 |
+| **#130** | feat | DATA_CLEANING 确定性 FLAG 清洗规则与版本化报告 | **P1** DATA_CLEANING FLAG 规则（V51-006）✅ | `cleaning_rules.py` / `cleaning_evaluators.py` / `cleaning_stage.py` + 497 行单测 |
+| **#131** | feat | V52-006/007/017：Judge 偏差校正路由 + 黄金题熔断 + PRM 步级奖励导出 | （V5.2 阶段1，见 §8·补） | 39 个单测（18+9+12），`docs/roadmap/v5.2/annotation-platform-blueprint-plan.md` 进度登记 |
 
 ---
 
@@ -82,13 +95,13 @@
 
 | S0 发现的问题 | 本轮处理 | 状态 |
 |---|---|---|
-| `processing_artifacts` = **0 行** | 编排接线 + 全链路测试 | ⚠️ **部分**（见 §6 诚实边界） |
+| `processing_artifacts` = **0 行** | 编排接线 + 全链路测试 → 下午迁移 0074 补齐约束（PR #126） | ✅ **已闭环**（落库 66 条真实产物，见 §6） |
 | 所有物化阶段 **SKIPPED** | STREAM_EXTRACTION 接入并成功执行 | ✅ 已解决 |
 | SensorStream/Observation/Action **零实例化** | 产出 174 obs + 174 action | ✅ 已解决 |
 | 无真实样本 | 下载 RoboMimic 并 SHA256 校验 | ✅ 已解决 |
 | **LeRobot 仅 METADATA_ONLY** | 逐帧 writer + GATE-2 验证 | ✅ **已升级 LOADER_FRAME** |
-| Canonical 字段缺 10 类 | 1.1 补齐 8 个 SensorStream 字段 | ⚠️ 部分（Observation/Action 待补） |
-| Adapter 无六级分级 | ADR-0048 已提交 | ⚠️ ADR 待落地 |
+| Canonical 字段缺 10 类 | 1.1 补齐 8 个 SensorStream 字段 → 下午补齐 Observation/Action（PR #129） | ✅ **已补齐**（1.0 仍可读） |
+| Adapter 无六级分级 | ADR-0048 已提交 → 下午落地能力矩阵与校验（PR #127） | ✅ **已落地** |
 
 ---
 
@@ -108,16 +121,19 @@
 
 ## 六、诚实边界（不得扩大宣称）
 
+> **2026-11-25 晚间更新**：仅闭环下表第一行（迁移 0074 + Worker `process_once()` 落库，PR #126）；
+> 其余边界**原样保留**，一律不得据此扩大宣称。
+
 | 项 | 状态 | 说明 |
 |---|---|---|
-| **`processing_artifacts` 表仍 0 行** | ⚠️ **未闭环** | 全链路测试直接调 handler + Pipeline 版本冲突（MEM-INC-011）未解决；表记录需 Worker `process_once()` 事件驱动才能写入 |
+| **`processing_artifacts` 表 0 行** | ✅ **已闭环**（2026-11-25 下午，PR #126） | 根因是 V51-001 新增 `STREAM_EXTRACTION` 枚举后无人同步数据库 CHECK 约束（见 MEM-INC-012）。迁移 **0074** 一次性补齐 `processing_runs` / `processing_run_steps` / `processing_artifacts` 三张表的 `stage` 约束与 `kind` 约束共四处；修复后 Worker 单次 `process_once()` 完整跑通 9 个阶段，`processing_runs.status = SUCCEEDED`，**落库 66 条真实 `processing_artifacts`**（含 3 个真实逐帧 NDJSON）。 |
 | **视频帧读取** | ❌ 未验证 | RoboMimic `ph` 版本不含图像，`video_provided=false` |
 | **真实硬件采集** | ❌ `HARDWARE_CAPTURE_NOT_TESTED` | 无采集硬件 |
-| **多 Episode 数据集** | ⚠️ 部分 | 3 个 demo 已验证，完整数据集未测 |
+| **多 Episode 数据集** | ⚠️ 部分 → ✅ 已验证（PR #128） | 3 个 demo 已验证；**下午补验**：5 个真实 demo（`[59, 58, 57, 55, 51]` 共 **280 帧**）经 STREAM_EXTRACTION NDJSON 桥接，官方 `lerobot==0.3.3` 全集（280 帧）与子集（167 帧）双模式 PASS |
 | **真实训练脚本消费** | ❌ 未验证 | `VERIFIED_FOR_TRAINING_PIPELINE` 需目标训练环境 |
-| **Observation/Action Canonical 字段** | ⚠️ 未补齐 | 本轮只补 SensorStream 8 个字段 |
-| **Adapter 六级分级** | ⚠️ ADR only | 待实施 |
-| **数据清洗** | ❌ 仍 SKIPPED | V51-006 未开始 |
+| **Observation/Action Canonical 字段** | ⚠️ 未补齐 → ✅ 已补齐（PR #129） | ADR-0049 扩展落地；1.0 产物仍可读，`_ADDED_IN_1_1_BY_ENTITY` 按实体裁剪 |
+| **Adapter 六级分级** | ⚠️ ADR only → ✅ 已落地（PR #127） | `ddp_data/capability.py` 六级枚举 + 证据存在性校验脚本 + 单测 |
+| **数据清洗** | ❌ 仍 SKIPPED → ✅ 已落地（PR #130） | V51-006 确定性 FLAG 清洗规则与版本化报告 |
 | 口径 | `PUBLIC_DATASET_INTEGRATION_TESTED` | **不是**真实硬件 Pilot |
 
 ---
@@ -137,19 +153,50 @@
 | INC-010 | 实际读取行数 ≠ 数据集总行数（会造成静默数据伪造） |
 | INC-011 | 绕过用例建 Run 导致 Pipeline 版本冲突 |
 
+### 记忆批次 4（2026-11-25 晚间，随本报告同批入库）
+
+- 库存：**22 张卡片**（17 + 批次 3 的 INC-012/013/014 + 本批 2 张），全部 ACTIVE，`check_ref` 全部有效
+- 本批新增 2 张：
+
+| ID | 类型 | 教训 | check_ref |
+|---|---|---|---|
+| INC-015 | INC | 并行 PR 各自 bump 契约版本必然冲突（version 是共享单点）——预分配版本号或 fragments + `$ref` 延迟 bump | `packages/contracts/scripts/check-compatibility.sh + scripts/check_contract_parity.py` |
+| SOP-002 | SOP | 并行智能体开发三件套：worktree 隔离 + 迁移号/契约版本/分支名/卡序号预分配 + check.sh 全局串行（引用 MEM-INC-009） | `scripts/check_memory.py + scripts/sync_memory_nebula.py` |
+
+- 本批已运行 `build_memory_index.py` / `check_memory.py`（22 张全过）/ `sync_memory_nebula.py`（星云 8898 新增 2 条 + 幂等更新 20 条）
+
 ---
 
-## 八、下一轮待办（按优先级）
+## 八、下一轮待办（2026-11-25 晚间更新：P0/P1 全部完成）
 
-| 优先级 | 事项 | 前置 |
+| 优先级 | 事项 | 状态（2026-11-25 晚间） | 闭环 PR |
+|---|---|---|---|
+| **P0** | 走通 Worker `process_once()` 让 `processing_artifacts` 真正落库 | ✅ **完成**——迁移 0074 补齐四处 CHECK 约束，单次 `process_once()` 跑通 9 个阶段，落库 66 条真实产物 | #126 |
+| **P0** | Observation/Action Canonical 字段补齐 | ✅ **完成**——ADR-0049 扩展，`_ADDED_IN_1_1_BY_ENTITY` 按实体裁剪，Schema 重导出 | #129 |
+| **P1** | Adapter 六级能力矩阵落地（ADR-0048） | ✅ **完成**——`capability.py` 六级枚举 + 证据存在性校验 + 单测 | #127 |
+| **P1** | DATA_CLEANING FLAG 规则（V51-006） | ✅ **完成**——确定性 FLAG 清洗规则 + 版本化报告 | #130 |
+| **P1** | 多 Episode 逐帧数据集 + 完整 Pipeline 联动 | ✅ **完成**——5 个真实 demo 280 帧官方 Loader 全集+子集 PASS，经 STREAM_EXTRACTION NDJSON 桥接 | #128 |
+| **P2** | 视频链路（需图像样本） | ⬜ 未开始 | 前置：图像样本（仍缺） |
+| **P2** | 真实硬件 Pilot | ⬜ 未开始 | 前置：硬件（仍缺） |
+
+## 八·补、V5.2 阶段进展（标注平台蓝图）
+
+> 依据 `docs/roadmap/v5.2/annotation-platform-blueprint-plan.md` §八实施进度与 PR #131。
+
+**阶段 1（已完成）**——judge / 熔断 / PRM（PR #131，`feat(v52-006/007/017)`）：
+
+| 能力 | 内容 | 验证 |
 |---|---|---|
-| **P0** | 走通 Worker `process_once()` 让 `processing_artifacts` 真正落库 | 需修 MEM-INC-011 的调用路径 |
-| **P0** | Observation/Action Canonical 字段补齐 | ADR-0049 扩展 |
-| **P1** | Adapter 六级能力矩阵落地（ADR-0048） | ADR 批准 |
-| **P1** | DATA_CLEANING FLAG 规则（V51-006） | 无 |
-| **P1** | 多 Episode 逐帧数据集 + 完整 Pipeline 联动 | 前者 |
-| **P2** | 视频链路（需图像样本） | 样本 |
-| **P2** | 真实硬件 Pilot | 硬件 |
+| Judge 偏差校正路由 | Swap&Average 位置偏差校正（翻转→TIE 降级）+ 长度惩罚（≥2 倍触发线性扣减）+ 三区路由（≥0.92 自动放行 / 灰区强制人工 / 其余标准流） | 18 单测 |
+| 黄金题熔断 | 黄金题滑窗熔断（连续 2 窗 <85% → `PAUSED` + 冻结结算，可手动解除重置） | 9 单测 |
+| PRM 步级奖励导出 | `PRM_STEP_REWARD_JSONL` writer：四类标签 reward 映射、未标注步骤不进训练文件、index 连续性强制、roundtrip 校验 | 12 单测 |
+| SFT-DPO 库 | `datasets5.2.0` 导出库验证 **PASS**（SFT / 偏好对导出格式落地） | 三方真实验证另存 `docs/testing/evidence/` |
+
+**阶段 2（进行中）**：
+
+- **PRM 步级标注域模型**——步级标注实体、四类标签与 reward 映射的领域模型扩展（`PLANNED → in-progress`）；
+- **技能标签路由**——按技能标签路由标注任务到对应 Judge / 人工队列（`PLANNED → in-progress`）；
+- **Token 成本台账**——judge / PRM 调用的 Token 计量与成本归集（`PLANNED → in-progress`）。
 
 ---
 
@@ -159,7 +206,11 @@
 
 - 真实样本 → 真实对象存储 → 真实物化 → 真实逐帧 Parquet → **官方 Loader 逐帧读取成功**
 - 这是 V4.1 结束时只有 `METADATA_ONLY` 的状态下**不可能达成的**
-- 但**训练数据生产全闭环尚未完成**：`processing_artifacts` 仍为 0 行、无清洗、无多 Episode、无真实训练消费
+- ~~但**训练数据生产全闭环尚未完成**：`processing_artifacts` 仍为 0 行、无清洗、无多 Episode、无真实训练消费~~
+- **2026-11-25 晚间更新**：上午报告中的未闭环项已由下午 6 个 PR（#126–#131）全部闭环——`processing_artifacts` 落库 66 条真实产物、DATA_CLEANING 落地、多 Episode 280 帧验证、Observation/Action 字段补齐、Adapter 矩阵落地（见 §二·补 与 §8）。§6 诚实边界中的视频帧读取、真实硬件采集、真实训练脚本消费三项**仍未验证**，不得扩大宣称。
 
 **建议**：接受本轮为 **「V5.1 第一阶段验收通过（物化能力打通 + 训练就绪核心验证）」**，
 而非「V5.1 全部完成」。后者需要 §8 的 P0/P1 全部闭环。
+
+**2026-11-25 晚间补充判定**：§8 的 P0/P1 已全部闭环（P2 视频链路与硬件 Pilot 前置条件仍缺），
+V5.1 主体建设完成度可升级为 **「P0/P1 验收通过」**；「V5.1 全部完成」的判定仍受 §6 保留边界约束。
