@@ -22,6 +22,10 @@ from ddp_data.adapters.registry import (
     AdapterRegistry,
     AdapterSpec,
 )
+from ddp_data.capability import (
+    GENERIC_JSONL_CAPABILITY_PROFILE,
+    HUMAN1M_PREVIEW_CAPABILITY_PROFILE,
+)
 from ddp_data.lerobot.parser import (
     CanonicalEpisode,
     CanonicalMediaAsset,
@@ -92,9 +96,7 @@ def parse_generic_jsonl(data: bytes) -> tuple[CanonicalEpisode, ...]:
                 instruction=_text(row.get("instruction"), f"{key}.instruction"),
                 environment=_optional_text(row.get("environment")),
                 setting=_optional_text(row.get("setting")),
-                episode_seconds=_optional_number(
-                    row.get("episode_seconds"), "episode_seconds"
-                ),
+                episode_seconds=_optional_number(row.get("episode_seconds"), "episode_seconds"),
                 source_fps=_optional_number(row.get("source_fps"), "source_fps"),
                 has_wrist=bool(row.get("has_wrist", False)),
                 media_assets=assets,
@@ -115,14 +117,10 @@ def _asset_of(episode_key: str, item: object) -> CanonicalMediaAsset:
     camera = item.get("camera")
     return CanonicalMediaAsset(
         path=path.strip(),
-        camera=(
-            camera.strip() if isinstance(camera, str) and camera.strip() else "main"
-        ),
+        camera=(camera.strip() if isinstance(camera, str) and camera.strip() else "main"),
         view_raw=str(item.get("view_raw") or ""),
         modality=str(item.get("modality") or "unknown"),
-        excerpt_start_seconds=_optional_number(
-            item.get("excerpt_start_seconds"), "start"
-        ),
+        excerpt_start_seconds=_optional_number(item.get("excerpt_start_seconds"), "start"),
         excerpt_seconds=_optional_number(item.get("excerpt_seconds"), "seconds"),
         source_fps=_optional_number(item.get("source_fps"), "fps"),
     )
@@ -145,7 +143,7 @@ def _optional_text(value: object) -> str | None:
 def _optional_number(value: object, field_name: str) -> float | None:
     if value is None:
         return None
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
+    if isinstance(value, bool) or not isinstance(value, int | float):
         raise GenericJsonlParseError(f"{field_name} 必须是数字或 null")
     return float(value)
 
@@ -245,6 +243,7 @@ def register_builtin_adapters(registry: AdapterRegistry) -> AdapterRegistry:
                 # 判断"这批数据没有动作/位姿"，而不是以为拿到了。
                 "semantic_gaps": _HUMAN1M_SEMANTIC_GAPS,
             },
+            capability_profile=HUMAN1M_PREVIEW_CAPABILITY_PROFILE,
         )
     )
     registry.register(
@@ -258,6 +257,7 @@ def register_builtin_adapters(registry: AdapterRegistry) -> AdapterRegistry:
             description="通用一行一 Episode 的 JSONL；用于非特定数据集的接入。",
             detect=_looks_like_generic_episode_jsonl,
             metadata={"source": "generic"},
+            capability_profile=GENERIC_JSONL_CAPABILITY_PROFILE,
         )
     )
     return registry
