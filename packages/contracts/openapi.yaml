@@ -1111,6 +1111,9 @@ paths:
   # --- 审计日志只读查询（owner / 平台管理员）---
   /api/v1/projects/{project_id}/ops/dispatch-queue:
     $ref: "./fragments/paths.ops.yaml#/opsDispatchQueue"
+  # --- Token 成本台账（V52-010，蓝图 N6；owner / 平台管理员）---
+  /api/v1/projects/{project_id}/ops/token-ledger:
+    $ref: "./fragments/paths.ops.yaml#/opsTokenLedger"
   /api/v1/projects/{project_id}/audit-logs:
     $ref: "./fragments/paths.audit.yaml#/auditLogs"
   /api/v1/projects/{project_id}/audit-logs/{resource_type}/{resource_id}:
@@ -1756,6 +1759,9 @@ components:
     QualityCheckRunPage: {$ref: "./fragments/schemas.stage9.yaml#/QualityCheckRunPage"}
     AiSuggestionItemInput: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionItemInput"}
     AiSuggestionsCreate: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionsCreate"}
+    AiTokenUsageItem: {$ref: "./fragments/schemas.stage9.yaml#/AiTokenUsageItem"}
+    TokenCostLedger: {$ref: "./fragments/schemas.ops.yaml#/TokenCostLedger"}
+    TokenCostLedgerEntry: {$ref: "./fragments/schemas.ops.yaml#/TokenCostLedgerEntry"}
     AiSuggestionConfirm: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionConfirm"}
     AiSuggestion: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestion"}
     AiSuggestionPage: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionPage"}

@@ -29,6 +29,7 @@ from app.application.annotation.schema_presets import SchemaPresetCatalog
 from app.application.annotation.schemas import AnnotationSchemaUseCases
 from app.application.annotation.submissions import AnnotationSubmissionUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
+from app.core.config import Settings, get_settings
 from app.infrastructure.repositories.annotation_ai_suggestions import (
     SqlAnnotationAiSuggestionRepository,
 )
@@ -66,6 +67,7 @@ from app.infrastructure.repositories.annotation_sample_sets import (
 )
 from app.infrastructure.repositories.annotation_schemas import SqlAnnotationSchemaRepository
 from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRepository
+from app.infrastructure.repositories.annotation_token_usage import SqlTokenUsageRecorder
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 
 
@@ -90,7 +92,10 @@ class AnnotationUseCases:
     prm_annotations: PrmAnnotationUseCases
 
 
-def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
+def get_annotation_use_cases(
+    session: DbSession,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> AnnotationUseCases:
     schemas_repo = SqlAnnotationSchemaRepository(session)
     sample_sets_repo = SqlAnnotationSampleSetRepository(session)
     tasks_repo = SqlAnnotationTaskRepository(session)
@@ -293,6 +298,10 @@ def get_annotation_use_cases(session: DbSession) -> AnnotationUseCases:
             outbox,
             idempotency,
             session,
+            # V52-010：默认关闭时不注入 recorder，登记建议行为与旧版完全一致。
+            token_recorder=(
+                SqlTokenUsageRecorder(session) if settings.ai_token_usage_enabled else None
+            ),
         ),
         prm_annotations=PrmAnnotationUseCases(
             prm_annotations_repo,

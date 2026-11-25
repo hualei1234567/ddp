@@ -1,22 +1,25 @@
 """AI 预标注建议 HTTP 路由。
 
-四个端点：
-- ``POST /annotation-submissions/{id}/ai-suggestions``：登记一批模型建议；
+五个端点：
+- ``POST /annotation-submissions/{id}/ai-suggestions``：登记一批模型建议
+  （可选 ``usage`` 计量条目，注入 recorder 时顺带记 Token 台账）；
 - ``GET  /annotation-submissions/{id}/ai-suggestions``：按提交查询；
 - ``POST /annotation-ai-suggestions/{id}/confirm``：人工确认/修订（带 ``If-Match``）；
 - ``GET  /annotation-submissions/{id}/ai-suggestions/agreement``：按模型版本
   聚合"采纳 / 修订 / 待处理"——N7 反馈闭环缺的输入。
 
 前三个已进契约 1.8.0（``packages/contracts/fragments/paths.stage8.yaml``）；
-``agreement`` 目前是运行时独有，属本轮新增，契约待下个版本收录
-（``check_contract_parity.py`` 会如实报出这 1 项）。
+``agreement`` 与 V52-010 的 ``usage`` 字段是运行时新增，契约待下个版本收录
+（``check_contract_parity.py`` 会如实报出差异，基线外差异会被 strict 红灯，
+见 fragments 注释与本轮 PR 说明）。
 """
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
 from app.api.v1.annotation_ai_models import (
     AgreementItemOut,
@@ -35,6 +38,7 @@ from app.api.v1.annotation_common import (
 from app.api.v1.annotation_dependencies import AnnotationUseCasesDep
 from app.api.v1.schemas import PageOut
 from app.application.annotation.commands import NewAiSuggestions
+from app.core.config import Settings, get_settings
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["annotation-ai-suggestions"])
 
@@ -50,6 +54,7 @@ def record_ai_suggestions(
     request: Request,
     scope: WriteScope,
     use_cases: AnnotationUseCasesDep,
+    settings: Annotated[Settings, Depends(get_settings)],
     idempotency_key: IdempotencyKey = None,
 ) -> PageOut[AiSuggestionOut]:
     suggestions = use_cases.ai_suggestions.record_suggestions(
@@ -57,11 +62,14 @@ def record_ai_suggestions(
         submission_id,
         NewAiSuggestions(
             suggestions=tuple(item.model_dump() for item in payload.suggestions),
+            usage=tuple(item.model_dump(exclude_none=True) for item in payload.usage),
         ),
         idempotency_key=idempotency_key,
         method=request.method,
         path=request.url.path,
         request_id=request_id(request),
+        # 价格表是部署配置，不随请求传输；未配置时 compute_cost 返回 None。
+        price_map=dict(settings.ai_token_price_map) or None,
     )
     submission = use_cases.submissions.get(scope, submission_id)
     redact_human_value = use_cases.submissions.should_redact_labels(scope, submission)

@@ -617,3 +617,197 @@ def test_agreement_isolated_across_projects(
     )
     assert response.status_code == 404, response.text
     assert response.json()["error"]["code"] == "resource_not_found"
+
+
+# --------------------------------------------------------------- V52-010 记账
+def _token_settings(*, enabled: bool, price: bool) -> object:
+    """构造记账开关与价格表配置；返回 Settings（鸭子类型即可）。"""
+    from app.core.config import Settings
+
+    return Settings(
+        env="local",
+        ai_token_usage_enabled=enabled,
+        ai_token_price_map=({"ddp-action-vlm": {"input": 0.002, "output": 0.008}} if price else {}),
+    )
+
+
+def _client_with_settings(factory, user_id, settings):
+    from app.api.deps import get_settings
+
+    client = make_client(factory, user_id)
+    app = client.app
+    app.dependency_overrides[get_settings] = lambda: settings
+    return client
+
+
+def test_usage_recording_with_price(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """开启记账 + 配价：登记建议顺带写台账，金额按 $/1k 折算。"""
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-usage-priced")
+    editor = _client_with_settings(factory, ids.editor_a, _token_settings(enabled=True, price=True))
+    submission_id = submission["submission_id"]
+    annotation_id = _annotation_id(factory, submission_id)
+
+    response = editor.post(
+        url(ids.project_a, _AI_SUGGESTION_PATH.format(submission_id=submission_id)),
+        json={
+            "suggestions": [_suggestion_payload(annotation_id)],
+            "usage": [{"input_tokens": 1000, "output_tokens": 500}],
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    from app.infrastructure.db.models.annotation_ai_token_usage import AiTokenUsage
+
+    with factory() as session:
+        rows = session.query(AiTokenUsage).all()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.model_id == "ddp-action-vlm"
+    assert row.purpose == "PRE_LABEL"
+    assert row.input_tokens == 1000
+    assert row.output_tokens == 500
+    assert row.cost_estimate is not None
+    assert str(row.cost_estimate) == "0.0060"
+
+
+def test_usage_without_price_stores_null_cost(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """开启记账但未配价：cost_estimate 落 NULL（不是 0），tokens 照记。"""
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-usage-unpriced")
+    editor = _client_with_settings(
+        factory, ids.editor_a, _token_settings(enabled=True, price=False)
+    )
+    submission_id = submission["submission_id"]
+    annotation_id = _annotation_id(factory, submission_id)
+
+    response = editor.post(
+        url(ids.project_a, _AI_SUGGESTION_PATH.format(submission_id=submission_id)),
+        json={
+            "suggestions": [_suggestion_payload(annotation_id)],
+            "usage": [{"input_tokens": 800, "output_tokens": 200}],
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    from app.infrastructure.db.models.annotation_ai_token_usage import AiTokenUsage
+
+    with factory() as session:
+        rows = session.query(AiTokenUsage).all()
+    assert len(rows) == 1
+    assert rows[0].cost_estimate is None
+    assert rows[0].input_tokens == 800
+
+
+def test_usage_disabled_keeps_existing_behavior(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """默认关闭：带 usage 字段的请求也只写建议，不写台账（现有行为不变）。"""
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-usage-off")
+    editor = _client_with_settings(
+        factory, ids.editor_a, _token_settings(enabled=False, price=True)
+    )
+    submission_id = submission["submission_id"]
+    annotation_id = _annotation_id(factory, submission_id)
+
+    response = editor.post(
+        url(ids.project_a, _AI_SUGGESTION_PATH.format(submission_id=submission_id)),
+        json={
+            "suggestions": [_suggestion_payload(annotation_id)],
+            "usage": [{"input_tokens": 1000, "output_tokens": 500}],
+        },
+    )
+    assert response.status_code == 201, response.text
+
+    from app.infrastructure.db.models.annotation_ai_token_usage import AiTokenUsage
+
+    with factory() as session:
+        assert session.query(AiTokenUsage).count() == 0
+
+
+def test_usage_without_usage_field_records_nothing(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """开启记账但不传 usage：不记账（计量由调用方给出，应用层不猜）。"""
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-usage-none")
+    editor = _client_with_settings(factory, ids.editor_a, _token_settings(enabled=True, price=True))
+    submission_id = submission["submission_id"]
+    annotation_id = _annotation_id(factory, submission_id)
+
+    response = editor.post(
+        url(ids.project_a, _AI_SUGGESTION_PATH.format(submission_id=submission_id)),
+        json={"suggestions": [_suggestion_payload(annotation_id)]},
+    )
+    assert response.status_code == 201, response.text
+
+    from app.infrastructure.db.models.annotation_ai_token_usage import AiTokenUsage
+
+    with factory() as session:
+        assert session.query(AiTokenUsage).count() == 0
+
+
+def test_usage_invalid_purpose_rejected(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """非法 purpose 显式失败（领域校验），整批回滚。"""
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-usage-badpurpose")
+    editor = _client_with_settings(factory, ids.editor_a, _token_settings(enabled=True, price=True))
+    submission_id = submission["submission_id"]
+    annotation_id = _annotation_id(factory, submission_id)
+
+    response = editor.post(
+        url(ids.project_a, _AI_SUGGESTION_PATH.format(submission_id=submission_id)),
+        json={
+            "suggestions": [_suggestion_payload(annotation_id)],
+            "usage": [{"input_tokens": 100, "output_tokens": 10, "purpose": "FINE_TUNE"}],
+        },
+    )
+    assert response.status_code == 422, response.text  # DomainValidationError → validation_failed
+
+    from app.infrastructure.db.models.annotation_ai_token_usage import AiTokenUsage
+
+    with factory() as session:
+        assert session.query(AiTokenUsage).count() == 0
+        # 建议本身也不落库（同事务回滚）
+        assert (
+            session.query(AnnotationAiSuggestion)
+            .filter(AnnotationAiSuggestion.annotation_id == annotation_id)
+            .count()
+            == 0
+        )
+
+
+def test_token_ledger_reflects_recorded_usage(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """记账后 owner 视角读台账：聚合口径与登记内容一致。"""
+    factory, ids = api_db
+    submission, _ = _prepare(factory, ids, "ai-usage-ledger")
+    editor = _client_with_settings(factory, ids.editor_a, _token_settings(enabled=True, price=True))
+    submission_id = submission["submission_id"]
+    annotation_id = _annotation_id(factory, submission_id)
+    editor.post(
+        url(ids.project_a, _AI_SUGGESTION_PATH.format(submission_id=submission_id)),
+        json={
+            "suggestions": [_suggestion_payload(annotation_id)],
+            "usage": [{"input_tokens": 2000, "output_tokens": 1000}],
+        },
+    )
+    owner = make_client(factory, ids.owner_a)
+    body = owner.get(url(ids.project_a, "/ops/token-ledger")).json()
+    assert len(body["entries"]) == 1
+    entry = body["entries"][0]
+    assert entry["model_id"] == "ddp-action-vlm"
+    assert entry["purpose"] == "PRE_LABEL"
+    assert entry["call_count"] == 1
+    assert entry["input_tokens"] == 2000
+    assert entry["total_tokens"] == 3000
+    assert entry["cost_estimate"] == "0.0120"
+    assert body["total_cost_estimate"] == "0.0120"
