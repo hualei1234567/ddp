@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 20 张卡片**：DRAFT 0 / ACTIVE 20 / SUPERSEDED 0 / DEPRECATED 0
+**总计 22 张卡片**：DRAFT 0 / ACTIVE 22 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 20 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 22 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -23,13 +23,14 @@
 | [MEM-DEC-001](decisions/MEM-DEC-001-adapter-capability-levels.md) | Adapter 能力分级用独立枚举，不改现有五值枚举 | ACTIVE | 1 | `adapter`, `adr`, `capability`, `enum`, `format`, `level` |
 | [MEM-DEC-002](decisions/MEM-DEC-002-preference-pair-as-json-value.md) | 偏好对比标注用 JSON 约定值而非新增标签类型 | ACTIVE | 1 | `dpo`, `json-label`, `pairwise`, `position-bias`, `preference`, `schema` |
 
-## SOP · 标准操作流程（1）
+## SOP · 标准操作流程（2）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
 | [MEM-SOP-001](sop/MEM-SOP-001-real-sample-admission.md) | 真实样本准入检查清单（GATE-0） | ACTIVE | 1 | `fixture`, `gate`, `golden-path`, `hdf5`, `sample`, `sha256`, `sop` |
+| [MEM-SOP-002](sop/MEM-SOP-002-parallel-agent-development.md) | 并行智能体开发 SOP：worktree 隔离 + 资源预分配 + check.sh 串行 | ACTIVE | 1 | `check-lock`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `version-bump`, `worktree` |
 
-## INC · 事故与缺陷复盘（14）
+## INC · 事故与缺陷复盘（15）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -47,6 +48,7 @@
 | [MEM-INC-012](incidents/MEM-INC-012-enum-multi-table-check-constraints.md) | 新增阶段与产物枚举值必须同步全部相关表的 CHECK 约束 | ACTIVE | 1 | `check-constraint`, `enum`, `migration`, `postgres`, `processing-run`, `stage`, `stream-extraction` |
 | [MEM-INC-013](incidents/MEM-INC-013-alembic-pg-sqlite-constraint-pitfalls.md) | PostgreSQL 与 SQLite 双库迁移的 Schema 限定、同名约束与冒号绑定陷阱 | ACTIVE | 1 | `alembic`, `check-constraint`, `dialect`, `migration`, `postgres`, `schema`, `sqlalchemy`, `sqlite` |
 | [MEM-INC-014](incidents/MEM-INC-014-canonical-per-entity-version-slicing.md) | Canonical 多版本演进必须按「实体 × 版本」双向裁剪字段表并重导出 Schema | ACTIVE | 1 | `backward-compatibility`, `canonical`, `deserialization`, `json-schema`, `schema-evolution`, `serialization`, `v1.1` |
+| [MEM-INC-015](incidents/MEM-INC-015-contract-version-parallel-bump-conflict.md) | 并行 PR 各自 bump 契约版本必然冲突，version 是共享单点 | ACTIVE | 1 | `api-contract`, `merge-conflict`, `openapi`, `parallel-pr`, `resource-preallocation`, `single-point`, `version-bump` |
 
 ## CHG · 变更记录（1）
 
@@ -85,6 +87,7 @@
 - `adapter`：MEM-DEC-001
 - `adr`：MEM-DEC-001
 - `alembic`：MEM-INC-013
+- `api-contract`：MEM-INC-015
 - `assertion`：MEM-INC-005
 - `backfill`：MEM-CHG-001
 - `backup`：MEM-OPS-001
@@ -97,6 +100,7 @@
 - `canonical`：MEM-INC-014
 - `capability`：MEM-DEC-001
 - `check-constraint`：MEM-INC-003, MEM-INC-012, MEM-INC-013
+- `check-lock`：MEM-SOP-002
 - `chunked-read`：MEM-INC-010
 - `ci`：MEM-INC-005
 - `claim-boundary`：MEM-REQ-001
@@ -132,16 +136,20 @@
 - `lineage`：MEM-INC-006, MEM-INC-007
 - `magic-number`：MEM-INC-005
 - `mcap`：MEM-INC-004
+- `merge-conflict`：MEM-INC-015
 - `metadata-only`：MEM-REQ-001
 - `migration`：MEM-CHG-001, MEM-INC-003, MEM-INC-012, MEM-INC-013
+- `migration-number`：MEM-SOP-002
 - `minio`：MEM-INC-009, MEM-OPS-001
 - `nanosecond`：MEM-INC-008
 - `off-by-n`：MEM-INC-010
+- `openapi`：MEM-INC-015
 - `optimistic-lock`：MEM-INC-011
 - `outbox`：MEM-CHG-001, MEM-INC-001, MEM-INC-003
 - `pagination`：MEM-INC-007
 - `pairwise`：MEM-DEC-002
-- `parallel`：MEM-INC-009
+- `parallel`：MEM-INC-009, MEM-SOP-002
+- `parallel-pr`：MEM-INC-015
 - `parquet`：MEM-INC-004
 - `pending`：MEM-CHG-001
 - `pipeline`：MEM-INC-011
@@ -154,6 +162,7 @@
 - `raw_asset`：MEM-INC-001
 - `recorded`：MEM-CHG-001
 - `recursion`：MEM-INC-007
+- `resource-preallocation`：MEM-INC-015, MEM-SOP-002
 - `restore`：MEM-OPS-001
 - `retry`：MEM-INC-001
 - `rpo`：MEM-INC-002, MEM-OPS-001
@@ -167,8 +176,9 @@
 - `sha256`：MEM-INC-004, MEM-SOP-001
 - `shape`：MEM-INC-010
 - `silent-failure`：MEM-INC-002
+- `single-point`：MEM-INC-015
 - `slice`：MEM-INC-010
-- `sop`：MEM-SOP-001
+- `sop`：MEM-SOP-001, MEM-SOP-002
 - `spool`：MEM-OPS-001
 - `sql`：MEM-INC-002
 - `sqlalchemy`：MEM-INC-013
@@ -183,6 +193,7 @@
 - `training-ready`：MEM-REQ-001
 - `unique-index`：MEM-INC-001
 - `v1.1`：MEM-INC-014
+- `version-bump`：MEM-INC-015, MEM-SOP-002
 - `version-conflict`：MEM-INC-011
 - `worker`：MEM-INC-001
-- `worktree`：MEM-INC-009
+- `worktree`：MEM-INC-009, MEM-SOP-002
