@@ -9,6 +9,7 @@ from __future__ import annotations
 from uuid import UUID, uuid4
 
 import pytest
+from app.domain.processing.enums import STAGE_SEQUENCE
 from app.infrastructure.db.models.collection import AuditLog
 from sqlalchemy import select
 
@@ -291,7 +292,8 @@ def test_steps_are_inlined_in_detail_and_paged_by_endpoint(api_db) -> None:
     assert detail.status_code == 200, detail.text
     body = detail.json()
     assert body["status"] == "SUCCEEDED"
-    assert len(body["steps"]) == 8
+    # 阶段数从 STAGE_SEQUENCE 推导，不写魔法数字（见 MEM-INC-005）。
+    assert len(body["steps"]) == len(STAGE_SEQUENCE)
     assert body["steps"][0]["stage"] == "FILE_VALIDATION"
     assert body["steps"][0]["status"] == "SUCCEEDED"
     assert body["steps"][1]["status"] == "SKIPPED"
@@ -315,7 +317,8 @@ def test_steps_are_inlined_in_detail_and_paged_by_endpoint(api_db) -> None:
         params={"limit": 100, "cursor": page_body["next_cursor"]},
     )
     assert rest.status_code == 200
-    assert len(rest.json()["items"]) == 5
+    # 剩余条数 = 总数 - 首页 3 条；总数从 STAGE_SEQUENCE 推导，不写魔法数字。
+    assert len(rest.json()["items"]) == len(STAGE_SEQUENCE) - 3
 
 
 def test_steps_endpoint_enforces_project_isolation_and_unknown_run(api_db) -> None:

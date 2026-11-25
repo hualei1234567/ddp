@@ -18,7 +18,7 @@ from app.application.processing.use_cases import (
 )
 from app.core.config import Settings
 from app.domain.identity.models import ProjectScope
-from app.domain.processing.enums import ProcessingRunStatus
+from app.domain.processing.enums import STAGE_SEQUENCE, ProcessingRunStatus
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.models.collection import AuditLog, OutboxEvent
 from app.infrastructure.db.models.quality import QualityRunModel
@@ -220,7 +220,8 @@ def test_worker_consumes_requested_event_and_runs_all_stages(env) -> None:
     run = _run(factory, ids, run_id)
     assert run is not None
     assert run.status == ProcessingRunStatus.SUCCEEDED.value
-    assert len(_steps(factory, ids, run_id)) == 8
+    # 阶段数从 STAGE_SEQUENCE 推导，不写魔法数字——新增阶段时不该让这里变红（见 MEM-INC-005）。
+    assert len(_steps(factory, ids, run_id)) == len(STAGE_SEQUENCE)
     assert _event_status(factory) == [("PUBLISHED", 0)]
 
 
@@ -283,7 +284,8 @@ def test_duplicate_event_is_published_without_extra_steps(env) -> None:
 
     assert duplicate["status"] == RunProcessingStatus.PUBLISHED.value
     assert duplicate["outcome"] == "NOOP"
-    assert len(_steps(factory, ids, run_id)) == 8
+    # 阶段数从 STAGE_SEQUENCE 推导，不写魔法数字——新增阶段时不该让这里变红（见 MEM-INC-005）。
+    assert len(_steps(factory, ids, run_id)) == len(STAGE_SEQUENCE)
 
 
 def test_only_the_consuming_worker_gets_the_event(env) -> None:

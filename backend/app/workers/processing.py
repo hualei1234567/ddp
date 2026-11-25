@@ -49,6 +49,9 @@ from app.application.processing.ports import (
 )
 from app.application.processing.quality_stage import QualityCheckHandler
 from app.application.processing.segmentation_stage import EpisodeSegmentationHandler
+from app.application.processing.stream_extraction_stage import (
+    StreamExtractionHandler,
+)
 from app.application.processing.time_alignment_stage import TimeAlignmentHandler
 from app.application.processing.use_cases import (
     PROCESSING_RUN_REQUESTED_EVENT,
@@ -354,6 +357,14 @@ class ProcessingRunWorker:
                 canonical_schema_version=CANONICAL_SCHEMA_VERSION,
             ),
         )
+        # V51-001~003：真实 payload → SensorStream/Observation/Action 物化。
+        # 装配 reader（有界下载 HDF5）与 artifacts（写 NDJSON 产物），
+        # 两者缺一都会让阶段无法真正落地。
+        stream_extraction = StreamExtractionHandler(
+            self._reader,
+            self._artifacts,
+            max_hdf5_bytes=self._settings.processing_metadata_max_object_bytes,
+        )
         return ProcessingPipeline(
             runs,
             SqlProcessingRunStepRepository(session),
@@ -366,6 +377,7 @@ class ProcessingRunWorker:
                 calibration_validation=calibration_validation,
                 episode_segmentation=episode_segmentation,
                 quality_check=quality_check,
+                stream_extraction=stream_extraction,
             ),
             session,
             # 阶段产物登记进一等目录（V31-016）；``output_refs`` 退化为兼容投影。

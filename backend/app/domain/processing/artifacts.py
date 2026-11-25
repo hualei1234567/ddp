@@ -68,6 +68,10 @@ class ProcessingArtifactKind(StrEnum):
     METADATA = "METADATA"
     CANONICAL = "CANONICAL"
     TIME_ALIGNMENT_REPORT = "TIME_ALIGNMENT_REPORT"
+    #: V51-001~003：从真实 payload 提取的 SensorStream / Observation / Action
+    #: 物化产物（NDJSON）。与 METADATA 区分：METADATA 是"描述数据长什么样"，
+    #: 本类型是"真的把逐帧值取出来了"，两者的下游消费者与失效条件都不同。
+    STREAM_EXTRACTION = "STREAM_EXTRACTION"
 
 
 def _coerce_kind(value: object) -> str:
