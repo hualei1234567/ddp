@@ -20,7 +20,8 @@ from app.application.annotation.sample_sets import AnnotationSampleSetUseCases
 from app.application.annotation.schemas import AnnotationSchemaUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
 from app.domain.annotation import ForbiddenOperationError, WorkloadStatus
-from app.domain.annotation.errors import EpisodeIneligibleError
+from app.domain.annotation.errors import AnnotatorNotEligibleError, EpisodeIneligibleError
+from app.domain.annotation.skill_routing import AnnotatorSkillProfile
 from app.domain.annotation.workload import CapacityPolicy
 from app.domain.identity.models import ProjectRole, ProjectScope
 from app.infrastructure.db.base import Base
@@ -638,3 +639,361 @@ def test_self_approval_and_project_isolation(
             path=f"/projects/p/annotation-schemas/{pending.schema_id}/actions/publish",
         )
     assert stacks.schemas.list(stacks.scope_other) == []
+
+
+# ── 技能路由（V52-009）───────────────────────────────────────
+
+
+class _FakeSkillProfiles:
+    """技能档案假端口：按 annotator_id 返回预设档案（测试显式构造）。"""
+
+    def __init__(self, profiles: dict[UUID, tuple[set[str], float]]) -> None:
+        self._profiles = profiles
+
+    def load_profiles(
+        self, scope: ProjectScope, annotator_ids: list[UUID]
+    ) -> list[AnnotatorSkillProfile]:
+        return [
+            AnnotatorSkillProfile(
+                annotator_id=annotator_id,
+                tags=frozenset(self._profiles.get(annotator_id, (set(), 0.0))[0]),
+                quality_score=self._profiles.get(annotator_id, (set(), 0.0))[1],
+            )
+            for annotator_id in annotator_ids
+        ]
+
+
+def _routed_stacks(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+    profiles: dict[UUID, tuple[set[str], float]],
+) -> tuple[sessionmaker[Session], _Stacks, UUID]:
+    """在既有夹具上重装配分配用例（注入技能档案端口），其余用例原样。"""
+    factory, stacks, episode_id = annotation_app
+    with factory() as session:
+        stacks.assignments = AnnotationAssignmentUseCases(
+            SqlAnnotationTaskRepository(session),
+            SqlAnnotationBatchRepository(session),
+            SqlAnnotationAssignmentRepository(session),
+            SqlMemberDirectory(session),
+            SqlAnnotationAuditRepository(session),
+            SqlAnnotationOutboxRepository(session),
+            SqlAnnotationIdempotencyRepository(session),
+            stacks.uow,
+            skill_profiles=_FakeSkillProfiles(profiles),
+        )
+    return factory, stacks, episode_id
+
+
+def _routed_task_stacks(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+    profiles: dict[UUID, tuple[set[str], float]],
+) -> tuple[sessionmaker[Session], _Stacks, UUID]:
+    """同时重装任务用例与分配用例（任务创建要带 required_skills）。"""
+    factory, stacks, episode_id = annotation_app
+    with factory() as session:
+        tasks_repo = SqlAnnotationTaskRepository(session)
+        stacks.tasks = AnnotationTaskUseCases(
+            tasks_repo,
+            SqlAnnotationSampleSetRepository(session),
+            SqlAnnotationSchemaRepository(session),
+            SqlAnnotationBatchRepository(session),
+            SqlAnnotationAssignmentRepository(session),
+            SqlAnnotationSubmissionRepository(session),
+            SqlAnnotationAuditRepository(session),
+            SqlAnnotationOutboxRepository(session),
+            SqlAnnotationIdempotencyRepository(session),
+            stacks.uow,
+        )
+        stacks.assignments = AnnotationAssignmentUseCases(
+            tasks_repo,
+            SqlAnnotationBatchRepository(session),
+            SqlAnnotationAssignmentRepository(session),
+            SqlMemberDirectory(session),
+            SqlAnnotationAuditRepository(session),
+            SqlAnnotationOutboxRepository(session),
+            SqlAnnotationIdempotencyRepository(session),
+            stacks.uow,
+            skill_profiles=_FakeSkillProfiles(profiles),
+        )
+    return factory, stacks, episode_id
+
+
+def _legacy_assignment_task_stacks(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+) -> tuple[sessionmaker[Session], _Stacks, UUID]:
+    """只重装任务用例（支持创建带 required_skills 的任务），
+    分配用例保留旧版装配（不注入技能端口）——验证可选注入契约。"""
+    factory, stacks, _episode_id = annotation_app
+    with factory() as session:
+        stacks.tasks = AnnotationTaskUseCases(
+            SqlAnnotationTaskRepository(session),
+            SqlAnnotationSampleSetRepository(session),
+            SqlAnnotationSchemaRepository(session),
+            SqlAnnotationBatchRepository(session),
+            SqlAnnotationAssignmentRepository(session),
+            SqlAnnotationSubmissionRepository(session),
+            SqlAnnotationAuditRepository(session),
+            SqlAnnotationOutboxRepository(session),
+            SqlAnnotationIdempotencyRepository(session),
+            stacks.uow,
+        )
+    return factory, stacks, _episode_id
+
+
+def _publish_and_ready(annotation_app, task_kwargs: dict) -> tuple[_Stacks, UUID, UUID]:
+    """走到"批次 READY、任务可分配"的最短路径，返回 (stacks, task_id, batch_id)。"""
+    factory, stacks, episode_id = annotation_app
+    schema = stacks.schemas.create(
+        stacks.scope_a, _schema_command(), path="/projects/p/annotation-schemas"
+    )
+    schema = stacks.schemas.apply_action(
+        stacks.scope_a,
+        schema.schema_id,
+        "submit-review",
+        expected_version=schema.version,
+        path="/p/act",
+    )
+    published = stacks.schemas.apply_action(
+        stacks.scope_b,
+        schema.schema_id,
+        "publish",
+        expected_version=schema.version,
+        path="/p/act",
+    )
+    sample_set = stacks.sample_sets.create(
+        stacks.scope_a,
+        NewAnnotationSampleSet(
+            code=f"sample-{task_kwargs.get('code', 'x')}",
+            filters={"scene_labels": ["kitchen"]},
+        ),
+        path="/projects/p/annotation-sample-sets",
+    )
+    preview = stacks.sample_sets.preview(
+        stacks.scope_a,
+        sample_set.sample_set_id,
+        expected_version=sample_set.version,
+        path="/p/act",
+    )
+    snapshot = stacks.sample_sets.snapshot(
+        stacks.scope_a,
+        sample_set.sample_set_id,
+        expected_version=preview.version,
+        path="/p/act",
+    )
+    task = stacks.tasks.create(
+        stacks.scope_a,
+        NewAnnotationTask(
+            code=task_kwargs.get("code", "task-skill"),
+            name="技能任务",
+            sample_set_id=snapshot.sample_set_id,
+            schema_id=published.schema_id,
+            target_item_count=1,
+            target_episode_count=1,
+            due_at=NOW + timedelta(days=1),
+            required_skills=task_kwargs.get("required_skills", ()),
+            quality_policy=task_kwargs.get("quality_policy", {}),
+        ),
+        path="/projects/p/annotation-tasks",
+    )
+    task = stacks.tasks.apply_action(
+        stacks.scope_a,
+        task.task_id,
+        "submit-review",
+        expected_version=task.version,
+        path="/p/act",
+    )
+    task = stacks.tasks.apply_action(
+        stacks.scope_b,
+        task.task_id,
+        "approve",
+        expected_version=task.version,
+        path="/p/act",
+    )
+    batch = stacks.batches.create(
+        stacks.scope_a,
+        task.task_id,
+        NewAnnotationBatch(
+            planned_item_count=1,
+            item_refs=(episode_id,),
+            code=f"B-{task_kwargs.get('code', 'x')}",
+        ),
+        path="/projects/p/annotation-tasks/annotation-batches",
+    )
+    stacks.tasks.apply_action(
+        stacks.scope_a,
+        task.task_id,
+        "ready",
+        expected_version=task.version,
+        path="/p/act",
+    )
+    batch = stacks.batches.apply_action(
+        stacks.scope_a,
+        batch.batch_id,
+        "ready",
+        expected_version=batch.version,
+        path="/p/act",
+    )
+    return stacks, task.task_id, batch.batch_id
+
+
+def test_assignment_without_skill_config_unchanged(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+) -> None:
+    """任务未配置必配技能：即使注入了技能端口，行为也必须与旧版一致。"""
+    factory, stacks, _episode_id = annotation_app
+    annotation_app = _routed_task_stacks(
+        annotation_app,
+        {stacks.scope_a.actor_id: (set(), 0.0)},  # 端口已注入，但任务零配置
+    )
+    stacks, _task_id, batch_id = _publish_and_ready(annotation_app, {"code": "ns-1"})
+    assignment = stacks.assignments.create(
+        stacks.scope_a,
+        batch_id,
+        NewAnnotationAssignment(
+            assignee_id=stacks.scope_a.actor_id,
+            planned_item_count=1,
+            planned_minutes=30,
+            lease_expires_at=NOW + timedelta(hours=4),
+        ),
+        path="/projects/p/annotation-assignments",
+    )
+    assert assignment.assignee_id == stacks.scope_a.actor_id
+
+
+def test_assignment_without_port_unchanged(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+) -> None:
+    """未注入技能端口（旧装配）：任务配置了必配技能也不路由——可选注入契约。"""
+    annotation_app = _legacy_assignment_task_stacks(annotation_app)
+    stacks, _task_id, batch_id = _publish_and_ready(
+        annotation_app,
+        {"code": "np-1", "required_skills": ({"tag_name": "kitchen"},)},
+    )
+    assignment = stacks.assignments.create(
+        stacks.scope_a,
+        batch_id,
+        NewAnnotationAssignment(
+            assignee_id=stacks.scope_a.actor_id,
+            planned_item_count=1,
+            planned_minutes=30,
+            lease_expires_at=NOW + timedelta(hours=4),
+        ),
+        path="/projects/p/annotation-assignments",
+    )
+    assert assignment.assignee_id == stacks.scope_a.actor_id
+
+
+def test_assignment_rejects_missing_required_skill(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+) -> None:
+    """配置了必配技能且注入端口：缺技能的候选被拒（422 契约码 + 原因码）。"""
+    factory, stacks, _episode_id = annotation_app
+    annotation_app = _routed_task_stacks(
+        annotation_app,
+        {stacks.scope_a.actor_id: (set(), 0.0)},
+    )
+    stacks, _task_id, batch_id = _publish_and_ready(
+        annotation_app,
+        {"code": "mr-1", "required_skills": ({"tag_name": "kitchen"},)},
+    )
+    with pytest.raises(AnnotatorNotEligibleError) as excinfo:
+        stacks.assignments.create(
+            stacks.scope_a,
+            batch_id,
+            NewAnnotationAssignment(
+                assignee_id=stacks.scope_a.actor_id,
+                planned_item_count=1,
+                planned_minutes=30,
+                lease_expires_at=NOW + timedelta(hours=4),
+            ),
+            path="/projects/p/annotation-assignments",
+        )
+    assert excinfo.value.code == "annotation_annotator_not_eligible"
+    assert excinfo.value.details["reason"] == "MISSING_REQUIRED_SKILL"
+
+
+def test_assignment_allows_annotator_with_required_skill(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+) -> None:
+    """持有必配技能的候选正常分配；reviewer 角色不受技能闸口限制。"""
+    factory, stacks, _episode_id = annotation_app
+    annotation_app = _routed_task_stacks(
+        annotation_app,
+        {stacks.scope_a.actor_id: ({"kitchen"}, 0.9)},
+    )
+    stacks, _task_id, batch_id = _publish_and_ready(
+        annotation_app,
+        {"code": "ok-1", "required_skills": ({"tag_name": "KITCHEN "},)},
+    )
+    assignment = stacks.assignments.create(
+        stacks.scope_a,
+        batch_id,
+        NewAnnotationAssignment(
+            assignee_id=stacks.scope_a.actor_id,
+            planned_item_count=1,
+            planned_minutes=30,
+            lease_expires_at=NOW + timedelta(hours=4),
+        ),
+        path="/projects/p/annotation-assignments",
+    )
+    assert assignment.assignee_id == stacks.scope_a.actor_id
+
+
+def test_assignment_rejects_low_quality(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+) -> None:
+    """技能匹配但质量分低于 min_quality：LOW_QUALITY 原因码。"""
+    factory, stacks, _episode_id = annotation_app
+    annotation_app = _routed_task_stacks(
+        annotation_app,
+        {stacks.scope_a.actor_id: ({"kitchen"}, 0.3)},
+    )
+    stacks, _task_id, batch_id = _publish_and_ready(
+        annotation_app,
+        {
+            "code": "lq-1",
+            "required_skills": ({"tag_name": "kitchen"},),
+            "quality_policy": {"skill_routing": {"min_quality": 0.5}},
+        },
+    )
+    with pytest.raises(AnnotatorNotEligibleError) as excinfo:
+        stacks.assignments.create(
+            stacks.scope_a,
+            batch_id,
+            NewAnnotationAssignment(
+                assignee_id=stacks.scope_a.actor_id,
+                planned_item_count=1,
+                planned_minutes=30,
+                lease_expires_at=NOW + timedelta(hours=4),
+            ),
+            path="/projects/p/annotation-assignments",
+        )
+    assert excinfo.value.details["reason"] == "LOW_QUALITY"
+
+
+def test_reviewer_role_bypasses_skill_gate(
+    annotation_app: tuple[sessionmaker[Session], _Stacks, UUID],
+) -> None:
+    """REVIEWER 角色不按标注技能过滤（技能闸口只对 ANNOTATOR 生效）。"""
+    factory, stacks, _episode_id = annotation_app
+    annotation_app = _routed_task_stacks(
+        annotation_app,
+        {stacks.scope_a.actor_id: (set(), 0.0)},
+    )
+    stacks, _task_id, batch_id = _publish_and_ready(
+        annotation_app,
+        {"code": "rv-1", "required_skills": ({"tag_name": "kitchen"},)},
+    )
+    assignment = stacks.assignments.create(
+        stacks.scope_a,
+        batch_id,
+        NewAnnotationAssignment(
+            assignee_id=stacks.scope_a.actor_id,
+            assignment_role="REVIEWER",
+            planned_item_count=1,
+            planned_minutes=30,
+            lease_expires_at=NOW + timedelta(hours=4),
+        ),
+        path="/projects/p/annotation-assignments",
+    )
+    assert assignment.assignment_role.value == "REVIEWER"

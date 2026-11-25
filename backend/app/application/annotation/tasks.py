@@ -79,6 +79,7 @@ _PATCHABLE = frozenset(
         "assignment_mode",
         "iaa_policy",
         "quality_policy",
+        "required_skills",
     }
 )
 
@@ -197,6 +198,7 @@ class AnnotationTaskUseCases:
             due_at=command.due_at,
             iaa_policy=command.iaa_policy,
             quality_policy=command.quality_policy,
+            required_skills=command.required_skills,
             progress={"total_items": command.target_item_count},
             created_at=now,
             updated_at=now,

@@ -372,6 +372,7 @@ _ANNOTATION_STATUS_BY_CODE = {
     "annotation_assignment_expired": 410,
     "annotation_assignment_revoked": 410,
     "annotation_item_already_assigned": 409,
+    "annotation_annotator_not_eligible": 422,
     "annotation_submission_not_editable": 409,
     "annotation_submission_incomplete": 422,
     "annotation_submission_schema_mismatch": 422,
@@ -427,6 +428,7 @@ _ANNOTATION_MESSAGES = {
     "annotation_assignment_expired": "分配已过期，需重新分配",
     "annotation_assignment_revoked": "分配已撤销",
     "annotation_item_already_assigned": "标注项已被分配",
+    "annotation_annotator_not_eligible": "候选缺少任务必配技能或质量不达标",
     "annotation_submission_not_editable": "提交当前状态不允许编辑",
     "annotation_submission_incomplete": "提交内容不完整",
     "annotation_submission_schema_mismatch": "提交 Schema 快照与任务不一致",
@@ -466,6 +468,9 @@ _ANNOTATION_DETAILS_SAFE_CODES = frozenset(
         "annotation_task_not_ready",
         "annotation_assignment_revoked",
         "annotation_item_already_assigned",
+        # 技能路由（V52-009）：details 只含被拒人员 UUID 与原因码
+        # （MISSING_REQUIRED_SKILL / LOW_QUALITY），不含他人档案或技能配置。
+        "annotation_annotator_not_eligible",
         "annotation_submission_already_decided",
         "annotation_review_required",
         # FR-019 冲突恢复：details 只含 expected_version / current_version，

@@ -28,6 +28,7 @@ from app.infrastructure.db.models.annotation_work import (
     AnnotationAssignmentEvent,
     AnnotationBatch,
     AnnotationTask,
+    AnnotatorSkillTag,
 )
 from app.infrastructure.db.models.capture_session import CaptureSessionModel
 from app.infrastructure.db.models.collection import (
@@ -122,6 +123,7 @@ from app.infrastructure.db.models.training import (
 __all__ = [
     "AcceptanceLedgerModel",
     "AnnotationAiSuggestion",
+    "AnnotatorSkillTag",
     "AnnotationArbitration",
     "AnnotationAssignment",
     "AnnotationAssignmentEvent",
