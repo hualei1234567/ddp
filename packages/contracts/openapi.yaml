@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.36.0
+  version: 1.40.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -211,6 +211,23 @@ info:
       `NORMAL`，不得把缺失当成 0；`missing_semantics` 显式区分缺失语义。
       本操作只读：不写库、不推进版本、不改派或关闭任务；服务端强制
       `project_id` 隔离。全部为增量：无路径/字段删除，无数据库迁移。
+    - `1.40.0` **PRM 步级标注与分叉重写（V52-020）**：新增 4 个操作——
+      `POST|GET /api/v1/projects/{project_id}/prm-trajectory-annotations`、
+      `GET .../prm-trajectory-annotations/{annotation_id}` 与
+      `POST .../prm-trajectory-annotations/{trajectory_id}/fork`。语义要点：
+      * 四分类步级标签 `CORRECT` / `REDUNDANT` / `HALLUCINATED_TOOL` / `FATAL`
+        的 reward 映射（+1 / -0.5 / -1 / -2）与
+        `data-platform/ddp_data/llm_export/prm.py` 完全一致，由领域单测
+        断言两边相等（防双源漂移）。
+      * `marks` 可部分标注：未标注步骤不携带任何结论（未标注 ≠ 正确）；
+        `step_index` 在轨迹内唯一且越界 422；`trajectory_id` 项目内唯一，
+        重复 409。
+      * fork 是**纯计算预览端点**：返回分叉轨迹（0..at_index-1 共享前缀 +
+        重写序列）与 Step-DPO 对（canonical 语义：chosen = Forked、
+        rejected = Original），并附 MEM-DEC-002 JSON 约定值形态的
+        `preference_json_value`——偏好对以 JSON 值回流提交链，不新增标签类型。
+      * 步级标注创建即不可变：无 PATCH/DELETE，修正走新轨迹行。
+      纯增量：无路径/字段删除，无必填性收紧；新增迁移 0078（`prm_annotations` 表）。
     - `1.36.0` **Frozen Dataset 引用保护（V51-017 / FR-045）**：新增只读端点
       `GET /api/v1/projects/{project_id}/raw-assets/{asset_id}/reference-impact`。
       语义要点：
@@ -402,7 +419,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.36.0
+  version: 1.40.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -532,6 +549,8 @@ tags:
     description: 分配、领取与职责分离
   - name: annotation-submissions
     description: 提交、记录、复核与仲裁
+  - name: annotation-prm
+    description: PRM 步级过程奖励标注（四分类 + reward）、分叉重写与 Step-DPO 对预览（V52-020）
   - name: annotation-quality
     description: 黄金集、质检抽检与 IAA 报告
   - name: datasets
@@ -1042,6 +1061,13 @@ paths:
     $ref: "./fragments/paths.stage8.yaml#/aiSuggestionConfirm"
   /api/v1/projects/{project_id}/annotation-submissions/{submission_id}/ai-suggestions/agreement:
     $ref: "./fragments/paths.stage8.yaml#/aiSuggestionAgreement"
+  # --- PRM 步级标注（V52-020，契约 1.40.0）---
+  /api/v1/projects/{project_id}/prm-trajectory-annotations:
+    $ref: "./fragments/paths.stage10.yaml#/prmTrajectoryAnnotations"
+  /api/v1/projects/{project_id}/prm-trajectory-annotations/{annotation_id}:
+    $ref: "./fragments/paths.stage10.yaml#/prmTrajectoryAnnotationDetail"
+  /api/v1/projects/{project_id}/prm-trajectory-annotations/{trajectory_id}/fork:
+    $ref: "./fragments/paths.stage10.yaml#/prmTrajectoryFork"
   # --- N5 DatasetVersion 血缘 ---
   /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{version_id}/lineage:
     $ref: "./fragments/paths.stage8.yaml#/datasetVersionLineage"
@@ -1731,6 +1757,13 @@ components:
     AiSuggestionConfirm: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionConfirm"}
     AiSuggestion: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestion"}
     AiSuggestionPage: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionPage"}
+    StepMarkIn: {$ref: "./fragments/schemas.stage10.yaml#/StepMarkIn"}
+    StepMarkOut: {$ref: "./fragments/schemas.stage10.yaml#/StepMarkOut"}
+    PrmAnnotationCreate: {$ref: "./fragments/schemas.stage10.yaml#/PrmAnnotationCreate"}
+    PrmAnnotationOut: {$ref: "./fragments/schemas.stage10.yaml#/PrmAnnotationOut"}
+    PrmForkRequest: {$ref: "./fragments/schemas.stage10.yaml#/PrmForkRequest"}
+    PrmForkPreviewOut: {$ref: "./fragments/schemas.stage10.yaml#/PrmForkPreviewOut"}
+    StepDpoPairOut: {$ref: "./fragments/schemas.stage10.yaml#/StepDpoPairOut"}
     AgreementItem: {$ref: "./fragments/schemas.stage9.yaml#/AgreementItem"}
     AgreementSummary: {$ref: "./fragments/schemas.stage9.yaml#/AgreementSummary"}
     SupplierPortfolioTotals: {$ref: "./fragments/schemas.stage6.yaml#/SupplierPortfolioTotals"}
