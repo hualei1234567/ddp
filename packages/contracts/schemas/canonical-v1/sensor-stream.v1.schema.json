@@ -13,7 +13,10 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "ddp.canonical/1.0.0"
+      "enum": [
+        "ddp.canonical/1.0.0",
+        "ddp.canonical/1.1.0"
+      ]
     },
     "stream_id": {
       "type": "string"
@@ -115,6 +118,58 @@
       ],
       "minimum": 1
     },
+    "dtype": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "start_timestamp_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "end_timestamp_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "missing_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "invalid_count": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "parser_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sensor_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "device_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "missing_fields": {
       "type": "array",
       "items": {
@@ -124,15 +179,23 @@
           "calibration_version",
           "channel_names",
           "checksum",
+          "device_id",
+          "dtype",
           "duration_ns",
+          "end_timestamp_ns",
           "frame_convention",
           "frame_id",
+          "invalid_count",
+          "missing_count",
           "modality",
+          "parser_version",
           "quantity_kind",
           "sample_count",
           "sample_rate_hz",
+          "sensor_id",
           "sensor_name",
           "sensor_type",
+          "start_timestamp_ns",
           "storage_reference",
           "unit"
         ]

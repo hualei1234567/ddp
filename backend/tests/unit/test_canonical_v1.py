@@ -26,6 +26,7 @@ from ddp_data.canonical import (
     OBSERVATION_FIELDS,
     SCHEMA_VERSION,
     SENSOR_STREAM_FIELDS,
+    SUPPORTED_SCHEMA_VERSIONS,
     VIDEO_STREAM_FIELDS,
     Action,
     CanonicalFieldError,
@@ -110,6 +111,10 @@ def _sensor_stream(**overrides: object) -> SensorStream:
         "checksum": "sha256:def",
         "calibration_id": "cal-1",
         "calibration_version": 1,
+        # 这个辅助函数构造的是**1.0 完整形态**：所有 1.0 字段都有值。
+        # 显式声明 schema_version=1.0，否则 1.1 新增字段（dtype 等）为 None
+        # 会要求登记 missing_fields——那正是 1.1 的校验规则，与本用例意图无关。
+        "schema_version": "ddp.canonical/1.0.0",
         "missing_fields": (),
     }
     values.update(overrides)
@@ -207,7 +212,9 @@ def _episode(**overrides: object) -> Episode:
 )
 def test_entity_roundtrips_through_json_safe_dict(entity: object) -> None:
     payload = entity.to_dict()  # type: ignore[attr-defined]
-    assert payload["schema_version"] == SCHEMA_VERSION
+    # 断言"序列化保留实例自身的版本"——fixture 显式构造 1.0 形态，
+    # 不一定等于当前 SCHEMA_VERSION（1.1）。真正要保证的是**往返不失真**。
+    assert payload["schema_version"] == entity.schema_version  # type: ignore[attr-defined]
     assert "missing_fields" in payload
     json.dumps(payload, allow_nan=False)  # 必须可被标准 JSON 序列化
     restored = type(entity).from_dict(payload)
@@ -232,8 +239,12 @@ def test_every_entity_exposes_schema_version_and_field_list() -> None:
             Observation: _observation,
             Episode: _episode,
         }[cls]()
-        assert instance.schema_version == SCHEMA_VERSION
-    assert SCHEMA_VERSION == "ddp.canonical/1.0.0"
+        # 每个实体都必须暴露 schema_version，且落在受支持版本集合内。
+        # fixture 显式构造 1.0 形态（见 _sensor_stream 注释），故不强制等于当前版本。
+        assert instance.schema_version in SUPPORTED_SCHEMA_VERSIONS
+    # 当前默认版本是 1.1（ADR-0049）；1.0 仍可读，但新产物一律写 1.1。
+    assert SCHEMA_VERSION == "ddp.canonical/1.1.0"
+    assert "ddp.canonical/1.0.0" in SUPPORTED_SCHEMA_VERSIONS
 
 
 @pytest.mark.parametrize(
