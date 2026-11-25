@@ -212,6 +212,32 @@ class AnnotatorNotEligibleError(AnnotationDomainError):
     code = "annotation_annotator_not_eligible"
 
 
+class AnnotatorPausedByHoneypotError(AnnotationDomainError):
+    """标注员因黄金题准确率熔断被暂停派单（V52-008 黄金题接线）。
+
+    details 只含标注员 UUID 与原因码（``HONEYPOT_PAUSED``），不含黄金题
+    期望答案或窗口明细，落在契约 details_rule 的允许范围。只挡新分配，
+    不收回已有分配。
+    """
+
+    code = "annotation_annotator_paused_honeypot"
+
+    def __init__(
+        self,
+        message: str = "",
+        *,
+        annotator_id: object = None,
+        reason: str = "HONEYPOT_PAUSED",
+    ) -> None:
+        super().__init__(
+            message or "标注员黄金题准确率熔断，暂停派单",
+            details={
+                "annotator_id": str(annotator_id) if annotator_id is not None else None,
+                "reason": reason,
+            },
+        )
+
+
 class SubmissionNotEditableError(AnnotationDomainError):
     code = "annotation_submission_not_editable"
 
