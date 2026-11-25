@@ -122,4 +122,8 @@ def test_artifact_kind_enum_covers_every_object_storage_product() -> None:
         "METADATA",
         "CANONICAL",
         "TIME_ALIGNMENT_REPORT",
+        # V51-001~003：STREAM_EXTRACTION 确实写对象存储
+        # （processing-run/<p>/<r>/streams/...ndjson），且与 METADATA 语义不同——
+        # METADATA 描述"数据长什么样"，本类型是"真的把逐帧值取出来了"。
+        "STREAM_EXTRACTION",
     }

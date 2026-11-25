@@ -182,6 +182,7 @@ def default_handlers(
     calibration_validation: StageHandler,
     episode_segmentation: StageHandler,
     quality_check: StageHandler,
+    stream_extraction: StageHandler | None = None,
 ) -> dict[ProcessingStage, StageHandler]:
     """默认阶段表：七个阶段有真实落点，DATA_CLEANING 显式 SKIPPED。
 
@@ -197,6 +198,14 @@ def default_handlers(
         ProcessingStage.EPISODE_SEGMENTATION: episode_segmentation,
         ProcessingStage.QUALITY_PRE_CHECK: quality_check,
     }
+    # STREAM_EXTRACTION 需要对象存储读取 + 产物写入两项注入；未注入时显式
+    # SKIPPED 并写明原因——静默成功会让「没接线」看起来像「没有需要提取的流」。
+    if stream_extraction is not None:
+        handlers[ProcessingStage.STREAM_EXTRACTION] = stream_extraction
+    else:
+        handlers[ProcessingStage.STREAM_EXTRACTION] = SkippedStage(
+            "STREAM_EXTRACTION 未注入（需要对象存储读取与产物写入能力）"
+        )
     for stage, reason in STAGE_SKIP_REASONS.items():
         handlers[stage] = SkippedStage(reason)
     missing = [stage.value for stage in STAGE_SEQUENCE if stage not in handlers]

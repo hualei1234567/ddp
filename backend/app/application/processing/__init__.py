@@ -27,6 +27,9 @@ from app.application.processing.segmentation_stage import (
     MAX_SEGMENTATION_EPISODES,
     EpisodeSegmentationHandler,
 )
+from app.application.processing.stream_extraction_stage import (
+    StreamExtractionHandler,
+)
 from app.application.processing.time_alignment_stage import (
     TIME_ALIGNMENT_REPORT_SCHEMA_VERSION,
     TimeAlignmentHandler,
@@ -59,6 +62,7 @@ __all__ = [
     "ProcessingWorkerUseCases",
     "QualityCheckHandler",
     "TimeAlignmentHandler",
+    "StreamExtractionHandler",
     "default_handlers",
     "resolve_episode_ids",
     "time_alignment_report_key",

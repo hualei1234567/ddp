@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 from app.application.processing.stream_extraction_stage import (
-    _LAYOUTS,
+    LAYOUTS,
     STREAM_SCHEMA_VERSION,
     extract_robomimic_demo,
     payload_sha256,
@@ -27,7 +27,7 @@ from ddp_data.hdf5 import read_hdf5_dataset_slice
 h5py = pytest.importorskip("h5py", reason="需要官方 h5py SDK 构造或读取 HDF5")
 
 _REAL_PATH = os.environ.get("DDP_TEST_REAL_HDF5")
-_LAYOUT = _LAYOUTS[0]
+_LAYOUT = LAYOUTS[0]
 
 
 def _build_demo_hdf5(path: Path, *, demos: int = 2, frames: int = 5) -> Path:
