@@ -1114,6 +1114,9 @@ paths:
   # --- Token 成本台账（V52-010，蓝图 N6；owner / 平台管理员）---
   /api/v1/projects/{project_id}/ops/token-ledger:
     $ref: "./fragments/paths.ops.yaml#/opsTokenLedger"
+  # --- 评测失败案例回流（V52-030，蓝图 N5 / G5）---
+  /api/v1/projects/{project_id}/annotation-backflow:
+    $ref: "./fragments/paths.ops.yaml#/annotationBackflow"
   /api/v1/projects/{project_id}/audit-logs:
     $ref: "./fragments/paths.audit.yaml#/auditLogs"
   /api/v1/projects/{project_id}/audit-logs/{resource_type}/{resource_id}:
@@ -1762,6 +1765,11 @@ components:
     AiTokenUsageItem: {$ref: "./fragments/schemas.stage9.yaml#/AiTokenUsageItem"}
     TokenCostLedger: {$ref: "./fragments/schemas.ops.yaml#/TokenCostLedger"}
     TokenCostLedgerEntry: {$ref: "./fragments/schemas.ops.yaml#/TokenCostLedgerEntry"}
+    AnnotationBackflowIngest: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowIngest"}
+    AnnotationBackflowIngestResult: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowIngestResult"}
+    AnnotationBackflowDecision: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowDecision"}
+    AnnotationBackflowCase: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCase"}
+    AnnotationBackflowCasePage: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCasePage"}
     AiSuggestionConfirm: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionConfirm"}
     AiSuggestion: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestion"}
     AiSuggestionPage: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionPage"}

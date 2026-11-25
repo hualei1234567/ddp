@@ -2,6 +2,7 @@
 
 from app.infrastructure.db.models.annotation_ai import AnnotationAiSuggestion
 from app.infrastructure.db.models.annotation_ai_token_usage import AiTokenUsage
+from app.infrastructure.db.models.annotation_backflow_case import AnnotationBackflowCase
 from app.infrastructure.db.models.annotation_catalog import (
     AnnotationSampleEpisode,
     AnnotationSampleSet,
@@ -128,6 +129,7 @@ __all__ = [
     "AiTokenUsage",
     "AnnotatorSkillTag",
     "AnnotationArbitration",
+    "AnnotationBackflowCase",
     "AnnotationAssignment",
     "AnnotationAssignmentEvent",
     "AnnotationBatch",

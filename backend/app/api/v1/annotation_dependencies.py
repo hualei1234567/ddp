@@ -14,6 +14,7 @@ from app.api.deps import DbSession
 from app.application.annotation.ai_suggestions import AnnotationAiSuggestionUseCases
 from app.application.annotation.arbitrations import AnnotationArbitrationUseCases
 from app.application.annotation.assignments import AnnotationAssignmentUseCases
+from app.application.annotation.backflow import BackflowUseCases
 from app.application.annotation.batches import AnnotationBatchUseCases
 from app.application.annotation.consistency import AnnotationConsistencyUseCases
 from app.application.annotation.gold_sets import GoldSetUseCases
@@ -41,6 +42,7 @@ from app.infrastructure.repositories.annotation_audit import (
     SqlAnnotationIdempotencyRepository,
     SqlAnnotationOutboxRepository,
 )
+from app.infrastructure.repositories.annotation_backflow import SqlBackflowRepository
 from app.infrastructure.repositories.annotation_batches import SqlAnnotationBatchRepository
 from app.infrastructure.repositories.annotation_directory import (
     SqlEpisodeDirectory,
@@ -91,6 +93,7 @@ class AnnotationUseCases:
     consistency: AnnotationConsistencyUseCases
     overdue_summary: AnnotationOverdueSummaryUseCases
     prm_annotations: PrmAnnotationUseCases
+    backflow: BackflowUseCases
 
 
 def get_annotation_use_cases(
@@ -179,6 +182,18 @@ def get_annotation_use_cases(
         session,
     )
 
+    tasks = AnnotationTaskUseCases(
+        tasks_repo,
+        sample_sets_repo,
+        schemas_repo,
+        batches_repo,
+        assignments_repo,
+        submissions_repo,
+        audit,
+        outbox,
+        idempotency,
+        session,
+    )
     return AnnotationUseCases(
         schemas=AnnotationSchemaUseCases(
             schemas_repo,
@@ -197,18 +212,7 @@ def get_annotation_use_cases(
             idempotency,
             session,
         ),
-        tasks=AnnotationTaskUseCases(
-            tasks_repo,
-            sample_sets_repo,
-            schemas_repo,
-            batches_repo,
-            assignments_repo,
-            submissions_repo,
-            audit,
-            outbox,
-            idempotency,
-            session,
-        ),
+        tasks=tasks,
         batches=AnnotationBatchUseCases(
             tasks_repo,
             batches_repo,
@@ -309,6 +313,11 @@ def get_annotation_use_cases(
             prm_annotations_repo,
             audit,
             outbox,
+            session,
+        ),
+        backflow=BackflowUseCases(
+            SqlBackflowRepository(session),
+            tasks,
             session,
         ),
     )
