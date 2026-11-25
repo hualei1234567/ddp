@@ -40,6 +40,7 @@ SUPPORTED_SCHEMA_VERSIONS = frozenset({SCHEMA_VERSION, "ddp.canonical/1.0.0"})
 #: 1.1 新增字段（1.0 产物不含，读取 1.0 时不得要求这些字段）。
 SCHEMA_1_1_ONLY_FIELDS = frozenset(
     {
+        # SensorStream
         "dtype",
         "start_timestamp_ns",
         "end_timestamp_ns",
@@ -48,6 +49,14 @@ SCHEMA_1_1_ONLY_FIELDS = frozenset(
         "parser_version",
         "sensor_id",
         "device_id",
+        # Observation / Action（共用同名的新增字段）
+        "timestamp_raw_ns",
+        "timestamp_normalized_ns",
+        "validity",
+        "source_index",
+        "source_offset",
+        "semantics_version",
+        "transform_provenance",
     }
 )
 
@@ -139,6 +148,18 @@ ACTION_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("confidence", kind="number", minimum=0),
     FieldSpec("action_schema_ref"),
     FieldSpec("frame_index", kind="int", minimum=0),
+    # --- 1.1 新增（全部可选，对齐 ADR-0049 §3.2）---
+    FieldSpec("timestamp_raw_ns", kind="int"),
+    FieldSpec("timestamp_normalized_ns", kind="int"),
+    FieldSpec("dtype"),
+    FieldSpec("validity"),
+    FieldSpec("parser_version"),
+    FieldSpec("source_index", kind="int", minimum=0),
+    FieldSpec("source_offset", kind="int", minimum=0),
+    # semantics_version：动作语义版本。**与 action_schema_ref 不同**：
+    # 后者指向 Schema 定义，前者表示"这批动作按哪一版语义解释"
+    # （例如末端 delta 的坐标系约定变了）。蓝图 §5 明确要求。
+    FieldSpec("semantics_version"),
 )
 
 OBSERVATION_FIELDS: tuple[FieldSpec, ...] = (
@@ -164,6 +185,19 @@ OBSERVATION_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("valid", kind="bool"),
     FieldSpec("invalid_reason"),
     FieldSpec("quality_flags", kind="str_tuple"),
+    # --- 1.1 新增（全部可选，对齐 ADR-0049 §3.2）---
+    FieldSpec("timestamp_raw_ns", kind="int"),
+    FieldSpec("timestamp_normalized_ns", kind="int"),
+    FieldSpec("validity"),
+    # parser_version：与 schema_version **正交**——同一 schema 版本可由不同
+    # 解析器产出。缺它就无法回答"这条观测是哪个解析器版本读出来的"，
+    # 而排查解析 bug 时这是第一个要问的问题（蓝图 §8 要求版本化）。
+    FieldSpec("parser_version"),
+    # 源定位：从这条观测能否回到**源文件的具体位置**。高维 payload 走 payload_ref，
+    # 但排查时仍需要"第几帧/第几个字节"，否则只能整份重读。
+    FieldSpec("source_index", kind="int", minimum=0),
+    FieldSpec("source_offset", kind="int", minimum=0),
+    FieldSpec("transform_provenance"),
 )
 
 EPISODE_FIELDS: tuple[FieldSpec, ...] = (
@@ -209,9 +243,7 @@ class Frame:
     def __post_init__(self) -> None:
         validate_entity(self, FRAME_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
         if self.timestamp_ns is None and self.source_time_ns is None:
-            raise CanonicalFieldError(
-                "Frame 必须至少有 timestamp_ns 或 source_time_ns 之一"
-            )
+            raise CanonicalFieldError("Frame 必须至少有 timestamp_ns 或 source_time_ns 之一")
         if self.is_dropped is True and self.drop_reason is None:
             raise CanonicalFieldError("is_dropped=True 时必须给出 drop_reason")
         if self.is_dropped is False and self.drop_reason is not None:
@@ -256,9 +288,7 @@ class VideoStream:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> Self:
-        return entity_from_dict(
-            cls, data, VIDEO_STREAM_FIELDS, SUPPORTED_SCHEMA_VERSIONS
-        )
+        return entity_from_dict(cls, data, VIDEO_STREAM_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -297,25 +327,28 @@ class SensorStream:
         # 按产物自身的 schema 版本选字段表：1.0 产物不该被要求声明 1.1 才有的字段。
         validate_entity(
             self,
-            _fields_for_version(SENSOR_STREAM_FIELDS, self.schema_version),
+            _fields_for_version("SensorStream", SENSOR_STREAM_FIELDS, self.schema_version),
             SUPPORTED_SCHEMA_VERSIONS,
         )
-        if (
-            self.frame_convention is not None
-            and self.frame_convention not in FRAME_CONVENTIONS
-        ):
+        if self.frame_convention is not None and self.frame_convention not in FRAME_CONVENTIONS:
             raise CanonicalFieldError(
                 f"SensorStream.frame_convention 非法：{self.frame_convention!r}；"
                 f"允许 {sorted(FRAME_CONVENTIONS)}"
             )
 
     def to_dict(self) -> dict[str, object]:
-        return entity_to_dict(self)
+        return entity_to_dict(
+            self, _fields_for_version("SensorStream", SENSOR_STREAM_FIELDS, self.schema_version)
+        )
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> Self:
+        version = str(data.get("schema_version", "")) if isinstance(data, Mapping) else ""
         return entity_from_dict(
-            cls, data, SENSOR_STREAM_FIELDS, SUPPORTED_SCHEMA_VERSIONS
+            cls,
+            data,
+            _fields_for_version("SensorStream", SENSOR_STREAM_FIELDS, version),
+            SUPPORTED_SCHEMA_VERSIONS,
         )
 
 
@@ -336,15 +369,26 @@ class Action:
     confidence: float | None = None
     action_schema_ref: str | None = None
     frame_index: int | None = None
+    # --- 1.1 新增（全部可选，1.0 产物不含）---
+    timestamp_raw_ns: int | None = None
+    timestamp_normalized_ns: int | None = None
+    dtype: str | None = None
+    validity: str | None = None
+    parser_version: str | None = None
+    source_index: int | None = None
+    source_offset: int | None = None
+    semantics_version: str | None = None
     schema_version: str = SCHEMA_VERSION
     missing_fields: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        validate_entity(self, ACTION_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
+        validate_entity(
+            self,
+            _fields_for_version("Action", ACTION_FIELDS, self.schema_version),
+            SUPPORTED_SCHEMA_VERSIONS,
+        )
         if self.start_time_ns is None and self.end_time_ns is None:
-            raise CanonicalFieldError(
-                "Action 必须至少有 start_time_ns 或 end_time_ns 之一"
-            )
+            raise CanonicalFieldError("Action 必须至少有 start_time_ns 或 end_time_ns 之一")
         if (
             self.start_time_ns is not None
             and self.end_time_ns is not None
@@ -355,11 +399,19 @@ class Action:
             raise CanonicalFieldError("Action.confidence 必须在 [0, 1] 内")
 
     def to_dict(self) -> dict[str, object]:
-        return entity_to_dict(self)
+        return entity_to_dict(
+            self, _fields_for_version("Action", ACTION_FIELDS, self.schema_version)
+        )
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> Self:
-        return entity_from_dict(cls, data, ACTION_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
+        version = str(data.get("schema_version", "")) if isinstance(data, Mapping) else ""
+        return entity_from_dict(
+            cls,
+            data,
+            _fields_for_version("Action", ACTION_FIELDS, version),
+            SUPPORTED_SCHEMA_VERSIONS,
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -388,25 +440,41 @@ class Observation:
     valid: bool | None = None
     invalid_reason: str | None = None
     quality_flags: tuple[str, ...] | None = None
+    # --- 1.1 新增（全部可选，1.0 产物不含）---
+    timestamp_raw_ns: int | None = None
+    timestamp_normalized_ns: int | None = None
+    validity: str | None = None
+    parser_version: str | None = None
+    source_index: int | None = None
+    source_offset: int | None = None
+    transform_provenance: str | None = None
     schema_version: str = SCHEMA_VERSION
     missing_fields: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        validate_entity(self, OBSERVATION_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
+        validate_entity(
+            self,
+            _fields_for_version("Observation", OBSERVATION_FIELDS, self.schema_version),
+            SUPPORTED_SCHEMA_VERSIONS,
+        )
         if self.timestamp_ns is None and self.source_time_ns is None:
-            raise CanonicalFieldError(
-                "Observation 必须至少有 timestamp_ns 或 source_time_ns 之一"
-            )
+            raise CanonicalFieldError("Observation 必须至少有 timestamp_ns 或 source_time_ns 之一")
         if self.valid is False and self.invalid_reason is None:
             raise CanonicalFieldError("valid=False 时必须给出 invalid_reason")
 
     def to_dict(self) -> dict[str, object]:
-        return entity_to_dict(self)
+        return entity_to_dict(
+            self, _fields_for_version("Observation", OBSERVATION_FIELDS, self.schema_version)
+        )
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> Self:
+        version = str(data.get("schema_version", "")) if isinstance(data, Mapping) else ""
         return entity_from_dict(
-            cls, data, OBSERVATION_FIELDS, SUPPORTED_SCHEMA_VERSIONS
+            cls,
+            data,
+            _fields_for_version("Observation", OBSERVATION_FIELDS, version),
+            SUPPORTED_SCHEMA_VERSIONS,
         )
 
 
@@ -494,23 +562,72 @@ __all__ = [
     "ensure_supported_version",
 ]
 
-#: 1.0 字段表：读取历史产物时用。
-#: **为什么必须区分**：1.1 新增字段在 1.0 产物里"不存在"，而不是"存在但为空"。
-#: 若读取 1.0 时也要求它们登记 missing_fields，历史产物会全部解析失败——
-#: 那不是"更严格"，是**破坏了向后兼容**（ADR-0049 明确要求 1.0 仍可读）。
-SENSOR_STREAM_FIELDS_1_0: tuple[FieldSpec, ...] = tuple(
-    spec for spec in SENSOR_STREAM_FIELDS if spec.name not in SCHEMA_1_1_ONLY_FIELDS
-)
-
 
 def _fields_for_version(
-    specs: tuple[FieldSpec, ...], version: str
+    entity_cls_name: str, specs: tuple[FieldSpec, ...], version: str
 ) -> tuple[FieldSpec, ...]:
-    """按产物的 schema 版本选择字段表。
+    """按产物的 schema 版本与实体类型裁剪字段表。
 
-    1.0 产物不含 1.1 新字段，校验时也不该要求它们——见 ``SENSOR_STREAM_FIELDS_1_0``
-    的注释。1.1 及以后用完整表。
+    1.0 产物**不含** 1.1 新字段（不是"有但为空"），因此读 1.0 时不该要求它们
+    登记 ``missing_fields``——否则历史产物会全部解析失败（那不是更严格，
+    是破坏向后兼容，见 ADR-0049）。
+
+    **注意跨实体同名但引入版本不同的字段**：``dtype`` 与 ``sensor_id`` 在
+    ``Observation`` 1.0 中已存在，但在 ``SensorStream`` / ``Action`` 中是 1.1
+    新增。若用一个全局集合统一剥离，会把 ``Observation`` 1.0 的既有字段误判为
+    "未定义字段"。因此必须按实体各自的 1.1 新增集裁剪。
     """
     if version == "ddp.canonical/1.0.0":
-        return SENSOR_STREAM_FIELDS_1_0
+        added = _ADDED_IN_1_1_BY_ENTITY.get(entity_cls_name, frozenset())
+        return tuple(spec for spec in specs if spec.name not in added)
     return specs
+
+
+_ADDED_IN_1_1_BY_ENTITY: Mapping[str, frozenset[str]] = {
+    "SensorStream": frozenset(
+        {
+            "dtype",
+            "start_timestamp_ns",
+            "end_timestamp_ns",
+            "missing_count",
+            "invalid_count",
+            "parser_version",
+            "sensor_id",
+            "device_id",
+        }
+    ),
+    "Action": frozenset(
+        {
+            "timestamp_raw_ns",
+            "timestamp_normalized_ns",
+            "dtype",
+            "validity",
+            "parser_version",
+            "source_index",
+            "source_offset",
+            "semantics_version",
+        }
+    ),
+    "Observation": frozenset(
+        {
+            "timestamp_raw_ns",
+            "timestamp_normalized_ns",
+            "validity",
+            "parser_version",
+            "source_index",
+            "source_offset",
+            "transform_provenance",
+        }
+    ),
+}
+
+#: 1.0 字段表：读取历史产物时用。
+SENSOR_STREAM_FIELDS_1_0: tuple[FieldSpec, ...] = _fields_for_version(
+    "SensorStream", SENSOR_STREAM_FIELDS, "ddp.canonical/1.0.0"
+)
+OBSERVATION_FIELDS_1_0: tuple[FieldSpec, ...] = _fields_for_version(
+    "Observation", OBSERVATION_FIELDS, "ddp.canonical/1.0.0"
+)
+ACTION_FIELDS_1_0: tuple[FieldSpec, ...] = _fields_for_version(
+    "Action", ACTION_FIELDS, "ddp.canonical/1.0.0"
+)

@@ -44,9 +44,12 @@ backend/.venv/bin/python scripts/check_contract_parity.py --strict
 echo "[9/10] Canonical JSON Schema 与字段声明一致（生成产物不得手改）"
 python3 scripts/export_canonical_schemas.py --check
 
-echo "[10/10] 记忆库校验（格式/索引/check_ref 有效性）"
+echo "[10/10] 记忆库校验与记忆星云同步（格式/索引/check_ref 有效性 + 本地星云自动纳管）"
 # 记忆库没有校验必然腐烂：卡片格式写错、check_ref 指向已删除的测试、
 # 索引与卡片不一致——任一发生，"记忆"就变成不可信文档（比没有更糟）。
 python3 scripts/check_memory.py
+# 本地若运行着记忆星云守护进程（127.0.0.1:8898），自动幂等推送全部 ACTIVE 卡片；
+# CI 环境无本地守护进程时自动静默放行（exit 0）。
+python3 scripts/sync_memory_nebula.py --warmup-query ""
 
 echo "全部检查通过"

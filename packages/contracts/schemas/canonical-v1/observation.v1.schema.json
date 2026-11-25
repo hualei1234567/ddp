@@ -154,6 +154,52 @@
         "type": "string"
       }
     },
+    "timestamp_raw_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "timestamp_normalized_ns": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^-?(0|[1-9][0-9]*)$"
+    },
+    "validity": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "parser_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "source_index": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "source_offset": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "transform_provenance": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "missing_fields": {
       "type": "array",
       "items": {
@@ -167,17 +213,24 @@
           "frame_id",
           "frame_index",
           "invalid_reason",
+          "parser_version",
           "payload_ref",
           "quality_flags",
           "quantity_kind",
           "sensor_id",
           "sequence",
           "shape",
+          "source_index",
+          "source_offset",
           "source_time_ns",
           "stream_id",
+          "timestamp_normalized_ns",
           "timestamp_ns",
+          "timestamp_raw_ns",
+          "transform_provenance",
           "unit",
-          "valid"
+          "valid",
+          "validity"
         ]
       },
       "uniqueItems": true
