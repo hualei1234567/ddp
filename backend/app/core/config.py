@@ -204,6 +204,12 @@ class Settings(BaseSettings):
     ai_token_price_map: dict[str, dict[str, float]] = Field(default_factory=dict)
     ai_token_usage_enabled: bool = False
 
+    # 黄金题熔断接线（V52-008，蓝图 N3 阶段 2）：默认关闭 = 全部入口短路
+    # 跳过（状态行不写、派单不查、resume 幂等），行为与旧版完全一致。
+    # 开启后：黄金题提交推进 annotation_honeypot_state，连续 2 窗 <85%
+    # 自动 PAUSED 并拦截新派单（只挡新分配，不收回已有）。
+    honeypot_breaker_enabled: bool = False
+
     # Hugging Face 远端校验：仅当登记请求显式 verify_remote=true 时才调用。
     # token 为空表示匿名只读（公开数据集足够）；GATED 数据集需要配置只读 token。
     # 超时必须显式设置：同步登记请求不能把 API 线程挂在不可达的外网上。

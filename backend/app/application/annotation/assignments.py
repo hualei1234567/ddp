@@ -8,6 +8,10 @@ from uuid import UUID, uuid4
 
 from app.application.annotation.audit import record_change
 from app.application.annotation.commands import NewAnnotationAssignment
+from app.application.annotation.honeypot_wiring import (
+    REASON_PAUSED,
+    HoneypotGatekeeper,
+)
 from app.application.annotation.idempotency import IdempotencyGuard, validate_key
 from app.application.annotation.ports import (
     ZERO_OPEN_PLANNED,
@@ -31,6 +35,7 @@ from app.domain.annotation.enums import (
 )
 from app.domain.annotation.errors import (
     AnnotatorNotEligibleError,
+    AnnotatorPausedByHoneypotError,
     AssignmentCapacityExceededError,
     AssignmentNotOwnedError,
     AssignmentRevokedError,
@@ -91,6 +96,7 @@ class AnnotationAssignmentUseCases:
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
         skill_profiles: SkillProfileDirectory | None = None,
+        honeypot_gate: HoneypotGatekeeper | None = None,
     ) -> None:
         self._tasks = tasks
         self._batches = batches
@@ -103,6 +109,9 @@ class AnnotationAssignmentUseCases:
         # 技能档案端口（V52-009，可选注入）：None = 完全不路由，行为与
         # 旧版一致。即使注入了端口，任务未配置必配技能时同样不路由。
         self._skill_profiles = skill_profiles
+        # 黄金题熔断闸口（V52-008，可选注入）：None = 不检查，行为与旧版
+        # 一致。端口实现内部由开关短路（关闭时直接放行）。
+        self._honeypot_gate = honeypot_gate
 
     def get(self, scope: ProjectScope, assignment_id: UUID) -> AnnotationAssignment:
         assignment = self._assignments.get(scope, assignment_id)
@@ -181,6 +190,7 @@ class AnnotationAssignmentUseCases:
             raise BatchNotCompatibleError("批次状态不允许分配")
         role = AssignmentRole(command.assignment_role)
         self._assert_member(scope, command.assignee_id)
+        self._assert_honeypot_dispatchable(scope, command.assignee_id, role)
         self._assert_skill_eligible(scope, task, command.assignee_id, role)
         self._assert_not_already_assigned(
             scope,
@@ -652,6 +662,34 @@ class AnnotationAssignmentUseCases:
     def _assert_member(self, scope: ProjectScope, user_id: UUID) -> None:
         if not self._members.user_is_member(scope, user_id):
             raise ResourceNotFoundError("项目成员", user_id)
+
+    def _assert_honeypot_dispatchable(
+        self,
+        scope: ProjectScope,
+        assignee_id: UUID,
+        role: AssignmentRole,
+    ) -> None:
+        """黄金题熔断闸口（V52-008）：两重短路，保证零配置 100% 兼容。
+
+        1. 未注入熔断端口（旧装配 / 旧测试）→ 不检查；
+        2. 被拒角色不是 ANNOTATOR（复核/仲裁人选人不按标注熔断过滤）→ 不检查。
+
+        端口实现内部再由 ``DDP_HONEYPOT_BREAKER_ENABLED`` 开关短路。
+        PAUSED 时映射为契约错误码 ``annotation_annotator_paused_honeypot``，
+        details 只带标注员 UUID 与原因码。只挡新分配，不收回已有分配。
+        """
+        if self._honeypot_gate is None or role is not AssignmentRole.ANNOTATOR:
+            return
+        try:
+            self._honeypot_gate.assert_dispatchable(scope.project_id, assignee_id)
+        except AnnotatorPausedByHoneypotError:
+            raise
+        except ValueError as exc:  # 端口实现抛的是裸 ValueError 时统一收口
+            raise AnnotatorPausedByHoneypotError(
+                str(exc) or "标注员黄金题准确率熔断，暂停派单",
+                annotator_id=assignee_id,
+                reason=REASON_PAUSED,
+            ) from exc
 
     def _assert_skill_eligible(
         self,

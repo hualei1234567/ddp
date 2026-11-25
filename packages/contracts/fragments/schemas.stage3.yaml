@@ -283,6 +283,12 @@ AnnotationAssignmentCreate:
   type: object
   required: [batch_id, assignee_id]
   additionalProperties: false
+  description: >-
+    创建分配（V52-008 黄金题熔断接线）：标注员处于黄金题熔断 PAUSED
+    状态时返回 422 `annotation_annotator_paused_honeypot`（details 只含
+    annotator_id 与原因码 HONEYPOT_PAUSED）；只挡新分配，不收回已有
+    分配。熔断开关（DDP_HONEYPOT_BREAKER_ENABLED）关闭时本校验不存在，
+    行为与旧版一致。
   properties:
     batch_id: {type: string, format: uuid}
     assignee_id: {type: string, format: uuid}

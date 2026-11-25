@@ -7,6 +7,7 @@ from app.infrastructure.db.models.annotation_catalog import (
     AnnotationSampleSet,
     AnnotationSchema,
 )
+from app.infrastructure.db.models.annotation_honeypot_state import AnnotationHoneypotState
 from app.infrastructure.db.models.annotation_quality import (
     GoldEvaluation,
     GoldExposure,
@@ -126,6 +127,7 @@ __all__ = [
     "AcceptanceLedgerModel",
     "AnnotationAiSuggestion",
     "AiTokenUsage",
+    "AnnotationHoneypotState",
     "AnnotatorSkillTag",
     "AnnotationArbitration",
     "AnnotationAssignment",

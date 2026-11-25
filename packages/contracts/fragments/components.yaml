@@ -217,6 +217,14 @@ parameters:
       type: string
       description: PRM 轨迹 ID（平台生成或 fork 物化时的派生 ID）。
 
+  AnnotatorId:
+    name: annotator_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+
 responses:
   Unauthorized:
     description: 未认证或令牌无效（`not_authenticated`，401）。

@@ -10,6 +10,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     adapter_callback_routes,
     annotation,
+    annotation_honeypot_routes,
     annotation_prm,
     asset_catalog_routes,
     audit_log_routes,
@@ -75,6 +76,8 @@ api_router.include_router(lineage.router)
 api_router.include_router(annotation.router)
 # PRM 步级标注（V52-020）：只读创建/查询 + fork 纯计算预览。
 api_router.include_router(annotation_prm.router)
+# 黄金题熔断（V52-008，蓝图 N3）：owner 口径的暂停解除治理端点。
+api_router.include_router(annotation_honeypot_routes.router)
 # 统一资产目录（N5-001）：只读跨资源检索，不替代各资源列表。
 api_router.include_router(asset_catalog_routes.router)
 api_router.include_router(dataset_routes.router)
