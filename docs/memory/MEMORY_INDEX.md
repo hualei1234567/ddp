@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 29 张卡片**：DRAFT 0 / ACTIVE 29 / SUPERSEDED 0 / DEPRECATED 0
+**总计 30 张卡片**：DRAFT 0 / ACTIVE 30 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 29 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 30 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -31,7 +31,7 @@
 | [MEM-SOP-002](sop/MEM-SOP-002-parallel-agent-development.md) | 并行智能体开发 SOP：worktree 隔离 + 资源预分配 + check.sh 串行 | ACTIVE | 1 | `check-lock`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `version-bump`, `worktree` |
 | [MEM-SOP-003](sop/MEM-SOP-003-subagent-parallel-collaboration.md) | 子代理并行开发协作模式：迁移号独占 + 契约策略 + 禁改共享文件 + 坑点统一入库 + check.sh 全局串行 | ACTIVE | 1 | `check-lock`, `contract-strategy`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `subagent` |
 
-## INC · 事故与缺陷复盘（21）
+## INC · 事故与缺陷复盘（22）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -50,12 +50,13 @@
 | [MEM-INC-013](incidents/MEM-INC-013-alembic-pg-sqlite-constraint-pitfalls.md) | PostgreSQL 与 SQLite 双库迁移的 Schema 限定、同名约束与冒号绑定陷阱 | ACTIVE | 1 | `alembic`, `check-constraint`, `dialect`, `migration`, `postgres`, `schema`, `sqlalchemy`, `sqlite` |
 | [MEM-INC-014](incidents/MEM-INC-014-canonical-per-entity-version-slicing.md) | Canonical 多版本演进必须按「实体 × 版本」双向裁剪字段表并重导出 Schema | ACTIVE | 1 | `backward-compatibility`, `canonical`, `deserialization`, `json-schema`, `schema-evolution`, `serialization`, `v1.1` |
 | [MEM-INC-015](incidents/MEM-INC-015-contract-version-parallel-bump-conflict.md) | 并行 PR 各自 bump 契约版本必然冲突，version 是共享单点 | ACTIVE | 1 | `api-contract`, `merge-conflict`, `openapi`, `parallel-pr`, `resource-preallocation`, `single-point`, `version-bump` |
-| [MEM-INC-016](incidents/MEM-INC-016-contract-parity-strict-red.md) | 契约门禁强制 parity：契约超前于 API 实现会被 `--strict` 判红，契约与实现必须同批交付 | ACTIVE | 1 | `api-contract`, `ci-gate`, `contract-first`, `parity`, `strict-mode` |
+| [MEM-INC-016](incidents/MEM-INC-016-contract-parity-strict-red.md) | 契约门禁强制 parity：契约超前于 API 实现会被 `--strict` 判红，契约与实现必须同批交付 | ACTIVE | **2** | `api-contract`, `ci-gate`, `contract-first`, `parity`, `strict-mode` |
 | [MEM-INC-017](incidents/MEM-INC-017-redocly-path-parameter-traps.md) | Redocly 路径参数三坑：动态段必须显式声明、组件必须落进 parameters: 段、fragment 内 $ref 相对解析 | ACTIVE | 1 | `api-contract`, `openapi`, `redocly`, `ref-resolution`, `swagger-lint`, `yaml` |
 | [MEM-INC-018](incidents/MEM-INC-018-parallel-pr-migration-chain-conflict.md) | 多 PR 同 base 迁移链冲突：三个 PR 的 down_revision 都写同一个号 → 双 head，处置=串行合并+重排 | ACTIVE | 1 | `alembic`, `down-revision`, `merge-conflict`, `migration-chain`, `multiple-heads`, `parallel-pr`, `sqlite` |
 | [MEM-INC-019](incidents/MEM-INC-019-sqlalchemy-duplicate-model-class-name.md) | SQLAlchemy 模型类名全局唯一：pytest filterwarnings=["error"] 把重复类名告警升级为硬错误 | ACTIVE | 1 | `alembic`, `filterwarnings`, `model-naming`, `pytest`, `sawarning`, `sqlalchemy` |
 | [MEM-INC-020](incidents/MEM-INC-020-sqlite-batch-cross-table-trigger.md) | SQLite batch 重建撞跨表触发器：被引用表 batch 改名瞬间触发器报 no such table，处置=drop→改表→重装 | ACTIVE | **2** | `0041`, `0052`, `alembic`, `batch-alter-table`, `guard-triggers`, `sqlite`, `trigger-rename` |
 | [MEM-INC-021](incidents/MEM-INC-021-jsonb-readback-and-decimal-money.md) | JSONB 回读类型不宽容 + Decimal 金额纪律：JSON 字段读回是 ISO 字符串、金额全程 Decimal 量化 4 位小数对外输出字符串 | ACTIVE | **2** | `datetime`, `decimal`, `jsonb`, `precision`, `serialization`, `type-coercion` |
+| [MEM-INC-022](incidents/MEM-INC-022-sqlite-naive-datetime-readback.md) | SQLite 读库 datetime 是 naive，领域层要求 aware——在仓储边界补 UTC，不放宽领域校验 | ACTIVE | **2** | `domain-invariant`, `naive-datetime`, `repository-boundary`, `sqlite`, `timezone` |
 
 ## CHG · 变更记录（1）
 
@@ -79,8 +80,10 @@
 |---|---|---|---|
 | [MEM-INC-009](incidents/MEM-INC-009-parallel-check-contention.md) | 多个 check.sh 并发跑同一 PostgreSQL 会互相污染 | **3** | `无（流程性约束，无法自动化断言；靠并发执行策略规避）` |
 | [MEM-INC-005](incidents/MEM-INC-005-hardcoded-test-count-in-ci.md) | CI 里写死测试计数，新增用例就红 | **2** | `.github/workflows/ci.yml`（E2E job 的 passed/skipped 断言处）+ `backend/tests/unit/test_error_mapping_no_leak.py` |
+| [MEM-INC-016](incidents/MEM-INC-016-contract-parity-strict-red.md) | 契约门禁强制 parity：契约超前于 API 实现会被 `--strict` 判红，契约与实现必须同批交付 | **2** | `scripts/check_contract_parity.py` |
 | [MEM-INC-020](incidents/MEM-INC-020-sqlite-batch-cross-table-trigger.md) | SQLite batch 重建撞跨表触发器：被引用表 batch 改名瞬间触发器报 no such table，处置=drop→改表→重装 | **2** | `backend/migrations/versions/0041_collection_asset_state_guards.py + backend/migrations/versions/0052_calibration_profile_supersedes_and_guards.py` |
 | [MEM-INC-021](incidents/MEM-INC-021-jsonb-readback-and-decimal-money.md) | JSONB 回读类型不宽容 + Decimal 金额纪律：JSON 字段读回是 ISO 字符串、金额全程 Decimal 量化 4 位小数对外输出字符串 | **2** | `backend/app/domain/annotation/prm_step.py` |
+| [MEM-INC-022](incidents/MEM-INC-022-sqlite-naive-datetime-readback.md) | SQLite 读库 datetime 是 naive，领域层要求 aware——在仓储边界补 UTC，不放宽领域校验 | **2** | `backend/app/infrastructure/repositories/annotation_backflow.py` |
 
 ---
 
@@ -130,6 +133,7 @@
 - `deserialization`：MEM-INC-014
 - `dialect`：MEM-INC-013
 - `dispatch`：MEM-INC-003
+- `domain-invariant`：MEM-INC-022
 - `down-revision`：MEM-INC-018
 - `dpo`：MEM-DEC-002
 - `drill`：MEM-INC-002, MEM-OPS-001
@@ -165,6 +169,7 @@
 - `minio`：MEM-INC-009, MEM-OPS-001
 - `model-naming`：MEM-INC-019
 - `multiple-heads`：MEM-INC-018
+- `naive-datetime`：MEM-INC-022
 - `nanosecond`：MEM-INC-008
 - `off-by-n`：MEM-INC-010
 - `openapi`：MEM-INC-015, MEM-INC-017
@@ -190,6 +195,7 @@
 - `recursion`：MEM-INC-007
 - `redocly`：MEM-INC-017
 - `ref-resolution`：MEM-INC-017
+- `repository-boundary`：MEM-INC-022
 - `resource-preallocation`：MEM-INC-015, MEM-SOP-002, MEM-SOP-003
 - `restore`：MEM-OPS-001
 - `retry`：MEM-INC-001
@@ -211,7 +217,7 @@
 - `spool`：MEM-OPS-001
 - `sql`：MEM-INC-002
 - `sqlalchemy`：MEM-INC-013, MEM-INC-019
-- `sqlite`：MEM-INC-013, MEM-INC-018, MEM-INC-020
+- `sqlite`：MEM-INC-013, MEM-INC-018, MEM-INC-020, MEM-INC-022
 - `stage`：MEM-INC-012
 - `status`：MEM-INC-003, MEM-REQ-001
 - `stream-extraction`：MEM-INC-012
@@ -222,6 +228,7 @@
 - `test-contention`：MEM-INC-009
 - `time-sensitive`：MEM-INC-009
 - `timestamp`：MEM-INC-008
+- `timezone`：MEM-INC-022
 - `training-ready`：MEM-REQ-001
 - `trigger-rename`：MEM-INC-020
 - `type-coercion`：MEM-INC-021

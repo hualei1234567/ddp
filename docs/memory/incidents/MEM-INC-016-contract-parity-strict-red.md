@@ -17,5 +17,11 @@
 #### 工程扩展字段
 
 - **check_ref**：`scripts/check_contract_parity.py`
-- **recurrence**：`1`
+- **recurrence**：`2`
 - **tags**：api-contract,ci-gate,parity,strict-mode,contract-first
+
+#### 追加案例（2026-11-26，PR #140 评测失败案例回流）
+
+- **裸容器放弃契约校验**：请求体写成 `list[dict[str, Any]]` 时实现侧无字段声明，检查器报「契约多字段」+「契约必填但实现非必填」两条差异。改用强类型 Pydantic 模型（`BackflowCaseIn`，7 个显式字段）后 `--strict` 通过。
+- **结论**：parity 按**实现侧 Pydantic 模型**比对字段可达性；请求/响应里出现 `dict[str, Any]` / `list[dict]` 等于主动放弃校验能力。新增端点的请求/响应模型一律显式字段声明。
+- **recurrence 更新**：`2`
