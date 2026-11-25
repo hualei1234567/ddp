@@ -32,6 +32,7 @@ from app.application.processing.stages import StageContext, StageFailure
 from app.domain.identity.models import ProjectScope
 from app.domain.processing.enums import ProcessingStage, ProcessingStepStatus
 from app.domain.processing.models import ProcessingRun
+from ddp_data.canonical import SCHEMA_VERSION
 
 from tests.unit.processing_stage_support import FakeArtifactStore, FakeObjectReader
 
@@ -517,7 +518,7 @@ def test_format_parsing_projects_mp4_to_canonical_video_stream() -> None:
     key = canonical_artifact_key(_PROJECT_ID, _RUN_ID, 0, kind="video-stream")
     assert outcome.output_refs == (key,)
     document = json.loads(artifacts.read_bytes(key, max_bytes=256 * 1024))
-    assert document["schema_version"] == "ddp.canonical/1.0.0"
+    assert document["schema_version"] == SCHEMA_VERSION  # 新产物写当前版本（1.1，ADR-0049）
     assert document["duration_ns"] == "12345000000"
     assert document["width"] == 1280
     assert document["storage_reference"] == source_ref

@@ -33,8 +33,24 @@ from ddp_data.canonical._schema import (
     validate_entity,
 )
 
-SCHEMA_VERSION = "ddp.canonical/1.0.0"
-SUPPORTED_SCHEMA_VERSIONS = frozenset({SCHEMA_VERSION})
+SCHEMA_VERSION = "ddp.canonical/1.1.0"
+#: 1.0.0 仍可**读取**（历史产物不因版本升级而变得不可解析）；
+#: 新产物一律写 1.1.0。1.1 在 1.0 基础上**只增加可选字段**，无删除、无收紧。
+SUPPORTED_SCHEMA_VERSIONS = frozenset({SCHEMA_VERSION, "ddp.canonical/1.0.0"})
+#: 1.1 新增字段（1.0 产物不含，读取 1.0 时不得要求这些字段）。
+SCHEMA_1_1_ONLY_FIELDS = frozenset(
+    {
+        "dtype",
+        "start_timestamp_ns",
+        "end_timestamp_ns",
+        "missing_count",
+        "invalid_count",
+        "parser_version",
+        "sensor_id",
+        "device_id",
+    }
+)
+
 
 # 草案 §4.1 的坐标约定是闭合集合；出现未知值时显式失败，而不是当成合法值。
 FRAME_CONVENTIONS = frozenset({"FLU", "RDF", "OPTICAL", "ENU", "NED"})
@@ -93,6 +109,20 @@ SENSOR_STREAM_FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("checksum"),
     FieldSpec("calibration_id"),
     FieldSpec("calibration_version", kind="int", minimum=1),
+    # --- 1.1 新增（全部可选；1.0 产物不含这些字段）---
+    # dtype：下游反序列化必须知道数值类型，否则只能猜。
+    FieldSpec("dtype"),
+    # 绝对起止时间：1.0 只有 duration_ns，无法定位到时间轴上的具体位置。
+    FieldSpec("start_timestamp_ns", kind="int", minimum=0),
+    FieldSpec("end_timestamp_ns", kind="int", minimum=0),
+    # 缺失/无效样本数：蓝图 §7 要求量化数据完整度，而不是只说"有缺失"。
+    FieldSpec("missing_count", kind="int", minimum=0),
+    FieldSpec("invalid_count", kind="int", minimum=0),
+    # parser_version：与 schema_version 正交——同一 schema 版本可由不同解析器产出。
+    FieldSpec("parser_version"),
+    # UUID 关联：1.0 只有 sensor_name（字符串），无法与设备表外键对齐。
+    FieldSpec("sensor_id"),
+    FieldSpec("device_id"),
 )
 
 ACTION_FIELDS: tuple[FieldSpec, ...] = (
@@ -251,11 +281,25 @@ class SensorStream:
     checksum: str | None = None
     calibration_id: str | None = None
     calibration_version: int | None = None
+    # --- 1.1 新增（全部可选，1.0 产物不含）---
+    dtype: str | None = None
+    start_timestamp_ns: int | None = None
+    end_timestamp_ns: int | None = None
+    missing_count: int | None = None
+    invalid_count: int | None = None
+    parser_version: str | None = None
+    sensor_id: str | None = None
+    device_id: str | None = None
     schema_version: str = SCHEMA_VERSION
     missing_fields: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        validate_entity(self, SENSOR_STREAM_FIELDS, SUPPORTED_SCHEMA_VERSIONS)
+        # 按产物自身的 schema 版本选字段表：1.0 产物不该被要求声明 1.1 才有的字段。
+        validate_entity(
+            self,
+            _fields_for_version(SENSOR_STREAM_FIELDS, self.schema_version),
+            SUPPORTED_SCHEMA_VERSIONS,
+        )
         if (
             self.frame_convention is not None
             and self.frame_convention not in FRAME_CONVENTIONS
@@ -449,3 +493,24 @@ __all__ = [
     "declared_missing_fields",
     "ensure_supported_version",
 ]
+
+#: 1.0 字段表：读取历史产物时用。
+#: **为什么必须区分**：1.1 新增字段在 1.0 产物里"不存在"，而不是"存在但为空"。
+#: 若读取 1.0 时也要求它们登记 missing_fields，历史产物会全部解析失败——
+#: 那不是"更严格"，是**破坏了向后兼容**（ADR-0049 明确要求 1.0 仍可读）。
+SENSOR_STREAM_FIELDS_1_0: tuple[FieldSpec, ...] = tuple(
+    spec for spec in SENSOR_STREAM_FIELDS if spec.name not in SCHEMA_1_1_ONLY_FIELDS
+)
+
+
+def _fields_for_version(
+    specs: tuple[FieldSpec, ...], version: str
+) -> tuple[FieldSpec, ...]:
+    """按产物的 schema 版本选择字段表。
+
+    1.0 产物不含 1.1 新字段，校验时也不该要求它们——见 ``SENSOR_STREAM_FIELDS_1_0``
+    的注释。1.1 及以后用完整表。
+    """
+    if version == "ddp.canonical/1.0.0":
+        return SENSOR_STREAM_FIELDS_1_0
+    return specs

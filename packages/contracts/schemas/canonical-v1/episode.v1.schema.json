@@ -16,7 +16,10 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "ddp.canonical/1.0.0"
+      "enum": [
+        "ddp.canonical/1.0.0",
+        "ddp.canonical/1.1.0"
+      ]
     },
     "episode_key": {
       "type": "string"

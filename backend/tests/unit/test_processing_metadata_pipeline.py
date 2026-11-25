@@ -89,6 +89,7 @@ from app.infrastructure.repositories.processing import (
 )
 from app.infrastructure.repositories.quality import SqlQualityRunRepository
 from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
+from ddp_data.canonical import SCHEMA_VERSION
 from sqlalchemy.orm import Session, sessionmaker
 
 from tests.api.conftest import seed_identity
@@ -311,7 +312,7 @@ def test_run_executes_metadata_and_format_stages_end_to_end(
                 max_bytes=256 * 1024,
             )
         )
-        assert video["schema_version"] == "ddp.canonical/1.0.0"
+        assert video["schema_version"] == SCHEMA_VERSION  # 新产物写当前版本（1.1，ADR-0049）
         assert video["width"] == 1280
         reference = json.loads(
             artifacts.read_bytes(
