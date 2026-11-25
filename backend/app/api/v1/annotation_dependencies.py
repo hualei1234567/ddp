@@ -18,6 +18,7 @@ from app.application.annotation.backflow import BackflowUseCases
 from app.application.annotation.batches import AnnotationBatchUseCases
 from app.application.annotation.consistency import AnnotationConsistencyUseCases
 from app.application.annotation.gold_sets import GoldSetUseCases
+from app.application.annotation.honeypot_wiring import SqlHoneypotGatekeeper
 from app.application.annotation.iaa import IAAUseCases
 from app.application.annotation.overdue_summary import AnnotationOverdueSummaryUseCases
 from app.application.annotation.prm_annotations import PrmAnnotationUseCases
@@ -233,6 +234,12 @@ def get_annotation_use_cases(
             idempotency,
             session,
             skill_profiles=SqlSkillProfileDirectory(session),
+            # 黄金题熔断闸口（V52-008）：开关关闭时不注入，派单行为与旧版一致。
+            honeypot_gate=(
+                SqlHoneypotGatekeeper(session, enabled=settings.honeypot_breaker_enabled)
+                if settings.honeypot_breaker_enabled
+                else None
+            ),
         ),
         submissions=AnnotationSubmissionUseCases(
             submissions_repo,

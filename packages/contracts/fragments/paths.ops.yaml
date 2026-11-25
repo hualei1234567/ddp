@@ -124,3 +124,41 @@ annotationBackflow:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+# V52-008 黄金题熔断接线（蓝图 N3 阶段 2）：派单准入治理端点，owner 口径。
+# 按 MEM-INC-017 三步自查：路径级 parameters 显式声明 {annotator_id} →
+# AnnotatorId 组件定义在 components.yaml 的 parameters: 段 → fragment 内
+# $ref 相对基准是本目录（../openapi.yaml#/...）。
+annotationHoneypotResume:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotatorId"
+  post:
+    operationId: resumeAnnotationHoneypot
+    tags: [annotation-quality]
+    summary: 解除标注员的黄金题熔断暂停（清窗口回 NORMAL）
+    description: |
+      黄金题熔断接线（V52-008，蓝图 N3）：标注员黄金题准确率连续 2 个
+      满窗口低于 85% 时，系统自动 PAUSED 并拦截新派单（只挡新分配，
+      不收回已有分配）。本端点由项目负责人手动解除暂停：状态回 NORMAL
+      并清空滑窗，从空窗口重新累计；不回放历史命中，也不改动已有
+      分配、提交与结算记录。
+
+      幂等：重复解除不是错误（本就 NORMAL 时返回 `resumed=false`）。
+      `resumed=false` 的三种情形都返回 200：熔断开关关闭
+      （`DDP_HONEYPOT_BREAKER_ENABLED=false`，状态行不写、派单不查）；
+      该标注员无状态行（从未熔断）；本就 NORMAL。客户端按 `state`
+      渲染，不要把 `resumed=false` 当失败。
+
+      权限为项目负责人口径（owner 或平台管理员）：解除暂停改变派单
+      准入与结算冻结口径，是治理动作。
+    responses:
+      "200":
+        description: 解除后的熔断状态快照
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/HoneypotResumeResult"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+

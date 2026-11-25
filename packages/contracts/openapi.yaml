@@ -1117,6 +1117,9 @@ paths:
   # --- 评测失败案例回流（V52-030，蓝图 N5 / G5）---
   /api/v1/projects/{project_id}/annotation-backflow:
     $ref: "./fragments/paths.ops.yaml#/annotationBackflow"
+  # --- 黄金题熔断接线（V52-008，蓝图 N3；owner / 平台管理员）---
+  /api/v1/projects/{project_id}/annotation-honeypot/{annotator_id}/resume:
+    $ref: "./fragments/paths.ops.yaml#/annotationHoneypotResume"
   /api/v1/projects/{project_id}/audit-logs:
     $ref: "./fragments/paths.audit.yaml#/auditLogs"
   /api/v1/projects/{project_id}/audit-logs/{resource_type}/{resource_id}:
@@ -1181,6 +1184,7 @@ components:
     RequiredIdempotencyKey: {$ref: "./fragments/components.yaml#/parameters/RequiredIdempotencyKey"}
     AnnotationId: {$ref: "./fragments/components.yaml#/parameters/AnnotationId"}
     TrajectoryId: {$ref: "./fragments/components.yaml#/parameters/TrajectoryId"}
+    AnnotatorId: {$ref: "./fragments/components.yaml#/parameters/AnnotatorId"}
     TaskAction: {$ref: "./fragments/components.yaml#/parameters/TaskAction"}
     BatchAction: {$ref: "./fragments/components.yaml#/parameters/BatchAction"}
     InboundBatchAction: {$ref: "./fragments/components.stage6.yaml#/parameters/InboundBatchAction"}
@@ -1770,6 +1774,7 @@ components:
     AnnotationBackflowDecision: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowDecision"}
     AnnotationBackflowCase: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCase"}
     AnnotationBackflowCasePage: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCasePage"}
+    HoneypotResumeResult: {$ref: "./fragments/schemas.ops.yaml#/HoneypotResumeResult"}
     AiSuggestionConfirm: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionConfirm"}
     AiSuggestion: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestion"}
     AiSuggestionPage: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionPage"}

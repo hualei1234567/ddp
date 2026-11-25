@@ -165,3 +165,27 @@ AnnotationBackflowCasePage:
     items:
       type: array
       items: { $ref: "#/AnnotationBackflowCase" }
+# V52-008 黄金题熔断接线（蓝图 N3 阶段 3）：解除暂停的响应快照。
+HoneypotResumeResult:
+  type: object
+  required:
+    - annotator_id
+    - state
+    - resumed
+    - checked_at
+  properties:
+    annotator_id:
+      type: string
+      format: uuid
+      description: 标注员 ID
+    state:
+      type: string
+      enum: [NORMAL, PAUSED]
+      description: 解除后的熔断状态（PAUSED 仅在开关关闭且从未写行时不可能出现；本端点只把 PAUSED 变 NORMAL）
+    resumed:
+      type: boolean
+      description: 本次调用是否实际发生了 NORMAL 化；false = 开关关闭 / 无状态行 / 本就 NORMAL（幂等，不是失败）
+    checked_at:
+      type: string
+      format: date-time
+      description: 状态快照时间（UTC，带时区）

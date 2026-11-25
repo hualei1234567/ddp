@@ -47,7 +47,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "0082"
-down_revision = "0080"  # main 实际 head：链 0074→0078→0081→0080→0082
+down_revision = "0083"  # 重排：链 0074→0078→0081→0080→0083→0082（#139 先合）
 branch_labels = None
 depends_on = None
 
