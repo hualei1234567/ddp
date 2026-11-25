@@ -1,0 +1,73 @@
+# V52-010 Token 成本台账 schema 片段（蓝图 N6）。
+#
+# 金额字段统一 `type: string`（十进制、4 位小数）：货币值经 JSON 双精度
+# 会丢精度（MEM-INC-008 同族问题），前端类型定义也必须用 string。
+# `cost_estimate: null` 表示"未配置价格"，不是 0（0 = 免费）。
+
+TokenCostLedgerEntry:
+  type: object
+  required:
+    - model_id
+    - purpose
+    - call_count
+    - input_tokens
+    - output_tokens
+    - total_tokens
+    - cost_estimate
+    - cost_estimated_tokens
+  properties:
+    model_id:
+      type: string
+      description: 模型 ID（成本归属键，与 AI 建议的 model_id 同源）
+    purpose:
+      type: string
+      enum: [PRE_LABEL, LLM_JUDGE, EMBED]
+      description: 计量用途
+    call_count:
+      type: integer
+      minimum: 0
+      description: 该桶的 LLM 调用次数
+    input_tokens:
+      type: integer
+      minimum: 0
+      description: 输入 token 合计
+    output_tokens:
+      type: integer
+      minimum: 0
+      description: 输出 token 合计
+    total_tokens:
+      type: integer
+      minimum: 0
+      description: 输入 + 输出 token 合计
+    cost_estimate:
+      type: [string, "null"]
+      description: 成本合计（USD 十进制字符串，4 位小数）；null = 未配置价格（不是 0）
+    cost_estimated_tokens:
+      type: integer
+      minimum: 0
+      description: 有价可算部分的 token 数；未配价模型的 tokens 不计入
+
+TokenCostLedger:
+  type: object
+  required:
+    - project_id
+    - entries
+    - total_cost_estimate
+    - generated_at
+  properties:
+    project_id:
+      type: string
+      format: uuid
+      description: 项目 ID
+    entries:
+      type: array
+      items:
+        $ref: "../openapi.yaml#/components/schemas/TokenCostLedgerEntry"
+      description: 按 (model_id, purpose) 聚合的条目（确定性排序）
+    total_cost_estimate:
+      type: [string, "null"]
+      description: 全项目有价部分成本合计（USD 十进制字符串）；全未配价时为 null（不是 0）
+    generated_at:
+      type: string
+      format: date-time
+      description: 快照生成时间（UTC，带时区）

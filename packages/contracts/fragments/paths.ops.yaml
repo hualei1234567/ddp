@@ -27,3 +27,39 @@ opsDispatchQueue:
       "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
       "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
       "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
+# V52-010 Token 成本台账（蓝图 N6）：与 dispatch-queue 同为 owner 口径运维视图。
+# 本 fragment 只声明路径与 schema；openapi.yaml 的 version 与 paths 引用由主控
+# 统一处理（本轮不 bump version）。金额字段全部用字符串（十进制），货币值经
+# JSON 双精度会丢精度（MEM-INC-008 同族问题）。
+opsTokenLedger:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: getOpsTokenLedger
+    tags: [ops]
+    summary: Token 成本台账（按模型/用途聚合的调用、tokens 与成本）
+    description: |
+      只读聚合：按 `(model_id, purpose)` 切分本项目 LLM 调用次数、输入/输出
+      token 合计与折算成本。计量行由登记 AI 建议时的可选 `usage` 条目写入
+      （`POST .../ai-suggestions` 的 `usage` 字段）；无计量数据的模型/用途
+      不会出现在本响应里。
+
+      `cost_estimate` 为 `null` 表示该模型**未配置价格**（部署配置
+      `DDP_AI_TOKEN_PRICE_MAP`），不是免费（0）：漏配与免费语义分开，
+      客户端必须把 `null` 渲染成"无价格数据"。金额是十进制字符串
+      （4 位小数，USD）；`cost_estimated_tokens` 只含有价可算部分的 token，
+      未配价模型的 tokens 不计入成本合计但照常统计调用次数。
+
+      权限为项目负责人口径（owner 或平台管理员）：成本暴露供应商账单折算
+      与 ROI 时薪口径，属企业内部信息。本端点只读，不提供任何写操作。
+    responses:
+      "200":
+        description: Token 成本台账快照
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/TokenCostLedger"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+

@@ -45,6 +45,7 @@ from app.api.v1 import (
     robots,
     sensors,
     supplier_routes,
+    token_ledger_routes,
     training_delivery_routes,
     training_request_routes,
     uploads,
@@ -92,6 +93,8 @@ api_router.include_router(inbound_routes.router)
 api_router.include_router(datasource_routes.router)
 api_router.include_router(audit_log_routes.router)
 api_router.include_router(ops_routes.router)
+# Token 成本台账（V52-010，蓝图 N6）：与 dispatch-queue 同为 owner 口径运维视图。
+api_router.include_router(token_ledger_routes.router)
 # 经营治理（N9）：项目配额、用量报表；写操作前置判定由各写路由显式声明依赖。
 api_router.include_router(governance_routes.router)
 # 数据处理运行（N4-001）：实体与状态机；八阶段编排在 N4-002。
