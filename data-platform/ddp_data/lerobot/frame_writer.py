@@ -58,7 +58,7 @@ class FrameFeature:
 
 @dataclass(frozen=True, slots=True)
 class FrameExportResult:
-    """逐帧导出的产物集合。"""
+    """逐帧导出的产物集合（单 Episode）。"""
 
     parquet_bytes: bytes
     info_json: bytes
@@ -97,6 +97,7 @@ def write_frame_episode(
     observation_dim: int,
     action_dim: int,
     split: str = "train",
+    global_index_offset: int = 0,
 ) -> FrameExportResult:
     """把逐帧记录写成 LeRobot v2.1 逐帧 Parquet + info.json。
 
@@ -109,8 +110,8 @@ def write_frame_episode(
         raise ValueError("逐帧导出至少需要 1 帧（空数据集不能标 FRAME_LEVEL）")
     if fps <= 0:
         raise ValueError("fps 必须为正（官方 Loader 的 check_timestamps_sync 依赖它）")
-    if episode_index < 0 or task_index < 0:
-        raise ValueError("episode_index / task_index 必须非负")
+    if episode_index < 0 or task_index < 0 or global_index_offset < 0:
+        raise ValueError("episode_index / task_index / global_index_offset 必须非负")
 
     observations: list[list[float]] = []
     actions: list[list[float]] = []
@@ -149,6 +150,7 @@ def write_frame_episode(
         timestamps=timestamps,
         observation_dim=observation_dim,
         action_dim=action_dim,
+        global_index_offset=global_index_offset,
     )
     info = _build_info_json(
         features=features,
@@ -191,8 +193,15 @@ def _write_parquet(
     timestamps: list[float],
     observation_dim: int,
     action_dim: int,
+    global_index_offset: int = 0,
 ) -> bytes:
-    """用 pyarrow 写逐帧 Parquet（固定写参数以保证字节确定）。"""
+    """用 pyarrow 写逐帧 Parquet（固定写参数以保证字节确定）。
+
+    ``index`` 列是**跨 Episode 全局递增帧索引**（``global_index_offset + i``），
+    ``frame_index`` 列是本 Episode 内局部索引（``0..N-1``）。官方 Loader 依赖
+    ``episode_data_index["from"/"to"]`` 与全局 ``index`` 自洽，多 Episode 时若每集
+    都从 0 起算会导致索引重叠。
+    """
     import pyarrow as pa
     import pyarrow.parquet as pq
 
@@ -200,7 +209,9 @@ def _write_parquet(
     arrays: dict[str, Any] = {
         "episode_index": pa.array([episode_index] * frame_count, type=pa.int64()),
         "frame_index": pa.array(list(range(frame_count)), type=pa.int64()),
-        "index": pa.array(list(range(frame_count)), type=pa.int64()),
+        "index": pa.array(
+            [global_index_offset + pos for pos in range(frame_count)], type=pa.int64()
+        ),
         "task_index": pa.array([task_index] * frame_count, type=pa.int64()),
         "timestamp": pa.array(timestamps, type=pa.float32()),
         "split": pa.array([split] * frame_count, type=pa.string()),
@@ -234,6 +245,10 @@ def _build_info_json(
     fps: float,
     frame_count: int,
     episode_index: int,
+    total_episodes: int = 1,
+    total_tasks: int = 1,
+    chunks_size: int = 1000,
+    splits: Mapping[str, str] | None = None,
 ) -> bytes:
     """构建逐帧数据集的 info.json。
 
@@ -246,12 +261,12 @@ def _build_info_json(
     payload = {
         "codebase_version": "v2.1",
         "robot_type": "ddp_import",
-        "total_episodes": 1,
+        "total_episodes": total_episodes,
         "total_frames": frame_count,
-        "total_tasks": 1,
+        "total_tasks": total_tasks,
         "fps": fps,
         # 官方 Loader 会读 chunks_size 计算 chunk 目录编号；缺失直接 KeyError。
-        "chunks_size": 1000,
+        "chunks_size": chunks_size,
         # 官方要求**模板形式**（含 {episode_chunk:03d}/{episode_index:06d}），
         # 写死具体路径会让 Loader 无法推导其它 Episode 的位置。
         "data_path": "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet",
@@ -259,7 +274,9 @@ def _build_info_json(
         # 传 None 会让 Loader 在建 split 时失败。这是实测踩到的。
         "video_path": "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
         "created_at": "1970-01-01T00:00:00+00:00",
-        "splits": {"train": f"0:{episode_index + 1}"},
+        "splits": dict(splits)
+        if splits is not None
+        else {"train": f"0:{episode_index + 1}"},
         "features": {feature.name: feature.as_info() for feature in features},
         "ddp": {
             "schema_version": FRAME_SCHEMA_VERSION,

@@ -16,6 +16,10 @@ import json
 
 import pytest
 
+from ddp_data.lerobot.frame_dataset import (
+    parse_stream_extraction_ndjson,
+    write_frame_dataset,
+)
 from ddp_data.lerobot.frame_writer import (
     FRAME_SCHEMA_VERSION,
     FRAME_SCOPE,
@@ -221,3 +225,105 @@ def test_feature_declarations_match_parquet() -> None:
 
     declared = build_frame_features(observation_dim=obs_dim, action_dim=act_dim)
     assert tuple(f.name for f in declared) == result.feature_names
+
+
+def test_write_frame_dataset_multi_episode_global_index_and_metadata() -> None:
+    """多 Episode 逐帧导出：全局 index 必须跨集连续递增，frame_index 每集重置，meta 全套自洽。"""
+    import io
+
+    import pyarrow.parquet as pq
+
+    bundle = write_frame_dataset(
+        episodes=[
+            {"frames": _frames(4, obs_dim=3, act_dim=2), "task": "lift cube"},
+            {"frames": _frames(6, obs_dim=3, act_dim=2), "task": "place cube"},
+            {"frames": _frames(5, obs_dim=3, act_dim=2), "task": "lift cube"},
+        ],
+        fps=20.0,
+        observation_dim=3,
+        action_dim=2,
+    )
+    assert bundle.total_episodes == 3
+    assert bundle.total_frames == 15
+    assert bundle.episode_lengths == (4, 6, 5)
+
+    info = json.loads(bundle.files["meta/info.json"])
+    assert info["total_episodes"] == 3
+    assert info["total_frames"] == 15
+    assert info["total_tasks"] == 2
+    assert info["splits"] == {"train": "0:3"}
+    assert info["ddp"]["loadable_scope"] == FRAME_SCOPE
+
+    ep0 = pq.read_table(
+        io.BytesIO(bundle.files["data/chunk-000/episode_000000.parquet"])
+    )
+    ep1 = pq.read_table(
+        io.BytesIO(bundle.files["data/chunk-000/episode_000001.parquet"])
+    )
+    ep2 = pq.read_table(
+        io.BytesIO(bundle.files["data/chunk-000/episode_000002.parquet"])
+    )
+
+    assert ep0["index"].to_pylist() == [0, 1, 2, 3]
+    assert ep1["index"].to_pylist() == [4, 5, 6, 7, 8, 9]
+    assert ep2["index"].to_pylist() == [10, 11, 12, 13, 14]
+    assert ep1["frame_index"].to_pylist() == [0, 1, 2, 3, 4, 5]
+    assert ep0["task_index"].to_pylist() == [0] * 4
+    assert ep1["task_index"].to_pylist() == [1] * 6
+    assert ep2["task_index"].to_pylist() == [0] * 5
+
+    ep_stats_lines = (
+        bundle.files["meta/episodes_stats.jsonl"].decode("utf-8").strip().splitlines()
+    )
+    assert len(ep_stats_lines) == 3
+    stats_doc = json.loads(bundle.files["meta/stats.json"])
+    assert stats_doc["num_episodes"] == 3
+    assert stats_doc["num_frames"] == 15
+
+
+def test_parse_stream_extraction_ndjson_roundtrip_to_dataset() -> None:
+    """STREAM_EXTRACTION 产出的 NDJSON 必须能无损桥接进 write_frame_dataset。"""
+    ndjson_lines = [
+        json.dumps({"_meta": {"action_source": "PRESENT", "streams": []}}),
+        json.dumps(
+            {
+                "type": "observation",
+                "frame_index": 0,
+                "values": [0.1, 0.2],
+                "timestamp_ns": None,
+            }
+        ),
+        json.dumps(
+            {
+                "type": "observation",
+                "frame_index": 1,
+                "values": [0.3, 0.4],
+                "timestamp_ns": None,
+            }
+        ),
+        json.dumps(
+            {"type": "action", "frame_index": 0, "values": [1.0], "timestamp_ns": None}
+        ),
+        json.dumps(
+            {"type": "action", "frame_index": 1, "values": [2.0], "timestamp_ns": None}
+        ),
+    ]
+    raw = ("\n".join(ndjson_lines) + "\n").encode("utf-8")
+    frames = parse_stream_extraction_ndjson(raw, fps=20.0)
+    assert len(frames) == 2
+    assert frames[0]["timestamp"] == 0.0
+    assert frames[1]["timestamp"] == pytest.approx(0.05)
+
+    bundle = write_frame_dataset(
+        episodes=[{"frames": frames, "task": "robomimic lift"}],
+        fps=20.0,
+        observation_dim=2,
+        action_dim=1,
+    )
+    assert bundle.total_frames == 2
+
+    absent = (
+        json.dumps({"_meta": {"action_source": "ACTION_SOURCE_ABSENT"}}) + "\n"
+    ).encode("utf-8")
+    with pytest.raises(ValueError, match="不含动作源"):
+        parse_stream_extraction_ndjson(absent, fps=20.0)
