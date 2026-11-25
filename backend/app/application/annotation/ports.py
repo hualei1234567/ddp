@@ -29,6 +29,7 @@ from app.domain.annotation.arbitration import AnnotationArbitration
 from app.domain.annotation.assignment import AnnotationAssignment
 from app.domain.annotation.batch import AnnotationBatch
 from app.domain.annotation.gold_set import GoldEvaluation, GoldSet
+from app.domain.annotation.prm_step import PrmAnnotation
 from app.domain.annotation.quality_check import QualityCheckRun
 from app.domain.annotation.quality_sample import QualitySample
 from app.domain.annotation.review import AnnotationReview
@@ -936,3 +937,52 @@ class QualityCheckRepository(Protocol):
         after_id: UUID | None = None,
         limit: int = 20,
     ) -> list[QualityCheckRun]: ...
+
+
+class PrmAnnotationRepository(Protocol):
+    """PRM 步级标注仓储（V52-020）：trajectory 粒度，项目隔离由 ``ProjectScope`` 强制。
+
+    查询返回 :class:`PrmAnnotationView`（ID + 实体 + 审计列）——API 响应需要
+    存储层分配的标注 ID 与时间戳，让调用方各自反查会多一次往返且易漂移。
+    创建即不可变（步级标注是复核对象而非编辑对象）：无 ``save``；
+    修正走"新版本轨迹标注"，不原地覆盖——与提交记录的防篡改语义同源。
+    """
+
+    def add(
+        self,
+        scope: ProjectScope,
+        annotation: PrmAnnotation,
+        *,
+        annotation_id: UUID,
+        actor_id: UUID,
+    ) -> PrmAnnotationView: ...
+
+    def get(
+        self,
+        scope: ProjectScope,
+        annotation_id: UUID,
+    ) -> PrmAnnotationView | None: ...
+
+    def get_by_trajectory(
+        self,
+        scope: ProjectScope,
+        trajectory_id: str,
+    ) -> PrmAnnotationView | None: ...
+
+    def list_for_project(
+        self,
+        scope: ProjectScope,
+        *,
+        limit: int = 50,
+    ) -> list[PrmAnnotationView]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class PrmAnnotationView:
+    """PRM 步级标注的存储视图：实体 + 存储层分配的 ID 与审计列。"""
+
+    annotation_id: UUID
+    annotation: PrmAnnotation
+    version: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
