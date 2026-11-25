@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 16 张卡片**：DRAFT 0 / ACTIVE 16 / SUPERSEDED 0 / DEPRECATED 0
+**总计 17 张卡片**：DRAFT 0 / ACTIVE 17 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 16 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 17 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -29,7 +29,7 @@
 |---|---|---|---|---|
 | [MEM-SOP-001](sop/MEM-SOP-001-real-sample-admission.md) | 真实样本准入检查清单（GATE-0） | ACTIVE | 1 | `fixture`, `gate`, `golden-path`, `hdf5`, `sample`, `sha256`, `sop` |
 
-## INC · 事故与缺陷复盘（10）
+## INC · 事故与缺陷复盘（11）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -43,6 +43,7 @@
 | [MEM-INC-008](incidents/MEM-INC-008-nanosecond-precision-in-json.md) | 纳秒时间戳经 JSON 传输会静默丢精度 | ACTIVE | 1 | `2^53`, `bigint`, `contract`, `json`, `nanosecond`, `precision`, `timestamp` |
 | [MEM-INC-009](incidents/MEM-INC-009-parallel-check-contention.md) | 多个 check.sh 并发跑同一 PostgreSQL 会互相污染 | ACTIVE | **3** | `flaky`, `minio`, `parallel`, `postgres`, `test-contention`, `time-sensitive`, `worktree` |
 | [MEM-INC-010](incidents/MEM-INC-010-payload-length-vs-shape.md) | 区分「实际读取行数」与「数据集总行数」 | ACTIVE | 1 | `chunked-read`, `data-fabrication`, `hdf5`, `off-by-n`, `shape`, `slice` |
+| [MEM-INC-011](incidents/MEM-INC-011-pipeline-version-conflict.md) | 绕过用例直接建 Run 会导致 Pipeline 版本冲突 | ACTIVE | 1 | `boundary`, `bypass`, `optimistic-lock`, `pipeline`, `processing-run`, `version-conflict` |
 
 ## CHG · 变更记录（1）
 
@@ -85,7 +86,9 @@
 - `backup`：MEM-OPS-001
 - `backup-restore`：MEM-INC-002
 - `bigint`：MEM-INC-008
+- `boundary`：MEM-INC-011
 - `budget`：MEM-INC-007
+- `bypass`：MEM-INC-011
 - `capability`：MEM-DEC-001
 - `check-constraint`：MEM-INC-003
 - `chunked-read`：MEM-INC-010
@@ -125,16 +128,19 @@
 - `minio`：MEM-INC-009, MEM-OPS-001
 - `nanosecond`：MEM-INC-008
 - `off-by-n`：MEM-INC-010
+- `optimistic-lock`：MEM-INC-011
 - `outbox`：MEM-CHG-001, MEM-INC-001, MEM-INC-003
 - `pagination`：MEM-INC-007
 - `pairwise`：MEM-DEC-002
 - `parallel`：MEM-INC-009
 - `parquet`：MEM-INC-004
 - `pending`：MEM-CHG-001
+- `pipeline`：MEM-INC-011
 - `position-bias`：MEM-DEC-002
 - `postgres`：MEM-INC-003, MEM-INC-009, MEM-OPS-001
 - `precision`：MEM-INC-008
 - `preference`：MEM-DEC-002
+- `processing-run`：MEM-INC-011
 - `projection`：MEM-INC-006, MEM-INC-007
 - `raw_asset`：MEM-INC-001
 - `recorded`：MEM-CHG-001
@@ -161,5 +167,6 @@
 - `timestamp`：MEM-INC-008
 - `training-ready`：MEM-REQ-001
 - `unique-index`：MEM-INC-001
+- `version-conflict`：MEM-INC-011
 - `worker`：MEM-INC-001
 - `worktree`：MEM-INC-009
