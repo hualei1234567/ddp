@@ -192,11 +192,19 @@
 | PRM 步级奖励导出 | `PRM_STEP_REWARD_JSONL` writer：四类标签 reward 映射、未标注步骤不进训练文件、index 连续性强制、roundtrip 校验 | 12 单测 |
 | SFT-DPO 库 | `datasets5.2.0` 导出库验证 **PASS**（SFT / 偏好对导出格式落地） | 三方真实验证另存 `docs/testing/evidence/` |
 
-**阶段 2（进行中）**：
+**阶段 2（2026-11-25 收口）**：三线并行（子代理模式，MEM-SOP-003）
 
-- **PRM 步级标注域模型**——步级标注实体、四类标签与 reward 映射的领域模型扩展（`PLANNED → in-progress`）；
-- **技能标签路由**——按技能标签路由标注任务到对应 Judge / 人工队列（`PLANNED → in-progress`）；
-- **Token 成本台账**——judge / PRM 调用的 Token 计量与成本归集（`PLANNED → in-progress`）。
+| 能力 | 内容 | 验证 |
+|---|---|---|
+| PRM 步级标注域模型（PR #134，已合并） | 步级标注实体、四类标签与 reward 映射；契约 **1.40.0**（`paths.stage10.yaml`） | 契约 parity + Redocly lint 通过（坑点沉淀 MEM-INC-016/017） |
+| Token 成本台账（PR #135，已合并） | judge/PRM Token 计量与成本归集；迁移 **0081**，金额全程 Decimal 量化 4 位小数、对外字符串输出 | `backend/tests/migrations/test_ai_token_usage_migration.py`（坑点沉淀 MEM-INC-019/021） |
+| 技能标签路由（PR #136，CI 收口中） | 按技能标签路由标注任务到 Judge/人工队列；迁移 **0080** | SQLite batch 撞跨表触发器已处置（MEM-INC-020，先例 0041/0052） |
+
+- 契约版本唯一 bump 至 **1.40.0**，其余 PR 走 fragments + `$ref` 延迟策略（MEM-INC-015 的处置落地）；
+- 迁移链最终态 `0074 → 0078 → 0081 → 0080`（head 唯一；并行期双 head 由后合方重排解决，MEM-INC-018）；
+- 本阶段 6 类真实坑点 + 1 张协作 SOP 入库（MEM-INC-016~021、MEM-SOP-003），记忆库 29 张全绿。
+
+**阶段 3（2026-11-25 开工）**：web-ui（标注工作台接入）／badcase-backflow（坏例回流）／honeypot-wiring（黄金题接线）三线并行。
 
 ---
 
