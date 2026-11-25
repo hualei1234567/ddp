@@ -1,7 +1,7 @@
 # ADR-0048 Adapter 六级能力分级（替换五值枚举）
 
-- 状态：**PROPOSED**（待用户确认后改 ACCEPTED）
-- 日期：2026-11-24
+- 状态：**ACCEPTED**（2026-11-25 落地 V51-005）
+- 日期：2026-11-24（2026-11-25 验收同步）
 - 决策者：System Architect + 后端
 - 关联：V51-005、V5.1 蓝图 `05_真实数据样本准入与格式适配.md` §5、`03_痛点地图与根因分析.md` 痛点二
 - 约束：不改 Canonical Schema；不破坏现有 Adapter 注册；不动 `data-platform` 公开 API 的解析签名
@@ -81,18 +81,32 @@ class FormatCapabilityProfile:
 
 不改 `AdapterCapability`，只在 `AdapterSpec` 上**新增可选字段** `capability_profile`。
 
-## 4. S0 实测的初始能力档案（作为落地基线）
+## 4. 权威格式能力档案（S0 基线 → V5.1 实证落地状态）
 
-| 格式 | max_level | 依据 | limitations |
+### 4.1 S0 初始实测基线（2026-11-24）
+
+| 格式 | S0 max_level | 当时依据 | 当时缺口 |
 |---|---|---|---|
-| hdf5 | **INSPECT** | `read_hdf5_structure()` 可读真实结构（RoboMimic 200 demos / 9666 帧） | **不读数值 payload** |
-| rosbag | **INSPECT** | `read_rosbag_structure()` 可读 topic/时间范围 | **显式不遍历 messages** |
+| hdf5 | **INSPECT** | `read_hdf5_structure()` 可读真实结构（RoboMimic 200 demos / 9666 帧） | 不读数值 payload |
+| rosbag | **INSPECT** | `read_rosbag_structure()` 可读 topic/时间范围 | 显式不遍历 messages |
 | mp4 | **INSPECT** | ffprobe 探流信息 | 不抽帧、不解码 |
-| parquet | **INSPECT** | 只读 schema | 不读全部行 |
-| mcap | **未支持** | 无 parser | 完全无 |
-| lerobot | **INSPECT** | 元数据 parser | 无逐帧 |
+| parquet | **INSPECT** | 只读 footer schema | 不读数据页行值 |
+| mcap | **INSPECT** | `read_mcap_metadata()` 只读 header/footer/summary | 不读 chunk 数据页与消息体 |
+| lerobot | **INSPECT** | 元数据 parser + `METADATA_ONLY` 导出 | 无逐帧 observation/action |
 
-**这份表就是「当前可宣称范围」的权威来源。任何 UI/文档宣称不得超过它。**
+### 4.2 V5.1 落地后的权威矩阵（`ddp_data.capability.BUILTIN_FORMAT_CAPABILITY_MATRIX`）
+
+| 格式 | 当前 `max_level` | 实证依据（CI 自动核验） | 诚实边界（`limitations`） |
+|---|---|---|---|
+| **hdf5** | **ROUND_TRIP**（仅 `robomimic_hdf5_v1.5` 已知布局）<br>通用任意 HDF5 仍为 **INSPECT** | `read_hdf5_dataset_slice()` 读真实数值 → `extract_robomimic_demo()` 产出三件套 → `write_frame_episode()` 写出逐帧 Parquet → `lerobot==0.3.3` 逐帧读取 59/59 帧通过（`verify_frame_load.py`） | 仅 `robomimic_hdf5_v1.5` 布局打通逐帧物化与往返，通用任意布局 HDF5 仅 `INSPECT`；`ph` 样本不含图像流（`video_provided=false`）；软/外部链接不跟随 |
+| **rosbag** | **INSPECT** | `read_rosbag_structure()` 可读 rosbag1/rosbag2 索引（`test_rosbag_probe.py`） | 显式不遍历 `messages()` 且不反序列化消息体；孤立 bag 不含任务/指令语义 |
+| **mp4** | **INSPECT** | 受控 `ffprobe` 子进程探流信息（`test_mp4_probe.py`） | 不解码视频帧、不抽帧；依赖宿主机 `ffprobe` |
+| **parquet** | **INSPECT** | PyArrow 只读 footer schema 与期望列缺失声明（`test_parquet_adapter.py`） | 不读取数据页行值；加密 footer（`PARE`）显式拒绝 |
+| **mcap** | **INSPECT** | `mcap` 官方 `SeekingReader` 只读 header/footer/summary（`test_mcap_adapter.py`） | 不读取 chunk 数据页且不解码消息体；无 summary 文件返回未知计数（`None`） |
+| **lerobot** | **ROUND_TRIP**（导出侧有逐帧流时）<br>导入侧 `lerobot.human1m_preview` 为 **INSPECT** | `frame_writer.write_frame_episode()` + `lerobot==0.3.3` Loader 逐帧往返验证；`export_writer` 保留 `METADATA_ONLY` | 导出双路共存（无逐帧流时仅 `METADATA_ONLY`，严禁混称训练就绪）；导入侧仅解析 Human-1M `metadata.jsonl`；不含视频封装 |
+| **generic_jsonl** | **INSPECT** | `parse_generic_jsonl()` 映射一行一 Episode 元数据（`test_adapter_registry.py`） | 仅解析元数据 JSONL 行，不读取底层媒体或传感器逐帧流 |
+
+**代码中的 `BUILTIN_FORMAT_CAPABILITY_MATRIX` 与 `AdapterSpec.capability_profile` 是「当前可宣称范围」的唯一权威来源，由 `scripts/check_adapter_capability.py` 强制校验证据存在性；任何 UI/文档宣称不得超过它。**
 
 ## 5. 后果
 
