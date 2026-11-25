@@ -1,0 +1,163 @@
+# PRM 步级标注（V52-020，契约 1.40.0）schema 片段。
+# 字段口径与 backend/app/api/v1/annotation_prm_models.py 的 Pydantic 模型
+# 一致（required / properties 由 check_contract_parity.py 双向核对）。
+
+StepMarkIn:
+  type: object
+  additionalProperties: false
+  required: [step_index, label]
+  properties:
+    step_index:
+      type: integer
+      minimum: 0
+      description: 步骤下标（0..n-1，与 AGENT_TRACE 载体一致）
+    label:
+      type: string
+      enum: [CORRECT, REDUNDANT, HALLUCINATED_TOOL, FATAL]
+      description: 蓝图 N1 四分类；reward 映射 +1 / -0.5 / -1 / -2
+    comment: { type: [string, "null"], maxLength: 2000 }
+    annotator: { type: [string, "null"], maxLength: 128 }
+
+StepMarkOut:
+  type: object
+  additionalProperties: false
+  required: [step_index, label, reward]
+  properties:
+    step_index: { type: integer, minimum: 0 }
+    label:
+      type: string
+      enum: [CORRECT, REDUNDANT, HALLUCINATED_TOOL, FATAL]
+    reward:
+      type: number
+      description: 由 label 唯一决定：CORRECT=+1、REDUNDANT=-0.5、HALLUCINATED_TOOL=-1、FATAL=-2
+    comment: { type: [string, "null"] }
+    annotator: { type: [string, "null"] }
+    marked_at: { type: [string, "null"], format: date-time }
+
+PrmAnnotationCreate:
+  type: object
+  additionalProperties: false
+  required: [trajectory_id, step_actions]
+  properties:
+    trajectory_id:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: 轨迹业务键；项目内唯一（分叉轨迹用派生 id 如 `<原 id>#fork-1`）
+    step_actions:
+      type: array
+      minItems: 1
+      maxItems: 512
+      items: { type: string, maxLength: 2000 }
+      description: 轨迹步骤序列（index 连续 0..n-1）
+    marks:
+      type: array
+      items: { $ref: "#/StepMarkIn" }
+      description: 可部分标注：未标注步骤不携带任何结论（未标注 ≠ 正确）
+    task_goal: { type: [string, "null"], maxLength: 2000 }
+
+PrmAnnotationOut:
+  type: object
+  additionalProperties: false
+  required:
+    [annotation_id, trajectory_id, task_goal, step_actions, marks, step_count,
+     marked_count, version]
+  properties:
+    annotation_id: { type: string, format: uuid }
+    trajectory_id: { type: string }
+    task_goal: { type: [string, "null"] }
+    step_actions:
+      type: array
+      items: { type: string }
+    marks:
+      type: array
+      items: { $ref: "#/StepMarkOut" }
+    step_count: { type: integer, minimum: 1, maximum: 512 }
+    marked_count: { type: integer, minimum: 0 }
+    fork_lineage:
+      type: [object, "null"]
+      description: 分叉血缘（source_trajectory_id / fork_point_index / shared_prefix_steps）；原轨迹为 null
+      additionalProperties: true
+    total_reward:
+      type: [number, "null"]
+      description: 已标注步骤 reward 之和；全部未标注时为 null
+    label_counts:
+      type: object
+      description: 各标签计数（看板/验收用）
+      additionalProperties: { type: integer }
+    version: { type: integer, minimum: 1 }
+    created_at: { type: [string, "null"], format: date-time }
+    updated_at: { type: [string, "null"], format: date-time }
+
+PrmForkRequest:
+  type: object
+  additionalProperties: false
+  required: [at_index, new_actions]
+  properties:
+    at_index:
+      type: integer
+      minimum: 0
+      description: 分叉点（0 = 整条重写；末步 = 只换最后一步；越界 422）
+    new_actions:
+      type: array
+      minItems: 1
+      maxItems: 512
+      items: { type: string, maxLength: 2000 }
+      description: 重写序列（替换 at_index 起的原步骤；全部未标注）
+
+PrmForkPreviewOut:
+  type: object
+  additionalProperties: false
+  required:
+    [source_trajectory_id, fork_point_index, forked_trajectory_id_preview,
+     forked_steps, shared_prefix_steps, forked_marks, dpo_pair]
+  properties:
+    source_trajectory_id: { type: string }
+    fork_point_index: { type: integer, minimum: 0 }
+    forked_trajectory_id_preview:
+      type: string
+      description: 物化时建议的 trajectory_id（`<原 id>#fork-preview`）；调用方可自行分配
+    forked_steps:
+      type: array
+      items: { type: string }
+      description: 分叉后完整步骤序列（共享前缀 + 重写序列）
+    shared_prefix_steps:
+      type: integer
+      minimum: 0
+      description: 分叉点前与原轨迹共享的步骤数
+    forked_marks:
+      type: array
+      items: { $ref: "#/StepMarkOut" }
+      description: 保留的前缀标注；重写步骤一律未标注
+    dpo_pair: { $ref: "#/StepDpoPairOut" }
+
+StepDpoPairOut:
+  type: object
+  additionalProperties: false
+  required:
+    [source_trajectory_id, fork_point_index, prompt, chosen, rejected,
+     preference_json_value]
+  properties:
+    source_trajectory_id: { type: string }
+    fork_point_index: { type: integer, minimum: 0 }
+    prompt:
+      type: string
+      description: 共享前缀任务描述 + 前缀步骤（chosen/rejected 不含前缀）
+    chosen:
+      type: string
+      description: 分叉点后的 Forked 重写序列摘要
+    rejected:
+      type: string
+      description: 分叉点后的 Original 原序列摘要
+    rationale: { type: [string, "null"] }
+    criteria_scores:
+      type: object
+      description: 偏好判据（含 original_total_reward / shared_prefix_reward）
+      additionalProperties: { type: number }
+    preference_json_value:
+      type: object
+      description: |
+        MEM-DEC-002 JSON 约定值形态（winner=chosen 语义键 + chosen/rejected +
+        fork_point_index + source_trajectory_id），作为 JSON 标签值回流偏好
+        提交链；不新增标签类型。
+      additionalProperties: true

@@ -50,7 +50,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0081"
-down_revision = "0074"
+down_revision = "0078"  # 重排：0081 依赖 0078（#134 先合，保持链线性）
 branch_labels = None
 depends_on = None
 

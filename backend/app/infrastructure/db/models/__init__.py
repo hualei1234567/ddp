@@ -96,6 +96,7 @@ from app.infrastructure.db.models.ingestion import (
 )
 from app.infrastructure.db.models.jobs import IngestionJobModel
 from app.infrastructure.db.models.locations import LocationModel
+from app.infrastructure.db.models.prm_annotation import PrmAnnotationModel
 from app.infrastructure.db.models.processing import (
     ProcessingArtifactModel,
     ProcessingRunModel,
@@ -184,6 +185,7 @@ __all__ = [
     "ProcessingArtifactModel",
     "ProcessingRunModel",
     "ProcessingRunStepModel",
+    "PrmAnnotationModel",
     "Project",
     "ProjectMember",
     "QualityFindingModel",

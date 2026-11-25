@@ -19,6 +19,7 @@ from app.application.annotation.consistency import AnnotationConsistencyUseCases
 from app.application.annotation.gold_sets import GoldSetUseCases
 from app.application.annotation.iaa import IAAUseCases
 from app.application.annotation.overdue_summary import AnnotationOverdueSummaryUseCases
+from app.application.annotation.prm_annotations import PrmAnnotationUseCases
 from app.application.annotation.progress import AnnotationProgressRefresher
 from app.application.annotation.quality_checks import QualityCheckUseCases
 from app.application.annotation.quality_samples import QualitySampleUseCases
@@ -46,6 +47,7 @@ from app.infrastructure.repositories.annotation_directory import (
     SqlGoldSetAnswerAccessPolicy,
     SqlMemberDirectory,
 )
+from app.infrastructure.repositories.annotation_prm import SqlPrmAnnotationRepository
 from app.infrastructure.repositories.annotation_quality import (
     SqlGoldSetRepository,
     SqlIAAReportRepository,
@@ -87,6 +89,7 @@ class AnnotationUseCases:
     ai_suggestions: AnnotationAiSuggestionUseCases
     consistency: AnnotationConsistencyUseCases
     overdue_summary: AnnotationOverdueSummaryUseCases
+    prm_annotations: PrmAnnotationUseCases
 
 
 def get_annotation_use_cases(
@@ -107,6 +110,7 @@ def get_annotation_use_cases(
     quality_check_repo = SqlQualityCheckRepository(session)
     iaa_repo = SqlIAAReportRepository(session)
     ai_suggestions_repo = SqlAnnotationAiSuggestionRepository(session)
+    prm_annotations_repo = SqlPrmAnnotationRepository(session)
     audit = SqlAnnotationAuditRepository(session)
     outbox = SqlAnnotationOutboxRepository(session)
     idempotency = SqlAnnotationIdempotencyRepository(session)
@@ -298,6 +302,12 @@ def get_annotation_use_cases(
             token_recorder=(
                 SqlTokenUsageRecorder(session) if settings.ai_token_usage_enabled else None
             ),
+        ),
+        prm_annotations=PrmAnnotationUseCases(
+            prm_annotations_repo,
+            audit,
+            outbox,
+            session,
         ),
     )
 

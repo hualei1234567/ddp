@@ -1,0 +1,127 @@
+# PRM 步级标注（V52-020，契约 1.40.0）路径片段。
+# 只声明 backend/app/api/v1/annotation_prm.py 实际实现的端点（4 个操作）。
+#
+# 范围说明：步级过程奖励标注（蓝图 N1）的创建 / 查询 / 分叉重写预览。
+# 四分类标签 CORRECT / REDUNDANT / HALLUCINATED_TOOL / FATAL 的 reward 映射
+# （+1 / -0.5 / -1 / -2）与 data-platform/ddp_data/llm_export/prm.py 完全一致，
+# 由领域单测钉死（防双源漂移）。
+#
+# **fork 是纯计算端点**：返回分叉轨迹与 Step-DPO 对预览，不落库——调用方确认
+# 后再用创建端点以新 trajectory_id 物化（先例：标注分配 capacity-preview）。
+#
+# **没有 PATCH / DELETE**：步级标注创建即不可变（复核对象而非编辑对象），
+# 修正走新轨迹行；数据库层面随 project_id 的 ON DELETE CASCADE 级联清理。
+#
+# Step-DPO 对按 MEM-DEC-002 以 JSON 约定值回流偏好提交链（chosen/rejected +
+# fork_point_index + source_trajectory_id），**不新增标签类型**。
+
+prmTrajectoryAnnotations:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listPrmTrajectoryAnnotations
+    tags: [annotation-prm]
+    summary: PRM 步级标注列表
+    description: 按项目隔离，按创建时间升序。`limit` 上限 200。
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        description: 非法取值返回 422，不静默忽略。
+    responses:
+      "200":
+        description: PRM 步级标注分页
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/PrmAnnotationOut" }
+                next_cursor: { type: [string, "null"] }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createPrmTrajectoryAnnotation
+    tags: [annotation-prm]
+    summary: 登记 PRM 步级标注
+    description: |
+      登记一条 Agent 轨迹的步级标注。`marks` 可部分标注——未标注步骤不携带
+      任何结论（未标注 ≠ 正确）；`step_index` 在轨迹内唯一且越界返回 422。
+      `trajectory_id` 在项目内唯一，重复返回 409 `duplicate_resource`。
+      创建即不可变：无 PATCH，修正走新轨迹行。客户端不能提交
+      `project_id` / `version` / 审计字段。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PrmAnnotationCreate" }
+    responses:
+      "201":
+        description: 已创建
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PrmAnnotationOut" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+prmTrajectoryAnnotationDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotationId"
+  get:
+    operationId: getPrmTrajectoryAnnotation
+    tags: [annotation-prm]
+    summary: PRM 步级标注详情
+    description: 按标注 ID 查询；跨项目返回 404（不区分"不存在"与"不可见"）。
+    responses:
+      "200":
+        description: 步级标注详情
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PrmAnnotationOut" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+prmTrajectoryFork:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/TrajectoryId"
+  post:
+    operationId: forkPrmTrajectory
+    tags: [annotation-prm]
+    summary: PRM 轨迹分叉重写预览
+    description: |
+      从 `at_index` 步分叉重写：保留 0..at_index-1 步（含已标注），at_index 起
+      替换为 `new_actions` 重写序列。**纯计算预览，不落库**——响应携带分叉
+      轨迹与 Step-DPO 对（canonical 语义：分叉点前共享前缀进 `prompt`；
+      chosen = Forked 重写序列、rejected = Original 原序列），以及按
+      MEM-DEC-002 JSON 约定值形态的 `preference_json_value`。
+      `at_index` 越界（含负数）返回 422；轨迹不存在返回 404。
+      确认后调用创建端点以新 `trajectory_id`（如 `<原 id>#fork-1`）物化。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/PrmForkRequest" }
+    responses:
+      "200":
+        description: 分叉轨迹与 Step-DPO 对预览
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/PrmForkPreviewOut" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
