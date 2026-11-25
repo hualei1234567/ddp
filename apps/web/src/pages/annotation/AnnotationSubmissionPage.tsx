@@ -15,6 +15,9 @@ import ReviewPanel, {
 import SubmissionMediaPanel from "../../components/annotation/SubmissionMediaPanel";
 import SubmissionQcEvidenceSection from "../../components/quality/SubmissionQcEvidenceSection";
 import SubmissionSummary from "../../components/annotation/SubmissionSummary";
+import LlmItemSection from "../../components/annotation/llm/LlmItemSection";
+import WatermarkOverlay from "../../components/annotation/llm/WatermarkOverlay";
+import type { PreferencePairAnnotationValue } from "../../types/llmAnnotation";
 import ApiErrorState from "../../components/ui/ApiErrorState";
 import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
@@ -53,6 +56,11 @@ function SubmissionContent({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [busySuggestionId, setBusySuggestionId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<AnnotationFeedback | null>(null);
+  // PREFERENCE_PAIR 的 JSON 约定值草稿（按 annotation_id 分键）；
+  // 仅暂存展示态，实际写入仍走既有提交动作，不在本页擅自扩 API。
+  const [preferenceValues, setPreferenceValues] = useState<
+    Record<string, PreferencePairAnnotationValue | null>
+  >({});
 
   const load = useCallback(
     (signal: AbortSignal) =>
@@ -330,6 +338,13 @@ function SubmissionContent({
           />
         ) : null}
         <AnnotationFeedbackAlert feedback={feedback} />
+        <LlmItemSection
+          records={data.records}
+          preferenceValue={preferenceValues}
+          onPreferenceChange={(annotationId, value) =>
+            setPreferenceValues((prev) => ({ ...prev, [annotationId]: value }))
+          }
+        />
         <SubmissionSummary
           submission={data.submission}
           records={data.records}
@@ -391,17 +406,26 @@ function SubmissionContent({
   }
 
   return (
-    <PageContainer
-      title="标注提交详情"
-      description={
-        data
-          ? `提交 v${data.submission.submission_version} · ${data.submission.submission_id}`
-          : "查看提交版本、记录、复核与仲裁。"
-      }
-      extra={extra}
-    >
-      {body}
-    </PageContainer>
+    <>
+      {/* 标注页强制水印：操作员 ID + 挂载时间戳，低透明度平铺且不拦截交互。
+          身份走服务端认证的 currentUserId（useAnnotationReviewers 已随页加载）；
+          身份降级时如实显示 unknown，不猜测。 */}
+      <WatermarkOverlay
+        operatorId={reviewers.currentUserId ?? "unknown"}
+        timestamp={new Date().toISOString()}
+      />
+      <PageContainer
+        title="标注提交详情"
+        description={
+          data
+            ? `提交 v${data.submission.submission_version} · ${data.submission.submission_id}`
+            : "查看提交版本、记录、复核与仲裁。"
+        }
+        extra={extra}
+      >
+        {body}
+      </PageContainer>
+    </>
   );
 }
 
