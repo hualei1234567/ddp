@@ -205,6 +205,16 @@ AnnotationTaskCreate:
         不返回值、来源、置信度与备注；record_sha256 / records_digest 返回
         空串，避免成为枚举标签的校验预言机。
     quality_policy: {type: object, additionalProperties: true, default: {}}
+    required_skills:
+      type: array
+      items: {$ref: "../schemas/annotation-task.v1.schema.json#/$defs/AnnotationSkillTag"}
+      default: []
+      description: >-
+        技能路由配置（V52-009）。空数组/缺省 = 不启用技能路由：分配行为与
+        未配置技能的项目完全一致（向后兼容）。配置了必配技能（required=true）
+        的任务在创建分配时只接受持有全部必配技能的标注员，否则返回
+        annotation_annotator_not_eligible；可选技能（required=false）参与
+        候选排序（质量分×0.7 + 加权命中率×0.3）。
     review_mode: {type: string, enum: [SINGLE, DOUBLE], default: SINGLE}
     agreement_threshold: {type: [number, "null"], minimum: 0, maximum: 1}
     auto_approve: {type: boolean, default: false}
@@ -226,6 +236,12 @@ AnnotationTaskPatch:
         同创建；blind_review 为可选布尔字段（默认 false），开启后服务端
         对非标注人隐藏标签值。
     quality_policy: {type: [object, "null"], additionalProperties: true}
+    required_skills:
+      type: [array, "null"]
+      items: {$ref: "../schemas/annotation-task.v1.schema.json#/$defs/AnnotationSkillTag"}
+      description: >-
+        技能路由配置（V52-009）：整体替换，仅 DRAFT 任务可改。
+        空数组 = 关闭技能路由。
 
 AnnotationTaskActionRequest:
   type: object

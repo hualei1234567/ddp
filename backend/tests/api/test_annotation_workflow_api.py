@@ -1224,3 +1224,213 @@ def test_task_list_overdue_filter_and_computed_flag(api_db) -> None:
     cancelled_detail = editor.get(url(ids.project_a, f"/annotation-tasks/{cancelled['task_id']}"))
     assert cancelled_detail.status_code == 200, cancelled_detail.text
     assert cancelled_detail.json()["is_overdue"] is False
+
+
+# ── 技能路由（V52-009）───────────────────────────────────────
+
+
+def test_task_create_accepts_required_skills_and_echoes(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """创建带 required_skills 的任务：201 + 响应回显规范化后的标签。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    seed_episode(factory, ids.project_a, ids.editor_a, "EP-SKILL-ECHO")
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-skill-echo")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-skill-echo")
+    created = editor.post(
+        url(ids.project_a, "/annotation-tasks"),
+        json={
+            "code": "task-skill-echo",
+            "name": "技能任务",
+            "sample_set_id": sample_set["sample_set_id"],
+            "schema_id": schema["schema_id"],
+            "target_item_count": 1,
+            "target_episode_count": 1,
+            "required_skills": [
+                {"tag_name": " Kitchen ", "weight": 0.8},
+                {"tag_name": "3d", "required": False, "category": "modeling"},
+            ],
+        },
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["required_skills"] == [
+        {"tag_name": "kitchen", "category": None, "weight": 0.8, "required": True},
+        {"tag_name": "3d", "category": "modeling", "weight": 1.0, "required": False},
+    ]
+
+    detail = editor.get(url(ids.project_a, f"/annotation-tasks/{body['task_id']}"))
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["required_skills"] == body["required_skills"]
+
+    # 列表同样回显
+    listing = editor.get(url(ids.project_a, "/annotation-tasks"))
+    items = [i for i in listing.json()["items"] if i["task_id"] == body["task_id"]]
+    assert items and items[0]["required_skills"] == body["required_skills"]
+
+
+def test_task_create_without_required_skills_defaults_empty(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """不带 required_skills 的旧客户端：字段缺省为空数组（零配置兼容）。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    seed_episode(factory, ids.project_a, ids.editor_a, "EP-SKILL-EMPTY")
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-skill-empty")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-skill-empty")
+    created = editor.post(
+        url(ids.project_a, "/annotation-tasks"),
+        json={
+            "code": "task-skill-empty",
+            "name": "普通任务",
+            "sample_set_id": sample_set["sample_set_id"],
+            "schema_id": schema["schema_id"],
+            "target_item_count": 1,
+            "target_episode_count": 1,
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["required_skills"] == []
+
+
+def test_assignment_rejected_when_annotator_missing_skill(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """API 层路由生效：缺必配技能 → 422 annotation_annotator_not_eligible。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    episode_id = seed_episode(factory, ids.project_a, ids.editor_a, "EP-SKILL-1")
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-skill-gate")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-skill-gate")
+    created = editor.post(
+        url(ids.project_a, "/annotation-tasks"),
+        json={
+            "code": "task-skill-gate",
+            "name": "技能闸口任务",
+            "sample_set_id": sample_set["sample_set_id"],
+            "schema_id": schema["schema_id"],
+            "target_item_count": 1,
+            "target_episode_count": 1,
+            "required_skills": [{"tag_name": "driving"}],
+        },
+    )
+    assert created.status_code == 201, created.text
+    task_id = created.json()["task_id"]
+    submitted = editor.post(
+        url(ids.project_a, f"/annotation-tasks/{task_id}/actions/submit-review"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    assert submitted.status_code == 200, submitted.text
+    approved = owner.post(
+        url(ids.project_a, f"/annotation-tasks/{task_id}/actions/approve"),
+        headers={"If-Match": '"2"'},
+        json={},
+    )
+    assert approved.status_code == 200, approved.text
+    ready = editor.post(
+        url(ids.project_a, f"/annotation-tasks/{task_id}/actions/ready"),
+        headers={"If-Match": '"3"'},
+        json={},
+    )
+    assert ready.status_code == 200, ready.text
+    batch = editor.post(
+        url(ids.project_a, f"/annotation-tasks/{task_id}/batches"),
+        json={"planned_item_count": 1, "item_refs": [str(episode_id)]},
+    )
+    assert batch.status_code == 201, batch.text
+    batch_ready = editor.post(
+        url(ids.project_a, f"/annotation-batches/{batch.json()['batch_id']}/actions/ready"),
+        headers={"If-Match": '"1"'},
+        json={},
+    )
+    assert batch_ready.status_code == 200, batch_ready.text
+
+    # editor_a 无技能档案（未登记任何标签）→ 被 MISSING_REQUIRED_SKILL 排除
+    batch_id = batch.json()["batch_id"]
+    denied = editor.post(
+        url(ids.project_a, f"/annotation-batches/{batch_id}/annotation-assignments"),
+        json={
+            "assignee_id": str(ids.editor_a),
+            "planned_item_count": 1,
+            "planned_minutes": 30,
+        },
+    )
+    assert denied.status_code == 422, denied.text
+    error = denied.json()["error"]
+    assert error["code"] == "annotation_annotator_not_eligible"
+    assert error["details"]["reason"] == "MISSING_REQUIRED_SKILL"
+
+    # 登记技能标签后同一请求放行（真实走 SqlSkillProfileDirectory 聚合）
+    with factory() as session:
+        from app.infrastructure.db.models.annotation_work import AnnotatorSkillTag
+
+        session.add(
+            AnnotatorSkillTag(
+                id=uuid4(),
+                project_id=ids.project_a,
+                annotator_id=ids.editor_a,
+                tag_name="driving",
+                created_by=ids.editor_a,
+            )
+        )
+        session.commit()
+    allowed = editor.post(
+        url(ids.project_a, f"/annotation-batches/{batch_id}/annotation-assignments"),
+        json={
+            "assignee_id": str(ids.editor_a),
+            "planned_item_count": 1,
+            "planned_minutes": 30,
+        },
+    )
+    assert allowed.status_code == 201, allowed.text
+
+
+def test_task_patch_updates_required_skills(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """DRAFT 任务可 PATCH required_skills；非法标签结构 422。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    owner = make_client(factory, ids.owner_a)
+    seed_episode(factory, ids.project_a, ids.editor_a, "EP-SKILL-PATCH")
+    schema = create_published_schema(editor, owner, ids.project_a, "schema-skill-patch")
+    sample_set = create_snapshot_set(editor, ids.project_a, "sample-skill-patch")
+    created = editor.post(
+        url(ids.project_a, "/annotation-tasks"),
+        json={
+            "code": "task-skill-patch",
+            "name": "PATCH 技能",
+            "sample_set_id": sample_set["sample_set_id"],
+            "schema_id": schema["schema_id"],
+            "target_item_count": 1,
+            "target_episode_count": 1,
+        },
+    )
+    task_id = created.json()["task_id"]
+    patched = editor.patch(
+        url(ids.project_a, f"/annotation-tasks/{task_id}"),
+        headers={"If-Match": '"1"'},
+        json={"required_skills": [{"tag_name": "kitchen"}]},
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["required_skills"] == [
+        {"tag_name": "kitchen", "category": None, "weight": 1.0, "required": True}
+    ]
+    cleared = editor.patch(
+        url(ids.project_a, f"/annotation-tasks/{task_id}"),
+        headers={"If-Match": '"2"'},
+        json={"required_skills": []},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["required_skills"] == []
+    bad = editor.patch(
+        url(ids.project_a, f"/annotation-tasks/{task_id}"),
+        headers={"If-Match": '"3"'},
+        json={"required_skills": [{"name": "缺 tag_name"}]},
+    )
+    assert bad.status_code == 422, bad.text

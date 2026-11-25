@@ -49,6 +49,9 @@ class NewAnnotationTask:
     assignment_mode: str = "MANUAL"
     iaa_policy: Mapping[str, object] = field(default_factory=dict)
     quality_policy: Mapping[str, object] = field(default_factory=dict)
+    # 技能路由配置（V52-009）：JSON 标签映射序列或 None；空 = 不路由。
+    # 校验在领域聚合根 AnnotationTask 统一完成。
+    required_skills: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

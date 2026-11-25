@@ -201,6 +201,17 @@ class ItemAlreadyAssignedError(AnnotationDomainError):
     code = "annotation_item_already_assigned"
 
 
+class AnnotatorNotEligibleError(AnnotationDomainError):
+    """候选缺少任务必配技能或历史质量不达标（V52-009 技能路由）。
+
+    details 只含被拒人员的原因码（``MISSING_REQUIRED_SKILL`` /
+    ``LOW_QUALITY``），不含他人技能档案，落在契约 details_rule 的
+    允许范围（counts / code 枚举语义）。
+    """
+
+    code = "annotation_annotator_not_eligible"
+
+
 class SubmissionNotEditableError(AnnotationDomainError):
     code = "annotation_submission_not_editable"
 

@@ -25,6 +25,22 @@ from app.domain.annotation.task import AnnotationTask, is_overdue
 from app.domain.annotation.workload import AssignmentCapacityPreview, WorkloadSummary
 
 
+class AnnotationSkillTagIn(BaseModel):
+    """任务技能标签（V52-009）。
+
+    与契约 ``AnnotationSkillTag``（``annotation-task.v1.schema.json``
+    ``$defs``）同构：``tag_name`` 必填，其余可选。规范化（小写、去空白）
+    在领域聚合根统一完成，HTTP 层不做二次规范化避免两套规则。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    tag_name: str = Field(min_length=1, max_length=64)
+    category: str | None = Field(default=None, max_length=64)
+    weight: float = Field(default=1.0, gt=0, le=1)
+    required: bool = True
+
+
 class AnnotationTaskCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -45,6 +61,8 @@ class AnnotationTaskCreate(BaseModel):
     review_mode: str = Field(default="SINGLE", max_length=8)
     agreement_threshold: float | None = Field(default=None, ge=0, le=1)
     auto_approve: bool = False
+    # 技能路由配置（V52-009）：标签列表；空/缺省 = 不启用路由。
+    required_skills: list[AnnotationSkillTagIn] = Field(default_factory=list)
 
     def merged_iaa_policy(self) -> dict[str, object]:
         policy = dict(self.iaa_policy)
@@ -70,6 +88,8 @@ class AnnotationTaskPatch(BaseModel):
     assignment_mode: str | None = Field(default=None, max_length=16)
     iaa_policy: dict[str, object] | None = None
     quality_policy: dict[str, object] | None = None
+    # 仅 DRAFT 任务可改（与核心字段同一闸口）；列表整体替换。
+    required_skills: list[AnnotationSkillTagIn] | None = None
 
 
 class AnnotationTaskActionRequest(BaseModel):
@@ -158,6 +178,8 @@ class AnnotationTaskOut(BaseModel):
     review_mode: str
     iaa_policy: dict[str, object]
     quality_policy: dict[str, object]
+    # 技能路由配置（V52-009）：服务端原样回显任务的标签列表；空 = 不路由。
+    required_skills: list[AnnotationSkillTagIn]
     progress: dict[str, object]
     quality_summary: dict[str, object]
     due_at: datetime | None
@@ -203,6 +225,15 @@ class AnnotationTaskOut(BaseModel):
             review_mode=task.review_mode.value,
             iaa_policy=dict(task.iaa_policy),
             quality_policy=dict(task.quality_policy),
+            required_skills=[
+                AnnotationSkillTagIn(
+                    tag_name=tag.tag_name,
+                    category=tag.category,
+                    weight=tag.weight,
+                    required=tag.required,
+                )
+                for tag in task.required_skills
+            ],
             progress=dict(task.progress),
             quality_summary=dict(task.quality_summary),
             due_at=task.due_at,

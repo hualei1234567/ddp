@@ -34,6 +34,11 @@ from app.infrastructure.db.models.annotation_catalog import AnnotationAuditMixin
 
 _JSON_TYPE = JSON().with_variant(JSONB, "postgresql")
 
+#: 技能标签名最大长度（与领域常量 TAG_NAME_MAX_LENGTH 对齐，迁移 0080 同口径）
+_SKILL_TAG_NAME_MAX = 64
+#: 技能标签分类最大长度
+_SKILL_TAG_CATEGORY_MAX = 64
+
 
 def _values(enum_type: type) -> str:
     return ", ".join(repr(item.value) for item in enum_type)
@@ -67,6 +72,14 @@ class AnnotationTask(Base, AnnotationAuditMixin):
     assignment_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     target_item_count: Mapped[int] = mapped_column(Integer, nullable=False)
     target_episode_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    # 技能路由配置（V52-009，迁移 0080）：JSON 标签列表；NULL = 不路由。
+    # 语义由领域层 AnnotationTask.required_skills 统一校验，这里只存取。
+    required_skills: Mapped[list[object] | None] = mapped_column(
+        _JSON_TYPE,
+        nullable=True,
+        default=None,
+        server_default=text("NULL"),
+    )
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     priority: Mapped[str] = mapped_column(String(8), nullable=False)
     progress: Mapped[dict[str, object]] = mapped_column(
@@ -366,5 +379,66 @@ class AnnotationAssignmentEvent(Base):
             "ix_annotation_assignment_events_project_assignment",
             "project_id",
             "assignment_id",
+        ),
+    )
+
+
+class AnnotatorSkillTag(Base):
+    """标注员技能标签（V52-009，迁移 0080）。
+
+    人员技能档案是**事实表**：一行 = 一名成员持有一个规范化标签。
+    唯一约束 ``(project_id, user_id, tag_name)`` 防重复登记；``tag_name``
+    由领域层在写入前规范化（小写、去空白），与任务侧
+    ``required_skills`` 的匹配语义对齐。
+
+    为什么带 ``project_id`` 并复合外键到 ``project_members``：技能标签是
+    项目成员维度的事实（跨项目的技能档案治理各项目自治），且复用分配
+    仓储既有的成员隔离口径——非成员不得有技能标签，数据库兜底。
+    """
+
+    __tablename__ = "annotator_skill_tags"
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    project_id: Mapped[UUID] = mapped_column(
+        Uuid,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    annotator_id: Mapped[UUID] = mapped_column(Uuid, nullable=False)
+    tag_name: Mapped[str] = mapped_column(String(_SKILL_TAG_NAME_MAX), nullable=False)
+    category: Mapped[str | None] = mapped_column(
+        String(_SKILL_TAG_CATEGORY_MAX),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+    created_by: Mapped[UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "project_id",
+            "annotator_id",
+            "tag_name",
+            name="uq_annotator_skill_tags_project_annotator_tag",
+        ),
+        ForeignKeyConstraint(
+            ["project_id", "annotator_id"],
+            ["project_members.project_id", "project_members.user_id"],
+            name="fk_annotator_skill_tags_project_annotator",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("length(tag_name) >= 1", name="tag_name_non_empty"),
+        Index(
+            "ix_annotator_skill_tags_project_annotator",
+            "project_id",
+            "annotator_id",
+        ),
+        Index(
+            "ix_annotator_skill_tags_project_tag",
+            "project_id",
+            "tag_name",
         ),
     )

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -35,6 +35,7 @@ from app.domain.annotation.quality_sample import QualitySample
 from app.domain.annotation.review import AnnotationReview
 from app.domain.annotation.sample_set import AnnotationSampleSet, SampleEpisodeRef
 from app.domain.annotation.schema import AnnotationSchema
+from app.domain.annotation.skill_routing import AnnotatorSkillProfile
 from app.domain.annotation.submission import AnnotationRecord, AnnotationSubmission
 from app.domain.annotation.task import AnnotationTask
 from app.domain.identity.models import ProjectScope
@@ -862,6 +863,21 @@ class MemberDirectory(Protocol):
         role: str | None = None,
     ) -> list[UUID]:
         """按角色列出项目成员；用于自动仲裁时挑选仲裁人。"""
+        ...
+
+
+class SkillProfileDirectory(Protocol):
+    """标注员技能档案读取端口（V52-009，可选注入）。
+
+    分配用例只依赖该协议：未注入（``None``）或任务未配置必配技能时，
+    既有分配逻辑 100% 不变。实现方从 ``annotator_skill_tags`` 与
+    历史分配/质检数据聚合 :class:`AnnotatorSkillProfile` 快照。
+    """
+
+    def load_profiles(
+        self, scope: ProjectScope, annotator_ids: Sequence[UUID]
+    ) -> list[AnnotatorSkillProfile]:
+        """按给定人员加载技能档案快照；无档案的人员返回 quality_score=0.0、空 tags。"""
         ...
 
 

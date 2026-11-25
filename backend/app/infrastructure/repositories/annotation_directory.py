@@ -1,17 +1,23 @@
-"""标注域只读目录适配：Episode 候选与项目成员。"""
+"""标注域只读目录适配：Episode 候选、项目成员与技能档案。"""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import exists, func, or_, select, update
+from sqlalchemy import case, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.application.annotation.ports import EpisodeCandidate
+from app.domain.annotation.enums import AnnotationAssignmentStatus
 from app.domain.annotation.errors import DomainValidationError
+from app.domain.annotation.skill_routing import AnnotatorSkillProfile
 from app.domain.identity.models import ProjectRole, ProjectScope
+from app.infrastructure.db.models.annotation_work import (
+    AnnotationAssignment,
+    AnnotatorSkillTag,
+)
 from app.infrastructure.db.models.episodes import DataLineageEdgeModel, EpisodeModel
 from app.infrastructure.db.models.identity import ProjectMember
 from app.infrastructure.repositories._annotation_sql import as_utc
@@ -242,6 +248,75 @@ class SqlMemberDirectory:
         if role is not None:
             statement = statement.where(ProjectMember.role == role)
         return list(self._session.scalars(statement.order_by(ProjectMember.user_id)))
+
+
+class SqlSkillProfileDirectory:
+    """标注员技能档案读取（V52-009）：``annotator_skill_tags`` → 领域快照。
+
+    历史质量分与完成量从 ``annotation_assignments`` 聚合：完成量 =
+    COMPLETED 分配数；质量分 = 已完成分配的 approved / planned 比率均值
+    （无完成记录时 0.0，fail-closed 语义见领域模型 docstring）。
+    两个聚合一次查询取回，随请求级 Session 提交，无额外事务边界。
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def load_profiles(
+        self, scope: ProjectScope, annotator_ids: Sequence[UUID]
+    ) -> list[AnnotatorSkillProfile]:
+        if not annotator_ids:
+            return []
+        rows = self._session.execute(
+            select(AnnotatorSkillTag.annotator_id, AnnotatorSkillTag.tag_name).where(
+                AnnotatorSkillTag.project_id == scope.project_id,
+                AnnotatorSkillTag.annotator_id.in_(annotator_ids),
+            )
+        ).all()
+        tags: dict[UUID, set[str]] = {annotator_id: set() for annotator_id in annotator_ids}
+        for annotator_id, tag_name in rows:
+            tags.setdefault(annotator_id, set()).add(tag_name)
+
+        stats: dict[UUID, tuple[int, float]] = {
+            annotator_id: (0, 0.0) for annotator_id in annotator_ids
+        }
+        aggregates = self._session.execute(
+            select(
+                AnnotationAssignment.assignee_id,
+                func.count().label("completed"),
+                func.coalesce(
+                    func.avg(
+                        case(
+                            (
+                                AnnotationAssignment.planned_item_count > 0,
+                                AnnotationAssignment.approved_item_count
+                                / AnnotationAssignment.planned_item_count,
+                            ),
+                            else_=None,
+                        )
+                    ),
+                    0.0,
+                ).label("avg_quality"),
+            )
+            .where(
+                AnnotationAssignment.project_id == scope.project_id,
+                AnnotationAssignment.assignee_id.in_(annotator_ids),
+                AnnotationAssignment.status == AnnotationAssignmentStatus.COMPLETED.value,
+            )
+            .group_by(AnnotationAssignment.assignee_id)
+        ).all()
+        for row in aggregates:
+            stats[row.assignee_id] = (int(row.completed), float(row.avg_quality))
+
+        return [
+            AnnotatorSkillProfile(
+                annotator_id=annotator_id,
+                tags=frozenset(tags.get(annotator_id, set())),
+                quality_score=min(1.0, max(0.0, stats[annotator_id][1])),
+                completed_count=stats[annotator_id][0],
+            )
+            for annotator_id in annotator_ids
+        ]
 
 
 class SqlGoldSetAnswerAccessPolicy:

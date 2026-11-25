@@ -18,6 +18,7 @@ from app.application.annotation.ports import (
     IdempotencyRepository,
     MemberDirectory,
     OutboxRepository,
+    SkillProfileDirectory,
     UnitOfWork,
 )
 from app.domain.annotation.assignment import AnnotationAssignment
@@ -29,6 +30,7 @@ from app.domain.annotation.enums import (
     AssignmentRole,
 )
 from app.domain.annotation.errors import (
+    AnnotatorNotEligibleError,
     AssignmentCapacityExceededError,
     AssignmentNotOwnedError,
     AssignmentRevokedError,
@@ -39,6 +41,12 @@ from app.domain.annotation.errors import (
     VersionConflictError,
 )
 from app.domain.annotation.review_policy import ReviewMode
+from app.domain.annotation.skill_routing import (
+    AnnotatorSkillProfile,
+    SkillExclusionReason,
+    parse_min_quality,
+    route_candidates,
+)
 from app.domain.annotation.state_machines import (
     allowed_assignment_actions,
     assert_assignment_action,
@@ -82,6 +90,7 @@ class AnnotationAssignmentUseCases:
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        skill_profiles: SkillProfileDirectory | None = None,
     ) -> None:
         self._tasks = tasks
         self._batches = batches
@@ -91,6 +100,9 @@ class AnnotationAssignmentUseCases:
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        # 技能档案端口（V52-009，可选注入）：None = 完全不路由，行为与
+        # 旧版一致。即使注入了端口，任务未配置必配技能时同样不路由。
+        self._skill_profiles = skill_profiles
 
     def get(self, scope: ProjectScope, assignment_id: UUID) -> AnnotationAssignment:
         assignment = self._assignments.get(scope, assignment_id)
@@ -169,6 +181,7 @@ class AnnotationAssignmentUseCases:
             raise BatchNotCompatibleError("批次状态不允许分配")
         role = AssignmentRole(command.assignment_role)
         self._assert_member(scope, command.assignee_id)
+        self._assert_skill_eligible(scope, task, command.assignee_id, role)
         self._assert_not_already_assigned(
             scope,
             batch_id=batch_id,
@@ -639,6 +652,53 @@ class AnnotationAssignmentUseCases:
     def _assert_member(self, scope: ProjectScope, user_id: UUID) -> None:
         if not self._members.user_is_member(scope, user_id):
             raise ResourceNotFoundError("项目成员", user_id)
+
+    def _assert_skill_eligible(
+        self,
+        scope: ProjectScope,
+        task: object,
+        assignee_id: UUID,
+        role: AssignmentRole,
+    ) -> None:
+        """技能路由闸口（V52-009）：三重短路，保证零配置 100% 兼容。
+
+        1. 未注入技能档案端口（旧装配 / 旧测试）→ 不路由；
+        2. 被拒角色不是 ANNOTATOR（复核/仲裁人选人不按标注技能过滤）→ 不路由；
+        3. 任务未配置必配技能（``required_skills`` 空）→ 不路由。
+
+        任一短路命中即直接返回，既有分配逻辑一行未动。三关都过才查档案、
+        跑 :func:`route_candidates`；被拒时映射为契约错误码
+        ``annotation_annotator_not_eligible``，details 只带原因码。
+        """
+        if self._skill_profiles is None or role is not AssignmentRole.ANNOTATOR:
+            return
+        required_skills = getattr(task, "required_skills", ())
+        if not required_skills:
+            return
+        min_quality = parse_min_quality(getattr(task, "quality_policy", {}) or {})
+        profile_map = {
+            profile.annotator_id: profile
+            for profile in self._skill_profiles.load_profiles(scope, [assignee_id])
+        }
+        profile = profile_map.get(assignee_id)
+        if profile is None:
+            # 档案缺失视作空档案（无技能、质量 0），由 route_candidates 判定，
+            # 不静默放行——配置了必配技能就必须走技能闸口。
+            profile = AnnotatorSkillProfile(
+                annotator_id=assignee_id, tags=frozenset(), quality_score=0.0
+            )
+        outcome = route_candidates(required_skills, min_quality, [profile])
+        if outcome.eligible:
+            return
+        reason = (
+            outcome.excluded[0].reason.value
+            if outcome.excluded
+            else SkillExclusionReason.MISSING_REQUIRED_SKILL.value
+        )
+        raise AnnotatorNotEligibleError(
+            "候选缺少任务必配技能或历史质量不达标",
+            details={"assignee_id": str(assignee_id), "reason": reason},
+        )
 
     def _record(
         self,

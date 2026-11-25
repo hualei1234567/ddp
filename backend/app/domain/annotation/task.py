@@ -24,6 +24,12 @@ from app.domain.annotation.errors import (
     TaskNotReadyError,
 )
 from app.domain.annotation.review_policy import ReviewMode, ReviewPolicy
+from app.domain.annotation.skill_routing import (
+    SkillRoutingError,
+    SkillTag,
+    normalize_skill_tags,
+    skill_tags_to_json,
+)
 from app.domain.annotation.state_machines import (
     action_requires_reason,
     task_target,
@@ -132,6 +138,9 @@ class AnnotationTask:
     assignment_mode: AssignmentMode | str = AssignmentMode.MANUAL
     iaa_policy: Mapping[str, object] = field(default_factory=dict)
     quality_policy: Mapping[str, object] = field(default_factory=dict)
+    # 技能路由配置（V52-009）：空 = 不启用路由（既有分配逻辑 100% 不变）。
+    # 存储形态仍是 JSON 标签列表，聚合根内规一成 SkillTag 元组。
+    required_skills: tuple[SkillTag, ...] = ()
     progress: Mapping[str, object] = field(default_factory=dict)
     quality_summary: Mapping[str, object] = field(default_factory=dict)
     due_at: datetime | None = None
@@ -209,6 +218,16 @@ class AnnotationTask:
             "quality_policy",
             _normalize_policy(self.quality_policy, "quality_policy"),
         )
+        # 技能标签接受 JSON 列表或 SkillTag 序列；非法元素在领域层立即报错，
+        # 不允许带着脏配置进入分配链路。
+        try:
+            object.__setattr__(
+                self,
+                "required_skills",
+                normalize_skill_tags(self.required_skills),
+            )
+        except SkillRoutingError as exc:
+            raise DomainValidationError(f"required_skills 非法：{exc}") from exc
         object.__setattr__(self, "progress", _normalize_progress(self.progress))
         object.__setattr__(
             self,
@@ -243,6 +262,11 @@ class AnnotationTask:
     @property
     def is_binding_frozen(self) -> bool:
         return self.status is not AnnotationTaskStatus.DRAFT
+
+    @property
+    def skill_tags_json(self) -> list[dict[str, object]]:
+        """``required_skills`` 的 JSON 落库形态（仓储写库用）。"""
+        return skill_tags_to_json(self.required_skills)
 
     def apply_action(
         self,
