@@ -60,13 +60,19 @@ RoboMimic demo_v15.hdf5（36.7MB，200 demos）
 ## 4. 复现命令
 
 ```bash
-# 步骤 1：backend 环境生成逐帧数据集（需 DDP_TEST_REAL_HDF5）
+# 步骤 1：backend 环境生成单 Episode 逐帧数据集
 PYTHONPATH="data-platform:backend" backend/.venv/bin/python \
   docs/testing/evidence/2026-11-25-lerobot-frame-verify/gen_frame_dataset.py
 
 # 步骤 2：lerobot 隔离环境做官方 Loader 逐帧验证
 /tmp/lerobot-verify-venv-v21/bin/python \
   docs/testing/evidence/2026-11-25-lerobot-frame-verify/verify_frame_load.py
+
+# 步骤 3：多 Episode（5 个真实 demo = 280 帧，经 STREAM_EXTRACTION NDJSON 桥接）全集 + 子集验证
+PYTHONPATH="data-platform:backend" backend/.venv/bin/python \
+  docs/testing/evidence/2026-11-25-lerobot-frame-verify/gen_multi_episode_dataset.py
+/tmp/lerobot-verify-venv-v21/bin/python \
+  docs/testing/evidence/2026-11-25-lerobot-frame-verify/verify_multi_episode_load.py
 ```
 
 ---
@@ -92,7 +98,7 @@ PYTHONPATH="data-platform:backend" backend/.venv/bin/python \
 | `observation.state` / `action` 数值读取 | ✅ 已验证 |
 | **视频帧读取** | ❌ **未验证** —— RoboMimic `ph` 版本不含图像，`video_provided=false` |
 | 真实硬件采集 | ❌ `HARDWARE_CAPTURE_NOT_TESTED` |
-| 多 Episode 数据集 | ❌ 当前只验证单 Episode（多 Episode 需补 test） |
+| 多 Episode 数据集 | ✅ **已验证** —— 5 个真实 demo（`[59, 58, 57, 55, 51]` 共 **280 帧**）经 `STREAM_EXTRACTION` NDJSON 桥接，官方 `lerobot==0.3.3` 全集（`episodes=None`，280 帧）与子集（`episodes=[0,2,4]`，167 帧）双模式 PASS，跨集全局 `index` 严格连续 `0..279` |
 | 真实训练脚本消费 | ❌ 未验证（`VERIFIED_FOR_TRAINING_PIPELINE` 需目标训练环境） |
 
 **状态口径**（ADR-0049 / 蓝图 §6）：
