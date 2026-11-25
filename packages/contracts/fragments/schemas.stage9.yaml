@@ -83,6 +83,37 @@ AiSuggestionsCreate:
       type: array
       minItems: 1
       items: { $ref: "../openapi.yaml#/components/schemas/AiSuggestionItemInput" }
+    # V52-010 可选计量条目：模型侧返回的 token 用量；缺省为空（不记账，
+    # 与旧请求完全一致）。价格表是部署配置，不随请求传输。
+    usage:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/AiTokenUsageItem" }
+
+AiTokenUsageItem:
+  type: object
+  additionalProperties: false
+  required: [input_tokens, output_tokens]
+  properties:
+    input_tokens:
+      type: integer
+      minimum: 0
+      description: 输入 token 数（模型侧返回值）
+    output_tokens:
+      type: integer
+      minimum: 0
+      description: 输出 token 数（模型侧返回值）
+    purpose:
+      type: [string, "null"]
+      enum: [PRE_LABEL, LLM_JUDGE, EMBED, null]
+      description: 计量用途；缺省 PRE_LABEL
+    annotation_id:
+      type: [string, "null"]
+      format: uuid
+      description: 只计入该记录的建议；缺省计入整批
+    occurred_at:
+      type: [string, "null"]
+      format: date-time
+      description: 调用发生时间；缺省为服务端当前时刻
 
 AiSuggestionConfirm:
   type: object

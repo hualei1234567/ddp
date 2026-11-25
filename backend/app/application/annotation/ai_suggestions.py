@@ -23,6 +23,18 @@ from dataclasses import asdict
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
+from app.application.annotation.ai_replay import (
+    REPLAY_PREFIX,
+    identity_of,
+    replay_batch,
+    submission_ref,
+    uuid_ref,
+    uuid_value,
+)
+from app.application.annotation.ai_usage import (
+    TokenUsageRecorder,
+    record_suggestion_usage,
+)
 from app.application.annotation.audit import record_change
 from app.application.annotation.authority import resolve_review_authority
 from app.application.annotation.commands import NewAiSuggestions
@@ -58,7 +70,6 @@ from app.domain.annotation.suggestion_agreement import (
 from app.domain.identity.models import ProjectScope
 
 _RESOURCE_TYPE = "ANNOTATION_AI_SUGGESTION"
-_REPLAY_PREFIX = "submission:"
 
 # 事件名必须是模块级常量：f-string 拼接会绕过 outbox 归类自检
 # （见 scripts/check_outbox_events.py 记录的 R-13 根因）。
@@ -83,6 +94,7 @@ class AnnotationAiSuggestionUseCases:
         outbox: OutboxRepository,
         idempotency: IdempotencyRepository,
         uow: UnitOfWork,
+        token_recorder: TokenUsageRecorder | None = None,
     ) -> None:
         self._suggestions = suggestions
         self._submissions = submissions
@@ -94,6 +106,8 @@ class AnnotationAiSuggestionUseCases:
         self._outbox = outbox
         self._idempotency = IdempotencyGuard(idempotency)
         self._uow = uow
+        # 可选注入：None 时不记账，登记建议的现有行为完全不变。
+        self._token_recorder = token_recorder
 
     # ------------------------------------------------------------------ 查询
     def get(self, scope: ProjectScope, suggestion_id: UUID) -> AiSuggestion:
@@ -144,6 +158,7 @@ class AnnotationAiSuggestionUseCases:
         method: str = "POST",
         path: str,
         request_id: str | None = None,
+        price_map: dict[str, object] | None = None,
     ) -> list[AiSuggestion]:
         key = validate_key(idempotency_key)
         body = asdict(command)
@@ -162,7 +177,7 @@ class AnnotationAiSuggestionUseCases:
             # 重放第一次请求会把后来追加的建议一并返回，响应与首次不一致。
             return self._replay_batch(
                 scope,
-                _submission_ref(replay.response_ref),
+                submission_ref(replay.response_ref),
                 command.suggestions,
             )
 
@@ -179,6 +194,14 @@ class AnnotationAiSuggestionUseCases:
             now=now,
         )
         self._suggestions.add_many(scope, suggestions)
+        record_suggestion_usage(
+            scope,
+            suggestions,
+            usage=command.usage,
+            price_map=price_map,
+            now=now,
+            recorder=self._token_recorder,
+        )
         for suggestion in suggestions:
             self._record(
                 scope,
@@ -197,7 +220,7 @@ class AnnotationAiSuggestionUseCases:
             path=path,
             body=body,
             response_status=201,
-            response_ref=f"{_REPLAY_PREFIX}{submission.submission_id}",
+            response_ref=f"{REPLAY_PREFIX}{submission.submission_id}",
             now=now,
         )
         self._uow.commit()
@@ -228,7 +251,7 @@ class AnnotationAiSuggestionUseCases:
             now=now,
         )
         if replay is not None:
-            return self.get(scope, _uuid_ref(replay.response_ref, "AI 建议"))
+            return self.get(scope, uuid_ref(replay.response_ref, "AI 建议"))
 
         current = self.get(scope, suggestion_id)
         if current.version != expected_version:
@@ -325,42 +348,13 @@ class AnnotationAiSuggestionUseCases:
         submission_id: UUID,
         payloads: tuple[Mapping[str, object], ...],
     ) -> list[AiSuggestion]:
-        """按**请求体里的建议身份**重建首次创建的批次。
-
-        幂等键作用域是 ``(project, actor, key)``，重放时请求体已被
-        :func:`request_fingerprint` 校验为与首次一致，因此可据此确定身份集合。
-        结果按身份集合过滤，而不是按提交取全量——后者会把后续用别的幂等键追加
-        的建议一并返回（同一提交多模型对比是设计上支持的用法）。
-
-        身份缺失时抛 404 而不是返回空列表：说明幂等记录指向的建议已被清理，
-        静默返回空会让客户端误以为"登记成功但一条都没有"。
-        """
-        payload_identities = [
-            _identity_of(
-                _uuid_value(item.get("annotation_id"), "annotation_id"),
-                item.get("label_key"),
-                item.get("model_id"),
-                item.get("model_version"),
-                item.get("prompt_version"),
-            )
-            for item in payloads
-        ]
-        by_identity = {
-            _identity_of(
-                suggestion.annotation_id,
-                suggestion.label_key,
-                suggestion.model_id,
-                suggestion.model_version,
-                suggestion.prompt_version,
-            ): suggestion
-            for suggestion in self._suggestions.list_for_submission(scope, submission_id)
-        }
-        # 按请求体顺序输出，与首次响应的顺序一致；仓储的排序键是数据库列序，
-        # 不是请求顺序，直接复用会让重放响应与首次在多项时对不上。
-        try:
-            return [by_identity[identity] for identity in payload_identities]
-        except KeyError as exc:
-            raise ResourceNotFoundError("AI 建议", submission_id) from exc
+        """委托 :func:`ai_replay.replay_batch`（实现与规则说明见该模块）。"""
+        return replay_batch(
+            scope,
+            list_for_submission=self._suggestions.list_for_submission,
+            submission_id=submission_id,
+            payloads=payloads,
+        )
 
     def _build_suggestions(
         self,
@@ -378,7 +372,7 @@ class AnnotationAiSuggestionUseCases:
         suggestions: list[AiSuggestion] = []
         seen: set[tuple[object, ...]] = set()
         for item in payloads:
-            annotation_id = _uuid_value(item.get("annotation_id"), "annotation_id")
+            annotation_id = uuid_value(item.get("annotation_id"), "annotation_id")
             if annotation_id not in records:
                 raise ResourceNotFoundError("标注记录", annotation_id)
             suggestion = AiSuggestion(
@@ -397,7 +391,7 @@ class AnnotationAiSuggestionUseCases:
                 created_by=scope.actor_id,
                 updated_by=scope.actor_id,
             )
-            identity = _identity_of(
+            identity = identity_of(
                 suggestion.annotation_id,
                 suggestion.label_key,
                 suggestion.model_id,
@@ -452,44 +446,6 @@ class AnnotationAiSuggestionUseCases:
             },
             occurred_at=now,
         )
-
-
-def _identity_of(
-    annotation_id: UUID,
-    label_key: object,
-    model_id: object,
-    model_version: object,
-    prompt_version: object,
-) -> tuple[object, ...]:
-    """建议的业务身份，与库表唯一约束 ``uq_annotation_ai_suggestions_identity`` 同序。
-
-    身份只在这里拼一次：落库前查重与幂等重放都引用它，两处各自手写会漂移。
-    """
-    return (annotation_id, label_key, model_id, model_version, prompt_version)
-
-
-def _uuid_value(value: object, field_name: str) -> UUID:
-    """载荷里的 UUID 只接受真正的 UUID 或 UUID 字符串，其余显式失败。"""
-    if isinstance(value, UUID):
-        return value
-    if isinstance(value, str):
-        try:
-            return UUID(value)
-        except ValueError as exc:
-            raise DomainValidationError(f"{field_name} 不是合法 UUID") from exc
-    raise DomainValidationError(f"{field_name} 必须是 UUID")
-
-
-def _uuid_ref(response_ref: str | None, resource: str) -> UUID:
-    if response_ref is None:
-        raise ResourceNotFoundError(resource, response_ref)
-    return _uuid_value(response_ref, resource)
-
-
-def _submission_ref(response_ref: str | None) -> UUID:
-    if response_ref is None or not response_ref.startswith(_REPLAY_PREFIX):
-        raise ResourceNotFoundError("标注提交", response_ref)
-    return _uuid_value(response_ref.removeprefix(_REPLAY_PREFIX), "标注提交")
 
 
 __all__ = [

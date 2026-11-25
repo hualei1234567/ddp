@@ -196,6 +196,14 @@ class Settings(BaseSettings):
     # 「未超容量」。配置后才可能出现 AT_CAPACITY / OVER_CAPACITY。
     annotation_capacity_minutes: int | None = Field(default=None, ge=1)
 
+    # Token 成本台账（V52-010，蓝图 N6）：LLM 价格表（$/1k tokens），
+    # 形如 ``{"model-id": {"input": 0.002, "output": 0.008}}``。空 dict =
+    # 未配置：计量行的 ``cost_estimate`` 落 NULL（"无价格数据"），
+    # 绝不用 0 冒充"免费"。启用记账须同时把 ``ai_token_usage_enabled``
+    # 置 true 并在依赖工厂注入 recorder（默认关闭，现有行为不变）。
+    ai_token_price_map: dict[str, dict[str, float]] = Field(default_factory=dict)
+    ai_token_usage_enabled: bool = False
+
     # Hugging Face 远端校验：仅当登记请求显式 verify_remote=true 时才调用。
     # token 为空表示匿名只读（公开数据集足够）；GATED 数据集需要配置只读 token。
     # 超时必须显式设置：同步登记请求不能把 API 线程挂在不可达的外网上。
