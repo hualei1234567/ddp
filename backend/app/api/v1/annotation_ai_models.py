@@ -36,6 +36,25 @@ class AiSuggestionsCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     suggestions: list[AiSuggestionItem] = Field(min_length=1)
+    # V52-010 可选计量条目：模型侧返回的 token 用量。缺省为空——不传就
+    # 与旧请求完全一致（不记账）。校验在应用层统一做，这里只声明形状。
+    usage: list[TokenUsageItem] = Field(default_factory=list)
+
+
+class TokenUsageItem(BaseModel):
+    """一次调用的计量条目（可选）。
+
+    ``annotation_id`` 缺省表示计入整批；给出时只计入该记录的建议。
+    ``purpose`` / ``occurred_at`` 同样可选（缺省 ``PRE_LABEL`` / 服务端时刻）。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    input_tokens: int = Field(ge=0)
+    output_tokens: int = Field(ge=0)
+    purpose: str | None = Field(default=None, description="PRE_LABEL / LLM_JUDGE / EMBED")
+    annotation_id: UUID | None = None
+    occurred_at: datetime | None = None
 
 
 class AiSuggestionConfirm(BaseModel):

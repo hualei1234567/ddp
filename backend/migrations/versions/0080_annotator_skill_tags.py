@@ -67,7 +67,7 @@ from app.infrastructure.db.annotation_work_guards import (
 )
 
 revision = "0080"
-down_revision = "0074"
+down_revision = "0081"  # 重排：链 0074→0078→0081→0080（#134/#135 先合）
 branch_labels = None
 depends_on = None
 

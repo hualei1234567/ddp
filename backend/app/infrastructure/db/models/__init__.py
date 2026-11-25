@@ -1,6 +1,7 @@
 """ORM 模型聚合，供 Alembic 与仓储导入。"""
 
 from app.infrastructure.db.models.annotation_ai import AnnotationAiSuggestion
+from app.infrastructure.db.models.annotation_ai_token_usage import AiTokenUsage
 from app.infrastructure.db.models.annotation_catalog import (
     AnnotationSampleEpisode,
     AnnotationSampleSet,
@@ -123,6 +124,7 @@ from app.infrastructure.db.models.training import (
 __all__ = [
     "AcceptanceLedgerModel",
     "AnnotationAiSuggestion",
+    "AiTokenUsage",
     "AnnotatorSkillTag",
     "AnnotationArbitration",
     "AnnotationAssignment",

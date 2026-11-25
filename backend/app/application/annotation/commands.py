@@ -89,9 +89,20 @@ class NewAiSuggestions:
     :class:`app.domain.annotation.ai_suggestion.AiSuggestion`，校验规则不在这
     一层重复。``generated_at`` 缺省由用例补当前时刻（模型侧时间可选：
     批量回放历史模型输出时常拿不到原始时间）。
+
+    ``usage``（V52-010 可选）：本轮调用的 Token 计量条目，形如::
+
+        {"input_tokens": 1200, "output_tokens": 350,
+         # 可选：purpose（缺省 PRE_LABEL）、occurred_at、annotation_id
+        }
+
+    条目带 ``annotation_id`` 时只计入该记录的建议，不带时计入整批；
+    token 数由模型侧返回值提供，应用层不猜用量。价格表不随请求传输
+    （部署配置，见用例 ``price_map`` 参数）。
     """
 
     suggestions: tuple[Mapping[str, object], ...]
+    usage: tuple[Mapping[str, object], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
