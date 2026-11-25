@@ -63,3 +63,6 @@
 - **反屎山**：500 行触发评审、800 行拆分；函数 50 行；禁止万能模块、循环依赖、
   复制业务规则、硬编码、吞异常、无幂等异步任务。
 - **三道闸口**：`make check` → 代码审查（§15.16 清单）→ QA 独立验收。
+- **自动记忆与记忆星云闭环（全体 Agent 强制，无需用户提醒）**：
+  - 开工前先检索 `docs/memory/MEMORY_INDEX.md` 确认相关领域红线；
+  - 凡踩到真实缺陷、CI 红灯、跨库/契约/并发反直觉陷阱，必须自动沉淀 `docs/memory/` 卡片（绑定真实 `check_ref`），运行 `python3 scripts/build_memory_index.py`、`python3 scripts/check_memory.py` 与 `python3 scripts/sync_memory_nebula.py` 纳入记忆星云。

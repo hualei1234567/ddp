@@ -28,8 +28,8 @@ from ddp_data.canonical.v1 import (
     EPISODE_FIELDS,
     FRAME_FIELDS,
     OBSERVATION_FIELDS,
-    SUPPORTED_SCHEMA_VERSIONS,
     SENSOR_STREAM_FIELDS,
+    SUPPORTED_SCHEMA_VERSIONS,
     VIDEO_STREAM_FIELDS,
     FieldSpec,
 )
@@ -183,6 +183,8 @@ def build_entity_schema(entity: EntitySchema) -> dict[str, object]:
             required.append(spec.name)
     properties["missing_fields"] = _missing_fields_schema(entity)
     required.append("missing_fields")
+    # 1.0 兼容：1.0 产物允许省略 1.1 新增的可选字段（这些字段在 properties 中已定义，
+    # 且均为可选，不在 required 列表中，因此 JSON Schema 天然允许省略或置 null）。
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": entity.schema_id,

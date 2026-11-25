@@ -144,12 +144,15 @@
 
 ## 开发与验证
 
-- 提交前：`make check`（ruff、pytest、tsc、build）。
+- 提交前：`make check`（ruff、pytest、tsc、build、记忆库与记忆星云同步）。
 - 涉及数据库：跑 Alembic 升级/回滚检查。
 - 涉及权限：必须有越权与跨项目隔离测试。
 - 涉及文件处理：必须有多格式/损坏文件/时间同步测试。
 - 涉及前端：必须覆盖 Loading/Empty/Error/Forbidden/Partial/Stale/Disabled。
 - 未跑测试不得声称通过；不能为了让测试变绿而放宽断言或删除用例。
+- **踩坑自动入库与记忆星云强制纳管（无需用户每次提醒）**：
+  - 凡遇到排查 ≥2 轮才定位的根因、导致 `check.sh`/CI 失败的真实缺陷、反直觉约束或跨模块隐性契约，必须在同批交付中新增或更新 `docs/memory/<type>/MEM-<TYPE>-<NNN>-<slug>.md`（`INC/DEC/SOP` 必填可执行 `check_ref`），运行 `python3 scripts/build_memory_index.py` + `python3 scripts/check_memory.py`；
+  - 并执行 `python3 scripts/sync_memory_nebula.py`（已内置于 `scripts/check.sh` 第 10 步），将全部 `ACTIVE` 卡片实时幂等同步至本机记忆星云（`127.0.0.1:8898` / `~/.dsh/memory-nebula-data`）。
 
 ## 任务标准流程
 

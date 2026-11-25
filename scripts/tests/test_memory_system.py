@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -164,3 +163,19 @@ def test_template_exists_and_documents_all_fields() -> None:
         "tags",
     ):
         assert field in text, f"模板缺少字段：{field}"
+
+
+def test_nebula_sync_script_dry_run_and_payload_builder() -> None:
+    """记忆星云同步脚本必须能无副作用解析全部 ACTIVE 卡片并生成合法载荷。"""
+    sync_script = ROOT / "scripts" / "sync_memory_nebula.py"
+    assert sync_script.is_file(), "缺少 scripts/sync_memory_nebula.py"
+    result = subprocess.run(
+        [sys.executable, str(sync_script), "--dry-run"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        check=False,
+    )
+    assert result.returncode == 0, f"sync_memory_nebula --dry-run 失败：\n{result.stderr}"
+    assert "ACTIVE 卡片待同步" in result.stdout
+    assert "[DRY-RUN] MEM-INC-001" in result.stdout
