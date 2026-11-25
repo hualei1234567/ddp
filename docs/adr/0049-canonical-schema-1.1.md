@@ -1,6 +1,6 @@
 # ADR-0049 Canonical Schema 1.1：补齐真实 payload 必需字段
 
-- 状态：**PROPOSED**（待用户确认后改 ACCEPTED）
+- 状态：**ACCEPTED**（已落地 SensorStream + Observation + Action 全量 1.1 字段与双向兼容）
 - 日期：2026-11-24
 - 决策者：System Architect + 后端
 - 关联：V51-001/002/003、V5.1 蓝图 `06_SensorStream_Observation_Action物化设计.md` §3~§5、`07_多流时间同步标定与坐标系.md` §2

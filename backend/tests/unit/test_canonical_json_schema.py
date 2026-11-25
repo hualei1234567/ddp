@@ -110,6 +110,8 @@ _SAMPLES: dict[str, object] = {
         confidence=0.9,
         action_schema_ref="ddp.action.joint_target/1.0.0",
         frame_index=0,
+        # 1.0 完整形态：显式声明版本，避免被 1.1 新增字段规则影响。
+        schema_version="ddp.canonical/1.0.0",
         missing_fields=(),
     ),
     "Observation": Observation(
@@ -135,6 +137,8 @@ _SAMPLES: dict[str, object] = {
         valid=True,
         invalid_reason=None,
         quality_flags=("OK",),
+        # 1.0 完整形态：显式声明版本，避免被 1.1 新增字段规则影响。
+        schema_version="ddp.canonical/1.0.0",
         missing_fields=("invalid_reason",),
     ),
     "Episode": Episode(
