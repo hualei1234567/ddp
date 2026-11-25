@@ -38,10 +38,31 @@ class BackflowConversionIn(BaseModel):
     schema_id: str = Field(min_length=1, description="标注 Schema ID")
 
 
+class BackflowCaseIn(BaseModel):
+    """单条失败案例（回调方给出的领域事实）。
+
+    字段**强类型**声明而非 ``dict``：契约一致性检查按 Pydantic 模型比对
+    字段可达性，`Any` 会让实现侧无从声明（MEM-INC-016 的连带教训）。
+    """
+
+    source: str = Field(min_length=1, max_length=120, description="来源系统标识")
+    case_ref: str = Field(min_length=1, max_length=200, description="来源系统内案例唯一键")
+    capability: str = Field(min_length=1, max_length=120, description="失败所属能力维度")
+    failure_summary: str | None = Field(default=None, max_length=1000, description="失败摘要")
+    failure_count: int = Field(default=1, ge=1, description="该案例累计失败次数（影响优先级）")
+    suggested_priority: str | None = Field(
+        default=None,
+        description="显式优先级 P0..P3；缺省按 capability + failure_count 映射",
+    )
+    payload: dict[str, Any] = Field(
+        default_factory=dict, description="评测平台原始报告片段（平台只存储不解释）"
+    )
+
+
 class BackflowIngestIn(BaseModel):
     """评测平台回调载荷：一批失败案例。"""
 
-    cases: list[dict[str, Any]] = Field(
+    cases: list[BackflowCaseIn] = Field(
         min_length=1,
         max_length=200,
         description="案例数组（1..200）；每条必含 source / case_ref / capability",
@@ -123,7 +144,7 @@ def ingest_backflow(
         )
     batch = backflow.ingest(
         scope,
-        payload.cases,
+        [case.model_dump() for case in payload.cases],
         limit=payload.limit,
         conversion=conversion,
     )
