@@ -72,6 +72,99 @@ TokenCostLedger:
       format: date-time
       description: 快照生成时间（UTC，带时区）
 
+# --- 评测失败案例回流（V52-030，蓝图 N5 / G5） ---
+AnnotationBackflowIngest:
+  type: object
+  required: [cases]
+  properties:
+    cases:
+      type: array
+      minItems: 1
+      maxItems: 200
+      description: 案例数组；每条必含 source / case_ref / capability
+      items:
+        type: object
+        required: [source, case_ref, capability]
+        properties:
+          source: { type: string, minLength: 1, maxLength: 120, description: 来源系统标识 }
+          case_ref: { type: string, minLength: 1, maxLength: 200, description: 来源系统内案例唯一键 }
+          capability: { type: string, minLength: 1, maxLength: 120, description: 失败所属能力维度 }
+          failure_summary: { type: string, maxLength: 1000, description: 失败摘要（可选） }
+          failure_count: { type: integer, minimum: 1, default: 1, description: 该案例累计失败次数（影响优先级） }
+          suggested_priority:
+            type: string
+            enum: [P0, P1, P2, P3]
+            description: 显式优先级（可选；缺省按 capability + failure_count 映射）
+          payload:
+            type: object
+            additionalProperties: true
+            description: 评测平台原始报告片段（平台只存储不解释）
+    limit:
+      type: integer
+      minimum: 1
+      maximum: 10000
+      default: 200
+      description: 单 source 每小时受理上限（超出判 RATE_LIMITED）
+    conversion:
+      type: object
+      required: [sample_set_id, schema_id]
+      description: 可选：受理后立即转任务的目标配置
+      properties:
+        sample_set_id: { type: string, format: uuid, description: 目标样本集 ID }
+        schema_id: { type: string, format: uuid, description: 标注 Schema ID }
+
+AnnotationBackflowDecision:
+  type: object
+  required: [source, case_ref, capability, decision, reason, suggested_priority]
+  properties:
+    source: { type: string }
+    case_ref: { type: string }
+    capability: { type: string }
+    decision:
+      type: string
+      enum: [CREATE_TASK, DUPLICATE_SKIPPED, RATE_LIMITED]
+      description: 单条案例的判定
+    reason: { type: string, description: 判定原因（审计可追溯） }
+    suggested_priority: { type: string, enum: [P0, P1, P2, P3] }
+
+AnnotationBackflowIngestResult:
+  type: object
+  required: [accepted, duplicated, rate_limited, decisions]
+  properties:
+    accepted: { type: integer, minimum: 0, description: 受理（将转任务）的案例数 }
+    duplicated: { type: integer, minimum: 0, description: 重复跳过的案例数 }
+    rate_limited: { type: integer, minimum: 0, description: 超限拒绝的案例数 }
+    task_id:
+      type: [string, "null"]
+      format: uuid
+      description: 转换成功时的任务 ID；未配置转换目标时为 null
+    decisions:
+      type: array
+      items: { $ref: "#/AnnotationBackflowDecision" }
+
+AnnotationBackflowCase:
+  type: object
+  required: [case_id, source, case_ref, capability, status, suggested_priority, received_at]
+  properties:
+    case_id: { type: string, format: uuid }
+    source: { type: string }
+    case_ref: { type: string }
+    capability: { type: string }
+    status:
+      type: string
+      enum: [RECEIVED, CONVERTED, SKIPPED_DUPLICATE, RATE_LIMITED]
+    suggested_priority: { type: string, enum: [P0, P1, P2, P3] }
+    failure_summary: { type: [string, "null"] }
+    task_id: { type: [string, "null"], format: uuid }
+    received_at: { type: string, format: date-time }
+
+AnnotationBackflowCasePage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "#/AnnotationBackflowCase" }
 # V52-008 黄金题熔断接线（蓝图 N3 阶段 3）：解除暂停的响应快照。
 HoneypotResumeResult:
   type: object
