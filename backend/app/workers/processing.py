@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.application.ingestion.ports import ClaimedValidationEvent
 from app.application.observability_redaction import sanitize_log_message
 from app.application.processing.calibration_stage import CalibrationValidationHandler
+from app.application.processing.cleaning_stage import DataCleaningHandler
 from app.application.processing.metadata_stage import (
     FormatParsingHandler,
     MetadataExtractionHandler,
@@ -339,6 +340,7 @@ class ProcessingRunWorker:
             episode_assets=SqlEpisodeRawAssetRepository(session),
             calibrations=SqlCalibrationRecordRepository(session),
         )
+        artifact_catalog = SqlProcessingArtifactRepository(session)
         episode_segmentation = EpisodeSegmentationHandler(
             episodes=SqlEpisodeRepository(session),
             episode_assets=SqlEpisodeRawAssetRepository(session),
@@ -346,7 +348,7 @@ class ProcessingRunWorker:
             # V31-018：没有边界读取器与创建器时，阶段只能做追溯检查——那会让
             # "有明确边界的原始输入"静默不产出 Episode。两者在此成对装配。
             metadata_reader=ProcessingMetadataDocumentReader(
-                SqlProcessingArtifactRepository(session),
+                artifact_catalog,
                 self._artifacts,
                 max_document_bytes=self._settings.processing_metadata_max_artifact_bytes,
             ),
@@ -365,6 +367,12 @@ class ProcessingRunWorker:
             self._artifacts,
             max_hdf5_bytes=self._settings.processing_metadata_max_object_bytes,
         )
+        # V51-006：消费当前运行 STREAM_EXTRACTION 产物执行确定性 FLAG 清洗，
+        # 只生成版本化报告，不篡改原始资产与上游流产物。
+        data_cleaning = DataCleaningHandler(
+            artifact_catalog,
+            self._artifacts,
+        )
         return ProcessingPipeline(
             runs,
             SqlProcessingRunStepRepository(session),
@@ -378,10 +386,11 @@ class ProcessingRunWorker:
                 episode_segmentation=episode_segmentation,
                 quality_check=quality_check,
                 stream_extraction=stream_extraction,
+                data_cleaning=data_cleaning,
             ),
             session,
             # 阶段产物登记进一等目录（V31-016）；``output_refs`` 退化为兼容投影。
-            artifacts=SqlProcessingArtifactRepository(session),
+            artifacts=artifact_catalog,
         )
 
     def _force_fail(
