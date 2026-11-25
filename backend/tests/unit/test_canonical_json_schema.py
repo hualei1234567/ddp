@@ -92,6 +92,8 @@ _SAMPLES: dict[str, object] = {
         checksum="sha256:def",
         calibration_id="cal-1",
         calibration_version=1,
+        # 1.0 完整形态：显式声明版本，避免被 1.1 的新增字段校验规则影响。
+        schema_version="ddp.canonical/1.0.0",
         missing_fields=(),
     ),
     "Action": Action(
@@ -180,7 +182,12 @@ def test_schema_is_valid_and_closed(entity) -> None:  # type: ignore[no-untyped-
     schema = _committed(entity.filename)
     Draft202012Validator.check_schema(schema)
     assert schema["additionalProperties"] is False
-    assert schema["properties"]["schema_version"]["const"] == SCHEMA_VERSION
+    # schema_version 用 enum（而非 const）：1.0 产物仍须通过校验，
+    # 只允许当前版本会让所有历史产物校验失败（ADR-0049 向后兼容要求）。
+    version_property = schema["properties"]["schema_version"]
+    allowed = version_property.get("enum") or [version_property["const"]]
+    assert SCHEMA_VERSION in allowed
+    assert "ddp.canonical/1.0.0" in allowed
     # 每个领域字段都必须出现在 schema 里，否则消费者看不到它。
     declared = {spec.name for spec in entity.fields}
     assert declared <= set(schema["properties"])

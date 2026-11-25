@@ -28,7 +28,7 @@ from ddp_data.canonical.v1 import (
     EPISODE_FIELDS,
     FRAME_FIELDS,
     OBSERVATION_FIELDS,
-    SCHEMA_VERSION,
+    SUPPORTED_SCHEMA_VERSIONS,
     SENSOR_STREAM_FIELDS,
     VIDEO_STREAM_FIELDS,
     FieldSpec,
@@ -168,7 +168,13 @@ def _missing_fields_schema(entity: EntitySchema) -> dict[str, object]:
 def build_entity_schema(entity: EntitySchema) -> dict[str, object]:
     """把一个实体声明翻译成自包含的 JSON Schema。"""
     properties: dict[str, object] = {
-        "schema_version": {"type": "string", "const": SCHEMA_VERSION},
+        # 用 enum 而非 const：1.0 产物仍须通过校验（ADR-0049 要求向后兼容）。
+        # 只写 const=当前版本会让所有历史产物校验失败——那不是"更严格"，
+        # 是**破坏了可读性**。
+        "schema_version": {
+            "type": "string",
+            "enum": sorted(SUPPORTED_SCHEMA_VERSIONS),
+        },
     }
     required: list[str] = ["schema_version"]
     for spec in entity.fields:
