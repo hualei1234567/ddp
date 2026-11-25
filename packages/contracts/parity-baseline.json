@@ -9,7 +9,7 @@
     "4. 若某项修好了，脚本会提示「基线里有 N 项已不存在」，把它从 accepted 移除即可（不移除也不影响通过，但会累积噪声）。"
   ],
   "_why": {
-    "response.required_runtime_only": "实现侧字段必填、契约非必填。服务端一定会返回该字段，客户端照契约读是安全的；契约偏保守而非有错。多数是 G-09 状态语义六列、G-04 标定快照等本轮新增字段。",
+    "response.required_runtime_only": "实现侧字段必填、契约非必填。服务端一定会返回该字段，客户端照契约读是安全的；契约偏保守而非有错。多数是 G-09 状态语义六列、G-04 标定快照等本轮新增字段。V52-009：required_skills 五个标注任务响应端点——契约 1.36.0 保持 optional （避免对已冻结基线构成新增必填响应字段的 oasdiff ERR），运行时必回显，契约版本随主控统一 bump 1.40.0 时收敛为 required。",
     "response.required_contract_only": "契约必填、实现侧有 None 默认。已排除类型可空的（语义等价）；余下是契约写得更严，同样只影响契约精度。 FR-042 的 ops/dispatch-queue：failures_by_event_type 在实现里默认空列表（无失败时返回 []），契约写成 required 更严格——服务端一定会返回该字段，客户端照契约读安全。",
     "request.required_contract_only": "契约必填、实现非必填。实现更宽松，不会拒绝契约允许的请求，客户端无感。",
     "request.contract_only": "契约有该字段、实现模型没有。已逐个核实这些字段在契约里是可选或已废弃（如 Sensor.coordinate_frame 已 DEPRECATED）。",
@@ -81,6 +81,11 @@
     "POST /api/v1/projects/{project_id}/training-requests | request.required_contract_only | snapshot.action_targets,snapshot.device_targets,snapshot.required_labels,snapshot.required_schema_versions,snapshot.required_schema_versions.[].schema_id,snapshot.required_schema_versions.[].schema_version,snapshot.robot_targets,snapshot.scene_targets",
     "POST /api/v1/projects/{project_id}/training-requests/{request_id}/revisions | request.contract_only | snapshot.required_schema_versions.[].schema_id,snapshot.required_schema_versions.[].schema_version,snapshot.split_requirements.group_by,snapshot.split_requirements.test_ratio,snapshot.split_requirements.train_ratio,snapshot.split_requirements.validation_ratio",
     "POST /api/v1/projects/{project_id}/training-requests/{request_id}/revisions | request.required_contract_only | snapshot.action_targets,snapshot.device_targets,snapshot.required_labels,snapshot.required_schema_versions,snapshot.required_schema_versions.[].schema_id,snapshot.required_schema_versions.[].schema_version,snapshot.robot_targets,snapshot.scene_targets",
-    "GET /api/v1/projects/{project_id}/ops/dispatch-queue | response.required_contract_only | failures_by_event_type"
+    "GET /api/v1/projects/{project_id}/ops/dispatch-queue | response.required_contract_only | failures_by_event_type",
+    "GET /api/v1/projects/{project_id}/annotation-tasks | response.required_runtime_only | items.[].required_skills",
+    "POST /api/v1/projects/{project_id}/annotation-tasks | response.required_runtime_only | required_skills",
+    "GET /api/v1/projects/{project_id}/annotation-tasks/{task_id} | response.required_runtime_only | required_skills",
+    "PATCH /api/v1/projects/{project_id}/annotation-tasks/{task_id} | response.required_runtime_only | required_skills",
+    "POST /api/v1/projects/{project_id}/annotation-tasks/{task_id}/actions/{action} | response.required_runtime_only | required_skills"
   ]
 }

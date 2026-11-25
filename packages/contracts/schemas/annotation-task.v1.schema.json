@@ -94,6 +94,13 @@
       "title": "Quality Policy",
       "type": "object"
     },
+    "required_skills": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/AnnotationSkillTag"
+      },
+      "description": "技能路由配置（V52-009）。空数组 = 不启用技能路由，分配行为与未配置一致。服务端始终回显该字段（对客户端可视为必回显；契约暂不声明 required 以保持与 1.36.0 基线的响应兼容，版本随主控统一 bump 1.40.0 时收敛）。创建/PATCH 通过请求体传入。"
+    },
     "progress": {
       "additionalProperties": true,
       "title": "Progress",
@@ -280,5 +287,42 @@
     "updated_by"
   ],
   "type": "object",
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "AnnotationSkillTag": {
+      "type": "object",
+      "required": [
+        "tag_name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "tag_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "规范化技能标签名（服务端统一小写、去首尾空白后比对）"
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 64
+        },
+        "weight": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "default": 1.0,
+          "description": "可选技能加权评分权重；必配技能不使用"
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "true=必配技能（缺任一即排除候选）；false=可选技能（参与加权评分）"
+        }
+      }
+    }
+  },
+  "x-ddp-note": "V52-009：required_skills 为增量字段；契约版本待主控统一 bump 1.40.0。"
 }

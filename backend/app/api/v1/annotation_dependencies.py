@@ -46,6 +46,7 @@ from app.infrastructure.repositories.annotation_directory import (
     SqlEpisodeDirectory,
     SqlGoldSetAnswerAccessPolicy,
     SqlMemberDirectory,
+    SqlSkillProfileDirectory,
 )
 from app.infrastructure.repositories.annotation_prm import SqlPrmAnnotationRepository
 from app.infrastructure.repositories.annotation_quality import (
@@ -227,6 +228,7 @@ def get_annotation_use_cases(
             outbox,
             idempotency,
             session,
+            skill_profiles=SqlSkillProfileDirectory(session),
         ),
         submissions=AnnotationSubmissionUseCases(
             submissions_repo,

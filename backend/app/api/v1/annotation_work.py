@@ -120,6 +120,15 @@ def create_task(
             assignment_mode=payload.assignment_mode,
             iaa_policy=policy,
             quality_policy=payload.quality_policy,
+            required_skills=tuple(
+                {
+                    "tag_name": t.tag_name,
+                    "category": t.category,
+                    "weight": t.weight,
+                    "required": t.required,
+                }
+                for t in payload.required_skills
+            ),
         ),
         idempotency_key=idempotency_key,
         method=request.method,
