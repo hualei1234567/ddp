@@ -76,6 +76,7 @@ prmTrajectoryAnnotations:
 prmTrajectoryAnnotationDetail:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotationId"
   get:
     operationId: getPrmTrajectoryAnnotation
     tags: [annotation-prm]
@@ -95,6 +96,7 @@ prmTrajectoryAnnotationDetail:
 prmTrajectoryFork:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/TrajectoryId"
   post:
     operationId: forkPrmTrajectory
     tags: [annotation-prm]

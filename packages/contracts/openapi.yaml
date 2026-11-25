@@ -1173,6 +1173,8 @@ components:
     IfMatch: {$ref: "./fragments/components.yaml#/parameters/IfMatch"}
     IdempotencyKey: {$ref: "./fragments/components.yaml#/parameters/IdempotencyKey"}
     RequiredIdempotencyKey: {$ref: "./fragments/components.yaml#/parameters/RequiredIdempotencyKey"}
+    AnnotationId: {$ref: "./fragments/components.yaml#/parameters/AnnotationId"}
+    TrajectoryId: {$ref: "./fragments/components.yaml#/parameters/TrajectoryId"}
     TaskAction: {$ref: "./fragments/components.yaml#/parameters/TaskAction"}
     BatchAction: {$ref: "./fragments/components.yaml#/parameters/BatchAction"}
     InboundBatchAction: {$ref: "./fragments/components.stage6.yaml#/parameters/InboundBatchAction"}

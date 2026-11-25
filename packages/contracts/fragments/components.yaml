@@ -200,6 +200,23 @@ parameters:
       minimum: 1
       maximum: 100
       default: 20
+
+  AnnotationId:
+    name: annotation_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+
+  TrajectoryId:
+    name: trajectory_id
+    in: path
+    required: true
+    schema:
+      type: string
+      description: PRM 轨迹 ID（平台生成或 fork 物化时的派生 ID）。
+
 responses:
   Unauthorized:
     description: 未认证或令牌无效（`not_authenticated`，401）。
