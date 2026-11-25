@@ -37,6 +37,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Protocol, cast
 
+from ddp_data.capability import FormatCapabilityLevel, FormatCapabilityProfile
 from ddp_data.lerobot.parser import CanonicalEpisode
 
 # 解析器签名：输入原始字节，输出 Canonical Episode 序列。
@@ -126,9 +127,7 @@ CANONICAL_EPISODE_FIELDS: tuple[CanonicalField, ...] = (
     CanonicalField("raw"),
 )
 
-_KNOWN_FIELDS: frozenset[str] = frozenset(
-    item.name for item in CANONICAL_EPISODE_FIELDS
-)
+_KNOWN_FIELDS: frozenset[str] = frozenset(item.name for item in CANONICAL_EPISODE_FIELDS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,6 +168,7 @@ class AdapterSpec:
     fetch: Fetcher | None = None
     verify: Verifier | None = None
     write: Writer | None = None
+    capability_profile: FormatCapabilityProfile | None = None
 
     def __post_init__(self) -> None:
         # 运行时也校验可调用性：类型标注挡不住动态构造，坏实现必须注册即失败。
@@ -183,6 +183,12 @@ class AdapterSpec:
         ):
             if implementation is not None and not callable(implementation):
                 raise AdapterRegistrationError(f"{name} 必须是可调用对象")
+        if self.capability_profile is not None and not isinstance(
+            self.capability_profile, FormatCapabilityProfile
+        ):
+            raise AdapterRegistrationError(
+                "capability_profile 必须是 FormatCapabilityProfile 或 None"
+            )
         if not self.adapter_id or "." not in self.adapter_id:
             raise AdapterRegistrationError(
                 f"adapter_id 必须形如 <format>.<variant>，得到 {self.adapter_id!r}"
@@ -191,21 +197,15 @@ class AdapterSpec:
             raise AdapterRegistrationError("version 不能为空：映射规则必须有版本")
         unknown = (self.supported_fields | self.missing_fields) - _KNOWN_FIELDS
         if unknown:
-            raise AdapterRegistrationError(
-                f"声明了未定义的 Canonical 字段：{sorted(unknown)}"
-            )
+            raise AdapterRegistrationError(f"声明了未定义的 Canonical 字段：{sorted(unknown)}")
         overlap = self.supported_fields & self.missing_fields
         if overlap:
-            raise AdapterRegistrationError(
-                f"同一字段不能既声明支持又声明缺失：{sorted(overlap)}"
-            )
+            raise AdapterRegistrationError(f"同一字段不能既声明支持又声明缺失：{sorted(overlap)}")
         undeclared = _KNOWN_FIELDS - self.supported_fields - self.missing_fields
         if undeclared:
             # 必须穷尽声明：否则"缺字段"会被误读成"支持但恰好为空"，
             # 下游无法区分"数据没有"与"Adapter 漏了"。
-            raise AdapterRegistrationError(
-                f"字段声明不完整，未表态的字段：{sorted(undeclared)}"
-            )
+            raise AdapterRegistrationError(f"字段声明不完整，未表态的字段：{sorted(undeclared)}")
 
     @property
     def declared_gaps(self) -> frozenset[str]:
@@ -249,6 +249,17 @@ class AdapterSpec:
         self.require(AdapterCapability.WRITE)
         return cast(Writer, self.write)
 
+    @property
+    def effective_capability_level(self) -> FormatCapabilityLevel:
+        """返回已核实的解析深度等级；未声明 capability_profile 时保守回退为 DETECT。"""
+        if self.capability_profile is None:
+            return FormatCapabilityLevel.DETECT
+        return self.capability_profile.max_level
+
+    def satisfies_format_level(self, level: FormatCapabilityLevel) -> bool:
+        """判断本 Adapter 是否已达到给定数据解析深度等级。"""
+        return self.effective_capability_level.at_least(level)
+
 
 class AdapterRegistry:
     """Adapter 注册表；实例级而非全局单例，便于测试隔离。"""
@@ -260,8 +271,7 @@ class AdapterRegistry:
         existing = self._specs.get(spec.adapter_id)
         if existing is not None:
             raise AdapterRegistrationError(
-                f"adapter_id 已注册：{spec.adapter_id}"
-                f"（已有 version={existing.version}）"
+                f"adapter_id 已注册：{spec.adapter_id}" f"（已有 version={existing.version}）"
             )
         self._specs[spec.adapter_id] = spec
         return spec
@@ -277,17 +287,17 @@ class AdapterRegistry:
     def list_specs(self) -> tuple[AdapterSpec, ...]:
         return tuple(self._specs[key] for key in sorted(self._specs))
 
-    def list_by_capability(
-        self, capability: AdapterCapability
-    ) -> tuple[AdapterSpec, ...]:
+    def list_by_capability(self, capability: AdapterCapability) -> tuple[AdapterSpec, ...]:
         """按能力检索已注册 Adapter；结果按 ``adapter_id`` 排序，可复现。"""
         return tuple(spec for spec in self.list_specs() if spec.supports(capability))
 
-    def require_capability(
-        self, adapter_id: str, capability: AdapterCapability
-    ) -> AdapterSpec:
+    def require_capability(self, adapter_id: str, capability: AdapterCapability) -> AdapterSpec:
         """取 Adapter 并要求其具备给定能力；不支持时抛 AdapterCapabilityError。"""
         return self.get(adapter_id).require(capability)
+
+    def list_by_format_level(self, min_level: FormatCapabilityLevel) -> tuple[AdapterSpec, ...]:
+        """按最低解析深度检索已注册 Adapter；结果按 ``adapter_id`` 排序。"""
+        return tuple(spec for spec in self.list_specs() if spec.satisfies_format_level(min_level))
 
     def detect(self, sample: bytes) -> AdapterSpec | None:
         """按内容样本探测格式；多个命中时取 ``adapter_id`` 字典序最小的。
@@ -296,9 +306,7 @@ class AdapterRegistry:
         Adapter 必须由调用方显式决定。返回确定性结果只是为了可复现。
         """
         matched = [
-            spec
-            for spec in self._specs.values()
-            if spec.detect is not None and spec.detect(sample)
+            spec for spec in self._specs.values() if spec.detect is not None and spec.detect(sample)
         ]
         if not matched:
             return None
