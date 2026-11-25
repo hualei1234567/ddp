@@ -353,8 +353,21 @@ def test_default_handlers_cover_every_stage(factory: sessionmaker[Session]) -> N
     assert handlers[ProcessingStage.CALIBRATION_VALIDATION] is calibration_validation
     assert handlers[ProcessingStage.EPISODE_SEGMENTATION] is episode_segmentation
     assert handlers[ProcessingStage.QUALITY_PRE_CHECK] is quality_check
-    # 剩余 DATA_CLEANING 阶段必须显式 SKIPPED，且原因写明依赖。
+    # 未注入 data_cleaning 时默认显式 SKIPPED，保证既有单测向后兼容；注入时使用真实处理器。
     assert isinstance(handlers[ProcessingStage.DATA_CLEANING], SkippedStage)
+
+    custom_cleaning = SkippedStage("测试显式注入：确定性清洗")
+    injected = default_handlers(
+        FakeInspector(),
+        metadata_extraction=metadata_extraction,
+        format_parsing=format_parsing,
+        time_alignment=time_alignment,
+        calibration_validation=calibration_validation,
+        episode_segmentation=episode_segmentation,
+        quality_check=quality_check,
+        data_cleaning=custom_cleaning,
+    )
+    assert injected[ProcessingStage.DATA_CLEANING] is custom_cleaning
 
 
 def test_terminal_run_is_noop(factory: sessionmaker[Session]) -> None:

@@ -11,9 +11,9 @@
   抽取与解析，N3）、``TIME_ALIGNMENT``、``CALIBRATION_VALIDATION``、
   ``EPISODE_SEGMENTATION``（N4）与 ``QUALITY_PRE_CHECK``（N4-005 统一质量引擎）
   均有真实落点；各处理器由组合根显式注入，不静默回退。
-- ``DATA_CLEANING`` 仍**没有真实实现**，一律显式 ``SKIPPED`` 并写明原因
-  （见 ``STAGE_SKIP_REASONS``）：把未实现写成 ``SUCCEEDED`` 会让"处理完成"
-  变成谎话。
+- ``DATA_CLEANING``（V51-006）支持注入确定性清洗处理器；未注入时按
+  ``STAGE_SKIP_REASONS`` 显式 ``SKIPPED`` 并写明原因，把未接线写成
+  ``SUCCEEDED`` 会让"处理完成"变成谎话。
 
 **重试与恢复**
 

@@ -17,9 +17,9 @@
 - ``EPISODE_SEGMENTATION`` 由
   :mod:`app.application.processing.segmentation_stage` 实现，对既有 Episode 的冻结
   规则版本做可追溯性检查，不在缺少规则参数时伪造重新切片；
-- ``DATA_CLEANING`` 仍**没有真实实现**，:class:`SkippedStage` 显式 SKIPPED 并写明
-  原因——把未实现写成 ``SUCCEEDED`` 会让"处理完成"变成谎话，也会让下游误以为
-  已有产物。
+- ``DATA_CLEANING`` 由 :mod:`app.application.processing.cleaning_stage` 实现，
+  对 ``STREAM_EXTRACTION`` 产出的逐帧流执行确定性 FLAG 清洗与版本化报告落库；
+  未注入清洗处理器时由 :class:`SkippedStage` 显式 SKIPPED 并写明原因。
 
 阶段处理器是纯函数式对象：输入 :class:`StageContext`，返回
 :class:`StageOutcome`；可预期失败抛 :class:`StageFailure`，由编排器脱敏落库。
@@ -183,10 +183,11 @@ def default_handlers(
     episode_segmentation: StageHandler,
     quality_check: StageHandler,
     stream_extraction: StageHandler | None = None,
+    data_cleaning: StageHandler | None = None,
 ) -> dict[ProcessingStage, StageHandler]:
-    """默认阶段表：七个阶段有真实落点，DATA_CLEANING 显式 SKIPPED。
+    """默认阶段表：必选阶段由组合根注入，可选阶段未注入时显式 SKIPPED。
 
-    各真实处理器必须由组合根显式注入：静默回退到 SKIPPED 会让“阶段没接线”
+    各真实处理器必须由组合根显式注入：静默回退到 SUCCEEDED 会让“阶段没接线”
     在生产里看起来像“没有需要处理的对象”。
     """
     handlers: dict[ProcessingStage, StageHandler] = {
@@ -208,6 +209,8 @@ def default_handlers(
         )
     for stage, reason in STAGE_SKIP_REASONS.items():
         handlers[stage] = SkippedStage(reason)
+    if data_cleaning is not None:
+        handlers[ProcessingStage.DATA_CLEANING] = data_cleaning
     missing = [stage.value for stage in STAGE_SEQUENCE if stage not in handlers]
     if missing:  # 防御：新增阶段忘配处理器时启动即失败，而不是运行时静默成功。
         raise ValueError(f"以下阶段缺少处理器：{', '.join(missing)}")
