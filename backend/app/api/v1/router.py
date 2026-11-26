@@ -34,6 +34,7 @@ from app.api.v1 import (
     feedback_routes,
     gap_candidate_routes,
     governance_routes,
+    health_dependencies_routes,
     inbound_routes,
     inference_routes,
     ingestion_jobs,
@@ -58,6 +59,8 @@ from app.api.v1 import (
 
 api_router = APIRouter()
 api_router.include_router(platform.router)
+# 依赖健康检查（V52-036）：探活数据库，任一依赖异常返回 200 degraded 而非 500。
+api_router.include_router(health_dependencies_routes.router)
 # 项目管理是平台级入口：``/projects`` 与 ``/projects/{project_id}`` 和
 # ``/projects/{project_id}/<resource>`` 不冲突（路径参数只会匹配单段），
 # 放在业务路由之前是为了保持"平台 → 业务"的阅读顺序。
