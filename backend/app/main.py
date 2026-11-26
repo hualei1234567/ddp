@@ -7,6 +7,8 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -141,18 +143,27 @@ def create_app() -> FastAPI:
     # fail-closed：非本地环境安全配置不完整时直接拒绝启动。
     settings.validate_runtime_security()
 
+    # 限流后端在装配期创建一次（Redis 客户端复用连接池），关闭时释放。
+    # fastapi 0.133 / starlette 1.10 移除了 ``add_event_handler``，改用 lifespan
+    # 上下文管理器承载启动/关闭钩子（依赖升级导致的最小适配）。
+    rate_limiter = build_rate_limiter(settings) if settings.rate_limit_enabled else None
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            if rate_limiter is not None:
+                rate_limiter.close()
+
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
+        lifespan=lifespan,
     )
-
-    # 限流后端在装配期创建一次（Redis 客户端复用连接池），关闭时释放。
-    rate_limiter = build_rate_limiter(settings) if settings.rate_limit_enabled else None
-    if rate_limiter is not None:
-        app.add_event_handler("shutdown", rate_limiter.close)
 
     # 指标注册表随应用实例创建：业务指标在抓取时查库，因此注入会话工厂。
     app.state.metrics = build_metrics(
