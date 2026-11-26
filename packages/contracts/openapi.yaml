@@ -888,6 +888,11 @@ paths:
     $ref: "./fragments/paths.stage4.yaml#/exportJobActions"
   /api/v1/projects/{project_id}/exports/{export_job_id}/artifacts:
     $ref: "./fragments/paths.stage4.yaml#/exportJobArtifacts"
+  # --- LLM 训练导出（V52-037，蓝图 N4 / 阶段 4 生态对接；计算型端点不落库）---
+  /api/v1/projects/{project_id}/llm-exports:
+    $ref: "./fragments/llm_export.yaml#/llmExports"
+  /api/v1/projects/{project_id}/llm-exports/formats:
+    $ref: "./fragments/llm_export.yaml#/llmExportFormats"
   /api/v1/projects/{project_id}/training-requests:
     $ref: "./fragments/paths.stage4.yaml#/trainingRequests"
   /api/v1/projects/{project_id}/training-requests/{request_id}:
@@ -1834,3 +1839,13 @@ components:
     AgentLeaseRequest: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentLeaseRequest"}
     AgentAssignment: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentAssignment"}
     AgentAssignmentList: {$ref: "./fragments/schemas.edge_agents.yaml#/AgentAssignmentList"}
+    # --- LLM 训练导出（V52-037；schema 与 paths 同片段）---
+    LlmExportProvenanceIn: {$ref: "./fragments/llm_export.yaml#/LlmExportProvenanceIn"}
+    LlmExportMessageIn: {$ref: "./fragments/llm_export.yaml#/LlmExportMessageIn"}
+    LlmExportStepIn: {$ref: "./fragments/llm_export.yaml#/LlmExportStepIn"}
+    LlmExportRecordIn: {$ref: "./fragments/llm_export.yaml#/LlmExportRecordIn"}
+    LlmExportCreate: {$ref: "./fragments/llm_export.yaml#/LlmExportCreate"}
+    LlmExportFileDigest: {$ref: "./fragments/llm_export.yaml#/LlmExportFileDigest"}
+    LlmExportSummaryOut: {$ref: "./fragments/llm_export.yaml#/LlmExportSummaryOut"}
+    LlmExportFormatItem: {$ref: "./fragments/llm_export.yaml#/LlmExportFormatItem"}
+    LlmExportFormatsOut: {$ref: "./fragments/llm_export.yaml#/LlmExportFormatsOut"}

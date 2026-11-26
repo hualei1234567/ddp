@@ -38,6 +38,7 @@ from app.api.v1 import (
     inference_routes,
     ingestion_jobs,
     lineage,
+    llm_export_routes,
     location_routes,
     model_adapter_routes,
     model_routes,
@@ -90,6 +91,9 @@ api_router.include_router(asset_catalog_routes.router)
 api_router.include_router(dataset_routes.router)
 api_router.include_router(dataset_version_routes.router)
 api_router.include_router(export_routes.router)
+# LLM 训练导出（V52-037，蓝图 N4 / 阶段 4 生态对接）：复用
+# data-platform/ddp_data/llm_export 的确定性 writer，计算型端点不落库。
+api_router.include_router(llm_export_routes.router)
 api_router.include_router(dataset_grant_routes.router)
 api_router.include_router(training_request_routes.router)
 api_router.include_router(training_delivery_routes.router)
