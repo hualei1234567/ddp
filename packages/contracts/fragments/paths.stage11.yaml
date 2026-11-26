@@ -1,0 +1,107 @@
+# 标注员技能标签写入（V52-033，补齐 V52-009 遗留）路径片段。
+#
+# 范围：人员技能档案治理——整体替换 / 单条追加 / 单条移除。
+# 表与读取端口已在主线的 V52-009 交付（迁移 0080 `annotator_skill_tags` +
+# `SkillProfileDirectory`），本片段只补写路由，不新增表、不改迁移。
+#
+# 权限口径（应用层唯一实现，见 SkillProfileUseCases）：
+# - 项目 owner 可改任何人（含自己）；
+# - 本人可改自己的标签；
+# - 其余 403。写路由统一要求 `WRITE` 项目动作，因此 viewer 自改也被拒。
+# 目标必须是项目成员，否则 422（数据库复合外键兜底）。
+#
+# 幂等：整体替换按「集合差」落库，同一集合重复提交结果一致（行 id、
+# created_at 不变）；追加已存在的标签不重复插入。删除不存在的标签返回 404，
+# 不把「已经没有了」当成功。
+#
+# 契约策略：本轮**不 bump openapi.yaml version**（MEM-INC-015 版本延迟策略），
+# 路径参数按 MEM-INC-017 三步：路径级声明 → 组件入 `parameters:` 段 →
+# fragment 内相对 `$ref`。
+
+skillTags:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotatorId"
+  put:
+    operationId: replaceAnnotatorSkillTags
+    tags: [annotation-skill-tags]
+    summary: 整体替换标注员的技能标签集（幂等）
+    description: |
+      用请求体里的完整标签集替换该成员当前标签集；空数组表示清空。
+
+      - 标签名服务端规范化为小写并去首尾空白（与任务侧 `required_skills`
+        的匹配语义同源），响应返回规范化后的结果；
+      - 规范化后重复的标签返回 422，不静默去重（静默去重会掩盖调用方 bug）；
+      - `weight` 按任务侧同规则校验 `(0, 1]`，但人员技能事实表没有 weight
+        列，本端点不持久化该值，响应也不伪造；
+      - 幂等：同一集合重复提交结果一致（按集合差落库，不重写未变化行）。
+
+      权限：项目 owner 可改任何人；本人可改自己；其余 403。目标不是项目成员
+      时返回 422（应用层先判，数据库复合外键兜底）。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/SkillTagReplaceIn"}
+    responses:
+      "200":
+        description: 替换后的完整标签集
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/AnnotatorSkillTags"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+  post:
+    operationId: addAnnotatorSkillTag
+    tags: [annotation-skill-tags]
+    summary: 追加单条技能标签（幂等）
+    description: |
+      追加单条标签并返回完整集合。已存在时不重复插入；仅当 `category` 变化时
+      就地更新该行（`tag_name` 是唯一键的一部分，不会被改写）。
+
+      权限与校验同 PUT：owner 可改任何人、本人可改自己，其余 403；非项目成员
+      目标返回 422。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: {$ref: "../openapi.yaml#/components/schemas/SkillTagWriteIn"}
+    responses:
+      "200":
+        description: 追加后的完整标签集
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/AnnotatorSkillTags"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+
+skillTagDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/AnnotatorId"
+    - $ref: "../openapi.yaml#/components/parameters/SkillTagName"
+  delete:
+    operationId: removeAnnotatorSkillTag
+    tags: [annotation-skill-tags]
+    summary: 移除单条技能标签
+    description: |
+      移除单条标签并返回剩余集合。路径里的 `tag_name` 先规范化（小写、去首尾
+      空白）再匹配；标签不存在时返回 404 `resource_not_found`——「已经没有了」
+      不是成功，避免客户端误判实际未删除。
+
+      权限同 PUT/POST：owner 可改任何人；本人可改自己；其余 403。
+    responses:
+      "200":
+        description: 移除后的剩余标签集（可能为空数组）
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/AnnotatorSkillTags"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}

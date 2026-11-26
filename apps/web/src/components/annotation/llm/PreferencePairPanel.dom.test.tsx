@@ -62,6 +62,17 @@ describe("LLM 展示组件交互（jsdom）", () => {
     expect(calls[calls.length - 1]?.[0]).toBeNull();
   });
 
+  it("PreferencePairPanel：清除选择回到未选状态（草稿可撤销，不把用户卡死）", async () => {
+    const onChange = vi.fn();
+    render(
+      <PreferencePairPanel payload={PREF_PAYLOAD} value={null} onChange={onChange} />,
+    );
+    await userEvent.click(screen.getByTestId("llm-pref-winner-A"));
+    expect(screen.queryByTestId("llm-pref-clear")).not.toBeNull();
+    await userEvent.click(screen.getByTestId("llm-pref-clear"));
+    expect(onChange).toHaveBeenLastCalledWith(null);
+  });
+
   it("DialogueTurnList：长输出默认折叠，点击展开后可见全文", async () => {
     const longContent = "很长的输出".repeat(60);
     render(

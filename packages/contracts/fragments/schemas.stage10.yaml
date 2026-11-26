@@ -104,6 +104,12 @@ PrmForkRequest:
       maxItems: 512
       items: { type: string, maxLength: 2000 }
       description: 重写序列（替换 at_index 起的原步骤；全部未标注）
+    materialize:
+      type: boolean
+      default: false
+      description: |
+        默认 false = 纯计算预览，不落库（旧客户端零影响）；true = 同请求内
+        分叉 + 落库（需要项目写权限），响应返回 `materialized_annotation_id`。
 
 PrmForkPreviewOut:
   type: object
@@ -116,7 +122,10 @@ PrmForkPreviewOut:
     fork_point_index: { type: integer, minimum: 0 }
     forked_trajectory_id_preview:
       type: string
-      description: 物化时建议的 trajectory_id（`<原 id>#fork-preview`）；调用方可自行分配
+      description: |
+        预览时为建议的 trajectory_id（`<原 id>#fork-preview`）；`materialize=true`
+        且物化成功时为**实际落库**的 trajectory_id（`<原 id>#fork-<n>`，冲突递增后
+        的最终值）。
     forked_steps:
       type: array
       items: { type: string }
@@ -130,6 +139,10 @@ PrmForkPreviewOut:
       items: { $ref: "#/StepMarkOut" }
       description: 保留的前缀标注；重写步骤一律未标注
     dpo_pair: { $ref: "#/StepDpoPairOut" }
+    materialized_annotation_id:
+      type: [string, "null"]
+      format: uuid
+      description: 物化成功后的新标注 ID；纯预览时为 null。
 
 StepDpoPairOut:
   type: object
@@ -157,7 +170,8 @@ StepDpoPairOut:
     preference_json_value:
       type: object
       description: |
-        MEM-DEC-002 JSON 约定值形态（winner=chosen 语义键 + chosen/rejected +
-        fork_point_index + source_trajectory_id），作为 JSON 标签值回流偏好
-        提交链；不新增标签类型。
+        MEM-DEC-002 JSON 约定值形态：必填 `winner`（呈现槽，A/B/TIE）、
+        `chosen`、`rejected`（必须不同）、`fork_point_index`、
+        `source_trajectory_id`；可选 `rationale`。可直接作为 `JSON` 标签值
+        回流提交链（服务端按同一约定校验），不新增标签类型。
       additionalProperties: true

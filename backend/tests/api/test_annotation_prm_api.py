@@ -111,7 +111,7 @@ def test_fork_preview_returns_step_dpo_pair(api_db: tuple[sessionmaker[Session],
     assert pair["chosen"] == "[1] 重抓杯子\n[2] 稳稳放置"
     assert pair["rejected"] == "[1] 抓取\n[2] 放置"
     assert "[0] 查表" in pair["prompt"]
-    assert pair["preference_json_value"]["winner"] == "chosen"
+    assert pair["preference_json_value"]["winner"] == "A"
     assert pair["preference_json_value"]["fork_point_index"] == 1
 
     # 预览不落库：列表仍只有一条。
@@ -176,3 +176,113 @@ def test_list_limit_bounds_rejected(
     editor = make_client(factory, ids.editor_a)
     response = editor.get(url(ids.project_a, _PRM_PATH), params={"limit": limit})
     assert response.status_code == 422, response.text
+
+
+# ── V52-032：fork 一步物化（materialize=true） ──────────────────────────
+
+
+def _fork_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {"at_index": 1, "new_actions": ["重抓杯子", "稳稳放置"]}
+    payload.update(overrides)
+    return payload
+
+
+def _created_trajectory_ids(client, project_id: object) -> list[str]:
+    listed = client.get(url(project_id, _PRM_PATH))
+    assert listed.status_code == 200, listed.text
+    return [item["trajectory_id"] for item in listed.json()["items"]]
+
+
+def test_fork_materialize_creates_visible_row(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """物化：一次请求完成分叉 + 落库，新行列表可见且带分叉血缘。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    base = url(ids.project_a, _PRM_PATH)
+    assert editor.post(base, json=_annotation_payload("traj-mat")).status_code == 201
+
+    response = editor.post(f"{base}/traj-mat/fork", json=_fork_payload(materialize=True))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    annotation_id = body["materialized_annotation_id"]
+    assert annotation_id
+    # 物化时 preview id 字段是**实际落库**的 trajectory_id。
+    assert body["forked_trajectory_id_preview"] == "traj-mat#fork-1"
+    assert body["dpo_pair"]["preference_json_value"]["winner"] == "A"
+
+    assert _created_trajectory_ids(editor, ids.project_a) == ["traj-mat", "traj-mat#fork-1"]
+    got = editor.get(f"{base}/{annotation_id}")
+    assert got.status_code == 200, got.text
+    materialized = got.json()
+    assert materialized["trajectory_id"] == "traj-mat#fork-1"
+    assert materialized["step_actions"] == ["查表", "重抓杯子", "稳稳放置"]
+    assert [mark["step_index"] for mark in materialized["marks"]] == [0]
+    assert materialized["fork_lineage"] == {
+        "source_trajectory_id": "traj-mat",
+        "fork_point_index": 1,
+        "shared_prefix_steps": 1,
+    }
+
+    # 预览（默认 materialize=false / 不传）仍不落库，且 materialized id 为 null。
+    preview = editor.post(f"{base}/traj-mat/fork", json=_fork_payload())
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["materialized_annotation_id"] is None
+    assert preview.json()["forked_trajectory_id_preview"] == "traj-mat#fork-preview"
+    assert len(_created_trajectory_ids(editor, ids.project_a)) == 2
+
+
+def test_fork_materialize_increments_on_conflict(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """trajectory_id 唯一冲突时序号递增：已占用 #fork-1/#fork-2 → 落 #fork-3。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    base = url(ids.project_a, _PRM_PATH)
+    for trajectory_id in ("traj-c", "traj-c#fork-1", "traj-c#fork-2"):
+        created = editor.post(base, json=_annotation_payload(trajectory_id))
+        assert created.status_code == 201, created.text
+
+    response = editor.post(f"{base}/traj-c/fork", json=_fork_payload(materialize=True))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["forked_trajectory_id_preview"] == "traj-c#fork-3"
+    got = editor.get(f"{base}/{body['materialized_annotation_id']}")
+    assert got.json()["trajectory_id"] == "traj-c#fork-3"
+    assert len(_created_trajectory_ids(editor, ids.project_a)) == 4
+
+
+def test_fork_materialize_retry_exhausted_returns_409(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """连续 5 个候选 id 全冲突：显式 409，不静默覆盖、不留下第 6 行。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    base = url(ids.project_a, _PRM_PATH)
+    for sequence in range(0, 6):
+        trajectory_id = "traj-x" if sequence == 0 else f"traj-x#fork-{sequence}"
+        assert editor.post(base, json=_annotation_payload(trajectory_id)).status_code == 201
+
+    response = editor.post(f"{base}/traj-x/fork", json=_fork_payload(materialize=True))
+    assert response.status_code == 409, response.text
+    assert response.json()["error"]["code"] == "duplicate_resource"
+    assert len(_created_trajectory_ids(editor, ids.project_a)) == 6
+
+
+def test_viewer_can_preview_but_cannot_materialize(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """预览保持只读可用；物化是写入，只读用户 403 且不落库。"""
+    factory, ids = api_db
+    editor = make_client(factory, ids.editor_a)
+    viewer = make_client(factory, ids.viewer_a)
+    base = url(ids.project_a, _PRM_PATH)
+    assert editor.post(base, json=_annotation_payload("traj-perm")).status_code == 201
+
+    preview = viewer.post(f"{base}/traj-perm/fork", json=_fork_payload())
+    assert preview.status_code == 200, preview.text
+
+    blocked = viewer.post(f"{base}/traj-perm/fork", json=_fork_payload(materialize=True))
+    assert blocked.status_code == 403, blocked.text
+    assert blocked.json()["error"]["code"] == "forbidden"
+    assert _created_trajectory_ids(viewer, ids.project_a) == ["traj-perm"]

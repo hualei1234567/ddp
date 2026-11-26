@@ -555,6 +555,8 @@ tags:
     description: 语义近似去重（TRIGRAM 默认真实可用；VECTOR 仅接口预留，不承诺向量能力）
   - name: annotation-quality
     description: 黄金集、质检抽检与 IAA 报告
+  - name: annotation-skill-tags
+    description: 标注员技能标签写入（owner / 本人；幂等替换、追加与移除，V52-033）
   - name: datasets
     description: Dataset 容器、状态动作与生命周期
   - name: dataset-versions
@@ -1125,6 +1127,11 @@ paths:
   # --- 黄金题熔断接线（V52-008，蓝图 N3；owner / 平台管理员）---
   /api/v1/projects/{project_id}/annotation-honeypot/{annotator_id}/resume:
     $ref: "./fragments/paths.ops.yaml#/annotationHoneypotResume"
+  # --- 标注员技能标签写入（V52-033，owner / 本人；迁移 0080 已在 main）---
+  /api/v1/projects/{project_id}/annotation-annotators/{annotator_id}/skill-tags:
+    $ref: "./fragments/paths.stage11.yaml#/skillTags"
+  /api/v1/projects/{project_id}/annotation-annotators/{annotator_id}/skill-tags/{tag_name}:
+    $ref: "./fragments/paths.stage11.yaml#/skillTagDetail"
   /api/v1/projects/{project_id}/audit-logs:
     $ref: "./fragments/paths.audit.yaml#/auditLogs"
   /api/v1/projects/{project_id}/audit-logs/{resource_type}/{resource_id}:
@@ -1190,6 +1197,7 @@ components:
     AnnotationId: {$ref: "./fragments/components.yaml#/parameters/AnnotationId"}
     TrajectoryId: {$ref: "./fragments/components.yaml#/parameters/TrajectoryId"}
     AnnotatorId: {$ref: "./fragments/components.yaml#/parameters/AnnotatorId"}
+    SkillTagName: {$ref: "./fragments/components.yaml#/parameters/SkillTagName"}
     TaskAction: {$ref: "./fragments/components.yaml#/parameters/TaskAction"}
     BatchAction: {$ref: "./fragments/components.yaml#/parameters/BatchAction"}
     InboundBatchAction: {$ref: "./fragments/components.stage6.yaml#/parameters/InboundBatchAction"}
@@ -1785,6 +1793,10 @@ components:
     AnnotationDedupCandidate: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupCandidate"}
     AnnotationDedupResult: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupResult"}
     HoneypotResumeResult: {$ref: "./fragments/schemas.ops.yaml#/HoneypotResumeResult"}
+    SkillTagWriteIn: {$ref: "./fragments/schemas.stage11.yaml#/SkillTagWriteIn"}
+    SkillTagReplaceIn: {$ref: "./fragments/schemas.stage11.yaml#/SkillTagReplaceIn"}
+    SkillTagOut: {$ref: "./fragments/schemas.stage11.yaml#/SkillTagOut"}
+    AnnotatorSkillTags: {$ref: "./fragments/schemas.stage11.yaml#/AnnotatorSkillTags"}
     AiSuggestionConfirm: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionConfirm"}
     AiSuggestion: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestion"}
     AiSuggestionPage: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionPage"}

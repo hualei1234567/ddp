@@ -17,10 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.domain.annotation.backflow import (
-    BackflowCase,
-    BackflowDecisionKind,
-)
+from app.domain.annotation.backflow import BackflowCase
 from app.domain.identity.models import ProjectScope
 from app.infrastructure.db.models.annotation_backflow_case import AnnotationBackflowCase as _Model
 
@@ -93,39 +90,6 @@ class SqlBackflowRepository:
                     status=case.status.value,
                     decision_reason=case.decision_reason,
                     task_id=case.task_id,
-                    received_at=case.received_at,
-                    created_at=case.created_at or datetime.now(UTC),
-                )
-            )
-
-    def add_skipped(
-        self,
-        scope: ProjectScope,
-        cases: tuple[BackflowCase, ...],
-        kind: BackflowDecisionKind,
-        reason: str,
-    ) -> None:
-        """写入被跳过/限流的案例行（留痕审计：运营能看到被拒了什么）。"""
-        for case in cases:
-            scope.ensure(case.project_id)
-            self._session.add(
-                _Model(
-                    id=case.case_id,
-                    project_id=case.project_id,
-                    source=case.source,
-                    case_ref=case.case_ref,
-                    capability=case.capability,
-                    failure_summary=case.failure_summary,
-                    failure_count=case.failure_count,
-                    suggested_priority=case.suggested_priority.value,
-                    payload=dict(case.payload),
-                    status=(
-                        "SKIPPED_DUPLICATE"
-                        if kind is BackflowDecisionKind.DUPLICATE_SKIPPED
-                        else "RATE_LIMITED"
-                    ),
-                    decision_reason=reason,
-                    task_id=None,
                     received_at=case.received_at,
                     created_at=case.created_at or datetime.now(UTC),
                 )

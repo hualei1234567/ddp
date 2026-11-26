@@ -74,6 +74,18 @@ def test_repeat_callback_is_idempotent(
     assert (body["accepted"], body["duplicated"]) == (0, 1)
     assert body["decisions"][0]["decision"] == "DUPLICATE_SKIPPED"
 
+    # 回归（MEM-INC-023）：跳过判决**不落库**——表上 (source, case_ref) 唯一，
+    # 若把重复跳过也写成行，第二次回调会撞唯一键返回 409（生产演练实测）。
+    with factory() as session:
+        count = session.execute(
+            sa.text(
+                "SELECT count(*) FROM annotation_backflow_cases "
+                "WHERE project_id = :pid AND case_ref = 'c1'"
+            ),
+            {"pid": ids.project_a.hex},
+        ).scalar_one()
+    assert count == 1  # 只有一条受理行，重复回调没有制造第二行
+
 
 def test_rate_limit_rejects_over_quota(
     api_db: tuple[sessionmaker[Session], ApiIds],

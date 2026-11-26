@@ -6,8 +6,8 @@
 # （+1 / -0.5 / -1 / -2）与 data-platform/ddp_data/llm_export/prm.py 完全一致，
 # 由领域单测钉死（防双源漂移）。
 #
-# **fork 是纯计算端点**：返回分叉轨迹与 Step-DPO 对预览，不落库——调用方确认
-# 后再用创建端点以新 trajectory_id 物化（先例：标注分配 capacity-preview）。
+# **fork 默认是纯计算预览**：返回分叉轨迹与 Step-DPO 对，不落库；`materialize=true`
+# 时同请求落库并返回新标注 ID（V52-032）。预览先例：标注分配 capacity-preview。
 #
 # **没有 PATCH / DELETE**：步级标注创建即不可变（复核对象而非编辑对象），
 # 修正走新轨迹行；数据库层面随 project_id 的 ON DELETE CASCADE 级联清理。
@@ -100,15 +100,22 @@ prmTrajectoryFork:
   post:
     operationId: forkPrmTrajectory
     tags: [annotation-prm]
-    summary: PRM 轨迹分叉重写预览
+    summary: PRM 轨迹分叉重写（预览 / 一步物化）
     description: |
       从 `at_index` 步分叉重写：保留 0..at_index-1 步（含已标注），at_index 起
-      替换为 `new_actions` 重写序列。**纯计算预览，不落库**——响应携带分叉
-      轨迹与 Step-DPO 对（canonical 语义：分叉点前共享前缀进 `prompt`；
-      chosen = Forked 重写序列、rejected = Original 原序列），以及按
-      MEM-DEC-002 JSON 约定值形态的 `preference_json_value`。
+      替换为 `new_actions` 重写序列。默认 `materialize=false` 是**纯计算预览，
+      不落库**——响应携带分叉轨迹与 Step-DPO 对（canonical 语义：分叉点前共享
+      前缀进 `prompt`；chosen = Forked 重写序列、rejected = Original 原序列），
+      以及按 MEM-DEC-002 JSON 约定值形态的 `preference_json_value`。
+
+      `materialize=true` 时在同一次请求内完成「分叉 + 落库」：服务端生成新
+      `trajectory_id`（规则 `<原 id>#fork-1`，唯一冲突递增序号，最多重试 5 次，
+      超限返回 409），复用创建路径落 `prm_annotations`，响应返回非空
+      `materialized_annotation_id`，`forked_trajectory_id_preview` 为该次实际
+      落库的 `trajectory_id`。物化属于写入，需要项目写权限；只读用户仍可预览。
+
       `at_index` 越界（含负数）返回 422；轨迹不存在返回 404。
-      确认后调用创建端点以新 `trajectory_id`（如 `<原 id>#fork-1`）物化。
+      `preference_json_value` 可直接作为 JSON 标签值回流提交链。
     requestBody:
       required: true
       content:
@@ -116,12 +123,13 @@ prmTrajectoryFork:
           schema: { $ref: "../openapi.yaml#/components/schemas/PrmForkRequest" }
     responses:
       "200":
-        description: 分叉轨迹与 Step-DPO 对预览
+        description: 分叉轨迹与 Step-DPO 对（物化时含新标注 ID）
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/PrmForkPreviewOut" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

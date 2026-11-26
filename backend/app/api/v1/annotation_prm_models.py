@@ -1,7 +1,8 @@
-"""PRM 步级标注 API 请求/响应模型（V52-020）。
+"""PRM 步级标注 API 请求/响应模型（V52-020/V52-032）。
 
 字段口径与领域层 ``prm_step`` 一致：marks 可部分标注（未标 ≠ 正确）、
-fork 端点为纯计算预览（不落库）。错误复用标注域既有错误码，无新增。
+fork 端点默认是纯计算预览（不落库），``materialize=true`` 时同请求落库并
+返回 ``materialized_annotation_id``。错误复用标注域既有错误码，无新增。
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.annotation.prm_dpo import StepDpoPair
-from app.domain.annotation.prm_step import ForkedTrajectory, PrmAnnotation, StepMark
+from app.domain.annotation.prm_step import PrmAnnotation, StepMark
 
 
 class StepMarkIn(BaseModel):
@@ -101,10 +102,13 @@ class PrmForkRequest(BaseModel):
 
     at_index: int = Field(ge=0)
     new_actions: tuple[str, ...] = Field(min_length=1, max_length=512)
+    #: 默认 false = 纯计算预览（旧客户端零影响）；true = 同请求内分叉 + 落库，
+    #: 需要项目写权限（预览只读即可）。
+    materialize: bool = False
 
 
 class PrmForkPreviewOut(BaseModel):
-    """分叉重写预览：分叉轨迹 + Step-DPO 对（纯计算结果，未落库）。"""
+    """分叉重写结果：分叉轨迹 + Step-DPO 对；``materialize=true`` 时含落库 ID。"""
 
     source_trajectory_id: str
     fork_point_index: int
@@ -113,6 +117,8 @@ class PrmForkPreviewOut(BaseModel):
     shared_prefix_steps: int
     forked_marks: list[StepMarkOut]
     dpo_pair: StepDpoPairOut
+    #: 物化成功后的新标注 ID；纯预览时为 null。
+    materialized_annotation_id: UUID | None = None
 
 
 class StepDpoPairOut(BaseModel):
@@ -139,7 +145,3 @@ class StepDpoPairOut(BaseModel):
             criteria_scores=dict(pair.criteria_scores),
             preference_json_value=pair.to_payload(),
         )
-
-
-def forked_preview_id(forked: ForkedTrajectory) -> str:
-    return f"{forked.source_trajectory_id}#fork-preview"

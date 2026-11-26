@@ -1,4 +1,4 @@
-import { Card, Col, Divider, Input, Row, Space, Tag, Typography } from "antd";
+import { Button, Card, Col, Divider, Input, Row, Space, Tag, Typography } from "antd";
 import { useState } from "react";
 
 import {
@@ -115,6 +115,18 @@ export default function PreferencePairPanel({
               {option}
             </Tag.CheckableTag>
           ))}
+          {/* 清除选择 = 回到"未选 winner"（不算有效结论）。没有这个入口，
+              误点后草稿无法撤销，提交链路会把用户永久卡住。 */}
+          {winner !== null ? (
+            <Button
+              type="link"
+              size="small"
+              onClick={() => emit({ winner: null })}
+              data-testid="llm-pref-clear"
+            >
+              清除选择
+            </Button>
+          ) : null}
         </Space>
         <Space size={8} wrap align="center">
           <Typography.Text>置信度：</Typography.Text>

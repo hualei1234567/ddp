@@ -225,6 +225,17 @@ parameters:
       type: string
       format: uuid
 
+  # V52-033 技能标签写入：路径里的单个标签名（服务端还会再做一次规范化）。
+  SkillTagName:
+    name: tag_name
+    in: path
+    required: true
+    description: 技能标签名；服务端规范化为小写并去首尾空白后匹配。
+    schema:
+      type: string
+      minLength: 1
+      maxLength: 64
+
 responses:
   Unauthorized:
     description: 未认证或令牌无效（`not_authenticated`，401）。
