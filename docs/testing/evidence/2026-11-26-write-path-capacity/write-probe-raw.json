@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-11-26T09:36:39.570499+00:00",
+  "plan": {
+    "base": "localhost:55432/postgres",
+    "workers": [
+      1,
+      4,
+      16
+    ],
+    "iterations_per_worker": 150,
+    "estimated_writes": 6300,
+    "temp_db_prefix": "ddp_perf_write_"
+  },
+  "results": [
+    {
+      "workers": 1,
+      "iterations_per_worker": 150,
+      "samples": 150,
+      "errors": 0,
+      "error_samples": [],
+      "p50_ms": 1.27,
+      "p95_ms": 1.96,
+      "p99_ms": 5.69,
+      "max_ms": 12.7,
+      "tps": 698.0,
+      "deadlocks": 0,
+      "lock_waits": 0
+    },
+    {
+      "workers": 4,
+      "iterations_per_worker": 150,
+      "samples": 600,
+      "errors": 0,
+      "error_samples": [],
+      "p50_ms": 1.29,
+      "p95_ms": 2.44,
+      "p99_ms": 5.26,
+      "max_ms": 24.18,
+      "tps": 2443.4,
+      "deadlocks": 0,
+      "lock_waits": 0
+    },
+    {
+      "workers": 16,
+      "iterations_per_worker": 150,
+      "samples": 2400,
+      "errors": 0,
+      "error_samples": [],
+      "p50_ms": 5.3,
+      "p95_ms": 8.54,
+      "p99_ms": 17.59,
+      "max_ms": 111.02,
+      "tps": 2547.8,
+      "deadlocks": 0,
+      "lock_waits": 0
+    }
+  ],
+  "pg": {
+    "max_connections": 100,
+    "connections_now": 1,
+    "weighted_by_wait_type": {
+      "CPU": 1
+    }
+  },
+  "notes": [
+    "每次写入为「审计行 + outbox 事件」双写，代表本项目写事务骨架",
+    "未覆盖业务校验耗时与端到端 HTTP 延迟",
+    "临时库已删除，数据不落主库"
+  ]
+}
