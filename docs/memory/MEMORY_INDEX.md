@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 32 张卡片**：DRAFT 0 / ACTIVE 32 / SUPERSEDED 0 / DEPRECATED 0
+**总计 33 张卡片**：DRAFT 0 / ACTIVE 33 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 32 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 33 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -23,13 +23,14 @@
 | [MEM-DEC-001](decisions/MEM-DEC-001-adapter-capability-levels.md) | Adapter 能力分级用独立枚举，不改现有五值枚举 | ACTIVE | 1 | `adapter`, `adr`, `capability`, `enum`, `format`, `level` |
 | [MEM-DEC-002](decisions/MEM-DEC-002-preference-pair-as-json-value.md) | 偏好对比标注用 JSON 约定值而非新增标签类型 | ACTIVE | 1 | `dpo`, `json-label`, `pairwise`, `position-bias`, `preference`, `schema` |
 
-## SOP · 标准操作流程（3）
+## SOP · 标准操作流程（4）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
 | [MEM-SOP-001](sop/MEM-SOP-001-real-sample-admission.md) | 真实样本准入检查清单（GATE-0） | ACTIVE | 1 | `fixture`, `gate`, `golden-path`, `hdf5`, `sample`, `sha256`, `sop` |
 | [MEM-SOP-002](sop/MEM-SOP-002-parallel-agent-development.md) | 并行智能体开发 SOP：worktree 隔离 + 资源预分配 + check.sh 串行 | ACTIVE | 1 | `check-lock`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `version-bump`, `worktree` |
 | [MEM-SOP-003](sop/MEM-SOP-003-subagent-parallel-collaboration.md) | 子代理并行开发协作模式：迁移号独占 + 契约策略 + 禁改共享文件 + 坑点统一入库 + check.sh 全局串行 | ACTIVE | 1 | `check-lock`, `contract-strategy`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `subagent` |
+| [MEM-SOP-004](sop/MEM-SOP-004-semgrep-sast-suppression.md) | Semgrep SAST 接入与误报基线的正确姿势 | ACTIVE | 1 | `baseline`, `ci`, `false-positive`, `nosemgrep`, `sast`, `semgrep`, `sql-injection`, `ssrf` |
 
 ## INC · 事故与缺陷复盘（24）
 
@@ -110,6 +111,7 @@
 - `backup`：MEM-OPS-001
 - `backup-restore`：MEM-INC-002
 - `backward-compatibility`：MEM-INC-014
+- `baseline`：MEM-SOP-004
 - `batch-alter-table`：MEM-INC-020
 - `bigint`：MEM-INC-008
 - `boundary`：MEM-INC-011
@@ -120,7 +122,7 @@
 - `check-constraint`：MEM-INC-003, MEM-INC-012, MEM-INC-013
 - `check-lock`：MEM-SOP-002, MEM-SOP-003
 - `chunked-read`：MEM-INC-010
-- `ci`：MEM-INC-005
+- `ci`：MEM-INC-005, MEM-SOP-004
 - `ci-gate`：MEM-INC-016
 - `claim-boundary`：MEM-REQ-001
 - `column-name`：MEM-INC-002
@@ -142,6 +144,7 @@
 - `drill`：MEM-INC-002, MEM-OPS-001
 - `e2e`：MEM-INC-005
 - `enum`：MEM-DEC-001, MEM-INC-012
+- `false-positive`：MEM-SOP-004
 - `filterwarnings`：MEM-INC-019
 - `fixture`：MEM-INC-004, MEM-SOP-001
 - `flaky`：MEM-INC-005, MEM-INC-009
@@ -176,6 +179,7 @@
 - `n-plus-1`：MEM-INC-024
 - `naive-datetime`：MEM-INC-022
 - `nanosecond`：MEM-INC-008
+- `nosemgrep`：MEM-SOP-004
 - `off-by-n`：MEM-INC-010
 - `openapi`：MEM-INC-015, MEM-INC-017
 - `optimistic-lock`：MEM-INC-011
@@ -209,10 +213,12 @@
 - `rpo`：MEM-INC-002, MEM-OPS-001
 - `rto`：MEM-OPS-001
 - `sample`：MEM-INC-004, MEM-SOP-001
+- `sast`：MEM-SOP-004
 - `savepoint`：MEM-INC-001
 - `sawarning`：MEM-INC-019
 - `schema`：MEM-DEC-002, MEM-INC-013
 - `schema-evolution`：MEM-INC-014
+- `semgrep`：MEM-SOP-004
 - `serialization`：MEM-INC-014, MEM-INC-021
 - `session`：MEM-INC-006
 - `sha256`：MEM-INC-004, MEM-SOP-001
@@ -223,9 +229,11 @@
 - `sop`：MEM-SOP-001, MEM-SOP-002, MEM-SOP-003
 - `spool`：MEM-OPS-001
 - `sql`：MEM-INC-002
+- `sql-injection`：MEM-SOP-004
 - `sqlalchemy`：MEM-INC-013, MEM-INC-019
 - `sqlalchemy-events`：MEM-INC-024
 - `sqlite`：MEM-INC-013, MEM-INC-018, MEM-INC-020, MEM-INC-022
+- `ssrf`：MEM-SOP-004
 - `stage`：MEM-INC-012
 - `status`：MEM-INC-003, MEM-REQ-001
 - `stream-extraction`：MEM-INC-012

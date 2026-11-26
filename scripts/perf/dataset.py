@@ -67,6 +67,8 @@ def create_database(base_dsn: str, name: str) -> None:
     engine = _admin_engine(base_dsn)
     try:
         with engine.connect() as connection:
+            # 库名标识符不能 bind；name 已由 ensure_safe_perf_db_name 校验前缀/长度/字符集
+            # nosemgrep: ddp-no-raw-sql-fstring —— 标识符来自校验函数，非请求值
             connection.execute(text(f'CREATE DATABASE "{name}"'))
     finally:
         engine.dispose()
@@ -85,6 +87,8 @@ def drop_database(base_dsn: str, name: str) -> None:
                 ),
                 {"name": name},
             )
+            # 同上：name 已过 ensure_safe_perf_db_name 标识符校验，只用于清理临时库。
+            # nosemgrep: ddp-no-raw-sql-fstring —— 标识符来自校验函数，非请求值
             connection.execute(text(f'DROP DATABASE IF EXISTS "{name}"'))
     finally:
         engine.dispose()

@@ -236,6 +236,8 @@ def verify_range(
 ) -> None:
     """测量前先验证 206 + Content-Range 总长，避免把"坏路径"当"慢路径"。"""
     with httpx.Client(timeout=timeout_seconds) as client:
+        # URL 来自压测目标（--base-url）或服务端返回的预签名播放地址；本地压测工具。
+        # nosemgrep: ddp-ssrf-unvalidated-url —— 非服务端出站面，目标由操作者显式指定
         response = client.get(url, headers={"Range": f"bytes=0-{chunk_size - 1}"})
     if response.status_code != 206:
         raise RuntimeError(f"Range 校验失败：HTTP {response.status_code}")

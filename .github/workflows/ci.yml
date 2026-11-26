@@ -299,6 +299,14 @@ jobs:
         run: pip install pytest pip-audit pyyaml
       - name: Secret 扫描（阻断）
         run: python scripts/check_secrets.py
+      - name: Semgrep SAST（阻断）
+        # 审计 R4：注入（SQL 拼接 / shell=True）与 SSRF 类问题此前只能靠人眼。
+        # 只 pip 安装扫描引擎（不引入 Docker / 不改 requirements）；扫描命令与
+        # 本地 scripts/check_sast.sh 保持单一来源，--error = 命中即让 job 失败。
+        # 版本固定：semgrep 引擎升级可能改变规则匹配行为，升级前先本地复核基线。
+        run: |
+          python -m pip install "semgrep==1.187.0"
+          bash scripts/check_sast.sh
       - name: Agent Bash 守卫测试（阻断）
         run: python -m pytest scripts/tests -q
       - name: outbox 事件归类自检（阻断）

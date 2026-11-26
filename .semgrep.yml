@@ -1,0 +1,149 @@
+# DDP Semgrep SAST 自定义规则（审计 R4 / V52-042）
+#
+# 官方规则集不内联在这里，由调用方通过 --config 引用：
+#
+#   semgrep --config p/python --config p/security-audit --config .semgrep.yml \
+#           --error backend/app scripts
+#
+# 本地一键执行：bash scripts/check_sast.sh
+# CI：.github/workflows/ci.yml 的 security job「Semgrep SAST（阻断）」步骤。
+#
+# 内联 p/python + p/security-audit 有上千条规则，会让规则仓与 semgrep 版本
+# 各自漂移；官方规则集升级交给 semgrep registry，本文件只维护**本项目真实
+# 风险面**的 3 条规则。新规则必须有对应的真实代码面，不抄通用模板。
+rules:
+  # ---------------------------------------------------------------------------
+  # a. 原生 SQL 拼接：SQLAlchemy text() 里拼 f-string 或字符串 +
+  #    DDP 的 SQL 一律走 SQLAlchemy Core / bind 参数（:name），不允许把值拼进
+  #    SQL 文本。拼接是注入的唯一入口，参数化后值永远不参与 SQL 解析。
+  #
+  #    纯全大写标识符插值（模块级常量，如 {_ACTIVE_STATUS_VALUES}）不报：
+  #    常量不是请求输入。已知盲区：`{name!r}` / `{name:>10}` 这类带转换或
+  #    格式说明符的插值，Semgrep 的 f-string 模式匹配不到，需升级规则或人工
+  #    评审覆盖（见 PR 说明的诚实边界）。
+  # ---------------------------------------------------------------------------
+  - id: ddp-no-raw-sql-fstring
+    languages: [python]
+    severity: ERROR
+    message: >-
+      text() 里拼接 SQL（f-string 或字符串加法）会把值直接送进 SQL 解析器，
+      是注入入口。改用 bind 参数：text("... WHERE id = :id"),
+      session.execute(stmt, {"id": value})；标识符（表名/列名/库名）必须来自
+      白名单常量或经过标识符校验函数，不得来自请求输入。
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: "CWE-89: Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')"
+      owasp: "A03:2021 - Injection"
+      references:
+        - https://docs.sqlalchemy.org/en/20/core/sqlelement.html#sqlalchemy.text
+      # 审计 R4：注入类问题此前完全依赖人眼。
+      technology: [sqlalchemy]
+    patterns:
+      - pattern-either:
+          # 变量/属性/调用插值：不是纯大写字面常量就报。
+          - patterns:
+              - pattern: text(f"...{$EXPR}...")
+              - metavariable-regex:
+                  metavariable: $EXPR
+                  regex: '^(?![_]?[A-Z][A-Z0-9_]*$).*$'
+          - patterns:
+              - pattern: sa.text(f"...{$EXPR}...")
+              - metavariable-regex:
+                  metavariable: $EXPR
+                  regex: '^(?![_]?[A-Z][A-Z0-9_]*$).*$'
+          # 字符串 + 拼接。
+          - pattern: text($SQL + ...)
+          - pattern: sa.text($SQL + ...)
+
+  # ---------------------------------------------------------------------------
+  # b. 命令注入：subprocess 调用带 shell=True 时，参数串由 shell 解析，
+  #    任何拼进去的变量都会变成命令。DDP 的后台任务（备份、校验、维护）
+  #    全部用参数列表调用（argv），不经过 shell。
+  # ---------------------------------------------------------------------------
+  - id: ddp-no-shell-true
+    languages: [python]
+    severity: ERROR
+    message: >-
+      subprocess 使用 shell=True 会让 shell 解析参数串，拼入的变量即命令注入入口。
+      改为参数列表调用：subprocess.run([exe, arg1, arg2], check=True)，不要经过 shell。
+    metadata:
+      category: security
+      confidence: HIGH
+      cwe: "CWE-78: Improper Neutralization of Special Elements used in an OS Command ('OS Command Injection')"
+      owasp: "A03:2021 - Injection"
+      references:
+        - https://docs.python.org/3/library/subprocess.html#security-considerations
+      technology: [subprocess]
+    patterns:
+      - pattern-either:
+          - pattern: subprocess.$FUNC(..., shell=True, ...)
+          - pattern: subprocess.$FUNC(..., shell=$SHELL, ...)
+      - metavariable-regex:
+          metavariable: $SHELL
+          regex: '^True$'
+
+  # ---------------------------------------------------------------------------
+  # c. SSRF：函数参数里的 URL 直接交给 httpx/requests 出站，且函数内没有先调用
+  #    真实守卫 ensure_safe_adapter_url()（backend/app/infrastructure/
+  #    adapter_url_guard.py）做地址筛查（拒环回/私网/链路本地/云元数据，
+  #    fail-closed），以及不跟随重定向。
+  #
+  #    规则是函数级近似：只要函数体里出现过对同一 URL 变量的守卫调用就不再报，
+  #    不区分调用先后；它拦的是"完全没校验就出站"的回归，不能替代对守卫
+  #    实现本身的评审。
+  # ---------------------------------------------------------------------------
+  - id: ddp-ssrf-unvalidated-url
+    languages: [python]
+    severity: ERROR
+    message: >-
+      函数参数 URL 未经 SSRF 守卫直接出站。出站前调用
+      app.infrastructure.adapter_url_guard.ensure_safe_adapter_url(url, context=...)，
+      并保持 follow_redirects=False（重定向目标会绕过对原始 URL 的校验）。
+    metadata:
+      category: security
+      confidence: MEDIUM
+      cwe: "CWE-918: Server-Side Request Forgery (SSRF)"
+      owasp: "A10:2021 - Server-Side Request Forgery (SSRF)"
+      references:
+        - https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+      technology: [httpx, requests]
+    patterns:
+      - pattern-inside: |
+          def $FUNC(..., $URL, ...):
+              ...
+      - pattern-not-inside: |
+          def $FUNC(..., $URL, ...):
+              ...
+              ensure_safe_adapter_url($URL, ...)
+              ...
+      - pattern-either:
+          # 模块级调用：httpx.get(url) / requests.post(url)
+          - pattern: httpx.get($URL, ...)
+          - pattern: httpx.post($URL, ...)
+          - pattern: httpx.put($URL, ...)
+          - pattern: httpx.patch($URL, ...)
+          - pattern: httpx.delete($URL, ...)
+          - pattern: httpx.head($URL, ...)
+          - pattern: httpx.options($URL, ...)
+          - pattern: requests.get($URL, ...)
+          - pattern: requests.post($URL, ...)
+          - pattern: requests.put($URL, ...)
+          - pattern: requests.patch($URL, ...)
+          - pattern: requests.delete($URL, ...)
+          # 客户端实例调用：client.get(url) / client.request("GET", url) /
+          # client.stream("GET", url)。只列举 HTTP 方法名，不用 $METHOD
+          # 通配，否则 `from sqlalchemy import create_engine` 这类导入会被
+          # 解析成 sqlalchemy.create_engine 而误报。
+          - pattern: $CLIENT.get($URL, ...)
+          - pattern: $CLIENT.post($URL, ...)
+          - pattern: $CLIENT.put($URL, ...)
+          - pattern: $CLIENT.patch($URL, ...)
+          - pattern: $CLIENT.delete($URL, ...)
+          - pattern: $CLIENT.head($URL, ...)
+          - pattern: $CLIENT.options($URL, ...)
+          - pattern: $CLIENT.request($METHOD, $URL, ...)
+          - pattern: $CLIENT.stream($METHOD, $URL, ...)
+      - metavariable-regex:
+          metavariable: $URL
+          regex: '(?i)^.*(url|uri|endpoint|base_url).*$'

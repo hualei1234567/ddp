@@ -83,6 +83,10 @@ class _HttpxFetcher:
 
     def stream(self, url: str) -> Iterator[bytes]:
         """满足 data-platform 的 ``HttpFetcher`` 协议：按块产出响应体。"""
+        # 下载 URL 由 ddp_data.huggingface.importer.resolve_url 构造：host 固定为
+        # huggingface.co，revision 必须是 40 位 commit sha，repo_id/path 只落在该
+        # 主机的路径里，调用方无法改写主机，因此这里没有 SSRF 出站面。
+        # nosemgrep: ddp-ssrf-unvalidated-url —— 主机不可由入参控制，理由见上
         with self._client.stream("GET", url, follow_redirects=True) as response:
             response.raise_for_status()
             yield from response.iter_bytes()
