@@ -88,12 +88,11 @@ class BackflowUseCases:
             received_at=moment,
             limit=limit,
         )
+        # 只持久化**受理**的案例：跳过/限流的判决是瞬态结论，只回给调用方，
+        # 不落库。原因——表上有 (source, case_ref) 唯一键，而"重复跳过"的案例
+        # 恰恰与既有行同键，写行必然撞唯一约束（生产演练实测 409，见
+        # MEM-INC-023）。限流同理：风暴期若逐条写拒绝行，反而制造写放大。
         self._backflow.add_accepted(scope, accepted)
-        for decision in batch.decisions:
-            if decision.decision.value != "CREATE_TASK":
-                self._backflow.add_skipped(
-                    scope, (decision.case,), decision.decision, decision.reason
-                )
         # 并发双写兜底：唯一键冲突整批拒绝（会话由依赖层回滚，无部分写入）。
         # 选择整批拒绝而非静默跳过：调用方需要知道"这批没有全部落库"才能重试；
         # 静默跳过会让评测平台误以为案例已受理（MEM-INC-001 的教训是别让异常
