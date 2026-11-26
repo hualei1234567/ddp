@@ -6,8 +6,21 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import pytest
-from scripts.perf.core import ensure_safe_base_dsn, ensure_safe_perf_db_name
+
+# CI 里 pytest 的 rootdir 是 backend/，仓库根的 scripts/ 不在 sys.path 上，
+# 直接 import scripts.perf.core 会 ModuleNotFoundError（本地因 PYTHONPATH 巧合能过）。
+_REPO = Path(__file__).resolve().parents[3]
+if str(_REPO) not in sys.path:
+    sys.path.insert(0, str(_REPO))
+
+from scripts.perf.core import (  # noqa: E402
+    ensure_safe_base_dsn,
+    ensure_safe_perf_db_name,
+)
 
 
 def test_rejects_non_loopback_host() -> None:
