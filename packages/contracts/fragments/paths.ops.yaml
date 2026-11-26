@@ -256,3 +256,64 @@ datasetVersionCompare:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+# --- Webhook 订阅（阶段 5 / 蓝图 N5 生态对接） ---
+webhookSubscription:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: createWebhookSubscription
+    tags: [webhook]
+    summary: 创建 Webhook 订阅（secret 仅本次响应返回一次）
+    description: |
+      为项目注册一个事件订阅。`secret` 明文**仅在创建响应里返回一次**，
+      之后只存 SHA-256 哈希；投递时用该密钥做 HMAC-SHA256 签名
+      （`X-DDP-Signature: sha256=...` + `X-DDP-Timestamp`），下游据此验签。
+
+      URL 只接受 https 或**本机** http（防误配把数据推到外部地址）。
+      同一项目同一 URL 只允许一份订阅（重复返回 409）。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/WebhookSubscriptionCreate" }
+    responses:
+      "201":
+        description: 创建成功（响应含明文 secret，仅此一次）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WebhookSubscriptionCreated" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+  get:
+    operationId: listWebhookSubscriptions
+    tags: [webhook]
+    summary: 列出项目的 Webhook 订阅（不含任何 secret）
+    description: |
+      订阅视图**不含**明文 secret 也**不含**哈希——两者都不对外暴露。
+      `status` 为 ACTIVE / PAUSED；连续投递失败达阈值自动 PAUSED，
+      成功投递后自动恢复 ACTIVE。
+    responses:
+      "200":
+        description: 订阅列表
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/WebhookSubscriptionPage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+webhookSubscriptionDetail:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/SubscriptionId"
+  delete:
+    operationId: deleteWebhookSubscription
+    tags: [webhook]
+    summary: 删除 Webhook 订阅
+    description: 删除订阅后该地址不再收到事件投递。删除是幂等的。
+    responses:
+      "204": { description: 删除成功 }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

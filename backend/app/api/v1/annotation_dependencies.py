@@ -33,6 +33,7 @@ from app.application.annotation.semantic_dedup import SemanticDedupUseCases
 from app.application.annotation.skill_profiles import SkillProfileUseCases
 from app.application.annotation.submissions import AnnotationSubmissionUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
+from app.application.webhook.subscriptions import WebhookSubscriptionUseCases
 from app.core.config import Settings, get_settings
 from app.infrastructure.repositories.annotation_ai_suggestions import (
     SqlAnnotationAiSuggestionRepository,
@@ -77,6 +78,7 @@ from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRe
 from app.infrastructure.repositories.annotation_token_usage import SqlTokenUsageRecorder
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.semantic_dedup import SqlSemanticDedupRepository
+from app.infrastructure.repositories.webhook_subscription import SqlWebhookSubscriptionRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,8 +101,19 @@ class AnnotationUseCases:
     overdue_summary: AnnotationOverdueSummaryUseCases
     prm_annotations: PrmAnnotationUseCases
     backflow: BackflowUseCases
+    webhook_subscriptions: WebhookSubscriptionUseCases
     semantic_dedup: SemanticDedupUseCases
     skill_profiles: SkillProfileUseCases
+
+
+def _webhook_key(settings: Settings) -> bytes:
+    """订阅明文加密密钥：从配置派生为 bytes。
+
+    **不在装配时强制**——创建订阅才需要加密密钥。空串时返回空，由仓储在
+    真正加密时报错（用时校验），避免装配失败波及所有不涉及 Webhook 的请求
+    与既有测试。启用出站投递时，启动校验会拒绝空密钥（fail-closed）。
+    """
+    return settings.webhook_encryption_key.strip().encode("utf-8")
 
 
 def get_annotation_use_cases(
@@ -331,6 +344,10 @@ def get_annotation_use_cases(
         backflow=BackflowUseCases(
             SqlBackflowRepository(session),
             tasks,
+            session,
+        ),
+        webhook_subscriptions=WebhookSubscriptionUseCases(
+            SqlWebhookSubscriptionRepository(session, encryption_key=_webhook_key(settings)),
             session,
         ),
         semantic_dedup=SemanticDedupUseCases(SqlSemanticDedupRepository(session)),

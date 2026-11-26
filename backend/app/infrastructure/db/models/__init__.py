@@ -132,6 +132,7 @@ __all__ = [
     "AnnotatorSkillTag",
     "AnnotationArbitration",
     "AnnotationBackflowCase",
+    "WebhookSubscriptionModel",
     "AnnotationAssignment",
     "AnnotationAssignmentEvent",
     "AnnotationBatch",
@@ -230,3 +231,4 @@ __all__ += [
     "DataSourceModel",
     "MediaAssetModel",
 ]
+from app.infrastructure.db.models.webhook_subscription import WebhookSubscriptionModel  # noqa: E402

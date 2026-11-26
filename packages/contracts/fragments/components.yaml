@@ -236,14 +236,6 @@ parameters:
       minLength: 1
       maxLength: 64
 
-  DatasetId:
-    name: dataset_id
-    in: path
-    required: true
-    schema:
-      type: string
-      format: uuid
-
   BaselineVersionId:
     name: baseline_version_id
     in: path
@@ -254,6 +246,14 @@ parameters:
 
   CandidateVersionId:
     name: candidate_version_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+
+  SubscriptionId:
+    name: subscription_id
     in: path
     required: true
     schema:
