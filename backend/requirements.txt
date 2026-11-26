@@ -1,12 +1,20 @@
-fastapi==0.115.6
+# 审计 v52-044：fastapi 0.115.6 的传递依赖 starlette 0.41.3 存在 48 个已知漏洞
+# （pip-audit 扫描），修复版本需 starlette ≥ 1.1.0。经 python:3.11-slim 容器验证，
+# fastapi 0.133.1 是拉起 starlette 1.10.0（已修复）的最小组合，故跨大版本升级。
+# 风险：fastapi 0.115 → 0.133 为跨大版本升级，可能影响响应模型、依赖注入、异常
+# 处理器等 API 兼容性；已跑全量 pytest 回归（见 tests/）确认无破坏。
+fastapi==0.133.1
 uvicorn[standard]==0.34.0
 pydantic-settings==2.7.1
 sqlalchemy==2.0.36
 alembic==1.14.0
 psycopg[binary]==3.2.3
 boto3==1.35.90
-python-multipart==0.0.20
-PyJWT==2.10.1
+# 审计 v52-044：0.0.20 存在 PYSEC-2026-3036/3037/3039/3040，修复版本 ≥ 0.0.31。
+python-multipart==0.0.34
+# 审计 v52-044：2.10.1 存在 PYSEC-2025-183 / PYSEC-2026-120/175-179/4140-4183 等，
+# 修复版本 ≥ 2.12.1，取 2.15.1 一并覆盖全部公告。
+PyJWT==2.15.1
 jsonschema==4.23.0
 rfc8785==0.1.4
 uuid-utils==1.2.0
