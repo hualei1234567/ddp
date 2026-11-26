@@ -1,0 +1,277 @@
+{
+  "task": "G10 生产只读压测基线",
+  "mode": "execute",
+  "generated_at": "2026-11-26T00:46:07+00:00",
+  "disclaimer": "本报告是单机生产环境的短时只读基线，不等于容量规划结论；并发/数据分布/后台 worker 负载都会显著影响数字，跨机器与跨时间不可直接比较。",
+  "environment": {
+    "base_url": "http://127.0.0.1:18000",
+    "pg_dsn_masked": "postgresql+psycopg://ddp:***@127.0.0.1:55432/ddp",
+    "pg_version": "16.16",
+    "hardware": {
+      "platform": "macOS-27.2.1-arm64-arm-64bit",
+      "machine": "arm64",
+      "processor": "arm",
+      "cpu_count": 10,
+      "memory_gib": 16.0,
+      "python": "3.11.17"
+    },
+    "git": {
+      "commit": "8b0abdca9156a8d366f806b00e5714e8d953107d",
+      "branch": "feat/v52-perf-baseline",
+      "dirty": true
+    },
+    "load_average_start": {
+      "1m": 3.091,
+      "5m": 2.988,
+      "15m": 2.43
+    }
+  },
+  "plan": {
+    "concurrency": 8,
+    "requests_per_endpoint": 300,
+    "duration_budget_seconds": 120.0,
+    "request_timeout_seconds": 10.0,
+    "wall_seconds": 5.8965,
+    "endpoints": [
+      {
+        "name": "health",
+        "path": "/health"
+      },
+      {
+        "name": "projects",
+        "path": "/api/v1/projects?limit=20"
+      },
+      {
+        "name": "project_detail",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0"
+      },
+      {
+        "name": "episodes",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/episodes?limit=20"
+      },
+      {
+        "name": "raw_assets",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/raw-assets?limit=20"
+      },
+      {
+        "name": "datasets",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/datasets?limit=20"
+      },
+      {
+        "name": "collection_tasks",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/collection-tasks?limit=20"
+      }
+    ]
+  },
+  "safety": {
+    "read_only": true,
+    "methods": [
+      "GET"
+    ],
+    "limits": {
+      "max_concurrency": 32,
+      "max_requests_per_endpoint": 2000,
+      "max_duration_seconds": 180.0,
+      "connection_guard_ratio": 0.8
+    }
+  },
+  "connection_guard": {
+    "ratio_limit": 0.8,
+    "max_connections": 100,
+    "start": {
+      "max_connections": 100,
+      "used": 12,
+      "ratio": 0.12,
+      "at": "2026-11-26T00:46:01+00:00"
+    },
+    "peak": {
+      "max_connections": 100,
+      "used": 18,
+      "ratio": 0.18,
+      "at": "2026-11-26T00:46:02+00:00"
+    },
+    "end": {
+      "max_connections": 100,
+      "used": 18,
+      "ratio": 0.18,
+      "at": "2026-11-26T00:46:06+00:00"
+    },
+    "sample_count": 6,
+    "query_failures": 0,
+    "aborted": false,
+    "abort_reason": null
+  },
+  "overall": {
+    "requests_sent": 2100,
+    "wall_seconds": 5.8965,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "throughput_rps": 356.145,
+    "p50_ms": 15.237,
+    "p95_ms": 75.655,
+    "p99_ms": 89.329
+  },
+  "per_endpoint": {
+    "health": {
+      "path": "/health",
+      "requests_planned": 300,
+      "requests_sent": 300,
+      "wall_seconds": 0.0975,
+      "status_counts": {
+        "200": 300
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 300,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 3076.426,
+        "p50_ms": 2.386,
+        "p95_ms": 2.982,
+        "p99_ms": 3.966,
+        "mean_ms": 2.438,
+        "max_ms": 4.035
+      }
+    },
+    "projects": {
+      "path": "/api/v1/projects?limit=20",
+      "requests_planned": 300,
+      "requests_sent": 300,
+      "wall_seconds": 0.3462,
+      "status_counts": {
+        "200": 300
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 300,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 866.497,
+        "p50_ms": 8.32,
+        "p95_ms": 9.659,
+        "p99_ms": 41.902,
+        "mean_ms": 9.007,
+        "max_ms": 42.161
+      }
+    },
+    "project_detail": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0",
+      "requests_planned": 300,
+      "requests_sent": 300,
+      "wall_seconds": 0.5131,
+      "status_counts": {
+        "200": 300
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 300,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 584.688,
+        "p50_ms": 11.294,
+        "p95_ms": 13.331,
+        "p99_ms": 92.008,
+        "mean_ms": 13.418,
+        "max_ms": 93.201
+      }
+    },
+    "episodes": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/episodes?limit=20",
+      "requests_planned": 300,
+      "requests_sent": 300,
+      "wall_seconds": 0.8083,
+      "status_counts": {
+        "200": 300
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 300,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 371.136,
+        "p50_ms": 20.726,
+        "p95_ms": 28.318,
+        "p99_ms": 34.015,
+        "mean_ms": 21.248,
+        "max_ms": 34.372
+      }
+    },
+    "raw_assets": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/raw-assets?limit=20",
+      "requests_planned": 300,
+      "requests_sent": 300,
+      "wall_seconds": 0.7956,
+      "status_counts": {
+        "200": 300
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 300,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 377.067,
+        "p50_ms": 19.043,
+        "p95_ms": 23.132,
+        "p99_ms": 85.947,
+        "mean_ms": 20.905,
+        "max_ms": 89.329
+      }
+    },
+    "datasets": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/datasets?limit=20",
+      "requests_planned": 300,
+      "requests_sent": 300,
+      "wall_seconds": 0.5822,
+      "status_counts": {
+        "200": 300
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 300,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 515.272,
+        "p50_ms": 15.118,
+        "p95_ms": 18.307,
+        "p99_ms": 21.6,
+        "mean_ms": 15.276,
+        "max_ms": 24.126
+      }
+    },
+    "collection_tasks": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/collection-tasks?limit=20",
+      "requests_planned": 300,
+      "requests_sent": 300,
+      "wall_seconds": 2.7528,
+      "status_counts": {
+        "200": 300
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 300,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 108.979,
+        "p50_ms": 72.639,
+        "p95_ms": 87.931,
+        "p99_ms": 118.839,
+        "mean_ms": 72.935,
+        "max_ms": 124.537
+      }
+    }
+  }
+}
