@@ -75,7 +75,7 @@ POST /api/v1/projects/{project_id}/annotation-honeypot/{annotator_id}/resume
 | 场景 | 操作 |
 | --- | --- |
 | 行为回滚（最快） | 设 `DDP_HONEYPOT_BREAKER_ENABLED=false` 并重启服务：派单恢复旧口径，resume 端点退化为只读 |
-| 数据回滚 | `alembic downgrade 0081`（删除 `annotation_honeypot_state`，状态清零）——需按迁移审批流程单独批准 |
+| 数据回滚 | `alembic downgrade 0080`（0083 的 down_revision 是 0080，回退后 `annotation_honeypot_state` 删除、状态清零）。**注意**：当前迁移链为 `0074→0078→0081→0080→0083→0082→0084`，`downgrade 0081` 会连带删除 0080/0083/0082（0082 之后的迁移同样受影响），因此必须按"目标版本的相邻上一版"填，不要填跨越多个迁移的版本号。需按迁移审批流程单独批准 |
 | 代码回滚 | revert 本 PR（迁移 0083 与接线代码同 PR，revert 后 downgrade 需先于代码回滚执行） |
 
 ## 6. 相关文档
