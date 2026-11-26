@@ -1,0 +1,223 @@
+{
+  "task": "G10 生产只读压测基线",
+  "mode": "execute",
+  "generated_at": "2026-11-26T00:47:03+00:00",
+  "disclaimer": "本报告是单机生产环境的短时只读基线，不等于容量规划结论；并发/数据分布/后台 worker 负载都会显著影响数字，跨机器与跨时间不可直接比较。",
+  "environment": {
+    "base_url": "http://127.0.0.1:18000",
+    "pg_dsn_masked": "postgresql+psycopg://ddp:***@127.0.0.1:55432/ddp",
+    "pg_version": "16.16",
+    "hardware": {
+      "platform": "macOS-27.2.1-arm64-arm-64bit",
+      "machine": "arm64",
+      "processor": "arm",
+      "cpu_count": 10,
+      "memory_gib": 16.0,
+      "python": "3.11.17"
+    },
+    "git": {
+      "commit": "8b0abdca9156a8d366f806b00e5714e8d953107d",
+      "branch": "feat/v52-perf-baseline",
+      "dirty": true
+    },
+    "load_average_start": {
+      "1m": 3.438,
+      "5m": 3.083,
+      "15m": 2.5
+    }
+  },
+  "plan": {
+    "concurrency": 4,
+    "requests_per_endpoint": 100,
+    "duration_budget_seconds": 60.0,
+    "request_timeout_seconds": 10.0,
+    "wall_seconds": 4.307,
+    "endpoints": [
+      {
+        "name": "ct_l1",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/collection-tasks?limit=1"
+      },
+      {
+        "name": "ct_l20",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/collection-tasks?limit=20"
+      },
+      {
+        "name": "ct_l50",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/collection-tasks?limit=50"
+      },
+      {
+        "name": "ep_l1",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/episodes?limit=1"
+      },
+      {
+        "name": "ep_l50",
+        "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/episodes?limit=50"
+      }
+    ]
+  },
+  "safety": {
+    "read_only": true,
+    "methods": [
+      "GET"
+    ],
+    "limits": {
+      "max_concurrency": 32,
+      "max_requests_per_endpoint": 2000,
+      "max_duration_seconds": 180.0,
+      "connection_guard_ratio": 0.8
+    }
+  },
+  "connection_guard": {
+    "ratio_limit": 0.8,
+    "max_connections": 100,
+    "start": {
+      "max_connections": 100,
+      "used": 18,
+      "ratio": 0.18,
+      "at": "2026-11-26T00:46:59+00:00"
+    },
+    "peak": {
+      "max_connections": 100,
+      "used": 18,
+      "ratio": 0.18,
+      "at": "2026-11-26T00:46:59+00:00"
+    },
+    "end": {
+      "max_connections": 100,
+      "used": 18,
+      "ratio": 0.18,
+      "at": "2026-11-26T00:47:03+00:00"
+    },
+    "sample_count": 5,
+    "query_failures": 0,
+    "aborted": false,
+    "abort_reason": null
+  },
+  "overall": {
+    "requests_sent": 500,
+    "wall_seconds": 4.307,
+    "error_count": 0,
+    "error_rate": 0.0,
+    "throughput_rps": 116.091,
+    "p50_ms": 19.385,
+    "p95_ms": 90.96,
+    "p99_ms": 108.738
+  },
+  "per_endpoint": {
+    "ct_l1": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/collection-tasks?limit=1",
+      "requests_planned": 100,
+      "requests_sent": 100,
+      "wall_seconds": 0.2339,
+      "status_counts": {
+        "200": 100
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 100,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 427.579,
+        "p50_ms": 8.574,
+        "p95_ms": 12.138,
+        "p99_ms": 17.886,
+        "mean_ms": 9.16,
+        "max_ms": 18.067
+      }
+    },
+    "ct_l20": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/collection-tasks?limit=20",
+      "requests_planned": 100,
+      "requests_sent": 100,
+      "wall_seconds": 1.0436,
+      "status_counts": {
+        "200": 100
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 100,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 95.822,
+        "p50_ms": 38.904,
+        "p95_ms": 45.182,
+        "p99_ms": 113.62,
+        "mean_ms": 41.481,
+        "max_ms": 114.333
+      }
+    },
+    "ct_l50": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/collection-tasks?limit=50",
+      "requests_planned": 100,
+      "requests_sent": 100,
+      "wall_seconds": 2.2165,
+      "status_counts": {
+        "200": 100
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 100,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 45.116,
+        "p50_ms": 87.696,
+        "p95_ms": 95.908,
+        "p99_ms": 108.738,
+        "mean_ms": 87.982,
+        "max_ms": 111.953
+      }
+    },
+    "ep_l1": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/episodes?limit=1",
+      "requests_planned": 100,
+      "requests_sent": 100,
+      "wall_seconds": 0.2465,
+      "status_counts": {
+        "200": 100
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 100,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 405.625,
+        "p50_ms": 9.697,
+        "p95_ms": 11.131,
+        "p99_ms": 12.137,
+        "mean_ms": 9.647,
+        "max_ms": 12.741
+      }
+    },
+    "ep_l50": {
+      "path": "/api/v1/projects/1bca073d-c9af-4601-9b0f-7888d0747db0/episodes?limit=50",
+      "requests_planned": 100,
+      "requests_sent": 100,
+      "wall_seconds": 0.5661,
+      "status_counts": {
+        "200": 100
+      },
+      "sample_errors": [],
+      "truncated_by_time": false,
+      "aborted_by_guard": false,
+      "summary": {
+        "count": 100,
+        "error_count": 0,
+        "error_rate": 0.0,
+        "throughput_rps": 176.653,
+        "p50_ms": 19.385,
+        "p95_ms": 22.573,
+        "p99_ms": 94.09,
+        "mean_ms": 22.412,
+        "max_ms": 95.675
+      }
+    }
+  }
+}

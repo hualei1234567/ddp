@@ -344,3 +344,146 @@ def evaluate_thresholds(
         "unmatched_patterns": thresholds.unmatched_patterns(list(results)),
         "thresholds_source": thresholds.source,
     }
+
+
+# ---------------------------------------------------------------------------
+# 生产只读压测的纯函数层（G10 readonly_load.py）
+#
+# 只读压测的安全红线是**代码常量**而不是 CLI 参数：放宽必须改代码走评审。
+# 端点解析、占位符替换、红线校验、DSN 脱敏、目标校验与样本汇总都是纯函数，
+# 放在这里便于直接单测；执行环（并发 worker、连接数守卫）留在脚本里。
+# ---------------------------------------------------------------------------
+
+READONLY_MAX_CONCURRENCY = 32
+READONLY_MAX_REQUESTS_PER_ENDPOINT = 2000
+READONLY_MAX_DURATION_SECONDS = 180.0
+READONLY_CONNECTION_GUARD_RATIO = 0.8
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+@dataclass(frozen=True, slots=True)
+class EndpointSpec:
+    """只读压测端点；name 用于报告分组，path 是相对 base-url 的路径。"""
+
+    name: str
+    path: str
+
+
+@dataclass(slots=True)
+class ReadonlySample:
+    """一次只读请求的结果：耗时、状态码与错误描述（2xx 之外均为错误）。"""
+
+    elapsed_ms: float
+    status: int | None
+    error: str | None
+
+
+def mask_dsn(dsn: str) -> str:
+    """报告/终端输出用：隐藏 DSN 里的口令，保留主机与库名以便核对目标。"""
+    parts = urlsplit(dsn)
+    if parts.password is None:
+        return dsn
+    netloc = parts.netloc.replace(f":{parts.password}@", ":***@", 1)
+    return parts._replace(netloc=netloc).geturl()
+
+
+def parse_readonly_endpoints(raw: str) -> list[EndpointSpec]:
+    """解析 ``--endpoints``：逗号分隔，支持 ``name=path``，默认 name 即 path。
+
+    只接受以 ``/`` 开头的相对路径且不含空白：本工具不解析 HTTP 方法，任何非 GET
+    语义都无法被表达，从输入侧封死写请求。
+    """
+    specs: list[EndpointSpec] = []
+    seen: set[str] = set()
+    for item in raw.split(","):
+        text = item.strip()
+        if not text:
+            continue
+        prefix, separator, path = text.partition("=")
+        # 只有「简单标识符=路径」才算命名；查询串里的 = 不能被误当成命名分隔符。
+        named = bool(separator) and bool(prefix) and "/" not in prefix and "?" not in prefix
+        name = prefix.strip() if named else text
+        path = path.strip() if named else text
+        if not path.startswith("/") or "://" in path:
+            raise ValueError(f"端点必须是 base-url 下的相对路径（以 / 开头）：{text!r}")
+        if any(ch.isspace() for ch in path):
+            raise ValueError(f"端点路径不能含空白（本工具不解析 HTTP 方法）：{text!r}")
+        if name in seen:
+            raise ValueError(f"端点名称重复：{name!r}")
+        seen.add(name)
+        specs.append(EndpointSpec(name=name, path=path))
+    if not specs:
+        raise ValueError("至少需要一个端点")
+    return specs
+
+
+def resolve_project_placeholder(
+    endpoints: Sequence[EndpointSpec], project_id: str | None
+) -> list[EndpointSpec]:
+    """把 ``{project_id}`` 占位符替换成真实项目 ID；无占位符则不要求。"""
+    if not any("{project_id}" in item.path for item in endpoints):
+        return list(endpoints)
+    if not project_id:
+        raise ValueError("端点含 {project_id} 占位符，必须提供 --project-id")
+    pid = project_id
+    return [EndpointSpec(item.name, item.path.replace("{project_id}", pid)) for item in endpoints]
+
+
+def validate_readonly_limits(*, concurrency: int, requests: int, duration: float) -> None:
+    """生产只读红线校验：超限直接拒绝，不做自动降级（降级会掩盖误配置）。"""
+    if not 1 <= concurrency <= READONLY_MAX_CONCURRENCY:
+        raise ValueError(f"并发必须在 1..{READONLY_MAX_CONCURRENCY} 之间，实际 {concurrency}")
+    if not 1 <= requests <= READONLY_MAX_REQUESTS_PER_ENDPOINT:
+        raise ValueError(
+            f"每端点请求数必须在 1..{READONLY_MAX_REQUESTS_PER_ENDPOINT}，实际 {requests}"
+        )
+    if duration < 0 or duration > READONLY_MAX_DURATION_SECONDS:
+        raise ValueError(
+            f"时长必须在 0..{READONLY_MAX_DURATION_SECONDS:g} 秒（0=只按请求数），"
+            f"实际 {duration:g}"
+        )
+
+
+def ensure_loopback_target(base_url: str, *, allow_non_loopback: bool) -> str:
+    """校验压测目标，返回 host。默认拒绝非本机目标，防止误压其他环境。"""
+    parts = urlsplit(base_url)
+    if parts.scheme not in {"http", "https"} or not parts.hostname:
+        raise ValueError(f"base-url 非法：{base_url!r}")
+    host = parts.hostname.lower()
+    if host not in _LOOPBACK_HOSTS and not allow_non_loopback:
+        raise ValueError(f"拒绝压测非本机目标 {host!r}；确认无误后可显式 --allow-non-loopback")
+    return host
+
+
+def summarize_readonly_endpoint(
+    path: str,
+    samples: Sequence[ReadonlySample],
+    *,
+    wall_seconds: float,
+    planned: int,
+    truncated_by_time: bool,
+    aborted_by_guard: bool,
+) -> dict[str, Any]:
+    """汇总单个只读端点的样本；耗时统计口径复用 :func:`summarize`。"""
+    status_counts: dict[str, int] = {}
+    for sample in samples:
+        key = str(sample.status) if sample.status is not None else "network_error"
+        status_counts[key] = status_counts.get(key, 0) + 1
+    errors = [sample.error for sample in samples if sample.error]
+    payload: dict[str, Any] = {
+        "path": path,
+        "requests_planned": planned,
+        "requests_sent": len(samples),
+        "wall_seconds": round(wall_seconds, 4),
+        "status_counts": status_counts,
+        "sample_errors": errors[:5],
+        "truncated_by_time": truncated_by_time,
+        "aborted_by_guard": aborted_by_guard,
+    }
+    if samples:
+        payload["summary"] = summarize(
+            [sample.elapsed_ms for sample in samples],
+            wall_seconds=wall_seconds,
+            error_count=len(errors),
+        )
+    return payload
