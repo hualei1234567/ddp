@@ -32,9 +32,9 @@ CI 与本地装出的就是同一组版本。
 | 文件 | 角色 | 谁消费 |
 |---|---|---|
 | `backend/requirements.txt` | **人读的意图声明**：15 个直接依赖 + 每条依赖的评估/许可/安全备注 | 人、`pip-compile` 输入、ADR 引用 |
-| `backend/requirements.lock` | **运行期解析结果**：47 个包（15 直接 + 32 传递），1183 条 sha256 | 生产镜像（若按 lock 构建）、`sbom` 生成、`pip-audit` |
-| `backend/requirements-dev.txt` | 开发/CI 意图声明：`-r requirements.txt` + 5 个开发工具 | 人、`pip-compile` 输入 |
-| `backend/requirements-dev.lock` | **CI/开发解析结果**：53 个包（含 5 个开发工具），1326 条 sha256 | CI 全部后端 job（backend / e2e / contract）、`make venv` |
+| `backend/requirements.lock` | **运行期解析结果**：48 个包（15 直接 + 33 传递），1185 条 sha256 | 生产镜像（若按 lock 构建）、`sbom` 生成、`pip-audit` |
+| `backend/requirements-dev.txt` | 开发/CI 意图声明：`-r requirements.txt` + 6 个开发工具 | 人、`pip-compile` 输入 |
+| `backend/requirements-dev.lock` | **CI/开发解析结果**：57 个包（含 6 个开发工具），1334 条 sha256 | CI 全部后端 job（backend / e2e / contract）、`make venv` |
 | `data-platform/requirements.txt` | data-platform 独立意图声明：5 个直接依赖 | 人、`pip-compile` 输入 |
 | `data-platform/requirements.lock` | data-platform 解析结果：22 个包（5 直接 + 17 传递），786 条 sha256 | CI（后端测试要 import `ddp_data`） |
 | `sbom/backend.cdx.json` | 运行期后端依赖的 CycloneDX 1.6 JSON 清单（47 组件，含 sha256） | 供应链事件影响面定位 |
@@ -141,6 +141,23 @@ macOS 本机验证开发机也装得上（Linux 解析出的 lock 在 macOS 安�
 5. 提交前本地验证（见 §6）；CI 用 lock 安装，lock 与 txt 不一致不会自动报错
    （见 §8 缺口），评审时人工核对。
 
+### 4.1 升级记录：v52-044 修复 48 个依赖漏洞（2026-11-26）
+
+`pip-audit -r backend/requirements.txt` 报 **48 个已知漏洞，集中在 3 个包**：
+`starlette==0.41.3`（fastapi 的传递依赖，修复需 ≥ 1.1.0）、`pyjwt==2.10.1`、
+`python-multipart==0.0.20`。处理方式：
+
+1. `backend/requirements.txt` 改意图：`fastapi 0.115.6 → 0.133.1`（跨大版本，
+   经 `python:3.11-slim` 验证其为拉起 `starlette 1.10.0` 的最小可修复组合）、
+   `PyJWT 2.10.1 → 2.15.1`、`python-multipart 0.0.20 → 0.0.34`。
+2. 传递依赖 `starlette` 的旧 pin 仍满足 `starlette>=0.40.0`，`pip-compile`
+   默认保留，需显式 `--upgrade-package starlette` 才会升到 1.10.0（本节 §4 已强调
+   「报警包是传递依赖时用 `--upgrade-package`」）。
+3. lock 仍在 **Linux 目标平台**（`python:3.11-slim` 容器）重新生成，满足 §3.1；
+   随后重生成 `sbom/backend.cdx.json` 并跑 `scripts/tests/test_requirements_lock.py`。
+4. 结果：`pip-audit -r backend/requirements.txt` **0 漏洞**；升级引入的运行期兼容
+   适配见 §8（`add_event_handler → lifespan`、`httpx2`、PyJWT 2.15 的 crit/短密钥告警）。
+
 ---
 
 ## 5. SBOM 怎么用
@@ -196,7 +213,7 @@ rm -rf /tmp/locktest && python3 -m venv /tmp/locktest
 - exit=0 且包数 = lock 中 `==` 行数（+ venv 自带的 `pip`/`setuptools`）即通过；
   任何一个包版本或 sha256 不符，pip 会直接失败（hash-checking 模式）。
 - 2026-11-26 实测（macOS arm64 本地 + `linux/arm64` 容器各一次，均按 CI 口径）：
-  `backend/requirements.lock` → exit 0 / 47 包；`backend/requirements-dev.lock` → exit 0 / 53 包；
+  `backend/requirements.lock` → exit 0 / 48 包；`backend/requirements-dev.lock` → exit 0 / 57 包；
   `data-platform/requirements.lock` → exit 0 / 22 包。
 
 ---
@@ -226,7 +243,7 @@ rm -rf /tmp/locktest && python3 -m venv /tmp/locktest
 | SBOM 无主组件（`metadata.component`） | `backend/pyproject.toml` 只有 `[tool.ruff]`/`[tool.pytest]`，不是 PEP 621，`cyclonedx-py --pyproject` 会报错；因此清单只有 47 个 `library` 组件、无顶层应用标识。补 PEP 621 `[project]` 后应重新生成 |
 | Python 小版本与 pip 版本未锁 | lock 由 Python 3.11 解析、CI 固定 3.11；但 Python 补丁版本（3.11.x）与 pip 自身版本未锁，存在理论漂移 |
 | 前端依赖 | 已有 `apps/web/package-lock.json`（npm lock），不在本文件范围 |
-| 已知漏洞 | 本轮不升版本。`pip-audit` 现可扫描全量传递依赖，历史告警（如 `pyjwt==2.10.1`、`python-multipart==0.0.20`）会显性列出，属后续升级任务 |
+| 已知漏洞 | **已修复（v52-044）**：原先 `pip-audit -r backend/requirements.txt` 报 48 个，集中在 `starlette==0.41.3`（fastapi 传递依赖）、`pyjwt==2.10.1`、`python-multipart==0.0.20`；本轮按 §4.1 升级后**归零**。升级引入的运行期兼容适配（非业务改动）：`app/main.py` 的 `add_event_handler` 改为 `lifespan`（fastapi 0.133 移除前者）；`app/infrastructure/auth/jwt.py` 适配 PyJWT 2.15 的 crit 校验与 `InsecureKeyLengthWarning`；测试用 `httpx2`（starlette 1.10 的 TestClient 弃用 httpx，见 `requirements-dev.txt`）。 |
 
 ## 9. 回滚
 
