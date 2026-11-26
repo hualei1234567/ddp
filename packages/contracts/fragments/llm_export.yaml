@@ -1,0 +1,253 @@
+# LLM 训练导出（V52-037，蓝图 N4 / 阶段 4 生态对接）路径与 schema 片段。
+#
+# 范围：**计算型**端点。把调用方给出的已就绪记录交给
+# `data-platform/ddp_data/llm_export` 的确定性 writer，返回摘要
+# （文件名 / sha256 / 字节数 / 行数 / 门禁剔除统计）。
+# 本批**不落库、不写对象存储、不回传大文件内容**；异步 Job 与制品下载
+# 属于后续接线（现有 `exports` 异步导出 Job 面向 DatasetVersion，不复用）。
+#
+# `format` 与 `format_version` 的取值来源是库内 manifest，不是本文件另行定义：
+# 请求用端点分组名 SFT/DPO/PRM；响应 `format` 是**产物格式标识**
+# （SFT_MESSAGES_JSONL / PREFERENCE_DPO_JSONL / PRM_STEP_REWARD_JSONL），
+# 训练侧据此校验训练文件结构。
+#
+# `records[]` 是跨格式统一形状：JSON 无法传领域对象，三种格式字段是互斥语义
+# 而非同一实体的不同视图；按 `format` 解释所需字段，缺失由应用层返回 422。
+# 资格门禁（未审核 / 质检不合格 / TIE 剔除）由库强制，本节只回显剔除统计。
+
+llmExports:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  post:
+    operationId: createLlmExport
+    tags: [llm-export]
+    summary: 生成 SFT/DPO/PRM 训练导出摘要
+    description: |
+      按 `format` 把 `records` 交给 `ddp_data.llm_export` 生成训练制品，返回
+      **摘要**（行数、门禁剔除统计、各产物 sha256 与字节数），不返回文件内容。
+
+      各格式所需字段（统一 `records[]` 形状）：
+      - `SFT`：`messages`（OpenAI 兼容，role ∈ system/user/assistant/tool）；
+      - `DPO`：`prompt` / `response_a` / `response_b` / `winner`（呈现槽标签
+        `A`/`B`/`TIE`；`TIE` 会被门禁剔除）；`presented_order` 声明槽位与
+        canonical 响应的映射，缺省 `["A","B"]`；可选 `rationale` /
+        `criteria_scores` / `confidence`（只进 provenance sidecar）；
+      - `PRM`：`trajectory_id` / `task_goal` / `steps`（`index` 必须连续
+        0..n-1）；未标注步骤不进训练文件（未标注 ≠ 正确），可选
+        `final_answer_correct`。
+
+      门槛：`provenance.review_status` 必须为 `APPROVED` 且
+      `qc_status` 不为 `PENDING`/`FAILED`，否则记录被**剔除**（不静默降级），
+      剔除原因计入 `excluded_counts`；全部剔除时 SFT 导出 0 行，DPO/PRM 返回
+      422（无一可导出）。
+
+      纯计算：不落库、不写对象存储，同一输入重复调用产物字节一致。
+      单次最多 5000 条（同步计算上限）；写权限要求项目 EDITOR/OWNER。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/LlmExportCreate" }
+    responses:
+      "200":
+        description: 导出摘要（不含训练文件内容）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/LlmExportSummaryOut" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+llmExportFormats:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: listLlmExportFormats
+    tags: [llm-export]
+    summary: 可选训练导出格式
+    description: |
+      返回本端点支持的训练格式与格式版本（与库内 `FORMAT_VERSION` 同源）。
+      只读权限即可访问；格式/版本随库演进，客户端不得硬编码。
+    responses:
+      "200":
+        description: 格式列表
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/LlmExportFormatsOut" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# --------------------------------------------------------------------------- #
+# schemas
+# --------------------------------------------------------------------------- #
+LlmExportProvenanceIn:
+  type: object
+  additionalProperties: false
+  required:
+    - dataset_version_id
+    - sample_id
+    - submission_id
+    - schema_version
+    - review_status
+    - qc_status
+  properties:
+    dataset_version_id: { type: string, minLength: 1, maxLength: 200 }
+    sample_id: { type: string, minLength: 1, maxLength: 200 }
+    submission_id: { type: string, minLength: 1, maxLength: 200 }
+    schema_version: { type: string, minLength: 1, maxLength: 64 }
+    review_status:
+      type: string
+      enum: [PENDING, APPROVED, REJECTED]
+      description: 仅 APPROVED 进入导出，其余按 REVIEW_NOT_APPROVED 剔除
+    qc_status:
+      type: string
+      enum: [PENDING, PASSED, FAILED]
+      description: FAILED/PENDING 分别按 QC_FAILED/QC_PENDING 剔除
+    guideline_version: { type: [string, "null"], maxLength: 200 }
+    judge_model: { type: [string, "null"], maxLength: 200 }
+    annotator_refs:
+      type: array
+      items: { type: string }
+      description: 已脱敏的稳定引用（不得携带原始身份）
+
+LlmExportMessageIn:
+  type: object
+  additionalProperties: false
+  required: [role, content]
+  properties:
+    role:
+      type: string
+      enum: [system, user, assistant, tool]
+    content: { type: string, minLength: 1 }
+
+LlmExportStepIn:
+  type: object
+  additionalProperties: false
+  required: [index, action]
+  properties:
+    index:
+      type: integer
+      minimum: 0
+      description: 轨迹内必须连续 0..n-1（不连续返回 422）
+    action: { type: string, minLength: 1, maxLength: 2000 }
+    label:
+      type: [string, "null"]
+      enum: [CORRECT, REDUNDANT, HALLUCINATED_TOOL, FATAL, null]
+      description: 四分类 reward 映射 +1 / -0.5 / -1 / -2；未标注步骤不进训练文件
+    tool: { type: [string, "null"], maxLength: 200 }
+    observation_digest: { type: [string, "null"], maxLength: 200 }
+
+LlmExportRecordIn:
+  type: object
+  additionalProperties: false
+  required: [provenance]
+  description: |
+    统一记录形状，按 `format` 解释所需字段。SFT 用 `messages`；DPO 用
+    `prompt`/`response_a`/`response_b`/`winner`（+可选 `rationale`/
+    `criteria_scores`/`confidence`/`presented_order`）；PRM 用
+    `trajectory_id`/`task_goal`/`steps`（+可选 `final_answer_correct`）。
+  properties:
+    provenance: { $ref: "#/LlmExportProvenanceIn" }
+    messages:
+      type: [array, "null"]
+      items: { $ref: "#/LlmExportMessageIn" }
+    prompt: { type: [string, "null"], minLength: 1 }
+    response_a: { type: [string, "null"], minLength: 1 }
+    response_b: { type: [string, "null"], minLength: 1 }
+    winner:
+      type: [string, "null"]
+      enum: [A, B, TIE, null]
+      description: 呈现槽标签（不是 canonical 身份）；TIE 会被门禁剔除
+    rationale: { type: [string, "null"], maxLength: 2000 }
+    criteria_scores:
+      type: [object, "null"]
+      additionalProperties: { type: number }
+    confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+    presented_order:
+      type: [array, "null"]
+      minItems: 2
+      maxItems: 2
+      items: { type: string, enum: [A, B] }
+      description: 呈现槽顺序；槽 k 展示的 canonical 响应名。缺省 ["A","B"]
+    trajectory_id: { type: [string, "null"], minLength: 1, maxLength: 200 }
+    task_goal: { type: [string, "null"], minLength: 1, maxLength: 2000 }
+    steps:
+      type: [array, "null"]
+      items: { $ref: "#/LlmExportStepIn" }
+    final_answer_correct: { type: [boolean, "null"] }
+
+LlmExportCreate:
+  type: object
+  additionalProperties: false
+  required: [format, records]
+  properties:
+    format:
+      type: string
+      enum: [SFT, DPO, PRM]
+      description: 一次只允许一种格式；SFT 与偏好/PRM 数据永不混批
+    records:
+      type: array
+      minItems: 1
+      maxItems: 5000
+      items: { $ref: "#/LlmExportRecordIn" }
+      description: 单次上限 5000 条（同步计算护栏；超限 422，不静默截断）
+
+LlmExportFileDigest:
+  type: object
+  additionalProperties: false
+  required: [sha256, bytes]
+  properties:
+    sha256:
+      type: string
+      pattern: "^[0-9a-f]{64}$"
+      description: "产物字节的 SHA-256（十六进制，不含 sha256: 前缀）"
+    bytes:
+      type: integer
+      minimum: 0
+
+LlmExportSummaryOut:
+  type: object
+  additionalProperties: false
+  required:
+    - format
+    - format_version
+    - generator_version
+    - record_count
+    - excluded_counts
+    - files
+  properties:
+    format:
+      type: string
+      description: 产物格式标识（如 SFT_MESSAGES_JSONL），来自库内 manifest
+    format_version: { type: string }
+    generator_version: { type: string }
+    record_count:
+      type: integer
+      description: 通过资格门禁、实际写入产物的记录数
+    excluded_counts:
+      type: object
+      additionalProperties: { type: integer }
+      description: 剔除原因码 → 条数（REVIEW_NOT_APPROVED / QC_FAILED / QC_PENDING / PREFERENCE_TIE）
+    files:
+      type: object
+      additionalProperties: { $ref: "#/LlmExportFileDigest" }
+      description: 产物文件名 → sha256/字节数；不返回文件内容
+
+LlmExportFormatItem:
+  type: object
+  additionalProperties: false
+  required: [format, format_version]
+  properties:
+    format: { type: string }
+    format_version: { type: string }
+
+LlmExportFormatsOut:
+  type: object
+  additionalProperties: false
+  required: [formats]
+  properties:
+    formats:
+      type: array
+      items: { $ref: "#/LlmExportFormatItem" }
