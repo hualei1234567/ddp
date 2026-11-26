@@ -56,8 +56,8 @@ Worker、运维脚本、直接改库的修数流程）都记得更新同一个�
 
 - **状态分族**（接入任务、Episode、数据源导入、处理运行、质量运行）：唯一标签
   是领域枚举 ``status``，序列数等于枚举取值个数，上限由代码静态决定。
-- **标量指标**（outbox 积压、导入最近成功时间/24h 吞吐、存储缺失）：无标签，
-  每个指标固定 1 条序列。
+- **标量指标**（outbox 积压、导入最近成功时间/24h 吞吐、存储缺失、标注回流积压/
+  熔断暂停/近 1 小时通过量）：无标签，每个指标固定 1 条序列。
 - 任何标签都不含 ``project_id`` / ``user_id`` / 文件名 / 原始 URL：``/metrics``
   是运维视角的全局聚合，跨项目内容不得出现在这里。
 - 状态分族缺某个状态时补 0（仪表盘不断线）；整组采集失败时**整组缺席**，
@@ -97,6 +97,10 @@ OUTBOX_FAILED_GAUGE = "ddp_outbox_failed_events"
 IMPORT_LAST_SUCCESS_GAUGE = "ddp_data_source_import_last_success_timestamp_seconds"
 IMPORT_SUCCEEDED_24H_GAUGE = "ddp_data_source_imports_succeeded_24h"
 RAW_ASSETS_OBJECT_MISSING_GAUGE = "ddp_raw_assets_object_missing"
+# 标注运营 SLO（V52-036）：回流积压、熔断暂停、近 1 小时通过量。
+BACKFLOW_RECEIVED_GAUGE = "ddp_annotation_backflow_received_cases"
+HONEYPOT_PAUSED_GAUGE = "ddp_annotation_honeypot_paused"
+SUBMISSION_APPROVED_LAST_HOUR = "ddp_annotation_records_approved_1h"
 
 # 未匹配到任何路由（404/被短路）：路径由客户端完全控制，只能折叠成常量。
 UNMATCHED_ROUTE = "__unmatched__"
@@ -211,6 +215,21 @@ def business_value_specs() -> tuple[BusinessValueSpec, ...]:
         BusinessValueSpec(
             name=RAW_ASSETS_OBJECT_MISSING_GAUGE,
             help_text="对象存储内容缺失而被隔离的原始资产数（quarantine_codes 含 object_missing）",
+        ),
+        BusinessValueSpec(
+            name=BACKFLOW_RECEIVED_GAUGE,
+            help_text="仍处于受理态（annotation_backflow_cases.status=RECEIVED）的回流案例数",
+        ),
+        BusinessValueSpec(
+            name=HONEYPOT_PAUSED_GAUGE,
+            help_text="被黄金题熔断暂停的标注员数（annotation_honeypot_state.state=PAUSED）",
+        ),
+        BusinessValueSpec(
+            name=SUBMISSION_APPROVED_LAST_HOUR,
+            help_text=(
+                "近 1 小时通过的标注记录数（annotation_records.status=APPROVED 且 "
+                "approved_at 落在 [now-1h, now] 滑动窗口，采集时计算）"
+            ),
         ),
     )
 
