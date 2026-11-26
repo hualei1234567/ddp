@@ -1,0 +1,44 @@
+# Alertmanager 最小可用配置（阶段 4 / 审计 R2）
+#
+# 当前为「本地可见」模式：所有告警写入 webhook 接收器（compose 里由
+# prometheus 侧的 --web.enable-lifecycle 与 UI 观察）。生产部署时应改为
+# 真实接收端（飞书/邮件/钉钉），只需替换 receivers 段。
+#
+# 分组策略：按 alertname 聚合，4h 内重复只发一次摘要，避免风暴。
+
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default-webhook
+  group_by: [alertname]
+  group_wait: 30s          # 首次聚合等待
+  group_interval: 5m       # 同组新增告警的发送间隔
+  repeat_interval: 4h      # 持续未恢复的重发间隔（足够长，避免噪音）
+
+  routes:
+    # critical 走独立接收端（生产应接电话/值班群）
+    - matchers: ['severity="critical"']
+      receiver: default-webhook
+      group_wait: 10s
+      repeat_interval: 1h
+    # 信息级每日汇总即可
+    - matchers: ['severity="info"']
+      receiver: default-webhook
+      group_wait: 5m
+      repeat_interval: 24h
+
+receivers:
+  - name: default-webhook
+    webhook_configs:
+      # 占位接收端：compose 里的 alertmanager 自身不带接收服务。
+      # 生产替换为真实 URL；本地不配置时 Alertmanager 会记录告警到 UI/日志，
+      # 足以验证「规则能触发」这一事实（审计 R2 的核心验收点）。
+      - url: http://127.0.0.1:9/ddp-alerts
+        send_resolved: true
+
+inhibit_rules:
+  # API 整体挂了就不再逐条报依赖异常，直接看 DdpApiDown
+  - source_matchers: ['alertname="DdpApiDown"']
+    target_matchers: ['severity=~"warning|info"']
+    equal: [component]
