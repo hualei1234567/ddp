@@ -23,6 +23,7 @@ import PageContainer from "../../components/ui/PageContainer";
 import PageState from "../../components/ui/PageState";
 import ProjectScopeRequired from "../../components/ui/ProjectScopeRequired";
 import { useAnnotationReviewers } from "../../hooks/useAnnotationReviewers";
+import { usePreferenceSubmission } from "../../hooks/usePreferenceSubmission";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
 import { annotationApi } from "../../services/annotation";
@@ -32,6 +33,7 @@ import {
   type AnnotationFeedback,
 } from "../../services/annotationPresentation";
 import { loadSubmissionBundle } from "../../services/annotationQueues";
+import { writePreferenceLabelsUnsupported } from "../../services/llmPreferenceSubmission";
 import {
   buildAnnotationTaskDetailPath,
   buildQualityCheckPath,
@@ -56,8 +58,9 @@ function SubmissionContent({
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [busySuggestionId, setBusySuggestionId] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<AnnotationFeedback | null>(null);
-  // PREFERENCE_PAIR 的 JSON 约定值草稿（按 annotation_id 分键）；
-  // 仅暂存展示态，实际写入仍走既有提交动作，不在本页擅自扩 API。
+  // PREFERENCE_PAIR 的 JSON 约定值草稿（按 annotation_id 分键）。
+  // 提交动作已接线（V52-033）：提交前规范成 MEM-DEC-002 label 值并交给写入器；
+  // 服务端偏好校验/记录更新端点尚未实现，写入器显式失败且草稿保留（不静默丢输入）。
   const [preferenceValues, setPreferenceValues] = useState<
     Record<string, PreferencePairAnnotationValue | null>
   >({});
@@ -103,8 +106,31 @@ function SubmissionContent({
     [reload],
   );
 
+  // 偏好值写入器：当前服务端无写入通道，显式失败（缺口如实暴露，见服务层注释）。
+  const preferenceSubmission = usePreferenceSubmission({
+    values: preferenceValues,
+    records: data?.records ?? [],
+    writeLabels: writePreferenceLabelsUnsupported,
+  });
+
+  const handlePreferenceSubmit = async () => {
+    const outcome = await preferenceSubmission.submit();
+    if (outcome.feedback !== null) {
+      setFeedback(outcome.feedback);
+    }
+    if (outcome.kind === "submitted") {
+      reload();
+    }
+  };
+
   const handleSubmissionAction = (action: "submit" | "withdraw") => {
     if (!data) {
+      return;
+    }
+    // 有偏好草稿时先走偏好提交链路：校验/写入失败都不提交、不丢草稿；
+    // 无草稿时完全保持既有提交行为（零回归）。
+    if (action === "submit" && preferenceSubmission.hasDrafts) {
+      void handlePreferenceSubmit();
       return;
     }
     void runAction(
@@ -348,7 +374,9 @@ function SubmissionContent({
         <SubmissionSummary
           submission={data.submission}
           records={data.records}
-          busyAction={busyAction}
+          busyAction={
+            busyAction ?? (preferenceSubmission.busy ? "submission:submit" : null)
+          }
           onSubmit={() => handleSubmissionAction("submit")}
           onWithdraw={() => handleSubmissionAction("withdraw")}
         />

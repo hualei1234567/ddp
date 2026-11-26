@@ -29,6 +29,7 @@ from app.application.annotation.reviews import AnnotationReviewUseCases
 from app.application.annotation.sample_sets import AnnotationSampleSetUseCases
 from app.application.annotation.schema_presets import SchemaPresetCatalog
 from app.application.annotation.schemas import AnnotationSchemaUseCases
+from app.application.annotation.skill_profiles import SkillProfileUseCases
 from app.application.annotation.submissions import AnnotationSubmissionUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
 from app.core.config import Settings, get_settings
@@ -50,6 +51,7 @@ from app.infrastructure.repositories.annotation_directory import (
     SqlGoldSetAnswerAccessPolicy,
     SqlMemberDirectory,
     SqlSkillProfileDirectory,
+    SqlSkillProfileRepository,
 )
 from app.infrastructure.repositories.annotation_prm import SqlPrmAnnotationRepository
 from app.infrastructure.repositories.annotation_quality import (
@@ -95,6 +97,7 @@ class AnnotationUseCases:
     overdue_summary: AnnotationOverdueSummaryUseCases
     prm_annotations: PrmAnnotationUseCases
     backflow: BackflowUseCases
+    skill_profiles: SkillProfileUseCases
 
 
 def get_annotation_use_cases(
@@ -325,6 +328,12 @@ def get_annotation_use_cases(
         backflow=BackflowUseCases(
             SqlBackflowRepository(session),
             tasks,
+            session,
+        ),
+        # 技能标签写入（V52-033）：复用只读目录的成员口径 + 同请求 Session。
+        skill_profiles=SkillProfileUseCases(
+            SqlSkillProfileRepository(session),
+            members,
             session,
         ),
     )

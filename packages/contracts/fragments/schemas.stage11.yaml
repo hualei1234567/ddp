@@ -1,0 +1,69 @@
+# 标注员技能标签写入（V52-033）Schema 片段。
+#
+# 语义与领域 `SkillTag` / 应用用例 `SkillProfileUseCases` 对齐：
+# - `tag_name` 落库前规范化为小写 + 去首尾空白（长度上限来自迁移 0080 的
+#   `String(64)`，与领域 `TAG_NAME_MAX_LENGTH` 同值）；
+# - `category` 是可选分类（同样的长度上限）；
+# - `weight` 与任务侧技能配置同规则校验 `(0, 1]`，仅供输入合法性；人员技能
+#   事实表无 weight 列，**不在响应里回显**（见 paths.stage11.yaml 说明）。
+#
+# 契约策略：本轮只新增片段并由 openapi.yaml `$ref` 引用，不 bump version。
+
+SkillTagWriteIn:
+  type: object
+  additionalProperties: false
+  required: [tag_name]
+  properties:
+    tag_name:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: 标签名；服务端规范化为小写并去首尾空白后落库
+    category:
+      type: [string, "null"]
+      minLength: 1
+      maxLength: 64
+      description: 可选分类（如 vision / language / tool-use）
+    weight:
+      type: number
+      exclusiveMinimum: 0
+      maximum: 1
+      default: 1.0
+      description: 与任务侧技能配置同规则校验（0 < weight <= 1）；人员档案不持久化该值
+
+SkillTagReplaceIn:
+  type: object
+  additionalProperties: false
+  properties:
+    tags:
+      type: array
+      description: 完整目标标签集；规范化后重复返回 422，空数组表示清空
+      items: {$ref: "../openapi.yaml#/components/schemas/SkillTagWriteIn"}
+
+SkillTagOut:
+  type: object
+  additionalProperties: false
+  required: [tag_name]
+  properties:
+    tag_name:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: 规范化后的标签名
+    category:
+      type: [string, "null"]
+      description: 可选分类；未设置时为 null
+
+AnnotatorSkillTags:
+  type: object
+  additionalProperties: false
+  required: [annotator_id, tags]
+  properties:
+    annotator_id:
+      type: string
+      format: uuid
+      description: 被读写的标注员（项目成员）
+    tags:
+      type: array
+      description: 完整标签集，按 tag_name 升序
+      items: {$ref: "../openapi.yaml#/components/schemas/SkillTagOut"}

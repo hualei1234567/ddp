@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import case, exists, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.application.annotation.ports import EpisodeCandidate
 from app.domain.annotation.enums import AnnotationAssignmentStatus
-from app.domain.annotation.errors import DomainValidationError
-from app.domain.annotation.skill_routing import AnnotatorSkillProfile
+from app.domain.annotation.errors import DomainValidationError, ResourceNotFoundError
+from app.domain.annotation.skill_routing import AnnotatorSkillProfile, SkillTag
 from app.domain.identity.models import ProjectRole, ProjectScope
 from app.infrastructure.db.models.annotation_work import (
     AnnotationAssignment,
@@ -317,6 +317,116 @@ class SqlSkillProfileDirectory:
             )
             for annotator_id in annotator_ids
         ]
+
+
+class SqlSkillProfileRepository(SqlSkillProfileDirectory):
+    """技能标签读写仓储（V52-033）：在只读目录上扩展写入能力。
+
+    读能力沿用父类的同表口径；写能力按「集合差」落库——只有差异行会被
+    插入/删除/改 category，因此重复提交同一集合是**真正的幂等**（行 id 与
+    ``created_at`` 保持不动），可被测试钉死为硬断言。
+
+    ``created_by`` 一律取服务端作用域里的 actor，不接受调用方另行传入
+    （与 :class:`~app.domain.identity.models.ProjectScope` 的约定一致）。
+    """
+
+    def load_tags(self, scope: ProjectScope, annotator_id: UUID) -> list[SkillTag]:
+        """按 ``tag_name`` 升序读取该成员标签集（稳定输出，响应可复算）。"""
+        rows = self._session.scalars(
+            select(AnnotatorSkillTag)
+            .where(
+                AnnotatorSkillTag.project_id == scope.project_id,
+                AnnotatorSkillTag.annotator_id == annotator_id,
+            )
+            .order_by(AnnotatorSkillTag.tag_name)
+        ).all()
+        return [SkillTag(tag_name=row.tag_name, category=row.category) for row in rows]
+
+    def replace_tags(
+        self,
+        scope: ProjectScope,
+        annotator_id: UUID,
+        tags: Sequence[SkillTag],
+        *,
+        now: datetime,
+    ) -> list[SkillTag]:
+        """整体替换：删除缺失行、插入新增行、category 变化才就地更新。"""
+        desired = {tag.tag_name: tag for tag in tags}
+        existing = {row.tag_name: row for row in self._rows(scope, annotator_id)}
+        for name, row in existing.items():
+            if name not in desired:
+                self._session.delete(row)
+        for name, tag in desired.items():
+            row = existing.get(name)
+            if row is None:
+                self._insert(scope, annotator_id, tag, now=now)
+            elif row.category != tag.category:
+                row.category = tag.category
+        self._session.flush()
+        return self.load_tags(scope, annotator_id)
+
+    def upsert_tag(
+        self,
+        scope: ProjectScope,
+        annotator_id: UUID,
+        tag: SkillTag,
+        *,
+        now: datetime,
+    ) -> list[SkillTag]:
+        """追加单条：已存在时不重复插入，仅对齐 category（幂等追加）。"""
+        rows = {row.tag_name: row for row in self._rows(scope, annotator_id)}
+        row = rows.get(tag.tag_name)
+        if row is None:
+            self._insert(scope, annotator_id, tag, now=now)
+        elif row.category != tag.category:
+            row.category = tag.category
+        self._session.flush()
+        return self.load_tags(scope, annotator_id)
+
+    def delete_tag(
+        self,
+        scope: ProjectScope,
+        annotator_id: UUID,
+        tag_name: str,
+    ) -> list[SkillTag]:
+        """移除单条：不存在即 404（领域错误），不把"已经没有了"当成功。"""
+        rows = {row.tag_name: row for row in self._rows(scope, annotator_id)}
+        row = rows.get(tag_name)
+        if row is None:
+            raise ResourceNotFoundError("技能标签", tag_name)
+        self._session.delete(row)
+        self._session.flush()
+        return self.load_tags(scope, annotator_id)
+
+    def _rows(self, scope: ProjectScope, annotator_id: UUID) -> list[AnnotatorSkillTag]:
+        return list(
+            self._session.scalars(
+                select(AnnotatorSkillTag).where(
+                    AnnotatorSkillTag.project_id == scope.project_id,
+                    AnnotatorSkillTag.annotator_id == annotator_id,
+                )
+            )
+        )
+
+    def _insert(
+        self,
+        scope: ProjectScope,
+        annotator_id: UUID,
+        tag: SkillTag,
+        *,
+        now: datetime,
+    ) -> None:
+        self._session.add(
+            AnnotatorSkillTag(
+                id=uuid4(),
+                project_id=scope.project_id,
+                annotator_id=annotator_id,
+                tag_name=tag.tag_name,
+                category=tag.category,
+                created_at=now,
+                created_by=scope.actor_id,
+            )
+        )
 
 
 class SqlGoldSetAnswerAccessPolicy:
