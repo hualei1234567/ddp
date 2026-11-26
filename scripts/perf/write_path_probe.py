@@ -93,6 +93,8 @@ def _create_temp_db(base_dsn: str) -> tuple[str, str]:
     )
     try:
         with admin.connect() as conn:
+            # 库名标识符不能 bind；name 已由 ensure_safe_perf_db_name 校验前缀/长度/字符集
+            # nosemgrep: ddp-no-raw-sql-fstring —— 标识符来自校验函数，非请求值
             conn.execute(text(f'CREATE DATABASE "{name}"'))
     finally:
         admin.dispose()
@@ -115,6 +117,8 @@ def _drop_temp_db(base_dsn: str, name: str) -> None:
     admin = create_engine(base_dsn, isolation_level="AUTOCOMMIT")
     try:
         with admin.connect() as conn:
+            # 同上：name 来自 ensure_safe_perf_db_name 校验后的探针临时库名。
+            # nosemgrep: ddp-no-raw-sql-fstring —— 标识符来自校验函数，非请求值
             conn.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
     finally:
         admin.dispose()

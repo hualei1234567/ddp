@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlsplit
+# 本地 S3 桩只解析本仓库 e2e 客户端构造的 XML（ElementTree 默认不展开外部实体）。
+# nosemgrep: python.lang.security.use-defused-xml.use-defused-xml —— 非对外解析入口
 from xml.etree import ElementTree
 
 

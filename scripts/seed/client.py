@@ -99,6 +99,8 @@ class Client:
 
     def _once(self, request: urllib.request.Request) -> tuple[int, Any, float]:
         try:
+            # request 的 URL 由 DDP_API_BASE 等显式环境变量构造，不是服务端请求入口。
+            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected —— 本地种子脚本
             with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
                 payload = response.read()
                 return response.status, (json.loads(payload) if payload else None), 0.0

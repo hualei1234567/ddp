@@ -176,6 +176,8 @@ def _auth_headers(token: str) -> dict[str, str]:
 def _issue(client: httpx.Client, url: str) -> tuple[int | None, str | None]:
     """发一次 GET，返回 (状态码, 错误描述)；2xx 之外都算错误。"""
     try:
+        # 目标 URL 来自 --base-url，且 main 里 core.ensure_loopback_target 默认强制 loopback。
+        # nosemgrep: ddp-ssrf-unvalidated-url —— 本地压测工具，非服务端出站面
         response = client.get(url)
     except httpx.HTTPError as exc:
         return None, f"{type(exc).__name__}: {exc}"[:160]

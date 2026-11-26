@@ -246,6 +246,7 @@ def drop_calibration_profile_guards(connection: Connection) -> None:
             "trg_calibration_profiles_immutable_update",
             "trg_calibration_profiles_no_delete",
         ):
+            # nosemgrep: ddp-no-raw-sql-fstring —— name 来自本函数写死的触发器名元组，非外部输入
             connection.execute(text(f"DROP TRIGGER IF EXISTS {name}"))
     elif dialect == "postgresql":
         connection.execute(

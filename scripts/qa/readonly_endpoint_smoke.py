@@ -214,6 +214,8 @@ def _jwt(sub: str, secret: str, issuer: str, audience: str) -> str:
 def _request(url: str, token: str) -> tuple[int, str]:
     req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
     try:
+        # URL 来自命令行显式配置（默认回环地址），不是服务端请求入口。
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected —— 本地只读冒烟脚本
         with urllib.request.urlopen(req, timeout=15) as response:
             return response.status, response.read(400).decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
