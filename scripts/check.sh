@@ -17,8 +17,13 @@ fi
 echo "[1/10] 后端 ruff check + format"
 (cd backend && .venv/bin/ruff check app tests migrations && .venv/bin/ruff format --check app tests migrations)
 
-echo "[2/10] 后端 pytest"
-(cd backend && .venv/bin/python -m pytest -q)
+echo "[2/10] 后端 pytest + 覆盖率门槛"
+# 覆盖率口径见仓库根 .coveragerc：只统计 backend/app，排除历史迁移。
+# 门槛 85%（实测基线 90%，留 5 点余量）。降门槛等同于降低验收标准——
+# 未覆盖就补真实用例，禁止为过门槛写无断言测试。
+# 用 `coverage run` 而非 pytest-cov：少一个依赖，且 fail-under 失败码可直接透传。
+(cd backend && .venv/bin/python -m coverage run -m pytest -q \
+  && .venv/bin/python -m coverage report --fail-under=85)
 
 echo "[3/10] 前端类型检查 / ESLint / 单元测试"
 (cd apps/web && npm run typecheck && npm run lint && npm test)

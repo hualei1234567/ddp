@@ -7,3 +7,6 @@ pyyaml==6.0.3
 pytest==8.3.4
 httpx==0.28.1
 ruff==0.8.6
+# 覆盖率测量（审计 R3）：先测基线再定门槛。口径见仓库根 .coveragerc。
+# 只统计 backend/app，排除历史迁移；workers 保留（真实运行路径）。
+coverage==7.17.5

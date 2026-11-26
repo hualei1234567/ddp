@@ -1,0 +1,26 @@
+# 覆盖率配置（审计 R3：建立覆盖率门槛）
+#
+# 口径：
+# - 只统计 backend/app（生产代码）；tests/、migrations/ 不计入分母
+# - migrations 排除：历史迁移是快照，不随后续业务变更演进，追求覆盖率无意义
+# - workers 保留在内：它们是真实运行路径，覆盖率低就是风险
+#
+# 门槛策略：先设 85%（当前实测 90%，留 5 个点余量），随基线提升再上调。
+# **不要**为了过门槛写无断言测试——未覆盖就让它未覆盖，直到补真实用例。
+
+[run]
+source = app
+omit =
+    */migrations/*
+    */__main__.py
+
+[report]
+precision = 1
+show_missing = True
+skip_covered = False
+# 失败门槛由 check.sh 显式传 --fail-under 决定，此处不写死，
+# 避免本地单跑 coverage report 时误报失败。
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    raise NotImplementedError
