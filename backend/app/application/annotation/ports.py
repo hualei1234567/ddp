@@ -35,7 +35,7 @@ from app.domain.annotation.quality_sample import QualitySample
 from app.domain.annotation.review import AnnotationReview
 from app.domain.annotation.sample_set import AnnotationSampleSet, SampleEpisodeRef
 from app.domain.annotation.schema import AnnotationSchema
-from app.domain.annotation.skill_routing import AnnotatorSkillProfile
+from app.domain.annotation.skill_routing import AnnotatorSkillProfile, SkillTag
 from app.domain.annotation.submission import AnnotationRecord, AnnotationSubmission
 from app.domain.annotation.task import AnnotationTask
 from app.domain.identity.models import ProjectScope
@@ -878,6 +878,53 @@ class SkillProfileDirectory(Protocol):
         self, scope: ProjectScope, annotator_ids: Sequence[UUID]
     ) -> list[AnnotatorSkillProfile]:
         """按给定人员加载技能档案快照；无档案的人员返回 quality_score=0.0、空 tags。"""
+        ...
+
+
+class SkillProfileWriteRepository(Protocol):
+    """标注员技能标签写入端口（V52-033，迁移 0080 同表）。
+
+    只暴露「按项目作用域读写一个人标签集」的最小能力：整体替换、单条追加、
+    单条移除。权限、成员资格与标签规范化都在应用/领域层完成，仓储不承载业务
+    规则——它只负责把合法标签集落成 ``annotator_skill_tags`` 行。
+
+    所有方法返回**写入后的完整标签集**（按 ``tag_name`` 升序），端点直接回显，
+    不必再读一次库。
+    """
+
+    def load_tags(self, scope: ProjectScope, annotator_id: UUID) -> list[SkillTag]:
+        """读取该成员当前标签集；无标签返回空列表（不是 None）。"""
+        ...
+
+    def replace_tags(
+        self,
+        scope: ProjectScope,
+        annotator_id: UUID,
+        tags: Sequence[SkillTag],
+        *,
+        now: datetime,
+    ) -> list[SkillTag]:
+        """整体替换为给定标签集：只增删改差异行（同集合重复提交结果不变）。"""
+        ...
+
+    def upsert_tag(
+        self,
+        scope: ProjectScope,
+        annotator_id: UUID,
+        tag: SkillTag,
+        *,
+        now: datetime,
+    ) -> list[SkillTag]:
+        """追加单条标签；已存在时按 category 对齐（幂等，不重复插入）。"""
+        ...
+
+    def delete_tag(
+        self,
+        scope: ProjectScope,
+        annotator_id: UUID,
+        tag_name: str,
+    ) -> list[SkillTag]:
+        """移除单条标签；标签不存在抛 :class:`ResourceNotFoundError`（不静默成功）。"""
         ...
 
 
