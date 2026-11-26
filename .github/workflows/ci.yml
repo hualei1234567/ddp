@@ -41,14 +41,17 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: |
-            backend/requirements-dev.txt
-            data-platform/requirements.txt
+            backend/requirements-dev.lock
+            data-platform/requirements.lock
       - name: 安装依赖
+        # 用 lock 安装（含传递依赖 + sha256 哈希，hash-checking 模式）：
+        # requirements*.txt 只作为「人读的意图声明」，不参与 CI 解析。
         # data-platform 是独立依赖清单：后端测试会导入 ddp_data.parquet，
         # 其 PyArrow 依赖必须显式安装，不能靠开发机上的巧合。
+        # 口径见 docs/ops/dependency-reproducibility.md。
         run: |
-          pip install -r requirements-dev.txt
-          pip install -r ../data-platform/requirements.txt
+          pip install -r requirements-dev.lock
+          pip install -r ../data-platform/requirements.lock
       - name: ruff
         run: |
           ruff check app tests migrations
@@ -109,13 +112,14 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: |
-            backend/requirements-dev.txt
-            data-platform/requirements.txt
+            backend/requirements-dev.lock
+            data-platform/requirements.lock
       - name: 安装后端与数据平台依赖
+        # lock 安装，口径同 backend job（docs/ops/dependency-reproducibility.md）。
         run: |
           python -m venv backend/.venv
-          backend/.venv/bin/pip install -r backend/requirements-dev.txt
-          backend/.venv/bin/pip install -r data-platform/requirements.txt
+          backend/.venv/bin/pip install -r backend/requirements-dev.lock
+          backend/.venv/bin/pip install -r data-platform/requirements.lock
       - name: 安装前端依赖与 Chromium
         working-directory: apps/web
         run: |
@@ -217,9 +221,9 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/requirements-dev.txt
+          cache-dependency-path: backend/requirements-dev.lock
       - name: 安装后端依赖
-        run: pip install -r backend/requirements-dev.txt
+        run: pip install -r backend/requirements-dev.lock
       - name: 安装前端依赖
         run: npm ci --prefix apps/web
       - name: 真实后端设备契约快照
@@ -313,7 +317,9 @@ jobs:
         # 投递类事件必须有消费者与测试（R-13 / T-4）。
         run: python scripts/check_outbox_events.py
       - name: 依赖漏洞扫描（阶段 0 仅告警）
+        # 审计面改为 lock：直接依赖的传递依赖同样会被扫描（审计 R5）。
+        # 仍只告警不阻断；升级路径见 docs/ops/dependency-reproducibility.md。
         continue-on-error: true
         run: |
-          pip-audit -r backend/requirements.txt
-          pip-audit -r data-platform/requirements.txt
+          pip-audit -r backend/requirements.lock
+          pip-audit -r data-platform/requirements.lock

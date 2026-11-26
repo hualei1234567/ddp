@@ -19,7 +19,8 @@ help:
 venv:
 	python3 -m venv backend/.venv
 	$(PIP) install --upgrade pip
-	$(PIP) install -r backend/requirements-dev.txt
+	# 用 lock 安装（含传递依赖 + 哈希），口径见 docs/ops/dependency-reproducibility.md
+	$(PIP) install -r backend/requirements-dev.lock
 
 infra-up:
 	docker compose up -d postgres redis minio minio-init
