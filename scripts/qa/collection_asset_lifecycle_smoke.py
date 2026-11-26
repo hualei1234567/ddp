@@ -95,6 +95,8 @@ class Client:
             },
         )
         try:
+            # URL 来自显式环境变量/回环地址，不是服务端请求入口，不存在 file:// 读取面。
+            # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected —— 本地 QA 冒烟脚本
             with urllib.request.urlopen(request, timeout=20) as response:
                 raw = response.read()
                 return response.status, (json.loads(raw) if raw else None)

@@ -1498,6 +1498,8 @@ def create_database() -> tuple[str, str]:
     dbname = f"ddp_qa_308_{uuid4().hex[:8]}"
     engine = create_engine(PG_ADMIN, isolation_level="AUTOCOMMIT", pool_pre_ping=True)
     with engine.connect() as conn:
+        # dbname 由 uuid4().hex 在脚本内部生成，不接受外部输入
+        # nosemgrep: ddp-no-raw-sql-fstring —— 标识符不可 bind，来源是内部 uuid
         conn.execute(text(f'CREATE DATABASE "{dbname}"'))
     engine.dispose()
     return dbname, PG_TEMPLATE.format(dbname=dbname)
@@ -1513,6 +1515,8 @@ def drop_database(dbname: str) -> None:
             ),
             {"name": dbname},
         )
+        # 同上：dbname 是脚本内部生成的临时库名，不承接外部输入。
+        # nosemgrep: ddp-no-raw-sql-fstring —— 标识符不可 bind，来源是内部 uuid
         conn.execute(text(f'DROP DATABASE IF EXISTS "{dbname}"'))
     engine.dispose()
 

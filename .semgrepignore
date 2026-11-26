@@ -1,0 +1,19 @@
+# Semgrep 扫描范围的显式声明（审计 R4 / V52-042）。
+#
+# CI 与 scripts/check_sast.sh 已显式传 `backend/app scripts` 两个目标；
+# 本文件是**兜底**：有人在仓库根直接 `semgrep --config .semgrep.yml` 时，
+# 不会把测试、迁移、前端依赖与文档混进 SAST 结果。
+#
+# 排除口径与任务一致：tests / migrations 的规则噪声远大于信号（测试里大量
+# 构造非法输入、迁移里大量 DDL 文本），真实代码面只有 backend/app + scripts。
+# 注意：这是"扫描范围"声明，不是"放行已发现的告警"——已确认的误报一律用
+# 规则行上的 `# nosemgrep: <rule-id>` 注释就地说明，见各文件。
+backend/tests/
+backend/migrations/
+data-platform/tests/
+apps/
+docs/
+node_modules/
+.venv/
+backend/.venv/
+.venv-*/
