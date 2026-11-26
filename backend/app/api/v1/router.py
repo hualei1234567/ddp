@@ -11,6 +11,7 @@ from app.api.v1 import (
     adapter_callback_routes,
     annotation,
     annotation_backflow_routes,
+    annotation_dedup_routes,
     annotation_honeypot_routes,
     annotation_prm,
     annotation_skill_routes,
@@ -79,6 +80,7 @@ api_router.include_router(annotation.router)
 # PRM 步级标注（V52-020）：只读创建/查询 + fork 纯计算预览。
 api_router.include_router(annotation_prm.router)
 api_router.include_router(annotation_backflow_routes.router)
+api_router.include_router(annotation_dedup_routes.router)
 # 黄金题熔断（V52-008，蓝图 N3）：owner 口径的暂停解除治理端点。
 api_router.include_router(annotation_honeypot_routes.router)
 # 技能标签写入（V52-033）：owner/本人口径的人员技能档案治理端点。
