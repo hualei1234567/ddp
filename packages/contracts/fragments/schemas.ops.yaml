@@ -189,3 +189,117 @@ HoneypotResumeResult:
       type: string
       format: date-time
       description: 状态快照时间（UTC，带时区）
+
+# V52-031 G6 语义近似去重：能力状态、查询与结果。
+AnnotationDedupBackendStatus:
+  type: object
+  required: [backend, available]
+  description: 单个去重后端的可用性
+  properties:
+    backend:
+      type: string
+      enum: [TRIGRAM, VECTOR]
+      description: 后端标识
+    available:
+      type: boolean
+      description: 当前部署下该后端是否真实可用（VECTOR 恒为 false：仅接口预留）
+    reason:
+      type: [string, "null"]
+      description: 不可用原因；available=true 时为 null
+AnnotationDedupStatus:
+  type: object
+  required: [engine, backend, threshold, candidate_limit, backends]
+  description: 语义近似去重能力状态
+  properties:
+    engine:
+      type: string
+      enum: [postgresql, sqlite]
+      description: 当前数据库方言（决定走 pg_trgm 索引还是 Python 兜底）
+    backend:
+      type: string
+      enum: [TRIGRAM, VECTOR]
+      description: 当前生效后端（生产为 TRIGRAM；VECTOR 仅接口预留）
+    threshold:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: 默认命中阈值（score >= threshold 命中）
+    candidate_limit:
+      type: integer
+      minimum: 1
+      description: 默认候选窗口（有界召回，禁止全表扫描）
+    backends:
+      type: array
+      description: 全部后端的可用性（TRIGRAM / VECTOR）
+      items: { $ref: "#/AnnotationDedupBackendStatus" }
+AnnotationDedupQuery:
+  type: object
+  required: [text]
+  description: 近似重复查询请求（只读）
+  properties:
+    text:
+      type: string
+      minLength: 1
+      maxLength: 2000
+      description: 待查文本（与样本文本上限同口径）
+    threshold:
+      type: number
+      minimum: 0
+      maximum: 1
+      default: 0.85
+      description: 命中阈值（score >= threshold 命中）
+    limit:
+      type: integer
+      minimum: 1
+      maximum: 500
+      default: 200
+      description: 参与比较的候选窗口上限（有界召回）
+AnnotationDedupCandidate:
+  type: object
+  required: [text_digest, text, score]
+  description: 一条近似重复候选
+  properties:
+    text_digest:
+      type: string
+      description: 候选文本的 sha256 指纹（sha256:<64 hex>）
+    text:
+      type: string
+      description: 候选文本（规范化后）
+    score:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: 与查询文本的 trigram 相似度（6 位小数）
+    episode_id:
+      type: [string, "null"]
+      format: uuid
+      description: 候选样本载体（Episode）ID
+AnnotationDedupResult:
+  type: object
+  required: [text_digest, backend, threshold, scanned, candidate_count, candidates]
+  description: 一次近似重复查询的结论（只读，不落库）
+  properties:
+    text_digest:
+      type: string
+      description: 查询文本的 sha256 指纹（sha256:<64 hex>）
+    backend:
+      type: string
+      enum: [TRIGRAM, VECTOR]
+      description: 实际使用的后端（生产为 TRIGRAM）
+    threshold:
+      type: number
+      minimum: 0
+      maximum: 1
+      description: 本次生效阈值
+    scanned:
+      type: integer
+      minimum: 0
+      description: 实际参与比较的候选条数（有界窗口内）
+    candidate_count:
+      type: integer
+      minimum: 0
+      description: 命中条数
+    candidates:
+      type: array
+      description: 命中的近似重复候选（按分数降序）
+      items: { $ref: "#/AnnotationDedupCandidate" }

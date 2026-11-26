@@ -29,6 +29,7 @@ from app.application.annotation.reviews import AnnotationReviewUseCases
 from app.application.annotation.sample_sets import AnnotationSampleSetUseCases
 from app.application.annotation.schema_presets import SchemaPresetCatalog
 from app.application.annotation.schemas import AnnotationSchemaUseCases
+from app.application.annotation.semantic_dedup import SemanticDedupUseCases
 from app.application.annotation.submissions import AnnotationSubmissionUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
 from app.core.config import Settings, get_settings
@@ -73,6 +74,7 @@ from app.infrastructure.repositories.annotation_schemas import SqlAnnotationSche
 from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRepository
 from app.infrastructure.repositories.annotation_token_usage import SqlTokenUsageRecorder
 from app.infrastructure.repositories.lineage import SqlLineageRepository
+from app.infrastructure.repositories.semantic_dedup import SqlSemanticDedupRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +97,7 @@ class AnnotationUseCases:
     overdue_summary: AnnotationOverdueSummaryUseCases
     prm_annotations: PrmAnnotationUseCases
     backflow: BackflowUseCases
+    semantic_dedup: SemanticDedupUseCases
 
 
 def get_annotation_use_cases(
@@ -327,6 +330,7 @@ def get_annotation_use_cases(
             tasks,
             session,
         ),
+        semantic_dedup=SemanticDedupUseCases(SqlSemanticDedupRepository(session)),
     )
 
 

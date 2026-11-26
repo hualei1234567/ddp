@@ -551,6 +551,8 @@ tags:
     description: 提交、记录、复核与仲裁
   - name: annotation-prm
     description: PRM 步级过程奖励标注（四分类 + reward）、分叉重写与 Step-DPO 对预览（V52-020）
+  - name: annotation-dedup
+    description: 语义近似去重（TRIGRAM 默认真实可用；VECTOR 仅接口预留，不承诺向量能力）
   - name: annotation-quality
     description: 黄金集、质检抽检与 IAA 报告
   - name: datasets
@@ -1117,6 +1119,9 @@ paths:
   # --- 评测失败案例回流（V52-030，蓝图 N5 / G5）---
   /api/v1/projects/{project_id}/annotation-backflow:
     $ref: "./fragments/paths.ops.yaml#/annotationBackflow"
+  # --- 语义近似去重（V52-031，蓝图 G6/N1；只读能力，默认 TRIGRAM 后端）---
+  /api/v1/projects/{project_id}/annotation-dedup:
+    $ref: "./fragments/paths.ops.yaml#/annotationDedup"
   # --- 黄金题熔断接线（V52-008，蓝图 N3；owner / 平台管理员）---
   /api/v1/projects/{project_id}/annotation-honeypot/{annotator_id}/resume:
     $ref: "./fragments/paths.ops.yaml#/annotationHoneypotResume"
@@ -1774,6 +1779,11 @@ components:
     AnnotationBackflowDecision: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowDecision"}
     AnnotationBackflowCase: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCase"}
     AnnotationBackflowCasePage: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCasePage"}
+    AnnotationDedupBackendStatus: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupBackendStatus"}
+    AnnotationDedupStatus: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupStatus"}
+    AnnotationDedupQuery: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupQuery"}
+    AnnotationDedupCandidate: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupCandidate"}
+    AnnotationDedupResult: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupResult"}
     HoneypotResumeResult: {$ref: "./fragments/schemas.ops.yaml#/HoneypotResumeResult"}
     AiSuggestionConfirm: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestionConfirm"}
     AiSuggestion: {$ref: "./fragments/schemas.stage9.yaml#/AiSuggestion"}

@@ -95,6 +95,11 @@ class EpisodeModel(Base):
         server_default=text("'[]'"),
     )
     language_instruction: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    # G6 语义近似去重的文本指纹（迁移 0084）：``language_instruction`` 的
+    # ``sha256:`` 规范化指纹。历史行由迁移一次性回填；该列只做**精确重复**
+    # 快速判定与 B-tree 索引，近似判定仍由 pg_trgm/领域纯函数完成。
+    # 可空是兼容口径：未填指令的 Episode 本来就不进去重语料。
+    text_digest: Mapped[str | None] = mapped_column(String(71), nullable=True)
     start_time_ns: Mapped[int] = mapped_column(BigInteger, nullable=False)
     end_time_ns: Mapped[int] = mapped_column(BigInteger, nullable=False)
     duration_ns: Mapped[int] = mapped_column(BigInteger, nullable=False)

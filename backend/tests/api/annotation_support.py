@@ -25,7 +25,10 @@ def seed_episode(
     project_id: UUID,
     actor_id: UUID,
     code: str,
+    *,
+    language_instruction: str | None = None,
 ) -> UUID:
+    """造一条最小可用 Episode（可选语言指令，供语义去重等文本能力测试）。"""
     episode_id = uuid4()
     with factory() as session:
         session.add(
@@ -39,6 +42,7 @@ def seed_episode(
                 quality_status="NOT_CHECKED",
                 annotation_status="NOT_STARTED",
                 scene_labels=["kitchen"],
+                language_instruction=language_instruction,
                 start_time_ns=1_000,
                 end_time_ns=2_000,
                 duration_ns=1_000,

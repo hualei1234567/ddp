@@ -162,3 +162,60 @@ annotationHoneypotResume:
       "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
       "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
 
+# V52-031 G6 语义近似去重（蓝图 N1 训练集防污染）：只读能力。
+# 生产 PostgreSQL 未装 pgvector，默认后端恒为 TRIGRAM（pg_trgm）；VECTOR 仅接口预留。
+annotationDedup:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+  get:
+    operationId: getAnnotationDedupStatus
+    tags: [annotation-dedup]
+    summary: 语义近似去重能力状态（后端可用性、阈值、候选窗口）
+    description: |
+      蓝图 G6 语义近似去重（N1 训练集防污染）的**只读**能力状态。
+
+      生产 PostgreSQL 16.16 未安装 pgvector，默认后端恒为 `TRIGRAM`
+      （`pg_trgm` 扩展 + GIN 三元组索引；SQLite 集成测试走纯 Python 兜底）。
+      `VECTOR` 后端只保留接口：`available=false` 且给出原因
+      （`extension_missing` 扩展缺失 / `not_implemented` 代码未实现），
+      **不提供向量能力**，客户端不得据此认为语义向量检索可用。
+
+      权限按 READ 校验（viewer 可读）。
+    responses:
+      "200":
+        description: 能力状态（后端可用性、生效阈值、有界候选窗口）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AnnotationDedupStatus" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+  post:
+    operationId: queryAnnotationDedup
+    tags: [annotation-dedup]
+    summary: 查询一段文本在项目内的近似重复样本（只读，不落库）
+    description: |
+      给一段文本（1..2000 字符），在项目内既有样本文本
+      （`episodes.language_instruction`）中查近似重复。
+
+      语义：对候选窗口内（默认 200，最大 500）的样本重算**字符 3-gram
+      Jaccard 相似度**，`score >= threshold` 命中（含边界），按分数降序返回。
+      本端点**只读**：不写库、不删数据、不修改去重结论的持久状态。
+
+      实现分派：PostgreSQL 用 `pg_trgm` 的 GIN 索引 + `similarity()` 做有界
+      索引扫描（`text_digest` B-tree 负责完全重复精确命中）；SQLite 用纯
+      Python 兜底。两条路径的最终分数都由领域纯函数重算，阈值语义一致。
+      候选窗口有界是**能力边界**：窗口外的样本不参与比较（禁止全表扫描）。
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/AnnotationDedupQuery" }
+    responses:
+      "200":
+        description: 近似重复查询结论（命中候选按分数降序）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AnnotationDedupResult" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
