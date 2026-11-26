@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 30 张卡片**：DRAFT 0 / ACTIVE 30 / SUPERSEDED 0 / DEPRECATED 0
+**总计 32 张卡片**：DRAFT 0 / ACTIVE 32 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 30 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 32 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -31,7 +31,7 @@
 | [MEM-SOP-002](sop/MEM-SOP-002-parallel-agent-development.md) | 并行智能体开发 SOP：worktree 隔离 + 资源预分配 + check.sh 串行 | ACTIVE | 1 | `check-lock`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `version-bump`, `worktree` |
 | [MEM-SOP-003](sop/MEM-SOP-003-subagent-parallel-collaboration.md) | 子代理并行开发协作模式：迁移号独占 + 契约策略 + 禁改共享文件 + 坑点统一入库 + check.sh 全局串行 | ACTIVE | 1 | `check-lock`, `contract-strategy`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `subagent` |
 
-## INC · 事故与缺陷复盘（22）
+## INC · 事故与缺陷复盘（24）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -57,6 +57,8 @@
 | [MEM-INC-020](incidents/MEM-INC-020-sqlite-batch-cross-table-trigger.md) | SQLite batch 重建撞跨表触发器：被引用表 batch 改名瞬间触发器报 no such table，处置=drop→改表→重装 | ACTIVE | **2** | `0041`, `0052`, `alembic`, `batch-alter-table`, `guard-triggers`, `sqlite`, `trigger-rename` |
 | [MEM-INC-021](incidents/MEM-INC-021-jsonb-readback-and-decimal-money.md) | JSONB 回读类型不宽容 + Decimal 金额纪律：JSON 字段读回是 ISO 字符串、金额全程 Decimal 量化 4 位小数对外输出字符串 | ACTIVE | **2** | `datetime`, `decimal`, `jsonb`, `precision`, `serialization`, `type-coercion` |
 | [MEM-INC-022](incidents/MEM-INC-022-sqlite-naive-datetime-readback.md) | SQLite 读库 datetime 是 naive，领域层要求 aware——在仓储边界补 UTC，不放宽领域校验 | ACTIVE | **2** | `domain-invariant`, `naive-datetime`, `repository-boundary`, `sqlite`, `timezone` |
+| [MEM-INC-023](incidents/MEM-INC-023-unique-key-rejection-rows.md) | 唯一键表的"拒绝类判决"不能落库——重复跳过/限流写入会撞自身唯一键 | ACTIVE | 1 | `409`, `idempotency`, `unique-constraint`, `webhook`, `write-amplification` |
+| [MEM-INC-024](incidents/MEM-INC-024-nplus1-query-count-guard.md) | 列表 N+1 用"查询次数不随页大小变化"的断言守护，而不是靠压测 | ACTIVE | 1 | `n-plus-1`, `performance-regression`, `query-count`, `sqlalchemy-events` |
 
 ## CHG · 变更记录（1）
 
@@ -98,6 +100,7 @@
 - `0041`：MEM-INC-020
 - `0052`：MEM-INC-020
 - `2^53`：MEM-INC-008
+- `409`：MEM-INC-023
 - `adapter`：MEM-DEC-001
 - `adr`：MEM-DEC-001
 - `alembic`：MEM-INC-013, MEM-INC-018, MEM-INC-019, MEM-INC-020
@@ -149,6 +152,7 @@
 - `golden-path`：MEM-INC-004, MEM-SOP-001
 - `guard-triggers`：MEM-INC-020
 - `hdf5`：MEM-INC-004, MEM-INC-010, MEM-SOP-001
+- `idempotency`：MEM-INC-023
 - `integrity-error`：MEM-INC-001
 - `invariant`：MEM-OPS-001
 - `json`：MEM-INC-008
@@ -169,6 +173,7 @@
 - `minio`：MEM-INC-009, MEM-OPS-001
 - `model-naming`：MEM-INC-019
 - `multiple-heads`：MEM-INC-018
+- `n-plus-1`：MEM-INC-024
 - `naive-datetime`：MEM-INC-022
 - `nanosecond`：MEM-INC-008
 - `off-by-n`：MEM-INC-010
@@ -182,6 +187,7 @@
 - `parity`：MEM-INC-016
 - `parquet`：MEM-INC-004
 - `pending`：MEM-CHG-001
+- `performance-regression`：MEM-INC-024
 - `pipeline`：MEM-INC-011
 - `position-bias`：MEM-DEC-002
 - `postgres`：MEM-INC-003, MEM-INC-009, MEM-INC-012, MEM-INC-013, MEM-OPS-001
@@ -190,6 +196,7 @@
 - `processing-run`：MEM-INC-011, MEM-INC-012
 - `projection`：MEM-INC-006, MEM-INC-007
 - `pytest`：MEM-INC-019
+- `query-count`：MEM-INC-024
 - `raw_asset`：MEM-INC-001
 - `recorded`：MEM-CHG-001
 - `recursion`：MEM-INC-007
@@ -217,6 +224,7 @@
 - `spool`：MEM-OPS-001
 - `sql`：MEM-INC-002
 - `sqlalchemy`：MEM-INC-013, MEM-INC-019
+- `sqlalchemy-events`：MEM-INC-024
 - `sqlite`：MEM-INC-013, MEM-INC-018, MEM-INC-020, MEM-INC-022
 - `stage`：MEM-INC-012
 - `status`：MEM-INC-003, MEM-REQ-001
@@ -232,10 +240,13 @@
 - `training-ready`：MEM-REQ-001
 - `trigger-rename`：MEM-INC-020
 - `type-coercion`：MEM-INC-021
+- `unique-constraint`：MEM-INC-023
 - `unique-index`：MEM-INC-001
 - `v1.1`：MEM-INC-014
 - `version-bump`：MEM-INC-015, MEM-SOP-002
 - `version-conflict`：MEM-INC-011
+- `webhook`：MEM-INC-023
 - `worker`：MEM-INC-001
 - `worktree`：MEM-INC-009, MEM-SOP-002
+- `write-amplification`：MEM-INC-023
 - `yaml`：MEM-INC-017
