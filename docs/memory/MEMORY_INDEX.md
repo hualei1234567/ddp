@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 32 张卡片**：DRAFT 0 / ACTIVE 32 / SUPERSEDED 0 / DEPRECATED 0
+**总计 33 张卡片**：DRAFT 0 / ACTIVE 33 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 32 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 33 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -31,7 +31,7 @@
 | [MEM-SOP-002](sop/MEM-SOP-002-parallel-agent-development.md) | 并行智能体开发 SOP：worktree 隔离 + 资源预分配 + check.sh 串行 | ACTIVE | 1 | `check-lock`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `version-bump`, `worktree` |
 | [MEM-SOP-003](sop/MEM-SOP-003-subagent-parallel-collaboration.md) | 子代理并行开发协作模式：迁移号独占 + 契约策略 + 禁改共享文件 + 坑点统一入库 + check.sh 全局串行 | ACTIVE | 1 | `check-lock`, `contract-strategy`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `subagent` |
 
-## INC · 事故与缺陷复盘（24）
+## INC · 事故与缺陷复盘（25）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -59,6 +59,7 @@
 | [MEM-INC-022](incidents/MEM-INC-022-sqlite-naive-datetime-readback.md) | SQLite 读库 datetime 是 naive，领域层要求 aware——在仓储边界补 UTC，不放宽领域校验 | ACTIVE | **2** | `domain-invariant`, `naive-datetime`, `repository-boundary`, `sqlite`, `timezone` |
 | [MEM-INC-023](incidents/MEM-INC-023-unique-key-rejection-rows.md) | 唯一键表的"拒绝类判决"不能落库——重复跳过/限流写入会撞自身唯一键 | ACTIVE | 1 | `409`, `idempotency`, `unique-constraint`, `webhook`, `write-amplification` |
 | [MEM-INC-024](incidents/MEM-INC-024-nplus1-query-count-guard.md) | 列表 N+1 用"查询次数不随页大小变化"的断言守护，而不是靠压测 | ACTIVE | 1 | `n-plus-1`, `performance-regression`, `query-count`, `sqlalchemy-events` |
+| [MEM-INC-025](incidents/MEM-INC-025-lock-platform-marker-greenlet.md) | macOS 上生成的 pip lock 在 Linux CI 因 greenlet 平台标记直接红 | ACTIVE | 1 | `ci`, `dependency-lock`, `greenlet`, `hash-checking`, `pip-compile`, `platform-marker`, `sbom` |
 
 ## CHG · 变更记录（1）
 
@@ -120,7 +121,7 @@
 - `check-constraint`：MEM-INC-003, MEM-INC-012, MEM-INC-013
 - `check-lock`：MEM-SOP-002, MEM-SOP-003
 - `chunked-read`：MEM-INC-010
-- `ci`：MEM-INC-005
+- `ci`：MEM-INC-005, MEM-INC-025
 - `ci-gate`：MEM-INC-016
 - `claim-boundary`：MEM-REQ-001
 - `column-name`：MEM-INC-002
@@ -133,6 +134,7 @@
 - `db-constraint`：MEM-INC-006
 - `dead-code`：MEM-INC-006
 - `decimal`：MEM-INC-021
+- `dependency-lock`：MEM-INC-025
 - `deserialization`：MEM-INC-014
 - `dialect`：MEM-INC-013
 - `dispatch`：MEM-INC-003
@@ -150,7 +152,9 @@
 - `gate`：MEM-SOP-001
 - `golden`：MEM-INC-005
 - `golden-path`：MEM-INC-004, MEM-SOP-001
+- `greenlet`：MEM-INC-025
 - `guard-triggers`：MEM-INC-020
+- `hash-checking`：MEM-INC-025
 - `hdf5`：MEM-INC-004, MEM-INC-010, MEM-SOP-001
 - `idempotency`：MEM-INC-023
 - `integrity-error`：MEM-INC-001
@@ -188,7 +192,9 @@
 - `parquet`：MEM-INC-004
 - `pending`：MEM-CHG-001
 - `performance-regression`：MEM-INC-024
+- `pip-compile`：MEM-INC-025
 - `pipeline`：MEM-INC-011
+- `platform-marker`：MEM-INC-025
 - `position-bias`：MEM-DEC-002
 - `postgres`：MEM-INC-003, MEM-INC-009, MEM-INC-012, MEM-INC-013, MEM-OPS-001
 - `precision`：MEM-INC-008, MEM-INC-021
@@ -211,6 +217,7 @@
 - `sample`：MEM-INC-004, MEM-SOP-001
 - `savepoint`：MEM-INC-001
 - `sawarning`：MEM-INC-019
+- `sbom`：MEM-INC-025
 - `schema`：MEM-DEC-002, MEM-INC-013
 - `schema-evolution`：MEM-INC-014
 - `serialization`：MEM-INC-014, MEM-INC-021

@@ -32,12 +32,12 @@ CI 与本地装出的就是同一组版本。
 | 文件 | 角色 | 谁消费 |
 |---|---|---|
 | `backend/requirements.txt` | **人读的意图声明**：15 个直接依赖 + 每条依赖的评估/许可/安全备注 | 人、`pip-compile` 输入、ADR 引用 |
-| `backend/requirements.lock` | **运行期解析结果**：46 个包（15 直接 + 31 传递），1104 条 sha256 | 生产镜像（若按 lock 构建）、`sbom` 生成、`pip-audit` |
+| `backend/requirements.lock` | **运行期解析结果**：47 个包（15 直接 + 32 传递），1183 条 sha256 | 生产镜像（若按 lock 构建）、`sbom` 生成、`pip-audit` |
 | `backend/requirements-dev.txt` | 开发/CI 意图声明：`-r requirements.txt` + 5 个开发工具 | 人、`pip-compile` 输入 |
-| `backend/requirements-dev.lock` | **CI/开发解析结果**：52 个包（含 5 个开发工具），1247 条 sha256 | CI 全部后端 job（backend / e2e / contract）、`make venv` |
+| `backend/requirements-dev.lock` | **CI/开发解析结果**：53 个包（含 5 个开发工具），1326 条 sha256 | CI 全部后端 job（backend / e2e / contract）、`make venv` |
 | `data-platform/requirements.txt` | data-platform 独立意图声明：5 个直接依赖 | 人、`pip-compile` 输入 |
 | `data-platform/requirements.lock` | data-platform 解析结果：22 个包（5 直接 + 17 传递），786 条 sha256 | CI（后端测试要 import `ddp_data`） |
-| `sbom/backend.cdx.json` | 运行期后端依赖的 CycloneDX 1.6 JSON 清单（46 组件，含 sha256） | 供应链事件影响面定位 |
+| `sbom/backend.cdx.json` | 运行期后端依赖的 CycloneDX 1.6 JSON 清单（47 组件，含 sha256） | 供应链事件影响面定位 |
 | `sbom/data-platform.cdx.json` | data-platform 依赖的 CycloneDX 1.6 JSON 清单（22 组件） | 同上 |
 
 > lock 文件头部的 `# via ...` 注释会标出每个传递依赖是被谁引入的，
@@ -76,6 +76,47 @@ cd ../data-platform
 
 生成后**必须一起提交**对应的 `.txt`（意图）与 `.lock`（结果），且 lock 与
 `requirements*.txt` 的版本必须一致；不一致即视为提交错误。
+
+### 3.1 必须在 Linux 目标平台生成 lock（血泪坑）
+
+`pip-compile` 的解析是**按当前平台求环境标记（marker）**的，不是跨平台求全集。
+2026-11-26 首版是在 macOS arm64 上生成的，CI（ubuntu-latest x86_64）安装直接红：
+
+```
+ERROR: In --require-hashes mode, all requirements must have their versions pinned with ==.
+These do not:
+    greenlet!=0.4.17 ... (from sqlalchemy==2.0.36->-r requirements-dev.lock)
+```
+
+原因：`SQLAlchemy 2.0.36` 的 `greenlet` 依赖带平台标记
+（`platform_machine` 为 `aarch64/x86_64/...` 时才有），macOS arm64 的
+`platform_machine` 是 `arm64`，**不命中** → 本机解析时 greenlet 被漏掉；
+CI/Linux 命中 → 需要 greenlet，但 lock 里没有且 hash 模式下不允许未固定版本。
+hash-checking 模式把这个平台差异从「悄悄少装一个包」升级成了**显式 CI 失败**。
+
+正确做法：**在 CI/生产的目标平台（Linux）里生成**，不要在本机 macOS 生成后直接提交：
+
+```bash
+# 在 Linux 容器里生成（与 CI ubuntu-latest 的 marker 求值一致；本机 Docker 为 arm64 亦可，
+# 因为 greenlet 的标记同时覆盖 aarch64 与 x86_64，二者解析结果相同）
+cd <repo>
+docker run --rm -v "$PWD":/src -w /src python:3.11-slim bash -lc '
+  set -e
+  pip install -q "pip-tools==7.7.0"
+  cd backend
+  pip-compile --generate-hashes --no-emit-index-url --no-emit-trusted-host \
+    --output-file=requirements.lock requirements.txt
+  pip-compile --generate-hashes --no-emit-index-url --no-emit-trusted-host \
+    --output-file=requirements-dev.lock requirements-dev.txt
+  cd ../data-platform
+  pip-compile --generate-hashes --no-emit-index-url --no-emit-trusted-host \
+    --output-file=requirements.lock requirements.txt
+'
+```
+
+生成后要**双平台各验证一次安装**（§6）：Linux 容器验证 CI 一定装得上，
+macOS 本机验证开发机也装得上（Linux 解析出的 lock 在 macOS 安装时可能多装
+`greenlet` 这类仅 Linux 需要的包，无功能影响）。
 
 ---
 
@@ -138,15 +179,25 @@ jq -r '.components[] | select(.name=="pyjwt") | .externalReferences[].hashes[]?.
 ## 6. 验证（干净 venv 复现）
 
 ```bash
+# A. Linux 平台（= CI 口径，必须过）
+docker run --rm -v "$PWD":/src -w /src python:3.11-slim bash -lc '
+  python -m venv /tmp/ci-venv
+  /tmp/ci-venv/bin/pip install -r backend/requirements-dev.lock
+  /tmp/ci-venv/bin/pip install -r data-platform/requirements.lock
+  PYTHONPATH=/src/data-platform /tmp/ci-venv/bin/python -c "import fastapi, sqlalchemy, psycopg, greenlet, pyarrow, ddp_data"
+'
+
+# B. 本机 macOS（= 开发机口径，也要能装）
 rm -rf /tmp/locktest && python3 -m venv /tmp/locktest
 /tmp/locktest/bin/pip install -r backend/requirements-dev.lock   # CI 用这份
-/tmp/locktest/bin/pip list --format=freeze | wc -l              # 期望 52 + pip/setuptools
+/tmp/locktest/bin/pip list --format=freeze | wc -l              # 期望 53 + pip/setuptools
 ```
 
 - exit=0 且包数 = lock 中 `==` 行数（+ venv 自带的 `pip`/`setuptools`）即通过；
   任何一个包版本或 sha256 不符，pip 会直接失败（hash-checking 模式）。
-- 2026-11-26 实测：`backend/requirements.lock` → exit 0 / 46 包；
-  `backend/requirements-dev.lock` → exit 0 / 52 包。
+- 2026-11-26 实测（macOS arm64 本地 + `linux/arm64` 容器各一次，均按 CI 口径）：
+  `backend/requirements.lock` → exit 0 / 47 包；`backend/requirements-dev.lock` → exit 0 / 53 包；
+  `data-platform/requirements.lock` → exit 0 / 22 包。
 
 ---
 
@@ -157,7 +208,7 @@ rm -rf /tmp/locktest && python3 -m venv /tmp/locktest
 | `backend` | `pip install -r requirements-dev.txt` + `data-platform/requirements.txt` | 两份 `.lock`（hash-checking） |
 | `e2e` | 同上（装进 `backend/.venv`） | 两份 `.lock` |
 | `contract` | `pip install -r backend/requirements-dev.txt` | `backend/requirements-dev.lock` |
-| `security` | `pip-audit -r backend/requirements.txt` / `data-platform/requirements.txt`（只覆盖直接依赖） | `pip-audit -r` 两份 `.lock`（覆盖传递依赖）；仍 `continue-on-error`，只告警 |
+| `security` | `pip-audit -r backend/requirements.txt` / `data-platform/requirements.txt`（只覆盖直接依赖） | `pip-audit -r` 两份 `.lock`（覆盖传递依赖）；仍 `continue-on-error`，只告警。同 job 的 `pytest scripts/tests` 会跑锁/SBOM 守卫测试 |
 
 `actions/setup-python` 的 `cache: pip` 的 `cache-dependency-path` 全部改为 lock，
 否则 lock 更新不会触发缓存失效、会装回旧 wheel。
@@ -171,8 +222,8 @@ rm -rf /tmp/locktest && python3 -m venv /tmp/locktest
 
 | 项 | 现状 |
 |---|---|
-| lock 与 `.txt` 漂移无自动门禁 | 本轮不改 `scripts/check.sh`；CI 只保证「按 lock 装」，不保证 lock 与意图一致。建议主控后续加一步「直接依赖版本 ⊆ lock 版本」的静态校验 |
-| SBOM 无主组件（`metadata.component`） | `backend/pyproject.toml` 只有 `[tool.ruff]`/`[tool.pytest]`，不是 PEP 621，`cyclonedx-py --pyproject` 会报错；因此清单只有 46 个 `library` 组件、无顶层应用标识。补 PEP 621 `[project]` 后应重新生成 |
+| lock 与 `.txt` 漂移、SBOM 与 lock 脱节 | 已由静态守卫 `scripts/tests/test_requirements_lock.py` 拦截（随 `pytest scripts/tests` 在本地 `check.sh` 第 6 步与 CI security job 执行）：直接依赖版本一致、每包有 hash、Linux 平台解析、SBOM 组件与 lock 同步。未改 `scripts/check.sh` 本身 |
+| SBOM 无主组件（`metadata.component`） | `backend/pyproject.toml` 只有 `[tool.ruff]`/`[tool.pytest]`，不是 PEP 621，`cyclonedx-py --pyproject` 会报错；因此清单只有 47 个 `library` 组件、无顶层应用标识。补 PEP 621 `[project]` 后应重新生成 |
 | Python 小版本与 pip 版本未锁 | lock 由 Python 3.11 解析、CI 固定 3.11；但 Python 补丁版本（3.11.x）与 pip 自身版本未锁，存在理论漂移 |
 | 前端依赖 | 已有 `apps/web/package-lock.json`（npm lock），不在本文件范围 |
 | 已知漏洞 | 本轮不升版本。`pip-audit` 现可扫描全量传递依赖，历史告警（如 `pyjwt==2.10.1`、`python-multipart==0.0.20`）会显性列出，属后续升级任务 |
