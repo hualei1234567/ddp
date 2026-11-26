@@ -1,0 +1,2857 @@
+{
+  "sample_sufficient": true,
+  "statistics": {
+    "total_index_scans": 2847828,
+    "total_seq_scans": 308422
+  },
+  "min_total_scans": 100000,
+  "small_table_rows_threshold": 1000,
+  "counts": {
+    "total_zero_scan_indexes": 354,
+    "by_verdict": {
+      "review_after_growth": 129,
+      "keep_constraint": 225
+    },
+    "wasted_bytes_on_drop_candidates": 0
+  },
+  "findings": [
+    {
+      "table": "audit_logs",
+      "index": "ix_audit_logs_project_resource",
+      "size_bytes": 1368064,
+      "table_rows": 39,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "audit_logs",
+      "index": "ix_audit_logs_project_occurred_at",
+      "size_bytes": 876544,
+      "table_rows": 39,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "audit_logs",
+      "index": "pk_audit_logs",
+      "size_bytes": 606208,
+      "table_rows": 39,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "idempotency_records",
+      "index": "pk_idempotency_records",
+      "size_bytes": 491520,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_lineage_edges",
+      "index": "uq_data_lineage_edges_endpoints_relation",
+      "size_bytes": 155648,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_findings",
+      "index": "uq_annotation_quality_findings_run_record_rule",
+      "size_bytes": 147456,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_source_media_assets",
+      "index": "uq_media_assets_project_id_id",
+      "size_bytes": 122880,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_source_media_assets",
+      "index": "pk_data_source_media_assets",
+      "size_bytes": 90112,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_findings",
+      "index": "uq_annotation_quality_findings_project_id_id",
+      "size_bytes": 90112,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "acceptance_ledger_entries",
+      "index": "ix_acceptance_ledger_supplier",
+      "size_bytes": 81920,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episode_raw_assets",
+      "index": "pk_episode_raw_assets",
+      "size_bytes": 73728,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_items",
+      "index": "uq_dataset_items_project_version_sha",
+      "size_bytes": 73728,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "lineage_node_refs",
+      "index": "pk_lineage_node_refs",
+      "size_bytes": 65536,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_assignment_events",
+      "index": "ix_annotation_assignment_events_project_assignee_time",
+      "size_bytes": 65536,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "acceptance_ledger_entries",
+      "index": "ix_acceptance_ledger_batch",
+      "size_bytes": 65536,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "acceptance_ledger_entries",
+      "index": "pk_acceptance_ledger_entries",
+      "size_bytes": 57344,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_sample_episodes",
+      "index": "uq_annotation_sample_episodes_set_episode",
+      "size_bytes": 57344,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_findings",
+      "index": "pk_annotation_quality_findings",
+      "size_bytes": 57344,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "raw_assets",
+      "index": "uq_raw_assets_project_content_active",
+      "size_bytes": 57344,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_lineage_edges",
+      "index": "pk_data_lineage_edges",
+      "size_bytes": 57344,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "raw_assets",
+      "index": "uq_raw_assets_project_code",
+      "size_bytes": 57344,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_sample_sets",
+      "index": "ix_annotation_sample_sets_project_status_created_at",
+      "size_bytes": 49152,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episodes",
+      "index": "ix_episodes_project_status_created_at",
+      "size_bytes": 49152,
+      "table_rows": 206,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "usage_snapshots",
+      "index": "pk_usage_snapshots",
+      "size_bytes": 49152,
+      "table_rows": 240,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_items",
+      "index": "uq_dataset_items_project_version_episode",
+      "size_bytes": 49152,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_submissions",
+      "index": "ix_annotation_submissions_project_task_status",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_records",
+      "index": "uq_annotation_records_project_id_id",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_records",
+      "index": "uq_annotation_records_project_lineage_version",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_records",
+      "index": "ix_annotation_records_project_task_status",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episode_raw_assets",
+      "index": "ix_episode_raw_assets_project_asset",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_batches",
+      "index": "ix_annotation_batches_project_task_status",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "raw_assets",
+      "index": "uq_raw_assets_project_id_id",
+      "size_bytes": 40960,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_schemas",
+      "index": "uq_annotation_schemas_project_code_version",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_schemas",
+      "index": "ix_annotation_schemas_project_status_created_at",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episodes",
+      "index": "ix_episodes_project_lineage",
+      "size_bytes": 40960,
+      "table_rows": 206,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_items",
+      "index": "uq_dataset_items_project_id_id",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_findings",
+      "index": "ix_annotation_quality_findings_project_run",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_assignments",
+      "index": "uq_annotation_assignments_batch_assignee_role",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_assignments",
+      "index": "ix_annotation_assignments_project_assignee_status",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_assignments",
+      "index": "ix_annotation_assignments_project_batch_status",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_assignments",
+      "index": "ix_annotation_assignments_project_task_status",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_assignment_events",
+      "index": "pk_annotation_assignment_events",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_batches",
+      "index": "uq_annotation_batches_project_task_id",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_assignment_events",
+      "index": "ix_annotation_assignment_events_project_assignment",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episode_raw_assets",
+      "index": "ix_episode_raw_assets_project_episode",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_sample_sets",
+      "index": "uq_annotation_sample_sets_project_code",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_sample_episodes",
+      "index": "pk_annotation_sample_episodes",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_sample_episodes",
+      "index": "ix_annotation_sample_episodes_project_set",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episodes",
+      "index": "uq_episodes_project_id_id",
+      "size_bytes": 40960,
+      "table_rows": 206,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_tasks",
+      "index": "uq_annotation_tasks_project_code",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_request_revisions",
+      "index": "uq_training_request_revisions_project_request_id_id",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_tasks",
+      "index": "ix_annotation_tasks_project_status_created_at",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episodes",
+      "index": "uq_episodes_project_code",
+      "size_bytes": 40960,
+      "table_rows": 206,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "episodes",
+      "index": "uq_episodes_project_lineage_version",
+      "size_bytes": 40960,
+      "table_rows": 206,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_findings",
+      "index": "ix_annotation_quality_findings_project_annotation",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_sample_sets",
+      "index": "uq_annotation_sample_sets_project_id_id",
+      "size_bytes": 40960,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "export_jobs",
+      "index": "uq_export_jobs_project_user_idempotency",
+      "size_bytes": 32768,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_submissions",
+      "index": "uq_annotation_submissions_assignment_version",
+      "size_bytes": 32768,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "project_members",
+      "index": "uq_project_members_project_id",
+      "size_bytes": 32768,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "calibration_target_refs",
+      "index": "pk_calibration_target_refs",
+      "size_bytes": 32768,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_batches",
+      "index": "uq_annotation_batches_project_code",
+      "size_bytes": 32768,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_reviews",
+      "index": "uq_annotation_reviews_submission_round",
+      "size_bytes": 32768,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "episodes",
+      "index": "ix_episodes_project_text_digest",
+      "size_bytes": 32768,
+      "table_rows": 206,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episodes",
+      "index": "ix_episodes_language_instruction_trgm",
+      "size_bytes": 32768,
+      "table_rows": 206,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_items",
+      "index": "pk_dataset_items",
+      "size_bytes": 32768,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_records",
+      "index": "ix_annotation_records_project_submission",
+      "size_bytes": 32768,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_batches",
+      "index": "uq_annotation_batches_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_batches",
+      "index": "uq_annotation_batches_project_task_sequence",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_batches",
+      "index": "ix_annotation_batches_project_sequence_no",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_assignments",
+      "index": "pk_annotation_assignments",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_assignments",
+      "index": "uq_annotation_assignments_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_submissions",
+      "index": "pk_annotation_submissions",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_submissions",
+      "index": "uq_annotation_submissions_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_records",
+      "index": "pk_annotation_records",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_records",
+      "index": "ix_annotation_records_project_episode",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_reviews",
+      "index": "pk_annotation_reviews",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_reviews",
+      "index": "uq_annotation_reviews_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_reviews",
+      "index": "ix_annotation_reviews_project_submission",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_arbitrations",
+      "index": "pk_annotation_arbitrations",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_arbitrations",
+      "index": "uq_annotation_arbitrations_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_arbitrations",
+      "index": "ix_annotation_arbitrations_project_submission",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_gold_sets",
+      "index": "pk_annotation_gold_sets",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_gold_sets",
+      "index": "uq_annotation_gold_sets_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_gold_sets",
+      "index": "uq_annotation_gold_sets_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_gold_sets",
+      "index": "ix_annotation_gold_sets_project_status_created_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_gold_set_exposures",
+      "index": "pk_annotation_gold_set_exposures",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_gold_set_exposures",
+      "index": "uq_annotation_gold_set_exposures_item_annotator_task",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_gold_set_exposures",
+      "index": "ix_annotation_gold_set_exposures_project_annotator",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_gold_set_evaluations",
+      "index": "pk_annotation_gold_set_evaluations",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_gold_set_evaluations",
+      "index": "ix_annotation_gold_set_evaluations_project_set",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_quality_samples",
+      "index": "pk_annotation_quality_samples",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_samples",
+      "index": "uq_annotation_quality_samples_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_samples",
+      "index": "ix_annotation_quality_samples_project_task_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_iaa_reports",
+      "index": "pk_annotation_iaa_reports",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_iaa_reports",
+      "index": "uq_annotation_iaa_reports_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_iaa_reports",
+      "index": "ix_annotation_iaa_reports_project_task_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "datasets",
+      "index": "pk_datasets",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "datasets",
+      "index": "uq_datasets_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "datasets",
+      "index": "uq_datasets_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "datasets",
+      "index": "ix_datasets_project_lineage",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "datasets",
+      "index": "ix_datasets_project_status_created_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_versions",
+      "index": "uq_dataset_versions_project_dataset_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_versions",
+      "index": "uq_dataset_versions_project_lineage_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_versions",
+      "index": "ix_dataset_versions_project_lineage",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_versions",
+      "index": "ix_dataset_versions_project_validity",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_items",
+      "index": "ix_dataset_items_project_episode",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_dedup_policies",
+      "index": "pk_dataset_dedup_policies",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_dedup_policies",
+      "index": "uq_dataset_dedup_policies_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_dedup_policies",
+      "index": "uq_dataset_dedup_policies_project_dataset_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_dedup_policies",
+      "index": "ix_dataset_dedup_policies_project_dataset",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_split_policies",
+      "index": "pk_dataset_split_policies",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_split_policies",
+      "index": "uq_dataset_split_policies_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_split_policies",
+      "index": "uq_dataset_split_policies_project_dataset_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_split_policies",
+      "index": "ix_dataset_split_policies_project_dataset",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_leakage_policies",
+      "index": "pk_dataset_leakage_policies",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_leakage_policies",
+      "index": "uq_dataset_leakage_policies_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_leakage_policies",
+      "index": "uq_dataset_leakage_policies_project_dataset_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_leakage_policies",
+      "index": "ix_dataset_leakage_policies_project_dataset",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_quality_policies",
+      "index": "pk_dataset_quality_policies",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_quality_policies",
+      "index": "uq_dataset_quality_policies_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_quality_policies",
+      "index": "uq_dataset_quality_policies_project_dataset_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_quality_policies",
+      "index": "ix_dataset_quality_policies_project_dataset",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_leakage_reports",
+      "index": "pk_dataset_leakage_reports",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_leakage_reports",
+      "index": "uq_dataset_leakage_reports_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_leakage_reports",
+      "index": "uq_dataset_leakage_reports_project_version_sha",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_leakage_reports",
+      "index": "ix_dataset_leakage_reports_project_version_checked",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_quality_reports",
+      "index": "pk_dataset_quality_reports",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_quality_reports",
+      "index": "uq_dataset_quality_reports_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_quality_reports",
+      "index": "uq_dataset_quality_reports_project_version_sha",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_quality_reports",
+      "index": "ix_dataset_quality_reports_project_version_created",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "export_jobs",
+      "index": "pk_export_jobs",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "export_jobs",
+      "index": "uq_export_jobs_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "export_jobs",
+      "index": "ix_export_jobs_project_status_created_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "export_jobs",
+      "index": "ix_export_jobs_project_version_created_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "training_requests",
+      "index": "pk_training_requests",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_requests",
+      "index": "uq_training_requests_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_requests",
+      "index": "uq_training_requests_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_requests",
+      "index": "ix_training_requests_project_owner",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "training_requests",
+      "index": "ix_training_requests_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "training_request_revisions",
+      "index": "pk_training_request_revisions",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_request_revisions",
+      "index": "uq_training_request_revisions_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_request_revisions",
+      "index": "uq_training_request_revisions_project_request_no",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_request_revisions",
+      "index": "ix_training_request_revisions_project_request_no",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "training_deliveries",
+      "index": "pk_training_deliveries",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_deliveries",
+      "index": "uq_training_deliveries_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_deliveries",
+      "index": "uq_training_deliveries_project_note",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_deliveries",
+      "index": "ix_training_deliveries_project_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "training_deliveries",
+      "index": "ix_training_deliveries_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "training_deliveries",
+      "index": "ix_training_deliveries_project_request",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "external_training_references",
+      "index": "pk_external_training_references",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "external_training_references",
+      "index": "uq_external_training_references_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "external_training_references",
+      "index": "uq_external_training_references_project_adapter_idempotency",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "external_training_references",
+      "index": "uq_external_training_references_project_adapter_run",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "external_training_references",
+      "index": "ix_external_training_references_project_delivery",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "external_training_references",
+      "index": "ix_external_training_references_adapter_run",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_grants",
+      "index": "pk_dataset_grants",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_grants",
+      "index": "uq_dataset_grants_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "dataset_grants",
+      "index": "ix_dataset_grants_grantee_project",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "dataset_grants",
+      "index": "ix_dataset_grants_expires_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "training_adapter_callbacks",
+      "index": "pk_training_adapter_callbacks",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_adapter_callbacks",
+      "index": "uq_training_adapter_callbacks_event",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_adapter_callbacks",
+      "index": "uq_training_adapter_callbacks_nonce",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "training_adapter_callbacks",
+      "index": "ix_training_adapter_callbacks_received_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "models",
+      "index": "pk_models",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "models",
+      "index": "uq_models_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "models",
+      "index": "ix_models_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "model_versions",
+      "index": "pk_model_versions",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "model_versions",
+      "index": "uq_model_versions_no",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "model_versions",
+      "index": "ix_model_versions_model_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "evaluations",
+      "index": "pk_evaluations",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "evaluations",
+      "index": "ix_evaluations_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "evaluations",
+      "index": "ix_evaluations_dataset",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "inference_services",
+      "index": "pk_inference_services",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "inference_services",
+      "index": "ix_inference_services_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "inference_tasks",
+      "index": "pk_inference_tasks",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "inference_tasks",
+      "index": "ix_inference_tasks_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "model_feedback",
+      "index": "pk_model_feedback",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "model_feedback",
+      "index": "ix_model_feedback_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "data_requirements",
+      "index": "pk_data_requirements",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_requirements",
+      "index": "uq_data_requirements_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_requirements",
+      "index": "ix_data_requirements_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "model_callbacks",
+      "index": "pk_model_callbacks",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "model_callbacks",
+      "index": "uq_model_callbacks_nonce",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "suppliers",
+      "index": "pk_suppliers",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "suppliers",
+      "index": "uq_suppliers_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "suppliers",
+      "index": "uq_suppliers_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "suppliers",
+      "index": "ix_suppliers_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "supplier_delivery_batches",
+      "index": "pk_supplier_delivery_batches",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "supplier_delivery_batches",
+      "index": "uq_supplier_batches_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "supplier_delivery_batches",
+      "index": "uq_supplier_batches_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "supplier_delivery_batches",
+      "index": "ix_supplier_batches_supplier",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "supplier_delivery_batches",
+      "index": "ix_supplier_batches_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "inbound_segments",
+      "index": "pk_inbound_segments",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "inbound_segments",
+      "index": "uq_inbound_segments_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "inbound_segments",
+      "index": "ix_inbound_segments_batch_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "data_sources",
+      "index": "pk_data_sources",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_sources",
+      "index": "uq_data_sources_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_sources",
+      "index": "uq_data_sources_project_repo_revision",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_sources",
+      "index": "ix_data_sources_project_kind",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "data_source_imports",
+      "index": "uq_data_source_imports_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_source_imports",
+      "index": "ix_data_source_imports_source_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "data_source_reviews",
+      "index": "pk_data_source_reviews",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_source_reviews",
+      "index": "uq_reviews_project_import",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_source_reviews",
+      "index": "uq_reviews_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_runs",
+      "index": "pk_annotation_quality_runs",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "calibration_profiles",
+      "index": "uq_calibration_profiles_name_target_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_runs",
+      "index": "uq_annotation_quality_runs_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_quality_runs",
+      "index": "ix_annotation_quality_runs_project_submission_created",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_ai_suggestions",
+      "index": "pk_annotation_ai_suggestions",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_ai_suggestions",
+      "index": "uq_annotation_ai_suggestions_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_ai_suggestions",
+      "index": "uq_annotation_ai_suggestions_identity",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_ai_suggestions",
+      "index": "ix_annotation_ai_suggestions_project_annotation",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_ai_suggestions",
+      "index": "ix_annotation_ai_suggestions_project_model",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "collection_plans",
+      "index": "pk_collection_plans",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_plans",
+      "index": "uq_collection_plans_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_plans",
+      "index": "uq_collection_plans_project_code_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_plans",
+      "index": "ix_collection_plans_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "collection_plans",
+      "index": "ix_collection_plans_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "collection_sops",
+      "index": "pk_collection_sops",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_sops",
+      "index": "uq_collection_sops_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_sops",
+      "index": "uq_collection_sops_project_code_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_sops",
+      "index": "ix_collection_sops_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "collection_sops",
+      "index": "ix_collection_sops_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "scenarios",
+      "index": "pk_scenarios",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "scenarios",
+      "index": "uq_scenarios_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "scenarios",
+      "index": "uq_scenarios_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "scenarios",
+      "index": "ix_scenarios_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "action_specs",
+      "index": "pk_action_specs",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "action_specs",
+      "index": "uq_action_specs_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "action_specs",
+      "index": "uq_action_specs_project_code_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "action_specs",
+      "index": "ix_action_specs_project_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "action_specs",
+      "index": "ix_action_specs_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "locations",
+      "index": "pk_locations",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "locations",
+      "index": "uq_locations_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "locations",
+      "index": "uq_locations_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "locations",
+      "index": "ix_locations_project_kind",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "locations",
+      "index": "ix_locations_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "resource_quotas",
+      "index": "pk_resource_quotas",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "projects",
+      "index": "ix_projects_status_code",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "data_source_imports",
+      "index": "ix_data_source_imports_task",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "calibration_records",
+      "index": "uq_calibration_records_project_supersedes",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_source_import_logs",
+      "index": "pk_data_source_import_logs",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "data_source_import_logs",
+      "index": "ix_data_source_import_logs_import",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "quality_runs",
+      "index": "pk_quality_runs",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "alembic_version",
+      "index": "alembic_version_pkc",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "quality_runs",
+      "index": "ix_quality_runs_project_subject_created",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "quality_runs",
+      "index": "ix_quality_runs_project_created",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "quality_findings",
+      "index": "pk_quality_findings",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "quality_findings",
+      "index": "uq_quality_findings_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "quality_findings",
+      "index": "uq_quality_findings_run_subject_rule",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "quality_findings",
+      "index": "ix_quality_findings_project_run_category",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "quality_findings",
+      "index": "ix_quality_findings_project_run_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "capture_sessions",
+      "index": "pk_capture_sessions",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "capture_sessions",
+      "index": "uq_capture_sessions_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "capture_sessions",
+      "index": "uq_capture_sessions_project_code",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "capture_sessions",
+      "index": "ix_capture_sessions_project_status_created_at",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "upload_sessions",
+      "index": "ix_upload_sessions_project_capture_session",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "processing_artifacts",
+      "index": "pk_processing_artifacts",
+      "size_bytes": 16384,
+      "table_rows": 66,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "quality_runs",
+      "index": "uq_quality_runs_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "projects",
+      "index": "uq_projects_code",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "project_members",
+      "index": "pk_project_members",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "calibration_profiles",
+      "index": "pk_calibration_profiles",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "calibration_profiles",
+      "index": "uq_calibration_profiles_project_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "calibration_profiles",
+      "index": "ix_calibration_profiles_project_scope",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "robots",
+      "index": "pk_robots",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "robots",
+      "index": "uq_robots_project_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "robots",
+      "index": "uq_robots_project_serial_number",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "robots",
+      "index": "ix_robots_project_status_created_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "devices",
+      "index": "pk_devices",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "devices",
+      "index": "uq_devices_project_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "devices",
+      "index": "uq_devices_project_serial_number",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "devices",
+      "index": "uq_devices_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "devices",
+      "index": "ix_devices_project_status_created_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "devices",
+      "index": "ix_devices_project_robot_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "calibration_records",
+      "index": "pk_calibration_records",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "calibration_records",
+      "index": "uq_calibration_records_project_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "calibration_records",
+      "index": "ix_calibration_records_project_target",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "calibration_records",
+      "index": "uq_calibration_records_active_target",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "sensors",
+      "index": "pk_sensors",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "sensors",
+      "index": "uq_sensors_project_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "sensors",
+      "index": "uq_sensors_project_serial_number",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "sensors",
+      "index": "uq_sensors_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "sensors",
+      "index": "ix_sensors_project_status_created_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "sensors",
+      "index": "ix_sensors_project_robot_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "sensors",
+      "index": "ix_sensors_project_device_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "collection_tasks",
+      "index": "pk_collection_tasks",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_tasks",
+      "index": "uq_collection_tasks_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_tasks",
+      "index": "ix_collection_tasks_project_status_created_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "collection_tasks",
+      "index": "ix_collection_tasks_project_assigned_to_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "collection_batches",
+      "index": "pk_collection_batches",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_batches",
+      "index": "uq_collection_batches_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_batches",
+      "index": "uq_collection_batches_project_code",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_batches",
+      "index": "uq_collection_batches_project_task_sequence",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "collection_batches",
+      "index": "ix_collection_batches_project_task_status",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "collection_batches",
+      "index": "ix_collection_batches_project_sequence_no",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "upload_sessions",
+      "index": "pk_upload_sessions",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "upload_sessions",
+      "index": "uq_upload_sessions_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "upload_sessions",
+      "index": "ix_upload_sessions_project_status_expires_at",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "upload_sessions",
+      "index": "ix_upload_sessions_project_task_status",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "upload_sessions",
+      "index": "ix_upload_sessions_project_asset",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "raw_assets",
+      "index": "ix_raw_assets_project_task",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "raw_asset_links",
+      "index": "pk_raw_asset_links",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "raw_asset_links",
+      "index": "uq_raw_asset_links_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "raw_asset_links",
+      "index": "ix_raw_asset_links_project_task_status",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "raw_asset_links",
+      "index": "ix_raw_asset_links_project_asset",
+      "size_bytes": 16384,
+      "table_rows": 3,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "ingestion_jobs",
+      "index": "pk_ingestion_jobs",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "ingestion_jobs",
+      "index": "uq_ingestion_jobs_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "ingestion_jobs",
+      "index": "ix_ingestion_jobs_project_status_created_at",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "ingestion_jobs",
+      "index": "ix_ingestion_jobs_project_raw_asset",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episodes",
+      "index": "ix_episodes_project_batch",
+      "size_bytes": 16384,
+      "table_rows": 206,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "episodes",
+      "index": "uq_episodes_supersedes",
+      "size_bytes": 16384,
+      "table_rows": 206,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "ingestion_jobs",
+      "index": "ix_ingestion_jobs_project_status_attempt",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "lineage_node_refs",
+      "index": "ix_lineage_node_refs_project_active",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_schemas",
+      "index": "pk_annotation_schemas",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_schemas",
+      "index": "uq_annotation_schemas_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_schemas",
+      "index": "uq_annotation_schemas_project_lineage_version",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_schemas",
+      "index": "ix_annotation_schemas_project_lineage",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_sample_sets",
+      "index": "pk_annotation_sample_sets",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_sample_episodes",
+      "index": "ix_annotation_sample_episodes_project_episode",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_tasks",
+      "index": "pk_annotation_tasks",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_tasks",
+      "index": "uq_annotation_tasks_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_tasks",
+      "index": "ix_annotation_tasks_project_sample_set",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_tasks",
+      "index": "ix_annotation_tasks_project_schema",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_batches",
+      "index": "pk_annotation_batches",
+      "size_bytes": 16384,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "prm_annotations",
+      "index": "pk_prm_annotations",
+      "size_bytes": 16384,
+      "table_rows": 1,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "prm_annotations",
+      "index": "uq_prm_annotations_project_id_id",
+      "size_bytes": 16384,
+      "table_rows": 1,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "prm_annotations",
+      "index": "uq_prm_annotations_trajectory",
+      "size_bytes": 16384,
+      "table_rows": 1,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_backflow_cases",
+      "index": "pk_annotation_backflow_cases",
+      "size_bytes": 16384,
+      "table_rows": 1,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotation_backflow_cases",
+      "index": "uq_annotation_backflow_cases_source_case_ref",
+      "size_bytes": 16384,
+      "table_rows": 1,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "edge_agent_pairing_tokens",
+      "index": "uq_edge_agent_pairing_tokens_token_hash",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "edge_agent_pairing_tokens",
+      "index": "ix_edge_agent_pairing_tokens_project_created_at",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "agent_heartbeats",
+      "index": "pk_agent_heartbeats",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "agent_heartbeats",
+      "index": "uq_agent_heartbeats_agent_reported",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "agent_heartbeats",
+      "index": "ix_agent_heartbeats_agent_received_at",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "agent_task_leases",
+      "index": "pk_agent_task_leases",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "agent_task_leases",
+      "index": "uq_agent_task_leases_active_session",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "agent_task_leases",
+      "index": "ix_agent_task_leases_agent_released_at",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "agent_task_leases",
+      "index": "ix_agent_task_leases_project_session",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_honeypot_state",
+      "index": "uq_annotation_honeypot_state_project_annotator",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "edge_agents",
+      "index": "pk_edge_agents",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "ingestion_jobs",
+      "index": "uq_ingestion_jobs_idempotency",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "ai_token_usage",
+      "index": "pk_ai_token_usage",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "ai_token_usage",
+      "index": "uq_ai_token_usage_project_id_id",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "ai_token_usage",
+      "index": "ix_ai_token_usage_project_occurred",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotator_skill_tags",
+      "index": "pk_annotator_skill_tags",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotator_skill_tags",
+      "index": "uq_annotator_skill_tags_project_annotator_tag",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "annotator_skill_tags",
+      "index": "ix_annotator_skill_tags_project_annotator",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotator_skill_tags",
+      "index": "ix_annotator_skill_tags_project_tag",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "annotation_honeypot_state",
+      "index": "pk_annotation_honeypot_state",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "edge_agents",
+      "index": "uq_edge_agents_project_id_id",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "edge_agents",
+      "index": "uq_edge_agents_token_hash",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    },
+    {
+      "table": "edge_agents",
+      "index": "ix_edge_agents_project_status_created_at",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "edge_agents",
+      "index": "ix_edge_agents_project_robot",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "performance",
+      "verdict": "review_after_growth"
+    },
+    {
+      "table": "edge_agent_pairing_tokens",
+      "index": "pk_edge_agent_pairing_tokens",
+      "size_bytes": 8192,
+      "table_rows": 0,
+      "kind": "constraint",
+      "verdict": "keep_constraint"
+    }
+  ],
+  "notes": [
+    "只读审计：不改任何索引；删索引必须人工评审并通过迁移落地",
+    "sample_sufficient=false 时不得下任何删除结论（统计样本不足）",
+    "review_after_growth：表行数小于阈值，seq scan 更优是正常现象，表长大后需复查"
+  ],
+  "target": "localhost:55432/ddp"
+}
