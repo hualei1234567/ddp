@@ -118,7 +118,28 @@ class SqlCollectionTaskRepository:
         if after_id is not None:
             statement = statement.where(CollectionTaskModel.id > after_id)
         statement = statement.order_by(CollectionTaskModel.id).limit(limit)
-        return [self._from_row(scope, row) for row in self._session.scalars(statement)]
+        rows = list(self._session.scalars(statement))
+        # V52-035：批量预取关联 ID 再构造领域对象。原实现每行各查 2 次
+        # （device / sensor），列表页大小 N 时是 2N+1 次查询——压测实测
+        # collection-tasks limit 50 达 87.7ms（docs/testing/evidence/
+        # 2026-11-26-prod-readonly-perf/）。改为固定 3 次查询，与页大小无关。
+        if not rows:
+            return []
+        device_map = self._assignment_ids_bulk(
+            CollectionTaskDevice, "device_id", scope, [row.id for row in rows]
+        )
+        sensor_map = self._assignment_ids_bulk(
+            CollectionTaskSensor, "sensor_id", scope, [row.id for row in rows]
+        )
+        return [
+            self._from_row(
+                scope,
+                row,
+                device_ids=device_map.get(row.id, ()),
+                sensor_ids=sensor_map.get(row.id, ()),
+            )
+            for row in rows
+        ]
 
     def list_pending_status(
         self,
@@ -250,7 +271,19 @@ class SqlCollectionTaskRepository:
         )
         self._session.flush()
 
-    def _from_row(self, scope: ProjectScope, row: CollectionTaskModel) -> CollectionTask:
+    def _from_row(
+        self,
+        scope: ProjectScope,
+        row: CollectionTaskModel,
+        *,
+        device_ids: tuple[UUID, ...] | None = None,
+        sensor_ids: tuple[UUID, ...] | None = None,
+    ) -> CollectionTask:
+        """行 → 领域对象。
+
+        ``device_ids`` / ``sensor_ids`` 为 ``None`` 时按单行查询（详情路径沿用
+        旧行为）；列表路径传入批量预取结果，避免 N+1。
+        """
         return CollectionTask(
             task_id=row.id,
             project_id=row.project_id,
@@ -267,17 +300,15 @@ class SqlCollectionTaskRepository:
             action_spec_version=row.action_spec_version,
             assigned_to=row.assigned_to,
             assigned_robot_id=row.assigned_robot_id,
-            assigned_device_ids=self._assignment_ids(
-                CollectionTaskDevice,
-                "device_id",
-                scope,
-                row.id,
+            assigned_device_ids=(
+                device_ids
+                if device_ids is not None
+                else self._assignment_ids(CollectionTaskDevice, "device_id", scope, row.id)
             ),
-            assigned_sensor_ids=self._assignment_ids(
-                CollectionTaskSensor,
-                "sensor_id",
-                scope,
-                row.id,
+            assigned_sensor_ids=(
+                sensor_ids
+                if sensor_ids is not None
+                else self._assignment_ids(CollectionTaskSensor, "sensor_id", scope, row.id)
             ),
             location_id=row.location_id,
             scheduled_start=as_utc(row.scheduled_start),
@@ -315,3 +346,30 @@ class SqlCollectionTaskRepository:
             .order_by(column)
         )
         return tuple(self._session.scalars(statement))
+
+    def _assignment_ids_bulk(
+        self,
+        model: type,
+        column_name: str,
+        scope: ProjectScope,
+        task_ids: list[UUID],
+    ) -> dict[UUID, tuple[UUID, ...]]:
+        """一次查询取回一批任务的关联 ID，按 ``task_id`` 分组。
+
+        排序与单行版一致（关联 ID 升序），保证领域对象与旧实现逐字段等价。
+        """
+        if not task_ids:
+            return {}
+        column = getattr(model, column_name)
+        statement = (
+            select(model.task_id, column)
+            .where(
+                model.project_id == scope.project_id,
+                model.task_id.in_(task_ids),
+            )
+            .order_by(model.task_id, column)
+        )
+        grouped: dict[UUID, list[UUID]] = {}
+        for task_id, value in self._session.execute(statement).all():
+            grouped.setdefault(task_id, []).append(value)
+        return {task_id: tuple(values) for task_id, values in grouped.items()}
