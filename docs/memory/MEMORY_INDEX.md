@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 34 张卡片**：DRAFT 0 / ACTIVE 34 / SUPERSEDED 0 / DEPRECATED 0
+**总计 35 张卡片**：DRAFT 0 / ACTIVE 35 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 34 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 35 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -32,7 +32,7 @@
 | [MEM-SOP-003](sop/MEM-SOP-003-subagent-parallel-collaboration.md) | 子代理并行开发协作模式：迁移号独占 + 契约策略 + 禁改共享文件 + 坑点统一入库 + check.sh 全局串行 | ACTIVE | 1 | `check-lock`, `contract-strategy`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `subagent` |
 | [MEM-SOP-004](sop/MEM-SOP-004-semgrep-sast-suppression.md) | Semgrep SAST 接入与误报基线的正确姿势 | ACTIVE | 1 | `baseline`, `ci`, `false-positive`, `nosemgrep`, `sast`, `semgrep`, `sql-injection`, `ssrf` |
 
-## INC · 事故与缺陷复盘（25）
+## INC · 事故与缺陷复盘（26）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -61,6 +61,7 @@
 | [MEM-INC-023](incidents/MEM-INC-023-unique-key-rejection-rows.md) | 唯一键表的"拒绝类判决"不能落库——重复跳过/限流写入会撞自身唯一键 | ACTIVE | 1 | `409`, `idempotency`, `unique-constraint`, `webhook`, `write-amplification` |
 | [MEM-INC-024](incidents/MEM-INC-024-nplus1-query-count-guard.md) | 列表 N+1 用"查询次数不随页大小变化"的断言守护，而不是靠压测 | ACTIVE | 1 | `n-plus-1`, `performance-regression`, `query-count`, `sqlalchemy-events` |
 | [MEM-INC-025](incidents/MEM-INC-025-lock-platform-marker-greenlet.md) | macOS 上生成的 pip lock 在 Linux CI 因 greenlet 平台标记直接红 | ACTIVE | 1 | `ci`, `dependency-lock`, `greenlet`, `hash-checking`, `pip-compile`, `platform-marker`, `sbom` |
+| [MEM-INC-026](incidents/MEM-INC-026-sqlalchemy-flush-ordering-fk.md) | SQLAlchemy 批量插入时父行必须先显式 flush——依赖排序不可靠，子行 FK 检查会失败 | ACTIVE | 1 | `composite-fk`, `flush-ordering`, `foreign-key`, `sqlalchemy`, `test-seeding` |
 
 ## CHG · 变更记录（1）
 
@@ -127,6 +128,7 @@
 - `ci-gate`：MEM-INC-016
 - `claim-boundary`：MEM-REQ-001
 - `column-name`：MEM-INC-002
+- `composite-fk`：MEM-INC-026
 - `contract`：MEM-INC-006, MEM-INC-008
 - `contract-first`：MEM-INC-016
 - `contract-strategy`：MEM-SOP-003
@@ -150,6 +152,8 @@
 - `filterwarnings`：MEM-INC-019
 - `fixture`：MEM-INC-004, MEM-SOP-001
 - `flaky`：MEM-INC-005, MEM-INC-009
+- `flush-ordering`：MEM-INC-026
+- `foreign-key`：MEM-INC-026
 - `format`：MEM-DEC-001
 - `frame-level`：MEM-REQ-001
 - `gate`：MEM-SOP-001
@@ -237,7 +241,7 @@
 - `spool`：MEM-OPS-001
 - `sql`：MEM-INC-002
 - `sql-injection`：MEM-SOP-004
-- `sqlalchemy`：MEM-INC-013, MEM-INC-019
+- `sqlalchemy`：MEM-INC-013, MEM-INC-019, MEM-INC-026
 - `sqlalchemy-events`：MEM-INC-024
 - `sqlite`：MEM-INC-013, MEM-INC-018, MEM-INC-020, MEM-INC-022
 - `ssrf`：MEM-SOP-004
@@ -249,6 +253,7 @@
 - `swagger-lint`：MEM-INC-017
 - `synthetic`：MEM-INC-004
 - `test-contention`：MEM-INC-009
+- `test-seeding`：MEM-INC-026
 - `time-sensitive`：MEM-INC-009
 - `timestamp`：MEM-INC-008
 - `timezone`：MEM-INC-022
