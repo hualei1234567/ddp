@@ -1,0 +1,51 @@
+{
+  "generated_at": "训练探测",
+  "summary": {
+    "sft": {
+      "initial_loss": 73.5495,
+      "final_loss": 9.3581,
+      "loss_improved": true,
+      "steps": 2640,
+      "vocab_size": 28,
+      "param_count": 8988,
+      "samples": [
+        "第0步：运行测试并验证结果",
+        "第1步：运行测试并验证结果",
+        "第2步：运行测试并验证结果"
+      ]
+    },
+    "dpo": {
+      "initial_accuracy": 0.5,
+      "final_accuracy": 1.0,
+      "accuracy_improved": true,
+      "steps": 1200,
+      "pairs_evaluated": null
+    }
+  },
+  "raw": {
+    "seed": 20261127,
+    "sft": {
+      "initial_loss": 73.5495,
+      "final_loss": 9.3581,
+      "loss_improved": true,
+      "steps": 2640,
+      "wall_seconds": 0.051,
+      "vocab_size": 28,
+      "param_count": 8988,
+      "texts_count": 8,
+      "samples": [
+        "第0步：运行测试并验证结果",
+        "第1步：运行测试并验证结果",
+        "第2步：运行测试并验证结果"
+      ]
+    },
+    "dpo": {
+      "initial_accuracy": 0.5,
+      "final_accuracy": 1.0,
+      "accuracy_improved": true,
+      "steps": 1200,
+      "wall_seconds": 0.002,
+      "pairs_count": 6
+    }
+  }
+}

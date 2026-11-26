@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import time
+import warnings
 from dataclasses import dataclass
 from typing import Any
 
@@ -115,6 +116,11 @@ def _decode_header(token: str) -> dict[str, Any]:
     try:
         header = jwt.get_unverified_header(token)
     except jwt.InvalidTokenError as exc:
+        # PyJWT 2.15+ 在 ``get_unverified_header`` 阶段即校验并拒绝 ``crit``
+        # 扩展，异常先于本模块的显式检查抛出，会把既有的「不支持的 crit 扩展」
+        # 语义覆盖成泛化的「令牌格式错误」。识别该场景，收敛回本模块的拒绝语义。
+        if "crit" in str(exc).lower():
+            raise TokenValidationError("不支持的 crit 扩展") from exc
         raise TokenValidationError("令牌格式错误") from exc
     if not isinstance(header, dict):
         raise TokenValidationError("令牌头必须是 JSON 对象")
@@ -123,12 +129,18 @@ def _decode_header(token: str) -> dict[str, Any]:
 
 def _decode_payload(token: str, secret: str) -> dict[str, Any]:
     try:
-        payload = jwt.decode(
-            token,
-            secret,
-            algorithms=list(_ALLOWED_ALGORITHMS),
-            options=_DECODE_OPTIONS,
-        )
+        # PyJWT 2.15+ 对短 HS256 密钥发 InsecureKeyLengthWarning。密钥强度由
+        # ``Settings.validate_runtime_security`` 在应用启动时统一强制（本地环境
+        # 显式允许短开发密钥），解码路径不重复裁决，避免该提示性告警在
+        # filterwarnings=error 的测试环境下升级为异常。
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=jwt.warnings.InsecureKeyLengthWarning)
+            payload = jwt.decode(
+                token,
+                secret,
+                algorithms=list(_ALLOWED_ALGORITHMS),
+                options=_DECODE_OPTIONS,
+            )
     except jwt.InvalidTokenError as exc:
         # 签名错误、格式错误、段数不符等统一收敛，不外泄内部原因。
         raise TokenValidationError("令牌校验失败") from exc
