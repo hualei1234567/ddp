@@ -1,4 +1,4 @@
-"""业务指标取数：状态分布 + 队列积压 + 导入吞吐 + 存储完整性。
+"""业务指标取数：状态分布 + 队列积压 + 导入吞吐 + 存储完整性 + 标注运营 SLO。
 
 只做聚合查询，不返回任何业务实体；调用方是 ``/metrics`` 的采集器
 （见 ``app.core.metrics`` 关于 pull 采集与标签基数的决策说明）。
@@ -19,6 +19,12 @@
 - **存储缺失**（``ddp_raw_assets_object_missing``）：``QUARANTINED`` 且
   ``quarantine_codes`` 含 ``object_missing`` 的原始资产。这是数据库里唯一的
   持久证据——对象内容缺失只会在校验时被发现并落成隔离原因，不另建清单。
+- **标注运营 SLO**（``ddp_annotation_backflow_received_cases`` /
+  ``ddp_annotation_honeypot_paused`` / ``ddp_annotation_records_approved_1h``）：
+  回流案例 ``status=RECEIVED`` 与黄金题熔断 ``state=PAUSED`` 的行数；近 1 小时
+  通过量取 ``annotation_records``（审核通过后记录状态的权威表，带 ``approved_at``）
+  中 ``status=APPROVED`` 且 ``approved_at`` 落在滑动窗口内的行数。窗口是口径的
+  一部分，写进指标 help。
 - **未知状态不容错**：库里出现领域枚举之外的状态值时，该值不进入样本但记
   warning。不默认归入某个既有状态——那会伪造数据。
 
@@ -47,7 +53,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import InstrumentedAttribute, Session, sessionmaker
 
 from app.core.metrics import (
+    BACKFLOW_RECEIVED_GAUGE,
     EPISODES_GAUGE,
+    HONEYPOT_PAUSED_GAUGE,
     IMPORT_LAST_SUCCESS_GAUGE,
     IMPORT_SUCCEEDED_24H_GAUGE,
     IMPORTS_GAUGE,
@@ -58,12 +66,19 @@ from app.core.metrics import (
     PROCESSING_RUNS_GAUGE,
     QUALITY_RUNS_GAUGE,
     RAW_ASSETS_OBJECT_MISSING_GAUGE,
+    SUBMISSION_APPROVED_LAST_HOUR,
     BusinessGaugeSpec,
     BusinessSnapshot,
     business_gauge_specs,
 )
+from app.domain.annotation.backflow import BackflowStatus
+from app.domain.annotation.enums import AnnotationRecordStatus
+from app.domain.annotation.honeypot_breaker import BreakerState
 from app.domain.datasources.enums import ImportStatus
 from app.domain.ingestion.enums import RawAssetQuarantineCode, RawAssetStatus
+from app.infrastructure.db.models.annotation_backflow_case import AnnotationBackflowCase
+from app.infrastructure.db.models.annotation_honeypot_state import AnnotationHoneypotState
+from app.infrastructure.db.models.annotation_results import AnnotationRecord
 from app.infrastructure.db.models.collection import OutboxEvent
 from app.infrastructure.db.models.datasources import DataSourceImportModel
 from app.infrastructure.db.models.episodes import EpisodeModel
@@ -85,6 +100,14 @@ BUSINESS_QUERY_TIMEOUT_MS = 2000
 
 # 导入吞吐的滑动窗口；改动会改变仪表盘语义，因此 metric help 里也写明。
 IMPORT_THROUGHPUT_WINDOW = timedelta(hours=24)
+
+# 近 1 小时通过量的滑动窗口；与 metric help 中的口径描述必须同时修改。
+ANNOTATION_APPROVAL_WINDOW = timedelta(hours=1)
+
+# 标注运营 SLO 的状态取值：直接来自领域枚举 / 库层 CHECK 的同义字面量，
+# 不在指标里另造字符串。
+_BACKFLOW_RECEIVED = BackflowStatus.RECEIVED.value
+_HONEYPOT_PAUSED = BreakerState.PAUSED.value
 
 # outbox 状态取值与 ``db/models/collection.py`` 的 CHECK 约束、
 # ``application/audit.py`` 的语义一一对应。领域层没有对应枚举，沿用既有仓储
@@ -264,6 +287,51 @@ def _object_missing_count(session: Session) -> int:
         )
 
 
+def _backflow_received_count(session: Session) -> int:
+    """仍处于受理态（待转换任务）的回流案例数：积压的直接信号。"""
+    with _read_transaction(session):
+        return int(
+            session.execute(
+                select(func.count())
+                .select_from(AnnotationBackflowCase)
+                .where(AnnotationBackflowCase.status == _BACKFLOW_RECEIVED)
+            ).scalar_one()
+        )
+
+
+def _honeypot_paused_count(session: Session) -> int:
+    """被黄金题熔断暂停的标注员数：越高说明标注质量/题目难度越异常。"""
+    with _read_transaction(session):
+        return int(
+            session.execute(
+                select(func.count())
+                .select_from(AnnotationHoneypotState)
+                .where(AnnotationHoneypotState.state == _HONEYPOT_PAUSED)
+            ).scalar_one()
+        )
+
+
+def _annotation_approved_recent_count(session: Session, now: datetime) -> int:
+    """近 1 小时通过的标注记录数（滑动窗口，边界取采集进程的 UTC 时钟）。
+
+    ``annotation_records`` 是审核通过后记录状态的权威表，``approved_at`` 是
+    通过时刻；提交表的 ``decided_at`` 统计的是提交次数，一次提交可含多条记录，
+    两者口径不同，不能互相替代。
+    """
+    window_start = now - ANNOTATION_APPROVAL_WINDOW
+    with _read_transaction(session):
+        return int(
+            session.execute(
+                select(func.count())
+                .select_from(AnnotationRecord)
+                .where(
+                    AnnotationRecord.status == AnnotationRecordStatus.APPROVED.value,
+                    AnnotationRecord.approved_at >= window_start,
+                )
+            ).scalar_one()
+        )
+
+
 # 参与状态分布采集的模型；``IMPORTS_GAUGE`` 因与吞吐/最近成功合并查询而单列。
 _DISTRIBUTION_MODELS: Mapping[str, type[_StatusedModel]] = {
     INGESTION_JOBS_GAUGE: IngestionJobModel,
@@ -322,6 +390,12 @@ def collect_business_snapshot(
         _record(OUTBOX_OLDEST_DUE_AGE_GAUGE, partial(_outbox_oldest_due_age_seconds, session, now))
         _record(OUTBOX_FAILED_GAUGE, partial(_outbox_failed_count, session))
         _record(RAW_ASSETS_OBJECT_MISSING_GAUGE, partial(_object_missing_count, session))
+        _record(BACKFLOW_RECEIVED_GAUGE, partial(_backflow_received_count, session))
+        _record(HONEYPOT_PAUSED_GAUGE, partial(_honeypot_paused_count, session))
+        _record(
+            SUBMISSION_APPROVED_LAST_HOUR,
+            partial(_annotation_approved_recent_count, session, now),
+        )
 
         return BusinessSnapshot(status_counts=status_counts, values=values)
     finally:
