@@ -1,19 +1,22 @@
-"""PRM 步级标注 HTTP 路由（V52-020，契约 1.40.0）。
+"""PRM 步级标注 HTTP 路由（V52-020/V52-032，契约 1.40.0）。
 
-端点（只读 PRM 标注创建/查询 + fork 预览）：
+端点（PRM 标注创建/查询 + fork 预览/物化）：
 - ``POST /projects/{id}/prm-trajectory-annotations``：登记一条轨迹的步级标注；
 - ``GET  /projects/{id}/prm-trajectory-annotations``：项目内列表；
 - ``GET  /projects/{id}/prm-trajectory-annotations/{annotation_id}``：按 ID 查询；
 - ``POST /projects/{id}/prm-trajectory-annotations/{trajectory_id}/fork``：
-  分叉重写预览（纯计算，不落库）——返回分叉轨迹与 Step-DPO 对。
+  分叉重写。默认纯计算预览（只读）；``materialize=true`` 时同请求落库
+  （需要写权限），响应带 ``materialized_annotation_id``。
 """
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 
+from app.api.deps import get_project_context
 from app.api.v1.annotation_common import ReadScope, WriteScope, request_id
 from app.api.v1.annotation_dependencies import AnnotationUseCasesDep
 from app.api.v1.annotation_prm_models import (
@@ -27,9 +30,21 @@ from app.api.v1.annotation_prm_models import (
 )
 from app.api.v1.schemas import PageOut
 from app.application.annotation.ports import PrmAnnotationView
+from app.core.errors import ForbiddenError
 from app.domain.annotation.prm_step import PrmAnnotation, StepMark
+from app.domain.identity.models import ProjectAction, ProjectContext
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["annotation-prm"])
+
+# 分叉端点默认只读（预览）；物化落库时按需升级为写权限——同一端点按请求体
+# 条件授权，不能直接依赖 ``WriteScope``，否则只读用户连预览都会被拒。
+ForkContext = Annotated[ProjectContext, Depends(get_project_context)]
+
+
+def _assert_materialize_allowed(context: ProjectContext) -> None:
+    """物化落库复用创建路径，权限口径必须与创建端点一致。"""
+    if not context.can(ProjectAction.WRITE):
+        raise ForbiddenError("分叉物化落库需要项目写权限")
 
 
 def _to_domain_marks(marks: tuple[StepMarkIn, ...]) -> tuple[StepMark, ...]:
@@ -107,22 +122,30 @@ def get_prm_annotation(
 def fork_prm_trajectory(
     trajectory_id: str,
     payload: PrmForkRequest,
+    request: Request,
     scope: ReadScope,
+    context: ForkContext,
     use_cases: AnnotationUseCasesDep,
 ) -> PrmForkPreviewOut:
-    """分叉重写预览：只读计算，不落库（确认后经 POST 以新 trajectory_id 物化）。"""
-    forked, pair, materialized = use_cases.prm_annotations.fork_preview(
+    """分叉重写：默认只读预览；``materialize=true`` 时同请求物化落库。"""
+    if payload.materialize:
+        _assert_materialize_allowed(context)
+    result = use_cases.prm_annotations.fork(
         scope,
         trajectory_id,
         at_index=payload.at_index,
         new_actions=payload.new_actions,
+        materialize=payload.materialize,
+        request_id=request_id(request),
     )
+    materialized_id = result.materialized.annotation_id if result.materialized is not None else None
     return PrmForkPreviewOut(
-        source_trajectory_id=forked.source_trajectory_id,
-        fork_point_index=forked.fork_point_index,
-        forked_trajectory_id_preview=materialized.trajectory_id,
-        forked_steps=list(forked.step_actions),
-        shared_prefix_steps=forked.prefix_step_count,
-        forked_marks=[StepMarkOut.from_domain(mark) for mark in forked.marks],
-        dpo_pair=StepDpoPairOut.from_domain(pair),
+        source_trajectory_id=result.forked.source_trajectory_id,
+        fork_point_index=result.forked.fork_point_index,
+        forked_trajectory_id_preview=result.forked_trajectory_id,
+        forked_steps=list(result.forked.step_actions),
+        shared_prefix_steps=result.forked.prefix_step_count,
+        forked_marks=[StepMarkOut.from_domain(mark) for mark in result.forked.marks],
+        dpo_pair=StepDpoPairOut.from_domain(result.pair),
+        materialized_annotation_id=materialized_id,
     )
