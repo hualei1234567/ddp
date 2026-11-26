@@ -51,3 +51,6 @@ apps/web/e2e-results.json
 
 # 并行开发用的临时 worktree（Claude Code 隔离工作区）
 .claude/worktrees/
+
+# 监控抓取令牌（生产用，禁止入库）
+infra/monitoring/metrics_token

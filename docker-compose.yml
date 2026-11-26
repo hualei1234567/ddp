@@ -421,7 +421,51 @@ services:
       # 正常的）。这类故障排查成本高，换一个不常撞车的默认值更划算。
       - "${DDP_WEB_PORT:-8088}:80"
 
+
+  # ── 监控栈（阶段 4 / 审计 R2：告警必须真正加载，而不是只写在文档里） ──
+  # 启用：docker compose --profile monitoring up -d prometheus alertmanager
+  # 抓取目标 api:8000 需要 api 服务在 app profile 下同时运行。
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:v3.1.0
+    container_name: ddp-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      # 允许热重载规则（SIGHUP / POST /-/reload），便于改规则不重启
+      - --web.enable-lifecycle
+    volumes:
+      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      # 生产抓取用 prometheus.prod.yml + 令牌文件；本地不挂（见 monitoring-setup.md）
+      - ddp-promdata:/prometheus
+    ports:
+      # 9090 在宿主上可能被占用，绑定到 9190 避免与其它本地 Prometheus 冲突
+      - "9190:9090"
+    depends_on:
+      - alertmanager
+    restart: unless-stopped
+
+  alertmanager:
+    profiles: ["monitoring"]
+    image: prom/alertmanager:v0.28.1
+    container_name: ddp-alertmanager
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      # 不要在 UI 里暴露敏感标签；本地够用
+      - --web.external-url=http://localhost:9193
+    volumes:
+      - ./infra/monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ddp-amdata:/alertmanager
+    ports:
+      - "9193:9093"
+    restart: unless-stopped
+
 volumes:
   ddp-pgdata:
   ddp-miniodata:
   ddp-backups:
+  ddp-promdata:
+  ddp-amdata:

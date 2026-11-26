@@ -1,0 +1,34 @@
+# Prometheus 抓取配置（阶段 4 / 审计 R2：告警落地）
+#
+# 抓取目标：ddp-api 的根级 /metrics（运维接口，非业务契约，不进 OpenAPI）。
+# 鉴权：静态 Bearer 令牌，令牌值从环境变量注入（compose 从 .env 读
+# DDP_METRICS_ACCESS_TOKEN），**禁止**把令牌写进本文件或镜像。
+#
+# 与 app/api/observability.py 的约定一致：
+# - 路径为根级 /metrics（不带 /api/v1 前缀）
+# - 鉴权失败返回统一错误结构，Prometheus 侧表现为 target down（不是 401 透传）
+
+global:
+  scrape_interval: 30s        # 30s 足够业务指标（指标本身是查库聚合，不宜过密）
+  scrape_timeout: 10s         # 小于 interval，避免抓取堆积
+  evaluation_interval: 30s    # 告警规则求值周期
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: ddp-api
+    metrics_path: /metrics
+    scheme: http
+    # 本地 compose 的 api 以 DDP_ENV=local 启动，/metrics 对本地来源放行，
+    # 不需要令牌。生产抓取请改用 prometheus.prod.yml（带 Bearer 令牌文件）。
+    static_configs:
+      - targets: ["api:8000"]
+        labels:
+          service: ddp-api
+          env: local

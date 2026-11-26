@@ -1,0 +1,36 @@
+# 生产抓取配置（带 Bearer 令牌）
+#
+# 与 prometheus.yml 的唯一差异：启用 authorization（静态令牌）。
+# 用法：把 compose 里 prometheus 的 config 挂载换成本文件，并把令牌写入
+# 宿主文件 infra/monitoring/metrics_token（已在 .gitignore 中忽略），
+# 该文件挂载到容器 /etc/prometheus/metrics_token。
+#
+# 令牌来源：.env 的 DDP_METRICS_ACCESS_TOKEN；必须与 API 侧一致。
+# 非本地环境未配置令牌时，API 的 /metrics 返回 503（失败关闭），
+# 而**不是**放行——见 backend/app/core/metrics_access.py。
+
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  evaluation_interval: 30s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+scrape_configs:
+  - job_name: ddp-api
+    metrics_path: /metrics
+    scheme: http
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/metrics_token
+    static_configs:
+      - targets: ["api:8000"]
+        labels:
+          service: ddp-api
+          env: prod
