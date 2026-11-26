@@ -1,3 +1,140 @@
+# 标注平台全面建设方案（蓝图 ↔ DDP 现状映射与实施）
+
+> 蓝图来源：`llm_annotation_platform_archify.html`（6 大子系统 N1–N6）。
+> 本文档为现状盘点、逐项映射、冲突处置与分阶段路线图，是 V5.2 阶段 B 的执行依据。
+> 假设标注（无依据处的合理假设）均以 **[假设]** 显式标记。
+
+## 一、现状盘点（实测结论）
+
+### 1.1 技术栈与目录
+- 后端：FastAPI + SQLAlchemy + Alembic（DDD 分层 api→application→domain→infrastructure）
+- 前端：React 18 + TS + Vite + AntD（`apps/web/src/pages/annotation/` 15 个页面）
+- 契约：OpenAPI `1.36.0`（在途 PR 至 1.37–1.39），标注相关路径 100 处
+- 数据：PostgreSQL + MinIO；**无 Redis / ClickHouse / Kafka / pgvector**（实测零引入）
+- 数据平台库：`data-platform/`（lerobot/canonical/hdf5/llm_export）
+- 门禁：`scripts/check.sh` 10 步；迁移 head = 0074（0075–0077 已预分配给在途分支）
+
+### 1.2 标注域已有能力（强复用点，全部实测存在）
+| 能力 | 现状实现 | 蓝图对应 |
+|---|---|---|
+| 任务状态机 | `AnnotationTaskStatus`：ASSIGNED/SUBMITTED/ARBITRATION/ACCEPTED 全链 + 批次/分配/提交/记录四级状态 | N2 ✓ |
+| 租约锁 | `assignment.py`：`lease_expires_at` + EXPIRED 状态 + 过期判定（**DB 级**） | N2（Redis 实现，见冲突 C2） |
+| 双盲标注 | `review_policy.py`：`ReviewMode.DOUBLE` + `hides_labels_from()` | N2 ✓ |
+| 冲突恢复/仲裁 | `arbitration.py` + ConflictError 409 | N2 ✓ |
+| 一致性 IAA | `iaa.py`：Cohen's Kappa + percent agreement（多人 κ 部分有） | N3 ✓ |
+| 黄金盲测题 | `gold_set.py`：blind=true 强制 | N3 ✓（熔断联动缺失，见 G3） |
+| AI 预标注 | `ai_suggestion.py` + `suggestion_agreement.py`（采纳/修改/拒绝统计） | N3 ✓ |
+| 抽检 | `quality_sample.py`：确定性稳定排序抽检 | N2/N3 ✓ |
+| 打回重标 | review 驳回闭环 + 返工计数（overdue/workload） | N2 ✓ |
+| 数据集版本快照 | `DatasetVersion.frozen_at/frozen_by` + Frozen 引用保护（V51-017） | N4 ✓ |
+| 训练导出 | `ExportFormat(LE_ROBOT/CANONICAL)` + 导出校验/血缘 | N4 ✓（格式扩展见 G4） |
+| 审计 | `audit_logs` + `DatasetAuditMixin` | N6 ✓ |
+| 权限 | `ProjectRole` + 项目作用域依赖注入；17 unit + 19 api 测试文件 | N2 ✓ |
+| SFT/DPO 导出库 | `ddp_data/llm_export`（本轮新增，第三方验证 PASS） | N4 ✓ |
+| LLM 标注载体 | V52-001~004（在途 PR）：TEXT/DIALOGUE/PREFERENCE_PAIR/AGENT_TRACE | N1 ✓ |
+| 统计看板 | V52-012~014（在途）：overview/breakdown + 脱敏导出 | N4 ✓ |
+
+### 1.3 缺口清单（蓝图要求但现状没有）
+| # | 缺口 | 蓝图 | 优先级 |
+|---|---|---|---|
+| G1 | LLM-as-Judge **偏差校正**（位置偏差 Swap&Average、长度惩罚）与**置信度路由**（高置信自动放行/灰区人工） | N3 | P1 |
+| G2 | 黄金题**熔断联动**：连续准确率 <85% 自动暂停派单并冻结结算 | N3 | P1 |
+| G3 | **技能标签路由**：按标注员领域标签/质量分路由高难度任务 | N2 | P2 |
+| G4 | 导出格式扩展：**PRM Step-Reward JSONL**（步骤级奖励）+ GRPO rollout 格式 | N4 | P1 |
+| G5 | **Bad Case 回流**：评测失败集 Webhook→自动建任务 | N5 | P2 |
+| G6 | **向量语义去重**（pgvector）与难例聚类 | N1 | P3 |
+| G7 | OLAP 看板（ClickHouse/Kafka） | N4 | P3（用 PG 聚合替代，见 C1） |
+| G8 | Token 成本核算（预标注/Judge 按 项目×模型 统计） | N6 | P2 |
+| G9 | 前端轨迹树/步骤级标注交互 + 暗水印 | N1/N2 | P2 |
+| G10 | 压测保障（千人并发领单） | N6 | P3 |
+
+## 二、蓝图功能映射表（N1–N6 → 现状/在途/缺口）
+
+| 蓝图功能点 | 现状 | 处置 |
+|---|---|---|
+| N1 统一 Sample Envelope | V52-001~004 `item_type`+`item_payload`（在途） | 复用推进 |
+| N1 Agent 轨迹解析/PRM 步级标注 | 载体有（AGENT_TRACE），步级 PRM 无 | G4 + P2 实施 |
+| N1 向量去重 | 无 | G6（P3，pgvector 迁移） |
+| N1 动态模板引擎 | `schema_presets.py` 部分覆盖 | 不新建，增量扩 |
+| N2 状态机/租约/双盲/仲裁/抽检/驳回 | 全有 | 不动（防回归） |
+| N2 技能标签路由 | 无 | G3 |
+| N2 水印/禁复制 | 无 | G9（前端） |
+| N3 规则校验/预标注/IAA/黄金题 | 全有 | 不动 |
+| N3 Judge 偏差校正+置信度路由 | 无 | G1（本轮实施） |
+| N3 Honeypot 熔断 | 无联动 | G2（本轮实施） |
+| N4 复合检索 | 分页过滤已有（annotation_pagination） | 够用 |
+| N4 不可变快照+导出 | 有 | G4 扩 PRM 格式 |
+| N4 防污染(泄露) | leakage.py（HARD/SOFT 规则）已有 | 不动 |
+| N4 OLAP ClickHouse | 无 | C1（替代方案） |
+| N5 Bad Case 回流 | 无 | G5 |
+| N5 配比台账 | DatasetVersion+血缘部分覆盖 | 增量 |
+| N6 审计/备份 | audit_logs + MEM-OPS-001 演练 | 不动 |
+| N6 Token 成本 | 无 | G8 |
+| N6 压测 | 无 | G10（P3） |
+
+## 三、冲突清单与处置
+
+| 类型 | 冲突 | 处置建议 |
+|---|---|---|
+| **C1 架构冲突** | 蓝图 N4 要求 Kafka→ClickHouse OLAP；现状纯 PG 且无消息队列基建 | **不引入新基建**。用 PG 物化聚合表 + 既有 outbox 事件驱动增量刷新达成"亚秒级看板"的 90% 价值；ClickHouse 移入 V5.3 备选 |
+| **C2 架构冲突** | 蓝图 N2 Redis 租约锁 vs 现状 DB `lease_expires_at` 已正确实现并测试覆盖 | **保留 DB 实现**（正确性已证），Redis 仅作为 P3 性能优化记录；不改核心调度 |
+| **C3 数据模型冲突** | 偏好标注：蓝图"统一 JSONB Envelope" vs 仓库决策 MEM-DEC-002（偏好=JSON 约定值不加标签类型） | **一致不冲突**：V52-003 用 `item_payload` 承载 + JSON 约定值标签，两条约束同时满足 |
+| **C4 接口冲突** | 蓝图"格式转换器一键导出 SFT/DPO/PRM" vs 既有 `ExportFormat(LE_ROBOT/CANONICAL)` 契约已冻结 1.36 | **纯增量**：新增枚举值（PRM_STEP_REWARD 等）+ additive 契约 1.40.0，不删旧值 |
+| **C5 依赖冲突** | 蓝图向量检索依赖 pgvector/Milvus；现状 PG 未装扩展 | G6 延后到 P3；如实施需先验证本机 PG 是否有 pgvector，无则降级为"精确哈希+分词相似"近似方案 |
+| **C6 排期冲突** | 蓝图 N1 载体与在途 V52-A 阶段（PR #127–130 + llm-items）重叠 | **合并执行**：以在途分支为准，蓝图映射表作为其验收依据，不重复建任务 |
+| **C7 迁移编号冲突** | 多线并行都要建迁移 | 资源预分配：0075=llm-items、0076=ops-funnel、0077=analytics、**0078=judge-router、0079=honeypot、0080=prm-export** |
+
+## 四、依赖清单
+
+- G1（Judge 校正路由）→ 依赖 ai_suggestion（有）→ 阻塞：无；被 G8（成本）依赖
+- G2（熔断）→ 依赖 gold_set（有）+ assignment/派单入口 → 阻塞：无
+- G4（PRM 导出）→ 依赖 V52-004 AGENT_TRACE 载体（在途）+ llm_export writer（已并入）
+- G5（回流）→ 依赖 G4 之后 + 契约 1.41；独立可后置
+- G8（成本）→ 依赖 G1 上线产生 Judge 调用记录
+- G9（前端轨迹树）→ 依赖 V52-004 合并 + 契约 1.38
+- G3（技能路由）→ 依赖 workload/quality 分（有）；独立
+
+## 五、分阶段建设路线图
+
+### 阶段 0（进行中，今日闭环）
+- PR #127–130 合并（V51 收尾：能力矩阵/多 Episode/Canonical 1.1/DATA_CLEANING）
+- V52-A：V52-001~004 载体（迁移 0075/契约 1.38）、V52-015/016 导出库（已 PASS）、V52-012~014 统计（契约 1.39）
+
+### 阶段 1：先基础能力（本轮实施，全部增量零破坏）
+| 任务 | 内容 | 迁移 | 契约 | 测试 |
+|---|---|---|---|---|
+| T1 G1 | `domain/annotation/judge_routing.py`：位置偏差校正（Swap&Average 双向判定）+ 长度惩罚 + 置信度三区路由（AUTO_APPROVE≥0.92 / HUMAN 0.5–0.85 / 其余标准流） | 无（纯领域） | 无（内部能力） | 单测 ≥12 |
+| T2 G2 | `domain/annotation/honeypot_breaker.py`：黄金题滑动窗口准确率，<85% 连续 N 次 → 产出 PAUSE 指令，派单用例消费 | 无（复用 gold_set） | 无 | 单测 ≥8 |
+| T3 G4a | `ddp_data/llm_export` 增 `PRM_STEP_REWARD_JSONL` writer（步骤级 正确/冗余/幻觉/致命→reward 映射） | 无 | 无 | 单测 ≥8 + roundtrip |
+
+### 阶段 2：核心标注流程增强（下一步）
+- T4：PRM 步级标注域模型（Fork 分叉重写 → Step-DPO 对）+ 契约 1.40 additive
+- T5：技能标签路由（assignment 过滤器）+ 迁移 0080（annotator_skill_tags）
+- T6：Token 成本台账（ai_suggestion 调用记录聚合）+ 迁移 0081
+
+### 阶段 3：增强与辅助（P3，按需排期）
+- G5 Bad Case 回流 Webhook（契约 1.41）；G6 向量去重（pgvector 可用性验证后）；G9 前端轨迹树+水印；G10 压测脚本
+
+### 实施步骤模板（每个任务）
+1. worktree 新建 → 2. 领域纯函数 + 单测 → 3. 接线现有用例（可选注入，默认旧行为不变）→ 4. 契约/migration（若需，用预分配号）→ 5. `ruff`+定向 pytest → 6. check.sh（持锁串行）→ 7. commit+PR → 8. CI 绿→合并 → 9. 记忆卡片/星云
+
+## 六、风险与回滚
+
+| 风险 | 缓解 | 回滚 |
+|---|---|---|
+| Judge 路由误放行低质数据 | AUTO_APPROVE 仅当 judge 与人工一致且 ≥0.92；默认关闭需显式开启 | 特性开关关闭即回旧行为 |
+| 熔断误伤正常标注员 | 窗口 ≥20 题、连续 2 轮才触发；PAUSE 可手动解除 | 删除 PAUSE 记录即恢复 |
+| PRM 格式与训练侧不匹配 | 先第三方 datasets 实测（同 llm_export 方法论） | 格式版本化 manifest |
+| 迁移冲突 | 编号预分配；batch 模式兼容 SQLite | 每迁移带 downgrade |
+| 并行 check.sh 污染 | 全局锁串行（MEM-INC-009） | — |
+
+## 七、验收要点（蓝图自检 → 本项目落地口径）
+- N1：四种 payload 校验器全覆盖（V52 单测）；PRM 步级可标注（阶段2）；去重（P3）
+- N2：领单冲突 409 + 租约过期释放（已有测试）；双盲+仲裁（已有）；技能路由（阶段2）
+- N3：规则拦截（已有 quality_rules）；预标注（已有）；Judge 偏差校正+置信度路由（T1）；Kappa（已有）；Honeypot 熔断（T2）
+- N4：快照+冻结（已有）；SFT/DPO/PRM 导出（llm_export）；防污染（已有 leakage）；看板（V52-012~014）
+- N5：回流 Webhook（阶段3）；配比台账（增量）
+- N6：审计（已有）；Token 成本（阶段2）；备份演练（已有 MEM-OPS-001）
 
 ---
 
