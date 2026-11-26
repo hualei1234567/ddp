@@ -210,6 +210,11 @@ class Settings(BaseSettings):
     # 自动 PAUSED 并拦截新派单（只挡新分配，不收回已有）。
     honeypot_breaker_enabled: bool = False
 
+    # Webhook 出站订阅（阶段 5）：订阅明文 secret 的加密密钥。
+    # 默认空串 = 未配置；开启出站投递时必须提供，否则启动校验拒绝。
+    webhook_outbound_enabled: bool = False
+    webhook_encryption_key: str = ""
+
     # Hugging Face 远端校验：仅当登记请求显式 verify_remote=true 时才调用。
     # token 为空表示匿名只读（公开数据集足够）；GATED 数据集需要配置只读 token。
     # 超时必须显式设置：同步登记请求不能把 API 线程挂在不可达的外网上。
@@ -465,6 +470,10 @@ class Settings(BaseSettings):
         """
         problems = self._cors_config_problems()
         problems.extend(self._rate_limit_config_problems())
+        if self.webhook_outbound_enabled and not self.webhook_encryption_key.strip():
+            problems.append(
+                "webhook 出站已启用但未配置 DDP_WEBHOOK_ENCRYPTION_KEY（订阅明文加密密钥）"
+            )
         problems.extend(self._metrics_access_config_problems())
         problems.extend(self._security_headers_config_problems())
         problems.extend(self._validation_worker_config_problems())

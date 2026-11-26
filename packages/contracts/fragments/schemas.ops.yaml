@@ -303,3 +303,57 @@ AnnotationDedupResult:
       type: array
       description: 命中的近似重复候选（按分数降序）
       items: { $ref: "#/AnnotationDedupCandidate" }
+
+# --- Webhook 订阅（阶段 5 / 蓝图 N5） ---
+WebhookSubscriptionCreate:
+  type: object
+  required: [url, secret, event_types]
+  properties:
+    url:
+      type: string
+      minLength: 1
+      maxLength: 2048
+      description: 订阅地址（https 或本机 http）
+    secret:
+      type: string
+      minLength: 8
+      maxLength: 256
+      description: 验签密钥明文（仅创建时返回一次）
+    event_types:
+      type: array
+      minItems: 1
+      maxItems: 50
+      description: 订阅的事件类型（至少一个）
+      items: { type: string }
+
+WebhookSubscriptionOut:
+  type: object
+  required: [id, url, event_types, status, consecutive_failures]
+  properties:
+    id: { type: string, format: uuid }
+    url: { type: string }
+    event_types:
+      type: array
+      items: { type: string }
+    status: { type: string, enum: [ACTIVE, PAUSED] }
+    consecutive_failures: { type: integer, minimum: 0 }
+    last_success_at: { type: [string, "null"], format: date-time }
+    last_error_at: { type: [string, "null"], format: date-time }
+    last_error_message: { type: [string, "null"] }
+    created_at: { type: [string, "null"], format: date-time }
+
+WebhookSubscriptionCreated:
+  allOf:
+    - $ref: "#/WebhookSubscriptionOut"
+    - type: object
+      required: [secret]
+      properties:
+        secret: { type: string, description: 验签密钥明文（仅创建时返回一次） }
+
+WebhookSubscriptionPage:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "#/WebhookSubscriptionOut" }
