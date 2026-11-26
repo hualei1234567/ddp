@@ -303,3 +303,44 @@ AnnotationDedupResult:
       type: array
       description: 命中的近似重复候选（按分数降序）
       items: { $ref: "#/AnnotationDedupCandidate" }
+
+# --- 数据集版本对比（阶段 5） ---
+StatDiff:
+  type: object
+  required: [baseline, candidate, changed]
+  properties:
+    baseline: { type: integer, description: 基线版本取值 }
+    candidate: { type: integer, description: 候选版本取值 }
+    changed: { type: boolean, description: 是否发生变化 }
+
+VersionComparison:
+  type: object
+  required: [dataset_id, baseline_version, candidate_version, items_added,
+             items_removed, items_common, item_comparison_truncated,
+             added_samples, removed_samples, stats_diff, policy_changes]
+  properties:
+    dataset_id: { type: string, format: uuid }
+    baseline_version: { type: integer, description: 基线版本号 }
+    candidate_version: { type: integer, description: 候选版本号 }
+    items_added: { type: integer, minimum: 0, description: 候选新增条目数 }
+    items_removed: { type: integer, minimum: 0, description: 基线被移除条目数 }
+    items_common: { type: integer, minimum: 0, description: 两版共有条目数 }
+    item_comparison_truncated:
+      type: boolean
+      description: 条目对比是否因上限截断（true 时计数是部分值）
+    added_samples:
+      type: array
+      maxItems: 5
+      description: 新增条目样例
+      items: { type: object, additionalProperties: true }
+    removed_samples:
+      type: array
+      maxItems: 5
+      description: 移除条目样例
+      items: { type: object, additionalProperties: true }
+    stats_diff:
+      type: object
+      additionalProperties: { $ref: "#/StatDiff" }
+    policy_changes:
+      type: object
+      additionalProperties: { type: string, description: "旧 → 新" }

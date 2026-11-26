@@ -1124,6 +1124,9 @@ paths:
   /api/v1/projects/{project_id}/ops/token-ledger:
     $ref: "./fragments/paths.ops.yaml#/opsTokenLedger"
   # --- 评测失败案例回流（V52-030，蓝图 N5 / G5）---
+  # --- 数据集版本对比（阶段 5 / 治理闭环）---
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{baseline_version_id}/compare/{candidate_version_id}:
+    $ref: "./fragments/paths.ops.yaml#/datasetVersionCompare"
   /api/v1/projects/{project_id}/annotation-backflow:
     $ref: "./fragments/paths.ops.yaml#/annotationBackflow"
   # --- 语义近似去重（V52-031，蓝图 G6/N1；只读能力，默认 TRIGRAM 后端）---
@@ -1200,6 +1203,9 @@ components:
     IdempotencyKey: {$ref: "./fragments/components.yaml#/parameters/IdempotencyKey"}
     RequiredIdempotencyKey: {$ref: "./fragments/components.yaml#/parameters/RequiredIdempotencyKey"}
     AnnotationId: {$ref: "./fragments/components.yaml#/parameters/AnnotationId"}
+    DatasetId: {$ref: "./fragments/components.yaml#/parameters/DatasetId"}
+    BaselineVersionId: {$ref: "./fragments/components.yaml#/parameters/BaselineVersionId"}
+    CandidateVersionId: {$ref: "./fragments/components.yaml#/parameters/CandidateVersionId"}
     TrajectoryId: {$ref: "./fragments/components.yaml#/parameters/TrajectoryId"}
     AnnotatorId: {$ref: "./fragments/components.yaml#/parameters/AnnotatorId"}
     SkillTagName: {$ref: "./fragments/components.yaml#/parameters/SkillTagName"}
@@ -1792,6 +1798,8 @@ components:
     AnnotationBackflowDecision: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowDecision"}
     AnnotationBackflowCase: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCase"}
     AnnotationBackflowCasePage: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCasePage"}
+    VersionComparison: {$ref: "./fragments/schemas.ops.yaml#/VersionComparison"}
+    StatDiff: {$ref: "./fragments/schemas.ops.yaml#/StatDiff"}
     AnnotationDedupBackendStatus: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupBackendStatus"}
     AnnotationDedupStatus: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupStatus"}
     AnnotationDedupQuery: {$ref: "./fragments/schemas.ops.yaml#/AnnotationDedupQuery"}

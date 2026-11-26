@@ -24,6 +24,7 @@ from app.api.v1 import (
     collection_asset_routes,
     dataset_grant_routes,
     dataset_routes,
+    dataset_version_compare_routes,
     dataset_version_routes,
     datasource_routes,
     devices,
@@ -93,6 +94,7 @@ api_router.include_router(annotation_skill_routes.router)
 api_router.include_router(asset_catalog_routes.router)
 api_router.include_router(dataset_routes.router)
 api_router.include_router(dataset_version_routes.router)
+api_router.include_router(dataset_version_compare_routes.router)
 api_router.include_router(export_routes.router)
 # LLM 训练导出（V52-037，蓝图 N4 / 阶段 4 生态对接）：复用
 # data-platform/ddp_data/llm_export 的确定性 writer，计算型端点不落库。

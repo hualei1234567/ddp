@@ -219,3 +219,40 @@ annotationDedup:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+
+# --- 数据集版本对比（阶段 5 / 治理闭环） ---
+datasetVersionCompare:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DatasetId"
+    - $ref: "../openapi.yaml#/components/parameters/BaselineVersionId"
+    - $ref: "../openapi.yaml#/components/parameters/CandidateVersionId"
+  get:
+    operationId: compareDatasetVersions
+    tags: [dataset-versions]
+    summary: 对比同一数据集的两个版本
+    description: |
+      对比两个数据集版本的：条目级差异（新增/删除/共同，按条目内容指纹）、
+      统计变化、策略指纹变化（去重/切分/泄漏防护/质检）。
+
+      条目对比有上限（默认 10000）：超限返回 `item_comparison_truncated=true`，
+      计数是部分值而非全量，**不静默截断**。只输出差异计数与样例（≤5 条），
+      不逐条输出全量条目。
+
+      两个版本必须属于同一数据集，否则 404。
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100000, default: 10000 }
+        description: 条目对比上限；非法取值返回 422。
+    responses:
+      "200":
+        description: 版本对比结果
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/VersionComparison" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
