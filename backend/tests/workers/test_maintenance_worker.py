@@ -17,17 +17,18 @@ from uuid import uuid4
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy import select
-
 from app.core.config import Settings
 from app.infrastructure.db.base import Base
 from app.infrastructure.db.models.collection import (
     IdempotencyRecord,
+)
+from app.infrastructure.db.models.collection import (
     OutboxEvent as OutboxModel,
 )
 from app.infrastructure.db.models.identity import Project, User
 from app.infrastructure.db.session import create_db_engine, create_session_factory
 from app.workers.maintenance import MaintenanceWorker
+from sqlalchemy import select
 
 NOW = datetime(2026, 11, 27, 12, 0, tzinfo=UTC)
 DB = "postgresql+psycopg://ddp:secretpw@localhost:55432/ddp"
