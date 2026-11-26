@@ -29,6 +29,7 @@ from app.domain.annotation.errors import (
     SubmissionIncompleteError,
     UnknownLabelError,
 )
+from app.domain.annotation.prm_dpo import require_preference_label_value
 from app.domain.annotation.schema import (
     OUTCOME_ERROR_CATEGORIES,
     OUTCOME_VALUES,
@@ -654,6 +655,9 @@ def _require_type(definition: LabelDefinition, value: object) -> None:
         _require_outcome_value(spec, value)
     elif label_type is AnnotationLabelType.JSON:
         _validated_json(value)
+        # V52-032：偏好约定值（MEM-DEC-002）走同一 JSON 标签类型回流，
+        # 这里只加"声明了偏好就必须完整"的收紧校验，不新增标签类型。
+        require_preference_label_value(value)
 
 
 #: OUTCOME_SPAN 值的合法字段（未知字段拒绝，避免拼写错误静默丢语义）。

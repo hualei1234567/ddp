@@ -19,11 +19,13 @@ from app.domain.annotation.prm_dpo import (
 )
 from app.domain.annotation.prm_step import (
     REWARD_BY_LABEL,
+    TRAJECTORY_ID_MAX_LENGTH,
     ForkedTrajectory,
     PrmAnnotation,
     StepLabelKind,
     StepMark,
     fork_from_step,
+    forked_trajectory_id,
 )
 from ddp_data.llm_export import Provenance, QcStatus, ReviewStatus
 from ddp_data.llm_export.prm import REWARD_BY_LABEL as EXPORT_REWARD_BY_LABEL
@@ -260,11 +262,15 @@ def test_pair_feeds_preference_record_from_raw() -> None:
 
 
 def test_preference_json_payload_shape() -> None:
-    """JSON 约定值形态：winner 用 chosen 语义键并可通过校验器。"""
+    """JSON 约定值形态：winner 是呈现槽标签（A/B/TIE）并可通过校验器。
+
+    旧实现写 ``winner="chosen"``，不在 MEM-DEC-002 的 A/B/TIE 约定内，
+    提交写路径会拒绝；V52-032 起统一为 canonical ``winner="A"``（chosen=槽 A）。
+    """
     prm, forked = _pair_fixture()
     pair = to_step_dpo_pair(prm, forked)
     payload = pair.to_payload()
-    assert payload["winner"] == "chosen"
+    assert payload["winner"] == "A"
     assert payload["fork_point_index"] == 1
     validate_preference_payload(payload)
     with pytest.raises(DomainValidationError, match="未知字段"):
@@ -292,3 +298,24 @@ def test_invalid_criteria_score_rejected() -> None:
             rejected="r",
             criteria_scores={"a": "1"},
         )
+
+
+# ── V52-032：分叉轨迹 id 生成规则（物化时冲突递增的基础） ──────────────
+
+
+def test_forked_trajectory_id_rule() -> None:
+    """规则固定为 ``<原 id>#fork-<n>``（n 从 1 起），可被冲突递增直接复用。"""
+    assert forked_trajectory_id("traj-1", 1) == "traj-1#fork-1"
+    assert forked_trajectory_id("traj-1", 3) == "traj-1#fork-3"
+
+
+def test_forked_trajectory_id_rejects_bad_sequence() -> None:
+    for sequence in (0, -1, True, "1"):
+        with pytest.raises(DomainValidationError, match="分叉序号"):
+            forked_trajectory_id("traj-1", sequence)  # type: ignore[arg-type]
+
+
+def test_forked_trajectory_id_length_guard() -> None:
+    """超长原 id 生成分叉 id 会越过 200 字符上限：显式失败，不静默截断。"""
+    with pytest.raises(DomainValidationError, match="200 字符上限"):
+        forked_trajectory_id("t" * TRAJECTORY_ID_MAX_LENGTH, 1)

@@ -60,6 +60,12 @@ REWARD_BY_LABEL: dict[str, float] = {
 #: 轨迹步骤数上限——与 ``llm_export.prm._MAX_STEPS`` 对齐（512）。
 MAX_STEP_COUNT = 512
 
+#: 轨迹业务键最大长度（与 ``PrmAnnotation.trajectory_id`` 校验一致）。
+TRAJECTORY_ID_MAX_LENGTH = 200
+
+#: 分叉物化时 trajectory_id 唯一冲突的最大重试次数（application 层使用）。
+FORK_MAX_ATTEMPTS = 5
+
 #: 单条步骤 action / 重写文本的最大长度（与提交备注同级，防超长注入）。
 ACTION_MAX_LENGTH = 2000
 
@@ -189,7 +195,9 @@ class PrmAnnotation:
         object.__setattr__(
             self,
             "trajectory_id",
-            normalized_text(self.trajectory_id, "trajectory_id", max_length=200),
+            normalized_text(
+                self.trajectory_id, "trajectory_id", max_length=TRAJECTORY_ID_MAX_LENGTH
+            ),
         )
         if not self.step_actions:
             raise DomainValidationError("轨迹至少需要 1 个步骤")
@@ -353,6 +361,25 @@ class ForkedTrajectory:
         )
 
 
+def forked_trajectory_id(source_trajectory_id: str, sequence: int) -> str:
+    """生成分叉轨迹业务键 ``<原 id>#fork-<sequence>``（sequence 从 1 起）。
+
+    物化时若唯一键冲突由调用方递增序号重试；这里只负责规则与长度约束——
+    超长时显式失败（不静默截断成可能撞车的 id）。
+    """
+    if not isinstance(sequence, int) or isinstance(sequence, bool) or sequence < 1:
+        raise DomainValidationError("分叉序号必须是正整数")
+    source = normalized_text(
+        source_trajectory_id, "source_trajectory_id", max_length=TRAJECTORY_ID_MAX_LENGTH
+    )
+    candidate = f"{source}#fork-{sequence}"
+    if len(candidate) > TRAJECTORY_ID_MAX_LENGTH:
+        raise DomainValidationError(
+            f"分叉 trajectory_id 超过 {TRAJECTORY_ID_MAX_LENGTH} 字符上限，无法生成"
+        )
+    return candidate
+
+
 def _validated_fork_point(prm: PrmAnnotation, at_index: int) -> None:
     if not isinstance(at_index, int) or isinstance(at_index, bool):
         raise DomainValidationError("at_index 必须是整数")
@@ -400,11 +427,14 @@ def fork_from_step(
 
 __all__ = [
     "ACTION_MAX_LENGTH",
+    "FORK_MAX_ATTEMPTS",
     "MAX_STEP_COUNT",
     "REWARD_BY_LABEL",
+    "TRAJECTORY_ID_MAX_LENGTH",
     "ForkedTrajectory",
     "PrmAnnotation",
     "StepLabelKind",
     "StepMark",
     "fork_from_step",
+    "forked_trajectory_id",
 ]
