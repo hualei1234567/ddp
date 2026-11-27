@@ -18,9 +18,11 @@
 | [backflow-intake.md](backflow-intake.md) | 评测失败案例回流：受理、限流处置、重发幂等、转换时机 | QA lead / 项目 owner | VERIFIED（端点与参数已 grep 核对） |
 | [dashboard-spec.md](dashboard-spec.md) | 四类看板（吞吐 / 质量 / 成本 / 数据飞轮）的指标来源、口径、刷新频率、异常阈值 | 项目 owner / 平台管理员 | 引用 VERIFIED（指标名与端点已 grep 核对）；阈值多为「建议/待定稿」，非 SLO 承诺 |
 | [backup-restore-runbook.md](backup-restore-runbook.md) | 备份与恢复演练（FR-043，已有文档，不在本次新增范围） | 平台管理员 | VERIFIED（有演练证据） |
+| [table-growth-and-partitioning.md](table-growth-and-partitioning.md) | 大表增长/体积只读审计：当前是否需要分区/归档、触发阈值、归档策略（复用 maintenance.py） | 平台管理员 | 判定 VERIFIED（2026-11-27 生产库实测）；分区/归档实施 PLANNED 且**当前不应实施** |
 
 > 标注排期、质检抽检、成本月报在阶段 4 计划中同属运营 SOP 集，但本轮只交付
 > 上述 4 份，避免文档铺开而无真实实现支撑。
+> `table-growth-and-partitioning.md` 为后续批次新增（V5.2 审计 R?）。
 
 ---
 
