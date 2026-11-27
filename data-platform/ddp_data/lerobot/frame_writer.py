@@ -46,14 +46,26 @@ FRAME_SCOPE = "LOADER_FRAME"
 
 @dataclass(frozen=True, slots=True)
 class FrameFeature:
-    """一个逐帧 feature 的声明（对应 LeRobot ``features`` 条目）。"""
+    """一个逐帧 feature 的声明（对应 LeRobot ``features`` 条目）。
+
+    ``names`` 是 LeRobot v2.1 的**必需**字段：视频特征必须给出
+    ``["height", "width", "channels"]``——官方 Loader 靠它把
+    ``(h, w, c)`` 解释成图像轴序，缺失会在解码时静默错位
+    （官方 ``dataset_to_policy_features`` 还要读 ``names[2]`` 判断
+    ``"channels"`` 并做 ``(c, h, w)`` 转置）。非视频特征用 ``None``。
+    """
 
     name: str
     dtype: str
     shape: tuple[int, ...]
+    names: tuple[str, ...] | None = None
 
     def as_info(self) -> dict[str, object]:
-        return {"dtype": self.dtype, "shape": list(self.shape), "names": None}
+        return {
+            "dtype": self.dtype,
+            "shape": list(self.shape),
+            "names": list(self.names) if self.names is not None else None,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,18 +85,34 @@ def build_frame_features(
     *,
     observation_dim: int,
     action_dim: int,
+    video_features: Sequence[FrameFeature] = (),
 ) -> tuple[FrameFeature, ...]:
     """构建逐帧 feature 声明。
 
-    官方 LeRobot 逐帧数据集至少有 ``observation.state`` 与 ``action``；
-    图像类 feature 需要真实视频，本模块不做（``ph`` 样本无图像）。
+    官方 LeRobot 逐帧数据集至少有 ``observation.state`` 与 ``action``。
+
+    **视频 feature（V6.1）**：``video_features`` 传入时按官方 v2.1 约定
+    声明（``dtype="video"``、``shape=(h, w, c)``、
+    ``names=["height", "width", "channels"]``）。官方 Loader 会据此把
+    ``videos/`` 下的 mp4 纳入数据集并按 video feature 解码——
+    此前本模块**硬编码** ``video_provided: False``，导致即使有视频也无法
+    被官方 Loader 当作视频特征消费（V61-008 的核心缺口）。
     """
     if observation_dim <= 0 or action_dim <= 0:
         raise ValueError("observation_dim 与 action_dim 必须为正")
+    for feature in video_features:
+        if feature.dtype != "video":
+            raise ValueError(f"视频 feature 的 dtype 必须是 video，实际 {feature.dtype!r}")
+        if feature.names != ("height", "width", "channels"):
+            raise ValueError(
+                "视频 feature 的 names 必须是 ('height', 'width', 'channels')，"
+                f"实际 {feature.names!r}（官方 Loader 依赖它做轴序解释）"
+            )
     return (
         FrameFeature("observation.state", "float32", (observation_dim,)),
         FrameFeature("action", "float32", (action_dim,)),
         FrameFeature("timestamp", "float32", (1,)),
+        *tuple(video_features),
     )
 
 
@@ -98,6 +126,7 @@ def write_frame_episode(
     action_dim: int,
     split: str = "train",
     global_index_offset: int = 0,
+    video_features: Sequence[FrameFeature] = (),
 ) -> FrameExportResult:
     """把逐帧记录写成 LeRobot v2.1 逐帧 Parquet + info.json。
 
@@ -139,7 +168,9 @@ def write_frame_episode(
             )
 
     features = build_frame_features(
-        observation_dim=observation_dim, action_dim=action_dim
+        observation_dim=observation_dim,
+        action_dim=action_dim,
+        video_features=video_features,
     )
     parquet = _write_parquet(
         episode_index=episode_index,
@@ -157,6 +188,7 @@ def write_frame_episode(
         fps=fps,
         frame_count=len(timestamps),
         episode_index=episode_index,
+        video_provided=any(f.dtype == "video" for f in features),
     )
     return FrameExportResult(
         parquet_bytes=parquet,
@@ -249,6 +281,7 @@ def _build_info_json(
     total_tasks: int = 1,
     chunks_size: int = 1000,
     splits: Mapping[str, str] | None = None,
+    video_provided: bool = False,
 ) -> bytes:
     """构建逐帧数据集的 info.json。
 
@@ -282,7 +315,9 @@ def _build_info_json(
             "schema_version": FRAME_SCHEMA_VERSION,
             "loadable_scope": FRAME_SCOPE,
             "frame_level_mapping": True,
-            "video_provided": False,
+            # 真实反映"本数据集是否含视频"：此前硬编码 False，
+            # 即使导出了 video feature 也会骗官方 Loader（V61-008 缺口）。
+            "video_provided": video_provided,
             "fps_source": "MEASURED_FROM_FRAMES",
             "episode_index": episode_index,
         },
