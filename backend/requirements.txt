@@ -7,7 +7,7 @@ fastapi==0.133.1
 uvicorn[standard]==0.34.0
 pydantic-settings==2.7.1
 sqlalchemy==2.0.36
-alembic==1.14.0
+alembic==1.20.1
 psycopg[binary]==3.2.3
 boto3==1.35.90
 # 审计 v52-044：0.0.20 存在 PYSEC-2026-3036/3037/3039/3040，修复版本 ≥ 0.0.31。
