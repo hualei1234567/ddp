@@ -1,0 +1,120 @@
+{
+  "generated_at": "2026-11-27T11:20:09.302169+00:00",
+  "mode": "execute",
+  "plan": {
+    "base": "localhost:55432/postgres",
+    "base_dsn_masked": "postgresql+psycopg://ddp:***@localhost:55432/postgres",
+    "workers": [
+      1,
+      4,
+      16
+    ],
+    "iterations_per_worker": 10,
+    "total_slots": 160,
+    "annotator_count": 4,
+    "task_groups": 4,
+    "temp_db_prefix": "ddp_perf_e2e_",
+    "endpoint": "POST /api/v1/projects/{project_id}/annotation-submissions (+ actions/submit)",
+    "requests_per_slot": 2
+  },
+  "results": [
+    {
+      "workers": 1,
+      "iterations_per_worker": 10,
+      "requests_sent": 20,
+      "wall_seconds": 1.2523,
+      "tps": 15.97,
+      "p50_ms": 42.891,
+      "p95_ms": 104.332,
+      "p99_ms": 131.995,
+      "mean_ms": 62.56,
+      "max_ms": 131.995,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "setup_failures": 0,
+      "status_counts": {
+        "201": 10,
+        "200": 10
+      },
+      "error_samples": []
+    },
+    {
+      "workers": 4,
+      "iterations_per_worker": 10,
+      "requests_sent": 80,
+      "wall_seconds": 3.024,
+      "tps": 26.455,
+      "p50_ms": 148.068,
+      "p95_ms": 256.009,
+      "p99_ms": 281.52,
+      "mean_ms": 147.852,
+      "max_ms": 281.52,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "setup_failures": 0,
+      "status_counts": {
+        "201": 40,
+        "200": 40
+      },
+      "error_samples": []
+    },
+    {
+      "workers": 16,
+      "iterations_per_worker": 10,
+      "requests_sent": 220,
+      "wall_seconds": 8.8887,
+      "tps": 24.751,
+      "p50_ms": 551.06,
+      "p95_ms": 1036.731,
+      "p99_ms": 1366.714,
+      "mean_ms": 625.384,
+      "max_ms": 1509.261,
+      "error_count": 0,
+      "error_rate": 0.0,
+      "setup_failures": 0,
+      "status_counts": {
+        "201": 110,
+        "200": 110
+      },
+      "error_samples": []
+    }
+  ],
+  "pg": {
+    "max_connections": 100,
+    "connections_on_instance": 26,
+    "connections_on_database": 11,
+    "by_wait_event_type": {
+      "CPU": 1,
+      "Client": 10
+    },
+    "by_state": {
+      "active": 1,
+      "idle": 10
+    },
+    "peak_connections_during_run": 17,
+    "connection_samples": 177,
+    "sample_interval_seconds": 0.05
+  },
+  "connection_pool_redline": {
+    "verdict": "safe",
+    "statement": "不会打满：占用率 26.0%（26/100），余量 74 个连接；API 侧单进程连接上限为 30",
+    "api_pool_size": 10,
+    "api_max_overflow": 20,
+    "api_connection_cap": 30,
+    "measured_peak_api_connections": 17,
+    "measured_peak_concurrency": 16,
+    "other_connections": 9,
+    "projected_total_connections": 26,
+    "pg_max_connections": 100,
+    "remaining_connections": 74,
+    "usage_ratio": 0.26
+  },
+  "notes": [
+    "每次迭代 = 建草稿(201) + 提交(200) 两次真实写请求，走完整鉴权/校验/审计/outbox",
+    "工作位（batch + 领取并开始的分配）在压测前造好，领域规则不允许同一分配反复建草稿",
+    "连接池参数取生产默认口径（pool_size=10 / max_overflow=20），压测期间未放宽",
+    "限流在本脚本内关闭：否则写请求会被 IP 桶挡掉，测到的不是业务写容量",
+    "连接峰值是 50ms 间隔的瞬时采样最大值，尖峰可能被漏掉",
+    "临时库已删除，数据不落主库"
+  ]
+}
