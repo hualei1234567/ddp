@@ -390,8 +390,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
+      # **不依赖 migrate**：`migrate` 在 `app` profile 里，本服务在独立的
+      # `webhook` profile——跨 profile 的 depends_on 会让 compose 报
+      # "depends on undefined service"（实测）。迁移由 `app` profile 的
+      # `migrate` 服务负责；启动前请确认目标库已升到 head
+      # （`alembic current` 应输出 0086）。
     restart: unless-stopped
 
   local-adapter:
