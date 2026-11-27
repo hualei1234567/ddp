@@ -1124,6 +1124,9 @@ paths:
   /api/v1/projects/{project_id}/ops/token-ledger:
     $ref: "./fragments/paths.ops.yaml#/opsTokenLedger"
   # --- 评测失败案例回流（V52-030，蓝图 N5 / G5）---
+  # --- 数据集版本对比（阶段 5 / 治理闭环）---
+  /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{baseline_version_id}/compare/{candidate_version_id}:
+    $ref: "./fragments/paths.ops.yaml#/datasetVersionCompare"
   # --- Webhook 订阅（阶段 5 / 蓝图 N5 生态对接）---
   /api/v1/projects/{project_id}/webhook-subscriptions:
     $ref: "./fragments/paths.ops.yaml#/webhookSubscription"
@@ -1205,6 +1208,8 @@ components:
     IdempotencyKey: {$ref: "./fragments/components.yaml#/parameters/IdempotencyKey"}
     RequiredIdempotencyKey: {$ref: "./fragments/components.yaml#/parameters/RequiredIdempotencyKey"}
     AnnotationId: {$ref: "./fragments/components.yaml#/parameters/AnnotationId"}
+    BaselineVersionId: {$ref: "./fragments/components.yaml#/parameters/BaselineVersionId"}
+    CandidateVersionId: {$ref: "./fragments/components.yaml#/parameters/CandidateVersionId"}
     SubscriptionId: {$ref: "./fragments/components.yaml#/parameters/SubscriptionId"}
     TrajectoryId: {$ref: "./fragments/components.yaml#/parameters/TrajectoryId"}
     AnnotatorId: {$ref: "./fragments/components.yaml#/parameters/AnnotatorId"}
@@ -1798,6 +1803,8 @@ components:
     AnnotationBackflowDecision: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowDecision"}
     AnnotationBackflowCase: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCase"}
     AnnotationBackflowCasePage: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowCasePage"}
+    VersionComparison: {$ref: "./fragments/schemas.ops.yaml#/VersionComparison"}
+    StatDiff: {$ref: "./fragments/schemas.ops.yaml#/StatDiff"}
     WebhookSubscriptionCreate: {$ref: "./fragments/schemas.ops.yaml#/WebhookSubscriptionCreate"}
     WebhookSubscriptionOut: {$ref: "./fragments/schemas.ops.yaml#/WebhookSubscriptionOut"}
     WebhookSubscriptionCreated: {$ref: "./fragments/schemas.ops.yaml#/WebhookSubscriptionCreated"}
