@@ -107,18 +107,18 @@ def list_subscriptions(
 ) -> WebhookSubscriptionPageOut:
     return WebhookSubscriptionPageOut(
         items=[
-        WebhookSubscriptionOut(
-            id=str(item.id),
-            url=item.url,
-            event_types=list(item.event_types),
-            status=item.status,
-            consecutive_failures=item.consecutive_failures,
-            last_success_at=_iso(item.last_success_at),
-            last_error_at=_iso(item.last_error_at),
-            last_error_message=item.last_error_message,
-            created_at=_iso(item.created_at),
-        )
-        for item in use_cases.webhook_subscriptions.list(scope)
+            WebhookSubscriptionOut(
+                id=str(item.id),
+                url=item.url,
+                event_types=list(item.event_types),
+                status=item.status,
+                consecutive_failures=item.consecutive_failures,
+                last_success_at=_iso(item.last_success_at),
+                last_error_at=_iso(item.last_error_at),
+                last_error_message=item.last_error_message,
+                created_at=_iso(item.created_at),
+            )
+            for item in use_cases.webhook_subscriptions.list(scope)
         ]
     )
 
