@@ -144,6 +144,23 @@ def test_project_isolation(
     assert owner_a.get(_url(ids.project_b)).json()["items"] == []
 
 
+def test_missing_encryption_key_returns_503_not_500(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """未配置加密密钥属**部署配置问题**：报 503，不报 500。
+
+    报 500 会把"运维要配 DDP_WEBHOOK_ENCRYPTION_KEY"伪装成"平台内部故障"；
+    报 422 会暗示"改请求参数就能好"——两者都不对。
+    """
+    factory, ids = api_db
+    # 不注入 webhook_encryption_key：模拟生产未配置
+    client = make_client(factory, ids.owner_a)
+    response = client.post(_url(ids.project_a), json=_payload())
+
+    assert response.status_code == 503, response.text
+    assert response.json()["error"]["code"] == "service_unavailable"
+
+
 def test_delete_unknown_returns_404(
     api_db: tuple[sessionmaker[Session], ApiIds],
 ) -> None:

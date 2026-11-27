@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.domain.identity.models import ProjectScope
+from app.domain.webhook.errors import WebhookNotConfiguredError
 from app.domain.webhook.subscription import (
     WebhookSubscription,
     decrypt_secret,
@@ -69,7 +70,9 @@ class SqlWebhookSubscriptionRepository:
     def _require_key(self) -> bytes:
         """加密密钥用时校验：创建订阅才需要，空密钥明确报错。"""
         if not self._encryption_key:
-            raise RuntimeError("未配置 DDP_WEBHOOK_ENCRYPTION_KEY，无法创建 Webhook 订阅")
+            raise WebhookNotConfiguredError(
+                "未配置 DDP_WEBHOOK_ENCRYPTION_KEY，无法创建 Webhook 订阅"
+            )
         return self._encryption_key
 
     def find_url(self, scope: ProjectScope, url: str) -> WebhookSubscription | None:

@@ -92,6 +92,9 @@ _STATUS_BY_CODE = {
     "idempotency_key_reused": 409,
     "resource_not_found": 404,
     "forbidden": 403,
+    # 平台侧缺少部署配置（调用方无法自行解决）——报 503 而不是 422：
+    # 422 暗示"改请求参数就能好"，503 才正确表达"服务暂不可用，运维要处理"。
+    "service_unavailable": 503,
 }
 
 # 对外错误文案固定且不含客户端输入；未知领域码统一收敛到 validation_failed。
@@ -106,6 +109,7 @@ _MESSAGES = {
     "version_conflict": "资源版本已变化，请重新读取后再试",
     "resource_immutable": "资源已冻结或包含不可变字段",
     "duplicate_resource": "项目内业务键或序列号重复",
+    "service_unavailable": "服务暂不可用（平台侧缺少必要配置）",
     "calibration_active_conflict": "同一标定目标已存在激活记录",
     "idempotency_key_reused": "同一幂等键对应了不同的请求体",
     "resource_not_found": "资源不存在或不属于当前项目",
@@ -345,6 +349,9 @@ def episode_error_to_app(exc: EpisodeDomainError) -> AppError:
 
 _ANNOTATION_STATUS_BY_CODE = {
     "validation_failed": 422,
+    # 平台侧缺少部署配置（调用方无法自行解决）→ 503。
+    # 报 422 会暗示"改请求参数就能好"；报 500 会把运维配置问题伪装成内部故障。
+    "service_unavailable": 503,
     "resource_not_found": 404,
     "forbidden": 403,
     "state_transition_invalid": 409,
@@ -401,6 +408,7 @@ _ANNOTATION_STATUS_BY_CODE = {
 }
 
 _ANNOTATION_MESSAGES = {
+    "service_unavailable": "服务暂不可用（平台侧缺少必要配置）",
     "validation_failed": "请求参数或标注域规则校验失败",
     "resource_not_found": "资源不存在或不属于当前项目",
     "forbidden": "无权执行该操作",
