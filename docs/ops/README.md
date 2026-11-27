@@ -20,9 +20,11 @@
 | [backup-restore-runbook.md](backup-restore-runbook.md) | 备份与恢复演练（FR-043，已有文档，不在本次新增范围） | 平台管理员 | VERIFIED（有演练证据） |
 | [webhook-outbound.md](webhook-outbound.md) | 对外 Webhook 投递：启用、订阅创建、下游验签、积压/熔断/死信排查 | 项目 owner（订阅配置）/ 平台管理员（Worker 与密钥） | VERIFIED（真实 HTTP 投递与验签有演练证据；熔断与回流事件出站为 MISSING） |
 | [alerting-runbook.md](alerting-runbook.md) | 告警链路（Prometheus → Alertmanager → 接收端 → 落盘）：6 条规则各自的处置动作、演练方法、接收端确认、生产接真实下游 | 值班工程师 / 平台管理员 | VERIFIED（链路已真实跑通，证据见 `docs/testing/evidence/2026-11-27-alert-receiver/`） |
+| [table-growth-and-partitioning.md](table-growth-and-partitioning.md) | 大表增长/体积只读审计：当前是否需要分区/归档、触发阈值、归档策略（复用 maintenance.py） | 平台管理员 | 判定 VERIFIED（2026-11-27 生产库实测）；分区/归档实施 PLANNED 且**当前不应实施** |
 
 > 标注排期、质检抽检、成本月报在阶段 4 计划中同属运营 SOP 集，但本轮只交付
-> 上述 5 份，避免文档铺开而无真实实现支撑。
+> 上述 7 份，避免文档铺开而无真实实现支撑。
+> `table-growth-and-partitioning.md` 为阶段 6 新增（V5.2 审计剩余项）。
 
 ---
 

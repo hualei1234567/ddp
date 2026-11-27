@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 38 张卡片**：DRAFT 0 / ACTIVE 38 / SUPERSEDED 0 / DEPRECATED 0
+**总计 39 张卡片**：DRAFT 0 / ACTIVE 39 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 38 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 39 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -72,11 +72,12 @@
 |---|---|---|---|---|
 | [MEM-CHG-001](changes/MEM-CHG-001-outbox-history-backfill.md) | 迁移 0072 归正 outbox 历史留痕行 | ACTIVE | 1 | `backfill`, `data-fix`, `migration`, `outbox`, `pending`, `recorded` |
 
-## OPS · 运维参数与门禁（1）
+## OPS · 运维参数与门禁（2）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
 | [MEM-OPS-001](ops/MEM-OPS-001-backup-restore-invariants.md) | 备份恢复演练的 7 个不变量与 RPO/RTO 基线 | ACTIVE | 1 | `backup`, `drill`, `invariant`, `minio`, `postgres`, `restore`, `rpo`, `rto`, `spool` |
+| [MEM-OPS-002](ops/MEM-OPS-002-table-growth-partition-thresholds.md) | 小表当前不需要分区；n_live_tup 因 PG 容器重启而不可信 | ACTIVE | 1 | `archive`, `audit_logs`, `container_restart`, `maintenance`, `outbox`, `partitioning`, `pg_stat`, `postgres`, `readiness`, `retention`, `table_growth`, `threshold` |
 
 ---
 
@@ -111,8 +112,10 @@
 - `adr`：MEM-DEC-001
 - `alembic`：MEM-INC-013, MEM-INC-018, MEM-INC-019, MEM-INC-020
 - `api-contract`：MEM-INC-015, MEM-INC-016, MEM-INC-017
+- `archive`：MEM-OPS-002
 - `assertion`：MEM-INC-005
 - `audit-gap`：MEM-INC-027
+- `audit_logs`：MEM-OPS-002
 - `backfill`：MEM-CHG-001
 - `backup`：MEM-OPS-001
 - `backup-restore`：MEM-INC-002
@@ -134,6 +137,7 @@
 - `claim-boundary`：MEM-REQ-001
 - `column-name`：MEM-INC-002
 - `composite-fk`：MEM-INC-026
+- `container_restart`：MEM-OPS-002
 - `contract`：MEM-INC-006, MEM-INC-008
 - `contract-first`：MEM-INC-016
 - `contract-strategy`：MEM-SOP-003
@@ -184,6 +188,7 @@
 - `lineage`：MEM-INC-006, MEM-INC-007
 - `local-dev-exception`：MEM-INC-028
 - `magic-number`：MEM-INC-005
+- `maintenance`：MEM-OPS-002
 - `mcap`：MEM-INC-004
 - `merge-conflict`：MEM-INC-015, MEM-INC-018
 - `metadata-only`：MEM-REQ-001
@@ -201,20 +206,22 @@
 - `openapi`：MEM-INC-015, MEM-INC-017
 - `optimistic-lock`：MEM-INC-011
 - `outbound`：MEM-INC-028
-- `outbox`：MEM-CHG-001, MEM-INC-001, MEM-INC-003, MEM-INC-027
+- `outbox`：MEM-CHG-001, MEM-INC-001, MEM-INC-003, MEM-INC-027, MEM-OPS-002
 - `pagination`：MEM-INC-007
 - `pairwise`：MEM-DEC-002
 - `parallel`：MEM-INC-009, MEM-SOP-002, MEM-SOP-003
 - `parallel-pr`：MEM-INC-015, MEM-INC-018
 - `parity`：MEM-INC-016
 - `parquet`：MEM-INC-004
+- `partitioning`：MEM-OPS-002
 - `pending`：MEM-CHG-001
 - `performance-regression`：MEM-INC-024
+- `pg_stat`：MEM-OPS-002
 - `pip-compile`：MEM-INC-025
 - `pipeline`：MEM-INC-011
 - `platform-marker`：MEM-INC-025
 - `position-bias`：MEM-DEC-002
-- `postgres`：MEM-INC-003, MEM-INC-009, MEM-INC-012, MEM-INC-013, MEM-OPS-001
+- `postgres`：MEM-INC-003, MEM-INC-009, MEM-INC-012, MEM-INC-013, MEM-OPS-001, MEM-OPS-002
 - `precision`：MEM-INC-008, MEM-INC-021
 - `preference`：MEM-DEC-002
 - `processing-run`：MEM-INC-011, MEM-INC-012
@@ -222,6 +229,7 @@
 - `pytest`：MEM-INC-019
 - `query-count`：MEM-INC-024
 - `raw_asset`：MEM-INC-001
+- `readiness`：MEM-OPS-002
 - `recorded`：MEM-CHG-001
 - `recursion`：MEM-INC-007
 - `redocly`：MEM-INC-017
@@ -229,6 +237,7 @@
 - `repository-boundary`：MEM-INC-022
 - `resource-preallocation`：MEM-INC-015, MEM-SOP-002, MEM-SOP-003
 - `restore`：MEM-OPS-001
+- `retention`：MEM-OPS-002
 - `retry`：MEM-INC-001
 - `rpo`：MEM-INC-002, MEM-OPS-001
 - `rto`：MEM-OPS-001
@@ -263,8 +272,10 @@
 - `subagent`：MEM-SOP-003
 - `swagger-lint`：MEM-INC-017
 - `synthetic`：MEM-INC-004
+- `table_growth`：MEM-OPS-002
 - `test-contention`：MEM-INC-009
 - `test-seeding`：MEM-INC-026
+- `threshold`：MEM-OPS-002
 - `time-sensitive`：MEM-INC-009
 - `timestamp`：MEM-INC-008
 - `timezone`：MEM-INC-022
