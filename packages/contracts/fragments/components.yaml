@@ -236,6 +236,14 @@ parameters:
       minLength: 1
       maxLength: 64
 
+  SubscriptionId:
+    name: subscription_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+
 responses:
   Unauthorized:
     description: 未认证或令牌无效（`not_authenticated`，401）。
