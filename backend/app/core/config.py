@@ -424,6 +424,25 @@ class Settings(BaseSettings):
     # 键前缀，便于与其他 Redis 使用者隔离；不含项目数据，仅桶名与脱敏后的来源。
     rate_limit_redis_key_prefix: str = "ddp:rl"
 
+    # OpenTelemetry 分布式追踪（默认关闭，见 docs/adr/0050）。
+    #
+    # **默认关闭 = 零开销**：不开启时不 import 任何 opentelemetry 模块、不构造
+    # TracerProvider、不产生 span、响应不带 X-Trace-Id（见 app/core/telemetry.py）。
+    #
+    # 开了但没配 endpoint 会**降级为不追踪 + 启动 WARNING**，不拒绝启动：追踪是
+    # 可观测性依赖，不是业务正确性依赖，让一次监控配置错误变成全站不可用不划算
+    # （同源口径见 metrics_access_token 的处理）。endpoint 格式非法则由启动自检
+    # 拒绝（fail-closed）。
+    otel_enabled: bool = False
+    # 上报的服务名（OTel 的 service.name）。空串时用 "ddp"。
+    otel_service_name: str = ""
+    # OTLP collector 地址。空串 = 未接线（即使 otel_enabled=true 也降级为不追踪）。
+    otel_exporter_otlp_endpoint: str = ""
+    # OTLP 传输协议：grpc（4317）或 http（4318）。
+    otel_exporter_otlp_protocol: Literal["grpc", "http"] = "grpc"
+    # 采样比例（0~1）。1.0 = 全采样；低采样用于高流量环境控制成本。
+    otel_sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
+
     # Prometheus 抓取端点（GET /metrics）的访问控制。抓取端是机器，不是用户：
     # 无法使用用户 JWT，因此用静态 Bearer 令牌 + 可选来源网段白名单。
     # 判定逻辑与失败关闭口径见 app/core/metrics_access.py。
@@ -475,6 +494,7 @@ class Settings(BaseSettings):
                 "webhook 出站已启用但未配置 DDP_WEBHOOK_ENCRYPTION_KEY（订阅明文加密密钥）"
             )
         problems.extend(self._metrics_access_config_problems())
+        problems.extend(self._telemetry_config_problems())
         problems.extend(self._security_headers_config_problems())
         problems.extend(self._validation_worker_config_problems())
         problems.extend(self._export_worker_config_problems())
@@ -612,6 +632,36 @@ class Settings(BaseSettings):
                 parse_source_networks([raw])
             except ValueError as exc:
                 problems.append(f"DDP_METRICS_ALLOWED_SOURCE_NETWORKS 非法：{exc}")
+        return problems
+
+    def _telemetry_config_problems(self) -> list[str]:
+        """OpenTelemetry 追踪配置自检。
+
+        **只校验"配错了"的配置，不校验"没配"**：endpoint 为空（未接线）时
+        追踪降级为不追踪并记 WARNING，不拒绝启动（理由见
+        ``app/core/telemetry.py`` 模块注释）。
+
+        endpoint 非空时必须是可直接使用的 http(s) 绝对地址——写错的地址会让
+        exporter 在后台线程里静默失败，属于"配了但没生效"的假象，必须拦下。
+        """
+        problems: list[str] = []
+        if not self.otel_enabled:
+            return problems
+        endpoint = self.otel_exporter_otlp_endpoint.strip()
+        if not endpoint:
+            # 未接线：降级路径，不算配置错误。
+            return problems
+        if endpoint != self.otel_exporter_otlp_endpoint:
+            problems.append("DDP_OTEL_EXPORTER_OTLP_ENDPOINT 不得包含首尾空白")
+        try:
+            parsed = urlsplit(endpoint)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                problems.append(
+                    "DDP_OTEL_EXPORTER_OTLP_ENDPOINT 必须是 http(s) 绝对地址，"
+                    f"当前为 {endpoint!r}"
+                )
+        except ValueError:
+            problems.append(f"DDP_OTEL_EXPORTER_OTLP_ENDPOINT 无法解析：{endpoint!r}")
         return problems
 
     def _security_headers_config_problems(self) -> list[str]:
