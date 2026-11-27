@@ -77,7 +77,7 @@ def test_duplicate_url_returns_409(
     owner = _client(factory, ids.owner_a)
 
     assert owner.post(_url(ids.project_a), json=_payload()).status_code == 201
-    again = owner.post(_url(ids.project_a), json=_payload(secret="another-secret"))
+    again = owner.post(_url(ids.project_a), json=_payload(secret="another-example-secret"))
     assert again.status_code == 409
 
 
