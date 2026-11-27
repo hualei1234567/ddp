@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 35 张卡片**：DRAFT 0 / ACTIVE 35 / SUPERSEDED 0 / DEPRECATED 0
+**总计 38 张卡片**：DRAFT 0 / ACTIVE 38 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 35 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 38 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -32,7 +32,7 @@
 | [MEM-SOP-003](sop/MEM-SOP-003-subagent-parallel-collaboration.md) | 子代理并行开发协作模式：迁移号独占 + 契约策略 + 禁改共享文件 + 坑点统一入库 + check.sh 全局串行 | ACTIVE | 1 | `check-lock`, `contract-strategy`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `subagent` |
 | [MEM-SOP-004](sop/MEM-SOP-004-semgrep-sast-suppression.md) | Semgrep SAST 接入与误报基线的正确姿势 | ACTIVE | 1 | `baseline`, `ci`, `false-positive`, `nosemgrep`, `sast`, `semgrep`, `sql-injection`, `ssrf` |
 
-## INC · 事故与缺陷复盘（26）
+## INC · 事故与缺陷复盘（29）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -62,6 +62,9 @@
 | [MEM-INC-024](incidents/MEM-INC-024-nplus1-query-count-guard.md) | 列表 N+1 用"查询次数不随页大小变化"的断言守护，而不是靠压测 | ACTIVE | 1 | `n-plus-1`, `performance-regression`, `query-count`, `sqlalchemy-events` |
 | [MEM-INC-025](incidents/MEM-INC-025-lock-platform-marker-greenlet.md) | macOS 上生成的 pip lock 在 Linux CI 因 greenlet 平台标记直接红 | ACTIVE | 1 | `ci`, `dependency-lock`, `greenlet`, `hash-checking`, `pip-compile`, `platform-marker`, `sbom` |
 | [MEM-INC-026](incidents/MEM-INC-026-sqlalchemy-flush-ordering-fk.md) | SQLAlchemy 批量插入时父行必须先显式 flush——依赖排序不可靠，子行 FK 检查会失败 | ACTIVE | 1 | `composite-fk`, `flush-ordering`, `foreign-key`, `sqlalchemy`, `test-seeding` |
+| [MEM-INC-027](incidents/MEM-INC-027-webhook-outbound-wiring-and-ssrf.md) | 「有能力无接线」是比「缺能力」更隐蔽的缺口——Webhook 投递用例曾无任何生产调用点 | ACTIVE | 1 | `audit-gap`, `capability-wiring`, `dead-code`, `idempotency`, `outbox`, `webhook` |
+| [MEM-INC-028](incidents/MEM-INC-028-webhook-ssrf-guard-local-exception.md) | 出站 URL 守卫默认拒绝回环地址——本地联调必须走独立开关，不能削弱守卫 | ACTIVE | 1 | `least-privilege`, `local-dev-exception`, `outbound`, `ssrf`, `url-guard` |
+| [MEM-INC-029](incidents/MEM-INC-029-http-header-case-and-sqlite-naive-datetime.md) | 断言 Webhook 投递时踩到的两个隐性事实：HTTP 头名大小写不敏感、SQLite 读回 datetime 无时区 | ACTIVE | 1 | `e2e-test`, `http-header-case`, `naive-datetime`, `seed-data`, `sqlite`, `webhook` |
 
 ## CHG · 变更记录（1）
 
@@ -109,6 +112,7 @@
 - `alembic`：MEM-INC-013, MEM-INC-018, MEM-INC-019, MEM-INC-020
 - `api-contract`：MEM-INC-015, MEM-INC-016, MEM-INC-017
 - `assertion`：MEM-INC-005
+- `audit-gap`：MEM-INC-027
 - `backfill`：MEM-CHG-001
 - `backup`：MEM-OPS-001
 - `backup-restore`：MEM-INC-002
@@ -121,6 +125,7 @@
 - `bypass`：MEM-INC-011
 - `canonical`：MEM-INC-014
 - `capability`：MEM-DEC-001
+- `capability-wiring`：MEM-INC-027
 - `check-constraint`：MEM-INC-003, MEM-INC-012, MEM-INC-013
 - `check-lock`：MEM-SOP-002, MEM-SOP-003
 - `chunked-read`：MEM-INC-010
@@ -136,7 +141,7 @@
 - `data-fix`：MEM-CHG-001
 - `datetime`：MEM-INC-021
 - `db-constraint`：MEM-INC-006
-- `dead-code`：MEM-INC-006
+- `dead-code`：MEM-INC-006, MEM-INC-027
 - `decimal`：MEM-INC-021
 - `dependency-lock`：MEM-INC-025
 - `deserialization`：MEM-INC-014
@@ -147,6 +152,7 @@
 - `dpo`：MEM-DEC-002
 - `drill`：MEM-INC-002, MEM-OPS-001
 - `e2e`：MEM-INC-005
+- `e2e-test`：MEM-INC-029
 - `enum`：MEM-DEC-001, MEM-INC-012
 - `false-positive`：MEM-SOP-004
 - `filterwarnings`：MEM-INC-019
@@ -163,17 +169,20 @@
 - `guard-triggers`：MEM-INC-020
 - `hash-checking`：MEM-INC-025
 - `hdf5`：MEM-INC-004, MEM-INC-010, MEM-SOP-001
-- `idempotency`：MEM-INC-023
+- `http-header-case`：MEM-INC-029
+- `idempotency`：MEM-INC-023, MEM-INC-027
 - `integrity-error`：MEM-INC-001
 - `invariant`：MEM-OPS-001
 - `json`：MEM-INC-008
 - `json-label`：MEM-DEC-002
 - `json-schema`：MEM-INC-014
 - `jsonb`：MEM-INC-021
+- `least-privilege`：MEM-INC-028
 - `lerobot`：MEM-REQ-001
 - `level`：MEM-DEC-001
 - `limit`：MEM-INC-007
 - `lineage`：MEM-INC-006, MEM-INC-007
+- `local-dev-exception`：MEM-INC-028
 - `magic-number`：MEM-INC-005
 - `mcap`：MEM-INC-004
 - `merge-conflict`：MEM-INC-015, MEM-INC-018
@@ -185,13 +194,14 @@
 - `model-naming`：MEM-INC-019
 - `multiple-heads`：MEM-INC-018
 - `n-plus-1`：MEM-INC-024
-- `naive-datetime`：MEM-INC-022
+- `naive-datetime`：MEM-INC-022, MEM-INC-029
 - `nanosecond`：MEM-INC-008
 - `nosemgrep`：MEM-SOP-004
 - `off-by-n`：MEM-INC-010
 - `openapi`：MEM-INC-015, MEM-INC-017
 - `optimistic-lock`：MEM-INC-011
-- `outbox`：MEM-CHG-001, MEM-INC-001, MEM-INC-003
+- `outbound`：MEM-INC-028
+- `outbox`：MEM-CHG-001, MEM-INC-001, MEM-INC-003, MEM-INC-027
 - `pagination`：MEM-INC-007
 - `pairwise`：MEM-DEC-002
 - `parallel`：MEM-INC-009, MEM-SOP-002, MEM-SOP-003
@@ -229,6 +239,7 @@
 - `sbom`：MEM-INC-025
 - `schema`：MEM-DEC-002, MEM-INC-013
 - `schema-evolution`：MEM-INC-014
+- `seed-data`：MEM-INC-029
 - `semgrep`：MEM-SOP-004
 - `serialization`：MEM-INC-014, MEM-INC-021
 - `session`：MEM-INC-006
@@ -243,8 +254,8 @@
 - `sql-injection`：MEM-SOP-004
 - `sqlalchemy`：MEM-INC-013, MEM-INC-019, MEM-INC-026
 - `sqlalchemy-events`：MEM-INC-024
-- `sqlite`：MEM-INC-013, MEM-INC-018, MEM-INC-020, MEM-INC-022
-- `ssrf`：MEM-SOP-004
+- `sqlite`：MEM-INC-013, MEM-INC-018, MEM-INC-020, MEM-INC-022, MEM-INC-029
+- `ssrf`：MEM-INC-028, MEM-SOP-004
 - `stage`：MEM-INC-012
 - `status`：MEM-INC-003, MEM-REQ-001
 - `stream-extraction`：MEM-INC-012
@@ -262,10 +273,11 @@
 - `type-coercion`：MEM-INC-021
 - `unique-constraint`：MEM-INC-023
 - `unique-index`：MEM-INC-001
+- `url-guard`：MEM-INC-028
 - `v1.1`：MEM-INC-014
 - `version-bump`：MEM-INC-015, MEM-SOP-002
 - `version-conflict`：MEM-INC-011
-- `webhook`：MEM-INC-023
+- `webhook`：MEM-INC-023, MEM-INC-027, MEM-INC-029
 - `worker`：MEM-INC-001
 - `worktree`：MEM-INC-009, MEM-SOP-002
 - `write-amplification`：MEM-INC-023

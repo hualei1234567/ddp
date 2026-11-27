@@ -1,0 +1,36 @@
+{
+  "plan": {
+    "dsn": "localhost:55432/ddp",
+    "receiver": "127.0.0.1:<随机端口>（标准库 HTTP 服务）",
+    "event_type": "annotation.submission.status_changed",
+    "cleanup": "演练结束删除订阅/待投递记录/演练项目与用户"
+  },
+  "delivery_result": "delivered",
+  "receiver_url": "http://127.0.0.1:55942/ddp-webhook",
+  "received_count": 1,
+  "received": [
+    {
+      "path": "/ddp-webhook",
+      "headers": {
+        "host": "127.0.0.1:55942",
+        "user-agent": "python-httpx/0.28.1",
+        "content-length": "304",
+        "accept": "*/*",
+        "accept-encoding": "gzip, deflate, zstd",
+        "content-type": "application/json",
+        "x-ddp-signature": "sha256=f1cbdec0accede4b914a5d7b8d8fb94d38478b273f5227e45cbcd710cd722622",
+        "x-ddp-timestamp": "1795777620"
+      },
+      "body": "{\"data\": {\"submission_id\": \"2f9f3fcb-573f-4b40-90f3-ef23b04c2a1c\", \"to_status\": \"SUBMITTED\"}, \"event_id\": \"00765c3d-b49b-4780-ab5f-cf5c952ab12a\", \"event_type\": \"annotation.submission.status_changed\", \"occurred_at\": \"2026-11-27T11:07:00.769301+00:00\", \"project_id\": \"e2c87ac6-fca3-4a59-b486-37453f4da474\"}",
+      "signature_valid": true,
+      "received_at": "2026-11-27T11:07:00.813646+00:00"
+    }
+  ],
+  "outbox_row": {
+    "status": "DELIVERED",
+    "attempts": 0,
+    "delivered_at": "2026-11-27T11:07:00.778297+00:00"
+  },
+  "signature_all_valid": true,
+  "cleanup": "已删除演练订阅/待投递记录/项目/用户"
+}
