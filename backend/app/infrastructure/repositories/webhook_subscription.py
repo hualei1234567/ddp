@@ -119,6 +119,22 @@ class SqlWebhookSubscriptionRepository:
         self._session.delete(row)
         return True
 
+    def active_subscription_ids(self, project_id: UUID, event_type: str) -> tuple[UUID, ...]:
+        """登记阶段用：命中该事件类型的 ACTIVE 订阅 id（**不解密** secret）。
+
+        与 :meth:`active_for_event` 的区别：那一处是投递阶段，需要明文 secret
+        计算 HMAC 签名；这一处只是登记待投递记录，不需要签名，解密属于
+        多余的密钥暴露面。订阅被暂停（PAUSED）不参与登记——暂停的订阅
+        不该再收到新事件。
+        """
+        rows = self._session.scalars(
+            select(_Model).where(
+                _Model.project_id == project_id,
+                _Model.status == "ACTIVE",
+            )
+        ).all()
+        return tuple(row.id for row in rows if event_type in list(row.event_types or ()))
+
     def active_for_event(self, project_id: UUID, event_type: str) -> tuple[DeliveryTarget, ...]:
         """投递时查询：项目内 ACTIVE 且命中该事件类型的订阅，
         并**在内存内**解密出明文 secret 供签名使用。

@@ -38,6 +38,7 @@ from app.api.middleware.metrics import MetricsMiddleware
 from app.api.middleware.rate_limit import RateLimitMiddleware
 from app.api.middleware.request_id import RequestIdMiddleware
 from app.api.middleware.security_headers import SecurityHeadersMiddleware
+from app.api.middleware.telemetry import TelemetryMiddleware
 from app.api.observability import router as observability_router
 from app.api.v1.platform_response_models import HealthResponse
 from app.api.v1.router import api_router
@@ -45,6 +46,7 @@ from app.core.config import Settings, get_settings
 from app.core.errors import AppError, ValidationFailedError
 from app.core.logging import configure_logging
 from app.core.metrics import Metrics, build_metrics
+from app.core.telemetry import configure_telemetry
 from app.domain.annotation.errors import AnnotationDomainError
 from app.domain.audit.errors import AuditDomainError
 from app.domain.catalog.errors import CatalogDomainError
@@ -112,9 +114,13 @@ def _register_middleware(
     """注册中间件。
 
     Starlette 中后添加的中间件位于外层，因此按“内层 → 外层”顺序添加。
-    最终执行顺序：RequestId → SecurityHeaders → CORS → Metrics → RateLimit → 路由。
+    最终执行顺序：RequestId → SecurityHeaders → CORS → Metrics → Telemetry →
+    RateLimit → 路由。
     这样限流/预检响应同样带安全头与 request_id；Metrics 在限流外层，被限流拒绝的
     请求也计入统计。
+
+    Telemetry 与 Metrics 同层：两者都要在响应返回后读 ``scope["route"]`` 里的
+    路由模板（见 ``app/api/middleware/telemetry.py`` 的时机说明）。
     """
     if rate_limiter is not None:
         app.add_middleware(
@@ -122,6 +128,7 @@ def _register_middleware(
             settings=settings,
             limiter=rate_limiter,
         )
+    app.add_middleware(TelemetryMiddleware, metrics=metrics)
     app.add_middleware(MetricsMiddleware, metrics=metrics)
     app.add_middleware(
         CORSMiddleware,
@@ -147,6 +154,10 @@ def create_app() -> FastAPI:
     # fastapi 0.133 / starlette 1.10 移除了 ``add_event_handler``，改用 lifespan
     # 上下文管理器承载启动/关闭钩子（依赖升级导致的最小适配）。
     rate_limiter = build_rate_limiter(settings) if settings.rate_limit_enabled else None
+
+    # OpenTelemetry 追踪：默认关闭 ⇒ 不 import 任何 OTel 模块、不产生 span。
+    # 开启但未配 endpoint 时降级为不追踪并记 WARNING（见 app/core/telemetry.py）。
+    configure_telemetry(settings)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:

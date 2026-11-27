@@ -162,3 +162,77 @@ backend/.venv/bin/python scripts/perf/readonly_load.py \
 - 纯函数层单测：`backend/tests/unit/test_perf_readonly_core.py`
   （端点解析/红线/脱敏/汇总）。跑法：
   `cd backend && .venv/bin/python -m pytest tests/unit/test_perf_readonly_core.py -q`
+
+---
+
+## 9. 写路径端到端压测（`write_path_e2e.py`）
+
+`readonly_load.py` 测的是**读**路径；`write_path_probe.py` 测的是**事务骨架**
+（直接 INSERT 审计行 + outbox 行，绕过了 HTTP、鉴权与业务校验）。两者之间
+还有一段空白：**真实写接口**（如标注提交）的端到端容量——这一段由本脚本补上。
+
+### 与 `write_path_probe.py` 的差别
+
+| 维度 | `write_path_probe.py` | `write_path_e2e.py` |
+|---|---|---|
+| 写入方式 | 直接 `INSERT`（SQL） | 真实 HTTP `POST /api/v1/.../annotation-submissions` |
+| 鉴权 | 无 | 真实 HS256 Bearer JWT（复用 `tests/jwt_support.make_token`） |
+| 业务校验 | 无 | 走完整校验链（Schema / 分配 / 状态机） |
+| 附带写入 | 仅审计 + outbox | 审计 + outbox + 血缘 + 进度投影 + 幂等记录 |
+| 前置数据 | 项目 + 用户 | 完整：项目 / 用户 / Episode / Schema / 样本集 / 任务 / 批次 / 分配 / 标注员 |
+| 隔离方式 | 一次性临时库 | 一次性临时库（`ddp_perf_e2e_` 前缀） |
+
+### 用法
+
+```bash
+# 先看计划（默认 dry-run：不建库、不发请求）
+backend/.venv/bin/python scripts/perf/write_path_e2e.py \
+  --dsn postgresql+psycopg://ddp:ddp@localhost:55432/postgres
+
+# 真实执行
+backend/.venv/bin/python scripts/perf/write_path_e2e.py \
+  --dsn postgresql+psycopg://ddp:ddp@localhost:55432/postgres \
+  --execute --workers 1,4,16 --iterations 10 \
+  --out docs/testing/evidence/2026-11-27-write-path-e2e/result.json
+```
+
+### 安全护栏（硬编码，不可绕过）
+
+1. 只允许本机回环 PG（`ensure_safe_base_dsn`）；
+2. 临时库名必须带 `ddp_perf_e2e_` 前缀（`ensure_safe_perf_db_name`），
+   用完 `DROP DATABASE`；
+3. 默认 dry-run，必须显式 `--execute`；
+4. 不写主库——所有数据只落在临时库。
+
+### 关键口径
+
+- **每次迭代 = 2 次真实写请求**（建草稿 201 + 提交 200），因此 `requests_sent`
+  是请求数、TPS 是请求吞吐；
+- **工作位在压测前造好**：领域规则不允许同一分配反复建草稿，所以每个
+  「工作位」只够 1 次建草稿 + 1 次提交；
+- **限流在脚本内关闭**：否则写请求会被 IP 桶挡掉，测到的不是业务写容量；
+- **连接池参数取生产默认口径**（`pool_size=10` / `max_overflow=20`），
+  压测期间**不放宽**——放宽会把「打满」这个结论掩盖掉；
+- **连接峰值是 50ms 间隔的瞬时采样最大值**，尖峰可能被漏掉（README 里已注明）。
+
+### 实测结论（2026-11-27，生产 PG）
+
+| 并发 | 请求数 | TPS | p50 | p95 | p99 | 错误率 |
+|---|---|---|---|---|---|---|
+| 1 | 20 | 15.97 | 42.9ms | 104.3ms | 132.0ms | 0 |
+| 4 | 80 | 26.46 | 148.1ms | 256.0ms | 281.5ms | 0 |
+| 16 | 220 | 24.75 | 551.1ms | 1036.7ms | 1366.7ms | 0 |
+
+连接池红线：**安全**（峰值 17 条连接 / PG 上限 100，占用 26%，余量 74）。
+
+完整证据见 `docs/testing/evidence/2026-11-27-write-path-e2e/README.md`。
+
+### 测试
+
+`scripts/tests/test_write_path_e2e.py`（39 项）覆盖：dry-run 不建库、
+临时库名校验、非 loopback DSN 被拒、汇总口径、连接池红线判定。
+
+```bash
+PYTHONPATH="backend:data-platform" backend/.venv/bin/python \
+  -m pytest scripts/tests/test_write_path_e2e.py -q
+```

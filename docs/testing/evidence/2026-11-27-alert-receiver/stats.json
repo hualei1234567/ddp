@@ -1,0 +1,1 @@
+{"by_alertname": {"DdpApiDown": 3, "DdpBusinessMetricsMissing": 1, "DdpHoneypotPaused": 2, "DdpOutboxStale": 2}, "firing": 6, "resolved": 2, "total": 8, "unknown_status": 0}

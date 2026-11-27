@@ -13,6 +13,19 @@
   也不得吞掉后返回假成功；
 - 不做重试：Adapter 不可用时应让调用方立刻看到 503，而不是被隐藏成长尾等待。
   显式超时由配置注入（``DDP_*_ADAPTER_TIMEOUT_SECONDS``），不在此硬编码。
+
+## 出站追踪（默认关闭）
+
+追踪关闭时本层的额外成本为**零**：``app/core/telemetry.py`` 的
+``inject_headers()`` 在未启用时直接返回空 dict，本层因此不会往请求里塞任何
+header，出站请求与接入前逐字节一致。
+
+追踪开启时：出站请求开一个 client span，并把 W3C ``traceparent`` 注入请求头，
+使「API → Adapter」跨进程链路可串联。注入的是**追踪上下文**，不含业务数据，
+也不含任何凭据（``Authorization`` 等既有头不受影响）。
+
+**SSRF 守卫不受影响**：``ensure_safe_adapter_url`` 仍在两个网关里、出站前调用，
+本层不改动它，也不改动 ``follow_redirects=False`` 的既有语义。
 """
 
 from __future__ import annotations
@@ -22,6 +35,8 @@ from contextlib import contextmanager
 from functools import lru_cache
 
 import httpx
+
+from app.core.telemetry import client_span, inject_headers
 
 # 非 2xx 响应体只截取前若干字符带进错误消息：既够排障，又避免把上游整页
 # HTML/堆栈灌进 API 错误体（错误消息会进入领域错误摘要与审计记录）。
@@ -75,7 +90,19 @@ def _send(
     try:
         # 显式不跟随重定向：重定向目标是新的 URL，会绕过调用方对 endpoint 的
         # SSRF 校验（把请求引向内网或云元数据）。3xx 一律按非 2xx 处理为不可用。
-        response = client.request(method, target, json=payload, follow_redirects=False)
+        with client_span(method=method, url=url):
+            # **在 client span 内部**注入：这样带出去的 traceparent 指向这个
+            # client span，下游服务才是它的子节点（OTel 语义约定）。在 span 外
+            # 注入的话，带出去的是父 span 的上下文，下游就成了兄弟节点。
+            # 追踪关闭时这里是空 dict：不 import OTel、不加任何 header。
+            trace_headers = inject_headers()
+            response = client.request(
+                method,
+                target,
+                json=payload,
+                follow_redirects=False,
+                headers=trace_headers or None,
+            )
     except httpx.TimeoutException as exc:
         raise AdapterHttpFailure(f"{context} 超时：{url}（{type(exc).__name__}）") from exc
     except httpx.HTTPError as exc:

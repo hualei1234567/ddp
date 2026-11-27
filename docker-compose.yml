@@ -361,6 +361,42 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  webhook-outbound-worker:
+    # Webhook 出站投递 Worker（阶段 6）：拉取 webhook_outbox 待投递记录，
+    # 用订阅明文 secret 计算 HMAC 签名并真实 POST 给下游。
+    #
+    # 为什么是独立 profile 而不是 "app"：出站投递会把平台数据推到**外部**
+    # 地址，必须由部署方显式开启。开关放这里（不写进 .env）：`.env` 会被
+    # 所有服务加载，`DDP_WEBHOOK_OUTBOUND_ENABLED=true` 会让 api / 各 worker
+    # 一起读到"已开启"，而 api 侧还需要 `DDP_WEBHOOK_ENCRYPTION_KEY`——
+    # 缺密钥时启动自检会拒绝，**整个 stack 起不来**。
+    # 需要时显式：
+    #   docker compose --profile webhook up -d webhook-outbound-worker
+    profiles: ["webhook"]
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    container_name: ddp-webhook-outbound-worker
+    command: ["python", "-m", "app.workers.webhook_outbound"]
+    env_file: .env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://ddp:ddp@postgres:5432/ddp
+      # 只在这个容器里打开出站投递；见上方注释。
+      DDP_WEBHOOK_OUTBOUND_ENABLED: "true"
+      # 订阅明文 secret 的解密密钥。**必须**与创建订阅时用的密钥一致，
+      # 否则投递时解密失败（记录进死信，不会静默丢事件）。
+      # 正式环境必须由 Secret 注入覆盖，禁止沿用本地默认值。
+      DDP_WEBHOOK_ENCRYPTION_KEY: ${DDP_WEBHOOK_ENCRYPTION_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # **不依赖 migrate**：`migrate` 在 `app` profile 里，本服务在独立的
+      # `webhook` profile——跨 profile 的 depends_on 会让 compose 报
+      # "depends on undefined service"（实测）。迁移由 `app` profile 的
+      # `migrate` 服务负责；启动前请确认目标库已升到 head
+      # （`alembic current` 应输出 0086）。
+    restart: unless-stopped
+
   local-adapter:
     # 真实执行的本地训练/推理/评测 Adapter（CPU 参考实现）。
     # 它只负责「被 DDP 调用 + 回 HMAC 回调」；DDP 侧需通过
@@ -461,6 +497,43 @@ services:
       - ddp-amdata:/alertmanager
     ports:
       - "9193:9093"
+    # depends_on 用 service_started（**不**强制 service_healthy）。
+    #
+    # 理由：告警接收端挂掉**不应该**阻止 Alertmanager 启动。
+    # 若用 service_healthy，接收端一坏 → Alertmanager 一起不启动 →
+    # 「接收端坏了」这件事本身反而没人知道告警（告警链路自己瞎了）。
+    # 语义上更正确的是：Alertmanager 始终在跑，接收端恢复后自动接上；
+    # 接收端不可用期间告警会由 Alertmanager 重试/缓存，不丢。
+    depends_on:
+      - alert-receiver
+    restart: unless-stopped
+
+  # 告警真实接收端：Alertmanager webhook 的落地方。
+  # 把 webhook payload 落成 NDJSON 留证（可查询、可复核），修掉审计项
+  # 「告警未接真实 Alertmanager 实例」（原 receiver 指向永连不通的占位地址）。
+  # 实现只用 Python 标准库，镜像固定 digest，且不装任何 pip 包。
+  alert-receiver:
+    profiles: ["monitoring"]
+    build:
+      context: .
+      dockerfile: services/alert-receiver/Dockerfile
+    container_name: ddp-alert-receiver
+    environment:
+      ALERT_RECEIVER_DIR: /var/lib/ddp-alerts
+      ALERT_RECEIVER_PORT: "8080"
+    volumes:
+      # 命名卷：告警是「证据」，容器重建后仍要能查到历史。
+      - ddp-alertdata:/var/lib/ddp-alerts
+    ports:
+      # 宿主 9194（9190/9193 已被 prometheus / alertmanager 占用）。
+      # 仅供本地观察，生产不应把该端口暴露到公网。
+      - "9194:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
     restart: unless-stopped
 
 volumes:
@@ -469,3 +542,4 @@ volumes:
   ddp-backups:
   ddp-promdata:
   ddp-amdata:
+  ddp-alertdata:

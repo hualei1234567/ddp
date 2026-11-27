@@ -8,6 +8,19 @@ formatter 对日志参数做截断与敏感字段脱敏，防止 Token、密码�
 ``RequestIdMiddleware`` 按请求设置，取值等于 ``request_id``）。这样日志与
 响应头/错误体里的 ``X-Request-Id`` 可以直接对齐，业务代码不必逐处传参。
 
+``otel_trace_id``：**仅在 OpenTelemetry 追踪开启时出现**的分布式追踪 ID，
+与响应头 ``X-Trace-Id``、链路后端里的 span 同值。两者刻意不合并：
+
+- ``trace_id`` 是既有的请求关联 ID（= ``request_id``），它被写进审计记录与
+  outbox 事件的 ``request_id`` 字段，"请求 → 事件 → 审计"这条链依赖它的
+  稳定性，不能随追踪开关变化；
+- ``otel_trace_id`` 是 OTel 的链路 ID，只在追踪开启时有意义。
+
+若把两者合成一个字段，同一个键会在不同配置下表示不同的东西（口径漂移），
+也让审计里的 ``request_id`` 在开启追踪后不再等于请求的 ``request_id``。
+因此：追踪关闭时日志字段集合与接入前**完全一致**（不出现 ``otel_trace_id``），
+开启时多一个显式命名的字段。
+
 Worker 处理 outbox 事件时没有 HTTP 请求，本模块提供
 :func:`trace_from_event_payload` / :func:`bind_trace` 恢复来源请求的
 ``request_id``（事件 payload 中的 ``request_id`` 由生产侧原样带入）；
@@ -352,12 +365,27 @@ class JsonFormatter(logging.Formatter):
         if source is not None:
             # 只在 Worker 事件上下文输出；HTTP 请求日志保持既有字段不变。
             payload["trace_source"] = source
+        otel_trace_id = _otel_trace_id()
+        if otel_trace_id is not None:
+            # 追踪关闭时**不出现**这个键：日志字段集合与接入前完全一致。
+            payload["otel_trace_id"] = otel_trace_id
         if record.exc_info:
             payload["exc"] = _truncate(
                 redact_credentials(self.formatException(record.exc_info)),
                 _MAX_LOG_EXCEPTION_LENGTH,
             )
         return json.dumps(payload, ensure_ascii=False, default=str)
+
+
+def _otel_trace_id() -> str | None:
+    """当前 OTel trace id；追踪未启用或当前无 span 时为 ``None``。
+
+    这里**不能** import ``app.core.telemetry`` 到模块顶层：追踪关闭时
+    OTel 模块根本不该被 import（硬约束：零开销）。故走函数内延迟 import。
+    """
+    from app.core.telemetry import current_trace_id as otel_current_trace_id
+
+    return otel_current_trace_id()
 
 
 def configure_logging() -> None:

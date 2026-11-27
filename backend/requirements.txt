@@ -32,3 +32,29 @@ httpx==0.28.1
 # 纯 Python、无运行期传递依赖（aiohttp/twisted/django 仅 extras）；
 # 许可 Apache-2.0 AND BSD-2-Clause；版本固定到具体版本。
 prometheus-client==0.26.0
+# OpenTelemetry 分布式追踪（默认关闭，见 app/core/telemetry.py 与
+# docs/adr/0050-otel-distributed-tracing.md）。
+#
+# 依赖评估（用途 / 替代方案 / 版本固定 / 体积性能 / 许可 / 安全公告）：
+# - 用途：W3C traceparent 传播、服务端/客户端 span、OTLP 上报。替代方案：
+#   ① 自研 trace（要自己实现 ID 生成、采样、传播、上报、重试，等于重造一个
+#   事实标准且无生态兼容）；② 引入 opentelemetry-exporter-prometheus（只是把
+#   span 指标化，不能表达"跨服务调用链"，且与已有 prometheus-client 重叠）；
+#   ③ 维持现状（审计项"OTel 未接入"无法关闭）。结论：采用官方 OTel。
+# - 版本固定：全部钉到具体版本，禁止 latest。
+# - 体积/性能：opentelemetry-api/sdk 纯 Python；**exporter 为 lazy import**，
+#   追踪关闭时进程完全不 import 它们（实测 import 开销 api≈35ms、sdk≈30ms，
+#   若顶层 import 则每次启动都要付）。protobuf 为 proto 编解码所需。
+#   gRPC 传输会带入 grpcio（含编译扩展，约 40MB），HTTP 传输带入 requests。
+# - 许可：全部 Apache-2.0（与本仓库既有依赖同族，无 copyleft 传染）。
+# - 安全公告：pip-audit 对 requirements.lock 全量扫描 0 漏洞（含新增包）。
+#
+# 关于"第二套 HTTP 客户端"：exporter-otlp-proto-http 官方实现硬依赖 requests，
+# 但 requests **只被 exporter 用来上传 span**，不参与任何业务请求；本仓库的
+# 业务 HTTP 客户端仍然只有 httpx 一套（出站 Adapter 调用、Worker 下载全部
+# 走 httpx）。曾评估改用官方 urllib3 transport 规避 requests，但该选择只能
+# 走 exporter 的私有参数（``_transport=``），违反 CLAUDE.md「不依赖私有 API，
+# 升级会静默失效」，故不采用。
+opentelemetry-api==1.45.2
+opentelemetry-sdk==1.45.2
+opentelemetry-exporter-otlp==1.45.2

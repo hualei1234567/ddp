@@ -214,6 +214,30 @@ class Settings(BaseSettings):
     # 默认空串 = 未配置；开启出站投递时必须提供，否则启动校验拒绝。
     webhook_outbound_enabled: bool = False
     webhook_encryption_key: str = ""
+    # Webhook 投递的 SSRF 守卫本地例外，**默认 False**。
+    #
+    # 投递地址是**用户提供的外部输入**：不设例外时守卫会拒绝环回/私网/
+    # 链路本地/云元数据地址（见 ``infrastructure/adapter_url_guard.py``），
+    # 这对生产是正确的——平台不该被当成探测内网的跳板。
+    #
+    # 但本地联调/自测需要把事件投到本机接收服务（如 compose 里的接收端、
+    # 本地开发的下游）。此时必须显式置 true 才放行。开启后本机可被用作
+    # 访问内网与云元数据的跳板，**只能用于本地开发**，不得用于共享或
+    # 生产环境。
+    #
+    # 与训练/模型 Adapter 的开关分开而不共用：出站面不同，共用开关会让
+    # "为本地联调放开 Webhook"顺带放开训练网关，违反最小授权。
+    webhook_outbound_allow_private: bool = False
+    # Webhook 出站 Worker（阶段 6）：拉取待投递记录并真实发往下游。
+    #
+    # 默认全部关闭：出站投递会把平台数据推到**外部**地址，必须由部署方
+    # 显式开启并同时提供加密密钥，否则启动自检拒绝（fail-closed）。
+    webhook_outbound_poll_interval_seconds: float = Field(default=5.0, gt=0, le=300)
+    # 单条事件的最大投递尝试次数（含首次）。达上限进死信，不再自动投递。
+    webhook_outbound_max_attempts: int = Field(default=5, ge=1, le=100)
+    # 重试退避：第 1 次失败后等 base，之后指数翻倍，封顶 max。
+    webhook_outbound_retry_base_seconds: float = Field(default=5.0, gt=0, le=3600)
+    webhook_outbound_retry_max_seconds: float = Field(default=300.0, gt=0, le=86400)
 
     # Hugging Face 远端校验：仅当登记请求显式 verify_remote=true 时才调用。
     # token 为空表示匿名只读（公开数据集足够）；GATED 数据集需要配置只读 token。
@@ -424,6 +448,25 @@ class Settings(BaseSettings):
     # 键前缀，便于与其他 Redis 使用者隔离；不含项目数据，仅桶名与脱敏后的来源。
     rate_limit_redis_key_prefix: str = "ddp:rl"
 
+    # OpenTelemetry 分布式追踪（默认关闭，见 docs/adr/0050）。
+    #
+    # **默认关闭 = 零开销**：不开启时不 import 任何 opentelemetry 模块、不构造
+    # TracerProvider、不产生 span、响应不带 X-Trace-Id（见 app/core/telemetry.py）。
+    #
+    # 开了但没配 endpoint 会**降级为不追踪 + 启动 WARNING**，不拒绝启动：追踪是
+    # 可观测性依赖，不是业务正确性依赖，让一次监控配置错误变成全站不可用不划算
+    # （同源口径见 metrics_access_token 的处理）。endpoint 格式非法则由启动自检
+    # 拒绝（fail-closed）。
+    otel_enabled: bool = False
+    # 上报的服务名（OTel 的 service.name）。空串时用 "ddp"。
+    otel_service_name: str = ""
+    # OTLP collector 地址。空串 = 未接线（即使 otel_enabled=true 也降级为不追踪）。
+    otel_exporter_otlp_endpoint: str = ""
+    # OTLP 传输协议：grpc（4317）或 http（4318）。
+    otel_exporter_otlp_protocol: Literal["grpc", "http"] = "grpc"
+    # 采样比例（0~1）。1.0 = 全采样；低采样用于高流量环境控制成本。
+    otel_sample_ratio: float = Field(default=1.0, ge=0.0, le=1.0)
+
     # Prometheus 抓取端点（GET /metrics）的访问控制。抓取端是机器，不是用户：
     # 无法使用用户 JWT，因此用静态 Bearer 令牌 + 可选来源网段白名单。
     # 判定逻辑与失败关闭口径见 app/core/metrics_access.py。
@@ -475,7 +518,9 @@ class Settings(BaseSettings):
                 "webhook 出站已启用但未配置 DDP_WEBHOOK_ENCRYPTION_KEY（订阅明文加密密钥）"
             )
         problems.extend(self._metrics_access_config_problems())
+        problems.extend(self._telemetry_config_problems())
         problems.extend(self._security_headers_config_problems())
+        problems.extend(self._webhook_outbound_config_problems())
         problems.extend(self._validation_worker_config_problems())
         problems.extend(self._export_worker_config_problems())
         problems.extend(self._maintenance_worker_config_problems())
@@ -586,6 +631,21 @@ class Settings(BaseSettings):
             problems.append("DDP_RATE_LIMIT_REDIS_URL 端口必须在 1–65535 之间")
         return problems
 
+    def _webhook_outbound_config_problems(self) -> list[str]:
+        """出站投递配置自检。
+
+        出站投递会把平台数据推到**外部**地址，因此：
+        - 开启投递必须同时有加密密钥（否则订阅明文无法解密，Worker 必然失败）；
+        - 退避上限不得小于基准（否则「上限」形同虚设，实际按基准重试）。
+        """
+        problems: list[str] = []
+        if self.webhook_outbound_retry_max_seconds < self.webhook_outbound_retry_base_seconds:
+            problems.append(
+                "DDP_WEBHOOK_OUTBOUND_RETRY_MAX_SECONDS 不得小于 "
+                "DDP_WEBHOOK_OUTBOUND_RETRY_BASE_SECONDS"
+            )
+        return problems
+
     def _metrics_access_config_problems(self) -> list[str]:
         """``/metrics`` 访问控制配置自检。
 
@@ -612,6 +672,36 @@ class Settings(BaseSettings):
                 parse_source_networks([raw])
             except ValueError as exc:
                 problems.append(f"DDP_METRICS_ALLOWED_SOURCE_NETWORKS 非法：{exc}")
+        return problems
+
+    def _telemetry_config_problems(self) -> list[str]:
+        """OpenTelemetry 追踪配置自检。
+
+        **只校验"配错了"的配置，不校验"没配"**：endpoint 为空（未接线）时
+        追踪降级为不追踪并记 WARNING，不拒绝启动（理由见
+        ``app/core/telemetry.py`` 模块注释）。
+
+        endpoint 非空时必须是可直接使用的 http(s) 绝对地址——写错的地址会让
+        exporter 在后台线程里静默失败，属于"配了但没生效"的假象，必须拦下。
+        """
+        problems: list[str] = []
+        if not self.otel_enabled:
+            return problems
+        endpoint = self.otel_exporter_otlp_endpoint.strip()
+        if not endpoint:
+            # 未接线：降级路径，不算配置错误。
+            return problems
+        if endpoint != self.otel_exporter_otlp_endpoint:
+            problems.append("DDP_OTEL_EXPORTER_OTLP_ENDPOINT 不得包含首尾空白")
+        try:
+            parsed = urlsplit(endpoint)
+            if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                problems.append(
+                    "DDP_OTEL_EXPORTER_OTLP_ENDPOINT 必须是 http(s) 绝对地址，"
+                    f"当前为 {endpoint!r}"
+                )
+        except ValueError:
+            problems.append(f"DDP_OTEL_EXPORTER_OTLP_ENDPOINT 无法解析：{endpoint!r}")
         return problems
 
     def _security_headers_config_problems(self) -> list[str]:

@@ -144,7 +144,37 @@
 `_EVENT_DOMAINS`；用量快照刷新是系统测量，不产生领域事件。
 
 
-### 3.3 R-13 收尾：其余域的动作事件静态化
+### 3.3 对外投递通道：`webhook_outbox`（阶段 6，与本表的分类正交）
+
+本表分类的是**平台内部**事件投递（`outbox_events.dispatch=true`，消费者是
+平台自己的 Worker）。阶段 6 引入的**对外** Webhook 投递是**另一条通道**，
+用独立的 `webhook_outbox` 表（迁移 0086），**不进入本表的分类体系**。
+
+为什么分表而不是复用 `outbox_events`：
+
+| 维度 | `outbox_events`（内部） | `webhook_outbox`（对外） |
+|---|---|---|
+| 消费者 | 平台自己的 Worker | 外部下游系统 |
+| 失败语义 | attempts 达上限 → `FAILED` 死信 | 连续失败达阈值 → 订阅自动 `PAUSED`；队列侧达上限 → `FAILED` |
+| 状态枚举 | `PENDING` / `PUBLISHED` / `FAILED` / `RECORDED` | `PENDING` / `DELIVERED` / `FAILED` |
+| 投递目标 | 内部处理逻辑 | 外部 HTTP 端点（带 HMAC 签名） |
+
+混在一张表里，Worker 抢占时必须靠 event_type 区分，任何漏写就会让外部
+事件被内部 Worker 捞走；且「订阅被熔断」会表现为一条普通内部死信，
+运营分不清是订阅问题还是积压问题。
+
+**登记点**：包装 outbox 仓储（`OutboundRegisteringOutbox`），业务事件写入
+`outbox_events` 的同时登记到 `webhook_outbox`。因此：
+
+- **对外投递的事件类型仍是本表里的留痕类**（例如
+  `annotation.submission.status_changed`）——它在平台内部是留痕类，
+  对外则由登记器按白名单单独判断是否推送；
+- 对外白名单的唯一权威是
+  `app/application/webhook/outbound.py` 的 `OUTBOUND_EVENT_TYPES`；
+- 本表的 `DISPATCH_EVENTS` 白名单**不变**（`scripts/check_outbox_events.py`
+  仍只校验内部投递类）。
+
+### 3.4 R-13 收尾：其余域的动作事件静态化
 
 设备域之外还有 20 处 `event_type=f"..."`（数据集 / 数据源 / 摄入 / modelops /
 供应商），同样拼出 AST 看不到的事件名。现已全部改为模块级映射表 +

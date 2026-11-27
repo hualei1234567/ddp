@@ -189,13 +189,25 @@ def test_postgres_concurrent_complete_is_202_or_409_never_503(pg_harness: _PgHar
     prepared = _create_and_upload(pg_harness)
     barrier = threading.Barrier(2)
 
-    def _send(key: str) -> Any:
-        client = make_client(
+    # 客户端必须**串行**构造好，再进线程。
+    #
+    # 之前把 make_client 放进线程里：两个线程并发调用 create_app() →
+    # pydantic 的模型构建不是线程安全的，会随机对某个 Field（实测出现过
+    # project_id / supplier_id）发出 UnsupportedFieldAttributeWarning；
+    # 本仓库 filterwarnings=error 把它放大成异常，线程在 barrier 前死掉，
+    # 另一个线程于是 BrokenBarrierError——CI 上偶发红、本地难复现。
+    # 被测对象是「并发 complete」，不是「并发建 app」。
+    clients = [
+        make_client(
             pg_harness.factory,
             pg_harness.ids.editor_a,
             object_storage=pg_harness.fake,
             settings_override=pg_harness.settings,
         )
+        for _ in range(2)
+    ]
+
+    def _send(client: Any, key: str) -> Any:
         barrier.wait(timeout=10)
         return client.post(
             f"/api/v1/projects/{prepared['project']}/upload-sessions/"
@@ -208,8 +220,8 @@ def test_postgres_concurrent_complete_is_202_or_409_never_503(pg_harness: _PgHar
         )
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        first = executor.submit(_send, "pg-complete-key-0001")
-        second = executor.submit(_send, "pg-complete-key-0002")
+        first = executor.submit(_send, clients[0], "pg-complete-key-0001")
+        second = executor.submit(_send, clients[1], "pg-complete-key-0002")
         responses = [first.result(timeout=30), second.result(timeout=30)]
 
     statuses = sorted(response.status_code for response in responses)
