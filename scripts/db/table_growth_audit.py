@@ -99,7 +99,6 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
@@ -562,6 +561,12 @@ def audit(
     burst_multiplier: float = DEFAULT_BURST_MULTIPLIER,
 ) -> dict:
     """执行只读审计，返回结构化报告（全部为 SELECT 查询）。"""
+    # 惰性导入 sqlalchemy：本模块的**纯函数层**（阈值判定、SQL 断言、脱敏）
+    # 不需要数据库驱动，CI 的 security job 只装 pytest/pip-audit/pyyaml。
+    # 顶层 import 会让 `pytest scripts/tests` 在没装 sqlalchemy 的环境里
+    # 直接 ImportError（实测 CI 因此红）。
+    from sqlalchemy import create_engine, text
+
     engine = create_engine(dsn)
     try:
         with engine.connect() as conn:

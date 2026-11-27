@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 39 张卡片**：DRAFT 0 / ACTIVE 39 / SUPERSEDED 0 / DEPRECATED 0
+**总计 40 张卡片**：DRAFT 0 / ACTIVE 40 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 39 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 40 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -32,7 +32,7 @@
 | [MEM-SOP-003](sop/MEM-SOP-003-subagent-parallel-collaboration.md) | 子代理并行开发协作模式：迁移号独占 + 契约策略 + 禁改共享文件 + 坑点统一入库 + check.sh 全局串行 | ACTIVE | 1 | `check-lock`, `contract-strategy`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `subagent` |
 | [MEM-SOP-004](sop/MEM-SOP-004-semgrep-sast-suppression.md) | Semgrep SAST 接入与误报基线的正确姿势 | ACTIVE | 1 | `baseline`, `ci`, `false-positive`, `nosemgrep`, `sast`, `semgrep`, `sql-injection`, `ssrf` |
 
-## INC · 事故与缺陷复盘（29）
+## INC · 事故与缺陷复盘（30）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -65,6 +65,7 @@
 | [MEM-INC-027](incidents/MEM-INC-027-webhook-outbound-wiring-and-ssrf.md) | 「有能力无接线」是比「缺能力」更隐蔽的缺口——Webhook 投递用例曾无任何生产调用点 | ACTIVE | 1 | `audit-gap`, `capability-wiring`, `dead-code`, `idempotency`, `outbox`, `webhook` |
 | [MEM-INC-028](incidents/MEM-INC-028-webhook-ssrf-guard-local-exception.md) | 出站 URL 守卫默认拒绝回环地址——本地联调必须走独立开关，不能削弱守卫 | ACTIVE | 1 | `least-privilege`, `local-dev-exception`, `outbound`, `ssrf`, `url-guard` |
 | [MEM-INC-029](incidents/MEM-INC-029-http-header-case-and-sqlite-naive-datetime.md) | 断言 Webhook 投递时踩到的两个隐性事实：HTTP 头名大小写不敏感、SQLite 读回 datetime 无时区 | ACTIVE | 1 | `e2e-test`, `http-header-case`, `naive-datetime`, `seed-data`, `sqlite`, `webhook` |
+| [MEM-INC-030](incidents/MEM-INC-030-ci-security-job-minimal-deps.md) | CI 的 security job 只装 pytest/pip-audit/pyyaml——`scripts/` 下测试文件不得顶层 import 数据库驱动 | ACTIVE | 1 | `ci-environment`, `lazy-import`, `local-green-vs-ci-green`, `minimal-deps`, `scripts-tests` |
 
 ## CHG · 变更记录（1）
 
@@ -133,6 +134,7 @@
 - `check-lock`：MEM-SOP-002, MEM-SOP-003
 - `chunked-read`：MEM-INC-010
 - `ci`：MEM-INC-005, MEM-INC-025, MEM-SOP-004
+- `ci-environment`：MEM-INC-030
 - `ci-gate`：MEM-INC-016
 - `claim-boundary`：MEM-REQ-001
 - `column-name`：MEM-INC-002
@@ -181,12 +183,14 @@
 - `json-label`：MEM-DEC-002
 - `json-schema`：MEM-INC-014
 - `jsonb`：MEM-INC-021
+- `lazy-import`：MEM-INC-030
 - `least-privilege`：MEM-INC-028
 - `lerobot`：MEM-REQ-001
 - `level`：MEM-DEC-001
 - `limit`：MEM-INC-007
 - `lineage`：MEM-INC-006, MEM-INC-007
 - `local-dev-exception`：MEM-INC-028
+- `local-green-vs-ci-green`：MEM-INC-030
 - `magic-number`：MEM-INC-005
 - `maintenance`：MEM-OPS-002
 - `mcap`：MEM-INC-004
@@ -195,6 +199,7 @@
 - `migration`：MEM-CHG-001, MEM-INC-003, MEM-INC-012, MEM-INC-013
 - `migration-chain`：MEM-INC-018
 - `migration-number`：MEM-SOP-002, MEM-SOP-003
+- `minimal-deps`：MEM-INC-030
 - `minio`：MEM-INC-009, MEM-OPS-001
 - `model-naming`：MEM-INC-019
 - `multiple-heads`：MEM-INC-018
@@ -248,6 +253,7 @@
 - `sbom`：MEM-INC-025
 - `schema`：MEM-DEC-002, MEM-INC-013
 - `schema-evolution`：MEM-INC-014
+- `scripts-tests`：MEM-INC-030
 - `seed-data`：MEM-INC-029
 - `semgrep`：MEM-SOP-004
 - `serialization`：MEM-INC-014, MEM-INC-021
