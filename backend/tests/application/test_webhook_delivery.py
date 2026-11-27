@@ -44,7 +44,7 @@ def _subscription(
         event_types=("annotation.completed",),
         status=status,
         consecutive_failures=failures,
-        secret_plain="test-secret-plain",
+        secret_plain="example-signing-secret",
     )
 
 
@@ -63,7 +63,7 @@ def test_successful_delivery_records_success_and_resets_count() -> None:
             self.saved: list[WebhookSubscription] = []
 
         def active_for_event(self, project_id, event_type):
-            return (DeliveryTarget(subscription=subscription, secret="test-secret-plain"),)
+            return (DeliveryTarget(subscription=subscription, secret="example-signing-secret"),)
 
         def replace_state(self, subscription_id, updated):
             self.saved.append(updated)
@@ -100,7 +100,7 @@ def test_repeated_failures_pause_the_subscription() -> None:
         def active_for_event(self, project_id, event_type):
             # 每次投递用当前状态（模拟真实循环）
             current = self.saved[-1] if self.saved else subscription
-            return (DeliveryTarget(subscription=current, secret="test-secret-plain"),)
+            return (DeliveryTarget(subscription=current, secret="example-signing-secret"),)
 
         def replace_state(self, subscription_id, updated):
             self.saved.append(updated)
@@ -123,7 +123,6 @@ def test_repeated_failures_pause_the_subscription() -> None:
 
 
 def test_paused_subscription_is_not_delivered() -> None:
-
     fake = FakeTransport([200])
     paused = _subscription(status=WebhookSubscriptionStatus.PAUSED)
 
@@ -150,7 +149,6 @@ def test_paused_subscription_is_not_delivered() -> None:
 
 
 def test_unmatched_event_type_delivers_nothing() -> None:
-
     fake = FakeTransport([200])
     subscription = _subscription()
 

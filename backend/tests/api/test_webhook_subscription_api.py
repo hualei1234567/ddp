@@ -33,7 +33,7 @@ def _url(project_id: UUID) -> str:
 def _payload(**overrides: object) -> dict[str, object]:
     payload: dict[str, object] = {
         "url": "https://hook.example.com/notify",
-        "secret": "a-super-secret-value",
+        "secret": "example-signing-secret",
         "event_types": ["annotation.completed", "annotation.honeypot.paused"],
     }
     payload.update(overrides)
@@ -53,7 +53,7 @@ def test_owner_creates_lists_and_deletes(
     assert body["status"] == "ACTIVE"
     assert body["consecutive_failures"] == 0
     # secret 明文只在创建响应里出现一次
-    assert body["secret"] == "a-super-secret-value"
+    assert body["secret"] == "example-signing-secret"
 
     listed = owner.get(_url(ids.project_a))
     assert listed.status_code == 200
@@ -77,7 +77,7 @@ def test_duplicate_url_returns_409(
     owner = _client(factory, ids.owner_a)
 
     assert owner.post(_url(ids.project_a), json=_payload()).status_code == 201
-    again = owner.post(_url(ids.project_a), json=_payload(secret="another-secret"))
+    again = owner.post(_url(ids.project_a), json=_payload(secret="another-example-secret"))
     assert again.status_code == 409
 
 
