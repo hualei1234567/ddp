@@ -461,6 +461,43 @@ services:
       - ddp-amdata:/alertmanager
     ports:
       - "9193:9093"
+    # depends_on 用 service_started（**不**强制 service_healthy）。
+    #
+    # 理由：告警接收端挂掉**不应该**阻止 Alertmanager 启动。
+    # 若用 service_healthy，接收端一坏 → Alertmanager 一起不启动 →
+    # 「接收端坏了」这件事本身反而没人知道告警（告警链路自己瞎了）。
+    # 语义上更正确的是：Alertmanager 始终在跑，接收端恢复后自动接上；
+    # 接收端不可用期间告警会由 Alertmanager 重试/缓存，不丢。
+    depends_on:
+      - alert-receiver
+    restart: unless-stopped
+
+  # 告警真实接收端：Alertmanager webhook 的落地方。
+  # 把 webhook payload 落成 NDJSON 留证（可查询、可复核），修掉审计项
+  # 「告警未接真实 Alertmanager 实例」（原 receiver 指向永连不通的占位地址）。
+  # 实现只用 Python 标准库，镜像固定 digest，且不装任何 pip 包。
+  alert-receiver:
+    profiles: ["monitoring"]
+    build:
+      context: .
+      dockerfile: services/alert-receiver/Dockerfile
+    container_name: ddp-alert-receiver
+    environment:
+      ALERT_RECEIVER_DIR: /var/lib/ddp-alerts
+      ALERT_RECEIVER_PORT: "8080"
+    volumes:
+      # 命名卷：告警是「证据」，容器重建后仍要能查到历史。
+      - ddp-alertdata:/var/lib/ddp-alerts
+    ports:
+      # 宿主 9194（9190/9193 已被 prometheus / alertmanager 占用）。
+      # 仅供本地观察，生产不应把该端口暴露到公网。
+      - "9194:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
     restart: unless-stopped
 
 volumes:
@@ -469,3 +506,4 @@ volumes:
   ddp-backups:
   ddp-promdata:
   ddp-amdata:
+  ddp-alertdata:

@@ -1,8 +1,42 @@
-# Alertmanager 最小可用配置（阶段 4 / 审计 R2）
+# Alertmanager 路由与接收端配置
 #
-# 当前为「本地可见」模式：所有告警写入 webhook 接收器（compose 里由
-# prometheus 侧的 --web.enable-lifecycle 与 UI 观察）。生产部署时应改为
-# 真实接收端（飞书/邮件/钉钉），只需替换 receivers 段。
+# 【本批变更】把 webhook receiver 从**占位地址** `http://127.0.0.1:9/ddp-alerts`
+# 改为指向**真实接收端服务** `alert-receiver:8080/alerts`
+# （compose 服务名，见 docker-compose.yml 的 `monitoring` profile）。
+#
+# 占位地址永远连不通——它让「配置看起来接好了」与「告警真的发得出去」之间
+# 存在缺口。审计项「告警未接真实 Alertmanager 实例」即指此。
+#
+# ── 生产接入真实下游（飞书 / 邮件 / 钉钉）────────────────────────────────
+# Alertmanager **不支持环境变量插值**，URL 只能写死在配置里。生产部署时
+# 只需替换下面的 `receivers:` 段即可，其余（route / inhibit_rules）不必动：
+#
+#   receivers:
+#     - name: default-webhook
+#       webhook_configs:
+#         - url: https://open.feishu.cn/open-apis/bot/v2/hook/<你的机器人Webhook>
+#           send_resolved: true
+#
+# 或改用内置集成（飞书没有内置集成，用通用 webhook；邮件用 email_configs）：
+#
+#   receivers:
+#     - name: default-webhook
+#       email_configs:
+#         - to: 'oncall@example.com'
+#           send_resolved: true
+#
+# 若下游 URL 属于**凭据**（飞书机器人 URL 即是），不要提交进仓库：
+# 用 `url_file` 指向一个挂载进来的文件（compose 里挂 secret 文件）。
+# ────────────────────────────────────────────────────────────────────────
+#
+# 为什么保留一个「无 webhook」的接收端（default-log）：
+#   它是一个**空接收端**——没有 webhook_configs，告警不会外发，
+#   但 Alertmanager 自身的分组、路由、静默、抑制逻辑照常工作，
+#   告警分组仍可在 Alertmanager UI / 日志中查看。
+#   用途：接收端不可用、或需要临时「只看不发」时，把 route 的 receiver
+#   改成 default-log 即可**不影响 Alertmanager 自身启动**。
+#   反面例子是「配置一个连不通的 URL」——那会让 Alertmanager 反复重试失败，
+#   看起来接好了其实什么都没发生。
 #
 # 分组策略：按 alertname 聚合，4h 内重复只发一次摘要，避免风暴。
 
@@ -29,13 +63,16 @@ route:
       repeat_interval: 24h
 
 receivers:
+  # 真实接收端：compose 服务名（同一网络内的 DNS 名）。
+  # 接收端把 webhook payload 落成 NDJSON 留证，并提供 /alerts 与 /stats 查询。
   - name: default-webhook
     webhook_configs:
-      # 占位接收端：compose 里的 alertmanager 自身不带接收服务。
-      # 生产替换为真实 URL；本地不配置时 Alertmanager 会记录告警到 UI/日志，
-      # 足以验证「规则能触发」这一事实（审计 R2 的核心验收点）。
-      - url: http://127.0.0.1:9/ddp-alerts
+      - url: http://alert-receiver:8080/alerts
         send_resolved: true
+
+  # 空接收端：不外发，仅由 Alertmanager 自身记录。
+  # 用途见文件头注释（人工切换的兜底目标）。
+  - name: default-log
 
 inhibit_rules:
   # API 整体挂了就不再逐条报依赖异常，直接看 DdpApiDown
