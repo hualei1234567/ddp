@@ -35,6 +35,10 @@ from app.domain.webhook.subscription import (
     build_signature_headers,
     next_state_after,
 )
+from app.infrastructure.adapter_url_guard import (
+    AdapterHttpFailure,
+    ensure_safe_adapter_url,
+)
 from app.infrastructure.repositories.webhook_subscription import (
     SqlWebhookSubscriptionRepository,
 )
@@ -127,6 +131,10 @@ class WebhookDeliveryUseCases:
                         target.subscription, success=True, now=moment
                     )
                 last_error = f"下游返回 {status}"
+            except AdapterHttpFailure as exc:
+                # URL 守卫拒绝：地址本身不安全，重试无意义——但仍计失败，
+                # 让连续失败达阈值后自动 PAUSED，避免反复打扰非法地址。
+                last_error = f"URL 守卫拒绝：{exc}"
             except Exception as exc:  # noqa: BLE001 - 投递异常必须计入失败计数
                 last_error = f"{type(exc).__name__}: {exc}"
             if attempt < MAX_ATTEMPTS_PER_EVENT:
@@ -142,8 +150,20 @@ class WebhookDeliveryUseCases:
 
     @staticmethod
     def _httpx_post(url: str, headers: dict[str, str], body: bytes) -> int:
-        """默认传输：httpx POST，超时 5s。"""
-        with httpx.Client(timeout=DELIVERY_TIMEOUT_SECONDS) as client:
+        """默认传输：httpx POST，超时 5s。
+
+        出站前必须过 URL 守卫（SSRF 防护）：订阅地址是**用户提供的外部输入**，
+        直连等于把平台变成任意地址的探测器。守卫只允许 http/https、
+        拒绝内嵌凭据，并按 DNS 解析结果拦截私网/保留地址。
+
+        ``follow_redirects=False``：重定向目标从未经校验——跟随会把"校验过的
+        首跳"变成"任意目标"，直接绕过守卫。
+        """
+        ensure_safe_adapter_url(url, context="Webhook 投递")
+        with httpx.Client(
+            timeout=DELIVERY_TIMEOUT_SECONDS,
+            follow_redirects=False,
+        ) as client:
             response = client.post(url, content=body, headers=headers)
             return response.status_code
 
