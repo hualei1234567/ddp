@@ -236,6 +236,22 @@ parameters:
       minLength: 1
       maxLength: 64
 
+  BaselineVersionId:
+    name: baseline_version_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+
+  CandidateVersionId:
+    name: candidate_version_id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+
   SubscriptionId:
     name: subscription_id
     in: path
