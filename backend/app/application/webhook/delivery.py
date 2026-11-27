@@ -65,10 +65,14 @@ class WebhookDeliveryUseCases:
         subscriptions: SqlWebhookSubscriptionRepository,
         *,
         transport: Callable[[str, dict[str, str], bytes], int] | None = None,
+        allow_private: bool = False,
     ) -> None:
         self._subscriptions = subscriptions
         # transport 可注入（测试用假函数）；生产默认 httpx
         self._transport = transport or self._httpx_post
+        # SSRF 守卫的本地例外（默认 False）。**只在默认传输路径**生效：
+        # 注入的 transport 不做地址校验（那是调用方自己的责任）。
+        self._allow_private = allow_private
 
     def deliver_event(
         self,
@@ -148,8 +152,7 @@ class WebhookDeliveryUseCases:
         )
         return "paused" if final.action == "paused" else "failed", final
 
-    @staticmethod
-    def _httpx_post(url: str, headers: dict[str, str], body: bytes) -> int:
+    def _httpx_post(self, url: str, headers: dict[str, str], body: bytes) -> int:
         """默认传输：httpx POST，超时 5s。
 
         出站前必须过 URL 守卫（SSRF 防护）：订阅地址是**用户提供的外部输入**，
@@ -158,8 +161,16 @@ class WebhookDeliveryUseCases:
 
         ``follow_redirects=False``：重定向目标从未经校验——跟随会把"校验过的
         首跳"变成"任意目标"，直接绕过守卫。
+
+        ``allow_private=True`` 时跳过地址筛查（**仅本地开发**）：本地联调要把
+        事件投到本机接收服务，而守卫默认拒绝环回地址。风险与训练/模型
+        Adapter 的同名开关一致——开启后本机可被用作访问内网的跳板。
         """
-        ensure_safe_adapter_url(url, context="Webhook 投递")
+        ensure_safe_adapter_url(
+            url,
+            context="Webhook 投递",
+            allow_private=self._allow_private,
+        )
         with httpx.Client(
             timeout=DELIVERY_TIMEOUT_SECONDS,
             follow_redirects=False,

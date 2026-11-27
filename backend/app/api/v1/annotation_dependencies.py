@@ -33,6 +33,7 @@ from app.application.annotation.semantic_dedup import SemanticDedupUseCases
 from app.application.annotation.skill_profiles import SkillProfileUseCases
 from app.application.annotation.submissions import AnnotationSubmissionUseCases
 from app.application.annotation.tasks import AnnotationTaskUseCases
+from app.application.webhook.outbound import OutboundRegistrar
 from app.application.webhook.subscriptions import WebhookSubscriptionUseCases
 from app.core.config import Settings, get_settings
 from app.infrastructure.repositories.annotation_ai_suggestions import (
@@ -78,6 +79,10 @@ from app.infrastructure.repositories.annotation_tasks import SqlAnnotationTaskRe
 from app.infrastructure.repositories.annotation_token_usage import SqlTokenUsageRecorder
 from app.infrastructure.repositories.lineage import SqlLineageRepository
 from app.infrastructure.repositories.semantic_dedup import SqlSemanticDedupRepository
+from app.infrastructure.repositories.webhook_outbound_wiring import (
+    OutboundRegisteringOutbox,
+)
+from app.infrastructure.repositories.webhook_outbox import SqlWebhookOutboxRepository
 from app.infrastructure.repositories.webhook_subscription import SqlWebhookSubscriptionRepository
 
 
@@ -136,7 +141,20 @@ def get_annotation_use_cases(
     ai_suggestions_repo = SqlAnnotationAiSuggestionRepository(session)
     prm_annotations_repo = SqlPrmAnnotationRepository(session)
     audit = SqlAnnotationAuditRepository(session)
-    outbox = SqlAnnotationOutboxRepository(session)
+    _outbox_writer = SqlAnnotationOutboxRepository(session)
+    # 订阅仓储装配一次，供订阅 CRUD 与对外登记共用。
+    webhook_subscriptions_repo = SqlWebhookSubscriptionRepository(
+        session, encryption_key=_webhook_key(settings)
+    )
+    # 对外 Webhook 登记（阶段 6）：包装 outbox 仓储，把「业务事件 → 待投递」
+    # 收敛到唯一写入点（record_change → outbox.enqueue）。
+    # 开关关闭时登记器是 no-op，**不产生任何数据库写入**，行为与旧版完全一致。
+    outbound_registrar = OutboundRegistrar(
+        webhook_subscriptions_repo,
+        SqlWebhookOutboxRepository(session),
+        enabled=settings.webhook_outbound_enabled,
+    )
+    outbox = OutboundRegisteringOutbox(_outbox_writer, outbound_registrar)
     idempotency = SqlAnnotationIdempotencyRepository(session)
     episodes = SqlEpisodeDirectory(session)
     members = SqlMemberDirectory(session)
@@ -347,7 +365,7 @@ def get_annotation_use_cases(
             session,
         ),
         webhook_subscriptions=WebhookSubscriptionUseCases(
-            SqlWebhookSubscriptionRepository(session, encryption_key=_webhook_key(settings)),
+            webhook_subscriptions_repo,
             session,
         ),
         semantic_dedup=SemanticDedupUseCases(SqlSemanticDedupRepository(session)),

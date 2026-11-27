@@ -214,6 +214,30 @@ class Settings(BaseSettings):
     # 默认空串 = 未配置；开启出站投递时必须提供，否则启动校验拒绝。
     webhook_outbound_enabled: bool = False
     webhook_encryption_key: str = ""
+    # Webhook 投递的 SSRF 守卫本地例外，**默认 False**。
+    #
+    # 投递地址是**用户提供的外部输入**：不设例外时守卫会拒绝环回/私网/
+    # 链路本地/云元数据地址（见 ``infrastructure/adapter_url_guard.py``），
+    # 这对生产是正确的——平台不该被当成探测内网的跳板。
+    #
+    # 但本地联调/自测需要把事件投到本机接收服务（如 compose 里的接收端、
+    # 本地开发的下游）。此时必须显式置 true 才放行。开启后本机可被用作
+    # 访问内网与云元数据的跳板，**只能用于本地开发**，不得用于共享或
+    # 生产环境。
+    #
+    # 与训练/模型 Adapter 的开关分开而不共用：出站面不同，共用开关会让
+    # "为本地联调放开 Webhook"顺带放开训练网关，违反最小授权。
+    webhook_outbound_allow_private: bool = False
+    # Webhook 出站 Worker（阶段 6）：拉取待投递记录并真实发往下游。
+    #
+    # 默认全部关闭：出站投递会把平台数据推到**外部**地址，必须由部署方
+    # 显式开启并同时提供加密密钥，否则启动自检拒绝（fail-closed）。
+    webhook_outbound_poll_interval_seconds: float = Field(default=5.0, gt=0, le=300)
+    # 单条事件的最大投递尝试次数（含首次）。达上限进死信，不再自动投递。
+    webhook_outbound_max_attempts: int = Field(default=5, ge=1, le=100)
+    # 重试退避：第 1 次失败后等 base，之后指数翻倍，封顶 max。
+    webhook_outbound_retry_base_seconds: float = Field(default=5.0, gt=0, le=3600)
+    webhook_outbound_retry_max_seconds: float = Field(default=300.0, gt=0, le=86400)
 
     # Hugging Face 远端校验：仅当登记请求显式 verify_remote=true 时才调用。
     # token 为空表示匿名只读（公开数据集足够）；GATED 数据集需要配置只读 token。
@@ -496,6 +520,7 @@ class Settings(BaseSettings):
         problems.extend(self._metrics_access_config_problems())
         problems.extend(self._telemetry_config_problems())
         problems.extend(self._security_headers_config_problems())
+        problems.extend(self._webhook_outbound_config_problems())
         problems.extend(self._validation_worker_config_problems())
         problems.extend(self._export_worker_config_problems())
         problems.extend(self._maintenance_worker_config_problems())
@@ -604,6 +629,21 @@ class Settings(BaseSettings):
             problems.append("DDP_RATE_LIMIT_REDIS_URL 缺少主机名")
         if port is not None and not (0 < port < 65_536):
             problems.append("DDP_RATE_LIMIT_REDIS_URL 端口必须在 1–65535 之间")
+        return problems
+
+    def _webhook_outbound_config_problems(self) -> list[str]:
+        """出站投递配置自检。
+
+        出站投递会把平台数据推到**外部**地址，因此：
+        - 开启投递必须同时有加密密钥（否则订阅明文无法解密，Worker 必然失败）；
+        - 退避上限不得小于基准（否则「上限」形同虚设，实际按基准重试）。
+        """
+        problems: list[str] = []
+        if self.webhook_outbound_retry_max_seconds < self.webhook_outbound_retry_base_seconds:
+            problems.append(
+                "DDP_WEBHOOK_OUTBOUND_RETRY_MAX_SECONDS 不得小于 "
+                "DDP_WEBHOOK_OUTBOUND_RETRY_BASE_SECONDS"
+            )
         return problems
 
     def _metrics_access_config_problems(self) -> list[str]:

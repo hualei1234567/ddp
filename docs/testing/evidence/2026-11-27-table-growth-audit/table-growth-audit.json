@@ -1,0 +1,5920 @@
+{
+  "target": "postgresql+psycopg://ddp:***@localhost:55432/ddp",
+  "readonly": true,
+  "retention_days": 30,
+  "thresholds": {
+    "partition_trigger_rows": 50000000,
+    "partition_trigger_bytes": 53687091200,
+    "archive_trigger_rows": 10000000,
+    "growth_review_trigger_rows": 1000000,
+    "large_table_candidate_rows": 100000,
+    "stats_drift_ratio": 10.0,
+    "burst_multiplier": 10.0
+  },
+  "statistics_reset": null,
+  "totals": {
+    "table_count": 103,
+    "non_empty_tables": 93,
+    "total_rows": 37003,
+    "total_bytes": 32251904,
+    "stats_untrustworthy_tables": 83
+  },
+  "verdict_counts": {
+    "no_partition_needed": 103
+  },
+  "top_by_size": [
+    {
+      "table": "outbox_events",
+      "rows": 12518,
+      "table_bytes": 4489216,
+      "index_bytes": 2531328,
+      "total_bytes": 7020544,
+      "n_live_tup": 35,
+      "n_dead_tup": 62,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3606,
+      "bloat_ratio": 0.005,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 28,
+        "2026-11-15": 857,
+        "2026-11-16": 21,
+        "2026-11-17": 7968,
+        "2026-11-18": 3375,
+        "2026-11-21": 234,
+        "2026-11-23": 18,
+        "2026-11-24": 1,
+        "2026-11-25": 14,
+        "2026-11-26": 2
+      },
+      "growth": {
+        "baseline_per_day": 45.429,
+        "organic_days": 7,
+        "burst_days": 3,
+        "burst_rows": 12200,
+        "burst_threshold": 245.0,
+        "median_daily": 24.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "outbox_events",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 12,518 与体积 7,020,544 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,363 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 12518,
+        "total_bytes": 7020544
+      }
+    },
+    {
+      "table": "audit_logs",
+      "rows": 12481,
+      "table_bytes": 3801088,
+      "index_bytes": 2850816,
+      "total_bytes": 6651904,
+      "n_live_tup": 39,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4286,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-14": 28,
+        "2026-11-15": 857,
+        "2026-11-16": 21,
+        "2026-11-17": 7894,
+        "2026-11-18": 3315,
+        "2026-11-21": 327,
+        "2026-11-23": 23,
+        "2026-11-24": 1,
+        "2026-11-25": 14,
+        "2026-11-26": 1
+      },
+      "growth": {
+        "baseline_per_day": 14.667,
+        "organic_days": 6,
+        "burst_days": 4,
+        "burst_rows": 12393,
+        "burst_threshold": 255.0,
+        "median_daily": 25.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "audit_logs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 12,481 与体积 6,651,904 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 440 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 12481,
+        "total_bytes": 6651904
+      }
+    },
+    {
+      "table": "data_source_media_assets",
+      "rows": 1509,
+      "table_bytes": 786432,
+      "index_bytes": 532480,
+      "total_bytes": 1318912,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4037,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 156,
+        "2026-11-15": 480,
+        "2026-11-17": 727,
+        "2026-11-18": 140,
+        "2026-11-21": 6
+      },
+      "growth": {
+        "baseline_per_day": 301.8,
+        "organic_days": 5,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 1560.0,
+        "median_daily": 156.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "data_source_media_assets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1,509 与体积 1,318,912 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 9,054 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1509,
+        "total_bytes": 1318912
+      }
+    },
+    {
+      "table": "idempotency_records",
+      "rows": 0,
+      "table_bytes": 24576,
+      "index_bytes": 647168,
+      "total_bytes": 671744,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-23T05:26:04.090783+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-23T05:26:04.095565+00:00",
+      "index_ratio": 0.9634,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "idempotency_records",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 671,744 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 671744
+      }
+    },
+    {
+      "table": "episodes",
+      "rows": 206,
+      "table_bytes": 278528,
+      "index_bytes": 376832,
+      "total_bytes": 655360,
+      "n_live_tup": 206,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-26T03:22:29.234364+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-26T03:22:29.257346+00:00",
+      "index_ratio": 0.575,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 69,
+        "2026-11-17": 105,
+        "2026-11-18": 32
+      },
+      "growth": {
+        "baseline_per_day": 68.667,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 690.0,
+        "median_daily": 69.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "episodes",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 206 与体积 655,360 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 2,060 行，不触阈"
+        ],
+        "rows": 206,
+        "total_bytes": 655360
+      }
+    },
+    {
+      "table": "raw_assets",
+      "rows": 283,
+      "table_bytes": 385024,
+      "index_bytes": 253952,
+      "total_bytes": 638976,
+      "n_live_tup": 3,
+      "n_dead_tup": 13,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3974,
+      "bloat_ratio": 0.0459,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 252,
+        "2026-11-17": 22,
+        "2026-11-18": 4,
+        "2026-11-21": 2,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 7.75,
+        "organic_days": 4,
+        "burst_days": 1,
+        "burst_rows": 252,
+        "burst_threshold": 40.0,
+        "median_daily": 4.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "raw_assets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 283 与体积 638,976 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 232 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 283,
+        "total_bytes": 638976
+      }
+    },
+    {
+      "table": "annotation_quality_findings",
+      "rows": 1044,
+      "table_bytes": 245760,
+      "index_bytes": 376832,
+      "total_bytes": 622592,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6053,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_quality_findings",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1,044 与体积 622,592 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1044,
+        "total_bytes": 622592
+      }
+    },
+    {
+      "table": "data_lineage_edges",
+      "rows": 872,
+      "table_bytes": 229376,
+      "index_bytes": 368640,
+      "total_bytes": 598016,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6164,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 207,
+        "2026-11-17": 298,
+        "2026-11-18": 340,
+        "2026-11-21": 27
+      },
+      "growth": {
+        "baseline_per_day": 218.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 2525.0,
+        "median_daily": 252.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "data_lineage_edges",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 872 与体积 598,016 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 6,540 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 872,
+        "total_bytes": 598016
+      }
+    },
+    {
+      "table": "dataset_versions",
+      "rows": 87,
+      "table_bytes": 385024,
+      "index_bytes": 114688,
+      "total_bytes": 499712,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2295,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 55,
+        "2026-11-18": 16
+      },
+      "growth": {
+        "baseline_per_day": 29.0,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 160.0,
+        "median_daily": 16.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_versions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 87 与体积 499,712 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 870 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 87,
+        "total_bytes": 499712
+      }
+    },
+    {
+      "table": "acceptance_ledger_entries",
+      "rows": 743,
+      "table_bytes": 270336,
+      "index_bytes": 204800,
+      "total_bytes": 475136,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.431,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-17": 543,
+        "2026-11-18": 200
+      },
+      "growth": {
+        "baseline_per_day": 371.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 3715.0,
+        "median_daily": 371.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "acceptance_ledger_entries",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 743 与体积 475,136 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 743,
+        "total_bytes": 475136
+      }
+    },
+    {
+      "table": "dataset_items",
+      "rows": 313,
+      "table_bytes": 237568,
+      "index_bytes": 229376,
+      "total_bytes": 466944,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4912,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 3,
+        "2026-11-17": 70,
+        "2026-11-18": 240
+      },
+      "growth": {
+        "baseline_per_day": 104.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 700.0,
+        "median_daily": 70.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_items",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 313 与体积 466,944 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 3,130 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 313,
+        "total_bytes": 466944
+      }
+    },
+    {
+      "table": "annotation_records",
+      "rows": 243,
+      "table_bytes": 262144,
+      "index_bytes": 188416,
+      "total_bytes": 450560,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4182,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 143,
+        "2026-11-18": 63,
+        "2026-11-21": 21
+      },
+      "growth": {
+        "baseline_per_day": 60.75,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 420.0,
+        "median_daily": 42.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_records",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 243 与体积 450,560 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,822 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 243,
+        "total_bytes": 450560
+      }
+    },
+    {
+      "table": "training_request_revisions",
+      "rows": 137,
+      "table_bytes": 327680,
+      "index_bytes": 106496,
+      "total_bytes": 434176,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2453,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 101,
+        "2026-11-18": 36
+      },
+      "growth": {
+        "baseline_per_day": 68.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 685.0,
+        "median_daily": 68.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "training_request_revisions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 137 与体积 434,176 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 137,
+        "total_bytes": 434176
+      }
+    },
+    {
+      "table": "annotation_schemas",
+      "rows": 152,
+      "table_bytes": 204800,
+      "index_bytes": 147456,
+      "total_bytes": 352256,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4186,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 18,
+        "2026-11-17": 106,
+        "2026-11-18": 18,
+        "2026-11-21": 10
+      },
+      "growth": {
+        "baseline_per_day": 38.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 180.0,
+        "median_daily": 18.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_schemas",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 152 与体积 352,256 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,140 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 152,
+        "total_bytes": 352256
+      }
+    },
+    {
+      "table": "annotation_tasks",
+      "rows": 164,
+      "table_bytes": 172032,
+      "index_bytes": 147456,
+      "total_bytes": 319488,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4615,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 17,
+        "2026-11-17": 104,
+        "2026-11-18": 33,
+        "2026-11-21": 10
+      },
+      "growth": {
+        "baseline_per_day": 41.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 250.0,
+        "median_daily": 25.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_tasks",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 164 与体积 319,488 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,230 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 164,
+        "total_bytes": 319488
+      }
+    },
+    {
+      "table": "annotation_assignment_events",
+      "rows": 600,
+      "table_bytes": 163840,
+      "index_bytes": 147456,
+      "total_bytes": 311296,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4737,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-15": 48,
+        "2026-11-17": 379,
+        "2026-11-18": 151,
+        "2026-11-21": 22
+      },
+      "growth": {
+        "baseline_per_day": 150.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 995.0,
+        "median_daily": 99.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_assignment_events",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 600 与体积 311,296 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 4,500 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 600,
+        "total_bytes": 311296
+      }
+    },
+    {
+      "table": "training_deliveries",
+      "rows": 49,
+      "table_bytes": 204800,
+      "index_bytes": 98304,
+      "total_bytes": 303104,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3243,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 31,
+        "2026-11-18": 18
+      },
+      "growth": {
+        "baseline_per_day": 24.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 245.0,
+        "median_daily": 24.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "training_deliveries",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 49 与体积 303,104 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 49,
+        "total_bytes": 303104
+      }
+    },
+    {
+      "table": "dataset_leakage_reports",
+      "rows": 34,
+      "table_bytes": 229376,
+      "index_bytes": 65536,
+      "total_bytes": 294912,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2222,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "dataset_leakage_reports",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 34 与体积 294,912 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 34,
+        "total_bytes": 294912
+      }
+    },
+    {
+      "table": "episode_raw_assets",
+      "rows": 524,
+      "table_bytes": 131072,
+      "index_bytes": 155648,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5429,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "episode_raw_assets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 524 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 524,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "annotation_sample_episodes",
+      "rows": 398,
+      "table_bytes": 131072,
+      "index_bytes": 155648,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5429,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_sample_episodes",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 398 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 398,
+        "total_bytes": 286720
+      }
+    }
+  ],
+  "top_by_rows": [
+    {
+      "table": "outbox_events",
+      "rows": 12518,
+      "table_bytes": 4489216,
+      "index_bytes": 2531328,
+      "total_bytes": 7020544,
+      "n_live_tup": 35,
+      "n_dead_tup": 62,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3606,
+      "bloat_ratio": 0.005,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 28,
+        "2026-11-15": 857,
+        "2026-11-16": 21,
+        "2026-11-17": 7968,
+        "2026-11-18": 3375,
+        "2026-11-21": 234,
+        "2026-11-23": 18,
+        "2026-11-24": 1,
+        "2026-11-25": 14,
+        "2026-11-26": 2
+      },
+      "growth": {
+        "baseline_per_day": 45.429,
+        "organic_days": 7,
+        "burst_days": 3,
+        "burst_rows": 12200,
+        "burst_threshold": 245.0,
+        "median_daily": 24.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "outbox_events",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 12,518 与体积 7,020,544 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,363 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 12518,
+        "total_bytes": 7020544
+      }
+    },
+    {
+      "table": "audit_logs",
+      "rows": 12481,
+      "table_bytes": 3801088,
+      "index_bytes": 2850816,
+      "total_bytes": 6651904,
+      "n_live_tup": 39,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4286,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-14": 28,
+        "2026-11-15": 857,
+        "2026-11-16": 21,
+        "2026-11-17": 7894,
+        "2026-11-18": 3315,
+        "2026-11-21": 327,
+        "2026-11-23": 23,
+        "2026-11-24": 1,
+        "2026-11-25": 14,
+        "2026-11-26": 1
+      },
+      "growth": {
+        "baseline_per_day": 14.667,
+        "organic_days": 6,
+        "burst_days": 4,
+        "burst_rows": 12393,
+        "burst_threshold": 255.0,
+        "median_daily": 25.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "audit_logs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 12,481 与体积 6,651,904 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 440 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 12481,
+        "total_bytes": 6651904
+      }
+    },
+    {
+      "table": "data_source_media_assets",
+      "rows": 1509,
+      "table_bytes": 786432,
+      "index_bytes": 532480,
+      "total_bytes": 1318912,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4037,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 156,
+        "2026-11-15": 480,
+        "2026-11-17": 727,
+        "2026-11-18": 140,
+        "2026-11-21": 6
+      },
+      "growth": {
+        "baseline_per_day": 301.8,
+        "organic_days": 5,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 1560.0,
+        "median_daily": 156.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "data_source_media_assets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1,509 与体积 1,318,912 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 9,054 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1509,
+        "total_bytes": 1318912
+      }
+    },
+    {
+      "table": "annotation_quality_findings",
+      "rows": 1044,
+      "table_bytes": 245760,
+      "index_bytes": 376832,
+      "total_bytes": 622592,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6053,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_quality_findings",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1,044 与体积 622,592 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1044,
+        "total_bytes": 622592
+      }
+    },
+    {
+      "table": "data_lineage_edges",
+      "rows": 872,
+      "table_bytes": 229376,
+      "index_bytes": 368640,
+      "total_bytes": 598016,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6164,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 207,
+        "2026-11-17": 298,
+        "2026-11-18": 340,
+        "2026-11-21": 27
+      },
+      "growth": {
+        "baseline_per_day": 218.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 2525.0,
+        "median_daily": 252.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "data_lineage_edges",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 872 与体积 598,016 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 6,540 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 872,
+        "total_bytes": 598016
+      }
+    },
+    {
+      "table": "acceptance_ledger_entries",
+      "rows": 743,
+      "table_bytes": 270336,
+      "index_bytes": 204800,
+      "total_bytes": 475136,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.431,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-17": 543,
+        "2026-11-18": 200
+      },
+      "growth": {
+        "baseline_per_day": 371.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 3715.0,
+        "median_daily": 371.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "acceptance_ledger_entries",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 743 与体积 475,136 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 743,
+        "total_bytes": 475136
+      }
+    },
+    {
+      "table": "annotation_assignment_events",
+      "rows": 600,
+      "table_bytes": 163840,
+      "index_bytes": 147456,
+      "total_bytes": 311296,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4737,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-15": 48,
+        "2026-11-17": 379,
+        "2026-11-18": 151,
+        "2026-11-21": 22
+      },
+      "growth": {
+        "baseline_per_day": 150.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 995.0,
+        "median_daily": 99.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_assignment_events",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 600 与体积 311,296 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 4,500 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 600,
+        "total_bytes": 311296
+      }
+    },
+    {
+      "table": "episode_raw_assets",
+      "rows": 524,
+      "table_bytes": 131072,
+      "index_bytes": 155648,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5429,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "episode_raw_assets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 524 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 524,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "lineage_node_refs",
+      "rows": 470,
+      "table_bytes": 73728,
+      "index_bytes": 131072,
+      "total_bytes": 204800,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.64,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "lineage_node_refs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 470 与体积 204,800 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 470,
+        "total_bytes": 204800
+      }
+    },
+    {
+      "table": "annotation_sample_episodes",
+      "rows": 398,
+      "table_bytes": 131072,
+      "index_bytes": 155648,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5429,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_sample_episodes",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 398 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 398,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "dataset_items",
+      "rows": 313,
+      "table_bytes": 237568,
+      "index_bytes": 229376,
+      "total_bytes": 466944,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4912,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 3,
+        "2026-11-17": 70,
+        "2026-11-18": 240
+      },
+      "growth": {
+        "baseline_per_day": 104.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 700.0,
+        "median_daily": 70.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_items",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 313 与体积 466,944 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 3,130 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 313,
+        "total_bytes": 466944
+      }
+    },
+    {
+      "table": "raw_assets",
+      "rows": 283,
+      "table_bytes": 385024,
+      "index_bytes": 253952,
+      "total_bytes": 638976,
+      "n_live_tup": 3,
+      "n_dead_tup": 13,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3974,
+      "bloat_ratio": 0.0459,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 252,
+        "2026-11-17": 22,
+        "2026-11-18": 4,
+        "2026-11-21": 2,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 7.75,
+        "organic_days": 4,
+        "burst_days": 1,
+        "burst_rows": 252,
+        "burst_threshold": 40.0,
+        "median_daily": 4.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "raw_assets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 283 与体积 638,976 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 232 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 283,
+        "total_bytes": 638976
+      }
+    },
+    {
+      "table": "annotation_records",
+      "rows": 243,
+      "table_bytes": 262144,
+      "index_bytes": 188416,
+      "total_bytes": 450560,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4182,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 143,
+        "2026-11-18": 63,
+        "2026-11-21": 21
+      },
+      "growth": {
+        "baseline_per_day": 60.75,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 420.0,
+        "median_daily": 42.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_records",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 243 与体积 450,560 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,822 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 243,
+        "total_bytes": 450560
+      }
+    },
+    {
+      "table": "usage_snapshots",
+      "rows": 240,
+      "table_bytes": 81920,
+      "index_bytes": 49152,
+      "total_bytes": 131072,
+      "n_live_tup": 240,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-27T11:21:18.563806+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-27T11:21:18.571959+00:00",
+      "index_ratio": 0.375,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "usage_snapshots",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 240 与体积 131,072 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 240,
+        "total_bytes": 131072
+      }
+    },
+    {
+      "table": "annotation_sample_sets",
+      "rows": 216,
+      "table_bytes": 139264,
+      "index_bytes": 147456,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5143,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 18,
+        "2026-11-17": 150,
+        "2026-11-18": 38,
+        "2026-11-21": 10
+      },
+      "growth": {
+        "baseline_per_day": 54.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 280.0,
+        "median_daily": 28.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_sample_sets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 216 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,620 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 216,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "episodes",
+      "rows": 206,
+      "table_bytes": 278528,
+      "index_bytes": 376832,
+      "total_bytes": 655360,
+      "n_live_tup": 206,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-26T03:22:29.234364+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-26T03:22:29.257346+00:00",
+      "index_ratio": 0.575,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 69,
+        "2026-11-17": 105,
+        "2026-11-18": 32
+      },
+      "growth": {
+        "baseline_per_day": 68.667,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 690.0,
+        "median_daily": 69.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "episodes",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 206 与体积 655,360 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 2,060 行，不触阈"
+        ],
+        "rows": 206,
+        "total_bytes": 655360
+      }
+    },
+    {
+      "table": "project_members",
+      "rows": 189,
+      "table_bytes": 57344,
+      "index_bytes": 65536,
+      "total_bytes": 122880,
+      "n_live_tup": 3,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 9,
+        "2026-11-15": 55,
+        "2026-11-17": 100,
+        "2026-11-18": 17,
+        "2026-11-21": 5,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 31.5,
+        "organic_days": 6,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 130.0,
+        "median_daily": 13.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "project_members",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 189 与体积 122,880 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 945 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 189,
+        "total_bytes": 122880
+      }
+    },
+    {
+      "table": "annotation_assignments",
+      "rows": 176,
+      "table_bytes": 90112,
+      "index_bytes": 196608,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6857,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 119,
+        "2026-11-18": 33,
+        "2026-11-21": 8
+      },
+      "growth": {
+        "baseline_per_day": 44.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 245.0,
+        "median_daily": 24.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_assignments",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 176 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,320 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 176,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "annotation_tasks",
+      "rows": 164,
+      "table_bytes": 172032,
+      "index_bytes": 147456,
+      "total_bytes": 319488,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4615,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 17,
+        "2026-11-17": 104,
+        "2026-11-18": 33,
+        "2026-11-21": 10
+      },
+      "growth": {
+        "baseline_per_day": 41.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 250.0,
+        "median_daily": 25.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_tasks",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 164 与体积 319,488 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,230 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 164,
+        "total_bytes": 319488
+      }
+    },
+    {
+      "table": "annotation_submissions",
+      "rows": 160,
+      "table_bytes": 122880,
+      "index_bytes": 122880,
+      "total_bytes": 245760,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 99,
+        "2026-11-18": 38,
+        "2026-11-21": 7
+      },
+      "growth": {
+        "baseline_per_day": 40.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 270.0,
+        "median_daily": 27.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_submissions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 160 与体积 245,760 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,200 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 160,
+        "total_bytes": 245760
+      }
+    }
+  ],
+  "large_table_candidates": [],
+  "tables": [
+    {
+      "table": "outbox_events",
+      "rows": 12518,
+      "table_bytes": 4489216,
+      "index_bytes": 2531328,
+      "total_bytes": 7020544,
+      "n_live_tup": 35,
+      "n_dead_tup": 62,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3606,
+      "bloat_ratio": 0.005,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 28,
+        "2026-11-15": 857,
+        "2026-11-16": 21,
+        "2026-11-17": 7968,
+        "2026-11-18": 3375,
+        "2026-11-21": 234,
+        "2026-11-23": 18,
+        "2026-11-24": 1,
+        "2026-11-25": 14,
+        "2026-11-26": 2
+      },
+      "growth": {
+        "baseline_per_day": 45.429,
+        "organic_days": 7,
+        "burst_days": 3,
+        "burst_rows": 12200,
+        "burst_threshold": 245.0,
+        "median_daily": 24.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "outbox_events",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 12,518 与体积 7,020,544 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,363 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 12518,
+        "total_bytes": 7020544
+      }
+    },
+    {
+      "table": "audit_logs",
+      "rows": 12481,
+      "table_bytes": 3801088,
+      "index_bytes": 2850816,
+      "total_bytes": 6651904,
+      "n_live_tup": 39,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4286,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-14": 28,
+        "2026-11-15": 857,
+        "2026-11-16": 21,
+        "2026-11-17": 7894,
+        "2026-11-18": 3315,
+        "2026-11-21": 327,
+        "2026-11-23": 23,
+        "2026-11-24": 1,
+        "2026-11-25": 14,
+        "2026-11-26": 1
+      },
+      "growth": {
+        "baseline_per_day": 14.667,
+        "organic_days": 6,
+        "burst_days": 4,
+        "burst_rows": 12393,
+        "burst_threshold": 255.0,
+        "median_daily": 25.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "audit_logs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 12,481 与体积 6,651,904 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 440 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 12481,
+        "total_bytes": 6651904
+      }
+    },
+    {
+      "table": "data_source_media_assets",
+      "rows": 1509,
+      "table_bytes": 786432,
+      "index_bytes": 532480,
+      "total_bytes": 1318912,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4037,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 156,
+        "2026-11-15": 480,
+        "2026-11-17": 727,
+        "2026-11-18": 140,
+        "2026-11-21": 6
+      },
+      "growth": {
+        "baseline_per_day": 301.8,
+        "organic_days": 5,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 1560.0,
+        "median_daily": 156.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "data_source_media_assets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1,509 与体积 1,318,912 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 9,054 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1509,
+        "total_bytes": 1318912
+      }
+    },
+    {
+      "table": "idempotency_records",
+      "rows": 0,
+      "table_bytes": 24576,
+      "index_bytes": 647168,
+      "total_bytes": 671744,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-23T05:26:04.090783+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-23T05:26:04.095565+00:00",
+      "index_ratio": 0.9634,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "idempotency_records",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 671,744 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 671744
+      }
+    },
+    {
+      "table": "episodes",
+      "rows": 206,
+      "table_bytes": 278528,
+      "index_bytes": 376832,
+      "total_bytes": 655360,
+      "n_live_tup": 206,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-26T03:22:29.234364+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-26T03:22:29.257346+00:00",
+      "index_ratio": 0.575,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 69,
+        "2026-11-17": 105,
+        "2026-11-18": 32
+      },
+      "growth": {
+        "baseline_per_day": 68.667,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 690.0,
+        "median_daily": 69.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "episodes",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 206 与体积 655,360 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 2,060 行，不触阈"
+        ],
+        "rows": 206,
+        "total_bytes": 655360
+      }
+    },
+    {
+      "table": "raw_assets",
+      "rows": 283,
+      "table_bytes": 385024,
+      "index_bytes": 253952,
+      "total_bytes": 638976,
+      "n_live_tup": 3,
+      "n_dead_tup": 13,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3974,
+      "bloat_ratio": 0.0459,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 252,
+        "2026-11-17": 22,
+        "2026-11-18": 4,
+        "2026-11-21": 2,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 7.75,
+        "organic_days": 4,
+        "burst_days": 1,
+        "burst_rows": 252,
+        "burst_threshold": 40.0,
+        "median_daily": 4.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "raw_assets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 283 与体积 638,976 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 232 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 283,
+        "total_bytes": 638976
+      }
+    },
+    {
+      "table": "annotation_quality_findings",
+      "rows": 1044,
+      "table_bytes": 245760,
+      "index_bytes": 376832,
+      "total_bytes": 622592,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6053,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_quality_findings",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1,044 与体积 622,592 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1044,
+        "total_bytes": 622592
+      }
+    },
+    {
+      "table": "data_lineage_edges",
+      "rows": 872,
+      "table_bytes": 229376,
+      "index_bytes": 368640,
+      "total_bytes": 598016,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6164,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 207,
+        "2026-11-17": 298,
+        "2026-11-18": 340,
+        "2026-11-21": 27
+      },
+      "growth": {
+        "baseline_per_day": 218.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 2525.0,
+        "median_daily": 252.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "data_lineage_edges",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 872 与体积 598,016 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 6,540 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 872,
+        "total_bytes": 598016
+      }
+    },
+    {
+      "table": "dataset_versions",
+      "rows": 87,
+      "table_bytes": 385024,
+      "index_bytes": 114688,
+      "total_bytes": 499712,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2295,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 55,
+        "2026-11-18": 16
+      },
+      "growth": {
+        "baseline_per_day": 29.0,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 160.0,
+        "median_daily": 16.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_versions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 87 与体积 499,712 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 870 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 87,
+        "total_bytes": 499712
+      }
+    },
+    {
+      "table": "acceptance_ledger_entries",
+      "rows": 743,
+      "table_bytes": 270336,
+      "index_bytes": 204800,
+      "total_bytes": 475136,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.431,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-17": 543,
+        "2026-11-18": 200
+      },
+      "growth": {
+        "baseline_per_day": 371.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 3715.0,
+        "median_daily": 371.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "acceptance_ledger_entries",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 743 与体积 475,136 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 743,
+        "total_bytes": 475136
+      }
+    },
+    {
+      "table": "dataset_items",
+      "rows": 313,
+      "table_bytes": 237568,
+      "index_bytes": 229376,
+      "total_bytes": 466944,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4912,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 3,
+        "2026-11-17": 70,
+        "2026-11-18": 240
+      },
+      "growth": {
+        "baseline_per_day": 104.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 700.0,
+        "median_daily": 70.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_items",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 313 与体积 466,944 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 3,130 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 313,
+        "total_bytes": 466944
+      }
+    },
+    {
+      "table": "annotation_records",
+      "rows": 243,
+      "table_bytes": 262144,
+      "index_bytes": 188416,
+      "total_bytes": 450560,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4182,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 143,
+        "2026-11-18": 63,
+        "2026-11-21": 21
+      },
+      "growth": {
+        "baseline_per_day": 60.75,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 420.0,
+        "median_daily": 42.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_records",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 243 与体积 450,560 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,822 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 243,
+        "total_bytes": 450560
+      }
+    },
+    {
+      "table": "training_request_revisions",
+      "rows": 137,
+      "table_bytes": 327680,
+      "index_bytes": 106496,
+      "total_bytes": 434176,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2453,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 101,
+        "2026-11-18": 36
+      },
+      "growth": {
+        "baseline_per_day": 68.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 685.0,
+        "median_daily": 68.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "training_request_revisions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 137 与体积 434,176 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 137,
+        "total_bytes": 434176
+      }
+    },
+    {
+      "table": "annotation_schemas",
+      "rows": 152,
+      "table_bytes": 204800,
+      "index_bytes": 147456,
+      "total_bytes": 352256,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4186,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 18,
+        "2026-11-17": 106,
+        "2026-11-18": 18,
+        "2026-11-21": 10
+      },
+      "growth": {
+        "baseline_per_day": 38.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 180.0,
+        "median_daily": 18.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_schemas",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 152 与体积 352,256 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,140 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 152,
+        "total_bytes": 352256
+      }
+    },
+    {
+      "table": "annotation_tasks",
+      "rows": 164,
+      "table_bytes": 172032,
+      "index_bytes": 147456,
+      "total_bytes": 319488,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4615,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 17,
+        "2026-11-17": 104,
+        "2026-11-18": 33,
+        "2026-11-21": 10
+      },
+      "growth": {
+        "baseline_per_day": 41.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 250.0,
+        "median_daily": 25.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_tasks",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 164 与体积 319,488 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,230 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 164,
+        "total_bytes": 319488
+      }
+    },
+    {
+      "table": "annotation_assignment_events",
+      "rows": 600,
+      "table_bytes": 163840,
+      "index_bytes": 147456,
+      "total_bytes": 311296,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4737,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-15": 48,
+        "2026-11-17": 379,
+        "2026-11-18": 151,
+        "2026-11-21": 22
+      },
+      "growth": {
+        "baseline_per_day": 150.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 995.0,
+        "median_daily": 99.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_assignment_events",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 600 与体积 311,296 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 4,500 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 600,
+        "total_bytes": 311296
+      }
+    },
+    {
+      "table": "training_deliveries",
+      "rows": 49,
+      "table_bytes": 204800,
+      "index_bytes": 98304,
+      "total_bytes": 303104,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3243,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 31,
+        "2026-11-18": 18
+      },
+      "growth": {
+        "baseline_per_day": 24.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 245.0,
+        "median_daily": 24.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "training_deliveries",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 49 与体积 303,104 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 49,
+        "total_bytes": 303104
+      }
+    },
+    {
+      "table": "dataset_leakage_reports",
+      "rows": 34,
+      "table_bytes": 229376,
+      "index_bytes": 65536,
+      "total_bytes": 294912,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2222,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "dataset_leakage_reports",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 34 与体积 294,912 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 34,
+        "total_bytes": 294912
+      }
+    },
+    {
+      "table": "annotation_assignments",
+      "rows": 176,
+      "table_bytes": 90112,
+      "index_bytes": 196608,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6857,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 119,
+        "2026-11-18": 33,
+        "2026-11-21": 8
+      },
+      "growth": {
+        "baseline_per_day": 44.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 245.0,
+        "median_daily": 24.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_assignments",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 176 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,320 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 176,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "annotation_batches",
+      "rows": 153,
+      "table_bytes": 106496,
+      "index_bytes": 180224,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6286,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 99,
+        "2026-11-18": 28,
+        "2026-11-21": 10
+      },
+      "growth": {
+        "baseline_per_day": 38.25,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 220.0,
+        "median_daily": 22.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_batches",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 153 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,148 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 153,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "annotation_sample_episodes",
+      "rows": 398,
+      "table_bytes": 131072,
+      "index_bytes": 155648,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5429,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_sample_episodes",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 398 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 398,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "annotation_sample_sets",
+      "rows": 216,
+      "table_bytes": 139264,
+      "index_bytes": 147456,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5143,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 18,
+        "2026-11-17": 150,
+        "2026-11-18": 38,
+        "2026-11-21": 10
+      },
+      "growth": {
+        "baseline_per_day": 54.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 280.0,
+        "median_daily": 28.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_sample_sets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 216 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,620 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 216,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "episode_raw_assets",
+      "rows": 524,
+      "table_bytes": 131072,
+      "index_bytes": 155648,
+      "total_bytes": 286720,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5429,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "episode_raw_assets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 524 与体积 286,720 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 524,
+        "total_bytes": 286720
+      }
+    },
+    {
+      "table": "annotation_submissions",
+      "rows": 160,
+      "table_bytes": 122880,
+      "index_bytes": 122880,
+      "total_bytes": 245760,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 99,
+        "2026-11-18": 38,
+        "2026-11-21": 7
+      },
+      "growth": {
+        "baseline_per_day": 40.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 270.0,
+        "median_daily": 27.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_submissions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 160 与体积 245,760 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,200 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 160,
+        "total_bytes": 245760
+      }
+    },
+    {
+      "table": "calibration_records",
+      "rows": 81,
+      "table_bytes": 139264,
+      "index_bytes": 81920,
+      "total_bytes": 221184,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3704,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 41,
+        "2026-11-18": 40
+      },
+      "growth": {
+        "baseline_per_day": 40.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 405.0,
+        "median_daily": 40.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "calibration_records",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 81 与体积 221,184 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 81,
+        "total_bytes": 221184
+      }
+    },
+    {
+      "table": "dataset_quality_reports",
+      "rows": 34,
+      "table_bytes": 155648,
+      "index_bytes": 65536,
+      "total_bytes": 221184,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2963,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 2,
+        "2026-11-17": 20,
+        "2026-11-18": 12
+      },
+      "growth": {
+        "baseline_per_day": 11.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 120.0,
+        "median_daily": 12.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_quality_reports",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 34 与体积 221,184 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 340 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 34,
+        "total_bytes": 221184
+      }
+    },
+    {
+      "table": "lineage_node_refs",
+      "rows": 470,
+      "table_bytes": 73728,
+      "index_bytes": 131072,
+      "total_bytes": 204800,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.64,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "lineage_node_refs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 470 与体积 204,800 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 470,
+        "total_bytes": 204800
+      }
+    },
+    {
+      "table": "export_jobs",
+      "rows": 68,
+      "table_bytes": 106496,
+      "index_bytes": 98304,
+      "total_bytes": 204800,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.48,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 47,
+        "2026-11-18": 21
+      },
+      "growth": {
+        "baseline_per_day": 34.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 340.0,
+        "median_daily": 34.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "export_jobs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 68 与体积 204,800 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 68,
+        "total_bytes": 204800
+      }
+    },
+    {
+      "table": "sensors",
+      "rows": 49,
+      "table_bytes": 81920,
+      "index_bytes": 114688,
+      "total_bytes": 196608,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5833,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 1,
+        "2026-11-17": 28,
+        "2026-11-18": 20
+      },
+      "growth": {
+        "baseline_per_day": 16.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 200.0,
+        "median_daily": 20.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "sensors",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 49 与体积 196,608 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 490 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 49,
+        "total_bytes": 196608
+      }
+    },
+    {
+      "table": "processing_artifacts",
+      "rows": 66,
+      "table_bytes": 114688,
+      "index_bytes": 81920,
+      "total_bytes": 196608,
+      "n_live_tup": 66,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-25T03:42:33.881093+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-25T03:42:33.890905+00:00",
+      "index_ratio": 0.4167,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-25": 66
+      },
+      "growth": {
+        "baseline_per_day": 66.0,
+        "organic_days": 1,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 660.0,
+        "median_daily": 66.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "processing_artifacts",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 66 与体积 196,608 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 66,
+        "total_bytes": 196608
+      }
+    },
+    {
+      "table": "upload_sessions",
+      "rows": 33,
+      "table_bytes": 81920,
+      "index_bytes": 98304,
+      "total_bytes": 180224,
+      "n_live_tup": 3,
+      "n_dead_tup": 6,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5455,
+      "bloat_ratio": 0.1818,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 8,
+        "2026-11-18": 18,
+        "2026-11-21": 4,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 8.25,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 60.0,
+        "median_daily": 6.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "upload_sessions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 33 与体积 180,224 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 248 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 33,
+        "total_bytes": 180224
+      }
+    },
+    {
+      "table": "annotation_reviews",
+      "rows": 151,
+      "table_bytes": 98304,
+      "index_bytes": 81920,
+      "total_bytes": 180224,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4545,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 94,
+        "2026-11-18": 38,
+        "2026-11-21": 3
+      },
+      "growth": {
+        "baseline_per_day": 37.75,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 270.0,
+        "median_daily": 27.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_reviews",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 151 与体积 180,224 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,132 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 151,
+        "total_bytes": 180224
+      }
+    },
+    {
+      "table": "devices",
+      "rows": 56,
+      "table_bytes": 73728,
+      "index_bytes": 98304,
+      "total_bytes": 172032,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5714,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 1,
+        "2026-11-17": 35,
+        "2026-11-18": 20
+      },
+      "growth": {
+        "baseline_per_day": 18.667,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 200.0,
+        "median_daily": 20.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "devices",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 56 与体积 172,032 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 560 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 56,
+        "total_bytes": 172032
+      }
+    },
+    {
+      "table": "external_training_references",
+      "rows": 22,
+      "table_bytes": 65536,
+      "index_bytes": 98304,
+      "total_bytes": 163840,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 11,
+        "2026-11-18": 11
+      },
+      "growth": {
+        "baseline_per_day": 11.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 110.0,
+        "median_daily": 11.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "external_training_references",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 22 与体积 163,840 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 22,
+        "total_bytes": 163840
+      }
+    },
+    {
+      "table": "datasets",
+      "rows": 83,
+      "table_bytes": 73728,
+      "index_bytes": 81920,
+      "total_bytes": 155648,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5263,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 18,
+        "2026-11-17": 49,
+        "2026-11-18": 16
+      },
+      "growth": {
+        "baseline_per_day": 27.667,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 180.0,
+        "median_daily": 18.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "datasets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 83 与体积 155,648 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 830 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 83,
+        "total_bytes": 155648
+      }
+    },
+    {
+      "table": "data_requirements",
+      "rows": 93,
+      "table_bytes": 106496,
+      "index_bytes": 49152,
+      "total_bytes": 155648,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3158,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 69,
+        "2026-11-18": 24
+      },
+      "growth": {
+        "baseline_per_day": 46.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 465.0,
+        "median_daily": 46.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "data_requirements",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 93 与体积 155,648 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 93,
+        "total_bytes": 155648
+      }
+    },
+    {
+      "table": "robots",
+      "rows": 56,
+      "table_bytes": 73728,
+      "index_bytes": 81920,
+      "total_bytes": 155648,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5263,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 36,
+        "2026-11-18": 20
+      },
+      "growth": {
+        "baseline_per_day": 28.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 280.0,
+        "median_daily": 28.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "robots",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 56 与体积 155,648 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 56,
+        "total_bytes": 155648
+      }
+    },
+    {
+      "table": "collection_tasks",
+      "rows": 98,
+      "table_bytes": 73728,
+      "index_bytes": 81920,
+      "total_bytes": 155648,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5263,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 80,
+        "2026-11-18": 18
+      },
+      "growth": {
+        "baseline_per_day": 49.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 490.0,
+        "median_daily": 49.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "collection_tasks",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 98 与体积 155,648 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 98,
+        "total_bytes": 155648
+      }
+    },
+    {
+      "table": "collection_plans",
+      "rows": 36,
+      "table_bytes": 65536,
+      "index_bytes": 81920,
+      "total_bytes": 147456,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5556,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-16": 4,
+        "2026-11-17": 21,
+        "2026-11-18": 11
+      },
+      "growth": {
+        "baseline_per_day": 12.0,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 110.0,
+        "median_daily": 11.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "collection_plans",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 36 与体积 147,456 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 360 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 36,
+        "total_bytes": 147456
+      }
+    },
+    {
+      "table": "data_source_imports",
+      "rows": 137,
+      "table_bytes": 81920,
+      "index_bytes": 65536,
+      "total_bytes": 147456,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4444,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 5,
+        "2026-11-15": 33,
+        "2026-11-17": 82,
+        "2026-11-18": 16,
+        "2026-11-21": 1
+      },
+      "growth": {
+        "baseline_per_day": 27.4,
+        "organic_days": 5,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 160.0,
+        "median_daily": 16.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "data_source_imports",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 137 与体积 147,456 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 822 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 137,
+        "total_bytes": 147456
+      }
+    },
+    {
+      "table": "training_requests",
+      "rows": 86,
+      "table_bytes": 65536,
+      "index_bytes": 81920,
+      "total_bytes": 147456,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5556,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 63,
+        "2026-11-18": 23
+      },
+      "growth": {
+        "baseline_per_day": 43.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 430.0,
+        "median_daily": 43.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "training_requests",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 86 与体积 147,456 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 86,
+        "total_bytes": 147456
+      }
+    },
+    {
+      "table": "inbound_segments",
+      "rows": 103,
+      "table_bytes": 98304,
+      "index_bytes": 49152,
+      "total_bytes": 147456,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 75,
+        "2026-11-18": 28
+      },
+      "growth": {
+        "baseline_per_day": 51.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 515.0,
+        "median_daily": 51.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "inbound_segments",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 103 与体积 147,456 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 103,
+        "total_bytes": 147456
+      }
+    },
+    {
+      "table": "annotation_quality_samples",
+      "rows": 91,
+      "table_bytes": 90112,
+      "index_bytes": 49152,
+      "total_bytes": 139264,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3529,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 63,
+        "2026-11-18": 28
+      },
+      "growth": {
+        "baseline_per_day": 45.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 455.0,
+        "median_daily": 45.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_quality_samples",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 91 与体积 139,264 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 91,
+        "total_bytes": 139264
+      }
+    },
+    {
+      "table": "model_versions",
+      "rows": 53,
+      "table_bytes": 90112,
+      "index_bytes": 49152,
+      "total_bytes": 139264,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3529,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 35,
+        "2026-11-18": 18
+      },
+      "growth": {
+        "baseline_per_day": 26.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 265.0,
+        "median_daily": 26.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "model_versions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 53 与体积 139,264 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 53,
+        "total_bytes": 139264
+      }
+    },
+    {
+      "table": "supplier_delivery_batches",
+      "rows": 45,
+      "table_bytes": 57344,
+      "index_bytes": 81920,
+      "total_bytes": 139264,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5882,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 33,
+        "2026-11-18": 12
+      },
+      "growth": {
+        "baseline_per_day": 22.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 225.0,
+        "median_daily": 22.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "supplier_delivery_batches",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 45 与体积 139,264 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 45,
+        "total_bytes": 139264
+      }
+    },
+    {
+      "table": "dataset_split_policies",
+      "rows": 83,
+      "table_bytes": 73728,
+      "index_bytes": 65536,
+      "total_bytes": 139264,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4706,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 15,
+        "2026-11-17": 52,
+        "2026-11-18": 16
+      },
+      "growth": {
+        "baseline_per_day": 27.667,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 160.0,
+        "median_daily": 16.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_split_policies",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 83 与体积 139,264 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 830 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 83,
+        "total_bytes": 139264
+      }
+    },
+    {
+      "table": "data_sources",
+      "rows": 40,
+      "table_bytes": 49152,
+      "index_bytes": 81920,
+      "total_bytes": 131072,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.625,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 5,
+        "2026-11-15": 34,
+        "2026-11-17": 1
+      },
+      "growth": {
+        "baseline_per_day": 13.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 50.0,
+        "median_daily": 5.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "data_sources",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 40 与体积 131,072 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 400 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 40,
+        "total_bytes": 131072
+      }
+    },
+    {
+      "table": "action_specs",
+      "rows": 14,
+      "table_bytes": 49152,
+      "index_bytes": 81920,
+      "total_bytes": 131072,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.625,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 9,
+        "2026-11-18": 5
+      },
+      "growth": {
+        "baseline_per_day": 7.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 70.0,
+        "median_daily": 7.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "action_specs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 14 与体积 131,072 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 14,
+        "total_bytes": 131072
+      }
+    },
+    {
+      "table": "dataset_leakage_policies",
+      "rows": 85,
+      "table_bytes": 65536,
+      "index_bytes": 65536,
+      "total_bytes": 131072,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 15,
+        "2026-11-17": 54,
+        "2026-11-18": 16
+      },
+      "growth": {
+        "baseline_per_day": 28.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 160.0,
+        "median_daily": 16.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_leakage_policies",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 85 与体积 131,072 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 850 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 85,
+        "total_bytes": 131072
+      }
+    },
+    {
+      "table": "annotation_ai_suggestions",
+      "rows": 36,
+      "table_bytes": 49152,
+      "index_bytes": 81920,
+      "total_bytes": 131072,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.625,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 21,
+        "2026-11-18": 15
+      },
+      "growth": {
+        "baseline_per_day": 18.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 180.0,
+        "median_daily": 18.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_ai_suggestions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 36 与体积 131,072 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 36,
+        "total_bytes": 131072
+      }
+    },
+    {
+      "table": "usage_snapshots",
+      "rows": 240,
+      "table_bytes": 81920,
+      "index_bytes": 49152,
+      "total_bytes": 131072,
+      "n_live_tup": 240,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-27T11:21:18.563806+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-27T11:21:18.571959+00:00",
+      "index_ratio": 0.375,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "usage_snapshots",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 240 与体积 131,072 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 240,
+        "total_bytes": 131072
+      }
+    },
+    {
+      "table": "annotation_gold_sets",
+      "rows": 25,
+      "table_bytes": 65536,
+      "index_bytes": 65536,
+      "total_bytes": 131072,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 15,
+        "2026-11-18": 10
+      },
+      "growth": {
+        "baseline_per_day": 12.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 125.0,
+        "median_daily": 12.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_gold_sets",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 25 与体积 131,072 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 25,
+        "total_bytes": 131072
+      }
+    },
+    {
+      "table": "collection_sops",
+      "rows": 14,
+      "table_bytes": 49152,
+      "index_bytes": 81920,
+      "total_bytes": 131072,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.625,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 9,
+        "2026-11-18": 5
+      },
+      "growth": {
+        "baseline_per_day": 7.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 70.0,
+        "median_daily": 7.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "collection_sops",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 14 与体积 131,072 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 14,
+        "total_bytes": 131072
+      }
+    },
+    {
+      "table": "suppliers",
+      "rows": 32,
+      "table_bytes": 57344,
+      "index_bytes": 65536,
+      "total_bytes": 122880,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 24,
+        "2026-11-18": 8
+      },
+      "growth": {
+        "baseline_per_day": 16.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 160.0,
+        "median_daily": 16.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "suppliers",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 32 与体积 122,880 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 32,
+        "total_bytes": 122880
+      }
+    },
+    {
+      "table": "project_members",
+      "rows": 189,
+      "table_bytes": 57344,
+      "index_bytes": 65536,
+      "total_bytes": 122880,
+      "n_live_tup": 3,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 9,
+        "2026-11-15": 55,
+        "2026-11-17": 100,
+        "2026-11-18": 17,
+        "2026-11-21": 5,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 31.5,
+        "organic_days": 6,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 130.0,
+        "median_daily": 13.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "project_members",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 189 与体积 122,880 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 945 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 189,
+        "total_bytes": 122880
+      }
+    },
+    {
+      "table": "calibration_profiles",
+      "rows": 56,
+      "table_bytes": 57344,
+      "index_bytes": 65536,
+      "total_bytes": 122880,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 36,
+        "2026-11-18": 20
+      },
+      "growth": {
+        "baseline_per_day": 28.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 280.0,
+        "median_daily": 28.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "calibration_profiles",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 56 与体积 122,880 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 56,
+        "total_bytes": 122880
+      }
+    },
+    {
+      "table": "dataset_dedup_policies",
+      "rows": 85,
+      "table_bytes": 57344,
+      "index_bytes": 65536,
+      "total_bytes": 122880,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 16,
+        "2026-11-17": 53,
+        "2026-11-18": 16
+      },
+      "growth": {
+        "baseline_per_day": 28.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 160.0,
+        "median_daily": 16.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_dedup_policies",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 85 与体积 122,880 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 850 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 85,
+        "total_bytes": 122880
+      }
+    },
+    {
+      "table": "dataset_quality_policies",
+      "rows": 83,
+      "table_bytes": 57344,
+      "index_bytes": 65536,
+      "total_bytes": 122880,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-15": 15,
+        "2026-11-17": 52,
+        "2026-11-18": 16
+      },
+      "growth": {
+        "baseline_per_day": 27.667,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 160.0,
+        "median_daily": 16.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "dataset_quality_policies",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 83 与体积 122,880 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 830 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 83,
+        "total_bytes": 122880
+      }
+    },
+    {
+      "table": "annotation_quality_runs",
+      "rows": 154,
+      "table_bytes": 65536,
+      "index_bytes": 49152,
+      "total_bytes": 114688,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4286,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 104,
+        "2026-11-18": 43,
+        "2026-11-21": 7
+      },
+      "growth": {
+        "baseline_per_day": 51.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 430.0,
+        "median_daily": 43.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "annotation_quality_runs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 154 与体积 114,688 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 1,540 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 154,
+        "total_bytes": 114688
+      }
+    },
+    {
+      "table": "scenarios",
+      "rows": 28,
+      "table_bytes": 49152,
+      "index_bytes": 65536,
+      "total_bytes": 114688,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5714,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 18,
+        "2026-11-18": 10
+      },
+      "growth": {
+        "baseline_per_day": 14.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 140.0,
+        "median_daily": 14.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "scenarios",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 28 与体积 114,688 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 28,
+        "total_bytes": 114688
+      }
+    },
+    {
+      "table": "collection_batches",
+      "rows": 12,
+      "table_bytes": 16384,
+      "index_bytes": 98304,
+      "total_bytes": 114688,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8571,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 7,
+        "2026-11-18": 5
+      },
+      "growth": {
+        "baseline_per_day": 6.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 60.0,
+        "median_daily": 6.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "collection_batches",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 12 与体积 114,688 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 12,
+        "total_bytes": 114688
+      }
+    },
+    {
+      "table": "models",
+      "rows": 58,
+      "table_bytes": 65536,
+      "index_bytes": 49152,
+      "total_bytes": 114688,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4286,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 39,
+        "2026-11-18": 19
+      },
+      "growth": {
+        "baseline_per_day": 29.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 290.0,
+        "median_daily": 29.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "models",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 58 与体积 114,688 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 58,
+        "total_bytes": 114688
+      }
+    },
+    {
+      "table": "annotation_iaa_reports",
+      "rows": 24,
+      "table_bytes": 57344,
+      "index_bytes": 49152,
+      "total_bytes": 106496,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4615,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 14,
+        "2026-11-18": 10
+      },
+      "growth": {
+        "baseline_per_day": 12.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 120.0,
+        "median_daily": 12.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_iaa_reports",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 24 与体积 106,496 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 24,
+        "total_bytes": 106496
+      }
+    },
+    {
+      "table": "processing_run_steps",
+      "rows": 23,
+      "table_bytes": 57344,
+      "index_bytes": 49152,
+      "total_bytes": 106496,
+      "n_live_tup": 23,
+      "n_dead_tup": 10,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-25T03:15:33.144335+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-25T03:42:33.893019+00:00",
+      "index_ratio": 0.4615,
+      "bloat_ratio": 0.4348,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-18": 14,
+        "2026-11-25": 9
+      },
+      "growth": {
+        "baseline_per_day": 11.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 115.0,
+        "median_daily": 11.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "processing_run_steps",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 23 与体积 106,496 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 23,
+        "total_bytes": 106496
+      }
+    },
+    {
+      "table": "ingestion_jobs",
+      "rows": 4,
+      "table_bytes": 16384,
+      "index_bytes": 90112,
+      "total_bytes": 106496,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8462,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-18": 4
+      },
+      "growth": {
+        "baseline_per_day": 4.0,
+        "organic_days": 1,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 40.0,
+        "median_daily": 4.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "ingestion_jobs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 4 与体积 106,496 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 4,
+        "total_bytes": 106496
+      }
+    },
+    {
+      "table": "quality_findings",
+      "rows": 11,
+      "table_bytes": 16384,
+      "index_bytes": 81920,
+      "total_bytes": 98304,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-18": 11
+      },
+      "growth": {
+        "baseline_per_day": 11.0,
+        "organic_days": 1,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 110.0,
+        "median_daily": 11.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "quality_findings",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 11 与体积 98,304 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 11,
+        "total_bytes": 98304
+      }
+    },
+    {
+      "table": "locations",
+      "rows": 25,
+      "table_bytes": 16384,
+      "index_bytes": 81920,
+      "total_bytes": 98304,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-16": 1,
+        "2026-11-17": 12,
+        "2026-11-18": 12
+      },
+      "growth": {
+        "baseline_per_day": 8.333,
+        "organic_days": 3,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 120.0,
+        "median_daily": 12.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "locations",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 25 与体积 98,304 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 250 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 25,
+        "total_bytes": 98304
+      }
+    },
+    {
+      "table": "model_feedback",
+      "rows": 54,
+      "table_bytes": 65536,
+      "index_bytes": 32768,
+      "total_bytes": 98304,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 35,
+        "2026-11-18": 19
+      },
+      "growth": {
+        "baseline_per_day": 27.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 270.0,
+        "median_daily": 27.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "model_feedback",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 54 与体积 98,304 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 54,
+        "total_bytes": 98304
+      }
+    },
+    {
+      "table": "capture_sessions",
+      "rows": 7,
+      "table_bytes": 16384,
+      "index_bytes": 81920,
+      "total_bytes": 98304,
+      "n_live_tup": 3,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-21": 4,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 3.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 35.0,
+        "median_daily": 3.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "capture_sessions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 7 与体积 98,304 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 7,
+        "total_bytes": 98304
+      }
+    },
+    {
+      "table": "evaluations",
+      "rows": 25,
+      "table_bytes": 49152,
+      "index_bytes": 49152,
+      "total_bytes": 98304,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.5,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 13,
+        "2026-11-18": 12
+      },
+      "growth": {
+        "baseline_per_day": 12.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 125.0,
+        "median_daily": 12.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "evaluations",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 25 与体积 98,304 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 25,
+        "total_bytes": 98304
+      }
+    },
+    {
+      "table": "dataset_grants",
+      "rows": 14,
+      "table_bytes": 16384,
+      "index_bytes": 81920,
+      "total_bytes": 98304,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 6,
+        "2026-11-18": 8
+      },
+      "growth": {
+        "baseline_per_day": 7.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 70.0,
+        "median_daily": 7.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "dataset_grants",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 14 与体积 98,304 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 14,
+        "total_bytes": 98304
+      }
+    },
+    {
+      "table": "raw_asset_links",
+      "rows": 28,
+      "table_bytes": 16384,
+      "index_bytes": 81920,
+      "total_bytes": 98304,
+      "n_live_tup": 3,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 5,
+        "2026-11-18": 18,
+        "2026-11-21": 2,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 7.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 40.0,
+        "median_daily": 4.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "raw_asset_links",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 28 与体积 98,304 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 210 行，不触阈"
+        ],
+        "rows": 28,
+        "total_bytes": 98304
+      }
+    },
+    {
+      "table": "inference_services",
+      "rows": 52,
+      "table_bytes": 57344,
+      "index_bytes": 32768,
+      "total_bytes": 90112,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3636,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 35,
+        "2026-11-18": 17
+      },
+      "growth": {
+        "baseline_per_day": 26.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 260.0,
+        "median_daily": 26.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "inference_services",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 52 与体积 90,112 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 52,
+        "total_bytes": 90112
+      }
+    },
+    {
+      "table": "calibration_target_refs",
+      "rows": 159,
+      "table_bytes": 57344,
+      "index_bytes": 32768,
+      "total_bytes": 90112,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.3636,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "calibration_target_refs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 159 与体积 90,112 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 159,
+        "total_bytes": 90112
+      }
+    },
+    {
+      "table": "processing_runs",
+      "rows": 5,
+      "table_bytes": 49152,
+      "index_bytes": 32768,
+      "total_bytes": 81920,
+      "n_live_tup": 5,
+      "n_dead_tup": 11,
+      "last_vacuum": null,
+      "last_autovacuum": "2026-11-25T03:14:33.099749+00:00",
+      "last_analyze": null,
+      "last_autoanalyze": "2026-11-25T03:13:33.079224+00:00",
+      "index_ratio": 0.4,
+      "bloat_ratio": 2.2,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-18": 4,
+        "2026-11-25": 1
+      },
+      "growth": {
+        "baseline_per_day": 2.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 25.0,
+        "median_daily": 2.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "processing_runs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 5 与体积 81,920 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 5,
+        "total_bytes": 81920
+      }
+    },
+    {
+      "table": "quality_runs",
+      "rows": 1,
+      "table_bytes": 16384,
+      "index_bytes": 65536,
+      "total_bytes": 81920,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-18": 1
+      },
+      "growth": {
+        "baseline_per_day": 1.0,
+        "organic_days": 1,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 10.0,
+        "median_daily": 1.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "quality_runs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1 与体积 81,920 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1,
+        "total_bytes": 81920
+      }
+    },
+    {
+      "table": "inference_tasks",
+      "rows": 30,
+      "table_bytes": 49152,
+      "index_bytes": 32768,
+      "total_bytes": 81920,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.4,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 18,
+        "2026-11-18": 12
+      },
+      "growth": {
+        "baseline_per_day": 15.0,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 150.0,
+        "median_daily": 15.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "inference_tasks",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 30 与体积 81,920 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 30,
+        "total_bytes": 81920
+      }
+    },
+    {
+      "table": "prm_annotations",
+      "rows": 1,
+      "table_bytes": 16384,
+      "index_bytes": 65536,
+      "total_bytes": 81920,
+      "n_live_tup": 1,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-26": 1
+      },
+      "growth": {
+        "baseline_per_day": 1.0,
+        "organic_days": 1,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 10.0,
+        "median_daily": 1.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "prm_annotations",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1 与体积 81,920 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 1,
+        "total_bytes": 81920
+      }
+    },
+    {
+      "table": "annotation_backflow_cases",
+      "rows": 1,
+      "table_bytes": 16384,
+      "index_bytes": 65536,
+      "total_bytes": 81920,
+      "n_live_tup": 1,
+      "n_dead_tup": 1,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8,
+      "bloat_ratio": 1.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-26": 1
+      },
+      "growth": {
+        "baseline_per_day": 1.0,
+        "organic_days": 1,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 10.0,
+        "median_daily": 1.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_backflow_cases",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1 与体积 81,920 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 1,
+        "total_bytes": 81920
+      }
+    },
+    {
+      "table": "webhook_outbox",
+      "rows": 0,
+      "table_bytes": 16384,
+      "index_bytes": 65536,
+      "total_bytes": 81920,
+      "n_live_tup": 0,
+      "n_dead_tup": 2,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "webhook_outbox",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 81,920 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 81920
+      }
+    },
+    {
+      "table": "training_adapter_callbacks",
+      "rows": 6,
+      "table_bytes": 8192,
+      "index_bytes": 65536,
+      "total_bytes": 73728,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8889,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "training_adapter_callbacks",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 6 与体积 73,728 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 6,
+        "total_bytes": 73728
+      }
+    },
+    {
+      "table": "projects",
+      "rows": 48,
+      "table_bytes": 16384,
+      "index_bytes": 49152,
+      "total_bytes": 65536,
+      "n_live_tup": 3,
+      "n_dead_tup": 1,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.75,
+      "bloat_ratio": 0.0208,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 6,
+        "2026-11-15": 34,
+        "2026-11-21": 5,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 12.0,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 55.0,
+        "median_daily": 5.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "projects",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 48 与体积 65,536 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 360 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 48,
+        "total_bytes": 65536
+      }
+    },
+    {
+      "table": "data_source_reviews",
+      "rows": 21,
+      "table_bytes": 16384,
+      "index_bytes": 49152,
+      "total_bytes": 65536,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.75,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 2,
+        "2026-11-15": 8,
+        "2026-11-17": 7,
+        "2026-11-18": 4
+      },
+      "growth": {
+        "baseline_per_day": 5.25,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 55.0,
+        "median_daily": 5.5,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "data_source_reviews",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 21 与体积 65,536 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 158 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 21,
+        "total_bytes": 65536
+      }
+    },
+    {
+      "table": "webhook_subscriptions",
+      "rows": 0,
+      "table_bytes": 16384,
+      "index_bytes": 49152,
+      "total_bytes": 65536,
+      "n_live_tup": 0,
+      "n_dead_tup": 3,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.75,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "webhook_subscriptions",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 65,536 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 65536
+      }
+    },
+    {
+      "table": "annotation_arbitrations",
+      "rows": 11,
+      "table_bytes": 16384,
+      "index_bytes": 49152,
+      "total_bytes": 65536,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.75,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 6,
+        "2026-11-18": 5
+      },
+      "growth": {
+        "baseline_per_day": 5.5,
+        "organic_days": 2,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 55.0,
+        "median_daily": 5.5,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_arbitrations",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 11 与体积 65,536 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 11,
+        "total_bytes": 65536
+      }
+    },
+    {
+      "table": "annotation_gold_set_exposures",
+      "rows": 24,
+      "table_bytes": 8192,
+      "index_bytes": 49152,
+      "total_bytes": 57344,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8571,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_gold_set_exposures",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 24 与体积 57,344 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 24,
+        "total_bytes": 57344
+      }
+    },
+    {
+      "table": "alembic_version",
+      "rows": 1,
+      "table_bytes": 40960,
+      "index_bytes": 16384,
+      "total_bytes": 57344,
+      "n_live_tup": 0,
+      "n_dead_tup": 38,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2857,
+      "bloat_ratio": 38.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "alembic_version",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1 与体积 57,344 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1,
+        "total_bytes": 57344
+      }
+    },
+    {
+      "table": "users",
+      "rows": 126,
+      "table_bytes": 40960,
+      "index_bytes": 16384,
+      "total_bytes": 57344,
+      "n_live_tup": 3,
+      "n_dead_tup": 1,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2857,
+      "bloat_ratio": 0.0079,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-14": 9,
+        "2026-11-15": 55,
+        "2026-11-17": 37,
+        "2026-11-18": 17,
+        "2026-11-21": 5,
+        "2026-11-23": 3
+      },
+      "growth": {
+        "baseline_per_day": 21.0,
+        "organic_days": 6,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 130.0,
+        "median_daily": 13.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "users",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 126 与体积 57,344 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 630 行，不触阈",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 126,
+        "total_bytes": 57344
+      }
+    },
+    {
+      "table": "upload_parts",
+      "rows": 42,
+      "table_bytes": 40960,
+      "index_bytes": 16384,
+      "total_bytes": 57344,
+      "n_live_tup": 9,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.2857,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "recorded_at",
+      "daily_counts": {
+        "2026-11-17": 6,
+        "2026-11-18": 18,
+        "2026-11-21": 9,
+        "2026-11-23": 9
+      },
+      "growth": {
+        "baseline_per_day": 10.5,
+        "organic_days": 4,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 90.0,
+        "median_daily": 9.0,
+        "insufficient_samples": false
+      },
+      "verdict": {
+        "table": "upload_parts",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 42 与体积 57,344 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "按当前速率保留期内预计 315 行，不触阈"
+        ],
+        "rows": 42,
+        "total_bytes": 57344
+      }
+    },
+    {
+      "table": "data_source_import_logs",
+      "rows": 7,
+      "table_bytes": 16384,
+      "index_bytes": 32768,
+      "total_bytes": 49152,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6667,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "occurred_at",
+      "daily_counts": {
+        "2026-11-21": 7
+      },
+      "growth": {
+        "baseline_per_day": 7.0,
+        "organic_days": 1,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 70.0,
+        "median_daily": 7.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "data_source_import_logs",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 7 与体积 49,152 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 7,
+        "total_bytes": 49152
+      }
+    },
+    {
+      "table": "edge_agents",
+      "rows": 0,
+      "table_bytes": 8192,
+      "index_bytes": 40960,
+      "total_bytes": 49152,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8333,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "edge_agents",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 49,152 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 49152
+      }
+    },
+    {
+      "table": "annotation_gold_set_evaluations",
+      "rows": 12,
+      "table_bytes": 16384,
+      "index_bytes": 32768,
+      "total_bytes": 49152,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6667,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_gold_set_evaluations",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 12 与体积 49,152 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 12,
+        "total_bytes": 49152
+      }
+    },
+    {
+      "table": "agent_task_leases",
+      "rows": 0,
+      "table_bytes": 8192,
+      "index_bytes": 32768,
+      "total_bytes": 40960,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "agent_task_leases",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 40,960 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 40960
+      }
+    },
+    {
+      "table": "collection_task_sensors",
+      "rows": 1,
+      "table_bytes": 8192,
+      "index_bytes": 32768,
+      "total_bytes": 40960,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "collection_task_sensors",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1 与体积 40,960 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1,
+        "total_bytes": 40960
+      }
+    },
+    {
+      "table": "model_callbacks",
+      "rows": 4,
+      "table_bytes": 8192,
+      "index_bytes": 32768,
+      "total_bytes": 40960,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "model_callbacks",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 4 与体积 40,960 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 4,
+        "total_bytes": 40960
+      }
+    },
+    {
+      "table": "resource_quotas",
+      "rows": 4,
+      "table_bytes": 8192,
+      "index_bytes": 32768,
+      "total_bytes": 40960,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": "created_at",
+      "daily_counts": {
+        "2026-11-17": 4
+      },
+      "growth": {
+        "baseline_per_day": 4.0,
+        "organic_days": 1,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 40.0,
+        "median_daily": 4.0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "resource_quotas",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 4 与体积 40,960 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 4,
+        "total_bytes": 40960
+      }
+    },
+    {
+      "table": "collection_task_devices",
+      "rows": 1,
+      "table_bytes": 8192,
+      "index_bytes": 32768,
+      "total_bytes": 40960,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.8,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "collection_task_devices",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 1 与体积 40,960 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 1,
+        "total_bytes": 40960
+      }
+    },
+    {
+      "table": "annotator_skill_tags",
+      "rows": 0,
+      "table_bytes": 0,
+      "index_bytes": 32768,
+      "total_bytes": 32768,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 1.0,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotator_skill_tags",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 32,768 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 32768
+      }
+    },
+    {
+      "table": "annotation_honeypot_state",
+      "rows": 0,
+      "table_bytes": 8192,
+      "index_bytes": 24576,
+      "total_bytes": 32768,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.75,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "annotation_honeypot_state",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 32,768 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 32768
+      }
+    },
+    {
+      "table": "agent_heartbeats",
+      "rows": 0,
+      "table_bytes": 8192,
+      "index_bytes": 24576,
+      "total_bytes": 32768,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.75,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "agent_heartbeats",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 32,768 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 32768
+      }
+    },
+    {
+      "table": "edge_agent_pairing_tokens",
+      "rows": 0,
+      "table_bytes": 8192,
+      "index_bytes": 24576,
+      "total_bytes": 32768,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.75,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "created_at",
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "edge_agent_pairing_tokens",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 32,768 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 32768
+      }
+    },
+    {
+      "table": "ai_token_usage",
+      "rows": 0,
+      "table_bytes": 0,
+      "index_bytes": 32768,
+      "total_bytes": 32768,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 1.0,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": true,
+      "time_column": "occurred_at",
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "ai_token_usage",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 0 与体积 32,768 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）"
+        ],
+        "rows": 0,
+        "total_bytes": 32768
+      }
+    },
+    {
+      "table": "upload_part_checksum_bindings",
+      "rows": 24,
+      "table_bytes": 8192,
+      "index_bytes": 16384,
+      "total_bytes": 24576,
+      "n_live_tup": 0,
+      "n_dead_tup": 0,
+      "last_vacuum": null,
+      "last_autovacuum": null,
+      "last_analyze": null,
+      "last_autoanalyze": null,
+      "index_ratio": 0.6667,
+      "bloat_ratio": 0.0,
+      "stats_trustworthy": false,
+      "time_column": null,
+      "daily_counts": {},
+      "growth": {
+        "baseline_per_day": 0.0,
+        "organic_days": 0,
+        "burst_days": 0,
+        "burst_rows": 0,
+        "burst_threshold": 0,
+        "median_daily": 0,
+        "insufficient_samples": true
+      },
+      "verdict": {
+        "table": "upload_part_checksum_bindings",
+        "verdict": "no_partition_needed",
+        "reasons": [
+          "行数 24 与体积 24,576 字节均远低于阈值（50,000,000 行 / 53,687,091,200 字节）",
+          "无可用时间列，增长率未知（但规模远低于阈值，不影响当前判定）",
+          "PG 统计值与精确行数偏差大，统计不可信（已改用精确 COUNT）"
+        ],
+        "rows": 24,
+        "total_bytes": 24576
+      }
+    }
+  ],
+  "notes": [
+    "只读审计：全部 SQL 为 SELECT，未执行任何 DDL/DML",
+    "行数为精确 COUNT(*)，不使用 n_live_tup 估算值（统计可能因容器重启归零）",
+    "增长率只用剔除尖峰后的有机基线外推；尖峰来自压测/演练，不代表业务流量",
+    "统计不可信的表（精确行数与 n_live_tup 偏差过大）增长率以时间列分布为准"
+  ],
+  "mode": "execute"
+}
