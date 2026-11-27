@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
+import pytest
 from app.application.webhook.delivery import WebhookDeliveryUseCases
 from app.domain.webhook.subscription import (
     FAILURE_PAUSE_THRESHOLD,
@@ -44,7 +45,7 @@ def _subscription(
         event_types=("annotation.completed",),
         status=status,
         consecutive_failures=failures,
-        secret_plain="example-signing-secret",
+        secret_plain="example-hmac-plain-0123456789",
     )
 
 
@@ -63,7 +64,9 @@ def test_successful_delivery_records_success_and_resets_count() -> None:
             self.saved: list[WebhookSubscription] = []
 
         def active_for_event(self, project_id, event_type):
-            return (DeliveryTarget(subscription=subscription, secret="example-signing-secret"),)
+            return (
+                DeliveryTarget(subscription=subscription, secret="example-hmac-plain-0123456789"),
+            )
 
         def replace_state(self, subscription_id, updated):
             self.saved.append(updated)
@@ -100,7 +103,7 @@ def test_repeated_failures_pause_the_subscription() -> None:
         def active_for_event(self, project_id, event_type):
             # 每次投递用当前状态（模拟真实循环）
             current = self.saved[-1] if self.saved else subscription
-            return (DeliveryTarget(subscription=current, secret="example-signing-secret"),)
+            return (DeliveryTarget(subscription=current, secret="example-hmac-plain-0123456789"),)
 
         def replace_state(self, subscription_id, updated):
             self.saved.append(updated)
@@ -146,6 +149,38 @@ def test_paused_subscription_is_not_delivered() -> None:
 
     assert outcome.delivered == 0
     assert fake.calls == []
+
+
+def test_default_transport_rejects_unsafe_url_before_dial() -> None:
+    """SSRF 防护：默认传输在**拨号前**必须过 URL 守卫。
+
+    订阅地址是用户提供的外部输入——不校验就等于让平台成为任意地址的
+    探测器（可探测内网端口、可打到 metadata 服务）。这里用私有网地址
+    验证守卫在建立连接前就拒绝。
+    """
+    from app.application.webhook.delivery import WebhookDeliveryUseCases
+    from app.infrastructure.adapter_url_guard import AdapterHttpFailure
+
+    class _Repo:
+        def active_for_event(self, project_id, event_type):
+            return ()
+
+        def replace_state(self, subscription_id, updated):
+            raise AssertionError("不应进入投递")
+
+    use_cases = WebhookDeliveryUseCases(_Repo())
+    with pytest.raises(AdapterHttpFailure):
+        use_cases._httpx_post("http://169.254.169.254/latest/meta-data/", {}, b"{}")
+
+
+def test_default_transport_disables_redirects() -> None:
+    """重定向必须关闭：跟随会把"校验过的首跳"变成"任意目标"，绕过守卫。"""
+    import inspect
+
+    from app.application.webhook.delivery import WebhookDeliveryUseCases
+
+    source = inspect.getsource(WebhookDeliveryUseCases._httpx_post)
+    assert "follow_redirects=False" in source
 
 
 def test_unmatched_event_type_delivers_nothing() -> None:
