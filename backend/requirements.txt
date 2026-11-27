@@ -3,7 +3,7 @@
 # fastapi 0.133.1 是拉起 starlette 1.10.0（已修复）的最小组合，故跨大版本升级。
 # 风险：fastapi 0.115 → 0.133 为跨大版本升级，可能影响响应模型、依赖注入、异常
 # 处理器等 API 兼容性；已跑全量 pytest 回归（见 tests/）确认无破坏。
-fastapi==0.133.1
+fastapi==0.165.0
 uvicorn[standard]==0.34.0
 pydantic-settings==2.7.1
 sqlalchemy==2.0.36
