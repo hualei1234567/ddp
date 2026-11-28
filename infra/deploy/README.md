@@ -10,7 +10,7 @@
 | `api.ddp.online` | 公网 VPS Nginx → `127.0.0.1:8000` | A 记录 橙云代理 (Proxied) | FastAPI REST 接口与 `/health` |
 | `s3.ddp.online` | 公网 VPS Nginx → `127.0.0.1:9000` | A 记录 **灰云直连 (DNS Only)** | 自建 MinIO 分片预签名直传（>10GB 零云存储费，避开 CF 100MB 限制） |
 
-## 2. 公网 VPS 后端一键部署步骤
+## 2. 公网 VPS 后端一键部署步骤（路径 A：公网 VPS + Nginx）
 
 ```bash
 # 1. 准备生产环境变量（替换其中 4 个 <REPLACE_WITH_...> 随机密钥）
@@ -26,6 +26,59 @@ curl -fsS http://127.0.0.1:8000/health
 sudo cp infra/deploy/nginx-origin.conf.example /etc/nginx/conf.d/ddp-online.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+## 2B. 路径 B：本机 Docker + Cloudflare Tunnel 60 秒公网启动（零 VPS）
+
+如果没有公网 VPS 或不想维护宿主机 Nginx / TLS 证书，可在本机（Mac / Linux 工作站）直接通过 `infra/deploy/docker-compose.tunnel.yml` 追加 `cloudflare/cloudflared:2025.2.0` 守护容器，零公网 IP 暴露后端与对象存储至公网域名。
+
+### 第一步：在 Cloudflare Zero Trust 创建 Tunnel 并配置两条路由
+
+登录 Cloudflare Zero Trust 控制台 → **Networks** → **Tunnels** → **Create a tunnel**（选择 **Cloudflared**），复制生成的 Tunnel Token，并在 **Public Hostname** 页签添加以下两条容器内网映射：
+
+| Public Hostname | Service Type | Service URL | 说明 |
+| :--- | :--- | :--- | :--- |
+| `api.ddp.online` | `HTTP` | `api:8000` | FastAPI REST 接口与 `/health` |
+| `s3.ddp.online` | `HTTP` | `minio:9000` | 自建 MinIO 预签名直传端点 |
+
+### 第二步：60 秒一键启动本机 Docker 栈 + Tunnel
+
+```bash
+# 1. 准备生产环境变量（替换其中 4 个 <REPLACE_WITH_...> 随机密钥，切勿提交 .env）
+cp infra/deploy/env.production.example .env
+
+# 2. 注入 Cloudflare Tunnel Token（可写入 .env 的 CF_TUNNEL_TOKEN=...，或临时 export）
+export CF_TUNNEL_TOKEN="<YOUR_CLOUDFLARE_TUNNEL_TOKEN>"
+
+# 3. 一键拉起全栈 + cloudflared 守护容器（继承 prod.yml 安全基线，隐藏 DB/Redis 端口）
+docker compose \
+  -f docker-compose.yml \
+  -f infra/deploy/docker-compose.prod.yml \
+  -f infra/deploy/docker-compose.tunnel.yml \
+  --profile app up -d --build
+```
+
+### 第三步：验收步骤
+
+```bash
+# 1. 确认 cloudflared 隧道已注册 4 条 QUIC/HTTP2 连接（日志出现 "Registered tunnel connection"）
+docker compose \
+  -f docker-compose.yml \
+  -f infra/deploy/docker-compose.prod.yml \
+  -f infra/deploy/docker-compose.tunnel.yml \
+  logs --tail=40 cloudflared
+
+# 2. 核验公网 API 健康检查（经 Cloudflare 边缘 HTTPS 穿透到本机 api:8000）
+curl -fsS https://api.ddp.online/health
+
+# 3. 核验 S3 端点预检与完整公网冒烟探针
+backend/.venv/bin/python scripts/ops/online_deploy_verify.py \
+  --skip-offline \
+  --api-url https://api.ddp.online \
+  --web-url https://www.ddp.online \
+  --s3-url https://s3.ddp.online
+```
+
+> **注意**：Cloudflare 免费版 Tunnel 代理单次 HTTP 请求体上限为 **100 MB**。DDP 上传链路默认走 S3 Multipart 分片上传，请确保单分片大小 `< 100 MB`（默认 5~64 MB 均安全）；如未来需要单次上传超过 100 MB 的非分片请求，可切回路径 A（VPS + `s3.ddp.online` 灰云直连）。
 
 ## 3. 签发轻量登录令牌与创建首个项目
 

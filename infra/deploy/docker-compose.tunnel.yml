@@ -1,0 +1,31 @@
+# DDP 公网部署路径 B：零 VPS · Cloudflare Tunnel 穿透本机 Docker 栈
+# 用法（在仓库根目录执行，与基础编排及生产基线叠加）：
+#   docker compose \
+#     -f docker-compose.yml \
+#     -f infra/deploy/docker-compose.prod.yml \
+#     -f infra/deploy/docker-compose.tunnel.yml \
+#     --profile app up -d --build
+#
+# 设计要点：
+# 1. 无需公网 VPS、无需公网 IP、无需宿主机 Nginx 与 TLS 证书管理，由 Cloudflare 边缘自动终止 HTTPS；
+# 2. 在 Cloudflare Zero Trust → Networks → Tunnels 控制台配置两条 Public Hostname 路由：
+#      - api.ddp.online → http://api:8000
+#      - s3.ddp.online  → http://minio:9000
+# 3. 通过环境变量 TUNNEL_TOKEN 传入 ${CF_TUNNEL_TOKEN}（不将明文 Token 暴露在命令行参数中）；
+# 4. 完整继承 docker-compose.prod.yml 的安全基线（postgres/redis 不暴露宿主端口、api 预签名指向
+#    https://s3.ddp.online、后台 Worker 走容器内网 http://minio:9000）。
+
+services:
+  cloudflared:
+    profiles: ["app"]
+    image: cloudflare/cloudflared:2025.2.0
+    container_name: ddp-cloudflared
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:?CF_TUNNEL_TOKEN is required for Cloudflare Tunnel}
+    depends_on:
+      api:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
