@@ -266,6 +266,11 @@ class Settings(BaseSettings):
         gt=0,
         le=16 * 1024**2,
     )
+    # DATA_CLEANING 动作策略（V61-015/016）：按规则 ID 显式启用隔离或衍生变换。
+    # 默认全空 = 保持既有 FLAG-only 行为（向后兼容）；规则 ID 非法时阶段显式
+    # 失败，不静默忽略——写错 ID 却"看起来生效"是比报错更糟的结果。
+    processing_cleaning_quarantine_rule_ids: list[str] = Field(default_factory=list)
+    processing_cleaning_transform_rule_ids: list[str] = Field(default_factory=list)
     validation_worker_poll_interval_seconds: float = Field(default=1.0, gt=0)
     validation_stream_chunk_size_bytes: int = Field(default=1024 * 1024, gt=0)
     validation_max_attempts: int = Field(default=5, ge=1, le=100)
