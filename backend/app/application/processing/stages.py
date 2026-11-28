@@ -20,6 +20,9 @@
 - ``DATA_CLEANING`` 由 :mod:`app.application.processing.cleaning_stage` 实现，
   对 ``STREAM_EXTRACTION`` 产出的逐帧流执行确定性 FLAG 清洗与版本化报告落库；
   未注入清洗处理器时由 :class:`SkippedStage` 显式 SKIPPED 并写明原因。
+- ``TIMESTAMP_NORMALIZE`` 由 :mod:`app.application.processing.timestamp_normalize_stage`
+  实现，把 ``video_frames`` 的原始时间显式归一化并留痕；未注入处理器时由
+  :class:`SkippedStage` 显式 SKIPPED 并写明原因。
 
 阶段处理器是纯函数式对象：输入 :class:`StageContext`，返回
 :class:`StageOutcome`；可预期失败抛 :class:`StageFailure`，由编排器脱敏落库。
@@ -198,6 +201,7 @@ def default_handlers(
     quality_check: StageHandler,
     stream_extraction: StageHandler | None = None,
     data_cleaning: StageHandler | None = None,
+    timestamp_normalize: StageHandler | None = None,
 ) -> dict[ProcessingStage, StageHandler]:
     """默认阶段表：必选阶段由组合根注入，可选阶段未注入时显式 SKIPPED。
 
@@ -225,6 +229,11 @@ def default_handlers(
         handlers[stage] = SkippedStage(reason)
     if data_cleaning is not None:
         handlers[ProcessingStage.DATA_CLEANING] = data_cleaning
+    # TIMESTAMP_NORMALIZE 需要数据库会话与 video_frames 读写语义；未注入时
+    # 由 STAGE_SKIP_REASONS 的 SkippedStage 显式跳过并写明原因（同
+    # STREAM_EXTRACTION 的可选注入模式），不静默成功。
+    if timestamp_normalize is not None:
+        handlers[ProcessingStage.TIMESTAMP_NORMALIZE] = timestamp_normalize
     missing = [stage.value for stage in STAGE_SEQUENCE if stage not in handlers]
     if missing:  # 防御：新增阶段忘配处理器时启动即失败，而不是运行时静默成功。
         raise ValueError(f"以下阶段缺少处理器：{', '.join(missing)}")
