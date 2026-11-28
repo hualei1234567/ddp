@@ -26,9 +26,12 @@ GET  /stats   计数统计（总数 / firing / resolved / 按 alertname 分组�
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
+import threading
 import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -64,13 +67,76 @@ SOCKET_TIMEOUT_SECONDS = 30
 #: 允许的 Content-Type（Alertmanager 固定发 ``application/json``）
 _JSON_CONTENT_TYPE = "application/json"
 
+#: 可选 HMAC-SHA256 签名请求头名（格式：``sha256=<64-hex>``）
+SIGNATURE_HEADER = "X-Alertmanager-Signature"
+
 
 class _BadRequest(Exception):
     """请求不合法（返回 400）。"""
 
 
+class _Unauthorized(Exception):
+    """鉴权或签名校验失败（返回 401）。"""
+
+
 class _PayloadTooLarge(Exception):
     """请求体超限（返回 413）。"""
+
+
+def compute_hmac_signature(secret: str, body: bytes) -> str:
+    """计算告警请求体的 HMAC-SHA256 签名（``sha256=<hex>``）。"""
+    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return f"sha256={digest}"
+
+
+def build_dedup_key(payload: dict[str, Any]) -> str:
+    """为告警载荷构造去重键：``(groupKey, status, sorted fingerprints)``。
+
+    同一告警从 ``firing`` 转为 ``resolved`` 时 ``status`` 变化，去重键不同，
+    因此恢复事件永远不会被误判为重复。
+    """
+    group_key = str(payload.get("groupKey") or "")
+    status = str(payload.get("status") or "")
+    fingerprints: list[str] = []
+    alerts = payload.get("alerts")
+    if isinstance(alerts, list):
+        for item in alerts:
+            if isinstance(item, dict):
+                fp = item.get("fingerprint")
+                if isinstance(fp, str) and fp:
+                    fingerprints.append(fp)
+    fingerprints.sort()
+    return json.dumps(
+        [group_key, status, fingerprints], ensure_ascii=False, separators=(",", ":")
+    )
+
+
+class _DedupCache:
+    """线程安全的滑动窗口去重表（仅在 ``window_seconds > 0`` 时启用）。"""
+
+    def __init__(self, window_seconds: float) -> None:
+        self._window = max(0.0, float(window_seconds))
+        self._lock = threading.Lock()
+        self._seen: dict[str, float] = {}
+
+    @property
+    def enabled(self) -> bool:
+        return self._window > 0.0
+
+    def is_duplicate(self, key: str, *, now: float | None = None) -> bool:
+        """若 ``key`` 在窗口内已出现过返回 True，否则登记并返回 False。"""
+        if not self.enabled:
+            return False
+        current = time.monotonic() if now is None else now
+        with self._lock:
+            expired = [k for k, ts in self._seen.items() if current - ts > self._window]
+            for k in expired:
+                del self._seen[k]
+            prev = self._seen.get(key)
+            if prev is not None and current - prev <= self._window:
+                return True
+            self._seen[key] = current
+            return False
 
 
 class AlertReceiverHandler(BaseHTTPRequestHandler):
@@ -83,8 +149,11 @@ class AlertReceiverHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "ddp-alert-receiver/1.0"
 
-    #: 由 build_server 注入的存储
+    #: 由 build_server 注入的存储与可选安全/去重配置
     store: AlertStore
+    bearer_token: str | None = None
+    hmac_secret: str | None = None
+    dedup_cache: _DedupCache = _DedupCache(0.0)
 
     # ── HTTP 方法实现 ────────────────────────────────────────────────
 
@@ -112,7 +181,9 @@ class AlertReceiverHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            payload = self._read_json_body()
+            raw_body = self._read_raw_body()
+            self._verify_auth(raw_body)
+            payload = self._parse_json_body(raw_body)
         except _PayloadTooLarge as exc:
             # 先回 413 再丢弃残余 body：顺序很重要——若先丢弃再回，
             # 遇到「Content-Length 撒谎」的客户端（声明 100 MB 但只发 10 字节）
@@ -120,8 +191,22 @@ class AlertReceiverHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": str(exc)})
             self._drain()
             return
+        except _Unauthorized as exc:
+            self._send_json(HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
+            return
         except _BadRequest as exc:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return
+
+        if self.dedup_cache.enabled and self.dedup_cache.is_duplicate(
+            build_dedup_key(payload)
+        ):
+            logger.info(
+                "去重跳过重复告警：alertname=%s status=%s",
+                _common_label(payload, "alertname"),
+                payload.get("status"),
+            )
+            self._send_json(HTTPStatus.OK, {"status": "deduplicated", "stored": False})
             return
 
         # 落盘：告警是「证据」，写失败必须让上游知道（Alertmanager 会重试）。
@@ -129,7 +214,9 @@ class AlertReceiverHandler(BaseHTTPRequestHandler):
             self.store.append(payload)
         except (OSError, ValueError) as exc:
             logger.error("落盘失败：%s", exc)
-            self._send_json(HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "persist_failed"})
+            self._send_json(
+                HTTPStatus.INTERNAL_SERVER_ERROR, {"error": "persist_failed"}
+            )
             return
 
         # 只记告警内容本身：不打印整个 payload（含全部标签/注解）。
@@ -169,11 +256,11 @@ class AlertReceiverHandler(BaseHTTPRequestHandler):
             return None
         return limit if limit >= 0 else None
 
-    def _read_json_body(self) -> dict[str, Any]:
-        """读取并解析请求体。
+    def _read_raw_body(self) -> bytes:
+        """读取原始请求体字节。
 
         :raises _PayloadTooLarge: body 超过上限。
-        :raises _BadRequest: Content-Type 不合法或 body 不是合法 JSON 对象。
+        :raises _BadRequest: Content-Type 或 Content-Length 不合法。
         """
         content_type = self.headers.get("Content-Type", "")
         base_type = content_type.split(";")[0].strip().lower()
@@ -200,6 +287,29 @@ class AlertReceiverHandler(BaseHTTPRequestHandler):
         body = self.rfile.read(length)
         if len(body) != length:
             raise _BadRequest("请求体长度与 Content-Length 不一致")
+        return body
+
+    def _verify_auth(self, raw_body: bytes) -> None:
+        """可选鉴权校验（默认关闭，配置对应令牌/密钥后强制校验）。"""
+        if self.bearer_token:
+            auth_header = self.headers.get("Authorization", "")
+            parts = auth_header.split(None, 1)
+            if (
+                len(parts) != 2
+                or parts[0].lower() != "bearer"
+                or not hmac.compare_digest(parts[1], self.bearer_token)
+            ):
+                raise _Unauthorized("Bearer 令牌缺失或无效")
+
+        if self.hmac_secret:
+            provided = self.headers.get(SIGNATURE_HEADER, "")
+            expected = compute_hmac_signature(self.hmac_secret, raw_body)
+            if not provided or not hmac.compare_digest(provided, expected):
+                raise _Unauthorized("HMAC 签名缺失或校验失败")
+
+    @staticmethod
+    def _parse_json_body(body: bytes) -> dict[str, Any]:
+        """解析 JSON 对象请求体。"""
         try:
             payload = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -280,6 +390,10 @@ def build_server(
     host: str = "0.0.0.0",
     port: int = 8080,
     data_dir: str | os.PathLike[str] | None = None,
+    *,
+    bearer_token: str | None = None,
+    hmac_secret: str | None = None,
+    dedup_window_seconds: float | None = None,
 ) -> _AlertReceiverServer:
     """构建 HTTP 服务器（不启动）。
 
@@ -287,14 +401,42 @@ def build_server(
     :param port: 监听端口。
     :param data_dir: 落盘目录；``None`` 时用 ``ALERT_RECEIVER_DIR`` 环境变量，
         再缺省到 ``/var/lib/ddp-alerts``。
+    :param bearer_token: 可选 Bearer 鉴权令牌；``None`` 时读取
+        ``ALERT_RECEIVER_BEARER_TOKEN``，为空则关闭。
+    :param hmac_secret: 可选 HMAC-SHA256 验签密钥；``None`` 时读取
+        ``ALERT_RECEIVER_HMAC_SECRET``，为空则关闭。
+    :param dedup_window_seconds: 可选去重窗口（秒）；``None`` 时读取
+        ``ALERT_RECEIVER_DEDUP_WINDOW_SECONDS``，为 0 则关闭（全量落盘）。
     """
     resolved_dir = data_dir or os.environ.get("ALERT_RECEIVER_DIR") or DEFAULT_DATA_DIR
+    resolved_bearer = (
+        bearer_token
+        if bearer_token is not None
+        else os.environ.get("ALERT_RECEIVER_BEARER_TOKEN")
+    ) or None
+    resolved_hmac = (
+        hmac_secret
+        if hmac_secret is not None
+        else os.environ.get("ALERT_RECEIVER_HMAC_SECRET")
+    ) or None
+    if dedup_window_seconds is None:
+        raw_window = os.environ.get("ALERT_RECEIVER_DEDUP_WINDOW_SECONDS", "0")
+        resolved_window = float(raw_window) if raw_window.strip() else 0.0
+    else:
+        resolved_window = float(dedup_window_seconds)
+
     store = AlertStore(resolved_dir)
+    dedup_cache = _DedupCache(resolved_window)
 
     handler = type(
         "BoundAlertReceiverHandler",
         (AlertReceiverHandler,),
-        {"store": store},
+        {
+            "store": store,
+            "bearer_token": resolved_bearer,
+            "hmac_secret": resolved_hmac,
+            "dedup_cache": dedup_cache,
+        },
     )
 
     server = _AlertReceiverServer((host, port), handler)

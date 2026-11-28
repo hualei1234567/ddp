@@ -1,0 +1,61 @@
+{
+  "passed": true,
+  "mode": "embedded",
+  "target_url": "http://127.0.0.1:55549",
+  "executed_at": "2026-11-28T10:08:37.842745+00:00",
+  "security": {
+    "bearer_auth_enabled": true,
+    "hmac_signature_enabled": true,
+    "dedup_window_seconds": 60.0
+  },
+  "fingerprint": "drill-9adc3cab2d64",
+  "checks": {
+    "health": {
+      "status_code": 200,
+      "service": "ddp-alert-receiver"
+    },
+    "auth_missing_bearer_rejected": {
+      "status_code": 401
+    },
+    "auth_invalid_hmac_rejected": {
+      "status_code": 401
+    },
+    "firing_accepted": {
+      "status_code": 200,
+      "response": {
+        "status": "accepted",
+        "stored": true
+      }
+    },
+    "duplicate_firing": {
+      "status_code": 200,
+      "response": {
+        "status": "deduplicated",
+        "stored": false
+      }
+    },
+    "resolved_accepted": {
+      "status_code": 200,
+      "response": {
+        "status": "accepted",
+        "stored": true
+      }
+    },
+    "cross_check": {
+      "stats_after": {
+        "by_alertname": {
+          "DdpApiDown": 2
+        },
+        "firing": 1,
+        "resolved": 1,
+        "total": 2,
+        "unknown_status": 0
+      },
+      "listing_count": 2,
+      "disk_ndjson_lines": 2,
+      "firing_delta": 1,
+      "resolved_delta": 1,
+      "total_delta": 2
+    }
+  }
+}

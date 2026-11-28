@@ -1,0 +1,42 @@
+{
+  "passed": true,
+  "executed_at": "2026-11-28T10:09:19.830462+00:00",
+  "otel_config": {
+    "enabled": true,
+    "service_name": "ddp-api-otel-drill",
+    "protocol": "http",
+    "endpoint": "http://127.0.0.1:55691/v1/traces",
+    "sample_ratio": 1.0
+  },
+  "trace_propagation": {
+    "incoming_traceparent": "00-edce086d3a1f51fd0d4ddd040d07eb81-a6c69f9661fa0eac-01",
+    "response_x_trace_id": "edce086d3a1f51fd0d4ddd040d07eb81",
+    "outbound_traceparent": "00-edce086d3a1f51fd0d4ddd040d07eb81-02c8aa1878fb4ffd-01",
+    "trace_id_matched": true
+  },
+  "otlp_stub_received": [
+    {
+      "path": "/v1/traces",
+      "content_type": "application/x-protobuf",
+      "content_encoding": "",
+      "raw_bytes_len": 662,
+      "span_count": 3,
+      "received_at": "2026-11-28T10:09:19.830241+00:00"
+    }
+  ],
+  "verified_health_span": {
+    "name": "GET /health",
+    "scope": "ddp",
+    "trace_id": "edce086d3a1f51fd0d4ddd040d07eb81",
+    "span_id": "5e47325e94ab0c54",
+    "parent_span_id": "a6c69f9661fa0eac",
+    "kind": 2,
+    "attributes": {
+      "http.request.method": "GET",
+      "url.path": "/health",
+      "http.route": "/health",
+      "http.response.status_code": 200
+    }
+  },
+  "total_exported_spans": 3
+}
