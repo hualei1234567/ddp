@@ -103,6 +103,9 @@ class DataSourceImportCreate(BaseModel):
     # 物化出的 Episode 会继承它。
     collection_task_id: UUID | None = None
     batch_id: UUID | None = None
+    #: V61-023 许可门禁：GATED 或非宽松许可的数据源必须显式确认。
+    #: 未确认时返回 422 并说明原因；宽松许可的数据源无需传本字段。
+    license_acknowledged: bool = False
 
 
 class ImportActionRequest(BaseModel):

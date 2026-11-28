@@ -48,6 +48,7 @@ from app.domain.datasources.errors import (
     ResourceNotFoundError,
     VersionConflictError,
 )
+from app.domain.datasources.license_gate import enforce_license_gate
 from app.domain.datasources.models import DataSource, DataSourceImport, DataSourceImportLog
 from app.domain.datasources.state_machines import (
     allowed_import_actions,
@@ -397,6 +398,14 @@ class DataSourceUseCases:
             return self._replay_import(scope, replay.response_ref)
 
         source = self.get_source(scope, data_source_id)
+        # V61-023 许可门禁：在登记导入**之前**拦截，避免"先落一条 PENDING 再失败"
+        # 留下误导性的半成品记录。已确认时把 reasons 写进审计 details。
+        gate = enforce_license_gate(
+            license_name=getattr(source, "license", None),
+            access_condition=str(getattr(source, "access_condition", "") or ""),
+            is_gated=bool(getattr(source, "is_gated", False)),
+            acknowledged=command.license_acknowledged,
+        )
         item = DataSourceImport(
             import_id=uuid4(),
             project_id=scope.project_id,
@@ -428,6 +437,10 @@ class DataSourceUseCases:
                 "revision": source.revision,
                 "scope": created.scope.value,
                 "sample_limit": created.sample_limit,
+                # 许可门禁留痕：确认了哪些限制、依据哪个许可。
+                "license": gate.license,
+                "license_acknowledged": command.license_acknowledged,
+                "license_gate_reasons": [reason.value for reason in gate.reasons],
             },
             event_type="datasource.import_requested",
             event_payload={

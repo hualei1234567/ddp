@@ -156,6 +156,15 @@ DataSourceImportCreate:
       type: [string, "null"]
       format: uuid
       description: 归属到具体采集批次；为空时只归属到任务。
+    license_acknowledged:
+      type: boolean
+      default: false
+      description: |
+        许可确认（V61-023）。数据源为 `access_condition=GATED` / `is_gated=true`、
+        或许可不在宽松白名单（MIT / Apache-2.0 / BSD / CC0 / CC-BY 等）时，
+        必须显式传 `true` 才能导入；否则返回 422 并说明原因。许可缺失同样
+        视为最严格（"没说许可"不等于"随便用"）。宽松许可的数据源无需本字段。
+        确认事实（许可值 + 触发的限制原因）会写入审计 details 留痕。
 
 ImportActionRequest:
   type: object

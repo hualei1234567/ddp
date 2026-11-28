@@ -53,3 +53,6 @@ class NewDataSourceImport:
     # 物化出的 Episode 同样带上 task_id——否则下游按任务统计永远查不到。
     collection_task_id: UUID | None = None
     batch_id: UUID | None = None
+    #: V61-023 许可门禁：GATED 或非宽松许可的数据源必须显式确认才能导入。
+    #: 默认 False = 未确认；宽松许可的数据源不受影响。
+    license_acknowledged: bool = False

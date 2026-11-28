@@ -357,6 +357,7 @@ def create_import(
             cache_location=payload.cache_location,
             collection_task_id=payload.collection_task_id,
             batch_id=payload.batch_id,
+            license_acknowledged=payload.license_acknowledged,
         ),
         idempotency_key=idempotency_key,
         method=request.method,
