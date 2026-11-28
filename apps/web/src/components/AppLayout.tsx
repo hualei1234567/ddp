@@ -10,21 +10,15 @@ import {
   Drawer,
   Grid,
   Layout,
-  Menu,
   Tag,
   Tooltip,
   Typography,
   message,
 } from "antd";
-import type { MenuProps } from "antd";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
-import {
-  findNavItem,
-  navSections,
-  PLATFORM_STAGE_LABEL,
-} from "../app/navigation";
+import { findNavItem, PLATFORM_STAGE_LABEL } from "../app/navigation";
 import { designTokens } from "../app/theme";
 import { useProjectId } from "../hooks/useProjectId";
 import { readAccessToken } from "../services/authToken";
@@ -32,48 +26,9 @@ import { formatIdentifier } from "../services/format";
 import { identityApi, type CurrentUser } from "../services/identity";
 import { storeProjectId } from "../services/project";
 import AuthSessionDrawer from "./AuthSessionDrawer";
+import SidebarNavigation from "./SidebarNavigation";
 
 const { Header, Sider, Content } = Layout;
-
-function buildMenuItems(): MenuProps["items"] {
-  return navSections.map((section) => ({
-    type: "group" as const,
-    key: `group:${section.key}`,
-    label: section.label,
-    children: section.items.map((item) => ({
-      key: item.path,
-      icon: item.icon,
-      disabled: !item.available,
-      label: (
-        <span className="ddp-nav-label">
-          <span>{item.label}</span>
-          {!item.available ? (
-            <span className="ddp-nav-badge">待开放</span>
-          ) : null}
-        </span>
-      ),
-    })),
-  }));
-}
-
-const MENU_ITEMS = buildMenuItems();
-
-interface NavigationMenuProps {
-  selectedKeys: string[];
-  onNavigate: (path: string) => void;
-}
-
-function NavigationMenu({ selectedKeys, onNavigate }: NavigationMenuProps) {
-  return (
-    <Menu
-      mode="inline"
-      selectedKeys={selectedKeys}
-      items={MENU_ITEMS}
-      onClick={({ key }) => onNavigate(key)}
-      className="ddp-nav"
-    />
-  );
-}
 
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
@@ -130,8 +85,13 @@ export default function AppLayout() {
     navigate(path);
   };
 
-  const navigation = (
-    <NavigationMenu selectedKeys={selectedKeys} onNavigate={handleNavigate} />
+  const navigation = (isCollapsed: boolean) => (
+    <SidebarNavigation
+      selectedKeys={selectedKeys}
+      activeSectionKey={match?.section.key ?? null}
+      collapsed={isCollapsed}
+      onNavigate={handleNavigate}
+    />
   );
 
   return (
@@ -149,7 +109,7 @@ export default function AppLayout() {
             <div className="ddp-brand-wrap">
               <Brand compact={collapsed} />
             </div>
-            {navigation}
+            {navigation(collapsed)}
             {!collapsed ? (
               <div className="ddp-sider-footer">
                 <Tag color="blue">{PLATFORM_STAGE_LABEL}</Tag>
@@ -270,7 +230,7 @@ export default function AppLayout() {
         title="DDP · 具身智能数据平台"
         className="ddp-drawer"
       >
-        {navigation}
+        {navigation(false)}
       </Drawer>
     </>
   );

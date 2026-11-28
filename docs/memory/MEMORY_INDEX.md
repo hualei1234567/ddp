@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 45 张卡片**：DRAFT 0 / ACTIVE 45 / SUPERSEDED 0 / DEPRECATED 0
+**总计 46 张卡片**：DRAFT 0 / ACTIVE 46 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 45 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 46 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -32,7 +32,7 @@
 | [MEM-SOP-003](sop/MEM-SOP-003-subagent-parallel-collaboration.md) | 子代理并行开发协作模式：迁移号独占 + 契约策略 + 禁改共享文件 + 坑点统一入库 + check.sh 全局串行 | ACTIVE | 1 | `check-lock`, `contract-strategy`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `subagent` |
 | [MEM-SOP-004](sop/MEM-SOP-004-semgrep-sast-suppression.md) | Semgrep SAST 接入与误报基线的正确姿势 | ACTIVE | 1 | `baseline`, `ci`, `false-positive`, `nosemgrep`, `sast`, `semgrep`, `sql-injection`, `ssrf` |
 
-## INC · 事故与缺陷复盘（32）
+## INC · 事故与缺陷复盘（33）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -68,6 +68,7 @@
 | [MEM-INC-030](incidents/MEM-INC-030-ci-security-job-minimal-deps.md) | CI 的 security job 只装 pytest/pip-audit/pyyaml——`scripts/` 下测试文件不得顶层 import 数据库驱动 | ACTIVE | 1 | `ci-environment`, `lazy-import`, `local-green-vs-ci-green`, `minimal-deps`, `scripts-tests` |
 | [MEM-INC-031](incidents/MEM-INC-031-edge-agent-upload-version-drift.md) | Edge Agent 分片完成未刷新 UploadSession.version 必撞 409 且 403 预签名过期未重签 | ACTIVE | 1 | `403`, `409`, `edge-agent`, `fake-drift`, `if-match`, `optimistic-lock`, `presigned-url`, `version-conflict` |
 | [MEM-INC-032](incidents/MEM-INC-032-sys-modules-app-namespace-collision.md) | 同进程脚本测试加载 services/alert-receiver/app 后未还原 sys.modules["app"] 导致 backend/app 导入失败 | ACTIVE | 1 | `alert-receiver`, `app-package`, `namespace-collision`, `pytest`, `scripts-tests`, `sys-modules` |
+| [MEM-INC-033](incidents/MEM-INC-033-processing-run-input-refs-drift.md) | 处理器读 `run.input_asset_ids` 而 `ProcessingRun` 只有 `input_refs`——隐性契约断裂让阶段永远静默跳过 | ACTIVE | 1 | `contract-drift`, `integration-test`, `processing-pipeline`, `silent-skip`, `timestamp-normalize`, `video-chain` |
 
 ## CHG · 变更记录（4）
 
@@ -151,6 +152,7 @@
 - `composite-fk`：MEM-INC-026
 - `container_restart`：MEM-OPS-002
 - `contract`：MEM-INC-006, MEM-INC-008
+- `contract-drift`：MEM-INC-033
 - `contract-first`：MEM-INC-016
 - `contract-strategy`：MEM-SOP-003
 - `count-shape`：MEM-CHG-004
@@ -194,6 +196,7 @@
 - `http-header-case`：MEM-INC-029
 - `idempotency`：MEM-INC-023, MEM-INC-027
 - `if-match`：MEM-INC-031
+- `integration-test`：MEM-INC-033
 - `integrity-error`：MEM-INC-001
 - `invariant`：MEM-OPS-001
 - `json`：MEM-INC-008
@@ -250,6 +253,7 @@
 - `precision`：MEM-INC-008, MEM-INC-021
 - `preference`：MEM-DEC-002
 - `presigned-url`：MEM-INC-031
+- `processing-pipeline`：MEM-INC-033
 - `processing-run`：MEM-INC-011, MEM-INC-012
 - `projection`：MEM-INC-006, MEM-INC-007
 - `pytest`：MEM-INC-019, MEM-INC-032
@@ -282,6 +286,7 @@
 - `sha256`：MEM-INC-004, MEM-SOP-001
 - `shape`：MEM-INC-010
 - `silent-failure`：MEM-INC-002
+- `silent-skip`：MEM-INC-033
 - `single-point`：MEM-INC-015
 - `slice`：MEM-INC-010
 - `sop`：MEM-SOP-001, MEM-SOP-002, MEM-SOP-003
@@ -307,6 +312,7 @@
 - `threshold`：MEM-OPS-002
 - `time-sensitive`：MEM-INC-009
 - `timestamp`：MEM-INC-008
+- `timestamp-normalize`：MEM-INC-033
 - `timezone`：MEM-INC-022
 - `training-gate`：MEM-CHG-002, MEM-CHG-003, MEM-CHG-004
 - `training-ready`：MEM-REQ-001
@@ -319,6 +325,7 @@
 - `v21`：MEM-CHG-002
 - `version-bump`：MEM-INC-015, MEM-SOP-002
 - `version-conflict`：MEM-INC-011, MEM-INC-031
+- `video-chain`：MEM-INC-033
 - `webhook`：MEM-INC-023, MEM-INC-027, MEM-INC-029
 - `worker`：MEM-INC-001
 - `worktree`：MEM-INC-009, MEM-SOP-002

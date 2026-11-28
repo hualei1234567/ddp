@@ -194,13 +194,31 @@ class TimestampNormalizeHandler:
     def _pending_rows(self, context: StageContext) -> list[VideoFrameModel]:
         """当前运行登记的 ``video_frames`` 行中**尚未归一化**的行。
 
-        - 资产范围取 ``run.input_asset_ids``（与 VIDEO_DECODE 同一来源，
-          处理器不自己猜哪些资产属于本次运行）；
+        - 资产范围两来源，先显式后推导：
+          ① ``run.input_asset_ids``（注入方直接给资产 ID，测试/未来编排器
+          扩展走这条）；
+          ② 为空时按 ``(project_id, input_refs)`` 在 ``raw_assets`` 里解析
+          （生产真实字段：``ProcessingRun`` 只保存 ``input_refs`` 对象键——
+          领域实体没有 ``input_asset_ids``，只靠它会恒为空、归一化永远
+          静默跳过）；
         - 只处理 ``timestamp_normalized_seconds IS NULL`` 的行：重跑幂等，
           不重复改写已归一化的行；
         - ``project_id`` 一律取 ``scope.project_id``，防止跨项目改写帧行。
         """
+
+        from app.infrastructure.db.models.ingestion import RawAssetModel
+
         asset_ids = tuple(getattr(context.run, "input_asset_ids", None) or ())
+        if not asset_ids:
+            refs = tuple(getattr(context.run, "input_refs", None) or ())
+            if refs:
+                asset_ids = tuple(
+                    self._session.scalars(
+                        select(RawAssetModel.id)
+                        .where(RawAssetModel.project_id == context.scope.project_id)
+                        .where(RawAssetModel.object_key.in_(refs))
+                    ).all()
+                )
         if not asset_ids:
             return []
         stmt = (
