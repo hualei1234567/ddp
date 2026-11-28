@@ -1275,3 +1275,100 @@ def test_import_logs_are_project_scoped_and_missing_import_is_404(api_db) -> Non
 
     missing = editor.get(f"/api/v1/projects/{ids.project_a}/data-source-imports/{uuid4()}/logs")
     assert missing.status_code == 404, missing.text
+
+
+# ------------------------------------------------ 许可门禁（V61-023）
+
+
+def _import_payload(**overrides: object) -> dict[str, object]:
+    base: dict[str, object] = {
+        "scope": "SAMPLE",
+        "tool_name": "huggingface_hub",
+        "tool_version": "0.27.1",
+        "sample_limit": 5,
+    }
+    base.update(overrides)
+    return base
+
+
+def _register_source(client, project_id: object, **overrides: object) -> dict:
+    created = client.post(_url(project_id), json=_payload(**overrides))
+    assert created.status_code == 201, created.text
+    return created.json()
+
+
+def _post_import(client, project_id: object, source_id: str, **overrides: object):
+    return client.post(_url(project_id, f"/{source_id}/imports"), json=_import_payload(**overrides))
+
+
+def test_gated_source_import_requires_licence_acknowledgement(api_db) -> None:
+    """GATED 数据源未确认 → 422，且不落半成品导入记录。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source = _register_source(
+        client, ids.project_a, license="Apache-2.0", access_condition="GATED", is_gated=True
+    )
+
+    response = _post_import(client, ids.project_a, source["data_source_id"])
+
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "validation_failed"
+    detail = client.get(_url(ids.project_a, f"/{source['data_source_id']}/detail")).json()
+    assert detail["imports"] == []
+
+
+def test_gated_source_import_succeeds_after_acknowledgement(api_db) -> None:
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source = _register_source(
+        client, ids.project_a, license="Apache-2.0", access_condition="GATED", is_gated=True
+    )
+
+    response = _post_import(
+        client, ids.project_a, source["data_source_id"], license_acknowledged=True
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "PENDING"
+
+
+def test_restricted_license_requires_acknowledgement(api_db) -> None:
+    """CC-BY-NC 属非宽松许可：即使非 GATED 也必须确认。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source = _register_source(client, ids.project_a, license="cc-by-nc-4.0")
+
+    rejected = _post_import(client, ids.project_a, source["data_source_id"])
+    accepted = _post_import(
+        client, ids.project_a, source["data_source_id"], license_acknowledged=True
+    )
+
+    assert rejected.status_code == 422, rejected.text
+    assert accepted.status_code == 201, accepted.text
+
+
+def test_permissive_license_import_needs_no_acknowledgement(api_db) -> None:
+    """Apache-2.0 宽松许可：不传 license_acknowledged 也能导入（默认值不误伤）。"""
+    factory, ids = api_db
+    client = make_client(factory, ids.editor_a)
+    source = _register_source(client, ids.project_a, license="Apache-2.0")
+
+    response = _post_import(client, ids.project_a, source["data_source_id"])
+
+    assert response.status_code == 201, response.text
+
+
+def test_licence_gate_is_project_scoped(api_db) -> None:
+    """项目隔离：项目 A 的 GATED 数据源不能从项目 B 的路径导入（跨项目不可达）。"""
+    factory, ids = api_db
+    editor_a = make_client(factory, ids.editor_a)
+    source = _register_source(
+        editor_a, ids.project_a, license="cc-by-nc-4.0", access_condition="GATED", is_gated=True
+    )
+
+    # 同一身份在项目 B 的路径下既无写权限、也看不到项目 A 的数据源。
+    response = _post_import(
+        editor_a, ids.project_b, source["data_source_id"], license_acknowledged=True
+    )
+
+    assert response.status_code in {403, 404}, response.text
