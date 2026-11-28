@@ -318,9 +318,13 @@ class UploadDriver:
         manifest_hash: str,
         parts: list[CompletePartSpec],
     ) -> UploadReceipt:
+        # 真实 DDP 服务端在每次 ack_part 后会推进 UploadSession.version（乐观锁），
+        # 因此 complete 前必须先 get_session 刷新最新 version 再发 If-Match。
+        latest = self._call_with_retry(lambda: self._gateway.get_session(cursor.upload_session_id))
+        expected_version = latest.version
         req = CompleteSessionRequest(
             upload_session_id=cursor.upload_session_id,
-            expected_version=cursor.session_version,
+            expected_version=expected_version,
             expected_sha256=artifact.sha256,
             expected_size_bytes=artifact.size_bytes,
             parts=tuple(parts),

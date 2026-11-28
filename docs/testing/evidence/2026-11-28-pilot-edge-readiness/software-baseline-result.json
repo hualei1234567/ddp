@@ -1,0 +1,48 @@
+{
+  "mode": "software_baseline_testclient",
+  "evidence_grade": "SOFTWARE_INTEGRATION_BASELINE",
+  "hardware_capture_status": "HARDWARE_CAPTURE_NOT_TESTED",
+  "real_hardware": false,
+  "object_storage_backend": "FakeMultipartStorage (in-memory test double)",
+  "started_at": "2026-11-28T10:12:48.587682+00:00",
+  "completed_at": "2026-11-28T10:12:49.049095+00:00",
+  "project_id": "36e03623-274f-4ec3-afa0-76fb681cc35f",
+  "robot_id": "5cb922f1-a331-4a73-a414-61c9666a961a",
+  "device_id": "9c2f59e9-5098-4633-b281-a4a4f0f4ce5a",
+  "steps": {
+    "pairing_token_issued": {
+      "token_id": "40092b69-240b-4886-be7e-7f6f9c49cf04",
+      "expires_at": "2026-11-28T10:22:48.951970Z"
+    },
+    "agent_paired": {
+      "agent_id": "36e257b5-0485-411d-8558-b94e5056d5ce",
+      "heartbeat_interval_seconds": 30,
+      "lease_ttl_seconds": 120
+    },
+    "heartbeat_online": {
+      "status": "ACTIVE",
+      "connectivity": "ONLINE"
+    },
+    "capture_session_and_lease": {
+      "capture_session_id": "a87cfa3d-ae46-4660-b75d-c4657cf20259",
+      "lease_id": "5abb623b-7279-4452-9060-590847033940",
+      "lease_renewed": true
+    },
+    "upload_and_raw_asset_verified": {
+      "spool_entry_id": "228b1102-ba29-4d0d-a566-387b3da3bbf6",
+      "manifest_hash": "sha256:c3cd9b7e143f1f12792ddd4ebd432efb504d05172d26a5ebb82cde98ec30705b",
+      "parts_uploaded": 3,
+      "raw_asset_id": "9adf82a4-9ff8-4736-ba34-dc2938a38748",
+      "sha256": "sha256:fa739bd22f0c555e47bf055c3e43618bc0f037d3864e9552fd5c8855311515f0",
+      "size_bytes": 2648,
+      "raw_asset_status": "VALIDATING",
+      "linked_to_capture_session": true
+    },
+    "lease_released": {
+      "lease_id": "5abb623b-7279-4452-9060-590847033940",
+      "status": "RELEASED"
+    }
+  },
+  "auth_boundary_note": "控制面 (/api/v1/edge-agents/{agent_id}/*) 使用配对签发的 ddp_agt_ Agent Token；数据面 (/api/v1/projects/{project_id}/upload-sessions*) 当前使用项目写权限 JWT。",
+  "status": "PASSED"
+}
