@@ -1,0 +1,36 @@
+{
+  "gate": "GATE-A (video)",
+  "claim": "官方 LeRobotDataset 加载含视频 feature 的 v2.1 数据集并真实解码帧",
+  "dataset": {
+    "root": "/var/folders/th/450x4cd168s5qlxh9pfwvd580000gn/T/ddp-gate-a-video-m090ktma",
+    "frames": 100,
+    "fps": 10.0,
+    "video_key": "observation.image",
+    "video_shape": [
+      3,
+      96,
+      96
+    ],
+    "video_source": "lerobot/pusht blob f58d1185...（真实机器人推物数据）",
+    "state_dim": 2,
+    "action_dim": 2
+  },
+  "verification": {
+    "frames_loaded": 100,
+    "decoded_frames_checked": [
+      0,
+      50,
+      99
+    ],
+    "pixel_range_ok": true,
+    "loader": "lerobot.datasets.lerobot_dataset.LeRobotDataset"
+  },
+  "video_file": {
+    "path": "/var/folders/th/450x4cd168s5qlxh9pfwvd580000gn/T/ddp-gate-a-video-m090ktma/source.mp4",
+    "size_bytes": 12451
+  },
+  "not_claimed": [
+    "硬件采集（pusht 为公开数据集，B 级样本）",
+    "全量 25,650 帧（只取前 100 帧验证解码链路）"
+  ]
+}
