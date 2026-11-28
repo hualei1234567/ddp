@@ -504,6 +504,25 @@ episodeDetail:
       "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
       "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
       "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
+episodeVideoFrames:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/EpisodeId"
+  get:
+    operationId: listEpisodeVideoFrames
+    tags: [episodes]
+    summary: Episode 关联原始资产的视频帧索引与时间归一化汇总（只读分页）
+    parameters:
+      - {name: stream_id, in: query, required: false, schema: {type: string, minLength: 1, maxLength: 128}}
+      - {name: offset, in: query, required: false, schema: {type: integer, minimum: 0, default: 0}}
+      - {name: limit, in: query, required: false, schema: {type: integer, minimum: 1, maximum: 200, default: 50}}
+    responses:
+      "200": {description: 视频帧索引分页与汇总, content: {application/json: {schema: {$ref: "../openapi.yaml#/components/schemas/EpisodeVideoFramesResponse"}}}}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "404": {$ref: "../openapi.yaml#/components/responses/NotFound"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+      "429": {$ref: "../openapi.yaml#/components/responses/TooManyRequests"}
 episodeActions:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ProjectId"
