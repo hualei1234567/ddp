@@ -31,6 +31,7 @@ from app.application.datasets.dataset_grants import (
 )
 from app.application.datasets.lineage import DatasetVersionLineageRecorder
 from app.application.datasets.training_deliveries import TrainingDeliveryUseCases
+from app.application.datasets.training_evidence import TrainingEvidenceUseCases
 from app.application.datasets.training_ports import TrainingAdapterGateway
 from app.application.datasets.training_references import (
     AdapterCallbackUseCases,
@@ -60,6 +61,9 @@ from app.infrastructure.repositories.training_delivery_repositories import (
     SqlTrainingCallbackRepository,
     SqlTrainingDeliveryRepository,
 )
+from app.infrastructure.repositories.training_evidence import (
+    SqlTrainingEvidenceRepository,
+)
 from app.infrastructure.repositories.training_grant_repositories import (
     SqlDatasetGrantRepository,
 )
@@ -86,6 +90,7 @@ class TrainingServices:
     requests: TrainingRequestUseCases
     deliveries: TrainingDeliveryUseCases
     references: ExternalTrainingReferenceUseCases
+    evidence: TrainingEvidenceUseCases
     callbacks: AdapterCallbackUseCases
     grants: DatasetGrantUseCases
     grant_access: DatasetGrantAccessService
@@ -101,6 +106,7 @@ def get_training_services(
     revisions_repo = SqlTrainingRequestRevisionRepository(session)
     deliveries_repo = SqlTrainingDeliveryRepository(session)
     references_repo = SqlExternalReferenceRepository(session)
+    evidence_repo = SqlTrainingEvidenceRepository(session)
     callbacks_repo = SqlTrainingCallbackRepository(session)
     grants_repo = SqlDatasetGrantRepository(session)
     datasets_repo = SqlDatasetRepository(session)
@@ -148,6 +154,13 @@ def get_training_services(
             idempotency=idempotency,
             uow=session,
             lineage=lineage,
+        ),
+        evidence=TrainingEvidenceUseCases(
+            deliveries=deliveries_repo,
+            references=references_repo,
+            versions=versions_repo,
+            evidence=evidence_repo,
+            uow=session,
         ),
         callbacks=AdapterCallbackUseCases(
             references=references_repo,

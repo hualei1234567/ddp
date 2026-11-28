@@ -12,7 +12,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -675,6 +675,34 @@ class ExternalTrainingReferenceOut(BaseModel):
     updated_at: datetime | None = None
 
 
+class TrainingRunEvidenceOut(BaseModel):
+    evidence_id: UUID
+    project_id: UUID
+    external_training_reference_id: UUID
+    dataset_version_id: UUID | None = None
+    run_kind: Literal["SMOKE", "REAL"]
+    device: str
+    runtime_versions: dict[str, Any]
+    config_sha256: str
+    seed: int
+    batch_size: int
+    steps: int
+    started_at: datetime
+    finished_at: datetime | None = None
+    metrics_summary: dict[str, Any] | None = None
+    checkpoint_ref: str | None = None
+    checkpoint_sha256: str | None = None
+    exit_code: int
+    status: Literal["SUCCEEDED", "FAILED"]
+    stdout_tail: str | None = None
+    created_at: datetime
+    created_by: UUID
+
+
+class TrainingRunEvidenceListOut(BaseModel):
+    items: list[TrainingRunEvidenceOut]
+
+
 __all__ = [
     "DatasetGrantOut",
     "DatasetItemOut",
@@ -696,4 +724,6 @@ __all__ = [
     "TrainingDeliveryOut",
     "TrainingRequestOut",
     "TrainingRequestRevisionOut",
+    "TrainingRunEvidenceListOut",
+    "TrainingRunEvidenceOut",
 ]
