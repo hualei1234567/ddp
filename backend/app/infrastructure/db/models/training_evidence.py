@@ -88,7 +88,7 @@ class TrainingRunEvidenceModel(Base):
         ForeignKeyConstraint(
             ["external_training_reference_id"],
             ["external_training_references.id"],
-            name="fk_training_run_evidence_reference_id_external_training_references",
+            name="fk_training_run_evidence_reference",
             ondelete="RESTRICT",
         ),
         ForeignKeyConstraint(

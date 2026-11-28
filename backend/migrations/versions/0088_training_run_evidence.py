@@ -145,7 +145,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["external_training_reference_id"],
             ["external_training_references.id"],
-            name=f"fk_{_TABLE}_reference_id_external_training_references",
+            name=f"fk_{_TABLE}_reference",
             ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
