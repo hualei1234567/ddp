@@ -74,8 +74,8 @@ export const navSections: NavSection[] = [
     ],
   },
   {
-    key: "pipeline",
-    label: "数据链路",
+    key: "plan",
+    label: "需求与采集",
     items: [
       {
         path: "/projects",
@@ -120,6 +120,19 @@ export const navSections: NavSection[] = [
         aliases: ["/data-source-imports"],
       },
       {
+        path: "/assets",
+        label: "数据资产",
+        description: "检索项目内经校验的原始资产（上传 / 设备采集 / 数据源导入）。",
+        icon: createElement(FolderOpenOutlined),
+        available: true,
+      },
+    ],
+  },
+  {
+    key: "process",
+    label: "处理与切片",
+    items: [
+      {
         path: "/episodes",
         label: "Episode 管理",
         description: "查看切片结果、元数据与数据血缘。",
@@ -136,6 +149,12 @@ export const navSections: NavSection[] = [
         icon: createElement(PartitionOutlined),
         available: true,
       },
+    ],
+  },
+  {
+    key: "annotate",
+    label: "标注与质检",
+    items: [
       {
         // 个人队列排在标注中心之前：标注人每天打开的是「我的任务」，
         // 任务/批次管理是管理员视角。
@@ -172,15 +191,12 @@ export const navSections: NavSection[] = [
         icon: createElement(SafetyCertificateOutlined),
         available: true,
       },
-      {
-        // 后端 `GET /raw-assets` 早已就绪，但此前菜单是不可进入的占位页：
-        // 数据在库里，用户没有入口。现在挂真实列表页（检索 + 跳转详情）。
-        path: "/assets",
-        label: "数据资产",
-        description: "检索项目内经校验的原始资产（上传 / 设备采集 / 数据源导入）。",
-        icon: createElement(FolderOpenOutlined),
-        available: true,
-      },
+    ],
+  },
+  {
+    key: "consume",
+    label: "数据集与训练",
+    items: [
       {
         path: "/datasets",
         label: "数据集管理",
