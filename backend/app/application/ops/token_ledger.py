@@ -24,6 +24,12 @@ from uuid import UUID
 from sqlalchemy import Case, func, select
 from sqlalchemy.orm import Session
 
+from app.domain.annotation.token_budget import (
+    BudgetUsage,
+    TokenBudgetEvaluation,
+    TokenBudgetPolicy,
+    evaluate_token_budget,
+)
 from app.domain.annotation.token_usage import (
     COST_QUANTUM,
     ModelPurposeLedger,
@@ -116,4 +122,49 @@ def read_cost_ledger(
     )
 
 
-__all__ = ["CostLedgerSnapshot", "read_cost_ledger"]
+def usage_from_snapshot(
+    snapshot: CostLedgerSnapshot,
+    *,
+    daily_tokens: int | None = None,
+    monthly_tokens: int | None = None,
+) -> BudgetUsage:
+    """把台账快照换算成预算评估用量（不重复查库、不重复算合计）。
+
+    ``total_tokens`` 取全部条目 tokens 合计；``total_cost_usd`` 复用
+    ``CostLedgerSnapshot.total_cost_estimate``（``None`` = 全项目无价记录，
+    保持「无数据 ≠ 0」语义）。日/月窗口由调用方按需另行传入——台账快照
+    本身不带时间切片，本层不做时间窗推断。
+    """
+    return BudgetUsage(
+        daily_tokens=daily_tokens,
+        monthly_tokens=monthly_tokens,
+        total_tokens=sum(entry.total_tokens for entry in snapshot.entries),
+        monthly_cost_usd=None,
+        total_cost_usd=snapshot.total_cost_estimate,
+    )
+
+
+def evaluate_project_token_budget(
+    session: Session,
+    *,
+    policy: TokenBudgetPolicy,
+    project_id: UUID,
+    now: datetime | None = None,
+    usage: BudgetUsage | None = None,
+) -> tuple[CostLedgerSnapshot, TokenBudgetEvaluation]:
+    """读取项目台账并评估预算，返回（快照, 评估结论）。
+
+    复用 :func:`read_cost_ledger` 的同一次聚合；``usage`` 允许调用方覆盖
+    台账无法表达的口径（如按月窗口另查），未提供时由快照推导。
+    """
+    snapshot = read_cost_ledger(session, project_id=project_id, now=now)
+    effective_usage = usage if usage is not None else usage_from_snapshot(snapshot)
+    return snapshot, evaluate_token_budget(effective_usage, policy)
+
+
+__all__ = [
+    "CostLedgerSnapshot",
+    "evaluate_project_token_budget",
+    "read_cost_ledger",
+    "usage_from_snapshot",
+]

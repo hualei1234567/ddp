@@ -16,13 +16,19 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from app.api.deps import DbSession, get_owner_scope
-from app.application.ops.token_ledger import read_cost_ledger
+from app.application.ops.token_ledger import (
+    evaluate_project_token_budget,
+    read_cost_ledger,
+)
+from app.domain.annotation.errors import DomainValidationError
+from app.domain.annotation.token_budget import TokenBudgetPolicy
 from app.domain.identity.models import ProjectScope
 
 router = APIRouter(tags=["ops"], prefix="/projects/{project_id}/ops")
@@ -105,6 +111,109 @@ def get_token_cost_ledger(
         ),
         generated_at=snapshot.generated_at,
     )
+
+
+class TokenBudgetDimensionOut(BaseModel):
+    """单维度评估明细（逐字段声明，契约与运行时必须同形）。"""
+
+    dimension: str = Field(
+        description="DAILY_TOKENS / MONTHLY_TOKENS / TOTAL_TOKENS / MONTHLY_COST / TOTAL_COST"
+    )
+    verdict: str = Field(
+        description=(
+            "UNLIMITED（未设预算）/ OK / WARNING / EXCEEDED / " "UNKNOWN（用量无数据，不等于 0）"
+        )
+    )
+    usage: str | None = Field(default=None, description="用量（十进制字符串）；null 表示无数据")
+    limit: str | None = Field(default=None, description="上限；null 表示该维度未设预算")
+    ratio: str | None = Field(
+        default=None, description="usage / limit（4 位小数）；null 表示不可算"
+    )
+
+
+class TokenBudgetEvaluationOut(BaseModel):
+    """Token 预算评估结论（V61-019）。
+
+    所有金额为十进制字符串；``null`` 一律表示「无数据 / 未设预算」，
+    与「0」或「OK」严格区分。
+    """
+
+    status: str = Field(description="OK / WARNING / EXCEEDED / UNLIMITED")
+    policy: dict[str, object] = Field(description="本次评估使用的预算策略快照")
+    dimensions: list[TokenBudgetDimensionOut] = Field(description="逐维度评估明细")
+    breached_dimensions: list[str] = Field(description="EXCEEDED 的维度 ID；可作为告警去重键")
+    warning_dimensions: list[str] = Field(description="WARNING 的维度 ID")
+
+
+@router.get(
+    "/token-budget",
+    response_model=TokenBudgetEvaluationOut,
+    summary="Token 预算评估（按查询参数传入预算上限，只读判定）",
+)
+def get_token_budget_evaluation(
+    scope: OwnerScope,
+    session: DbSession,
+    monthly_tokens: Annotated[int | None, Query(ge=1)] = None,
+    total_tokens: Annotated[int | None, Query(ge=1)] = None,
+    monthly_cost_usd: Annotated[str | None, Query()] = None,
+    total_cost_usd: Annotated[str | None, Query()] = None,
+    warning_ratio: Annotated[float | None, Query(gt=0, le=1)] = None,
+) -> TokenBudgetEvaluationOut:
+    """用当前台账 + 调用方传入的预算上限做只读判定。
+
+    **为什么预算走查询参数而不是服务端配置**：预算属于项目经营决策，
+    每个项目、每个季度都可能不同；固化进部署配置会让「改预算要重新部署」。
+    本端点不落库、不缓存，纯粹是「给定台账与上限，返回判定」。
+
+    未传任何上限时返回 ``UNLIMITED``——不是 ``OK``：没设预算不等于在预算内。
+    """
+    policy_kwargs: dict[str, object] = {}
+    if monthly_tokens is not None:
+        policy_kwargs["monthly_tokens"] = monthly_tokens
+    if total_tokens is not None:
+        policy_kwargs["total_tokens"] = total_tokens
+    if monthly_cost_usd is not None:
+        policy_kwargs["monthly_cost_usd"] = _parse_money(monthly_cost_usd, "monthly_cost_usd")
+    if total_cost_usd is not None:
+        policy_kwargs["total_cost_usd"] = _parse_money(total_cost_usd, "total_cost_usd")
+    if warning_ratio is not None:
+        policy_kwargs["warning_ratio"] = warning_ratio
+
+    # 非法预算参数由领域层 DomainValidationError 抛出，交给 main.py 的
+    # AnnotationDomainError 全局处理器统一映射为 422——不在路由里重复造错误体。
+    policy = TokenBudgetPolicy(**policy_kwargs)  # type: ignore[arg-type]
+
+    _, evaluation = evaluate_project_token_budget(
+        session, policy=policy, project_id=scope.project_id
+    )
+    payload = evaluation.to_payload()
+    return TokenBudgetEvaluationOut(
+        status=str(payload["status"]),
+        policy=payload["policy"],  # type: ignore[arg-type]
+        dimensions=[
+            TokenBudgetDimensionOut(
+                dimension=str(item["dimension"]),
+                verdict=str(item["verdict"]),
+                usage=item["usage"],  # type: ignore[arg-type]
+                limit=item["limit"],  # type: ignore[arg-type]
+                ratio=item["ratio"],  # type: ignore[arg-type]
+            )
+            for item in payload["dimensions"]  # type: ignore[union-attr]
+        ],
+        breached_dimensions=payload["breached_dimensions"],  # type: ignore[arg-type]
+        warning_dimensions=payload["warning_dimensions"],  # type: ignore[arg-type]
+    )
+
+
+def _parse_money(raw: str, field: str) -> Decimal:
+    """把查询参数里的金额解析成 ``Decimal``；非法值显式失败，不静默当 0。"""
+    try:
+        value = Decimal(raw)
+    except InvalidOperation as exc:
+        raise DomainValidationError(f"{field} 不是合法金额：{raw!r}") from exc
+    if not value.is_finite() or value <= 0:
+        raise DomainValidationError(f"{field} 必须为正数：{raw!r}")
+    return value
 
 
 __all__ = ["router"]

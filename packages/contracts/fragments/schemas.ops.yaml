@@ -72,6 +72,54 @@ TokenCostLedger:
       format: date-time
       description: 快照生成时间（UTC，带时区）
 
+TokenBudgetEvaluation:
+  type: object
+  required: [status, policy, dimensions, breached_dimensions, warning_dimensions]
+  properties:
+    status:
+      type: string
+      enum: [OK, WARNING, EXCEEDED, UNLIMITED]
+      description: |
+        整体结论。`UNLIMITED` 表示所有维度都未设预算（不是 OK）；
+        任一维度 EXCEEDED 即整体 EXCEEDED，否则任一 WARNING 即整体 WARNING。
+    policy:
+      type: object
+      description: 本次评估使用的预算策略快照（原样回显，便于复核判定依据）
+      additionalProperties: true
+    dimensions:
+      type: array
+      description: 逐维度评估明细（DAILY_TOKENS / MONTHLY_TOKENS / TOTAL_TOKENS / MONTHLY_COST / TOTAL_COST）
+      items:
+        type: object
+        required: [dimension, verdict]
+        properties:
+          dimension:
+            type: string
+            enum: [DAILY_TOKENS, MONTHLY_TOKENS, TOTAL_TOKENS, MONTHLY_COST, TOTAL_COST]
+          verdict:
+            type: string
+            enum: [UNLIMITED, OK, WARNING, EXCEEDED, UNKNOWN]
+            description: |
+              `UNLIMITED` = 未设预算；`UNKNOWN` = 用量无数据（不等于 0，不告警）；
+              等于上限是 `WARNING`，严格超过才是 `EXCEEDED`。
+          usage:
+            type: [string, "null"]
+            description: 用量（十进制字符串）；null 表示无数据
+          limit:
+            type: [string, "null"]
+            description: 上限（十进制字符串）；null 表示该维度未设预算
+          ratio:
+            type: [string, "null"]
+            description: usage / limit（4 位小数）；null 表示无法计算
+    breached_dimensions:
+      type: array
+      items: {type: string}
+      description: EXCEEDED 的维度 ID；可直接作为告警去重键
+    warning_dimensions:
+      type: array
+      items: {type: string}
+      description: WARNING 的维度 ID
+
 # --- 评测失败案例回流（V52-030，蓝图 N5 / G5） ---
 AnnotationBackflowIngest:
   type: object

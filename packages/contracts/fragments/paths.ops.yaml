@@ -63,6 +63,64 @@ opsTokenLedger:
       "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
       "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
 
+# --- Token 预算评估（V61-019，蓝图 N6；owner / 平台管理员） ---
+opsTokenBudget:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - name: monthly_tokens
+      in: query
+      required: false
+      schema: {type: integer, minimum: 1}
+      description: 月度 token 上限；不传表示该维度不设预算
+    - name: total_tokens
+      in: query
+      required: false
+      schema: {type: integer, minimum: 1}
+      description: 项目累计 token 上限；不传表示该维度不设预算
+    - name: monthly_cost_usd
+      in: query
+      required: false
+      schema: {type: string, pattern: "^[0-9]+(\\.[0-9]+)?$"}
+      description: 月度成本上限（USD 十进制字符串，> 0）；
+        用字符串避免 JSON 双精度丢精度
+    - name: total_cost_usd
+      in: query
+      required: false
+      schema: {type: string, pattern: "^[0-9]+(\\.[0-9]+)?$"}
+      description: 项目累计成本上限（USD 十进制字符串，> 0）
+    - name: warning_ratio
+      in: query
+      required: false
+      schema: {type: number, exclusiveMinimum: 0, maximum: 1}
+      description: 预警比例，默认 0.8；用量达到 limit × ratio 即 WARNING
+  get:
+    operationId: getOpsTokenBudget
+    tags: [ops]
+    summary: Token 预算评估（按查询参数传入上限，只读判定）
+    description: |
+      用当前台账合计与调用方传入的预算上限做**只读**判定，不落库、不缓存。
+      预算随项目与季度变化，因此走查询参数而不是部署配置——固化进配置会让
+      "改预算"变成"重新部署"。
+
+      **三条语义必须照实渲染**：
+
+      1. `UNLIMITED` ≠ `OK`：某维度没设上限是"没有预算"，不是"在预算内"；
+      2. `UNKNOWN` ≠ `0`：用量无数据（如全项目未配价）时不判超限，也不告警；
+      3. `WARNING` 从 `usage ≥ limit × warning_ratio` 开始，**等于上限仍是
+         WARNING**，只有严格超过才是 `EXCEEDED`。
+
+      权限与成本台账一致（owner / 平台管理员）。`breached_dimensions` 可
+      直接作为告警去重键。
+    responses:
+      "200":
+        description: 预算评估结论
+        content:
+          application/json:
+            schema: {$ref: "../openapi.yaml#/components/schemas/TokenBudgetEvaluation"}
+      "401": {$ref: "../openapi.yaml#/components/responses/Unauthorized"}
+      "403": {$ref: "../openapi.yaml#/components/responses/Forbidden"}
+      "422": {$ref: "../openapi.yaml#/components/responses/UnprocessableEntity"}
+
 
 # --- 评测失败案例回流（V52-030，蓝图 N5 / G5） ---
 annotationBackflow:
