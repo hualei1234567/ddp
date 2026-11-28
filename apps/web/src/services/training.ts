@@ -7,6 +7,7 @@ import type {
   TrainingDelivery,
   TrainingRequest,
   TrainingRequestRevision,
+  TrainingRunEvidenceList,
 } from "../types/dataset";
 import { apiClient, type ApiClient } from "./api";
 import {
@@ -18,6 +19,7 @@ import {
   parseTrainingRequestPage,
   parseTrainingRequestRevision,
   parseTrainingRequestRevisionPage,
+  parseTrainingRunEvidenceList,
 } from "./datasetParsers";
 import { createIdempotencyKey, formatIfMatch } from "./idempotency";
 import {
@@ -171,6 +173,16 @@ export interface TrainingApi {
     action: string,
     options: WriteOptions,
   ): Promise<ExternalTrainingReference>;
+  listDeliveryEvidence(
+    projectId: string,
+    deliveryId: string,
+    options?: { limit?: number; offset?: number; signal?: AbortSignal },
+  ): Promise<TrainingRunEvidenceList>;
+  listExternalReferenceEvidence(
+    projectId: string,
+    externalRefId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<TrainingRunEvidenceList>;
 }
 
 export function createTrainingApi(client: ApiClient): TrainingApi {
@@ -369,6 +381,34 @@ export function createTrainingApi(client: ApiClient): TrainingApi {
             assertProjectScope(parseExternalTrainingReference(value), projectId, "外部训练引用"),
         },
       );
+    },
+    async listDeliveryEvidence(projectId, deliveryId, options) {
+      return client.get(deliveryPath(projectId, deliveryId, "/evidence"), {
+        signal: options?.signal,
+        query: {
+          limit: options?.limit,
+          offset: options?.offset,
+        },
+        validate: (value) => {
+          const parsed = parseTrainingRunEvidenceList(value);
+          for (const item of parsed.items) {
+            assertProjectScope(item, projectId, "训练过程证据");
+          }
+          return parsed;
+        },
+      });
+    },
+    async listExternalReferenceEvidence(projectId, externalRefId, options) {
+      return client.get(externalPath(projectId, externalRefId, "/evidence"), {
+        signal: options?.signal,
+        validate: (value) => {
+          const parsed = parseTrainingRunEvidenceList(value);
+          for (const item of parsed.items) {
+            assertProjectScope(item, projectId, "训练过程证据");
+          }
+          return parsed;
+        },
+      });
     },
   };
 }

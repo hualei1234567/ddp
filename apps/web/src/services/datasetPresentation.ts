@@ -102,6 +102,16 @@ const EXECUTION_MODE: Record<string, StatusPresentation> = {
   UNKNOWN: { label: "执行方式未知", color: "red" },
 };
 
+const EVIDENCE_RUN_KIND: Record<string, StatusPresentation> = {
+  SMOKE: { label: "SMOKE 冒烟", color: "blue" },
+  REAL: { label: "REAL 正式训练", color: "green" },
+};
+
+const EVIDENCE_STATUS: Record<string, StatusPresentation> = {
+  SUCCEEDED: { label: "成功", color: "green" },
+  FAILED: { label: "失败", color: "red" },
+};
+
 const GRANT_STATUS: Record<string, StatusPresentation> = {
   PENDING_APPROVAL: { label: "待审批", color: "processing" },
   ACTIVE: { label: "生效中", color: "green" },
@@ -154,6 +164,8 @@ export const presentRevisionStatus = (value: string) => present(REVISION_STATUS,
 export const presentDeliveryStatus = (value: string) => present(DELIVERY_STATUS, value);
 export const presentExternalStatus = (value: string) => present(EXTERNAL_STATUS, value);
 export const presentExecutionMode = (value: string) => present(EXECUTION_MODE, value);
+export const presentEvidenceRunKind = (value: string) => present(EVIDENCE_RUN_KIND, value);
+export const presentEvidenceStatus = (value: string) => present(EVIDENCE_STATUS, value);
 export const presentGrantStatus = (value: string) => present(GRANT_STATUS, value);
 export const presentPriority = (value: string) => present(PRIORITY, value);
 export const presentUsagePolicy = (value: string) => present(USAGE_POLICY, value);

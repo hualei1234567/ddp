@@ -569,3 +569,82 @@ ExportArtifactDownload:
     size_bytes: { type: integer, minimum: 0 }
     download_url: { type: string, format: uri }
     download_url_expires_at: { type: string, format: date-time }
+
+TrainingRunEvidenceCreate:
+  type: object
+  additionalProperties: false
+  required: [run_kind, device, config_sha256, seed, batch_size, steps, started_at]
+  properties:
+    dataset_version_id: { type: [string, "null"], format: uuid }
+    run_kind: { type: string, enum: [SMOKE, REAL] }
+    device: { type: string, minLength: 1, maxLength: 64 }
+    runtime_versions:
+      type: object
+      additionalProperties: true
+      default: {}
+    config_sha256: { type: string, pattern: '^sha256:[0-9a-f]{64}$' }
+    seed: { type: integer, minimum: 0 }
+    batch_size: { type: integer, minimum: 1 }
+    steps: { type: integer, minimum: 1 }
+    started_at: { type: string, format: date-time }
+    finished_at: { type: [string, "null"], format: date-time }
+    metrics_summary:
+      type: [object, "null"]
+      additionalProperties: true
+    checkpoint_ref: { type: [string, "null"], maxLength: 1024 }
+    checkpoint_sha256: { type: [string, "null"], pattern: '^sha256:[0-9a-f]{64}$' }
+    exit_code: { type: integer, default: 0 }
+    stdout_tail: { type: [string, "null"], maxLength: 8192 }
+
+TrainingRunEvidence:
+  type: object
+  required:
+    - evidence_id
+    - project_id
+    - external_training_reference_id
+    - run_kind
+    - device
+    - runtime_versions
+    - config_sha256
+    - seed
+    - batch_size
+    - steps
+    - started_at
+    - exit_code
+    - status
+    - created_at
+    - created_by
+  properties:
+    evidence_id: { type: string, format: uuid }
+    project_id: { type: string, format: uuid }
+    external_training_reference_id: { type: string, format: uuid }
+    dataset_version_id: { type: [string, "null"], format: uuid }
+    run_kind: { type: string, enum: [SMOKE, REAL] }
+    device: { type: string }
+    runtime_versions:
+      type: object
+      additionalProperties: true
+    config_sha256: { type: string }
+    seed: { type: integer }
+    batch_size: { type: integer }
+    steps: { type: integer }
+    started_at: { type: string, format: date-time }
+    finished_at: { type: [string, "null"], format: date-time }
+    metrics_summary:
+      type: [object, "null"]
+      additionalProperties: true
+    checkpoint_ref: { type: [string, "null"] }
+    checkpoint_sha256: { type: [string, "null"] }
+    exit_code: { type: integer }
+    status: { type: string, enum: [SUCCEEDED, FAILED] }
+    stdout_tail: { type: [string, "null"] }
+    created_at: { type: string, format: date-time }
+    created_by: { type: string, format: uuid }
+
+TrainingRunEvidenceList:
+  type: object
+  required: [items]
+  properties:
+    items:
+      type: array
+      items: { $ref: "../openapi.yaml#/components/schemas/TrainingRunEvidence" }

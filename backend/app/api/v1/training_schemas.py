@@ -14,6 +14,9 @@ from app.domain.datasets.training_enums import ExecutionMode
 from app.domain.datasets.training_references import ExternalTrainingReference
 from app.domain.datasets.training_requests import TrainingRequest, TrainingRequestRevision
 from app.domain.datasets.training_state_machines import allowed_external_actions
+from app.infrastructure.repositories.training_evidence import TrainingRunEvidence
+
+_SHA256_PATTERN = r"^sha256:[0-9a-f]{64}$"
 
 
 class RequirementSnapshot(BaseModel):
@@ -107,6 +110,26 @@ class ExternalTrainingReferenceCreate(BaseModel):
     # 这里用 Literal 而不是 ExecutionMode：UNKNOWN 只描述存量数据，不是客户端
     # 可声明的执行方式，运行时 OpenAPI 也必须与契约一致地只暴露这四个值。
     execution_mode: Literal["LOCAL", "MOCK", "DRY_RUN", "REMOTE"] | None = None
+
+
+class TrainingRunEvidenceCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    dataset_version_id: UUID | None = None
+    run_kind: Literal["SMOKE", "REAL"]
+    device: str = Field(min_length=1, max_length=64)
+    runtime_versions: dict[str, object] = Field(default_factory=dict)
+    config_sha256: str = Field(pattern=_SHA256_PATTERN)
+    seed: int = Field(ge=0)
+    batch_size: int = Field(ge=1)
+    steps: int = Field(ge=1)
+    started_at: datetime
+    finished_at: datetime | None = None
+    metrics_summary: dict[str, object] | None = None
+    checkpoint_ref: str | None = Field(default=None, max_length=1024)
+    checkpoint_sha256: str | None = Field(default=None, pattern=_SHA256_PATTERN)
+    exit_code: int = 0
+    stdout_tail: str | None = Field(default=None, max_length=8192)
 
 
 class DatasetGrantCreate(BaseModel):
@@ -309,6 +332,32 @@ def grant_out(grant: DatasetGrant, *, effective_status: object | None = None) ->
     }
 
 
+def training_evidence_out(evidence: TrainingRunEvidence) -> dict[str, Any]:
+    return {
+        "evidence_id": evidence.id,
+        "project_id": evidence.project_id,
+        "external_training_reference_id": evidence.external_training_reference_id,
+        "dataset_version_id": evidence.dataset_version_id,
+        "run_kind": evidence.run_kind,
+        "device": evidence.device,
+        "runtime_versions": evidence.runtime_versions,
+        "config_sha256": evidence.config_sha256,
+        "seed": evidence.seed,
+        "batch_size": evidence.batch_size,
+        "steps": evidence.steps,
+        "started_at": _iso(evidence.started_at),
+        "finished_at": _iso(evidence.finished_at),
+        "metrics_summary": evidence.metrics_summary,
+        "checkpoint_ref": evidence.checkpoint_ref,
+        "checkpoint_sha256": evidence.checkpoint_sha256,
+        "exit_code": evidence.exit_code,
+        "status": "SUCCEEDED" if evidence.exit_code == 0 else "FAILED",
+        "stdout_tail": evidence.stdout_tail,
+        "created_at": _iso(evidence.created_at),
+        "created_by": evidence.created_by,
+    }
+
+
 __all__ = [
     "AdapterCallbackPayload",
     "DatasetGrantCreate",
@@ -319,9 +368,11 @@ __all__ = [
     "TrainingRequestCreate",
     "TrainingRequestRevisionCreate",
     "TrainingRequestRevisionPatch",
+    "TrainingRunEvidenceCreate",
     "external_reference_out",
     "grant_out",
     "training_delivery_out",
+    "training_evidence_out",
     "training_revision_out",
     "training_request_out",
 ]

@@ -389,6 +389,40 @@ export interface ExternalTrainingReference {
   last_synced_at: string;
 }
 
+export const TRAINING_EVIDENCE_RUN_KIND_VALUES = ["SMOKE", "REAL"] as const;
+export type TrainingEvidenceRunKind = (typeof TRAINING_EVIDENCE_RUN_KIND_VALUES)[number];
+
+export const TRAINING_EVIDENCE_STATUS_VALUES = ["SUCCEEDED", "FAILED"] as const;
+export type TrainingEvidenceStatus = (typeof TRAINING_EVIDENCE_STATUS_VALUES)[number];
+
+export interface TrainingRunEvidence {
+  evidence_id: string;
+  project_id: string;
+  external_training_reference_id: string;
+  dataset_version_id: string | null;
+  run_kind: TrainingEvidenceRunKind;
+  device: string;
+  runtime_versions: Record<string, unknown>;
+  config_sha256: string;
+  seed: number;
+  batch_size: number;
+  steps: number;
+  started_at: string;
+  finished_at: string | null;
+  metrics_summary: Record<string, unknown> | null;
+  checkpoint_ref: string | null;
+  checkpoint_sha256: string | null;
+  exit_code: number;
+  status: TrainingEvidenceStatus;
+  stdout_tail: string | null;
+  created_at: string;
+  created_by: string;
+}
+
+export interface TrainingRunEvidenceList {
+  items: TrainingRunEvidence[];
+}
+
 export const DATASET_STATUS_VALUES = ["DRAFT", "ACTIVE", "ARCHIVED"] as const;
 export const DATASET_VERSION_STATUS_VALUES = [
   "DRAFT",

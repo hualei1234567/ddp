@@ -28,15 +28,22 @@ import { useCursorPage } from "../../hooks/useCursorPage";
 import type { CursorPageRequestOptions } from "../../hooks/useCursorPage";
 import { useProjectId } from "../../hooks/useProjectId";
 import { useRequest } from "../../hooks/useRequest";
+import type { ApiError } from "../../services/api";
 import { trainingApi, type ExternalReferenceCreateInput } from "../../services/training";
 import {
   presentDeliveryStatus,
+  presentEvidenceRunKind,
+  presentEvidenceStatus,
   presentExecutionMode,
   presentExternalStatus,
 } from "../../services/datasetPresentation";
 import { trainingRequestDetailPath } from "../../services/datasetUrl";
 import { resolvePagePhase } from "../../services/pagePhase";
-import type { ExternalTrainingReference, TrainingDelivery } from "../../types/dataset";
+import type {
+  ExternalTrainingReference,
+  TrainingDelivery,
+  TrainingRunEvidence,
+} from "../../types/dataset";
 
 /** MOCK / DRY_RUN / UNKNOWN 都不是真实训练结果，界面必须显式提示。 */
 const NON_REAL_EXECUTION_MODES = new Set(["MOCK", "DRY_RUN", "UNKNOWN"]);
@@ -226,6 +233,127 @@ function ExternalReferencesPanel({
   );
 }
 
+function extractModelSha256(evidence: TrainingRunEvidence): string | null {
+  if (evidence.checkpoint_sha256) {
+    return evidence.checkpoint_sha256;
+  }
+  const summarySha = evidence.metrics_summary?.model_safetensors_sha256;
+  return typeof summarySha === "string" && summarySha.trim() ? summarySha : null;
+}
+
+export interface TrainingEvidenceTableProps {
+  items: TrainingRunEvidence[];
+  loading: boolean;
+  error: ApiError | null;
+  onReload: () => void;
+}
+
+export function TrainingEvidenceTable({
+  items,
+  loading,
+  error,
+  onReload,
+}: TrainingEvidenceTableProps) {
+  const columns: ColumnsType<TrainingRunEvidence> = [
+    {
+      title: "证据类型",
+      key: "run_kind",
+      width: 140,
+      render: (_, item) => (
+        <StatusTag value={item.run_kind} presentation={presentEvidenceRunKind} />
+      ),
+    },
+    {
+      title: "训练步数",
+      key: "steps",
+      width: 160,
+      render: (_, item) => (
+        <Space direction="vertical" size={0}>
+          <Typography.Text strong>{item.steps} steps</Typography.Text>
+          <Typography.Text type="secondary">
+            {item.device} · batch={item.batch_size} · seed={item.seed}
+          </Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: "model_safetensors_sha256",
+      key: "model_safetensors_sha256",
+      width: 280,
+      render: (_, item) => {
+        const sha = extractModelSha256(item);
+        return sha ? (
+          <Typography.Text copyable={{ text: sha }} ellipsis style={{ maxWidth: 260 }}>
+            {sha}
+          </Typography.Text>
+        ) : (
+          <Typography.Text type="secondary">—</Typography.Text>
+        );
+      },
+    },
+    {
+      title: "状态",
+      key: "status",
+      width: 140,
+      render: (_, item) => (
+        <Space direction="vertical" size={0}>
+          <StatusTag value={item.status} presentation={presentEvidenceStatus} />
+          <Typography.Text type="secondary">exit_code={item.exit_code}</Typography.Text>
+        </Space>
+      ),
+    },
+    {
+      title: "落库时间",
+      dataIndex: "created_at",
+      width: 200,
+      ellipsis: true,
+    },
+  ];
+
+  return (
+    <Space direction="vertical" size={8} style={{ width: "100%" }}>
+      <Space>
+        <Typography.Text strong>已落库训练证据</Typography.Text>
+        <Button size="small" onClick={onReload}>
+          刷新证据
+        </Button>
+      </Space>
+      <Table<TrainingRunEvidence>
+        rowKey="evidence_id"
+        size="small"
+        loading={loading}
+        columns={columns}
+        dataSource={items}
+        pagination={false}
+        locale={{ emptyText: "暂无已落库的训练过程证据" }}
+      />
+      {error ? <ApiErrorState error={error} onRetry={onReload} /> : null}
+    </Space>
+  );
+}
+
+function TrainingEvidencePanel({
+  projectId,
+  deliveryId,
+}: {
+  projectId: string;
+  deliveryId: string;
+}) {
+  const load = useCallback(
+    (signal: AbortSignal) => trainingApi.listDeliveryEvidence(projectId, deliveryId, { signal }),
+    [projectId, deliveryId],
+  );
+  const { data, error, loading, reload } = useRequest(load);
+  return (
+    <TrainingEvidenceTable
+      items={data?.items ?? []}
+      loading={loading}
+      error={error}
+      onReload={reload}
+    />
+  );
+}
+
 function DeliveryDetailContent({
   projectId,
   deliveryId,
@@ -337,6 +465,12 @@ function DeliveryDetailContent({
           projectId={projectId}
           delivery={delivery}
           onChanged={refreshAll}
+        />
+        <Divider />
+        <TrainingEvidencePanel
+          key={`evidence:${deliveryId}:${refreshToken}`}
+          projectId={projectId}
+          deliveryId={deliveryId}
         />
       </Space>
     );

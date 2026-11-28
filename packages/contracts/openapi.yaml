@@ -913,8 +913,12 @@ paths:
     $ref: "./fragments/paths.stage4.yaml#/trainingDeliveryActions"
   /api/v1/projects/{project_id}/training-deliveries/{delivery_id}/external-references:
     $ref: "./fragments/paths.stage4.yaml#/trainingDeliveryExternalReferences"
+  /api/v1/projects/{project_id}/training-deliveries/{delivery_id}/evidence:
+    $ref: "./fragments/paths.stage4.yaml#/trainingDeliveryEvidence"
   /api/v1/projects/{project_id}/external-training-references/{external_ref_id}:
     $ref: "./fragments/paths.stage4.yaml#/externalTrainingReferenceDetail"
+  /api/v1/projects/{project_id}/external-training-references/{external_ref_id}/evidence:
+    $ref: "./fragments/paths.stage4.yaml#/externalTrainingReferenceEvidence"
   /api/v1/projects/{project_id}/external-training-references/{external_ref_id}/actions/{action}:
     $ref: "./fragments/paths.stage4.yaml#/externalTrainingReferenceActions"
   /api/v1/integrations/training-adapters/{adapter_id}/callbacks:
@@ -1604,6 +1608,9 @@ components:
     TrainingRequestRevisionPage: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRequestRevisionPage"}
     TrainingDeliveryPage: {$ref: "./fragments/schemas.stage4.yaml#/TrainingDeliveryPage"}
     ExternalTrainingReferencePage: {$ref: "./fragments/schemas.stage4.yaml#/ExternalTrainingReferencePage"}
+    TrainingRunEvidenceCreate: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRunEvidenceCreate"}
+    TrainingRunEvidence: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRunEvidence"}
+    TrainingRunEvidenceList: {$ref: "./fragments/schemas.stage4.yaml#/TrainingRunEvidenceList"}
     ExportArtifactDownload: {$ref: "./fragments/schemas.stage4.yaml#/ExportArtifactDownload"}
     ModelStatus: {$ref: "./fragments/schemas.stage5.yaml#/ModelStatus"}
     ModelTaskType: {$ref: "./fragments/schemas.stage5.yaml#/ModelTaskType"}
