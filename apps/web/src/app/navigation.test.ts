@@ -33,7 +33,7 @@ describe("导航分区配置", () => {
 
   it("详情路径按最长前缀匹配所属模块", () => {
     expect(findNavItem("/projects/123")?.item.path).toBe("/projects");
-    expect(findNavItem("/projects")?.section.key).toBe("pipeline");
+    expect(findNavItem("/projects")?.section.key).toBe("plan");
     expect(findNavItem("/devices/123")?.item.path).toBe("/devices");
     expect(findNavItem("/devices")?.item.available).toBe(true);
   });
