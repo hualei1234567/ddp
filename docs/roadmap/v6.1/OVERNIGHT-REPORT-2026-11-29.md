@@ -178,6 +178,15 @@ online_deploy_verify.py --skip-env \
 
 **注意**：Quick Tunnel 域名每次重启变化；如需固定域名需绑定 Zero Trust Tunnel 或等 NS 切换完成。
 
+**后端版本落后于 `main`（如实标注）**：公网 API 当前是既有构建——
+`GET .../ops/token-ledger` 返回 401（路由存在、需鉴权），而本次新增的
+`GET .../ops/token-budget` 返回 **404**（该构建尚无此路由）。本机 `:8000` 由
+一个 **ssh 端口转发**持有（不是本地 uvicorn），实际服务在别处，我无法安全重启它。
+**新端点需在后端重新部署后才会生效**，这一点标为 `UNVERIFIED`，不计入上线结论。
+
+**前端已确认生效**：`https://ddp-web.pages.dev/` 的产物同时包含新导航分组
+「需求与采集」与侧栏检索「检索功能模块」，说明 #176 的前端改动已随 Pages 构建上线。
+
 ---
 
 ## 七、本轮真实数字
