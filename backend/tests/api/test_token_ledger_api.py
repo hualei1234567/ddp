@@ -220,3 +220,139 @@ def test_ledger_does_not_leak_actor_identity(
     raw = owner.get(_url(ids.project_a)).text
     assert "created_by" not in raw
     assert "updated_by" not in raw
+
+
+# --------------------------------------------------------------- 预算评估端点（V61-019）
+
+
+def _budget_url(project_id: UUID) -> str:
+    return f"/api/v1/projects/{project_id}/ops/token-budget"
+
+
+def test_budget_unlimited_without_limits(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """不传任何上限 → UNLIMITED（不是 OK：没设预算不等于在预算内）。"""
+    factory, ids = api_db
+    _seed(factory, ids)
+    owner = make_client(factory, ids.owner_a)
+
+    response = owner.get(_budget_url(ids.project_a))
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "UNLIMITED"
+    assert body["breached_dimensions"] == []
+    assert body["warning_dimensions"] == []
+    # 未设上限的维度一律 UNLIMITED
+    assert {item["verdict"] for item in body["dimensions"]} == {"UNLIMITED"}
+
+
+def test_budget_uses_ledger_totals_and_reports_warning(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """按台账合计判定：project_a 合计 tokens 8100，上限 10000 → WARNING(0.81)。"""
+    factory, ids = api_db
+    _seed(factory, ids)
+    owner = make_client(factory, ids.owner_a)
+
+    # 台账合计：m-pre 3000 + m-judge 2100 + m-embed 3000 = 8100
+    response = owner.get(f"{_budget_url(ids.project_a)}?total_tokens=10000")
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    assert body["status"] == "WARNING"
+    assert body["warning_dimensions"] == ["TOTAL_TOKENS"]
+    total = next(d for d in body["dimensions"] if d["dimension"] == "TOTAL_TOKENS")
+    assert total["usage"] == "8100"
+    assert total["limit"] == "10000"
+    assert total["ratio"] == "0.8100"
+
+
+def test_budget_exceeded_when_over_limit(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    factory, ids = api_db
+    _seed(factory, ids)
+    owner = make_client(factory, ids.owner_a)
+
+    body = owner.get(f"{_budget_url(ids.project_a)}?total_tokens=1000").json()
+    assert body["status"] == "EXCEEDED"
+    assert body["breached_dimensions"] == ["TOTAL_TOKENS"]
+
+
+def test_budget_cost_limit_compares_string_money(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """成本维度：project_a 有价合计 0.0170；上限 0.01 → EXCEEDED。"""
+    factory, ids = api_db
+    _seed(factory, ids)
+    owner = make_client(factory, ids.owner_a)
+
+    body = owner.get(f"{_budget_url(ids.project_a)}?total_cost_usd=0.01").json()
+    cost = next(d for d in body["dimensions"] if d["dimension"] == "TOTAL_COST")
+    assert cost["verdict"] == "EXCEEDED"
+    assert cost["usage"] == "0.0170"
+    assert body["breached_dimensions"] == ["TOTAL_COST"]
+
+
+def test_budget_does_not_leak_other_projects(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    """跨项目隔离：project_b 的 99.0000 成本不得进入 project_a 的判定。"""
+    factory, ids = api_db
+    _seed(factory, ids)
+    owner = make_client(factory, ids.owner_a)
+
+    body = owner.get(f"{_budget_url(ids.project_a)}?total_cost_usd=10").json()
+    cost = next(d for d in body["dimensions"] if d["dimension"] == "TOTAL_COST")
+    assert cost["usage"] == "0.0170"
+    assert body["status"] == "OK"
+
+
+@pytest.mark.parametrize("path", ["/ops/token-budget", "/ops/token-ledger"])
+def test_budget_requires_owner_role(
+    api_db: tuple[sessionmaker[Session], ApiIds], path: str
+) -> None:
+    """与台账同权限：viewer/editor 一律 403（成本属经营信息）。"""
+    factory, ids = api_db
+    clients = {
+        "viewer": make_client(factory, ids.viewer_a),
+        "editor": make_client(factory, ids.editor_a),
+    }
+    for name, client in clients.items():
+        response = client.get(f"/api/v1/projects/{ids.project_a}{path}")
+        assert response.status_code == 403, (name, response.text)
+
+
+@pytest.mark.parametrize(
+    ("query", "reason"),
+    [
+        ("total_tokens=0", "total_tokens"),
+        ("total_tokens=-5", "total_tokens"),
+        ("warning_ratio=0", "warning_ratio"),
+        ("warning_ratio=1.5", "warning_ratio"),
+        ("total_cost_usd=abc", "total_cost_usd"),
+        ("total_cost_usd=-1", "total_cost_usd"),
+    ],
+)
+def test_budget_rejects_invalid_parameters(
+    api_db: tuple[sessionmaker[Session], ApiIds], query: str, reason: str
+) -> None:
+    """非法预算参数显式 422，不静默当 0 或忽略。"""
+    factory, ids = api_db
+    owner = make_client(factory, ids.owner_a)
+
+    response = owner.get(f"{_budget_url(ids.project_a)}?{query}")
+    assert response.status_code == 422, (query, response.text)
+    # 错误详情按 code 白名单脱敏（不回显字段名），只断言稳定错误码。
+    assert response.json()["error"]["code"] == "validation_failed", (query, reason)
+
+
+def test_budget_endpoint_is_read_only(
+    api_db: tuple[sessionmaker[Session], ApiIds],
+) -> None:
+    factory, ids = api_db
+    owner = make_client(factory, ids.owner_a)
+    for method in ("post", "patch", "put", "delete"):
+        response = getattr(owner, method)(_budget_url(ids.project_a))
+        assert response.status_code == 405, (method, response.status_code)

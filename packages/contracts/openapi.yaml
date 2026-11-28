@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: DDP API
-  version: 1.40.0
+  version: 1.41.0
   description: |
     DDP（Embodied AI Data Platform）HTTP API 契约。
 
@@ -419,7 +419,7 @@ info:
     name: Proprietary
 x-ddp-contract:
   kind: implemented-snapshot
-  version: 1.40.0
+  version: 1.41.0
   stages:
     device:
       version: ddp.device/1.0.0
@@ -1129,6 +1129,9 @@ paths:
   # --- Token 成本台账（V52-010，蓝图 N6；owner / 平台管理员）---
   /api/v1/projects/{project_id}/ops/token-ledger:
     $ref: "./fragments/paths.ops.yaml#/opsTokenLedger"
+  # --- Token 预算评估（V61-019，蓝图 N6；owner / 平台管理员）---
+  /api/v1/projects/{project_id}/ops/token-budget:
+    $ref: "./fragments/paths.ops.yaml#/opsTokenBudget"
   # --- 评测失败案例回流（V52-030，蓝图 N5 / G5）---
   # --- 数据集版本对比（阶段 5 / 治理闭环）---
   /api/v1/projects/{project_id}/datasets/{dataset_id}/versions/{baseline_version_id}/compare/{candidate_version_id}:
@@ -1809,6 +1812,7 @@ components:
     AiTokenUsageItem: {$ref: "./fragments/schemas.stage9.yaml#/AiTokenUsageItem"}
     TokenCostLedger: {$ref: "./fragments/schemas.ops.yaml#/TokenCostLedger"}
     TokenCostLedgerEntry: {$ref: "./fragments/schemas.ops.yaml#/TokenCostLedgerEntry"}
+    TokenBudgetEvaluation: {$ref: "./fragments/schemas.ops.yaml#/TokenBudgetEvaluation"}
     AnnotationBackflowIngest: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowIngest"}
     AnnotationBackflowIngestResult: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowIngestResult"}
     AnnotationBackflowDecision: {$ref: "./fragments/schemas.ops.yaml#/AnnotationBackflowDecision"}
