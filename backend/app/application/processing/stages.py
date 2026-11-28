@@ -173,17 +173,12 @@ STAGE_SKIP_REASONS: Mapping[ProcessingStage, str] = {
     ProcessingStage.DATA_CLEANING: (
         "清洗规则尚未接入处理运行（缺少规则集版本与清洗产物落库语义），本阶段没有真实实现"
     ),
-    # V6.1 视频链三阶段（V61-005/007）：枚举与迁移 0087 已就位，解码器接线
-    # 在 T1-02（data-platform video_decode → 编排器注入）。未接线期间显式
-    # SKIPPED——非视频样本（如 RoboMimic ph，无图像流）本就应跳过；
-    # 注入后由 default_handlers 的 video_decode/video_frame_index/timestamp_normalize
-    # 参数覆盖。
-    ProcessingStage.VIDEO_DECODE: (
-        "视频解码器未注入（T1-02 video_decode 接线中），非视频样本自然跳过"
-    ),
-    ProcessingStage.FRAME_INDEX: (
-        "帧索引构建未注入（依赖 VIDEO_DECODE 产物），视频样本解码器接线后启用"
-    ),
+    # V6.1 视频链三阶段（V61-005/007）：枚举与迁移 0087 已就位；未注入时
+    # 显式 SKIPPED——非视频样本（如 RoboMimic ph，无图像流）本就应跳过；
+    # 注入后由 default_handlers 的 video_decode / timestamp_normalize 参数覆盖
+    # （FRAME_INDEX 与 VIDEO_DECODE 同事务落库，共用一个处理器）。
+    ProcessingStage.VIDEO_DECODE: ("视频解码器未注入（V6.1 视频链未接线），非视频样本自然跳过"),
+    ProcessingStage.FRAME_INDEX: ("帧索引构建未注入（依赖 VIDEO_DECODE 产物），解码器接线后启用"),
     ProcessingStage.TIMESTAMP_NORMALIZE: (
         "时间归一化未注入（依赖 FRAME_INDEX 的原始 pts），解码器接线后启用"
     ),
@@ -201,6 +196,7 @@ def default_handlers(
     quality_check: StageHandler,
     stream_extraction: StageHandler | None = None,
     data_cleaning: StageHandler | None = None,
+    video_decode: StageHandler | None = None,
     timestamp_normalize: StageHandler | None = None,
 ) -> dict[ProcessingStage, StageHandler]:
     """默认阶段表：必选阶段由组合根注入，可选阶段未注入时显式 SKIPPED。
@@ -229,9 +225,15 @@ def default_handlers(
         handlers[stage] = SkippedStage(reason)
     if data_cleaning is not None:
         handlers[ProcessingStage.DATA_CLEANING] = data_cleaning
-    # TIMESTAMP_NORMALIZE 需要数据库会话与 video_frames 读写语义；未注入时
-    # 由 STAGE_SKIP_REASONS 的 SkippedStage 显式跳过并写明原因（同
-    # STREAM_EXTRACTION 的可选注入模式），不静默成功。
+    # V6.1 视频链三阶段（V61-005/007）：VIDEO_DECODE 与 TIMESTAMP_NORMALIZE
+    # 由组合根成对注入（解码产生帧行，归一化消费帧行）。FRAME_INDEX 与解码
+    # 同事务落库，**不单独执行**——映射为显式跳过并写明"随 VIDEO_DECODE
+    # 落库"，否则同一处理器跑两遍会把帧索引翻倍。
+    if video_decode is not None:
+        handlers[ProcessingStage.VIDEO_DECODE] = video_decode
+        handlers[ProcessingStage.FRAME_INDEX] = SkippedStage(
+            "帧索引随 VIDEO_DECODE 同事务落库，无独立处理器"
+        )
     if timestamp_normalize is not None:
         handlers[ProcessingStage.TIMESTAMP_NORMALIZE] = timestamp_normalize
     missing = [stage.value for stage in STAGE_SEQUENCE if stage not in handlers]

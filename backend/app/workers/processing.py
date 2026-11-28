@@ -54,10 +54,12 @@ from app.application.processing.stream_extraction_stage import (
     StreamExtractionHandler,
 )
 from app.application.processing.time_alignment_stage import TimeAlignmentHandler
+from app.application.processing.timestamp_normalize_stage import TimestampNormalizeHandler
 from app.application.processing.use_cases import (
     PROCESSING_RUN_REQUESTED_EVENT,
     ProcessingWorkerUseCases,
 )
+from app.application.processing.video_decode_stage import VideoDecodeHandler
 from app.application.quality.episode_checks import EpisodeQualityChecks
 from app.application.quality.registry import default_registry
 from app.application.quality.use_cases import QualityRunUseCases
@@ -76,6 +78,10 @@ from app.infrastructure.db.session import create_session_factory, get_engine
 from app.infrastructure.processing.episode_creation import ProcessingEpisodeCreator
 from app.infrastructure.processing.metadata_documents import (
     ProcessingMetadataDocumentReader,
+)
+from app.infrastructure.processing.video_adapter import (
+    FfprobeVideoDecoder,
+    RawAssetVideoResolver,
 )
 from app.infrastructure.repositories.annotation_results import (
     SqlAnnotationRecordRepository,
@@ -373,6 +379,19 @@ class ProcessingRunWorker:
             artifact_catalog,
             self._artifacts,
         )
+        # V6.1 视频链（V61-005/007）：ffprobe 逐帧解码 → video_frames 落库，
+        # 再由 TIMESTAMP_NORMALIZE 填归一化列。两个阶段都真实接线——
+        # 不接线时的 SKIPPED 占位只属于"能力缺失"，不属于"能力已存在"。
+        video_decoder = FfprobeVideoDecoder(
+            self._reader,
+            max_object_bytes=self._settings.processing_metadata_max_object_bytes,
+        )
+        video_decode = VideoDecodeHandler(
+            session,
+            video_decoder,
+            resolver=RawAssetVideoResolver(session),
+        )
+        timestamp_normalize = TimestampNormalizeHandler(session)
         return ProcessingPipeline(
             runs,
             SqlProcessingRunStepRepository(session),
@@ -387,6 +406,8 @@ class ProcessingRunWorker:
                 quality_check=quality_check,
                 stream_extraction=stream_extraction,
                 data_cleaning=data_cleaning,
+                video_decode=video_decode,
+                timestamp_normalize=timestamp_normalize,
             ),
             session,
             # 阶段产物登记进一等目录（V31-016）；``output_refs`` 退化为兼容投影。
