@@ -103,9 +103,7 @@ def session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 @pytest.fixture()
-def context(
-    engine: Engine, session_factory: sessionmaker[Session]
-) -> Iterator[dict[str, object]]:
+def context(engine: Engine, session_factory: sessionmaker[Session]) -> Iterator[dict[str, object]]:
     """1 项目 + 1 用户 + 2 引用（同项目），返回种子上下文。"""
     project_a, project_b, user_id = uuid4(), uuid4(), uuid4()
     with session_factory() as session:
