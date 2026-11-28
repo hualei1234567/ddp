@@ -76,6 +76,8 @@ import QualityCheckPage from "./pages/quality/QualityCheckPage";
 import QualityOverviewPage from "./pages/quality/QualityOverviewPage";
 import NotFound from "./pages/NotFound";
 import PeoplePage from "./pages/people/PeoplePage";
+import ProcessingRunDetailPage from "./pages/processing/ProcessingRunDetailPage";
+import ProcessingRunsPage from "./pages/processing/ProcessingRunsPage";
 import ProjectListPage from "./pages/projects/ProjectListPage";
 import RawAssetDetailPage from "./pages/rawAssets/RawAssetDetailPage";
 import RawAssetListPage from "./pages/rawAssets/RawAssetListPage";
@@ -339,6 +341,13 @@ export default function AppRoutes() {
           path="inference-tasks/:taskId"
           element={<InferenceTaskDetailPage />}
         />
+        {/*
+          处理运行监控（N4-001）：RawAsset 处理流水线的执行视图。
+          /processing 此前是不可进入的占位页；后端 processing-runs 已就绪，
+          这里替换为真实页面。详情页内联有界步骤，完整历史以后端为准。
+        */}
+        <Route path="processing" element={<ProcessingRunsPage />} />
+        <Route path="processing/:runId" element={<ProcessingRunDetailPage />} />
         <Route path="suppliers" element={<SupplierListPage />} />
         <Route path="suppliers/:supplierId" element={<SupplierDetailPage />} />
         <Route path="inbound-batches" element={<BatchListPage />} />

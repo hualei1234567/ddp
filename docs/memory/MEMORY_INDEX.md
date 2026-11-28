@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 40 张卡片**：DRAFT 0 / ACTIVE 40 / SUPERSEDED 0 / DEPRECATED 0
+**总计 43 张卡片**：DRAFT 0 / ACTIVE 43 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 40 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 43 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -67,11 +67,14 @@
 | [MEM-INC-029](incidents/MEM-INC-029-http-header-case-and-sqlite-naive-datetime.md) | 断言 Webhook 投递时踩到的两个隐性事实：HTTP 头名大小写不敏感、SQLite 读回 datetime 无时区 | ACTIVE | 1 | `e2e-test`, `http-header-case`, `naive-datetime`, `seed-data`, `sqlite`, `webhook` |
 | [MEM-INC-030](incidents/MEM-INC-030-ci-security-job-minimal-deps.md) | CI 的 security job 只装 pytest/pip-audit/pyyaml——`scripts/` 下测试文件不得顶层 import 数据库驱动 | ACTIVE | 1 | `ci-environment`, `lazy-import`, `local-green-vs-ci-green`, `minimal-deps`, `scripts-tests` |
 
-## CHG · 变更记录（1）
+## CHG · 变更记录（4）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
 | [MEM-CHG-001](changes/MEM-CHG-001-outbox-history-backfill.md) | 迁移 0072 归正 outbox 历史留痕行 | ACTIVE | 1 | `backfill`, `data-fix`, `migration`, `outbox`, `pending`, `recorded` |
+| [MEM-CHG-002](changes/MEM-CHG-002-lerobot-env-state-key.md) | LeRobot 导出必须同时写 `observation.environment_state`——官方策略只认 ENV 键，只写 `observation.state` 会拒绝训练 | ACTIVE | 1 | `env-state`, `export`, `feature-naming`, `lerobot`, `training-gate`, `v21` |
+| [MEM-CHG-003](changes/MEM-CHG-003-lerobot-nested-vector-columns.md) | 官方 LeRobot 策略消费的是**嵌套向量列**，只有扁平 `observation.state[0..N]` 列会 KeyError | ACTIVE | 1 | `act-policy`, `lerobot`, `nested-columns`, `parquet`, `training-gate` |
+| [MEM-CHG-004](changes/MEM-CHG-004-lerobot-stats-count-shape.md) | LeRobot stats 的 `count` 必须是 shape `(1,)`——0 维标量与错误序列化都会被 aggregate_stats 拒绝 | ACTIVE | 1 | `aggregate-stats`, `count-shape`, `jsonl`, `lerobot`, `stats`, `training-gate` |
 
 ## OPS · 运维参数与门禁（2）
 
@@ -109,8 +112,10 @@
 - `0052`：MEM-INC-020
 - `2^53`：MEM-INC-008
 - `409`：MEM-INC-023
+- `act-policy`：MEM-CHG-003
 - `adapter`：MEM-DEC-001
 - `adr`：MEM-DEC-001
+- `aggregate-stats`：MEM-CHG-004
 - `alembic`：MEM-INC-013, MEM-INC-018, MEM-INC-019, MEM-INC-020
 - `api-contract`：MEM-INC-015, MEM-INC-016, MEM-INC-017
 - `archive`：MEM-OPS-002
@@ -143,6 +148,7 @@
 - `contract`：MEM-INC-006, MEM-INC-008
 - `contract-first`：MEM-INC-016
 - `contract-strategy`：MEM-SOP-003
+- `count-shape`：MEM-CHG-004
 - `data-fabrication`：MEM-INC-010
 - `data-fix`：MEM-CHG-001
 - `datetime`：MEM-INC-021
@@ -160,7 +166,10 @@
 - `e2e`：MEM-INC-005
 - `e2e-test`：MEM-INC-029
 - `enum`：MEM-DEC-001, MEM-INC-012
+- `env-state`：MEM-CHG-002
+- `export`：MEM-CHG-002
 - `false-positive`：MEM-SOP-004
+- `feature-naming`：MEM-CHG-002
 - `filterwarnings`：MEM-INC-019
 - `fixture`：MEM-INC-004, MEM-SOP-001
 - `flaky`：MEM-INC-005, MEM-INC-009
@@ -183,9 +192,10 @@
 - `json-label`：MEM-DEC-002
 - `json-schema`：MEM-INC-014
 - `jsonb`：MEM-INC-021
+- `jsonl`：MEM-CHG-004
 - `lazy-import`：MEM-INC-030
 - `least-privilege`：MEM-INC-028
-- `lerobot`：MEM-REQ-001
+- `lerobot`：MEM-CHG-002, MEM-CHG-003, MEM-CHG-004, MEM-REQ-001
 - `level`：MEM-DEC-001
 - `limit`：MEM-INC-007
 - `lineage`：MEM-INC-006, MEM-INC-007
@@ -206,6 +216,7 @@
 - `n-plus-1`：MEM-INC-024
 - `naive-datetime`：MEM-INC-022, MEM-INC-029
 - `nanosecond`：MEM-INC-008
+- `nested-columns`：MEM-CHG-003
 - `nosemgrep`：MEM-SOP-004
 - `off-by-n`：MEM-INC-010
 - `openapi`：MEM-INC-015, MEM-INC-017
@@ -217,7 +228,7 @@
 - `parallel`：MEM-INC-009, MEM-SOP-002, MEM-SOP-003
 - `parallel-pr`：MEM-INC-015, MEM-INC-018
 - `parity`：MEM-INC-016
-- `parquet`：MEM-INC-004
+- `parquet`：MEM-CHG-003, MEM-INC-004
 - `partitioning`：MEM-OPS-002
 - `pending`：MEM-CHG-001
 - `performance-regression`：MEM-INC-024
@@ -272,6 +283,7 @@
 - `sqlite`：MEM-INC-013, MEM-INC-018, MEM-INC-020, MEM-INC-022, MEM-INC-029
 - `ssrf`：MEM-INC-028, MEM-SOP-004
 - `stage`：MEM-INC-012
+- `stats`：MEM-CHG-004
 - `status`：MEM-INC-003, MEM-REQ-001
 - `stream-extraction`：MEM-INC-012
 - `strict-mode`：MEM-INC-016
@@ -285,6 +297,7 @@
 - `time-sensitive`：MEM-INC-009
 - `timestamp`：MEM-INC-008
 - `timezone`：MEM-INC-022
+- `training-gate`：MEM-CHG-002, MEM-CHG-003, MEM-CHG-004
 - `training-ready`：MEM-REQ-001
 - `trigger-rename`：MEM-INC-020
 - `type-coercion`：MEM-INC-021
@@ -292,6 +305,7 @@
 - `unique-index`：MEM-INC-001
 - `url-guard`：MEM-INC-028
 - `v1.1`：MEM-INC-014
+- `v21`：MEM-CHG-002
 - `version-bump`：MEM-INC-015, MEM-SOP-002
 - `version-conflict`：MEM-INC-011
 - `webhook`：MEM-INC-023, MEM-INC-027, MEM-INC-029

@@ -79,6 +79,14 @@ class ProcessingStage(StrEnum):
     FILE_VALIDATION = "FILE_VALIDATION"
     METADATA_EXTRACTION = "METADATA_EXTRACTION"
     FORMAT_PARSING = "FORMAT_PARSING"
+    #: V6.1 视频链三阶段（V61-005/007）：插在容器解析之后、流提取之前——
+    #: 先解码拿到帧与时间，才能提取流与观察。枚举顺序即阶段顺序（权威），
+    #: 与迁移 0087 的 CHECK 允许集一致；防回归测试
+    #: ``tests/migrations/test_processing_stage_constraints.py`` 会断言
+    #: 每个枚举值都在三表约束内，新增阶段忘改约束时 CI 直接红。
+    VIDEO_DECODE = "VIDEO_DECODE"
+    FRAME_INDEX = "FRAME_INDEX"
+    TIMESTAMP_NORMALIZE = "TIMESTAMP_NORMALIZE"
     TIME_ALIGNMENT = "TIME_ALIGNMENT"
     CALIBRATION_VALIDATION = "CALIBRATION_VALIDATION"
     #: V51-001~003：从真实 payload 提取 SensorStream / Observation / Action。

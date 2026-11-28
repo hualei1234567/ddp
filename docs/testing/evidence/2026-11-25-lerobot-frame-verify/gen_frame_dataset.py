@@ -8,7 +8,7 @@ from ddp_data.lerobot.frame_writer import (
     write_frame_episode, build_stats, build_stats_json, build_episodes_stats_jsonl)
 
 sample = Path.home()/"ddp-samples/robomimic/demo_v15.hdf5"
-layout = ses._LAYOUTS[0]
+layout = ses.LAYOUTS[0]
 sha = hashlib.sha256(sample.read_bytes()).hexdigest()
 print(f"样本: {sample.name} {sample.stat().st_size}B sha256={sha[:16]}...")
 

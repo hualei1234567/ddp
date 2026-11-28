@@ -127,6 +127,16 @@ export const navSections: NavSection[] = [
         available: true,
       },
       {
+        // N4-001 处理运行监控：此前 /processing 是不可进入的占位页（后端
+        // 没有能力，用户点进去只能看到一句说明，已被整体移出菜单）。后端
+        // processing-runs 就绪后恢复为真实页面入口。
+        path: "/processing",
+        label: "处理运行",
+        description: "查看 RawAsset 处理流水线的运行状态、阶段步骤与耗时。",
+        icon: createElement(PartitionOutlined),
+        available: true,
+      },
+      {
         // 个人队列排在标注中心之前：标注人每天打开的是「我的任务」，
         // 任务/批次管理是管理员视角。
         path: "/annotation/my-tasks",

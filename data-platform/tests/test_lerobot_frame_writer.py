@@ -52,7 +52,13 @@ def test_writes_frame_level_parquet_and_info() -> None:
     )
 
     assert result.frame_count == 5
-    assert result.feature_names == ("observation.state", "action", "timestamp")
+    # V6.1：新增 observation.environment_state（ENV 特征，供官方 ACT 等策略消费）。
+    assert result.feature_names == (
+        "observation.state",
+        "observation.environment_state",
+        "action",
+        "timestamp",
+    )
     assert result.parquet_bytes[:4] == b"PAR1"  # 合法 Parquet 魔数
 
     info = json.loads(result.info_json)
@@ -140,7 +146,12 @@ def test_stats_are_generated_for_every_feature() -> None:
     assert "action[1]" in stats
     for name, values in stats.items():
         assert values["min"] <= values["max"], name
-        assert values["count"] == 4, name
+        # count 形状：整向量级 stats（observation.state / observation.environment_state /
+        # action）的 count 是 [n]（官方 aggregate_stats 要求至少 1 维）；逐维 stats 仍是标量。
+        if name in {"observation.state", "observation.environment_state", "action"}:
+            assert values["count"] == [4], name
+        else:
+            assert values["count"] == 4, name
 
 
 # ---- 边界与失败路径（严格校验是对训练数据的保护）----
