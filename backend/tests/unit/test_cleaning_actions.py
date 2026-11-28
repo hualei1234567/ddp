@@ -416,3 +416,41 @@ def test_handler_transform_only_writes_derived_stream(
     assert report["raw_asset_mutated"] is False
     # 原始上游流未被改写
     assert store._objects[source_key] == data
+
+
+# ------------------------------------------------- 衍生流写入器（模块抽取后）
+
+
+def test_serialize_transformed_slice_is_byte_deterministic() -> None:
+    """同一条衍生切片两次序列化必须字节级相同（报告与产物 SHA 才有意义）。"""
+    from app.application.processing.cleaning_transformed_writer import (
+        serialize_transformed_slice,
+    )
+    from app.domain.processing.cleaning_actions import apply_cleaning_actions
+
+    item = _slice_with_jump()
+    report = evaluate_stream_records([item], thresholds=THRESHOLDS)
+    result = apply_cleaning_actions(
+        [item], report, thresholds=THRESHOLDS, transform_rule_ids={RULE_ACTION_STEP_JUMP}
+    )
+    transformed = result.transformed_slices[0]
+
+    first = serialize_transformed_slice(transformed)
+    second = serialize_transformed_slice(transformed)
+
+    assert first == second
+    lines = first.decode("utf-8").splitlines()
+    assert json.loads(lines[0])["_meta"]["provenance"]["rule_id"] == RULE_ACTION_STEP_JUMP
+    # 首行 _meta，随后是 observation 行（先）+ action 行（后）
+    types = [json.loads(line).get("type") for line in lines[1:]]
+    assert types == ["observation"] * 4 + ["action"] * 3
+
+
+def test_write_transformed_slices_uses_shared_key_helper() -> None:
+    """抽取后的写入器与处理器共用同一 Key 生成规则（不出现两套路径）。"""
+    from app.application.processing.cleaning_transformed_writer import (
+        cleaning_transformed_key as writer_key,
+    )
+
+    assert writer_key is cleaning_transformed_key
+    assert cleaning_transformed_key(uuid4(), uuid4(), 2).endswith("transformed-002.ndjson")

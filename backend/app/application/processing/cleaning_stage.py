@@ -23,6 +23,10 @@ from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from uuid import UUID
 
+from app.application.processing.cleaning_transformed_writer import (
+    cleaning_transformed_key,
+    write_transformed_slices,
+)
 from app.application.processing.ports import (
     ObjectInspectionError,
     ObjectMissingError,
@@ -39,9 +43,7 @@ from app.application.processing.stages import (
 from app.application.processing.stream_extraction_stage import STREAM_SCHEMA_VERSION
 from app.domain.processing.artifacts import ProcessingArtifact, ProcessingArtifactKind
 from app.domain.processing.cleaning_actions import (
-    TRANSFORM_SCHEMA_VERSION,
     CleaningActionResult,
-    TransformedSlice,
     apply_cleaning_actions,
 )
 from app.domain.processing.cleaning_rules import (
@@ -72,11 +74,6 @@ _ALLOWED_ACTION_SOURCES = frozenset({"PRESENT", "ACTION_SOURCE_ABSENT"})
 def cleaning_report_key(project_id: UUID, run_id: UUID) -> str:
     """服务端生成的幂等清洗报告 Key（不含时间戳，同运行重跑覆盖同一路径）。"""
     return f"processing-run/{project_id}/{run_id}/cleaning/report.json"
-
-
-def cleaning_transformed_key(project_id: UUID, run_id: UUID, index: int) -> str:
-    """服务端生成的衍生 TRANSFORM 流产物 Key（不覆盖原始资产与上游流）。"""
-    return f"processing-run/{project_id}/{run_id}/cleaning/transformed-{index:03d}.ndjson"
 
 
 class DataCleaningHandler:
@@ -136,8 +133,11 @@ class DataCleaningHandler:
         except DomainValidationError as exc:
             raise StageFailure("cleaning_config_invalid", str(exc), retryable=False) from exc
 
-        transformed_artifacts = self._write_transformed_slices(
-            context.run.project_id, context.run.run_id, action_result.transformed_slices
+        transformed_artifacts = write_transformed_slices(
+            self._artifacts,
+            project_id=context.run.project_id,
+            run_id=context.run.run_id,
+            transformed_slices=action_result.transformed_slices,
         )
         report_ref = cleaning_report_key(context.run.project_id, context.run.run_id)
         document = self._build_report_document(
@@ -266,78 +266,6 @@ class DataCleaningHandler:
             ],
             **payload,
         }
-
-    def _write_transformed_slices(
-        self,
-        project_id: UUID,
-        run_id: UUID,
-        transformed_slices: Sequence[TransformedSlice],
-    ) -> list[StageArtifact]:
-        artifacts: list[StageArtifact] = []
-        for idx, item in enumerate(transformed_slices):
-            ref = cleaning_transformed_key(project_id, run_id, idx)
-            lines = [
-                json.dumps(
-                    {
-                        "_meta": {
-                            "schema_version": TRANSFORM_SCHEMA_VERSION,
-                            "source_target_ref": item.target_ref,
-                            "provenance": item.transform_provenance,
-                        }
-                    },
-                    ensure_ascii=False,
-                    sort_keys=True,
-                )
-            ]
-            for obs in item.observations:
-                lines.append(
-                    json.dumps(
-                        {
-                            "type": "observation",
-                            "observation_id": obs.record_id,
-                            "frame_index": obs.frame_index,
-                            "timestamp_ns": obs.timestamp_ns,
-                            "values": list(obs.values),
-                        },
-                        ensure_ascii=False,
-                        sort_keys=True,
-                    )
-                )
-            for act in item.actions:
-                lines.append(
-                    json.dumps(
-                        {
-                            "type": "action",
-                            "action_id": act.record_id,
-                            "frame_index": act.frame_index,
-                            "timestamp_ns": act.timestamp_ns,
-                            "values": list(act.values),
-                        },
-                        ensure_ascii=False,
-                        sort_keys=True,
-                    )
-                )
-            data = ("\n".join(lines) + "\n").encode("utf-8")
-            try:
-                self._artifacts.put_bytes(ref, data)
-            except ObjectInspectionError as exc:
-                raise StageFailure(
-                    "object_storage_unavailable",
-                    "对象存储不可用，无法写入衍生清洗流产物",
-                    retryable=True,
-                ) from exc
-            artifacts.append(
-                StageArtifact(
-                    kind=ProcessingArtifactKind.CANONICAL,
-                    object_key=ref,
-                    schema_version=TRANSFORM_SCHEMA_VERSION,
-                    content_type="application/x-ndjson",
-                    size_bytes=len(data),
-                    checksum_sha256=hashlib.sha256(data).hexdigest(),
-                    source_ref=item.source_ref,
-                )
-            )
-        return artifacts
 
     def _write_report(
         self,
