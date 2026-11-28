@@ -12,6 +12,14 @@
 本包不建表、不做 IO、不依赖 backend；缺失字段通过 ``missing_fields`` 显式登记。
 """
 
+from ddp_data.canonical.image_observation import (
+    FRAME_LOCATOR_SEPARATOR,
+    OBSERVATION_TYPE_IMAGE,
+    FrameLocator,
+    StreamObservationProjection,
+    project_frame_observation,
+    project_stream_observations,
+)
 from ddp_data.canonical.json_schema import (
     ENTITIES,
     EntitySchema,
@@ -68,8 +76,12 @@ __all__ = [
     "EntitySchema",
     "Episode",
     "EpisodeProjection",
+    "FRAME_LOCATOR_SEPARATOR",
     "FieldSpec",
     "Frame",
+    "FrameLocator",
+    "StreamObservationProjection",
+    "OBSERVATION_TYPE_IMAGE",
     "Observation",
     "SensorStream",
     "VideoStream",
@@ -78,6 +90,8 @@ __all__ = [
     "declared_missing_fields",
     "ensure_supported_version",
     "project_episode",
+    "project_frame_observation",
+    "project_stream_observations",
     "projection_to_dict",
     "render_json_schema",
 ]
