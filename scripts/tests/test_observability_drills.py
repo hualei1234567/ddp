@@ -154,6 +154,7 @@ def test_otel_traceparent_and_stub_receiver() -> None:
                 "Content-Encoding": "gzip",
             },
         )
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- 仅向本进程 127.0.0.1 临时 OTLP 测试桩发请求
         with urllib.request.urlopen(req, timeout=5) as resp:
             assert resp.status == 200
 

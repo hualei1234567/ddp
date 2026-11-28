@@ -129,8 +129,12 @@ def _http_json(
     req_headers = dict(headers or {})
     if body is not None and "Content-Type" not in req_headers:
         req_headers["Content-Type"] = "application/json"
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise ValueError(f"仅允许 http/https 协议：{url!r}")
     request = urllib.request.Request(url, data=body, method=method, headers=req_headers)
     try:
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- 已显式校验 http/https scheme 且调用方仅允许回环地址
         with urllib.request.urlopen(request, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8")
             return resp.status, json.loads(raw)

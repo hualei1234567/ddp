@@ -369,6 +369,7 @@ def report_evidence_to_api(
         method="POST",
     )
     try:
+        # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected -- 函数开头已校验 endpoint 仅允许 http/https scheme
         with urllib_request.urlopen(req, timeout=timeout_seconds) as resp:  # noqa: S310
             body = resp.read().decode("utf-8")
             return json.loads(body) if body else {}

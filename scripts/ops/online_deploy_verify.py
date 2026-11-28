@@ -515,9 +515,13 @@ def _default_http_requester(
     method: str, url: str, headers: dict[str, str], timeout: float
 ) -> HttpProbeResponse:
     """惰性导入 httpx（遵守 MEM-INC-030）。"""
+    parsed = urlsplit(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError(f"探针 URL 必须为合法 http/https 地址：{url!r}")
     import httpx
 
-    with httpx.Client(timeout=timeout, follow_redirects=True) as client:
+    with httpx.Client(timeout=timeout, follow_redirects=False) as client:
+        # nosemgrep: ddp-ssrf-unvalidated-url -- 运维 CLI 探针脚本，仅由运维命令行显式传入目标公网 URL 且已校验 scheme 并禁用重定向
         resp = client.request(method, url, headers=headers)
         return HttpProbeResponse(resp.status_code, dict(resp.headers), resp.text)
 
