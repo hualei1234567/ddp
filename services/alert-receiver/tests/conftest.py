@@ -43,12 +43,18 @@ def server(store_dir: Path):
         thread.join(timeout=5)
 
 
-def post_json(url: str, payload: dict[str, Any], content_type: str = "application/json"):
+def post_json(
+    url: str,
+    payload: dict[str, Any],
+    content_type: str = "application/json",
+    headers: dict[str, str] | None = None,
+):
     """POST 一个 JSON 到接收端（返回 urllib 响应）。"""
     body = json.dumps(payload).encode("utf-8")
-    request = urllib.request.Request(
-        url, data=body, method="POST", headers={"Content-Type": content_type}
-    )
+    req_headers = {"Content-Type": content_type}
+    if headers:
+        req_headers.update(headers)
+    request = urllib.request.Request(url, data=body, method="POST", headers=req_headers)
     try:
         with urllib.request.urlopen(request, timeout=10) as response:
             return response.status, json.loads(response.read().decode("utf-8"))
@@ -91,7 +97,7 @@ def post_raw(url: str, body: bytes, content_type: str = "application/json"):
 #: 一条真实的 Alertmanager webhook payload（v4 格式）
 SAMPLE_PAYLOAD: dict[str, Any] = {
     "version": "4",
-    "groupKey": "{}:{alertname=\"DdpApiDown\"}",
+    "groupKey": '{}:{alertname="DdpApiDown"}',
     "status": "firing",
     "receiver": "default-webhook",
     "groupLabels": {"alertname": "DdpApiDown"},

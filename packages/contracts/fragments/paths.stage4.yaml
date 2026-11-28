@@ -1341,3 +1341,70 @@ exportJobArtifactDownload:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+trainingDeliveryEvidence:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/DeliveryId"
+  get:
+    operationId: listDeliveryTrainingEvidence
+    tags: [training-deliveries]
+    summary: 查询训练交付下所有外部训练引用已落库的训练过程证据
+    parameters:
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      - name: offset
+        in: query
+        required: false
+        schema: { type: integer, minimum: 0, default: 0 }
+    responses:
+      "200":
+        description: 训练过程证据列表（最新在前）
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRunEvidenceList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+externalTrainingReferenceEvidence:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/ProjectId"
+    - $ref: "../openapi.yaml#/components/parameters/ExternalRefId"
+  get:
+    operationId: listExternalReferenceEvidence
+    tags: [training-deliveries]
+    summary: 按外部训练引用查询已落库的训练过程证据
+    responses:
+      "200":
+        description: 训练过程证据列表
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRunEvidenceList" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    operationId: createExternalReferenceEvidence
+    tags: [training-deliveries]
+    summary: 为外部训练引用登记一条真实训练过程证据（training_run_evidence）
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRunEvidenceCreate" }
+    responses:
+      "201":
+        description: 已登记的训练过程证据
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TrainingRunEvidence" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "422": { $ref: "../openapi.yaml#/components/responses/UnprocessableEntity" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

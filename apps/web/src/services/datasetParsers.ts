@@ -22,8 +22,14 @@ import type {
   TrainingDelivery,
   TrainingRequest,
   TrainingRequestRevision,
+  TrainingRunEvidence,
+  TrainingRunEvidenceList,
 } from "../types/dataset";
-import { EXECUTION_MODE_VALUES } from "../types/dataset";
+import {
+  EXECUTION_MODE_VALUES,
+  TRAINING_EVIDENCE_RUN_KIND_VALUES,
+  TRAINING_EVIDENCE_STATUS_VALUES,
+} from "../types/dataset";
 import {
   asRecord,
   ContractValidationError,
@@ -647,4 +653,54 @@ export function parseExternalTrainingReference(value: unknown): ExternalTraining
 
 export function parseExternalTrainingReferencePage(value: unknown) {
   return parseCursorPage(value, "externalReferences", parseExternalTrainingReference);
+}
+
+export function parseTrainingRunEvidence(value: unknown): TrainingRunEvidence {
+  const record = asRecord(value, "trainingRunEvidence");
+  const datasetVersionId = record.dataset_version_id;
+  return {
+    evidence_id: readUuid(record, "evidence_id", "trainingRunEvidence"),
+    project_id: readUuid(record, "project_id", "trainingRunEvidence"),
+    external_training_reference_id: readUuid(
+      record,
+      "external_training_reference_id",
+      "trainingRunEvidence",
+    ),
+    dataset_version_id:
+      datasetVersionId === null || datasetVersionId === undefined
+        ? null
+        : readUuid(record, "dataset_version_id", "trainingRunEvidence"),
+    run_kind: readEnum(
+      record,
+      "run_kind",
+      "trainingRunEvidence",
+      TRAINING_EVIDENCE_RUN_KIND_VALUES,
+    ),
+    device: readString(record, "device", "trainingRunEvidence"),
+    runtime_versions: asRecord(record.runtime_versions, "trainingRunEvidence.runtime_versions"),
+    config_sha256: readString(record, "config_sha256", "trainingRunEvidence"),
+    seed: readInteger(record, "seed", "trainingRunEvidence"),
+    batch_size: readPositiveInteger(record, "batch_size", "trainingRunEvidence"),
+    steps: readPositiveInteger(record, "steps", "trainingRunEvidence"),
+    started_at: readString(record, "started_at", "trainingRunEvidence"),
+    finished_at: readOptionalString(record, "finished_at", "trainingRunEvidence"),
+    metrics_summary: readOptionalRecord(record, "metrics_summary", "trainingRunEvidence"),
+    checkpoint_ref: readOptionalString(record, "checkpoint_ref", "trainingRunEvidence"),
+    checkpoint_sha256: readOptionalString(record, "checkpoint_sha256", "trainingRunEvidence"),
+    exit_code: readInteger(record, "exit_code", "trainingRunEvidence"),
+    status: readEnum(record, "status", "trainingRunEvidence", TRAINING_EVIDENCE_STATUS_VALUES),
+    stdout_tail: readOptionalString(record, "stdout_tail", "trainingRunEvidence"),
+    created_at: readString(record, "created_at", "trainingRunEvidence"),
+    created_by: readUuid(record, "created_by", "trainingRunEvidence"),
+  };
+}
+
+export function parseTrainingRunEvidenceList(value: unknown): TrainingRunEvidenceList {
+  const record = asRecord(value, "trainingRunEvidenceList");
+  if (!Array.isArray(record.items)) {
+    throw new ContractValidationError("trainingRunEvidenceList.items 必须为数组");
+  }
+  return {
+    items: record.items.map((item) => parseTrainingRunEvidence(item)),
+  };
 }

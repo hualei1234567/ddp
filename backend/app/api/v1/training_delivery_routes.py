@@ -18,6 +18,8 @@ from app.api.v1.dataset_pagination import build_page, decode_cursor, fetch_limit
 from app.api.v1.dataset_response_models import (
     ExternalTrainingReferenceOut,
     TrainingDeliveryOut,
+    TrainingRunEvidenceListOut,
+    TrainingRunEvidenceOut,
 )
 from app.api.v1.schemas import PageOut
 from app.api.v1.training_dependencies import (
@@ -29,13 +31,16 @@ from app.api.v1.training_schemas import (
     ExternalTrainingReferenceCreate,
     TrainingActionRequest,
     TrainingDeliveryCreate,
+    TrainingRunEvidenceCreate,
     external_reference_out,
     training_delivery_out,
+    training_evidence_out,
 )
 from app.application.datasets.training_commands import (
     NewExternalTrainingReference,
     NewTrainingDelivery,
 )
+from app.application.datasets.training_evidence import NewTrainingRunEvidence
 from app.core.errors import ForbiddenError, ValidationFailedError
 from app.domain.datasets.training_deliveries import TrainingDelivery
 from app.domain.datasets.training_enums import ExecutionMode, TrainingDeliveryStatus
@@ -278,6 +283,74 @@ def act_on_external_reference(
         request_id=request_id(request),
     )
     return external_reference_out(reference)
+
+
+@router.get(
+    "/training-deliveries/{delivery_id}/evidence",
+    response_model=TrainingRunEvidenceListOut,
+)
+def list_delivery_training_evidence(
+    delivery_id: UUID,
+    scope: ReadScope,
+    services: TrainingServicesDep,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> dict[str, Any]:
+    items = services.evidence.list_for_delivery(
+        scope,
+        delivery_id,
+        limit=limit,
+        offset=offset,
+    )
+    return {"items": [training_evidence_out(item) for item in items]}
+
+
+@router.get(
+    "/external-training-references/{external_ref_id}/evidence",
+    response_model=TrainingRunEvidenceListOut,
+)
+def list_external_reference_evidence(
+    external_ref_id: UUID,
+    scope: ReadScope,
+    services: TrainingServicesDep,
+) -> dict[str, Any]:
+    items = services.evidence.list_for_reference(scope, external_ref_id)
+    return {"items": [training_evidence_out(item) for item in items]}
+
+
+@router.post(
+    "/external-training-references/{external_ref_id}/evidence",
+    response_model=TrainingRunEvidenceOut,
+    status_code=201,
+)
+def create_external_reference_evidence(
+    external_ref_id: UUID,
+    payload: TrainingRunEvidenceCreate,
+    scope: WriteScope,
+    services: TrainingServicesDep,
+) -> dict[str, Any]:
+    evidence = services.evidence.record(
+        scope,
+        external_ref_id,
+        NewTrainingRunEvidence(
+            dataset_version_id=payload.dataset_version_id,
+            run_kind=payload.run_kind,
+            device=payload.device,
+            runtime_versions=payload.runtime_versions,
+            config_sha256=payload.config_sha256,
+            seed=payload.seed,
+            batch_size=payload.batch_size,
+            steps=payload.steps,
+            started_at=payload.started_at,
+            finished_at=payload.finished_at,
+            metrics_summary=payload.metrics_summary,
+            checkpoint_ref=payload.checkpoint_ref,
+            checkpoint_sha256=payload.checkpoint_sha256,
+            exit_code=payload.exit_code,
+            stdout_tail=payload.stdout_tail,
+        ),
+    )
+    return training_evidence_out(evidence)
 
 
 __all__ = ["router"]

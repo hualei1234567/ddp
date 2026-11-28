@@ -52,7 +52,9 @@ def test_ndjson_has_one_json_per_line(server, store_dir: Path) -> None:
         assert status == 200
 
     ndjson = store_dir / "alerts.ndjson"
-    lines = [line for line in ndjson.read_text(encoding="utf-8").splitlines() if line.strip()]
+    lines = [
+        line for line in ndjson.read_text(encoding="utf-8").splitlines() if line.strip()
+    ]
     assert len(lines) == 3, "每条告警必须独占一行"
     for line in lines:
         parsed = json.loads(line)  # 每一行都必须能独立解析
@@ -211,3 +213,123 @@ def test_data_survives_restart(server, store_dir: Path) -> None:
     records = reopened.read_all()
     assert len(records) == 1
     assert records[0]["commonLabels"]["alertname"] == "DdpApiDown"
+
+
+def test_bearer_token_auth_enforced_when_configured(tmp_path: Path) -> None:
+    """配置 bearer_token 时，缺令牌或错误令牌返回 401，正确令牌正常落盘。"""
+    import secrets
+    import threading
+
+    from app.main import build_server
+
+    data_dir = tmp_path / "auth-alerts"
+    bearer_val = secrets.token_hex(16)
+    httpd = build_server(
+        host="127.0.0.1", port=0, data_dir=data_dir, bearer_token=bearer_val
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    host, port = httpd.server_address[0], httpd.server_address[1]
+    base_url = f"http://{host}:{port}"
+    try:
+        status_missing, _ = post_json(f"{base_url}/alerts", SAMPLE_PAYLOAD)
+        assert status_missing == 401
+
+        status_wrong, _ = post_json(
+            f"{base_url}/alerts",
+            SAMPLE_PAYLOAD,
+            headers={"Authorization": "Bearer wrong-value"},
+        )
+        assert status_wrong == 401
+
+        status_ok, body_ok = post_json(
+            f"{base_url}/alerts",
+            SAMPLE_PAYLOAD,
+            headers={"Authorization": f"Bearer {bearer_val}"},
+        )
+        assert status_ok == 200
+        assert body_ok == {"status": "accepted", "stored": True}
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+def test_hmac_signature_verification_enforced_when_configured(tmp_path: Path) -> None:
+    """配置 hmac_secret 时，缺少或篡改签名返回 401，合法签名返回 200。"""
+    import secrets
+    import threading
+
+    from app.main import SIGNATURE_HEADER, build_server, compute_hmac_signature
+
+    data_dir = tmp_path / "hmac-alerts"
+    hmac_key = secrets.token_hex(16)
+    httpd = build_server(
+        host="127.0.0.1", port=0, data_dir=data_dir, hmac_secret=hmac_key
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    host, port = httpd.server_address[0], httpd.server_address[1]
+    base_url = f"http://{host}:{port}"
+    try:
+        raw_body = json.dumps(SAMPLE_PAYLOAD).encode("utf-8")
+        status_missing, _ = post_json(f"{base_url}/alerts", SAMPLE_PAYLOAD)
+        assert status_missing == 401
+
+        status_bad, _ = post_json(
+            f"{base_url}/alerts",
+            SAMPLE_PAYLOAD,
+            headers={SIGNATURE_HEADER: "sha256=" + "0" * 64},
+        )
+        assert status_bad == 401
+
+        valid_sig = compute_hmac_signature(hmac_key, raw_body)
+        status_ok, body_ok = post_json(
+            f"{base_url}/alerts",
+            SAMPLE_PAYLOAD,
+            headers={SIGNATURE_HEADER: valid_sig},
+        )
+        assert status_ok == 200
+        assert body_ok == {"status": "accepted", "stored": True}
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)
+
+
+def test_dedup_window_skips_duplicate_and_allows_resolved(tmp_path: Path) -> None:
+    """启用去重窗口后：同 fingerprint 重复 firing 被去重，但 resolved 恢复事件必须落盘。"""
+    import threading
+
+    from app.main import build_server
+
+    data_dir = tmp_path / "dedup-alerts"
+    httpd = build_server(
+        host="127.0.0.1", port=0, data_dir=data_dir, dedup_window_seconds=60.0
+    )
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    host, port = httpd.server_address[0], httpd.server_address[1]
+    base_url = f"http://{host}:{port}"
+    try:
+        s1, b1 = post_json(f"{base_url}/alerts", SAMPLE_PAYLOAD)
+        assert s1 == 200 and b1 == {"status": "accepted", "stored": True}
+
+        s2, b2 = post_json(f"{base_url}/alerts", SAMPLE_PAYLOAD)
+        assert s2 == 200 and b2 == {"status": "deduplicated", "stored": False}
+
+        resolved = json.loads(json.dumps(SAMPLE_PAYLOAD))
+        resolved["status"] = "resolved"
+        resolved["alerts"][0]["status"] = "resolved"
+        resolved["alerts"][0]["endsAt"] = "2026-11-28T10:05:00.000Z"
+        s3, b3 = post_json(f"{base_url}/alerts", resolved)
+        assert s3 == 200 and b3 == {"status": "accepted", "stored": True}
+
+        _, stats = get_json(f"{base_url}/stats")
+        assert stats["total"] == 2
+        assert stats["firing"] == 1
+        assert stats["resolved"] == 1
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        thread.join(timeout=5)

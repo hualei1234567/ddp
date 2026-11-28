@@ -21,9 +21,11 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.infrastructure.db.models.training import ExternalTrainingReferenceModel
 from app.infrastructure.db.models.training_evidence import (
     TrainingRunEvidenceModel as _Model,
 )
+from app.infrastructure.repositories._dataset_sql import as_utc
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,14 +67,14 @@ def _to_domain(row: _Model) -> TrainingRunEvidence:
         seed=row.seed,
         batch_size=row.batch_size,
         steps=row.steps,
-        started_at=row.started_at,
-        finished_at=row.finished_at,
+        started_at=as_utc(row.started_at),
+        finished_at=as_utc(row.finished_at) if row.finished_at is not None else None,
         metrics_summary=dict(row.metrics_summary) if row.metrics_summary is not None else None,
         checkpoint_ref=row.checkpoint_ref,
         checkpoint_sha256=row.checkpoint_sha256,
         exit_code=row.exit_code,
         stdout_tail=row.stdout_tail,
-        created_at=row.created_at,
+        created_at=as_utc(row.created_at),
         created_by=row.created_by,
     )
 
@@ -150,12 +152,44 @@ class SqlTrainingEvidenceRepository:
         ).all()
         return [_to_domain(row) for row in rows]
 
-    def find_by_reference(self, external_training_reference_id: UUID) -> list[TrainingRunEvidence]:
+    def find_by_reference(
+        self,
+        external_training_reference_id: UUID,
+        *,
+        project_id: UUID | None = None,
+    ) -> list[TrainingRunEvidence]:
         """按引用反查证据（一个引用可有多条：smoke 重跑 / smoke + real）。"""
+        stmt = select(_Model).where(
+            _Model.external_training_reference_id == external_training_reference_id
+        )
+        if project_id is not None:
+            stmt = stmt.where(_Model.project_id == project_id)
+        rows = self._session.scalars(stmt.order_by(_Model.created_at, _Model.id)).all()
+        return [_to_domain(row) for row in rows]
+
+    def list_for_delivery(
+        self,
+        project_id: UUID,
+        training_delivery_id: UUID,
+        *,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[TrainingRunEvidence]:
+        """按交付反查其下全部外部训练引用的证据（最新在前，单次 JOIN 无 N+1）。"""
         rows = self._session.scalars(
             select(_Model)
-            .where(_Model.external_training_reference_id == external_training_reference_id)
-            .order_by(_Model.created_at, _Model.id)
+            .join(
+                ExternalTrainingReferenceModel,
+                _Model.external_training_reference_id == ExternalTrainingReferenceModel.id,
+            )
+            .where(
+                _Model.project_id == project_id,
+                ExternalTrainingReferenceModel.project_id == project_id,
+                ExternalTrainingReferenceModel.training_delivery_id == training_delivery_id,
+            )
+            .order_by(_Model.created_at.desc(), _Model.id)
+            .limit(limit)
+            .offset(offset)
         ).all()
         return [_to_domain(row) for row in rows]
 
