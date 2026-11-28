@@ -20,6 +20,7 @@ from app.api.v1.episode_schemas import (
     EpisodeCreate,
     EpisodeOut,
     EpisodeRevisionCreate,
+    EpisodeVideoFramesOut,
 )
 from app.api.v1.governance_dependencies import EnforceEpisodeCreateQuota
 from app.api.v1.preconditions import require_expected_version, require_idempotency_key
@@ -159,6 +160,36 @@ def get_episode(
     episode = use_cases.episodes.get_episode(scope, episode_id)
     response.headers["ETag"] = f'"{episode.version}"'
     return EpisodeOut.from_domain(episode)
+
+
+@router.get(
+    "/episodes/{episode_id}/video-frames",
+    response_model=EpisodeVideoFramesOut,
+)
+def list_episode_video_frames(
+    episode_id: UUID,
+    scope: ReadScope,
+    use_cases: EpisodeUseCasesDep,
+    stream_id: Annotated[str | None, Query(min_length=1, max_length=128)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> EpisodeVideoFramesOut:
+    """只读分页查询 Episode 关联原始资产的视频帧索引与时间归一化汇总。
+
+    先通过 ``get_episode`` 验证 Episode 存在且属于当前项目（跨项目一律 404）；
+    无关联原始资产或无帧索引时返回空列表与全 0 汇总，绝不造假。
+    """
+    use_cases.episodes.get_episode(scope, episode_id)
+    if use_cases.video_frames is None:
+        raise RuntimeError("video_frames 仓储未装配")
+    page = use_cases.video_frames.list_for_episode(
+        scope,
+        episode_id,
+        stream_id=stream_id,
+        offset=offset,
+        limit=limit,
+    )
+    return EpisodeVideoFramesOut.from_page(page)
 
 
 @router.post("/episodes/{episode_id}/actions/{action}", response_model=EpisodeOut)

@@ -1,0 +1,96 @@
+{
+  "status": "PASSED",
+  "mode": "in_process_testclient_sqlite",
+  "evidence_grade": "E1_CLOSED_LOOP_IN_PROCESS",
+  "sprint": "V6.1-Sprint-5",
+  "task_id": "T3-04",
+  "git_commit": "711e5c989d36956761a904d6f5560765434c1eaf",
+  "python": "3.11.17",
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "started_at": "2026-11-28T11:55:28.846967+00:00",
+  "finished_at": "2026-11-28T11:55:29.835092+00:00",
+  "elapsed_seconds": 0.988,
+  "honest_boundaries": [
+    "默认模式使用进程内 FastAPI TestClient + 内存 SQLite，验证全部真实 HTTP 路由、状态机与持久化契约；",
+    "训练证据载荷来自仓库已归档的真实 GATE-B 证据并通过 gate_b_video_train.build_evidence_payload 转换；",
+    "对象存储、模型产物检查器与外部训练 Adapter 使用进程内替身；实时部署栈联调请使用 --live-url。"
+  ],
+  "steps": {
+    "dataset_and_export": {
+      "project_id": "3664eefe-fd06-42c9-845f-8eb132af8c23",
+      "episode_count": 10,
+      "dataset_id": "329adfcd-d543-40db-969d-4b2ee0918706",
+      "dataset_version_id": "575f5de4-2634-40c0-a103-8ebb387d5878",
+      "dataset_version_status": "FROZEN",
+      "export_job_id": "34efa1b3-632e-4389-b11b-9ee8f5f6c895",
+      "export_status": "SUCCEEDED"
+    },
+    "training_delivery_and_reference": {
+      "training_request_id": "0bc80df5-9b6b-43b6-a311-a4c933f97618",
+      "training_delivery_id": "39446d7b-cad9-4bb1-a4cb-f58a93eac2f8",
+      "delivery_status": "DELIVERED",
+      "external_ref_id": "0c324100-9c31-4432-a6be-512d114bd3c6",
+      "execution_mode": "LOCAL"
+    },
+    "training_evidence": {
+      "source_evidence_file": "docs/testing/evidence/2026-11-28-gate-b-training/evidence.json",
+      "evidence_id": "915b9119-30a4-46ff-87f0-00b7c336f49f",
+      "run_kind": "SMOKE",
+      "status": "SUCCEEDED",
+      "steps": 2,
+      "exit_code": 0,
+      "config_sha256": "sha256:5a8f50cf29c9ff662e8bb1bfbde858105288d42e4366292c4b7fa274b61bd0be",
+      "checkpoint_sha256": "sha256:46bbbabfac48233eeeb4edd72acc567eb60e49e78cfd8d6cf2df1f1056407099",
+      "verified_by_reference_count": 1,
+      "verified_by_delivery_count": 1
+    },
+    "model_registry": {
+      "model_id": "c0d57ac8-69c1-4a83-9784-241f6c89d486",
+      "model_version_id": "ca83dcf7-d23b-4d81-878c-12dd73eee370",
+      "status": "READY",
+      "artifact_verification_status": "VERIFIED"
+    },
+    "initial_evaluation": {
+      "evaluation_id": "b291beb0-ebf1-44d9-b1bf-2da8aaf96bd5",
+      "status": "SUCCEEDED",
+      "verdict": "FAIL",
+      "metrics": {
+        "success_rate": 0.42
+      }
+    },
+    "badcase_feedback": {
+      "feedback_id": "bd0eb364-b132-4cdd-8e52-87e6e92b8354",
+      "status": "OPEN",
+      "issue_type": "SCENE_COVERAGE",
+      "gap_open_feedback_count": 1,
+      "gap_coverage_source": "MEASURED"
+    },
+    "data_requirement": {
+      "requirement_id": "07afe31b-5294-48ae-99a7-224d36d34fc5",
+      "code": "DR-V61-b8174f",
+      "source_feedback_ids": [
+        "bd0eb364-b132-4cdd-8e52-87e6e92b8354"
+      ],
+      "status_after_satisfy": "SATISFIED",
+      "linked_dataset_version_ids": [
+        "575f5de4-2634-40c0-a103-8ebb387d5878"
+      ]
+    },
+    "retest_and_link": {
+      "retest_evaluation_id": "04537a8e-0b78-4512-9d90-161cda185cfa",
+      "retest_status": "SUCCEEDED",
+      "retest_verdict": "PASS",
+      "retest_metrics": {
+        "success_rate": 0.95
+      },
+      "requirement_retest_ids": [
+        "04537a8e-0b78-4512-9d90-161cda185cfa"
+      ]
+    },
+    "closure": {
+      "requirement_status": "CLOSED",
+      "feedback_status": "RESOLVED",
+      "resolution_note": "复测评测 04537a8e-0b78-4512-9d90-161cda185cfa 通过（0.95 >= 0.90），闭环关闭"
+    }
+  }
+}

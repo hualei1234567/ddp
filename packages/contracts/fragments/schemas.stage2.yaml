@@ -639,6 +639,35 @@ EpisodePage:
   properties:
     items: {type: array, items: {$ref: "#/Episode"}}
     next_cursor: {type: [string, "null"]}
+VideoFrame:
+  type: object
+  required: [frame_index, stream_id, pts_seconds, timestamp_raw, timestamp_normalized, normalize_method, time_base, is_keyframe, decode_status, error_message]
+  additionalProperties: false
+  properties:
+    frame_index: {type: integer, minimum: 0}
+    stream_id: {type: string}
+    pts_seconds: {type: [number, "null"]}
+    timestamp_raw: {type: [string, "null"]}
+    timestamp_normalized: {type: [number, "null"]}
+    normalize_method: {type: [string, "null"]}
+    time_base: {type: [string, "null"]}
+    is_keyframe: {type: boolean}
+    decode_status: {type: string}
+    error_message: {type: [string, "null"]}
+EpisodeVideoFramesResponse:
+  type: object
+  required: [episode_id, raw_asset_ids, total_frames, decoded_count, failed_count, normalized_count, limit, offset, items]
+  additionalProperties: false
+  properties:
+    episode_id: {type: string, format: uuid}
+    raw_asset_ids: {type: array, items: {type: string, format: uuid}}
+    total_frames: {type: integer, minimum: 0}
+    decoded_count: {type: integer, minimum: 0}
+    failed_count: {type: integer, minimum: 0}
+    normalized_count: {type: integer, minimum: 0}
+    limit: {type: integer, minimum: 1}
+    offset: {type: integer, minimum: 0}
+    items: {type: array, items: {$ref: "#/VideoFrame"}}
 IngestionJobType:
   type: string
   enum: [VALIDATE, PARSE_METADATA, SEGMENT_EPISODE, REVALIDATE]
