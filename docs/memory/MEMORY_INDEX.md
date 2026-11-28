@@ -4,9 +4,9 @@
 > 手改会被 `scripts/check_memory.py` 判为漂移并让 CI 失败。
 > 新增/修改记忆请改卡片文件，然后重新生成本索引。
 
-**总计 44 张卡片**：DRAFT 0 / ACTIVE 44 / SUPERSEDED 0 / DEPRECATED 0
+**总计 45 张卡片**：DRAFT 0 / ACTIVE 45 / SUPERSEDED 0 / DEPRECATED 0
 
-其中 **ACTIVE 44 张**（只有 ACTIVE 可被当作约束引用）。
+其中 **ACTIVE 45 张**（只有 ACTIVE 可被当作约束引用）。
 
 ---
 
@@ -32,7 +32,7 @@
 | [MEM-SOP-003](sop/MEM-SOP-003-subagent-parallel-collaboration.md) | 子代理并行开发协作模式：迁移号独占 + 契约策略 + 禁改共享文件 + 坑点统一入库 + check.sh 全局串行 | ACTIVE | 1 | `check-lock`, `contract-strategy`, `migration-number`, `parallel`, `resource-preallocation`, `sop`, `subagent` |
 | [MEM-SOP-004](sop/MEM-SOP-004-semgrep-sast-suppression.md) | Semgrep SAST 接入与误报基线的正确姿势 | ACTIVE | 1 | `baseline`, `ci`, `false-positive`, `nosemgrep`, `sast`, `semgrep`, `sql-injection`, `ssrf` |
 
-## INC · 事故与缺陷复盘（31）
+## INC · 事故与缺陷复盘（32）
 
 | ID | 标题 | 状态 | 复发 | tags |
 |---|---|---|---|---|
@@ -67,6 +67,7 @@
 | [MEM-INC-029](incidents/MEM-INC-029-http-header-case-and-sqlite-naive-datetime.md) | 断言 Webhook 投递时踩到的两个隐性事实：HTTP 头名大小写不敏感、SQLite 读回 datetime 无时区 | ACTIVE | 1 | `e2e-test`, `http-header-case`, `naive-datetime`, `seed-data`, `sqlite`, `webhook` |
 | [MEM-INC-030](incidents/MEM-INC-030-ci-security-job-minimal-deps.md) | CI 的 security job 只装 pytest/pip-audit/pyyaml——`scripts/` 下测试文件不得顶层 import 数据库驱动 | ACTIVE | 1 | `ci-environment`, `lazy-import`, `local-green-vs-ci-green`, `minimal-deps`, `scripts-tests` |
 | [MEM-INC-031](incidents/MEM-INC-031-edge-agent-upload-version-drift.md) | Edge Agent 分片完成未刷新 UploadSession.version 必撞 409 且 403 预签名过期未重签 | ACTIVE | 1 | `403`, `409`, `edge-agent`, `fake-drift`, `if-match`, `optimistic-lock`, `presigned-url`, `version-conflict` |
+| [MEM-INC-032](incidents/MEM-INC-032-sys-modules-app-namespace-collision.md) | 同进程脚本测试加载 services/alert-receiver/app 后未还原 sys.modules["app"] 导致 backend/app 导入失败 | ACTIVE | 1 | `alert-receiver`, `app-package`, `namespace-collision`, `pytest`, `scripts-tests`, `sys-modules` |
 
 ## CHG · 变更记录（4）
 
@@ -119,7 +120,9 @@
 - `adr`：MEM-DEC-001
 - `aggregate-stats`：MEM-CHG-004
 - `alembic`：MEM-INC-013, MEM-INC-018, MEM-INC-019, MEM-INC-020
+- `alert-receiver`：MEM-INC-032
 - `api-contract`：MEM-INC-015, MEM-INC-016, MEM-INC-017
+- `app-package`：MEM-INC-032
 - `archive`：MEM-OPS-002
 - `assertion`：MEM-INC-005
 - `audit-gap`：MEM-INC-027
@@ -220,6 +223,7 @@
 - `multiple-heads`：MEM-INC-018
 - `n-plus-1`：MEM-INC-024
 - `naive-datetime`：MEM-INC-022, MEM-INC-029
+- `namespace-collision`：MEM-INC-032
 - `nanosecond`：MEM-INC-008
 - `nested-columns`：MEM-CHG-003
 - `nosemgrep`：MEM-SOP-004
@@ -248,7 +252,7 @@
 - `presigned-url`：MEM-INC-031
 - `processing-run`：MEM-INC-011, MEM-INC-012
 - `projection`：MEM-INC-006, MEM-INC-007
-- `pytest`：MEM-INC-019
+- `pytest`：MEM-INC-019, MEM-INC-032
 - `query-count`：MEM-INC-024
 - `raw_asset`：MEM-INC-001
 - `readiness`：MEM-OPS-002
@@ -270,7 +274,7 @@
 - `sbom`：MEM-INC-025
 - `schema`：MEM-DEC-002, MEM-INC-013
 - `schema-evolution`：MEM-INC-014
-- `scripts-tests`：MEM-INC-030
+- `scripts-tests`：MEM-INC-030, MEM-INC-032
 - `seed-data`：MEM-INC-029
 - `semgrep`：MEM-SOP-004
 - `serialization`：MEM-INC-014, MEM-INC-021
@@ -296,6 +300,7 @@
 - `subagent`：MEM-SOP-003
 - `swagger-lint`：MEM-INC-017
 - `synthetic`：MEM-INC-004
+- `sys-modules`：MEM-INC-032
 - `table_growth`：MEM-OPS-002
 - `test-contention`：MEM-INC-009
 - `test-seeding`：MEM-INC-026

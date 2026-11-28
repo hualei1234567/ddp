@@ -151,23 +151,32 @@ def _ensure_loopback_url(url: str) -> None:
 
 
 def _load_receiver_build_server() -> Any:
-    """惰性加载 services/alert-receiver 的 build_server（避免与 backend/app 命名冲突）。"""
-    service_root = str(ALERT_RECEIVER_ROOT)
-    if service_root in sys.path:
-        sys.path.remove(service_root)
-    sys.path.insert(0, service_root)
+    """惰性加载 services/alert-receiver 的 build_server，并在加载后还原 sys.path 与 sys.modules。
 
-    existing_app = sys.modules.get("app")
-    existing_file = getattr(existing_app, "__file__", "") or ""
-    if existing_app is not None and not str(Path(existing_file).resolve()).startswith(
-        str(ALERT_RECEIVER_ROOT.resolve())
-    ):
-        for mod_name in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
+    注意：``services/alert-receiver/app`` 与 ``backend/app`` 共享顶层包名 ``app``，
+    若不还原 ``sys.modules["app*"]``，同一 pytest 进程内后续加载 ``backend/app`` 的测试
+    会报 ``ModuleNotFoundError: No module named 'app.api'``（见 MEM-INC-032）。
+    """
+    service_root = str(ALERT_RECEIVER_ROOT)
+    saved_path = list(sys.path)
+    saved_app_modules = {
+        k: v for k, v in sys.modules.items() if k == "app" or k.startswith("app.")
+    }
+    try:
+        if service_root in sys.path:
+            sys.path.remove(service_root)
+        sys.path.insert(0, service_root)
+        for mod_name in list(saved_app_modules):
             sys.modules.pop(mod_name, None)
 
-    from app.main import build_server
+        from app.main import build_server
 
-    return build_server
+        return build_server
+    finally:
+        for mod_name in [k for k in sys.modules if k == "app" or k.startswith("app.")]:
+            sys.modules.pop(mod_name, None)
+        sys.modules.update(saved_app_modules)
+        sys.path[:] = saved_path
 
 
 def run_alerting_drill(
