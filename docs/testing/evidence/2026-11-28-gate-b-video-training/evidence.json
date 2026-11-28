@@ -1,0 +1,30 @@
+{
+  "gate": "GATE-B-VIDEO",
+  "sprint": "V6.1-Sprint-3",
+  "git_commit": "b2c9dffcd8052c4bec4850c7558200a6267ef0cc",
+  "platform": "macOS-27.2.1-arm64-arm-64bit",
+  "python": "3.11.17",
+  "dataset": {
+    "dataset_root": "/var/folders/th/450x4cd168s5qlxh9pfwvd580000gn/T/ddp-gateb-video-pzrew0rp/dataset",
+    "episodes": 2,
+    "frames_per_episode": 60,
+    "total_frames": 120
+  },
+  "training": {
+    "policy": "ACT",
+    "device": "cpu",
+    "steps": 2,
+    "batch_size": 2,
+    "seed": 42,
+    "elapsed_seconds": 6.168
+  },
+  "checkpoint": {
+    "dir": "/var/folders/th/450x4cd168s5qlxh9pfwvd580000gn/T/ddp-gateb-video-pzrew0rp/train_out/checkpoints/last/pretrained_model",
+    "model_safetensors_sha256": "3965931e0d8ae08452f950958b3c24cbb00db97784d11cf556b7145e633dcdd8",
+    "reload_forward_shape": [
+      1,
+      2
+    ],
+    "reload_ok": true
+  }
+}
