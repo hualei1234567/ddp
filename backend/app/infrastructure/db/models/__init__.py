@@ -123,6 +123,7 @@ from app.infrastructure.db.models.training import (
     TrainingRequestModel,
     TrainingRequestRevisionModel,
 )
+from app.infrastructure.db.models.training_evidence import TrainingRunEvidenceModel
 
 __all__ = [
     "AcceptanceLedgerModel",
@@ -210,6 +211,7 @@ __all__ = [
     "TrainingDeliveryModel",
     "TrainingRequestModel",
     "TrainingRequestRevisionModel",
+    "TrainingRunEvidenceModel",
     "UploadPartChecksumBindingModel",
     "UploadPartModel",
     "UploadSessionModel",
