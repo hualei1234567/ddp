@@ -34,6 +34,7 @@ REST 端点（create/get/part-url/ack/complete + 预签名 PUT）。HTTP 客户�
 from __future__ import annotations
 
 import json
+import ssl
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
@@ -46,6 +47,7 @@ from edge_agent.errors import (
     ChecksumMismatchError,
     GatewayPermanentError,
     GatewayTransientError,
+    SignedUrlExpiredError,
     UploadSessionGoneError,
 )
 from edge_agent.timesource import Clock, SystemClock
@@ -120,6 +122,17 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
+def _build_opener(*, verify_tls: bool) -> urllib.request.OpenerDirector:
+    """构建禁用重定向的 HTTP(S) opener，并按配置决定是否校验证书。"""
+    handlers: list[urllib.request.BaseHandler] = [_NoRedirect()]
+    if not verify_tls:
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+        handlers.append(urllib.request.HTTPSHandler(context=context))
+    return urllib.request.build_opener(*handlers)
+
+
 class HttpServerGateway:
     """基于标准库 urllib 的 ``ServerGateway`` 实现。"""
 
@@ -133,7 +146,7 @@ class HttpServerGateway:
         self._clock = clock or SystemClock()
         self._root = config.base_url.rstrip("/")
         # 预签名 PUT 走同一个 opener（禁用重定向、不发送 Authorization）。
-        self._opener = urllib.request.build_opener(_NoRedirect())
+        self._opener = _build_opener(verify_tls=config.verify_tls)
 
     # -- ServerGateway 协议 -------------------------------------------------
 
@@ -216,10 +229,17 @@ class HttpServerGateway:
                 pass  # noqa: S110 - 资源释放路径，无可映射的业务语义
             finally:
                 exc.close()
-            # 预签名 PUT 的 4xx：签名过期（403）应重签，其余视为永久错误。
+            # 预签名 PUT 错误映射：
+            # - 400 / 403：签名过期或时钟偏差，抛出 SignedUrlExpiredError 让驱动只重签、不重建会话；
+            # - 429 / 5xx：对象存储暂时过载，抛出 GatewayTransientError 退避重试；
+            # - 其余 4xx：永久性错误。
             if exc.code in (400, 403):
-                raise GatewayTransientError(
+                raise SignedUrlExpiredError(
                     f"分片上传被拒（{exc.code}，签名可能已过期）：{_redact(signed_url.url)}"
+                ) from exc
+            if exc.code == 429 or exc.code >= 500:
+                raise GatewayTransientError(
+                    f"分片上传暂时不可用（{exc.code}）：{_redact(signed_url.url)}"
                 ) from exc
             raise GatewayPermanentError(f"分片上传失败（{exc.code}）") from exc
         except (urllib.error.URLError, TimeoutError) as exc:

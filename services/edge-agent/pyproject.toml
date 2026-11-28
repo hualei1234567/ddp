@@ -17,6 +17,7 @@ ignore = ["S101"]
 "tests/**" = ["S101", "S105", "S106"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["error"]

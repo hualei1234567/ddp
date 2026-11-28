@@ -48,6 +48,8 @@ class ServerState:
     idempotency: dict[str, str] = field(default_factory=dict)
     completed: dict[str, str] = field(default_factory=dict)
     url_expired_once: bool = False
+    url_inflight_403_once: bool = False
+    part_url_calls: int = 0
     create_calls: int = 0
     complete_calls: int = 0
 
@@ -83,11 +85,15 @@ class _Handler(BaseHTTPRequestHandler):
     # -- 分派 ----------------------------------------------------------
 
     def do_PUT(self) -> None:  # noqa: N802
-        """预签名分片上传：把字节存进 state.parts 待 ack 校验。"""
+        """预签名分片上传：把字节存进 state.parts 待 ack 校验；带 expired=1 时返回 403。"""
         length = int(self.headers.get("Content-Length") or 0)
         data = self.rfile.read(length)
-        session_id = self.path.split("/s3/")[1].split("/")[0]
-        part = int(self.path.split("/part-")[1])
+        if "expired=1" in self.path:
+            self._json(403, {"error": {"code": "AccessDenied", "message": "Request has expired"}})
+            return
+        path = self.path.split("?", 1)[0]
+        session_id = path.split("/s3/")[1].split("/")[0]
+        part = int(path.split("/part-")[1])
         etag = f'"etag-{part}-{len(data)}"'
         type(self).state.parts.setdefault(session_id, {})[part] = {
             "size": len(data),
@@ -130,6 +136,20 @@ class _Handler(BaseHTTPRequestHandler):
 
         if path.endswith("/url"):
             part = int(path.split("/parts/")[1].split("/")[0])
+            state.part_url_calls += 1
+            if state.url_inflight_403_once and part == 2:
+                state.url_inflight_403_once = False
+                self._json(
+                    200,
+                    {
+                        "part_number": part,
+                        "method": "PUT",
+                        "url": f"{self.base}/s3/{session_id}/part-{part}?expired=1",
+                        "headers": {},
+                        "expires_at": "2099-01-01T00:00:00Z",
+                    },
+                )
+                return
             # 首次请求分片 2 的 URL 时模拟「签名已过期」：返回一个必然 403 的地址，
             # 驱动会重签（再次请求 URL 时返回正常地址），但绝不会重建 Session。
             if state.url_expired_once and part == 2:
@@ -173,8 +193,9 @@ class _Handler(BaseHTTPRequestHandler):
                 )
                 return
             # 服务端记住客户端 ACK 时提交的 sha256，并在 get 时原样回放——
-            # 真实 DDP 就是这样把分片校验和持久化的（见 V31-002 四要素）。
+            # 真实 DDP 就是这样把分片校验和持久化的（见 V31-002 四要素），同时推进 version。
             stored["sha256"] = body.get("sha256")
+            info["version"] += 1
             self._json(
                 200,
                 {
@@ -191,6 +212,19 @@ class _Handler(BaseHTTPRequestHandler):
 
         if path.endswith("/complete"):
             body = self._body()
+            expected_etag = f'"{info["version"]}"'
+            if self.headers.get("If-Match") != expected_etag:
+                got = self.headers.get("If-Match")
+                self._json(
+                    409,
+                    {
+                        "error": {
+                            "code": "version_conflict",
+                            "message": f"expected {expected_etag}, got {got}",
+                        }
+                    },
+                )
+                return
             state.complete_calls += 1
             key = self.headers.get("Idempotency-Key") or ""
             if key in state.completed:
@@ -385,6 +419,24 @@ def test_e2e_signed_url_expiry_resigns_without_new_session(
     assert receipt.artifacts[0].raw_asset_id == "asset-1"
     # 只创建过一次会话：过期用的是重签，不是重建
     assert _Handler.state.create_calls == 1
+
+
+def test_e2e_inflight_403_resigns_without_new_session(
+    tmp_path: Path, http_server: ThreadingHTTPServer, fake_clock: FakeClock
+) -> None:
+    """PUT 途中服务端真实返回 403（即使本地 expires_at 未过期）时自动重签，不重建 UploadSession。"""
+    _Handler.state.url_inflight_403_once = True
+    mgr = SpoolManager(SpoolConfig(root=tmp_path / "spool"), clock=fake_clock)
+    driver = UploadDriver(
+        mgr, _gateway(http_server), UploadConfig(backoff_base_s=0.01), clock=fake_clock
+    )
+    entry_id = _ingest(mgr, tmp_path, b"E" * 700)  # 3 分片
+    receipt = driver.upload_entry(entry_id)
+
+    assert receipt.artifacts[0].raw_asset_id == "asset-1"
+    assert _Handler.state.create_calls == 1
+    # 3 个分片 + 分片 2 403 后重签 1 次 = 4 次 get_part_url
+    assert _Handler.state.part_url_calls == 4
 
 
 def test_e2e_complete_is_idempotent(

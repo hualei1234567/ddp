@@ -26,6 +26,7 @@ from edge_agent.errors import (
     ChecksumMismatchError,
     GatewayPermanentError,
     GatewayTransientError,
+    SignedUrlExpiredError,
     UploadSessionGoneError,
 )
 from edge_agent.upload.gateway import (
@@ -173,6 +174,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         self._dispatch("POST")
+
+    def do_PUT(self) -> None:  # noqa: N802
+        self._dispatch("PUT")
 
 
 def _session_payload(*, status: str) -> dict[str, Any]:
@@ -374,3 +378,73 @@ def test_signed_url_signature_not_in_error_message(server: ThreadingHTTPServer) 
     with pytest.raises(GatewayPermanentError) as excinfo:
         gateway.upload_part(bad, b"hello")
     assert "MUSTNOTAPPEAR" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("status", [400, 403])
+def test_upload_part_400_403_raises_signed_url_expired_and_redacts(
+    server: ThreadingHTTPServer, status: int
+) -> None:
+    """预签名 PUT 返回 400/403 必须映射为 SignedUrlExpiredError，驱动才会重签而非盲重试。"""
+    from datetime import UTC, datetime
+
+    from edge_agent.upload.gateway import SignedPartUrl
+
+    _Handler.status_override = {"/s3/expired-part": status}
+    host, port = server.server_address[:2]
+    bad = SignedPartUrl(
+        part_number=1,
+        method="PUT",
+        url=f"http://{host}:{port}/s3/expired-part?X-Amz-Signature=SECRET999",
+        headers={},
+        expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+    )
+    with pytest.raises(SignedUrlExpiredError) as excinfo:
+        _gateway(server).upload_part(bad, b"hello")
+    assert "SECRET999" not in str(excinfo.value)
+
+
+@pytest.mark.parametrize("status", [429, 500, 503])
+def test_upload_part_429_5xx_raises_transient_error(
+    server: ThreadingHTTPServer, status: int
+) -> None:
+    """对象存储返回 429/5xx 必须映射为 GatewayTransientError，避免立刻把条目打成 FAILED。"""
+    from datetime import UTC, datetime
+
+    from edge_agent.upload.gateway import SignedPartUrl
+
+    _Handler.status_override = {"/s3/transient-part": status}
+    host, port = server.server_address[:2]
+    target = SignedPartUrl(
+        part_number=1,
+        method="PUT",
+        url=f"http://{host}:{port}/s3/transient-part?X-Amz-Signature=SECRET999",
+        headers={},
+        expires_at=datetime(2099, 1, 1, tzinfo=UTC),
+    )
+    with pytest.raises(GatewayTransientError) as excinfo:
+        _gateway(server).upload_part(target, b"hello")
+    assert "SECRET999" not in str(excinfo.value)
+
+
+def test_verify_tls_false_configures_unverified_https_handler() -> None:
+    """verify_tls=False 时必须实际配置 SSLContext，不得静默忽略。"""
+    import ssl
+    import urllib.request
+
+    gateway = HttpServerGateway(
+        HttpGatewayConfig(
+            base_url="https://127.0.0.1:8443",
+            project_id=PROJECT,
+            agent_id=AGENT,
+            agent_token=TOKEN,
+            verify_tls=False,
+        )
+    )
+    https_handlers = [
+        h for h in gateway._opener.handlers if isinstance(h, urllib.request.HTTPSHandler)
+    ]
+    assert https_handlers
+    ctx = https_handlers[0]._context
+    assert ctx is not None
+    assert ctx.verify_mode == ssl.CERT_NONE
+    assert ctx.check_hostname is False
