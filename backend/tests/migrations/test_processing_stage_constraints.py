@@ -46,6 +46,18 @@ def _load_migration():
         )
 
 
+def _latest_stage_migration():
+    """返回「当前声明 stage 允许集」的最新迁移模块。
+
+    枚举每次扩展都会产生新迁移（0074→0087→…）；防回归必须**始终钉住最新
+    声明**，否则旧迁移的元组会让测试在枚举合法扩展后误报。判断方式：
+    新迁移模块会声明 ``_STAGE_VALUES_AFTER_<REV>`` 且 ``down_revision``
+    指向旧迁移。这里显式登记已知迁移——新增时同步改这一行，让登记本身
+    成为一次"有意识的约束同步"。
+    """
+    return importlib.import_module("migrations.versions.0087_video_frames_and_stages")
+
+
 def test_stage_migration_covers_every_enum_value() -> None:
     """迁移声明的 stage 允许值必须与实际枚举**完全相等**。
 
@@ -53,16 +65,22 @@ def test_stage_migration_covers_every_enum_value() -> None:
     用集合相等而非子集：多一个值同样危险——它意味着约束放行了代码不会产生的值，
     掩盖拼写错误。
     """
-    migration = _load_migration()
-    declared = set(migration._STAGE_VALUES_AFTER_0074)
+    migration = _latest_stage_migration()
+    declared = set(migration._STAGE_VALUES_AFTER_0087)
     actual = {stage.value for stage in ProcessingStage}
 
     assert declared == actual, (
         "迁移的 stage 允许值与 ProcessingStage 枚举不一致：\n"
         f"  迁移多出：{sorted(declared - actual)}\n"
         f"  迁移缺失：{sorted(actual - declared)}\n"
-        "请同步迁移 0074（或新增迁移）与枚举。"
+        "请同步最新迁移（或新增迁移）与枚举。"
     )
+
+    # 0087 必须建立在 0074 之上（阶段只增不减的链式保证）。
+    head_migration = _load_migration()
+    assert (
+        set(head_migration._STAGE_VALUES_AFTER_0074) < actual
+    ), "0074 的允许集应当是当前枚举的真子集：阶段只增不减。"
 
 
 def test_kind_migration_covers_every_enum_value() -> None:

@@ -170,6 +170,20 @@ STAGE_SKIP_REASONS: Mapping[ProcessingStage, str] = {
     ProcessingStage.DATA_CLEANING: (
         "清洗规则尚未接入处理运行（缺少规则集版本与清洗产物落库语义），本阶段没有真实实现"
     ),
+    # V6.1 视频链三阶段（V61-005/007）：枚举与迁移 0087 已就位，解码器接线
+    # 在 T1-02（data-platform video_decode → 编排器注入）。未接线期间显式
+    # SKIPPED——非视频样本（如 RoboMimic ph，无图像流）本就应跳过；
+    # 注入后由 default_handlers 的 video_decode/video_frame_index/timestamp_normalize
+    # 参数覆盖。
+    ProcessingStage.VIDEO_DECODE: (
+        "视频解码器未注入（T1-02 video_decode 接线中），非视频样本自然跳过"
+    ),
+    ProcessingStage.FRAME_INDEX: (
+        "帧索引构建未注入（依赖 VIDEO_DECODE 产物），视频样本解码器接线后启用"
+    ),
+    ProcessingStage.TIMESTAMP_NORMALIZE: (
+        "时间归一化未注入（依赖 FRAME_INDEX 的原始 pts），解码器接线后启用"
+    ),
 }
 
 

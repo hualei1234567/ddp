@@ -46,14 +46,26 @@ FRAME_SCOPE = "LOADER_FRAME"
 
 @dataclass(frozen=True, slots=True)
 class FrameFeature:
-    """一个逐帧 feature 的声明（对应 LeRobot ``features`` 条目）。"""
+    """一个逐帧 feature 的声明（对应 LeRobot ``features`` 条目）。
+
+    ``names`` 是 LeRobot v2.1 的**必需**字段：视频特征必须给出
+    ``["height", "width", "channels"]``——官方 Loader 靠它把
+    ``(h, w, c)`` 解释成图像轴序，缺失会在解码时静默错位
+    （官方 ``dataset_to_policy_features`` 还要读 ``names[2]`` 判断
+    ``"channels"`` 并做 ``(c, h, w)`` 转置）。非视频特征用 ``None``。
+    """
 
     name: str
     dtype: str
     shape: tuple[int, ...]
+    names: tuple[str, ...] | None = None
 
     def as_info(self) -> dict[str, object]:
-        return {"dtype": self.dtype, "shape": list(self.shape), "names": None}
+        return {
+            "dtype": self.dtype,
+            "shape": list(self.shape),
+            "names": list(self.names) if self.names is not None else None,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,18 +85,39 @@ def build_frame_features(
     *,
     observation_dim: int,
     action_dim: int,
+    video_features: Sequence[FrameFeature] = (),
 ) -> tuple[FrameFeature, ...]:
     """构建逐帧 feature 声明。
 
-    官方 LeRobot 逐帧数据集至少有 ``observation.state`` 与 ``action``；
-    图像类 feature 需要真实视频，本模块不做（``ph`` 样本无图像）。
+    官方 LeRobot 逐帧数据集至少有 ``observation.state`` 与 ``action``。
+
+    **视频 feature（V6.1）**：``video_features`` 传入时按官方 v2.1 约定
+    声明（``dtype="video"``、``shape=(h, w, c)``、
+    ``names=["height", "width", "channels"]``）。官方 Loader 会据此把
+    ``videos/`` 下的 mp4 纳入数据集并按 video feature 解码——
+    此前本模块**硬编码** ``video_provided: False``，导致即使有视频也无法
+    被官方 Loader 当作视频特征消费（V61-008 的核心缺口）。
     """
     if observation_dim <= 0 or action_dim <= 0:
         raise ValueError("observation_dim 与 action_dim 必须为正")
+    for feature in video_features:
+        if feature.dtype != "video":
+            raise ValueError(f"视频 feature 的 dtype 必须是 video，实际 {feature.dtype!r}")
+        if feature.names != ("height", "width", "channels"):
+            raise ValueError(
+                "视频 feature 的 names 必须是 ('height', 'width', 'channels')，"
+                f"实际 {feature.names!r}（官方 Loader 依赖它做轴序解释）"
+            )
     return (
         FrameFeature("observation.state", "float32", (observation_dim,)),
+        # 官方策略（ACT 等）的 env-state 输入键是 ``observation.environment_state``
+        # （lerobot.constants.OBS_ENV_STATE）；只写 observation.state 会被
+        # ``dataset_to_policy_features`` 判为 STATE 而非 ENV，ACT 直接拒绝训练
+        # （V61-011 GATE-B 实测）。两个键同值并存：既有键向后兼容，新键供官方策略消费。
+        FrameFeature("observation.environment_state", "float32", (observation_dim,)),
         FrameFeature("action", "float32", (action_dim,)),
         FrameFeature("timestamp", "float32", (1,)),
+        *tuple(video_features),
     )
 
 
@@ -98,6 +131,7 @@ def write_frame_episode(
     action_dim: int,
     split: str = "train",
     global_index_offset: int = 0,
+    video_features: Sequence[FrameFeature] = (),
 ) -> FrameExportResult:
     """把逐帧记录写成 LeRobot v2.1 逐帧 Parquet + info.json。
 
@@ -139,7 +173,9 @@ def write_frame_episode(
             )
 
     features = build_frame_features(
-        observation_dim=observation_dim, action_dim=action_dim
+        observation_dim=observation_dim,
+        action_dim=action_dim,
+        video_features=video_features,
     )
     parquet = _write_parquet(
         episode_index=episode_index,
@@ -157,6 +193,7 @@ def write_frame_episode(
         fps=fps,
         frame_count=len(timestamps),
         episode_index=episode_index,
+        video_provided=any(f.dtype == "video" for f in features),
     )
     return FrameExportResult(
         parquet_bytes=parquet,
@@ -220,10 +257,31 @@ def _write_parquet(
         arrays[f"observation.state[{dim}]"] = pa.array(
             [row[dim] for row in observations], type=pa.float32()
         )
+        # 与 observation.state 同值的 env 键（供官方策略消费，见 features 注释）
+        arrays[f"observation.environment_state[{dim}]"] = pa.array(
+            [row[dim] for row in observations], type=pa.float32()
+        )
     for dim in range(action_dim):
         arrays[f"action[{dim}]"] = pa.array(
             [row[dim] for row in actions], type=pa.float32()
         )
+    # **嵌套向量列**（官方策略消费的键形态）：官方 ``save_episode`` 经
+    # HF datasets 写出的就是 list 列——训练时 ``item["observation.state"]``
+    # 直接取整向量；只有扁平的 ``observation.state[0..N]`` 列时该键不存在，
+    # ACT 前向会 KeyError（V61-011 GATE-B 实测）。列名与扁平列不冲突
+    # （``observation.state`` ≠ ``observation.state[0]``）。
+    arrays["observation.state"] = pa.array(
+        [list(row) for row in observations],
+        type=pa.list_(pa.float32()),
+    )
+    arrays["observation.environment_state"] = pa.array(
+        [list(row) for row in observations],
+        type=pa.list_(pa.float32()),
+    )
+    arrays["action"] = pa.array(
+        [list(row) for row in actions],
+        type=pa.list_(pa.float32()),
+    )
 
     table = pa.table(arrays)
     buffer = io.BytesIO()
@@ -249,6 +307,7 @@ def _build_info_json(
     total_tasks: int = 1,
     chunks_size: int = 1000,
     splits: Mapping[str, str] | None = None,
+    video_provided: bool = False,
 ) -> bytes:
     """构建逐帧数据集的 info.json。
 
@@ -282,7 +341,9 @@ def _build_info_json(
             "schema_version": FRAME_SCHEMA_VERSION,
             "loadable_scope": FRAME_SCOPE,
             "frame_level_mapping": True,
-            "video_provided": False,
+            # 真实反映"本数据集是否含视频"：此前硬编码 False，
+            # 即使导出了 video feature 也会骗官方 Loader（V61-008 缺口）。
+            "video_provided": video_provided,
             "fps_source": "MEASURED_FROM_FRAMES",
             "episode_index": episode_index,
         },
@@ -324,9 +385,49 @@ def build_stats(
     stats["timestamp"] = _one(timestamps)
     for dim in range(len(observations[0])):
         stats[f"observation.state[{dim}]"] = _one([row[dim] for row in observations])
+        stats[f"observation.environment_state[{dim}]"] = _one(
+            [row[dim] for row in observations]
+        )
     for dim in range(len(actions[0])):
         stats[f"action[{dim}]"] = _one([row[dim] for row in actions])
+    # **整向量级 stats**（官方策略消费的键形态）：官方 ``Normalize`` 按
+    # feature 名（``observation.state`` / ``observation.environment_state`` /
+    # ``action``）取 stats，且要求 ``count`` 形状为 ``(1,)``——0 维标量会被
+    # ``aggregate_stats`` 拒绝（实测 "Number of dimensions must be at least 1"）。
+    # 因此向量级 min/max/mean/std 是**整向量**（逐维数组），count 包成 [n]。
+    obs_matrix = [list(row) for row in observations]
+    act_matrix = [list(row) for row in actions]
+    dim_obs = len(obs_matrix[0])
+    dim_act = len(act_matrix[0])
+    count = [len(obs_matrix)]
+    stats["observation.state"] = _vector_stats(obs_matrix, dim_obs, count)
+    stats["observation.environment_state"] = _vector_stats(obs_matrix, dim_obs, count)
+    stats["action"] = _vector_stats(act_matrix, dim_act, count)
     return stats
+
+
+def _vector_stats(
+    matrix: list[list[float]], dim: int, count: list[int]
+) -> dict[str, object]:
+    """整向量级 stats（对齐官方 ``compute_episode_stats`` 的 2 维口径）。
+
+    官方对 2 维特征（每行一个向量）按 ``axis=0, keepdims=False`` 归约：
+    min/max/mean/std 都是**逐维标量**（shape ``(dim,)``），count 是 ``(1,)``。
+    全部值必须是 numpy 可转的一维结构（0 维标量会被 ``_assert_type_and_shape``
+    拒绝："Number of dimensions must be at least 1"）。
+    """
+    size = len(matrix)
+    means = [sum(row[d] for row in matrix) / size for d in range(dim)]
+    return {
+        "min": [min(row[d] for row in matrix) for d in range(dim)],
+        "max": [max(row[d] for row in matrix) for d in range(dim)],
+        "mean": means,
+        "std": [
+            (sum((row[d] - means[d]) ** 2 for row in matrix) / size) ** 0.5
+            for d in range(dim)
+        ],
+        "count": list(count),
+    }
 
 
 def build_stats_json(
@@ -350,16 +451,29 @@ def build_episodes_stats_jsonl(
     *,
     episode_index: int,
 ) -> bytes:
-    """官方 ``meta/episodes_stats.jsonl``：每个 Episode 一行，值是**数组**形式。"""
+    """官方 ``meta/episodes_stats.jsonl``：每个 Episode 一行。
+
+    官方语义：min/max/mean/std 是「沿 batch 轴归约并 keepdims」的结果——
+    - **标量级** stats（逐维键如 ``observation.state[0]``、``timestamp``）：
+      值是标量，序列化包一层 → ``[v]``（shape ``(1,)``）；
+    - **向量级** stats（``observation.state`` / ``observation.environment_state`` /
+      ``action``）：值已是**逐维数组**，序列化**原样**（再包一层会变成
+      ``(1, dim)``，官方 ``aggregate_stats`` 直接拒绝——实测
+      "Shape of 'count' must be (1)"）。
+    统一规则：**list 原样，标量包一层**。
+    """
+    def _wrap(value: object) -> object:
+        return value if isinstance(value, list) else [value]
+
     row = {
         "episode_index": episode_index,
         "stats": {
             name: {
-                "min": [values["min"]],
-                "max": [values["max"]],
-                "mean": [values["mean"]],
-                "std": [values["std"]],
-                "count": [values["count"]],
+                "min": _wrap(values["min"]),
+                "max": _wrap(values["max"]),
+                "mean": _wrap(values["mean"]),
+                "std": _wrap(values["std"]),
+                "count": _wrap(values["count"]),
             }
             for name, values in stats.items()
         },

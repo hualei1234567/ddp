@@ -134,6 +134,7 @@ __all__ = [
     "AnnotationBackflowCase",
     "WebhookOutboxModel",
     "WebhookSubscriptionModel",
+    "VideoFrameModel",
     "AnnotationAssignment",
     "AnnotationAssignmentEvent",
     "AnnotationBatch",
@@ -232,5 +233,6 @@ __all__ += [
     "DataSourceModel",
     "MediaAssetModel",
 ]
+from app.infrastructure.db.models.video_frame import VideoFrameModel  # noqa: E402
 from app.infrastructure.db.models.webhook_outbox import WebhookOutboxModel  # noqa: E402
 from app.infrastructure.db.models.webhook_subscription import WebhookSubscriptionModel  # noqa: E402
