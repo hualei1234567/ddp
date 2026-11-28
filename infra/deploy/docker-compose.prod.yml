@@ -1,0 +1,60 @@
+# DDP 公网 VPS 生产覆盖编排（适配 >10GB 自建 MinIO + Cloudflare Pages）
+# 用法（在仓库根目录执行）：
+#   docker compose -f docker-compose.yml -f infra/deploy/docker-compose.prod.yml --profile app up -d --build
+#
+# 设计要点：
+# 1. 隐藏 postgres (55432) 与 redis (6379) 公网端口，仅 api (:8000) 与 minio (:9000) 绑定宿主机 127.0.0.1 供 Nginx 反代；
+# 2. 覆盖主 docker-compose.yml 中写死的 ddp:ddp 默认口令；
+# 3. 修复 DIAG-01：api 容器的 DDP_S3_ENDPOINT 指向公网 HTTPS https://s3.ddp.online（确保浏览器预签名 PUT/GET Host 签名一致），
+#    10 个后台 Worker 继续走容器内网 http://minio:9000 高速流式读写，零公网回环开销。
+
+services:
+  postgres:
+    ports: !override []
+    restart: unless-stopped
+
+  redis:
+    ports: !override []
+    restart: unless-stopped
+
+  minio:
+    ports: !override
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    restart: unless-stopped
+
+  migrate:
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://${DDP_DB_USER}:${DDP_DB_PASSWORD}@postgres:5432/${DDP_DB_NAME:-ddp}
+
+  api:
+    ports: !override
+      - "127.0.0.1:8000:8000"
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://${DDP_DB_USER}:${DDP_DB_PASSWORD}@postgres:5432/${DDP_DB_NAME:-ddp}
+      DDP_S3_ENDPOINT: ${DDP_S3_PUBLIC_ENDPOINT:-https://s3.ddp.online}
+      DDP_RATE_LIMIT_REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
+
+  worker: &prod_worker_env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://${DDP_DB_USER}:${DDP_DB_PASSWORD}@postgres:5432/${DDP_DB_NAME:-ddp}
+      DDP_S3_ENDPOINT: http://minio:9000
+
+  datasource-worker: *prod_worker_env
+  ingestion-job-worker: *prod_worker_env
+  processing-worker: *prod_worker_env
+  export-worker: *prod_worker_env
+  quality-worker: *prod_worker_env
+  domain-worker: *prod_worker_env
+  usage-snapshot-worker: *prod_worker_env
+  webhook-outbound-worker: *prod_worker_env
+
+  maintenance-worker:
+    volumes:
+      - ddp-backups:/backups
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://${DDP_DB_USER}:${DDP_DB_PASSWORD}@postgres:5432/${DDP_DB_NAME:-ddp}
+      DDP_S3_ENDPOINT: http://minio:9000
+      DDP_MAINTENANCE_ENABLED: "true"
+      DDP_BACKUP_DIR: /backups

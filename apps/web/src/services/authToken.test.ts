@@ -40,6 +40,17 @@ describe("访问令牌存储", () => {
     expect(readAccessToken()).toBe("token-value");
   });
 
+  it("自动剥离粘贴时附带的 Bearer 前缀", () => {
+    const stored = storeAccessToken("  Bearer   eyJ.test.sig  ");
+    expect(stored).toBe("eyJ.test.sig");
+    expect(readAccessToken()).toBe("eyJ.test.sig");
+  });
+
+  it("仅输入 Bearer 前缀而无实际令牌时不保存", () => {
+    expect(storeAccessToken("Bearer   ")).toBeNull();
+    expect(readAccessToken()).toBeNull();
+  });
+
   it("空令牌不保存", () => {
     expect(storeAccessToken("   ")).toBeNull();
     expect(readAccessToken()).toBeNull();

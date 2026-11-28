@@ -2,17 +2,15 @@ import {
   MenuFoldOutlined,
   MenuOutlined,
   MenuUnfoldOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import {
   Breadcrumb,
   Button,
   Drawer,
   Grid,
-  Input,
   Layout,
   Menu,
-  Modal,
-  Space,
   Tag,
   Tooltip,
   Typography,
@@ -29,12 +27,11 @@ import {
 } from "../app/navigation";
 import { designTokens } from "../app/theme";
 import { useProjectId } from "../hooks/useProjectId";
-import {
-  clearAccessToken,
-  readAccessToken,
-  storeAccessToken,
-} from "../services/authToken";
+import { readAccessToken } from "../services/authToken";
 import { formatIdentifier } from "../services/format";
+import { identityApi, type CurrentUser } from "../services/identity";
+import { storeProjectId } from "../services/project";
+import AuthSessionDrawer from "./AuthSessionDrawer";
 
 const { Header, Sider, Content } = Layout;
 
@@ -95,10 +92,23 @@ export default function AppLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [tokenOpen, setTokenOpen] = useState(false);
-  const [tokenDraft, setTokenDraft] = useState("");
   const [hasToken, setHasToken] = useState(() => readAccessToken() !== null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [messageApi, contextHolder] = message.useMessage();
   const projectId = useProjectId();
+
+  useEffect(() => {
+    if (!hasToken) {
+      setCurrentUser(null);
+      return;
+    }
+    const controller = new AbortController();
+    identityApi
+      .getCurrentUser({ signal: controller.signal })
+      .then((user) => setCurrentUser(user))
+      .catch(() => setCurrentUser(null));
+    return () => controller.abort();
+  }, [hasToken]);
 
   const match = findNavItem(location.pathname);
   const pageTitle =
@@ -194,15 +204,26 @@ export default function AppLayout() {
                     : "未选择项目"}
                 </Tag>
               </Tooltip>
-              <Tooltip title={hasToken ? "已设置访问令牌" : "未设置访问令牌，受保护接口会返回 401"}>
+              <Tooltip
+                title={
+                  currentUser
+                    ? `已登录：${currentUser.display_name} (${currentUser.platform_role})`
+                    : hasToken
+                      ? "已设置访问令牌，点击查看身份或切换项目"
+                      : "未登录，点击输入 Bearer JWT 登录"
+                }
+              >
                 <Button
                   size="small"
-                  onClick={() => {
-                    setTokenDraft(readAccessToken() ?? "");
-                    setTokenOpen(true);
-                  }}
+                  type={hasToken ? "default" : "primary"}
+                  icon={<UserOutlined />}
+                  onClick={() => setTokenOpen(true)}
                 >
-                  {hasToken ? "令牌已设置" : "设置令牌"}
+                  {currentUser
+                    ? currentUser.display_name
+                    : hasToken
+                      ? "令牌已设置"
+                      : "轻量登录"}
                 </Button>
               </Tooltip>
               <Tag color="blue">{PLATFORM_STAGE_LABEL}</Tag>
@@ -215,47 +236,31 @@ export default function AppLayout() {
       </Layout>
 
       {contextHolder}
-      <Modal
-        title="访问令牌"
+      <AuthSessionDrawer
         open={tokenOpen}
-        okText="保存"
-        cancelText="取消"
-        onCancel={() => setTokenOpen(false)}
-        onOk={() => {
-          const stored = storeAccessToken(tokenDraft);
-          setHasToken(stored !== null);
-          setTokenOpen(false);
-          messageApi.success(stored ? "令牌已保存（仅当前浏览器会话）" : "令牌为空，未保存");
+        currentProjectId={projectId}
+        currentUser={currentUser}
+        onClose={() => setTokenOpen(false)}
+        onSessionChange={(user, nextHasToken) => {
+          setCurrentUser(user);
+          setHasToken(nextHasToken);
+          if (user) {
+            messageApi.success(`欢迎，${user.display_name}`);
+          } else {
+            messageApi.info("已退出登录并清除会话令牌");
+          }
         }}
-        footer={(_, { OkBtn, CancelBtn }) => (
-          <Space>
-            <Button
-              danger
-              onClick={() => {
-                clearAccessToken();
-                setHasToken(false);
-                setTokenDraft("");
-                setTokenOpen(false);
-                messageApi.success("令牌已清除");
-              }}
-            >
-              清除令牌
-            </Button>
-            <CancelBtn />
-            <OkBtn />
-          </Space>
-        )}
-      >
-        <Typography.Paragraph type="secondary">
-          粘贴外部签发的 Bearer JWT。令牌只保存在浏览器会话中，不写入 URL 或服务端存储。
-        </Typography.Paragraph>
-        <Input.TextArea
-          rows={4}
-          value={tokenDraft}
-          placeholder="eyJhbGciOiJIUzI1NiJ9..."
-          onChange={(event) => setTokenDraft(event.target.value)}
-        />
-      </Modal>
+        onSelectProject={(nextProjectId) => {
+          storeProjectId(nextProjectId);
+          const params = new URLSearchParams(location.search);
+          params.set("project_id", nextProjectId);
+          navigate({
+            pathname: location.pathname,
+            search: `?${params.toString()}`,
+          });
+          messageApi.success(`已切换至项目 ${formatIdentifier(nextProjectId)}`);
+        }}
+      />
 
       <Drawer
         open={!isDesktop && menuOpen}

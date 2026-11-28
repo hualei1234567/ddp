@@ -1,0 +1,2126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DDP × Archify 全方位架构与线上建设方案 (www.ddp.online)</title>
+  <style>
+    :root, [data-theme="dark"] {
+      --background: #0b1020;
+      --card: #12192e;
+      --border: #243152;
+      --card-border: #1d2846;
+      --foreground: #e8eefc;
+      --muted-foreground: #94a3c4;
+      --primary: #4f8cff;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --error: #ef4444;
+    }
+    [data-theme="light"] {
+      --background: #f5f7fb;
+      --card: #ffffff;
+      --border: #d7dfec;
+      --card-border: #e5ebf5;
+      --foreground: #0f172a;
+      --muted-foreground: #52627a;
+      --primary: #2563eb;
+      --success: #16a34a;
+      --warning: #d97706;
+      --error: #dc2626;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--background);
+      color: var(--foreground);
+      margin: 0;
+      padding: 0;
+    }
+    code, pre, .font-mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    /* Pure offline utility classes (zero CDN dependency) */
+    .sticky { position: sticky; }
+    .relative { position: relative; }
+    .top-0 { top: 0; }
+    .z-30 { z-index: 30; }
+    .m-0 { margin: 0; }
+    .mt-0\.5 { margin-top: 2px; }
+    .mt-1 { margin-top: 4px; }
+    .p-0 { padding: 0; }
+    .p-2 { padding: 8px; }
+    .p-2\.5 { padding: 10px; }
+    .p-3 { padding: 12px; }
+    .p-3\.5 { padding: 14px; }
+    .p-4 { padding: 16px; }
+    .p-5 { padding: 20px; }
+    .px-1\.5 { padding-left: 6px; padding-right: 6px; }
+    .px-2 { padding-left: 8px; padding-right: 8px; }
+    .px-2\.5 { padding-left: 10px; padding-right: 10px; }
+    .px-3 { padding-left: 12px; padding-right: 12px; }
+    .px-4 { padding-left: 16px; padding-right: 16px; }
+    .px-5 { padding-left: 20px; padding-right: 20px; }
+    .py-0\.5 { padding-top: 2px; padding-bottom: 2px; }
+    .py-1 { padding-top: 4px; padding-bottom: 4px; }
+    .py-1\.5 { padding-top: 6px; padding-bottom: 6px; }
+    .py-2 { padding-top: 8px; padding-bottom: 8px; }
+    .py-2\.5 { padding-top: 10px; padding-bottom: 10px; }
+    .py-3 { padding-top: 12px; padding-bottom: 12px; }
+    .py-3\.5 { padding-top: 14px; padding-bottom: 14px; }
+    .pt-1 { padding-top: 4px; }
+    .pt-2 { padding-top: 8px; }
+    .pt-3 { padding-top: 12px; }
+    .pb-3 { padding-bottom: 12px; }
+    .pr-2 { padding-right: 8px; }
+    .pl-4 { padding-left: 16px; }
+    .pl-5 { padding-left: 20px; }
+    .mx-auto { margin-left: auto; margin-right: auto; }
+    .max-w-\[1440px\] { max-width: 1440px; }
+    .max-h-\[420px\] { max-height: 420px; }
+    .w-full { width: 100%; }
+    .h-full { height: 100%; }
+    .w-9 { width: 36px; } .h-9 { height: 36px; }
+    .w-12 { width: 48px; }
+    .w-36 { width: 144px; } .h-2 { height: 8px; }
+    .w-2\.5 { width: 10px; } .h-2\.5 { height: 10px; }
+    .h-\[540px\] { height: 540px; }
+    .flex { display: flex; }
+    .hidden { display: none !important; }
+    .block { display: block; }
+    .grid { display: grid; }
+    .flex-col { flex-direction: column; }
+    .flex-wrap { flex-wrap: wrap; }
+    .items-center { align-items: center; }
+    .items-start { align-items: flex-start; }
+    .justify-center { justify-content: center; }
+    .justify-between { justify-content: space-between; }
+    .gap-1\.5 { gap: 6px; }
+    .gap-2 { gap: 8px; }
+    .gap-2\.5 { gap: 10px; }
+    .gap-3 { gap: 12px; }
+    .gap-4 { gap: 16px; }
+    .space-y-1 > * + * { margin-top: 4px; }
+    .space-y-1\.5 > * + * { margin-top: 6px; }
+    .space-y-2 > * + * { margin-top: 8px; }
+    .space-y-2\.5 > * + * { margin-top: 10px; }
+    .space-y-3 > * + * { margin-top: 12px; }
+    .space-y-4 > * + * { margin-top: 16px; }
+    .space-y-5 > * + * { margin-top: 20px; }
+    .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+    .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    @media (min-width: 768px) {
+      .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .md\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    }
+    @media (min-width: 1024px) {
+      .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .lg\:grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+      .lg\:col-span-4 { grid-column: span 4 / span 4; }
+      .lg\:col-span-8 { grid-column: span 8 / span 8; }
+      .lg\:border-b-0 { border-bottom-width: 0 !important; }
+      .lg\:border-r { border-right: 1px solid var(--card-border); }
+    }
+    @media (min-width: 1280px) {
+      .xl\:col-span-3 { grid-column: span 3 / span 3; }
+      .xl\:col-span-9 { grid-column: span 9 / span 9; }
+    }
+    .bg-\[var\(--background\)\] { background-color: var(--background); }
+    .bg-\[var\(--card\)\] { background-color: var(--card); }
+    .text-\[var\(--foreground\)\] { color: var(--foreground); }
+    .text-\[var\(--muted-foreground\)\] { color: var(--muted-foreground); }
+    .text-\[var\(--primary\)\] { color: var(--primary); }
+    .border { border: 1px solid var(--border); }
+    .border-b { border-bottom: 1px solid var(--border); }
+    .border-t { border-top: 1px solid var(--border); }
+    .border-r { border-right: 1px solid var(--border); }
+    .border-\[var\(--border\)\] { border-color: var(--border); }
+    .border-\[var\(--card-border\)\] { border-color: var(--card-border); }
+    .border-\[var\(--primary\)\] { border-color: var(--primary); }
+    .border-transparent { border-color: transparent; }
+    .divide-y > * + * { border-top: 1px solid var(--card-border); }
+    .rounded { border-radius: 5px; }
+    .rounded-md { border-radius: 7px; }
+    .rounded-lg { border-radius: 9px; }
+    .rounded-xl { border-radius: 12px; }
+    .rounded-full { border-radius: 9999px; }
+    .text-xs { font-size: 12px; }
+    .text-sm { font-size: 13.5px; }
+    .text-base { font-size: 15.5px; }
+    .font-medium { font-weight: 500; }
+    .font-semibold { font-weight: 600; }
+    .font-bold { font-weight: 700; }
+    .uppercase { text-transform: uppercase; }
+    .tracking-tight { letter-spacing: -0.015em; }
+    .tracking-wider { letter-spacing: 0.05em; }
+    .leading-relaxed { line-height: 1.62; }
+    .text-left { text-align: left; }
+    .text-center { text-align: center; }
+    .whitespace-nowrap { white-space: nowrap; }
+    .whitespace-pre-line { white-space: pre-line; }
+    .break-all { word-break: break-all; }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .line-through { text-decoration: line-through; }
+    .overflow-hidden { overflow: hidden; }
+    .overflow-x-auto { overflow-x: auto; }
+    .border-collapse { border-collapse: collapse; }
+    .list-disc { list-style-type: disc; }
+    .list-decimal { list-style-type: decimal; }
+    .cursor-pointer { cursor: pointer; }
+    button {
+      background: transparent;
+      color: inherit;
+      border: none;
+      cursor: pointer;
+      font: inherit;
+    }
+    select, input[type="text"] {
+      color: var(--foreground);
+      font: inherit;
+    }
+  </style>
+  <style>
+    * { box-sizing: border-box; }
+    .svg-stage {
+      user-select: none;
+      cursor: grab;
+      touch-action: none;
+      background-image: radial-gradient(color-mix(in srgb, var(--foreground) 12%, transparent) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    .svg-stage:active { cursor: grabbing; }
+    @keyframes dashFlow {
+      to { stroke-dashoffset: -28; }
+    }
+    .edge-animated {
+      stroke-dasharray: 7 7;
+      animation: dashFlow 0.9s linear infinite;
+    }
+    .node-group {
+      cursor: pointer;
+      transition: opacity 0.2s ease, transform 0.15s ease;
+    }
+    .edge-group {
+      transition: opacity 0.2s ease;
+    }
+    .dimmed { opacity: 0.16 !important; }
+    .code-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+    .code-scroll::-webkit-scrollbar-thumb {
+      background: color-mix(in srgb, var(--foreground) 22%, transparent);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased m-0 p-0">
+  <!-- Top Header -->
+  <header class="sticky top-0 z-30 bg-[var(--card)] border-b border-[var(--border)] px-5 py-3.5">
+    <div class="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center font-mono font-bold text-sm"
+             style="background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary); border: 1px solid color-mix(in srgb, var(--primary) 40%, transparent);">
+          A◈
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-semibold tracking-tight m-0">DDP 具身智能数据闭环平台 · 全方位建设方案</h1>
+            <span class="px-2 py-0.5 text-xs font-mono rounded"
+                  style="background: color-mix(in srgb, var(--primary) 15%, transparent); color: var(--primary);">
+              Archify IR Engine v2
+            </span>
+            <span class="px-2 py-0.5 text-xs font-mono rounded"
+                  style="background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success);">
+              Target: www.ddp.online
+            </span>
+          </div>
+          <p class="text-xs text-[var(--muted-foreground)] m-0 mt-0.5">
+            基于仓库真实代码审计（FastAPI 0.133 · React 18 / Vite 6 · 10 Workers · PostgreSQL 16 · Redis 7.4 · MinIO/R2 · ADR-0007）
+          </p>
+        </div>
+      </div>
+
+      <!-- Primary Navigation Tabs -->
+      <nav id="main-tabs" class="flex flex-wrap items-center gap-1.5 text-xs">
+        <button data-tab="studio" class="tab-btn px-3 py-1.5 rounded-md font-medium transition">1. 交互式架构图谱</button>
+        <button data-tab="feasibility" class="tab-btn px-3 py-1.5 rounded-md font-medium transition">2. CF 适配与红线诊断</button>
+        <button data-tab="roadmap" class="tab-btn px-3 py-1.5 rounded-md font-medium transition">3. 六阶段建设路线</button>
+        <button data-tab="generator" class="tab-btn px-3 py-1.5 rounded-md font-medium transition">4. 生产配置生成器</button>
+        <button data-tab="ops" class="tab-btn px-3 py-1.5 rounded-md font-medium transition">5. 验收清单与运维</button>
+        <button data-tab="ir" class="tab-btn px-3 py-1.5 rounded-md font-medium transition">6. Archify JSON IR</button>
+        <button id="btn-theme-toggle" class="px-2.5 py-1.5 rounded-md border border-[var(--border)] font-mono">☀/☾ 主题</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="max-w-[1440px] mx-auto p-5 space-y-5">
+    <!-- Top KPI / Executive Summary Strip -->
+    <section class="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-3">
+        <div class="text-xs text-[var(--muted-foreground)]">前端静态层 (apps/web)</div>
+        <div class="text-sm font-semibold mt-1" style="color: var(--success);">100% 适配 CF Pages</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5 font-mono">dist/static · 无限带宽免费</div>
+      </div>
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-3">
+        <div class="text-xs text-[var(--muted-foreground)]">后端与存储承载 (已定稿)</div>
+        <div class="text-sm font-semibold mt-1" style="color: var(--primary);">公网 VPS + 自建 MinIO</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5 font-mono">&gt;10GB 零云存储费 · s3 灰云直连</div>
+      </div>
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-3">
+        <div class="text-xs text-[var(--muted-foreground)]">前端认证体验 (已落地)</div>
+        <div class="text-sm font-semibold mt-1" style="color: var(--success);">轻量登录与项目切换抽屉</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5 font-mono">AuthSessionDrawer + /api/v1/me</div>
+      </div>
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-3">
+        <div class="text-xs text-[var(--muted-foreground)]">核心源码级阻塞项</div>
+        <div class="text-sm font-semibold mt-1" style="color: var(--error);">2 项 Critical 已给出解法</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5 font-mono">SigV4 预签名域名 & 前端登录</div>
+      </div>
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-lg p-3">
+        <div class="text-xs text-[var(--muted-foreground)]">外层零信任安全防护</div>
+        <div class="text-sm font-semibold mt-1" style="color: var(--success);">Cloudflare Access (50席免费)</div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5 font-mono">OTP / GitHub SSO 边缘门禁</div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 1: ARCHIFY INTERACTIVE DIAGRAM STUDIO ================= -->
+    <section id="panel-studio" class="tab-panel space-y-4">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl overflow-hidden">
+        <!-- Studio Toolbar -->
+        <div class="px-4 py-3 border-b border-[var(--card-border)] flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-1.5" id="diagram-switcher">
+            <button data-diag="architecture" class="diag-btn px-3 py-1.5 text-xs rounded-md font-medium">A. 代码运行时架构 (Architecture)</button>
+            <button data-diag="topology" class="diag-btn px-3 py-1.5 text-xs rounded-md font-medium">B. www.ddp.online 线上拓扑 (Topology)</button>
+            <button data-diag="sequence" class="diag-btn px-3 py-1.5 text-xs rounded-md font-medium">C. 鉴权与分片直传时序 (Sequence)</button>
+            <button data-diag="dataflow" class="diag-btn px-3 py-1.5 text-xs rounded-md font-medium">D. 具身数据闭环流向 (Dataflow)</button>
+            <button data-diag="workflow" class="diag-btn px-3 py-1.5 text-xs rounded-md font-medium">E. 发布门禁与回滚状态机 (Workflow)</button>
+          </div>
+
+          <div class="flex items-center gap-2 text-xs">
+            <!-- Sequence Controls (shown on sequence mode) -->
+            <div id="seq-controls" class="hidden items-center gap-1.5 pr-2 border-r border-[var(--card-border)]">
+              <button id="seq-prev" class="px-2 py-1 rounded border border-[var(--border)] hover:opacity-80">◀ 上一步</button>
+              <span id="seq-indicator" class="font-mono px-1.5">全部步骤</span>
+              <button id="seq-next" class="px-2 py-1 rounded border border-[var(--border)] hover:opacity-80">下一步 ▶</button>
+              <button id="seq-play" class="px-2 py-1 rounded font-medium" style="background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary);">自动回放</button>
+            </div>
+            <button id="btn-zoom-out" class="px-2 py-1 rounded border border-[var(--border)] font-mono" title="缩小">−</button>
+            <span id="zoom-label" class="font-mono w-12 text-center text-[var(--muted-foreground)]">100%</span>
+            <button id="btn-zoom-in" class="px-2 py-1 rounded border border-[var(--border)] font-mono" title="放大">+</button>
+            <button id="btn-reset-view" class="px-2.5 py-1 rounded border border-[var(--border)]">重置视图</button>
+            <button id="btn-clear-trace" class="px-2.5 py-1 rounded border border-[var(--border)]">清除高亮</button>
+          </div>
+        </div>
+
+        <!-- Studio Body: Canvas + Inspector Drawer -->
+        <div class="grid grid-cols-1 lg:grid-cols-12">
+          <div class="lg:col-span-8 xl:col-span-9 relative border-b lg:border-b-0 lg:border-r border-[var(--card-border)]">
+            <div id="diagram-subtitle" class="px-4 py-2 text-xs text-[var(--muted-foreground)] border-b border-[var(--card-border)] flex items-center justify-between">
+              <span id="diagram-desc">点击任意节点可追踪上下游调用链，拖拽画布平移，滚轮缩放。</span>
+              <span class="font-mono text-xs" id="trace-badge">未选中节点（显示全图）</span>
+            </div>
+            <div id="svg-container" class="svg-stage w-full h-[540px] overflow-hidden relative">
+              <svg id="archify-svg" class="w-full h-full" viewBox="0 0 1080 620">
+                <defs>
+                  <marker id="arrow-default" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="currentColor" style="color: var(--muted-foreground);" />
+                  </marker>
+                  <marker id="arrow-active" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="currentColor" style="color: var(--primary);" />
+                  </marker>
+                  <marker id="arrow-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="currentColor" style="color: var(--warning);" />
+                  </marker>
+                </defs>
+                <g id="svg-viewport"></g>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Right Inspector Panel -->
+          <aside class="lg:col-span-4 xl:col-span-3 p-4 flex flex-col justify-between space-y-4 bg-[var(--card)]">
+            <div id="inspector-content" class="space-y-3">
+              <!-- Populated dynamically on node click -->
+            </div>
+            <div class="pt-3 border-t border-[var(--card-border)] space-y-2 text-xs">
+              <div class="font-semibold text-[var(--muted-foreground)]">图例说明 (Archify Node Types)</div>
+              <div class="grid grid-cols-2 gap-1.5">
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background: var(--success);"></span><span>Cloudflare 边缘免费层</span></div>
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background: var(--primary);"></span><span>核心应用 / API 服务</span></div>
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background: var(--warning);"></span><span>后台常驻 Worker / 包</span></div>
+                <div class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full" style="background: var(--error);"></span><span>有状态存储 / 关键阻塞点</span></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 2: CLOUDFLARE FEASIBILITY & DIAGNOSTICS ================= -->
+    <section id="panel-feasibility" class="tab-panel hidden space-y-5">
+      <!-- Filter Bar -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold m-0">Cloudflare 免费计划产品逐项适配评估矩阵</h2>
+            <p class="text-xs text-[var(--muted-foreground)] m-0 mt-0.5">基于实际依赖清单（backend/requirements.txt · apps/web/package.json · docker-compose.yml）逐项核验</p>
+          </div>
+          <div class="flex items-center gap-1.5 text-xs" id="cf-filter-group">
+            <button data-filter="all" class="cf-filter-btn px-2.5 py-1 rounded border border-[var(--border)]">全部 (8)</button>
+            <button data-filter="ready" class="cf-filter-btn px-2.5 py-1 rounded border border-[var(--border)]">直接可用 (3)</button>
+            <button data-filter="adapt" class="cf-filter-btn px-2.5 py-1 rounded border border-[var(--border)]">需配置/条件可用 (2)</button>
+            <button data-filter="blocked" class="cf-filter-btn px-2.5 py-1 rounded border border-[var(--border)]">不适配/阻塞 (3)</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-[var(--card-border)] text-left text-[var(--muted-foreground)]">
+                <th class="py-2.5 px-3">Cloudflare 产品</th>
+                <th class="py-2.5 px-3">结论状态</th>
+                <th class="py-2.5 px-3">免费计划硬约束</th>
+                <th class="py-2.5 px-3">对应 DDP 模块与代码依据</th>
+                <th class="py-2.5 px-3">工程落地方案</th>
+              </tr>
+            </thead>
+            <tbody id="cf-matrix-body" class="divide-y divide-[var(--card-border)]"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Archify Codebase Diagnostics -->
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <div>
+          <h2 class="text-sm font-semibold m-0">Archify 源码级上线阻塞与红线诊断 (5 项真实代码发现)</h2>
+          <p class="text-xs text-[var(--muted-foreground)] m-0 mt-0.5">如果不提前处置以下问题，即便容器和 Pages 部署完成，线上功能也会出现 401/403/503 或启动直接退出</p>
+        </div>
+        <div id="diagnostics-list" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 3: STEP-BY-STEP CONSTRUCTION ROADMAP ================= -->
+    <section id="panel-roadmap" class="tab-panel hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div class="lg:col-span-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-1.5" id="phase-nav"></div>
+        <div class="lg:col-span-8 bg-[var(--card)] border border-[var(--border)] rounded-xl p-5" id="phase-detail"></div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 4: INTERACTIVE CONFIG GENERATOR ================= -->
+    <section id="panel-generator" class="tab-panel hidden space-y-4">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-4">
+        <div>
+          <h2 class="text-sm font-semibold m-0">参数化线上配置生成器（零真实密钥 · 对齐 config.py 启动自检）</h2>
+          <p class="text-xs text-[var(--muted-foreground)] m-0 mt-0.5">切换下方架构选项，实时生成可直接落盘的生产配置文件与命令行指令</p>
+        </div>
+
+        <!-- Controls -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+          <label class="block space-y-1 text-xs">
+            <span class="text-[var(--muted-foreground)] font-medium">1. 后端承载环境 (已定稿: 公网 VPS)</span>
+            <select id="cfg-host" class="w-full px-2.5 py-1.5 rounded bg-[var(--background)] border border-[var(--border)] text-xs">
+              <option value="vps" selected>公网云服务器 VPS + Nginx TLS (开源公网部署首选)</option>
+              <option value="tunnel">Ubuntu 笔记本 + Cloudflare Tunnel (内网无公网IP备选)</option>
+            </select>
+          </label>
+          <label class="block space-y-1 text-xs">
+            <span class="text-[var(--muted-foreground)] font-medium">2. 对象存储方案 (已定稿: &gt;10GB 自建 MinIO)</span>
+            <select id="cfg-storage" class="w-full px-2.5 py-1.5 rounded bg-[var(--background)] border border-[var(--border)] text-xs">
+              <option value="minio_tunnel" selected>宿主机自建 MinIO + s3.ddp.online 灰云直连 (&gt;10GB 零存储费)</option>
+              <option value="r2">Cloudflare R2 (≤10GB 备选)</option>
+            </select>
+          </label>
+          <label class="block space-y-1 text-xs">
+            <span class="text-[var(--muted-foreground)] font-medium">3. 前端请求 API 路由模式</span>
+            <select id="cfg-routing" class="w-full px-2.5 py-1.5 rounded bg-[var(--background)] border border-[var(--border)] text-xs">
+              <option value="subdomain">VITE_API_BASE=https://api.ddp.online (推荐·不耗Worker配额)</option>
+              <option value="pages_fn">Pages Functions 同域代理 /api/* (限10万次/天)</option>
+            </select>
+          </label>
+          <label class="block space-y-1 text-xs">
+            <span class="text-[var(--muted-foreground)] font-medium">4. 生产主域名</span>
+            <input id="cfg-domain" type="text" value="www.ddp.online" class="w-full px-2.5 py-1.5 rounded bg-[var(--background)] border border-[var(--border)] text-xs font-mono" />
+          </label>
+        </div>
+
+        <!-- Generated File Tabs -->
+        <div class="border-t border-[var(--card-border)] pt-3 space-y-3">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap gap-1.5 text-xs" id="cfg-file-tabs">
+              <button data-cfile="env" class="cfile-btn px-3 py-1.5 rounded font-mono">.env.production</button>
+              <button data-cfile="compose" class="cfile-btn px-3 py-1.5 rounded font-mono">docker-compose.prod.yml</button>
+              <button data-cfile="edge" class="cfile-btn px-3 py-1.5 rounded font-mono">cloudflared / nginx 配置</button>
+              <button data-cfile="pages" class="cfile-btn px-3 py-1.5 rounded font-mono">CF Pages & wrangler.toml</button>
+              <button data-cfile="jwt" class="cfile-btn px-3 py-1.5 rounded font-mono">管理员 JWT 签发与注入脚本</button>
+            </div>
+            <button id="btn-copy-cfg" class="px-3 py-1.5 rounded text-xs font-medium"
+                    style="background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary);">
+              复制当前配置
+            </button>
+          </div>
+          <pre id="cfg-code-output" class="code-scroll p-4 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs font-mono overflow-x-auto leading-relaxed m-0"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 5: CHECKLIST, OPS & PENDING CONFIRMATIONS ================= -->
+    <section id="panel-ops" class="tab-panel hidden space-y-4">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold m-0">上线前检查与上线后验收交互清单</h2>
+            <p class="text-xs text-[var(--muted-foreground)] m-0 mt-0.5">勾选状态自动保存在本地浏览器，用于发版逐项核对</p>
+          </div>
+          <div class="flex items-center gap-3 text-xs">
+            <span id="checklist-progress-text" class="font-mono">0 / 16 已完成</span>
+            <div class="w-36 h-2 rounded-full bg-[var(--background)] overflow-hidden border border-[var(--border)]">
+              <div id="checklist-progress-bar" class="h-full transition-all duration-300" style="width: 0%; background: var(--success);"></div>
+            </div>
+            <button id="btn-reset-checks" class="px-2.5 py-1 rounded border border-[var(--border)]">重置勾选</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2" id="checklist-container"></div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Rollback & Quota Monitoring -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-2.5 text-xs">
+          <h3 class="text-sm font-semibold m-0">回滚策略、配额监控与排障入口</h3>
+          <div class="space-y-2 text-[var(--muted-foreground)] leading-relaxed">
+            <div><strong class="text-[var(--foreground)]">1. 前端秒级回滚：</strong>Cloudflare Dashboard → Workers & Pages → <code class="font-mono">ddp-web</code> → Deployments → 选中历史正常构建点击 <code class="font-mono">Rollback to this deployment</code>（全球边缘 30 秒内生效）。</div>
+            <div><strong class="text-[var(--foreground)]">2. 后端镜像与数据库回滚：</strong>遵循 <code class="font-mono">docs/ops/backup-restore-runbook.md</code>（MEM-OPS-001 7 个不变量），升级前先执行 <code class="font-mono">pg_dump</code> 快照；若应用异常则切回上一 Git tag 镜像并按需 <code class="font-mono">alembic downgrade -1</code>。</div>
+            <div><strong class="text-[var(--foreground)]">3. 免费额度重点监控：</strong>
+              <ul class="list-disc pl-4 mt-1 space-y-1">
+                <li>CF Pages 构建次数：上限 <strong>500 次/月</strong>（建议仅在 <code class="font-mono">main</code> 分支开启自动生产构建，PR 按需预览）。</li>
+                <li>若启用 Pages Functions：上限 <strong>10 万次/天</strong>；采用推荐的 <code class="font-mono">api.ddp.online</code> 子域直连则<strong>完全不消耗</strong> Workers/Functions 配额。</li>
+                <li>若启用 Cloudflare R2：上限 <strong>10 GB 存储 + 100 万次写 + 1000 万次读/月</strong>，可在 R2 Overview 设置用量告警。</li>
+              </ul>
+            </div>
+            <div><strong class="text-[var(--foreground)]">4. 故障排查入口：</strong>请求响应头均携带 <code class="font-mono">X-Request-Id</code>（<code class="font-mono">app/api/middleware/request_id.py</code>），结合 <code class="font-mono">docker compose logs -f api worker</code> 按 <code class="font-mono">request_id</code> 精确检索领域异常原文；指标抓取见 <code class="font-mono">GET /metrics</code>（Prometheus + Alertmanager :9090/:9093）。</div>
+          </div>
+        </div>
+
+        <!-- Confirmed Decisions -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-2.5 text-xs">
+          <h3 class="text-sm font-semibold m-0">已拍板定稿并落盘的 4 项架构决策</h3>
+          <div class="space-y-2 leading-relaxed">
+            <div class="p-2.5 rounded bg-[var(--background)] border border-[var(--card-border)]">
+              <div class="font-semibold" style="color:var(--success);">✓ D1. 域名 <code class="font-mono">ddp.online</code> NS 托管接入 Cloudflare</div>
+              <div class="text-[var(--muted-foreground)] mt-0.5"><code class="font-mono">www.ddp.online</code> 绑定 CF Pages；<code class="font-mono">api.ddp.online</code> 橙云代理；<code class="font-mono">s3.ddp.online</code> 灰云直连 (DNS Only) 跑满公网带宽。</div>
+            </div>
+            <div class="p-2.5 rounded bg-[var(--background)] border border-[var(--card-border)]">
+              <div class="font-semibold" style="color:var(--success);">✓ D2. 公网 VPS 承载（开源学习项目安全基线）</div>
+              <div class="text-[var(--muted-foreground)] mt-0.5">已落盘脱敏套件 <code class="font-mono">infra/deploy/docker-compose.prod.yml</code>、<code class="font-mono">env.production.example</code> 与 <code class="font-mono">nginx-origin.conf.example</code>。</div>
+            </div>
+            <div class="p-2.5 rounded bg-[var(--background)] border border-[var(--card-border)]">
+              <div class="font-semibold" style="color:var(--success);">✓ D3. 前端轻量登录与项目切换抽屉已落地</div>
+              <div class="text-[var(--muted-foreground)] mt-0.5">已实现 <code class="font-mono">apps/web/src/components/AuthSessionDrawer.tsx</code>，自动剥离多余 <code class="font-mono">Bearer </code> 前缀、在线调用 <code class="font-mono">GET /api/v1/me</code> 校验并支持一键切换项目。</div>
+            </div>
+            <div class="p-2.5 rounded bg-[var(--background)] border border-[var(--card-border)]">
+              <div class="font-semibold" style="color:var(--success);">✓ D4. 对象存储 &gt;10GB 采用宿主机自建 MinIO 方案</div>
+              <div class="text-[var(--muted-foreground)] mt-0.5">API 注入 <code class="font-mono">DDP_S3_ENDPOINT=https://s3.ddp.online</code> 生成公网合规 SigV4 预签名，10 个后台 Worker 继续走容器内网 <code class="font-mono">http://minio:9000</code> 零开销流式读写。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= TAB 6: ARCHIFY JSON IR SPEC & EXPORT ================= -->
+    <section id="panel-ir" class="tab-panel hidden space-y-4">
+      <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold m-0">Archify Typed JSON IR 规范文件与本地 CLI 编译命令</h2>
+            <p class="text-xs text-[var(--muted-foreground)] m-0 mt-0.5">
+              本页面内置了符合 <code class="font-mono">tt-a1i/archify</code> 理念的结构化图谱中间表示（IR）。您也可以导出 JSON 并在安装 Archify CLI 后编译更多衍生视图。
+            </p>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <button id="btn-copy-ir" class="px-3 py-1.5 rounded border border-[var(--border)]">复制 JSON IR</button>
+            <button id="btn-download-ir" class="px-3 py-1.5 rounded font-medium"
+                    style="background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary);">
+              下载 ddp-archify-ir.json
+            </button>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--card-border)] text-xs font-mono space-y-1">
+          <div class="text-[var(--muted-foreground)]"># 可选：在宿主机终端安装 tt-a1i/archify 技能并编译 JSON IR</div>
+          <div>npx -y skills@latest add https://archify.si --skill archify --global</div>
+          <div>node bin/archify.mjs deliver architecture ddp-archify-ir.json ddp-architecture.html --quality showcase</div>
+        </div>
+
+        <pre id="ir-json-viewer" class="code-scroll p-4 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs font-mono overflow-x-auto max-h-[420px] m-0"></pre>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // =========================================================================
+    // 1. ARCHIFY TYPED JSON IR DATA (100% Grounded in DDP Repository Evidence)
+    // =========================================================================
+    const ARCHIFY_IR = {
+      "$schema": "https://tt-a1i.github.io/archify/schemas/architecture.schema.json",
+      "schema_version": 2,
+      "meta": {
+        "project": "DDP (Embodied AI Data Closed-Loop Platform)",
+        "version": "0.2.0",
+        "target_domain": "https://www.ddp.online",
+        "repository_root": "/Users/hualei/vscodeworkspace/DataPlatform"
+      },
+      "diagrams": {
+        "architecture": {
+          "title": "A. 代码运行时模块架构 (Monorepo Runtime Architecture)",
+          "subtitle": "点击任意模块查看真实文件路径、启动入口、端口与上下游依赖链路",
+          "groups": [
+            { "id": "g-client", "label": "前端与外部接入层", "x": 20, "y": 24, "w": 220, "h": 565 },
+            { "id": "g-backend", "label": "FastAPI 模块化单体 (backend/app)", "x": 270, "y": 24, "w": 490, "h": 385 },
+            { "id": "g-workers", "label": "异步与定时进程群 (10 Workers + ddp_data)", "x": 270, "y": 425, "w": 490, "h": 164 },
+            { "id": "g-infra", "label": "有状态存储与可观测底座", "x": 790, "y": 24, "w": 270, "h": 565 }
+          ],
+          "nodes": [
+            {
+              "id": "web", "label": "Web SPA (ddp-web)", "sub": "React 18 · AntD 5 · Vite 6",
+              "x": 40, "y": 68, "w": 180, "h": 68, "tone": "success",
+              "path": "apps/web/src/routes.tsx",
+              "cmd": "cd apps/web && npm run dev (:5173) | npm run build",
+              "cf": "直接部署至 Cloudflare Pages (dist/static)",
+              "details": "包含项目/设备/采集/接入/Episode/标注(工作台·黄金集·IAA·仲裁)/质检/数据集/模型评测/供应商等全套页面。通过 ApiClient (apps/web/src/services/api.ts) 统一注入 Bearer JWT 与 X-Request-Id。"
+            },
+            {
+              "id": "contracts", "label": "契约包 (contracts)", "sub": "OpenAPI 3 · JSON Schema",
+              "x": 40, "y": 175, "w": 180, "h": 64, "tone": "primary",
+              "path": "packages/contracts/openapi.yaml",
+              "cmd": "python scripts/check_contract_parity.py --strict",
+              "cf": "构建期校验产物，不独立运行",
+              "details": "定义全平台 REST 契约、Canonical 共享 JSON Schema 与标定参数 Schema (calibration-parameters.v1.schema.json)，由 CI 门禁强制校验契约与实现零漂移。"
+            },
+            {
+              "id": "edge_agent", "label": "边缘采集端 (edge-agent)", "sub": "心跳 · 配对 · 分片直传",
+              "x": 40, "y": 280, "w": 180, "h": 64, "tone": "warning",
+              "path": "services/edge-agent/edge_agent",
+              "cmd": "部署于机器人/采集工控机本地",
+              "cf": "运行在边缘设备，通过 HTTPS 访问 api/s3",
+              "details": "负责真机侧数据采集会话上报、30s 心跳续租 (ADR-0047) 以及按预签名 URL 分片上传原始轨迹包。"
+            },
+            {
+              "id": "ext_adapters", "label": "训练/模型网关 (adapters)", "sub": "local-adapter / 远端平台",
+              "x": 40, "y": 385, "w": 180, "h": 64, "tone": "warning",
+              "path": "services/local-adapter/app",
+              "cmd": "DDP_TRAINING_ADAPTER_ENDPOINTS 配置驱动",
+              "cf": "外部算力网关（生产默认开启 SSRF 私网拦截）",
+              "details": "承载训练作业提交 (/training-runs)、评测 (/evaluations) 与推理 (/inference-tasks)，通过 HMAC 共享密钥回调后端。"
+            },
+            {
+              "id": "mw_chain", "label": "ASGI 中间件防御链", "sub": "ReqId→SecHdr→CORS→Metrics→OTel→RL",
+              "x": 295, "y": 65, "w": 440, "h": 62, "tone": "primary",
+              "path": "backend/app/main.py:108-145",
+              "cmd": "uvicorn app.main:app --host 0.0.0.0 --port 8000",
+              "cf": "运行于后端容器（不可跑在 CF Workers）",
+              "details": "严格按由外向内顺序执行：RequestIdMiddleware → SecurityHeaders(CSP/HSTS) → CORS → Metrics(/metrics) → Telemetry(W3C traceparent) → RateLimit(Redis/Memory)。"
+            },
+            {
+              "id": "api_v1", "label": "REST API 路由层 (v1)", "sub": "JWT 鉴权 · 项目隔离 · 错误脱敏",
+              "x": 295, "y": 152, "w": 210, "h": 68, "tone": "primary",
+              "path": "backend/app/api/v1/router.py",
+              "cmd": "GET /health | GET /api/v1/platform/meta",
+              "cf": "通过 https://api.ddp.online 暴露",
+              "details": "使用 PyJWT 2.15 校验 HS256 Bearer Token；生产启动执行 validate_runtime_security() fail-closed 自检；领域异常统一映射为结构化错误码且不泄露堆栈。"
+            },
+            {
+              "id": "app_layer", "label": "应用编排层 (application)", "sub": "用例事务 · 幂等 · Outbox 写入",
+              "x": 525, "y": 152, "w": 210, "h": 68, "tone": "primary",
+              "path": "backend/app/application/",
+              "cmd": "由 API 路由与 Workers 共同调用",
+              "cf": "后端进程内模块",
+              "details": "编排跨聚合用例、事务边界、接口幂等键记录，并将异步任务以事务性 Outbox 事件同库落盘。"
+            },
+            {
+              "id": "domain_core", "label": "21 个核心业务领域模型 (domain)", "sub": "devices · ingestion · episodes · annotation · datasets · modelops · suppliers...",
+              "x": 295, "y": 245, "w": 440, "h": 68, "tone": "primary",
+              "path": "backend/app/domain/",
+              "cmd": "纯 Python 领域不变量与状态机规则",
+              "cf": "后端核心业务逻辑层",
+              "details": "涵盖设备标定快照、采集会话、RawAsset 接入、八阶段处理、Episode 训练就绪判定、标注状态机/黄金题熔断/IAA、数据集版本与导出、训练交付匹配 (TRN-002)、供应商结算台账。"
+            },
+            {
+              "id": "infra_layer", "label": "基础设施适配层 (infrastructure)", "sub": "SQLAlchemy 2 · S3Multipart · Redis RL · SSRF Guard",
+              "x": 295, "y": 332, "w": 440, "h": 62, "tone": "primary",
+              "path": "backend/app/infrastructure/",
+              "cmd": "alembic upgrade head (migrations/)",
+              "cf": "依赖 psycopg3 二进制驱动与 boto3",
+              "details": "封装 PostgreSQL 仓储、boto3 SigV4 分片上传/下载预签名、Redis 滑动窗口限流、HuggingFace 流式拉取与出站 URL SSRF 守卫。"
+            },
+            {
+              "id": "workers_10", "label": "10 个常驻后台 Worker 进程", "sub": "outbox · datasources · ingestion · processing · exports · quality · sweeps · usage · maint · webhook",
+              "x": 295, "y": 458, "w": 300, "h": 112, "tone": "warning",
+              "path": "backend/app/workers/",
+              "cmd": "python -m app.workers.<name> (Compose 独立容器)",
+              "cf": "阻塞项：CF Cron 最多5个且限10ms CPU，必须在宿主机常驻",
+              "details": "消费 Outbox 投递事件、流式下载 HF 数据集、执行八阶段轨迹解析、异步打包数据集导出、定时巡检对象可达性、调用 pg_dump 执行每日备份与保留期清扫。"
+            },
+            {
+              "id": "ddp_data", "label": "数据引擎包 (ddp_data)", "sub": "HDF5 · MCAP · LeRobot · Parquet",
+              "x": 610, "y": 458, "w": 135, "h": 112, "tone": "warning",
+              "path": "data-platform/ddp_data/",
+              "cmd": "PYTHONPATH=/app/data-platform",
+              "cf": "含重型科学计算/容器解析逻辑，需宿主机运行",
+              "details": "独立顶层包 ddp_data：提供 Canonical Schema v1/v1.1、HDF5、LeRobot、DROID、MCAP、ROS bag、Parquet 及 LLM/PRM 偏好导出解析能力。"
+            },
+            {
+              "id": "postgres", "label": "PostgreSQL 16", "sub": "核心业务库 + Outbox (:55432)",
+              "x": 810, "y": 68, "w": 230, "h": 76, "tone": "error",
+              "path": "docker-compose.yml:2-19",
+              "cmd": "postgres:16-alpine + alembic upgrade head",
+              "cf": "不可替换为 CF D1 (SQLite)：重度依赖 PG16 约束/JSONB/pg_dump",
+              "details": "承载全量业务表、70+ Alembic 迁移版本、行级锁租约抢占 (processing/outbox) 与定时 pg_dump 备份。"
+            },
+            {
+              "id": "redis", "label": "Redis 7.4", "sub": "全局分布式限流 (:6379)",
+              "x": 810, "y": 172, "w": 230, "h": 68, "tone": "error",
+              "path": "docker-compose.yml:20-47",
+              "cmd": "DDP_RATE_LIMIT_BACKEND=redis",
+              "cf": "宿主机容器运行（单实例亦可降级为 memory）",
+              "details": "256MB allkeys-lru 无持久化内存实例，专用于多副本 API 的客户端 IP 滑动窗口限流 (ddp:rl 前缀)。"
+            },
+            {
+              "id": "s3_minio", "label": "MinIO / Cloudflare R2", "sub": "S3 兼容对象存储 (:9000)",
+              "x": 810, "y": 268, "w": 230, "h": 82, "tone": "error",
+              "path": "backend/app/infrastructure/storage/s3.py",
+              "cmd": "Bucket: ddp-raw (SigV4 path-style)",
+              "cf": "可切换至 Cloudflare R2 (10GB免费) 或暴露 s3.ddp.online",
+              "details": "存放原始采集轨迹包、流提取产物与导出压缩包。关键注意：API 生成的预签名 URL 必须使用浏览器公网可达的 HTTPS 域名！"
+            },
+            {
+              "id": "observability", "label": "Prometheus + Alertmanager", "sub": "指标抓取 + alert-receiver",
+              "x": 810, "y": 380, "w": 230, "h": 82, "tone": "primary",
+              "path": "infra/monitoring/prometheus.prod.yml",
+              "cmd": ":9090 / :9093 / alert-receiver :9095",
+              "cf": "宿主机内网监控栈，通过 Bearer Token 抓取 /metrics",
+              "details": "采集 HTTP 延迟、限流拒绝数、Outbox 积压、Worker 失败率与业务快照指标，触发告警落盘至 alert-receiver。"
+            }
+          ],
+          "edges": [
+            { "from": "web", "to": "mw_chain", "label": "HTTPS /api/v1/*" },
+            { "from": "web", "to": "s3_minio", "label": "PUT/GET 预签名直传", "warn": true },
+            { "from": "contracts", "to": "web", "label": "类型与快照约束" },
+            { "from": "contracts", "to": "api_v1", "label": "parity --strict" },
+            { "from": "edge_agent", "to": "mw_chain", "label": "心跳 & 会话上报" },
+            { "from": "edge_agent", "to": "s3_minio", "label": "Multipart PUT" },
+            { "from": "mw_chain", "to": "api_v1", "label": "鉴权与路由分发" },
+            { "from": "api_v1", "to": "app_layer", "label": "DTO → 用例调用" },
+            { "from": "app_layer", "to": "domain_core", "label": "聚合状态机演进" },
+            { "from": "app_layer", "to": "infra_layer", "label": "仓储持久化 & Outbox" },
+            { "from": "infra_layer", "to": "postgres", "label": "psycopg3 连接池" },
+            { "from": "mw_chain", "to": "redis", "label": "滑动窗口计数" },
+            { "from": "infra_layer", "to": "s3_minio", "label": "SigV4 预签名" },
+            { "from": "infra_layer", "to": "ext_adapters", "label": "HTTP + HMAC 回调" },
+            { "from": "workers_10", "to": "postgres", "label": "轮询抢占 Outbox & pg_dump" },
+            { "from": "workers_10", "to": "s3_minio", "label": "流式校验与导出写盘" },
+            { "from": "workers_10", "to": "ddp_data", "label": "import ddp_data" },
+            { "from": "observability", "to": "mw_chain", "label": "GET /metrics (Bearer)" }
+          ]
+        },
+
+        "topology": {
+          "title": "B. www.ddp.online 线上混合云部署拓扑 (Cloudflare Free + 宿主机)",
+          "subtitle": "零公网 IP 方案：Cloudflare Pages 托管静态前端 + Cloudflare Tunnel 安全穿透至宿主机 Docker Compose",
+          "groups": [
+            { "id": "t-user", "label": "公网访问侧", "x": 20, "y": 30, "w": 185, "h": 550 },
+            { "id": "t-cf", "label": "Cloudflare 全球边缘网络 (100% Free Plan)", "x": 235, "y": 30, "w": 395, "h": 550 },
+            { "id": "t-host", "label": "Ubuntu 宿主机 / 云服务器 VPS (Docker Compose)", "x": 665, "y": 30, "w": 395, "h": 550 }
+          ],
+          "nodes": [
+            {
+              "id": "browser", "label": "用户浏览器", "sub": "标注员 / 算法 / 管理员",
+              "x": 38, "y": 140, "w": 150, "h": 72, "tone": "primary",
+              "path": "https://www.ddp.online",
+              "cmd": "HTTPS TLS 1.3 访问",
+              "cf": "客户端浏览器",
+              "details": "访问 www.ddp.online 加载静态单页应用；API 请求发往 https://api.ddp.online；大文件分片直接 PUT 到 https://s3.ddp.online 或 R2。"
+            },
+            {
+              "id": "robot_client", "label": "真机 Edge Agent", "sub": "外部采集点设备",
+              "x": 38, "y": 360, "w": 150, "h": 72, "tone": "warning",
+              "path": "services/edge-agent",
+              "cmd": "连接 api.ddp.online & s3.ddp.online",
+              "cf": "支持 CF Service Token 机器鉴权",
+              "details": "外场采集机器无需 VPN，直接通过公网 HTTPS 向 api.ddp.online 发送心跳并分片直传轨迹至对象存储。"
+            },
+            {
+              "id": "cf_dns", "label": "Cloudflare DNS + CDN + WAF", "sub": "NS 托管 ddp.online · Full(Strict) SSL",
+              "x": 260, "y": 72, "w": 345, "h": 68, "tone": "success",
+              "path": "DNS: www / api / s3.ddp.online",
+              "cmd": "Always Use HTTPS + Auto HSTS",
+              "cf": "Free 计划标配（无限 DDoS 防护与全球 Anycast）",
+              "details": "统一接管 ddp.online 权威 DNS：www 绑定 Pages；api 与 s3 绑定 Cloudflare Tunnel CNAME (<tunnel-id>.cfargotunnel.com)。"
+            },
+            {
+              "id": "cf_access", "label": "Cloudflare Access (Zero Trust)", "sub": "外层身份门禁 · Email OTP / GitHub SSO",
+              "x": 260, "y": 168, "w": 345, "h": 68, "tone": "success",
+              "path": "Zero Trust → Access → Applications",
+              "cmd": "免费额度：最多 50 名团队成员",
+              "cf": "弥补前端暂无登录页的外网裸奔风险",
+              "details": "在浏览器触达前端控制台前强制要求团队邮箱验证码或 GitHub 组织认证，未授权公网流量在边缘即被拦截。"
+            },
+            {
+              "id": "cf_pages", "label": "Cloudflare Pages (ddp-web)", "sub": "托管 apps/web/dist · SPA 回退 index.html",
+              "x": 260, "y": 266, "w": 345, "h": 76, "tone": "success",
+              "path": "apps/web/dist/static/*",
+              "cmd": "Root: apps/web | Build: npm run build",
+              "cf": "无限静态带宽 · 500次构建/月 · 单文件≤25MiB",
+              "details": "构建注入环境变量 NODE_VERSION=20、VITE_API_BASE=https://api.ddp.online、VITE_PROJECT_ID=<默认项目UUID>。"
+            },
+            {
+              "id": "cf_tunnel", "label": "Cloudflare Tunnel 边缘网关", "sub": "api.ddp.online + s3.ddp.online",
+              "x": 260, "y": 370, "w": 345, "h": 76, "tone": "success",
+              "path": "Zero Trust → Networks → Tunnels",
+              "cmd": "宿主机主动出站长连接，无需公网 IP / 无需开端口",
+              "cf": "100% 免费，完美契合 ADR-0007 Ubuntu 笔记本承载",
+              "details": "将公网 https://api.ddp.online 路由至容器 api:8000；将 https://s3.ddp.online 路由至容器 minio:9000（若使用 CF R2 则无需 s3 隧道）。"
+            },
+            {
+              "id": "cf_r2", "label": "可选替代：Cloudflare R2", "sub": "10GB 免费 S3 对象存储 · 零出网流量费",
+              "x": 260, "y": 474, "w": 345, "h": 76, "tone": "success",
+              "path": "https://<account>.r2.cloudflarestorage.com",
+              "cmd": "DDP_S3_REGION=auto",
+              "cf": "适合轻量线上演示（超 10GB 建议回退宿主机 MinIO）",
+              "details": "原生支持 S3 SigV4 预签名上传与下载，配置 CORS 允许 https://www.ddp.online 后浏览器可高速直传。"
+            },
+            {
+              "id": "cloudflared", "label": "cloudflared 守护容器", "sub": "仅出站 QUIC/HTTP2 加密隧道",
+              "x": 690, "y": 76, "w": 345, "h": 68, "tone": "primary",
+              "path": "docker-compose.prod.yml (cloudflared)",
+              "cmd": "cloudflared tunnel --no-autoupdate run",
+              "cf": "宿主机防火墙可保持 0 入站端口开放",
+              "details": "在 Docker 内部网络直接转发流量至 http://api:8000 与 http://minio:9000，若选云 VPS 也可替换为 Nginx/Caddy 反向代理。"
+            },
+            {
+              "id": "host_api", "label": "ddp-api + ddp-migrate", "sub": "FastAPI :8000 · validate_runtime_security()",
+              "x": 690, "y": 175, "w": 345, "h": 76, "tone": "primary",
+              "path": "infra/docker/api.Dockerfile",
+              "cmd": "DDP_ENV=production | HSTS & CORS 显式白名单",
+              "cf": "宿主机 Docker 容器运行",
+              "details": "启动前先由 migrate 容器执行 alembic upgrade head；API 配置 DDP_CORS_ALLOWED_ORIGINS=[\"https://www.ddp.online\"] 与 DDP_S3_ENDPOINT=https://s3.ddp.online。"
+            },
+            {
+              "id": "host_workers", "label": "10× Python Workers 进程组", "sub": "outbox / processing / exports / maintenance...",
+              "x": 690, "y": 280, "w": 345, "h": 82, "tone": "warning",
+              "path": "backend/app/workers/* + data-platform/",
+              "cmd": "内网直连 http://minio:9000 与 postgres:5432",
+              "cf": "宿主机常驻运行，不受 10ms CPU 限制",
+              "details": "Worker 容器内部继续走 Docker 极速内网 http://minio:9000 读写大文件，不经过公网回环，兼顾吞吐性能与零流量成本。"
+            },
+            {
+              "id": "host_data", "label": "PG 16 + Redis 7.4 + MinIO + Prom", "sub": "持久化数据卷 + 每日 pg_dump 备份",
+              "x": 690, "y": 392, "w": 345, "h": 155, "tone": "error",
+              "path": "volumes: ddp-pgdata / ddp-miniodata / ddp-backups",
+              "cmd": "maintenance-worker 每日自动备份至 ddp-backups",
+              "cf": "核心数据资产完全自主可控",
+              "details": "PostgreSQL 强口令隔离在内网；Redis 提供滑动窗口限流；MinIO 挂载本地大容量磁盘并通过 s3.ddp.online 提供公网预签名直传。"
+            }
+          ],
+          "edges": [
+            { "from": "browser", "to": "cf_dns", "label": "HTTPS 访问 www.ddp.online" },
+            { "from": "cf_dns", "to": "cf_access", "label": "外层零信任校验" },
+            { "from": "cf_access", "to": "cf_pages", "label": "放行加载 SPA 静态资源" },
+            { "from": "browser", "to": "cf_tunnel", "label": "API 调用 api.ddp.online" },
+            { "from": "browser", "to": "cf_r2", "label": "预签名 PUT/GET (选 R2 时)", "warn": true },
+            { "from": "robot_client", "to": "cf_tunnel", "label": "心跳 & 分片上传" },
+            { "from": "cf_tunnel", "to": "cloudflared", "label": "QUIC 加密隧道" },
+            { "from": "cloudflared", "to": "host_api", "label": "内网转发 http://api:8000" },
+            { "from": "cloudflared", "to": "host_data", "label": "s3.ddp.online → minio:9000", "warn": true },
+            { "from": "host_api", "to": "host_data", "label": "PG / Redis / SigV4 签名" },
+            { "from": "host_workers", "to": "host_data", "label": "Outbox 消费 & 流式解析" }
+          ]
+        },
+
+        "sequence": {
+          "title": "C. 线上核心交互时序：鉴权与大文件分片预签名直传 (Sequence)",
+          "subtitle": "点击右上角「下一步 / 自动回放」，逐步检视请求如何在绕过 CF Worker 限制的同时完成安全闭环",
+          "lifelines": [
+            { "id": "l-user", "label": "浏览器 (www.ddp.online)", "x": 115, "tone": "primary" },
+            { "id": "l-pages", "label": "CF Access + Pages", "x": 335, "tone": "success" },
+            { "id": "l-api", "label": "FastAPI (api.ddp.online)", "x": 575, "tone": "primary" },
+            { "id": "l-s3", "label": "R2 / s3.ddp.online", "x": 805, "tone": "error" },
+            { "id": "l-worker", "label": "processing-worker", "x": 990, "tone": "warning" }
+          ],
+          "steps": [
+            { "idx": 1, "from": "l-user", "to": "l-pages", "y": 135, "label": "1. GET https://www.ddp.online (Access OTP 认证通过)", "note": "边缘返回 index.html 与 /static/* 静态产物，不消耗任何后端算力。" },
+            { "idx": 2, "from": "l-user", "to": "l-api", "y": 195, "label": "2. POST /api/v1/ingestion/sessions (Bearer JWT + X-Request-Id)", "note": "前端从 sessionStorage['ddp.access_token'] 读取令牌，携带 VITE_PROJECT_ID 发起分片初始化。" },
+            { "idx": 3, "from": "l-api", "to": "l-s3", "y": 255, "label": "3. create_multipart_upload & 本地计算 SigV4 预签名 URL", "note": "关键：API 的 DDP_S3_ENDPOINT 设为 https://s3.ddp.online (或 R2)，签名 Host 与浏览器访问域名严格一致！" },
+            { "idx": 4, "from": "l-api", "to": "l-user", "y": 315, "label": "4. 返回 upload_id + 16MB 分片 Presigned PUT URLs (TTL 900s)", "note": "响应附带 CORS 白名单头与 X-RateLimit-Remaining。" },
+            { "idx": 5, "from": "l-user", "to": "l-s3", "y": 380, "label": "5. PUT 分片字节流 + x-amz-checksum-sha256 直传存储", "note": "数据流不经过 CF Pages Functions，彻底避开 10ms CPU 上限，支持 GB 级 HDF5/MCAP 轨迹上传。" },
+            { "idx": 6, "from": "l-user", "to": "l-api", "y": 445, "label": "6. POST .../complete 完成合并 → 同事务写 PostgreSQL Outbox", "note": "后端核验 ETag 与分片完整性，登记 RawAsset 并写入 processing.run.requested 事件。" },
+            { "idx": 7, "from": "l-api", "to": "l-worker", "y": 510, "label": "7. Worker 抢占租约 (900s) → 调用 ddp_data 八阶段解析入库", "note": "processing-worker 从内网高速读取对象头尾提取 Canonical 元数据，推进 Episode 至训练就绪。" }
+          ]
+        },
+
+        "dataflow": {
+          "title": "D. 具身智能数据闭环全链路数据流 (Dataflow Lineage)",
+          "subtitle": "从真机/供应商/HF 原始数据接入，到清洗、标注质检、数据集导出、训练交付与模型缺口回流",
+          "groups": [
+            { "id": "d-in", "label": "1. 数据源与接入", "x": 20, "y": 40, "w": 230, "h": 530 },
+            { "id": "d-proc", "label": "2. 解析与标注质检", "x": 280, "y": 40, "w": 260, "h": 530 },
+            { "id": "d-ds", "label": "3. 数据集与训练交付", "x": 570, "y": 40, "w": 240, "h": 530 },
+            { "id": "d-loop", "label": "4. 评测与缺口闭环", "x": 840, "y": 40, "w": 220, "h": 530 }
+          ],
+          "nodes": [
+            { "id": "df_edge", "label": "真机采集会话", "sub": "CaptureSession / Device", "x": 40, "y": 95, "w": 190, "h": 70, "tone": "primary", "path": "backend/app/domain/collection", "cmd": "关联标定快照 CalibrationProfile", "cf": "API + Edge Agent", "details": "强制绑定设备 UUIDv7 与标定参数版本快照，保证传感器外参可追溯。" },
+            { "id": "df_sup", "label": "供应商到货批次", "sub": "Supplier Batch / Ledger", "x": 40, "y": 215, "w": 190, "h": 70, "tone": "primary", "path": "backend/app/domain/suppliers", "cmd": "到货抽检与结算台账 (Decimal)", "cf": "API 业务域", "details": "支持外部数据供应商分批交付、片段审核验收与精确到 4 位小数的结算台账。" },
+            { "id": "df_hf", "label": "外部数据源导入", "sub": "HuggingFace 流式拉取", "x": 40, "y": 335, "w": 190, "h": 70, "tone": "warning", "path": "backend/app/workers/datasources.py", "cmd": "边下载边校验 SHA256", "cf": "datasource-worker", "details": "异步拉取公开或受限 (DDP_HUGGINGFACE_TOKEN) 数据集文件存入对象存储。" },
+            { "id": "df_raw", "label": "RawAsset 原始资产", "sub": "S3 / R2 不可变对象", "x": 40, "y": 455, "w": 190, "h": 70, "tone": "error", "path": "backend/app/domain/ingestion", "cmd": "SHA256 内容寻址校验", "cf": "MinIO / Cloudflare R2", "details": "所有入口统一收敛为受管控的 RawAsset 与 MediaAsset 目录。" },
+            { "id": "df_can", "label": "八阶段解析与 Canonical", "sub": "ddp_data · Episode 切分", "x": 305, "y": 120, "w": 210, "h": 80, "tone": "warning", "path": "backend/app/workers/processing.py", "cmd": "区分 METADATA_ONLY 与训练就绪", "cf": "processing-worker", "details": "严格遵循 MEM-REQ-001：仅提取元数据的资产绝不冒充训练就绪，帧级对齐后生成可训练 Episode。" },
+            { "id": "df_ann", "label": "多模态标注与仲裁", "sub": "工作台 · 黄金题熔断 · IAA", "x": 305, "y": 255, "w": 210, "h": 85, "tone": "primary", "path": "backend/app/domain/annotation", "cmd": "支持 DPO 偏好对与 PRM 步骤级标注", "cf": "Web 视频标注台 + API", "details": "含黄金集盲测（连续两窗 <85% 自动熔断暂停派单）、多人一致性 IAA 计算与争议仲裁队列。" },
+            { "id": "df_qc", "label": "自动化质检运行", "sub": "QualityRun 规则评分", "x": 305, "y": 400, "w": 210, "h": 75, "tone": "warning", "path": "backend/app/workers/quality.py", "cmd": "消费 quality.run.requested", "cf": "quality-worker", "details": "对 Episode 与标注结果执行自动化质检门禁，输出质检报告。" },
+            { "id": "df_ver", "label": "DatasetVersion 版本固化", "sub": "Train/Val/Test 划分快照", "x": 590, "y": 135, "w": 200, "h": 80, "tone": "primary", "path": "backend/app/domain/datasets", "cmd": "来源对象可达性巡检 (domain-worker)", "cf": "PostgreSQL 快照", "details": "冻结不可变数据集版本，domain-worker 定期探测底层 S3 对象是否仍可达 (VALID/STALE/UNKNOWN)。" },
+            { "id": "df_exp", "label": "多格式异步导出", "sub": "LeRobot / Parquet / LLM PRM", "x": 590, "y": 270, "w": 200, "h": 80, "tone": "warning", "path": "backend/app/workers/exports.py", "cmd": "写回 S3 exports/ 前缀", "cf": "export-worker", "details": "流式打包成目标训练框架格式并生成短时预签名下载链接 (TTL 300s)。" },
+            { "id": "df_trn", "label": "训练需求匹配与交付", "sub": "TRN-002 强校验 · TrainingRun", "x": 590, "y": 405, "w": 200, "h": 80, "tone": "primary", "path": "backend/app/infrastructure/training_adapter_http.py", "cmd": "不满足需求默认 BLOCK 拦截", "cf": "API → 训练网关", "details": "核对模态、样本量与划分比例容差，通过后调用外部训练 Adapter 并建立血缘边。" },
+            { "id": "df_eval", "label": "模型注册与评测推理", "sub": "Model / Evaluation / Inference", "x": 858, "y": 175, "w": 185, "h": 85, "tone": "primary", "path": "backend/app/domain/modelops", "cmd": "HMAC 防重放回调验签", "cf": "API → 模型网关", "details": "追踪训练产出的模型权重、基准评测得分与在线推理任务表现。" },
+            { "id": "df_gap", "label": "数据缺口发现与回流", "sub": "DataGap → 新一轮采集需求", "x": 858, "y": 345, "w": 185, "h": 85, "tone": "success", "path": "apps/web/src/pages/models/DataGapPage.tsx", "cmd": "新鲜度阈值 24h 自动标 STALE", "cf": "闭环驱动下一轮采集", "details": "定位长尾失败场景与数据缺口，反向生成新一轮采集任务需求，形成完整具身数据飞轮。" }
+          ],
+          "edges": [
+            { "from": "df_edge", "to": "df_raw", "label": "分片上传" },
+            { "from": "df_sup", "to": "df_raw", "label": "批次入库" },
+            { "from": "df_hf", "to": "df_raw", "label": "流式导入" },
+            { "from": "df_raw", "to": "df_can", "label": "八阶段解析" },
+            { "from": "df_can", "to": "df_ann", "label": "派发标注" },
+            { "from": "df_ann", "to": "df_qc", "label": "提交质检" },
+            { "from": "df_qc", "to": "df_ver", "label": "准入编目" },
+            { "from": "df_ver", "to": "df_exp", "label": "异步导出" },
+            { "from": "df_exp", "to": "df_trn", "label": "TRN-002 交付" },
+            { "from": "df_trn", "to": "df_eval", "label": "产出模型" },
+            { "from": "df_eval", "to": "df_gap", "label": "薄弱场景定位" },
+            { "from": "df_gap", "to": "df_edge", "label": "驱动补采闭环", "warn": true }
+          ]
+        },
+
+        "workflow": {
+          "title": "E. 生产发布门禁、自动自检与回滚工作流 (Release & Rollback Workflow)",
+          "subtitle": "严格串联本地 10 道 check.sh 闸口、Alembic 独立迁移、fail-closed 安全自检与秒级回滚路径",
+          "groups": [
+            { "id": "w-ci", "label": "阶段 1：提交前门禁", "x": 25, "y": 55, "w": 240, "h": 490 },
+            { "id": "w-deploy", "label": "阶段 2：双端构建与迁移", "x": 295, "y": 55, "w": 265, "h": 490 },
+            { "id": "w-verify", "label": "阶段 3：启动自检与切流", "x": 590, "y": 55, "w": 235, "h": 490 },
+            { "id": "w-rollback", "label": "阶段 4：异常熔断回滚", "x": 855, "y": 55, "w": 205, "h": 490 }
+          ],
+          "nodes": [
+            { "id": "wf_check", "label": "1. make check 全量十道门禁", "sub": "ruff · pytest≥85% · vitest · secrets · parity", "x": 42, "y": 120, "w": 205, "h": 86, "tone": "primary", "path": "scripts/check.sh", "cmd": "bash scripts/check.sh", "cf": "本地 / GitHub Actions CI", "details": "涵盖后端 85% 覆盖率红线、前端 tsc+eslint+vitest、check_secrets.py 密钥扫描、Outbox 消费者自检与 OpenAPI 契约一致性。" },
+            { "id": "wf_backup", "label": "2. 发布前数据库快照备份", "sub": "pg_dump 落盘 + RPO 锚点核验", "x": 42, "y": 265, "w": 205, "h": 78, "tone": "warning", "path": "scripts/ops/backup-restore-drill.sh", "cmd": "pg_dump -Fc ddp > pre_release.dump", "cf": "宿主机持久化卷 ddp-backups", "details": "确保任何 DDL 迁移失败或业务回归时具备可验证的数据回退基线 (MEM-OPS-001)。" },
+            { "id": "wf_pages", "label": "3A. CF Pages 构建静态前端", "sub": "tsc --noEmit && vite build → dist/", "x": 315, "y": 120, "w": 225, "h": 82, "tone": "success", "path": "apps/web/package.json", "cmd": "自动生成预览 URL (*.pages.dev)", "cf": "Cloudflare Pages 构建机", "details": "注入 VITE_API_BASE 与 VITE_PROJECT_ID，生成不可变哈希静态包并推送全球边缘节点。" },
+            { "id": "wf_migrate", "label": "3B. 独立 migrate 容器执行 DDL", "sub": "alembic upgrade head (单实例串行)", "x": 315, "y": 265, "w": 225, "h": 82, "tone": "primary", "path": "docker-compose.yml:74-96", "cmd": "service_completed_successfully 后才拉起 API", "cf": "宿主机 Compose 编排", "details": "避免多副本 API 并发跑 DDL 锁冲突；若迁移失败，旧版 API 不被替换或新 API 直接拒绝启动。" },
+            { "id": "wf_sec", "label": "4. validate_runtime_security()", "sub": "Fail-Closed 启动期安全自检", "x": 608, "y": 120, "w": 200, "h": 82, "tone": "error", "path": "backend/app/core/config.py:507", "cmd": "拦截弱 JWT / 默认 MinIO 密码 / 通配 CORS", "cf": "API & Workers 启动入口", "details": "任一生产安全项不合规直接抛 RuntimeError 终止启动，绝不带病上线。" },
+            { "id": "wf_smoke", "label": "5. 线上冒烟探测与放量", "sub": "/health + /api/v1/platform/meta + 分片直传", "x": 608, "y": 265, "w": 200, "h": 82, "tone": "success", "path": "scripts/qa/readonly_endpoint_smoke.py", "cmd": "验证 www.ddp.online 全链路 200", "cf": "公网端到端验证", "details": "确认 HTTPS 证书、CORS 预检、SPA 深链刷新 (/assets) 与对象存储预签名上传全部正常。" },
+            { "id": "wf_live", "label": "6. 正式对外服务 & 持续巡检", "sub": "Prometheus 告警 + maintenance-worker", "x": 608, "y": 410, "w": 200, "h": 76, "tone": "success", "path": "infra/monitoring/alerts.yml", "cmd": "www.ddp.online 稳定运行", "cf": "CF Edge + 宿主机监控", "details": "开启每日自动备份、过期幂等键清扫与数据集底层对象可达性巡检。" },
+            { "id": "wf_rb_fe", "label": "前端一键回滚 (30s)", "sub": "CF Pages Rollback Deployment", "x": 872, "y": 145, "w": 172, "h": 82, "tone": "warning", "path": "Cloudflare Pages 控制台", "cmd": "无需重新编译，指针秒切", "cf": "Cloudflare Pages", "details": "前端白屏或静态接口不兼容时，一键切回上一版不可变构建快照。" },
+            { "id": "wf_rb_be", "label": "后端镜像回退与恢复", "sub": "切回旧 Tag + 按需恢复备份", "x": 872, "y": 295, "w": 172, "h": 82, "tone": "error", "path": "docs/ops/release-discipline.md", "cmd": "docker compose up -d <prev-tag>", "cf": "宿主机 Compose", "details": "回滚容器镜像版本，必要时按 backup-restore-runbook 恢复数据库。" }
+          ],
+          "edges": [
+            { "from": "wf_check", "to": "wf_backup", "label": "10/10 绿灯" },
+            { "from": "wf_backup", "to": "wf_pages", "label": "推送 Git 分支" },
+            { "from": "wf_backup", "to": "wf_migrate", "label": "拉取生产代码" },
+            { "from": "wf_migrate", "to": "wf_sec", "label": "DDL 迁移成功" },
+            { "from": "wf_pages", "to": "wf_smoke", "label": "边缘静态就绪" },
+            { "from": "wf_sec", "to": "wf_smoke", "label": "安全自检通过" },
+            { "from": "wf_smoke", "to": "wf_live", "label": "冒烟全部通过" },
+            { "from": "wf_smoke", "to": "wf_rb_fe", "label": "前端异常", "warn": true },
+            { "from": "wf_sec", "to": "wf_rb_be", "label": "自检/冒烟失败", "warn": true }
+          ]
+        }
+      }
+    };
+
+    // =========================================================================
+    // 2. CLOUDFLARE MATRIX & CODEBASE DIAGNOSTICS DATA
+    // =========================================================================
+    const CF_MATRIX = [
+      {
+        product: "Cloudflare Pages",
+        cat: "ready",
+        badge: "完全适配 · 首选",
+        tone: "success",
+        limits: "无限静态带宽 · 500次构建/月 · 2万文件 · 单文件≤25MiB",
+        evidence: "apps/web/vite.config.ts (打包纯静态 SPA 至 dist/static/)",
+        plan: "直接托管前端并绑定 www.ddp.online，原生支持 /index.html SPA 路由回退。"
+      },
+      {
+        product: "Cloudflare Tunnel (Zero Trust)",
+        cat: "ready",
+        badge: "完全适配 · 强烈推荐",
+        tone: "success",
+        limits: "免费计划无带宽硬顶 · 需宿主机运行轻量 cloudflared",
+        evidence: "docs/adr/0007-deployment-laptop.md (Ubuntu 笔记本无公网 IP)",
+        plan: "免公网 IP、免开路由器端口，将宿主机 api:8000 与 minio:9000 安全映射为 api.ddp.online 与 s3.ddp.online。"
+      },
+      {
+        product: "Cloudflare Access (Zero Trust)",
+        cat: "ready",
+        badge: "完全适配 · 安全补位",
+        tone: "success",
+        limits: "免费最多 50 个活跃用户席位 · 支持 Email OTP / GitHub",
+        evidence: "apps/web/src/services/authToken.ts (产品尚未内置前端登录页)",
+        plan: "为 www.ddp.online 增加边缘身份门禁，防止未登录控制台对公网裸奔。"
+      },
+      {
+        product: "Cloudflare R2 对象存储",
+        cat: "adapt",
+        badge: "条件适配 (≤10GB 免费)",
+        tone: "warning",
+        limits: "10GB/月免费 · 100万次A类写 · 1000万次B类读 · 需绑卡开通",
+        evidence: "backend/app/infrastructure/storage/s3.py (boto3 SigV4 兼容)",
+        plan: "演示或小数据量可直接替代 MinIO；若具身轨迹超 10GB，优先用自建 MinIO + s3.ddp.online 零费用方案。"
+      },
+      {
+        product: "Cloudflare Workers / Pages Functions",
+        cat: "adapt",
+        badge: "仅可作轻量代理",
+        tone: "warning",
+        limits: "10万次请求/天 · 每次请求 10ms CPU · 脚本体积≤3MiB · 请求体≤100MB",
+        evidence: "backend/requirements.txt (psycopg[binary]/boto3/rfc8785/ddp_data)",
+        plan: "绝对不可运行 FastAPI 后端；仅在需要同域 /api/* 转发时作薄代理（更推荐直接用 api.ddp.online 子域绕开配额）。"
+      },
+      {
+        product: "Cloudflare D1 数据库",
+        cat: "blocked",
+        badge: "不适配 · 硬阻塞",
+        tone: "error",
+        limits: "基于 SQLite · 单库免费 500MB · 无服务端连接池与行锁语义",
+        evidence: "docker-compose.yml (PostgreSQL 16) + 70+ Alembic 迁移 + pg_dump",
+        plan: "禁止迁移至 D1；继续在宿主机容器运行 PostgreSQL 16。"
+      },
+      {
+        product: "Cloudflare KV",
+        cat: "blocked",
+        badge: "不适配 · 硬阻塞",
+        tone: "error",
+        limits: "最终一致性 (~60s) · 每日仅 1,000 次免费写入",
+        evidence: "backend/app/infrastructure/rate_limit.py (高频原子滑动窗口限流)",
+        plan: "KV 无法支撑每次写请求的实时限流计数；继续使用宿主机 Redis 7.4（或单实例 memory 模式）。"
+      },
+      {
+        product: "Cloudflare Cron Triggers",
+        cat: "blocked",
+        badge: "不适配 · 硬阻塞",
+        tone: "error",
+        limits: "每账号最多 5 个触发器 · 共享免费版 CPU 时间限制",
+        evidence: "backend/app/workers/ (10 个常驻轮询/流式下载/pg_dump Worker)",
+        plan: "10 个 Python Worker 必须在宿主机 Docker Compose 中常驻运行。"
+      }
+    ];
+
+    const DIAGNOSTICS = [
+      {
+        id: "DIAG-01",
+        severity: "CRITICAL",
+        tone: "error",
+        title: "S3 预签名 URL 内网域名泄漏导致公网上传/预览 100% 失败",
+        file: "backend/app/infrastructure/storage/s3.py:38 & docker-compose.yml:111",
+        symptom: "docker-compose.yml 将 api 容器的 DDP_S3_ENDPOINT 硬编码为 http://minio:9000。浏览器从 https://www.ddp.online 请求上传或视频预览时，拿到的预签名 URL 指向 http://minio:9000/...，外网既无法解析主机名，又触发 HTTPS Mixed Content 拦截；且 SigV4 将 Host 纳入签名，反向代理无法中途改写域名。",
+        fix: "在生产覆盖文件 docker-compose.prod.yml 中将 api 服务的 DDP_S3_ENDPOINT 改为公网 HTTPS 地址 https://s3.ddp.online（通过 Cloudflare Tunnel 指向 minio:9000 并开启 CORS），或切换至 Cloudflare R2 HTTPS 端点；内部 10 个 Worker 可继续保留 http://minio:9000 走容器内网高速读写。"
+      },
+      {
+        id: "DIAG-02",
+        severity: "CRITICAL",
+        tone: "error",
+        title: "前端尚未内置登录页，且生产环境严禁 Header 后门或 Nginx 写死令牌",
+        file: "apps/web/src/services/authToken.ts:6 & infra/docker/nginx.conf.template:14",
+        symptom: "本地开发靠 nginx 注入 DDP_WEB_DEV_AUTH 或 DDP_LOCAL_HEADER_AUTH=true；但上公网若在边缘代理注入全局管理员 Bearer Token，等于任何访客直接拥有最高权限！而不注入时，浏览器 sessionStorage['ddp.access_token'] 为空，所有受保护接口返回 401。",
+        fix: "双层安全方案：① 外层启用免费 Cloudflare Access (Email OTP/GitHub) 拦截一切未授权访客；② 内层由管理员通过脚本签发个人 HS256 JWT，在控制台注入 sessionStorage.setItem('ddp.access_token', '<JWT>')（二期可花 0.5 天补一个轻量 Token 粘贴抽屉组件）。"
+      },
+      {
+        id: "DIAG-03",
+        severity: "HIGH",
+        tone: "warning",
+        title: "生产环境 Fail-Closed 安全自检拒绝启动条件（5 处红线）",
+        file: "backend/app/core/config.py:507-594 (validate_runtime_security)",
+        symptom: "只要 DDP_ENV != local，满足任一条件进程立即抛 RuntimeError 退出：① DDP_JWT_SECRET 长度 < 32 或为占位符；② DDP_S3_ACCESS_KEY/SECRET_KEY 为 minioadmin 或两者相同；③ DDP_LOCAL_HEADER_AUTH=true；④ DDP_CORS_ALLOWED_ORIGINS 含通配符 * 或带尾部斜杠；⑤ DDP_RATE_LIMIT_BACKEND=redis 但未配 URL。",
+        fix: "使用本页面「4. 生产配置生成器」一键导出严格合规的 .env.production 与 docker-compose.prod.yml（并用 openssl rand -hex 32 生成真实密钥）。"
+      },
+      {
+        id: "DIAG-04",
+        severity: "HIGH",
+        tone: "warning",
+        title: "前端项目隔离门禁：未配置 VITE_PROJECT_ID 时业务页提示缺少项目上下文",
+        file: "apps/web/src/hooks/useProjectId.ts:23 & ProjectScopeRequired.tsx",
+        symptom: "DDP 严格按项目隔离（ADR-0004），前端绝不伪造硬编码默认项目。若上线后直接访问 https://www.ddp.online/devices 而不带 ?project_id=...，且构建期未设 VITE_PROJECT_ID，页面会停留在「请指定项目」空状态。",
+        fix: "线上初始化首个真实项目拿到 UUID 后，在 Cloudflare Pages 环境变量中配置 VITE_PROJECT_ID=<真实项目UUID> 重新触发一次构建。"
+      },
+      {
+        id: "DIAG-05",
+        severity: "MEDIUM",
+        tone: "primary",
+        title: "静态资源目录 static/ 与前端路由 /assets 的命名空间保护",
+        file: "apps/web/vite.config.ts:11 (assetsDir: 'static')",
+        symptom: "产品中存在真实业务路由 /assets（数据资产清单）。仓库已专门将 Vite 产物目录改为 dist/static/ 防止静态服务器将 /assets 当目录 301/403。",
+        fix: "保持 vite.config.ts 的 assetsDir: 'static' 不变；Cloudflare Pages 缓存规则仅对 /static/* 设置长期不可变缓存（Cache-Control: public, max-age=31536000, immutable）。"
+      }
+    ];
+
+    // =========================================================================
+    // 3. SIX-PHASE STEP-BY-STEP CONSTRUCTION ROADMAP DATA
+    // =========================================================================
+    const ROADMAP_PHASES = [
+      {
+        id: "p1",
+        step: "Phase 1",
+        title: "账号、域名 NS 接入与零信任初始化",
+        duration: "约 15 分钟",
+        goal: "将 ddp.online 接入 Cloudflare 免费计划，打通全球 DNS、SSL 证书与 Zero Trust 控制台。",
+        steps: [
+          "登录 Cloudflare Dashboard → 点击 Add a domain → 输入 `ddp.online` → 选择最底部的 **Free ($0/month)** 计划。",
+          "前往 `ddp.online` 原域名注册商控制台，将权威 Nameservers (NS) 替换为 Cloudflare 分配的两条 `*.ns.cloudflare.com` 记录。",
+          "在 Cloudflare **SSL/TLS → Overview** 中将加密模式设为 **Full (strict)**；在 **Edge Certificates** 中开启 **Always Use HTTPS**、**Automatic HTTPS Rewrites** 与 **TLS 1.3**。",
+          "进入左侧 **Zero Trust**（首次进入选择 Free Plan，绑卡或零元开通 50 席免费额度），准备创建 Tunnel 与 Access 门禁。"
+        ],
+        cmdTitle: "本地验证 NS 是否已在公网生效",
+        cmd: "dig NS ddp.online +short\n# 预期输出两行 *.ns.cloudflare.com."
+      },
+      {
+        id: "p2",
+        step: "Phase 2",
+        title: "宿主机生产环境变量与 Docker Compose 覆盖加固",
+        duration: "约 25 分钟",
+        goal: "在 Ubuntu 笔记本（ADR-0007）或云 VPS 上拉起通过生产安全自检的 PG16 + Redis + MinIO + API + 10 Workers。",
+        steps: [
+          "在宿主机克隆仓库至 `/opt/ddp/DataPlatform`（或既有工作目录），切勿修改入库的 `docker-compose.yml`，而是新建 `.env` 与 `docker-compose.prod.yml`（从「4. 生产配置生成器」一键复制）。",
+          "用 `openssl rand -hex 32` 分别生成独立的 `DDP_JWT_SECRET`、`DDP_DB_PASSWORD`、`DDP_S3_SECRET_KEY` 与 `DDP_METRICS_ACCESS_TOKEN`（注意：`DDP_S3_ACCESS_KEY` 与 `SECRET_KEY` 不能相同，且不能为 `minioadmin`）。",
+          "确认 `.env` 中 `DDP_ENV=production`、`DDP_LOCAL_HEADER_AUTH=false`、`DDP_CORS_ALLOWED_ORIGINS=[\"https://www.ddp.online\"]`、`DDP_S3_ENDPOINT=https://s3.ddp.online`（或 R2 地址）。",
+          "启动全量服务并观察 `ddp-migrate` 是否退出码为 0、`ddp-api` 是否健康就绪。"
+        ],
+        cmdTitle: "宿主机生产栈构建与启动命令",
+        cmd: "cd /opt/ddp/DataPlatform\n# 使用主编排 + 生产覆盖文件启动\ndocker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app up -d --build\n\n# 验证迁移与 API 健康状态\ndocker compose ps\ncurl -fsS http://127.0.0.1:8000/health"
+      },
+      {
+        id: "p3",
+        step: "Phase 3",
+        title: "打通 api.ddp.online 与对象存储公网预签名 (s3.ddp.online / R2)",
+        duration: "约 20 分钟",
+        goal: "解决无公网 IP 穿透与 S3 分片直传预签名域名一致性（彻底消除 DIAG-01 阻塞）。",
+        steps: [
+          "【推荐零公网 IP 路径】在 Cloudflare Zero Trust → **Networks → Tunnels** → Create a tunnel（类型选 Cloudflared，命名为 `ddp-prod`），复制生成的 Tunnel Token。",
+          "在 Tunnel 的 **Public Hostname** 标签页添加两条公网映射（Cloudflare 会自动创建对应的代理 DNS 记录）：\n  • `api.ddp.online` → Service: `http://api:8000`\n  • `s3.ddp.online` → Service: `http://minio:9000`（若采用 Cloudflare R2 则无需此条）。",
+          "为对象存储配置跨域许可（CORS）：MinIO 默认允许跨域请求，若在 Cloudflare 层拦截 OPTIONS 或使用 R2，请在 R2 Bucket Settings → CORS Policy 中允许 Origin `https://www.ddp.online`、Methods `GET, PUT, HEAD, POST, DELETE`、AllowedHeaders `*`、ExposeHeaders `ETag`。",
+          "在 Cloudflare **Rules → Cache Rules** 中为 `Hostname equals s3.ddp.online` 和 `api.ddp.online` 添加规则：**Bypass cache**（防止动态 API 或大文件分片流被边缘误缓存）。"
+        ],
+        cmdTitle: "公网验证后端 API 与 CORS 预检",
+        cmd: "curl -i https://api.ddp.online/health\n\ncurl -i -X OPTIONS https://api.ddp.online/api/v1/platform/meta \\\n  -H 'Origin: https://www.ddp.online' \\\n  -H 'Access-Control-Request-Method: GET'"
+      },
+      {
+        id: "p4",
+        step: "Phase 4",
+        title: "Cloudflare Pages 部署前端并绑定 www.ddp.online",
+        duration: "约 15 分钟",
+        goal: "将 apps/web 编译发布至 Cloudflare 全球 CDN 边缘并绑定自定义主域名。",
+        steps: [
+          "进入 Cloudflare Dashboard → **Workers & Pages** → **Create** → 切换到 **Pages** 标签 → 连接 GitHub 仓库（或使用 Wrangler CLI 直接上传产物）。",
+          "填写构建参数（严格对照本仓库布局）：\n  • Project name: `ddp-web`\n  • Root directory: `apps/web`\n  • Build command: `npm run build`\n  • Build output directory: `dist`",
+          "在 Pages **Settings → Environment variables (Production)** 添加：\n  • `NODE_VERSION` = `20`\n  • `VITE_API_BASE` = `https://api.ddp.online`\n  • `VITE_PROJECT_ID` = `<初始化项目UUID，可首轮部署后填入>`",
+          "进入 Pages **Custom domains** → **Set up a custom domain** → 输入 `www.ddp.online` 激活；可选在 Cloudflare **Rules → Redirect Rules** 增加根域 `ddp.online/*` 301 跳转至 `https://www.ddp.online/$1`。"
+        ],
+        cmdTitle: "备选：不连 Git，本地一键 CLI 发布至 Cloudflare Pages",
+        cmd: "cd apps/web\nVITE_API_BASE=https://api.ddp.online npm run build\nnpx wrangler pages deploy dist --project-name=ddp-web --branch=main"
+      },
+      {
+        id: "p5",
+        step: "Phase 5",
+        title: "Cloudflare Access 边缘身份加固与首个管理员项目初始化",
+        duration: "约 15 分钟",
+        goal: "保护未内置登录页的前端控制台（消除 DIAG-02），签发业务 JWT 并创建首个真实项目。",
+        steps: [
+          "进入 Cloudflare Zero Trust → **Access → Applications** → Add an application → **Self-hosted**：\n  • Application domain: `www.ddp.online`\n  • Policy: Allow → Emails ending in `@你的团队域名`（或指定管理员邮箱白名单），开启 One-time PIN 登录。",
+          "在宿主机使用「4. 生产配置生成器 → 管理员 JWT 签发脚本」签发一枚有效期 12 小时的管理员 Bearer JWT。",
+          "调用 `POST https://api.ddp.online/api/v1/projects` 创建首个真实线上项目，获取返回的 `project_id` 并回填至 Cloudflare Pages 的 `VITE_PROJECT_ID` 环境变量。",
+          "打开浏览器访问 `https://www.ddp.online`，通过 Cloudflare Access 邮箱验证码进入页面后，在浏览器 DevTools Console 执行一次 `sessionStorage.setItem('ddp.access_token', '<你的JWT>'); location.reload();` 即可解锁全部读写功能。"
+        ],
+        cmdTitle: "通过管理员 JWT 验证线上业务元信息与项目列表",
+        cmd: "curl -fsS https://api.ddp.online/api/v1/platform/meta \\\n  -H \"Authorization: Bearer <YOUR_SIGNED_JWT>\" | python3 -m json.tool"
+      },
+      {
+        id: "p6",
+        step: "Phase 6",
+        title: "定时备份、监控告警与日常运维闭环",
+        duration: "约 15 分钟",
+        goal: "启用 maintenance-worker 自动备份、Prometheus 指标采集与备份恢复演练。",
+        steps: [
+          "在生产覆盖配置中开启 `DDP_MAINTENANCE_ENABLED=true` 与 `DDP_BACKUP_DIR=/backups`（挂载宿主机持久化目录），使 `maintenance-worker` 每日自动执行 `pg_dump` 并按 7 天保留期滚动清扫。",
+          "启动监控 profile（`prometheus` + `alertmanager` + `alert-receiver`），确认 `prometheus.prod.yml` 携带 `DDP_METRICS_ACCESS_TOKEN` 成功抓取 `api:8000/metrics`。",
+          "在首次对外交付业务数据前，执行一次仓库自带的备份恢复演练脚本 `scripts/ops/backup-restore-drill.sh`，验证 RPO/RTO 基线。"
+        ],
+        cmdTitle: "检查所有后台 Worker 与备份任务日志",
+        cmd: "docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=50 \\\n  api worker processing-worker maintenance-worker"
+      }
+    ];
+
+    // =========================================================================
+    // 4. CHECKLIST ITEMS DATA
+    // =========================================================================
+    const CHECKLIST_DATA = {
+      pre: [
+        { id: "c1", text: "本地执行 make check 十道门禁全部通过（含 check_secrets.py 零密钥泄露）" },
+        { id: "c2", text: "cd apps/web && npm run build 成功，dist/index.html 与 dist/static/* 产物齐全" },
+        { id: "c3", text: "生产 .env 已设置 DDP_ENV=production 且 DDP_LOCAL_HEADER_AUTH=false" },
+        { id: "c4", text: "DDP_JWT_SECRET 与 DDP_METRICS_ACCESS_TOKEN 均为 ≥32 字符独立高熵随机串" },
+        { id: "c5", text: "PostgreSQL 与 MinIO 生产凭据已替换默认 ddp/minioadmin，且 AK 与 SK 不相同" },
+        { id: "c6", text: "DDP_CORS_ALLOWED_ORIGINS 精确设为 [\"https://www.ddp.online\"]（无通配符 *、无尾斜杠）" },
+        { id: "c7", text: "api 容器的 DDP_S3_ENDPOINT 已覆盖为公网 HTTPS 域名（https://s3.ddp.online 或 R2）" },
+        { id: "c8", text: "Cloudflare SSL/TLS 已设为 Full (strict)，并开启 Always Use HTTPS" }
+      ],
+      post: [
+        { id: "p1", text: "浏览器访问 https://www.ddp.online 触发 Cloudflare Access 认证并正常加载首页" },
+        { id: "p2", text: "直接刷新深层路由 https://www.ddp.online/assets 返回前端资产页（无 403/404）" },
+        { id: "p3", text: "GET https://api.ddp.online/health 返回 HTTP 200 且携带安全响应头与 X-Request-Id" },
+        { id: "p4", text: "携带 Bearer JWT 请求 /api/v1/platform/meta 正常返回 phase=8 与模块清单" },
+        { id: "p5", text: "不携带 Token 请求受保护写接口稳定返回 401（确认无认证后门开启）" },
+        { id: "p6", text: "在采集/原始资产页发起一次真实小文件分片上传，验证浏览器 PUT 预签名直传 200" },
+        { id: "p7", text: "上传完成后 processing-worker 自动消费 Outbox 事件并推进解析状态（非卡在 CREATED）" },
+        { id: "p8", text: "Cloudflare Pages Deployments 确认保留至少 1 个可一键回滚的历史版本" }
+      ]
+    };
+
+    // =========================================================================
+    // 5. INTERACTIVE SVG COMPILER & PAN/ZOOM/TRACE ENGINE
+    // =========================================================================
+    let currentTab = "studio";
+    let currentDiag = "architecture";
+    let selectedNodeId = null;
+    let seqStep = 0; // 0 = show all, 1..N = highlight up to step
+    let seqTimer = null;
+
+    let viewState = { scale: 1, tx: 0, ty: 0, dragging: false, startX: 0, startY: 0 };
+
+    const svgEl = document.getElementById("archify-svg");
+    const viewportEl = document.getElementById("svg-viewport");
+    const svgContainer = document.getElementById("svg-container");
+
+    function applyTransform() {
+      viewportEl.setAttribute("transform", `translate(${viewState.tx}, ${viewState.ty}) scale(${viewState.scale})`);
+      document.getElementById("zoom-label").textContent = `${Math.round(viewState.scale * 100)}%`;
+    }
+
+    function resetView() {
+      viewState = { scale: 1, tx: 0, ty: 0, dragging: false, startX: 0, startY: 0 };
+      applyTransform();
+    }
+
+    svgContainer.addEventListener("pointerdown", (e) => {
+      if (e.target.closest(".node-group")) return;
+      viewState.dragging = true;
+      viewState.startX = e.clientX - viewState.tx;
+      viewState.startY = e.clientY - viewState.ty;
+      svgContainer.setAttribute("data-panning", "1");
+    });
+    window.addEventListener("pointermove", (e) => {
+      if (!viewState.dragging) return;
+      viewState.tx = e.clientX - viewState.startX;
+      viewState.ty = e.clientY - viewState.startY;
+      applyTransform();
+    });
+    window.addEventListener("pointerup", () => {
+      viewState.dragging = false;
+      svgContainer.removeAttribute("data-panning");
+    });
+    svgContainer.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.08 : 0.92;
+      const nextScale = Math.min(2.2, Math.max(0.55, viewState.scale * factor));
+      viewState.scale = nextScale;
+      applyTransform();
+    }, { passive: false });
+
+    document.getElementById("btn-zoom-in").onclick = () => {
+      viewState.scale = Math.min(2.2, viewState.scale * 1.15);
+      applyTransform();
+    };
+    document.getElementById("btn-zoom-out").onclick = () => {
+      viewState.scale = Math.max(0.55, viewState.scale / 1.15);
+      applyTransform();
+    };
+    document.getElementById("btn-reset-view").onclick = resetView;
+    document.getElementById("btn-clear-trace").onclick = () => {
+      selectedNodeId = null;
+      renderDiagram();
+    };
+
+    function toneStyles(tone) {
+      const map = {
+        primary: "var(--primary)",
+        success: "var(--success)",
+        warning: "var(--warning)",
+        error: "var(--error)"
+      };
+      return map[tone] || "var(--primary)";
+    }
+
+    function createSvgEl(tag, attrs = {}) {
+      const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        el.setAttribute(k, String(v));
+      }
+      return el;
+    }
+
+    function getAnchorPoint(node, targetNode) {
+      const cx = node.x + node.w / 2;
+      const cy = node.y + node.h / 2;
+      const tcx = targetNode.x + targetNode.w / 2;
+      const tcy = targetNode.y + targetNode.h / 2;
+      const dx = tcx - cx;
+      const dy = tcy - cy;
+      if (Math.abs(dx) > Math.abs(dy) * 1.15) {
+        return dx > 0
+          ? { x: node.x + node.w, y: cy }
+          : { x: node.x, y: cy };
+      }
+      return dy > 0
+        ? { x: cx, y: node.y + node.h }
+        : { x: cx, y: node.y };
+    }
+
+    function renderInspector(node, diagData) {
+      const box = document.getElementById("inspector-content");
+      const badge = document.getElementById("trace-badge");
+
+      if (!node) {
+        badge.textContent = "未选中节点（点击节点追踪上下游）";
+        badge.style.color = "var(--muted-foreground)";
+        box.innerHTML = `
+          <div class="space-y-2.5">
+            <div class="text-xs font-mono uppercase tracking-wider text-[var(--primary)]">Archify Inspector</div>
+            <h3 class="text-sm font-semibold m-0">${diagData.title}</h3>
+            <p class="text-xs text-[var(--muted-foreground)] leading-relaxed m-0">${diagData.subtitle}</p>
+            <div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--card-border)] text-xs space-y-1.5">
+              <div class="font-medium">交互操作指南：</div>
+              <ul class="list-disc pl-4 space-y-1 text-[var(--muted-foreground)]">
+                <li><strong>单击任意模块卡片</strong>：自动高亮与该节点直接相连的上游输入与下游依赖边，并在此处展示源码文件路径与部署判定。</li>
+                <li><strong>滚轮 / 拖拽画布</strong>：无损矢量缩放与自由平移。</li>
+                <li>切换顶部 <strong>A ~ E 五种视图</strong>，从代码结构、线上拓扑、时序、数据流到发布状态机全方位审视。</li>
+              </ul>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      const color = toneStyles(node.tone);
+      badge.textContent = `正在追踪: ${node.label}`;
+      badge.style.color = color;
+
+      const edges = diagData.edges || [];
+      const upstream = edges.filter(e => e.to === node.id).map(e => {
+        const n = diagData.nodes.find(x => x.id === e.from);
+        return n ? `${n.label} (${e.label})` : e.from;
+      });
+      const downstream = edges.filter(e => e.from === node.id).map(e => {
+        const n = diagData.nodes.find(x => x.id === e.to);
+        return n ? `${n.label} (${e.label})` : e.to;
+      });
+
+      box.innerHTML = `
+        <div class="space-y-3 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <span class="px-2 py-0.5 rounded font-mono" style="background: color-mix(in srgb, ${color} 18%, transparent); color: ${color};">
+              NODE · ${node.id}
+            </span>
+            <button onclick="selectedNodeId=null;renderDiagram();" class="text-[var(--muted-foreground)] hover:underline">取消选中</button>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold m-0">${node.label}</h3>
+            <div class="text-[var(--muted-foreground)] font-mono mt-0.5">${node.sub || ""}</div>
+          </div>
+          <div class="space-y-1.5 p-2.5 rounded-lg bg-[var(--background)] border border-[var(--card-border)]">
+            <div><span class="text-[var(--muted-foreground)]">代码/配置定位：</span><code class="font-mono break-all">${node.path}</code></div>
+            <div><span class="text-[var(--muted-foreground)]">运行/构建指令：</span><code class="font-mono break-all">${node.cmd}</code></div>
+            <div><span class="text-[var(--muted-foreground)]">线上部署归属：</span><strong style="color:${color}">${node.cf}</strong></div>
+          </div>
+          <p class="text-[var(--muted-foreground)] leading-relaxed m-0">${node.details}</p>
+          <div class="space-y-1.5 pt-1 border-t border-[var(--card-border)]">
+            <div class="font-medium">上游调用方 (${upstream.length})：</div>
+            <div class="text-[var(--muted-foreground)]">${upstream.length ? upstream.map(u => `<div>← ${u}</div>`).join("") : "（入口起点）"}</div>
+            <div class="font-medium pt-1">下游依赖方 (${downstream.length})：</div>
+            <div class="text-[var(--muted-foreground)]">${downstream.length ? downstream.map(d => `<div>→ ${d}</div>`).join("") : "（终端存储/汇点）"}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderSequenceDiagram(diag) {
+      viewportEl.innerHTML = "";
+      document.getElementById("diagram-desc").textContent = diag.subtitle;
+
+      const lifelines = diag.lifelines;
+      const steps = diag.steps;
+      const activeMax = seqStep === 0 ? steps.length : seqStep;
+
+      // Draw lifelines
+      lifelines.forEach(ll => {
+        const col = toneStyles(ll.tone);
+        const g = createSvgEl("g");
+        const line = createSvgEl("line", {
+          x1: ll.x, y1: 86, x2: ll.x, y2: 565,
+          stroke: "var(--border)", "stroke-width": 1.5, "stroke-dasharray": "5 5"
+        });
+        g.appendChild(line);
+
+        const rect = createSvgEl("rect", {
+          x: ll.x - 85, y: 32, width: 170, height: 44, rx: 8,
+          fill: "var(--card)", stroke: col, "stroke-width": 1.6
+        });
+        g.appendChild(rect);
+
+        const txt = createSvgEl("text", {
+          x: ll.x, y: 58, "text-anchor": "middle",
+          fill: "var(--foreground)", "font-size": "12", "font-weight": "600"
+        });
+        txt.textContent = ll.label;
+        g.appendChild(txt);
+        viewportEl.appendChild(g);
+      });
+
+      // Draw sequence arrows
+      const llMap = Object.fromEntries(lifelines.map(l => [l.id, l]));
+      steps.forEach(st => {
+        const fromL = llMap[st.from];
+        const toL = llMap[st.to];
+        const isCurrent = seqStep === st.idx;
+        const isVisible = st.idx <= activeMax;
+
+        const g = createSvgEl("g", {
+          class: `edge-group ${isVisible ? "" : "dimmed"}`,
+          style: "cursor: pointer;"
+        });
+        g.onclick = () => {
+          seqStep = st.idx;
+          updateSeqIndicator(diag);
+          renderSequenceDiagram(diag);
+        };
+
+        const dir = toL.x > fromL.x ? 1 : -1;
+        const x1 = fromL.x + dir * 6;
+        const x2 = toL.x - dir * 8;
+        const strokeCol = isCurrent ? "var(--primary)" : "var(--muted-foreground)";
+
+        const line = createSvgEl("line", {
+          x1, y1: st.y, x2, y2: st.y,
+          stroke: strokeCol,
+          "stroke-width": isCurrent ? 2.5 : 1.6,
+          "marker-end": isCurrent ? "url(#arrow-active)" : "url(#arrow-default)",
+          class: isCurrent ? "edge-animated" : ""
+        });
+        g.appendChild(line);
+
+        const midX = (x1 + x2) / 2;
+        const pillW = Math.min(430, st.label.length * 7.4 + 26);
+        const pill = createSvgEl("rect", {
+          x: midX - pillW / 2, y: st.y - 24, width: pillW, height: 19, rx: 4,
+          fill: "var(--card)", stroke: isCurrent ? "var(--primary)" : "var(--card-border)", "stroke-width": 1
+        });
+        g.appendChild(pill);
+
+        const lbl = createSvgEl("text", {
+          x: midX, y: st.y - 11, "text-anchor": "middle",
+          fill: isCurrent ? "var(--primary)" : "var(--foreground)",
+          "font-size": "11.5", "font-weight": isCurrent ? "600" : "500"
+        });
+        lbl.textContent = st.label;
+        g.appendChild(lbl);
+
+        viewportEl.appendChild(g);
+      });
+
+      // Inspector for sequence
+      const box = document.getElementById("inspector-content");
+      const currentObj = steps.find(s => s.idx === seqStep) || steps[steps.length - 1];
+      document.getElementById("trace-badge").textContent = seqStep === 0 ? "展示全部 7 步时序（可点击任意箭头）" : `当前聚焦步骤 ${seqStep} / ${steps.length}`;
+      box.innerHTML = `
+        <div class="space-y-2.5 text-xs">
+          <div class="font-mono text-[var(--primary)]">SEQUENCE TRACE</div>
+          <h3 class="text-sm font-semibold m-0">${diag.title}</h3>
+          <div class="space-y-2 pt-1">
+            ${steps.map(s => `
+              <div onclick="seqStep=${s.idx};updateSeqIndicator(ARCHIFY_IR.diagrams.sequence);renderDiagram();"
+                   class="p-2 rounded border cursor-pointer transition ${seqStep === s.idx ? 'border-[var(--primary)] bg-[var(--background)]' : 'border-[var(--card-border)] opacity-85 hover:opacity-100'}">
+                <div class="font-semibold">${s.label}</div>
+                <div class="text-[var(--muted-foreground)] mt-0.5">${s.note}</div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function updateSeqIndicator(diag) {
+      const ind = document.getElementById("seq-indicator");
+      ind.textContent = seqStep === 0 ? `全部 (${diag.steps.length}步)` : `第 ${seqStep}/${diag.steps.length} 步`;
+    }
+
+    function renderGraphDiagram(diag) {
+      viewportEl.innerHTML = "";
+      document.getElementById("diagram-desc").textContent = diag.subtitle;
+
+      const nodeMap = Object.fromEntries(diag.nodes.map(n => [n.id, n]));
+      const connectedNodes = new Set();
+      if (selectedNodeId) {
+        connectedNodes.add(selectedNodeId);
+        diag.edges.forEach(e => {
+          if (e.from === selectedNodeId) connectedNodes.add(e.to);
+          if (e.to === selectedNodeId) connectedNodes.add(e.from);
+        });
+      }
+
+      // 1. Groups
+      (diag.groups || []).forEach(grp => {
+        const g = createSvgEl("g");
+        const rect = createSvgEl("rect", {
+          x: grp.x, y: grp.y, width: grp.w, height: grp.h, rx: 12,
+          fill: "color-mix(in srgb, var(--foreground) 3%, transparent)",
+          stroke: "var(--border)", "stroke-width": 1.2, "stroke-dasharray": "6 4"
+        });
+        const label = createSvgEl("text", {
+          x: grp.x + 14, y: grp.y + 22,
+          fill: "var(--muted-foreground)", "font-size": "12", "font-weight": "600"
+        });
+        label.textContent = grp.label;
+        g.appendChild(rect);
+        g.appendChild(label);
+        viewportEl.appendChild(g);
+      });
+
+      // 2. Edges
+      diag.edges.forEach(e => {
+        const src = nodeMap[e.from];
+        const dst = nodeMap[e.to];
+        if (!src || !dst) return;
+
+        const isRelated = !selectedNodeId || e.from === selectedNodeId || e.to === selectedNodeId;
+        const isHighlighted = selectedNodeId && (e.from === selectedNodeId || e.to === selectedNodeId);
+
+        const p1 = getAnchorPoint(src, dst);
+        const p2 = getAnchorPoint(dst, src);
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const cx1 = p1.x + dx * 0.42;
+        const cy1 = p1.y;
+        const cx2 = p2.x - dx * 0.42;
+        const cy2 = p2.y;
+
+        const g = createSvgEl("g", { class: `edge-group ${isRelated ? "" : "dimmed"}` });
+        const strokeColor = e.warn
+          ? "var(--warning)"
+          : (isHighlighted ? "var(--primary)" : "var(--muted-foreground)");
+        const marker = e.warn
+          ? "url(#arrow-warn)"
+          : (isHighlighted ? "url(#arrow-active)" : "url(#arrow-default)");
+
+        const path = createSvgEl("path", {
+          d: `M ${p1.x} ${p1.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${p2.x} ${p2.y}`,
+          fill: "none",
+          stroke: strokeColor,
+          "stroke-width": isHighlighted ? 2.4 : 1.5,
+          "marker-end": marker,
+          class: (isHighlighted || e.warn) ? "edge-animated" : ""
+        });
+        g.appendChild(path);
+
+        if (isHighlighted || !selectedNodeId) {
+          const lx = (p1.x + p2.x) / 2;
+          const ly = (p1.y + p2.y) / 2 - 5;
+          const bgW = e.label.length * 6.8 + 14;
+          const bg = createSvgEl("rect", {
+            x: lx - bgW / 2, y: ly - 11, width: bgW, height: 16, rx: 4,
+            fill: "var(--card)", opacity: "0.92"
+          });
+          const txt = createSvgEl("text", {
+            x: lx, y: ly + 1, "text-anchor": "middle",
+            fill: isHighlighted ? strokeColor : "var(--muted-foreground)",
+            "font-size": "10.5", "font-weight": isHighlighted ? "600" : "400"
+          });
+          txt.textContent = e.label;
+          g.appendChild(bg);
+          g.appendChild(txt);
+        }
+
+        viewportEl.appendChild(g);
+      });
+
+      // 3. Nodes
+      diag.nodes.forEach(n => {
+        const col = toneStyles(n.tone);
+        const isSelected = selectedNodeId === n.id;
+        const isDimmed = selectedNodeId && !connectedNodes.has(n.id);
+
+        const g = createSvgEl("g", {
+          class: `node-group ${isDimmed ? "dimmed" : ""}`
+        });
+        g.onclick = (ev) => {
+          ev.stopPropagation();
+          selectedNodeId = selectedNodeId === n.id ? null : n.id;
+          renderDiagram();
+        };
+
+        const card = createSvgEl("rect", {
+          x: n.x, y: n.y, width: n.w, height: n.h, rx: 9,
+          fill: "var(--card)",
+          stroke: isSelected ? col : "color-mix(in srgb, " + col + " 55%, var(--border))",
+          "stroke-width": isSelected ? 2.6 : 1.4
+        });
+        g.appendChild(card);
+
+        const accent = createSvgEl("rect", {
+          x: n.x, y: n.y, width: 5, height: n.h, rx: 3,
+          fill: col
+        });
+        g.appendChild(accent);
+
+        const title = createSvgEl("text", {
+          x: n.x + 14, y: n.y + 25,
+          fill: "var(--foreground)", "font-size": "12.5", "font-weight": "600"
+        });
+        title.textContent = n.label;
+        g.appendChild(title);
+
+        // Wrap subtitle up to 2 lines if long
+        const subText = n.sub || "";
+        const maxChars = Math.floor((n.w - 22) / 6.5);
+        const line1 = subText.slice(0, maxChars);
+        const line2 = subText.slice(maxChars, maxChars * 2);
+
+        const sub1 = createSvgEl("text", {
+          x: n.x + 14, y: n.y + 44,
+          fill: "var(--muted-foreground)", "font-size": "11"
+        });
+        sub1.textContent = line1;
+        g.appendChild(sub1);
+
+        if (line2) {
+          const sub2 = createSvgEl("text", {
+            x: n.x + 14, y: n.y + 59,
+            fill: "var(--muted-foreground)", "font-size": "10.5"
+          });
+          sub2.textContent = line2 + (subText.length > maxChars * 2 ? "…" : "");
+          g.appendChild(sub2);
+        }
+
+        viewportEl.appendChild(g);
+      });
+
+      const activeNode = selectedNodeId ? nodeMap[selectedNodeId] : null;
+      renderInspector(activeNode, diag);
+    }
+
+    function renderDiagram() {
+      const diag = ARCHIFY_IR.diagrams[currentDiag];
+      const seqControls = document.getElementById("seq-controls");
+
+      document.querySelectorAll(".diag-btn").forEach(btn => {
+        const active = btn.dataset.diag === currentDiag;
+        btn.style.background = active ? "color-mix(in srgb, var(--primary) 18%, transparent)" : "transparent";
+        btn.style.color = active ? "var(--primary)" : "var(--muted-foreground)";
+      });
+
+      if (currentDiag === "sequence") {
+        seqControls.classList.remove("hidden");
+        seqControls.classList.add("flex");
+        updateSeqIndicator(diag);
+        renderSequenceDiagram(diag);
+      } else {
+        seqControls.classList.add("hidden");
+        seqControls.classList.remove("flex");
+        if (seqTimer) { clearInterval(seqTimer); seqTimer = null; }
+        renderGraphDiagram(diag);
+      }
+    }
+
+    // Sequence player buttons
+    document.getElementById("seq-prev").onclick = () => {
+      const total = ARCHIFY_IR.diagrams.sequence.steps.length;
+      seqStep = seqStep <= 1 ? total : seqStep - 1;
+      renderDiagram();
+    };
+    document.getElementById("seq-next").onclick = () => {
+      const total = ARCHIFY_IR.diagrams.sequence.steps.length;
+      seqStep = seqStep >= total ? 0 : seqStep + 1;
+      renderDiagram();
+    };
+    document.getElementById("seq-play").onclick = (e) => {
+      if (seqTimer) {
+        clearInterval(seqTimer);
+        seqTimer = null;
+        e.target.textContent = "自动回放";
+        return;
+      }
+      seqStep = 1;
+      renderDiagram();
+      e.target.textContent = "停止回放";
+      seqTimer = setInterval(() => {
+        const total = ARCHIFY_IR.diagrams.sequence.steps.length;
+        seqStep = seqStep >= total ? 1 : seqStep + 1;
+        renderDiagram();
+      }, 1800);
+    };
+
+    document.querySelectorAll(".diag-btn").forEach(btn => {
+      btn.onclick = () => {
+        currentDiag = btn.dataset.diag;
+        selectedNodeId = null;
+        seqStep = 0;
+        resetView();
+        renderDiagram();
+      };
+    });
+
+    // =========================================================================
+    // 6. RENDER FEASIBILITY MATRIX & DIAGNOSTICS
+    // =========================================================================
+    let cfFilter = "all";
+    function renderFeasibility() {
+      document.querySelectorAll(".cf-filter-btn").forEach(btn => {
+        const active = btn.dataset.filter === cfFilter;
+        btn.style.background = active ? "color-mix(in srgb, var(--primary) 18%, transparent)" : "transparent";
+        btn.style.color = active ? "var(--primary)" : "var(--foreground)";
+      });
+
+      const rows = CF_MATRIX.filter(r => cfFilter === "all" || r.cat === cfFilter);
+      document.getElementById("cf-matrix-body").innerHTML = rows.map(r => {
+        const col = toneStyles(r.tone);
+        return `
+          <tr>
+            <td class="py-3 px-3 font-semibold whitespace-nowrap">${r.product}</td>
+            <td class="py-3 px-3 whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded font-medium" style="background: color-mix(in srgb, ${col} 16%, transparent); color: ${col};">
+                ${r.badge}
+              </span>
+            </td>
+            <td class="py-3 px-3 text-[var(--muted-foreground)]">${r.limits}</td>
+            <td class="py-3 px-3 font-mono text-[var(--muted-foreground)]">${r.evidence}</td>
+            <td class="py-3 px-3">${r.plan}</td>
+          </tr>
+        `;
+      }).join("");
+
+      document.getElementById("diagnostics-list").innerHTML = DIAGNOSTICS.map(d => {
+        const col = toneStyles(d.tone);
+        return `
+          <div class="p-3.5 rounded-lg bg-[var(--background)] border border-[var(--card-border)] space-y-2 text-xs">
+            <div class="flex items-center justify-between gap-2">
+              <span class="px-2 py-0.5 rounded font-mono font-semibold" style="background: color-mix(in srgb, ${col} 18%, transparent); color: ${col};">
+                ${d.id} · ${d.severity}
+              </span>
+              <code class="font-mono text-[var(--muted-foreground)] truncate">${d.file}</code>
+            </div>
+            <div class="font-semibold text-sm">${d.title}</div>
+            <div class="text-[var(--muted-foreground)] leading-relaxed"><strong>现象根因：</strong>${d.symptom}</div>
+            <div class="leading-relaxed pt-1 border-t border-[var(--card-border)]"><strong style="color:var(--success);">落地方案：</strong>${d.fix}</div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    document.querySelectorAll(".cf-filter-btn").forEach(btn => {
+      btn.onclick = () => {
+        cfFilter = btn.dataset.filter;
+        renderFeasibility();
+      };
+    });
+
+    // =========================================================================
+    // 7. RENDER SIX-PHASE ROADMAP
+    // =========================================================================
+    let activePhaseId = "p1";
+    function renderRoadmap() {
+      document.getElementById("phase-nav").innerHTML = ROADMAP_PHASES.map(p => {
+        const active = p.id === activePhaseId;
+        return `
+          <button data-pid="${p.id}" class="phase-item w-full text-left p-3 rounded-lg border transition block ${active ? 'border-[var(--primary)] bg-[var(--background)]' : 'border-transparent hover:bg-[var(--background)]'}">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-mono font-semibold" style="color: ${active ? 'var(--primary)' : 'var(--muted-foreground)'};">${p.step}</span>
+              <span class="text-[var(--muted-foreground)]">${p.duration}</span>
+            </div>
+            <div class="text-xs font-semibold mt-1">${p.title}</div>
+          </button>
+        `;
+      }).join("");
+
+      document.querySelectorAll(".phase-item").forEach(el => {
+        el.onclick = () => {
+          activePhaseId = el.dataset.pid;
+          renderRoadmap();
+        };
+      });
+
+      const p = ROADMAP_PHASES.find(x => x.id === activePhaseId);
+      document.getElementById("phase-detail").innerHTML = `
+        <div class="space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-[var(--card-border)]">
+            <div>
+              <span class="text-xs font-mono text-[var(--primary)]">${p.step} · ${p.duration}</span>
+              <h3 class="text-base font-semibold m-0 mt-0.5">${p.title}</h3>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-[var(--background)] border border-[var(--card-border)] text-xs">
+            <strong>阶段目标：</strong><span class="text-[var(--muted-foreground)]">${p.goal}</span>
+          </div>
+          <div class="space-y-2.5 text-xs leading-relaxed">
+            <div class="font-semibold">执行步骤清单：</div>
+            <ol class="list-decimal pl-5 space-y-2">
+              ${p.steps.map(s => `<li class="whitespace-pre-line">${s}</li>`).join("")}
+            </ol>
+          </div>
+          <div class="space-y-1.5 pt-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-semibold text-[var(--muted-foreground)]">${p.cmdTitle}</span>
+              <button id="copy-phase-cmd" class="px-2.5 py-1 rounded border border-[var(--border)] text-xs">复制命令</button>
+            </div>
+            <pre class="code-scroll p-3.5 rounded-lg bg-[var(--background)] border border-[var(--border)] text-xs font-mono overflow-x-auto m-0">${p.cmd}</pre>
+          </div>
+        </div>
+      `;
+      document.getElementById("copy-phase-cmd").onclick = (ev) => {
+        navigator.clipboard.writeText(p.cmd);
+        ev.target.textContent = "已复制 ✓";
+        setTimeout(() => { ev.target.textContent = "复制命令"; }, 1500);
+      };
+    }
+
+    // =========================================================================
+    // 8. INTERACTIVE CONFIG GENERATOR
+    // =========================================================================
+    let currentCfgFile = "env";
+    function buildGeneratedConfig() {
+      const host = document.getElementById("cfg-host").value;
+      const storage = document.getElementById("cfg-storage").value;
+      const routing = document.getElementById("cfg-routing").value;
+      const domain = (document.getElementById("cfg-domain").value || "www.ddp.online").trim();
+      const rootDomain = domain.replace(/^www\./, "");
+      const apiOrigin = `https://api.${rootDomain}`;
+      const s3PublicUrl = storage === "r2"
+        ? "https://<YOUR_CF_ACCOUNT_ID>.r2.cloudflarestorage.com"
+        : `https://s3.${rootDomain}`;
+      const s3Region = storage === "r2" ? "auto" : "us-east-1";
+
+      const files = {
+        env: `# 生产环境变量模板 (.env) —— 严禁提交 Git！
+# 已严格对齐 backend/app/core/config.py::validate_runtime_security()
+
+DDP_ENV=production
+DDP_APP_NAME=DDP
+DDP_APP_VERSION=0.2.0
+DDP_LOG_LEVEL=INFO
+DDP_PLATFORM_PHASE=8
+
+# 1. 安全与 JWT 认证（非 local 环境必须 >=32 字符且禁止占位符，禁止开启 Header 认证）
+DDP_LOCAL_HEADER_AUTH=false
+DDP_JWT_SECRET=<RUN_openssl_rand_-hex_32_FOR_JWT>
+DDP_JWT_ISSUER=ddp
+DDP_JWT_AUDIENCE=ddp-api
+DDP_JWT_EXPIRE_MINUTES=720
+DDP_JWT_LEEWAY_SECONDS=30
+
+# 2. 数据库与缓存凭据（供 docker-compose.prod.yml 插值注入）
+DDP_DB_USER=ddp_prod
+DDP_DB_PASSWORD=<RUN_openssl_rand_-hex_24_FOR_PG>
+DDP_DB_NAME=ddp
+
+DDP_RATE_LIMIT_ENABLED=true
+DDP_RATE_LIMIT_BACKEND=redis
+DDP_RATE_LIMIT_REDIS_URL=redis://redis:6379/0
+DDP_RATE_LIMIT_TRUST_FORWARDED_FOR=true
+
+# 3. 对象存储（注意：AccessKey 与 SecretKey 不得相同，且不得为 minioadmin）
+DDP_S3_ENDPOINT=${s3PublicUrl}
+DDP_S3_ACCESS_KEY=ddp_prod_storage_ak
+DDP_S3_SECRET_KEY=<RUN_openssl_rand_-hex_24_FOR_S3>
+DDP_S3_BUCKET=ddp-raw
+DDP_S3_REGION=${s3Region}
+
+# 4. CORS 与安全头（非 local 环境禁止 *，不得包含尾斜杠）
+DDP_CORS_ALLOWED_ORIGINS=["https://${domain}"]
+DDP_CORS_ALLOW_CREDENTIALS=false
+DDP_HSTS_ENABLED=true
+DDP_HSTS_MAX_AGE_SECONDS=31536000
+
+# 5. Prometheus 指标抓取保护（>=32 字符）与每日维护备份
+DDP_METRICS_ACCESS_TOKEN=<RUN_openssl_rand_-hex_32_FOR_METRICS>
+DDP_MAINTENANCE_ENABLED=true
+DDP_BACKUP_DIR=/backups
+DDP_BACKUP_RETENTION_DAYS=7
+
+# 6. 出站 SSRF 守卫（生产环境必须全部保持 false）
+DDP_TRAINING_ADAPTER_ALLOW_PRIVATE=false
+DDP_MODEL_ADAPTER_ALLOW_PRIVATE=false
+DDP_WEBHOOK_OUTBOUND_ALLOW_PRIVATE=false`,
+
+        compose: `# docker-compose.prod.yml —— 生产覆盖配置
+# 启动命令：docker compose -f docker-compose.yml -f docker-compose.prod.yml --profile app up -d --build
+# 作用：覆盖主文件写死的 ddp:ddp 默认密码及 http://minio:9000 内网预签名地址（修复 DIAG-01）
+
+services:
+  postgres:
+    ports: !override []   # 生产不向宿主机公网暴露 55432
+  redis:
+    ports: !override []   # 生产不暴露 6379
+  minio:
+    ports: !override []   # 通过 Tunnel 或内网访问，不直接裸露 9000/9001
+
+  migrate:
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://\${DDP_DB_USER}:\${DDP_DB_PASSWORD}@postgres:5432/\${DDP_DB_NAME}
+
+  api:
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://\${DDP_DB_USER}:\${DDP_DB_PASSWORD}@postgres:5432/\${DDP_DB_NAME}
+      # 关键：API 生成浏览器分片预签名 URL，必须使用公网可达 HTTPS 域名！
+      DDP_S3_ENDPOINT: ${s3PublicUrl}
+      DDP_RATE_LIMIT_REDIS_URL: redis://redis:6379/0
+
+  # 10 个后台 Worker：统一注入生产数据库密码；对象存储走内网（MinIO）或 R2
+  worker: &worker_env
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://\${DDP_DB_USER}:\${DDP_DB_PASSWORD}@postgres:5432/\${DDP_DB_NAME}
+      DDP_S3_ENDPOINT: ${storage === "r2" ? s3PublicUrl : "http://minio:9000"}
+  datasource-worker: *worker_env
+  ingestion-job-worker: *worker_env
+  processing-worker: *worker_env
+  export-worker: *worker_env
+  quality-worker: *worker_env
+  domain-worker: *worker_env
+  usage-snapshot-worker: *worker_env
+  webhook-outbound-worker: *worker_env
+  maintenance-worker:
+    volumes:
+      - ddp-backups:/backups
+    environment:
+      DDP_DATABASE_URL: postgresql+psycopg://\${DDP_DB_USER}:\${DDP_DB_PASSWORD}@postgres:5432/\${DDP_DB_NAME}
+      DDP_S3_ENDPOINT: ${storage === "r2" ? s3PublicUrl : "http://minio:9000"}
+      DDP_MAINTENANCE_ENABLED: "true"
+      DDP_BACKUP_DIR: /backups
+${host === "tunnel" ? `
+  cloudflared:
+    image: cloudflare/cloudflared:2025.2.0
+    container_name: ddp-cloudflared
+    profiles: ["app"]
+    command: tunnel --no-autoupdate run --token \${CF_TUNNEL_TOKEN}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped` : ""}`,
+
+        edge: host === "tunnel"
+          ? `# Cloudflare Tunnel (Zero Trust) 路由配置说明
+# 路径：Cloudflare Zero Trust -> Networks -> Tunnels -> ddp-prod -> Public Hostnames
+
+1. API 网关子域：
+   - Subdomain: api
+   - Domain: ${rootDomain}
+   - Service Type: HTTP
+   - URL: api:8000
+
+${storage === "minio_tunnel" ? `2. MinIO 预签名直传子域（解决分片上传 Host 签名一致）：
+   - Subdomain: s3
+   - Domain: ${rootDomain}
+   - Service Type: HTTP
+   - URL: minio:9000
+   - 附加设置：Cloudflare Rules -> Cache Rules -> Hostname equals s3.${rootDomain} -> Bypass Cache` : `# 当前已选择 Cloudflare R2，无需为 MinIO 配置 s3.${rootDomain} 隧道`}`
+          : `# Nginx 反向代理配置 (/etc/nginx/conf.d/ddp.conf —— 适用于公网云 VPS)
+server {
+    listen 443 ssl http2;
+    server_name api.${rootDomain};
+
+    ssl_certificate     /etc/ssl/cloudflare/origin.pem;
+    ssl_certificate_key /etc/ssl/cloudflare/origin.key;
+    client_max_body_size 64m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}`,
+
+        pages: `# Cloudflare Pages 构建与配置清单 (apps/web)
+# 构建设置 (Cloudflare Dashboard -> Workers & Pages -> ddp-web)：
+Root directory:         apps/web
+Build command:          npm run build
+Build output directory: dist
+
+# Production 环境变量：
+NODE_VERSION = 20
+VITE_API_BASE = ${routing === "subdomain" ? apiOrigin : ""}
+VITE_PROJECT_ID = <填入线上初始化首个项目的 UUID>
+
+# apps/web/wrangler.toml 示例：
+name = "ddp-web"
+compatibility_date = "2025-01-01"
+pages_build_output_dir = "dist"
+${routing === "pages_fn" ? `
+# 同域代理模式（apps/web/functions/api/[[path]].ts）—— 注意每日 10 万次免费请求上限：
+export const onRequest: PagesFunction<{ DDP_API_ORIGIN: string }> = async (ctx) => {
+  const incoming = new URL(ctx.request.url);
+  const upstream = new URL(incoming.pathname + incoming.search, ctx.env.DDP_API_ORIGIN);
+  const headers = new Headers(ctx.request.headers);
+  headers.set("Host", upstream.host);
+  return fetch(upstream.toString(), {
+    method: ctx.request.method,
+    headers,
+    body: ["GET", "HEAD"].includes(ctx.request.method) ? undefined : ctx.request.body,
+    redirect: "manual",
+  });
+};` : "\n# 当前采用推荐的子域直连模式 (VITE_API_BASE)，静态与 API 完全解耦，0 消耗 Workers 配额！"}`,
+
+        jwt: `# 使用新增的 scripts/ops/issue_jwt.py 幂等登记用户并签发合规 HS256 JWT
+# 严格对齐 backend/app/domain/identity/models.py (sub 必须为 UUID，platform_role 为 member 或 admin)
+
+backend/.venv/bin/python scripts/ops/issue_jwt.py \\
+  --display-name "开源管理员" \\
+  --role admin \\
+  --hours 72
+
+# 纯离线签发模式（无需直连数据库，指定已有用户 UUID）：
+backend/.venv/bin/python scripts/ops/issue_jwt.py \\
+  --user-id 01960000-0000-7000-8000-000000000001 \\
+  --role admin \\
+  --no-db
+
+# 登录方式：打开 https://${domain} -> 点击右上角「轻量登录」按钮 -> 粘贴令牌点击「验证并登录」！`
+      };
+
+      document.querySelectorAll(".cfile-btn").forEach(btn => {
+        const active = btn.dataset.cfile === currentCfgFile;
+        btn.style.background = active ? "color-mix(in srgb, var(--primary) 18%, transparent)" : "var(--background)";
+        btn.style.color = active ? "var(--primary)" : "var(--foreground)";
+        btn.style.border = "1px solid var(--border)";
+      });
+
+      document.getElementById("cfg-code-output").textContent = files[currentCfgFile];
+    }
+
+    ["cfg-host", "cfg-storage", "cfg-routing", "cfg-domain"].forEach(id => {
+      document.getElementById(id).addEventListener("input", buildGeneratedConfig);
+      document.getElementById(id).addEventListener("change", buildGeneratedConfig);
+    });
+    document.querySelectorAll(".cfile-btn").forEach(btn => {
+      btn.onclick = () => {
+        currentCfgFile = btn.dataset.cfile;
+        buildGeneratedConfig();
+      };
+    });
+    document.getElementById("btn-copy-cfg").onclick = (ev) => {
+      navigator.clipboard.writeText(document.getElementById("cfg-code-output").textContent);
+      ev.target.textContent = "已复制 ✓";
+      setTimeout(() => { ev.target.textContent = "复制当前配置"; }, 1500);
+    };
+
+    // =========================================================================
+    // 9. INTERACTIVE CHECKLIST WITH LOCALSTORAGE PERSISTENCE
+    // =========================================================================
+    const CHECK_STORAGE_KEY = "ddp_archify_online_checks_v1";
+    function loadChecks() {
+      try { return JSON.parse(localStorage.getItem(CHECK_STORAGE_KEY) || "{}"); }
+      catch { return {}; }
+    }
+    function saveChecks(state) {
+      try { localStorage.setItem(CHECK_STORAGE_KEY, JSON.stringify(state)); } catch {}
+    }
+    function renderChecklist() {
+      const state = loadChecks();
+      const allIds = [...CHECKLIST_DATA.pre, ...CHECKLIST_DATA.post].map(i => i.id);
+      const doneCount = allIds.filter(id => state[id]).length;
+      const pct = Math.round((doneCount / allIds.length) * 100);
+
+      document.getElementById("checklist-progress-text").textContent = `${doneCount} / ${allIds.length} 已完成 (${pct}%)`;
+      document.getElementById("checklist-progress-bar").style.width = `${pct}%`;
+
+      const renderGroup = (title, items) => `
+        <div class="space-y-2">
+          <div class="text-xs font-semibold text-[var(--muted-foreground)] uppercase">${title}</div>
+          <div class="space-y-1.5">
+            ${items.map(it => `
+              <label class="flex items-start gap-2.5 p-2.5 rounded-lg bg-[var(--background)] border border-[var(--card-border)] cursor-pointer text-xs">
+                <input type="checkbox" data-cid="${it.id}" ${state[it.id] ? "checked" : ""} class="mt-0.5 accent-[var(--primary)]" />
+                <span class="${state[it.id] ? 'line-through text-[var(--muted-foreground)]' : ''}">${it.text}</span>
+              </label>
+            `).join("")}
+          </div>
+        </div>
+      `;
+
+      const container = document.getElementById("checklist-container");
+      container.innerHTML = renderGroup("上线前检查清单 (Pre-Flight 8 项)", CHECKLIST_DATA.pre)
+                          + renderGroup("上线后验收清单 (Post-Flight 8 项)", CHECKLIST_DATA.post);
+
+      container.querySelectorAll("input[type=checkbox]").forEach(cb => {
+        cb.onchange = () => {
+          const next = loadChecks();
+          next[cb.dataset.cid] = cb.checked;
+          saveChecks(next);
+          renderChecklist();
+        };
+      });
+    }
+    document.getElementById("btn-reset-checks").onclick = () => {
+      saveChecks({});
+      renderChecklist();
+    };
+
+    // =========================================================================
+    // 10. ARCHIFY JSON IR VIEWER & DOWNLOADER
+    // =========================================================================
+    function renderIrTab() {
+      const jsonStr = JSON.stringify(ARCHIFY_IR, null, 2);
+      document.getElementById("ir-json-viewer").textContent = jsonStr;
+      document.getElementById("btn-copy-ir").onclick = (ev) => {
+        navigator.clipboard.writeText(jsonStr);
+        ev.target.textContent = "已复制 JSON ✓";
+        setTimeout(() => { ev.target.textContent = "复制 JSON IR"; }, 1500);
+      };
+      document.getElementById("btn-download-ir").onclick = () => {
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "ddp-archify-ir.json";
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+    }
+
+    // =========================================================================
+    // 11. TOP-LEVEL TAB SWITCHER & INIT
+    // =========================================================================
+    function switchMainTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll(".tab-panel").forEach(p => {
+        p.classList.toggle("hidden", p.id !== `panel-${tab}`);
+      });
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        const active = btn.dataset.tab === tab;
+        btn.style.background = active ? "color-mix(in srgb, var(--primary) 18%, transparent)" : "transparent";
+        btn.style.color = active ? "var(--primary)" : "var(--muted-foreground)";
+      });
+    }
+
+    document.querySelectorAll(".tab-btn").forEach(btn => {
+      btn.onclick = () => switchMainTab(btn.dataset.tab);
+    });
+
+    const themeToggle = document.getElementById("btn-theme-toggle");
+    if (themeToggle) {
+      document.documentElement.setAttribute("data-theme", "dark");
+      themeToggle.onclick = () => {
+        const cur = document.documentElement.getAttribute("data-theme") === "light" ? "dark" : "light";
+        document.documentElement.setAttribute("data-theme", cur);
+      };
+    }
+    switchMainTab("studio");
+    renderDiagram();
+    renderFeasibility();
+    renderRoadmap();
+    buildGeneratedConfig();
+    renderChecklist();
+    renderIrTab();
+  </script>
+</body>
+</html>
