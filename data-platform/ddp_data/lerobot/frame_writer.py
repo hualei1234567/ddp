@@ -110,6 +110,11 @@ def build_frame_features(
             )
     return (
         FrameFeature("observation.state", "float32", (observation_dim,)),
+        # 官方策略（ACT 等）的 env-state 输入键是 ``observation.environment_state``
+        # （lerobot.constants.OBS_ENV_STATE）；只写 observation.state 会被
+        # ``dataset_to_policy_features`` 判为 STATE 而非 ENV，ACT 直接拒绝训练
+        # （V61-011 GATE-B 实测）。两个键同值并存：既有键向后兼容，新键供官方策略消费。
+        FrameFeature("observation.environment_state", "float32", (observation_dim,)),
         FrameFeature("action", "float32", (action_dim,)),
         FrameFeature("timestamp", "float32", (1,)),
         *tuple(video_features),
@@ -252,10 +257,31 @@ def _write_parquet(
         arrays[f"observation.state[{dim}]"] = pa.array(
             [row[dim] for row in observations], type=pa.float32()
         )
+        # 与 observation.state 同值的 env 键（供官方策略消费，见 features 注释）
+        arrays[f"observation.environment_state[{dim}]"] = pa.array(
+            [row[dim] for row in observations], type=pa.float32()
+        )
     for dim in range(action_dim):
         arrays[f"action[{dim}]"] = pa.array(
             [row[dim] for row in actions], type=pa.float32()
         )
+    # **嵌套向量列**（官方策略消费的键形态）：官方 ``save_episode`` 经
+    # HF datasets 写出的就是 list 列——训练时 ``item["observation.state"]``
+    # 直接取整向量；只有扁平的 ``observation.state[0..N]`` 列时该键不存在，
+    # ACT 前向会 KeyError（V61-011 GATE-B 实测）。列名与扁平列不冲突
+    # （``observation.state`` ≠ ``observation.state[0]``）。
+    arrays["observation.state"] = pa.array(
+        [list(row) for row in observations],
+        type=pa.list_(pa.float32()),
+    )
+    arrays["observation.environment_state"] = pa.array(
+        [list(row) for row in observations],
+        type=pa.list_(pa.float32()),
+    )
+    arrays["action"] = pa.array(
+        [list(row) for row in actions],
+        type=pa.list_(pa.float32()),
+    )
 
     table = pa.table(arrays)
     buffer = io.BytesIO()
@@ -359,9 +385,49 @@ def build_stats(
     stats["timestamp"] = _one(timestamps)
     for dim in range(len(observations[0])):
         stats[f"observation.state[{dim}]"] = _one([row[dim] for row in observations])
+        stats[f"observation.environment_state[{dim}]"] = _one(
+            [row[dim] for row in observations]
+        )
     for dim in range(len(actions[0])):
         stats[f"action[{dim}]"] = _one([row[dim] for row in actions])
+    # **整向量级 stats**（官方策略消费的键形态）：官方 ``Normalize`` 按
+    # feature 名（``observation.state`` / ``observation.environment_state`` /
+    # ``action``）取 stats，且要求 ``count`` 形状为 ``(1,)``——0 维标量会被
+    # ``aggregate_stats`` 拒绝（实测 "Number of dimensions must be at least 1"）。
+    # 因此向量级 min/max/mean/std 是**整向量**（逐维数组），count 包成 [n]。
+    obs_matrix = [list(row) for row in observations]
+    act_matrix = [list(row) for row in actions]
+    dim_obs = len(obs_matrix[0])
+    dim_act = len(act_matrix[0])
+    count = [len(obs_matrix)]
+    stats["observation.state"] = _vector_stats(obs_matrix, dim_obs, count)
+    stats["observation.environment_state"] = _vector_stats(obs_matrix, dim_obs, count)
+    stats["action"] = _vector_stats(act_matrix, dim_act, count)
     return stats
+
+
+def _vector_stats(
+    matrix: list[list[float]], dim: int, count: list[int]
+) -> dict[str, object]:
+    """整向量级 stats（对齐官方 ``compute_episode_stats`` 的 2 维口径）。
+
+    官方对 2 维特征（每行一个向量）按 ``axis=0, keepdims=False`` 归约：
+    min/max/mean/std 都是**逐维标量**（shape ``(dim,)``），count 是 ``(1,)``。
+    全部值必须是 numpy 可转的一维结构（0 维标量会被 ``_assert_type_and_shape``
+    拒绝："Number of dimensions must be at least 1"）。
+    """
+    size = len(matrix)
+    means = [sum(row[d] for row in matrix) / size for d in range(dim)]
+    return {
+        "min": [min(row[d] for row in matrix) for d in range(dim)],
+        "max": [max(row[d] for row in matrix) for d in range(dim)],
+        "mean": means,
+        "std": [
+            (sum((row[d] - means[d]) ** 2 for row in matrix) / size) ** 0.5
+            for d in range(dim)
+        ],
+        "count": list(count),
+    }
 
 
 def build_stats_json(
@@ -385,16 +451,29 @@ def build_episodes_stats_jsonl(
     *,
     episode_index: int,
 ) -> bytes:
-    """官方 ``meta/episodes_stats.jsonl``：每个 Episode 一行，值是**数组**形式。"""
+    """官方 ``meta/episodes_stats.jsonl``：每个 Episode 一行。
+
+    官方语义：min/max/mean/std 是「沿 batch 轴归约并 keepdims」的结果——
+    - **标量级** stats（逐维键如 ``observation.state[0]``、``timestamp``）：
+      值是标量，序列化包一层 → ``[v]``（shape ``(1,)``）；
+    - **向量级** stats（``observation.state`` / ``observation.environment_state`` /
+      ``action``）：值已是**逐维数组**，序列化**原样**（再包一层会变成
+      ``(1, dim)``，官方 ``aggregate_stats`` 直接拒绝——实测
+      "Shape of 'count' must be (1)"）。
+    统一规则：**list 原样，标量包一层**。
+    """
+    def _wrap(value: object) -> object:
+        return value if isinstance(value, list) else [value]
+
     row = {
         "episode_index": episode_index,
         "stats": {
             name: {
-                "min": [values["min"]],
-                "max": [values["max"]],
-                "mean": [values["mean"]],
-                "std": [values["std"]],
-                "count": [values["count"]],
+                "min": _wrap(values["min"]),
+                "max": _wrap(values["max"]),
+                "mean": _wrap(values["mean"]),
+                "std": _wrap(values["std"]),
+                "count": _wrap(values["count"]),
             }
             for name, values in stats.items()
         },

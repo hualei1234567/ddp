@@ -1,0 +1,59 @@
+{
+  "gate": "GATE-B",
+  "claim": "真实 Batch 进入官方训练代码、Loss 有效、step 完成、checkpoint 可保存",
+  "dataset": {
+    "root": "/tmp/ddp-frame-dataset",
+    "frames": 59,
+    "codebase_version": "v2.1",
+    "obs_shape": [
+      32
+    ],
+    "act_shape": [
+      7
+    ],
+    "source_sample": "RoboMimic demo_v15.hdf5 (36,699,586 B, sha256 68f2a8cfe2502de1...)"
+  },
+  "training": {
+    "policy": "act",
+    "device": "cpu",
+    "steps": 2,
+    "batch_size": 2,
+    "seed": 42,
+    "wall_seconds": 3.06,
+    "torch": "2.7.1",
+    "python": "3.11.17",
+    "platform": "macOS-27.2.1-arm64-arm-64bit"
+  },
+  "checkpoint_reload": {
+    "from": "/tmp/v61-train-smoke/checkpoints/last/pretrained_model",
+    "success": true,
+    "probe_action_shape": [
+      1,
+      7
+    ],
+    "model_safetensors_sha256": "46bbbabfac48233eeeb4edd72acc567eb60e49e78cfd8d6cf2df1f1056407099"
+  },
+  "artifacts": {
+    "checkpoint_files": [
+      "/tmp/v61-train-smoke/checkpoints/000002/pretrained_model/model.safetensors",
+      "/tmp/v61-train-smoke/checkpoints/000002/training_state/optimizer_state.safetensors",
+      "/tmp/v61-train-smoke/checkpoints/000002/training_state/rng_state.safetensors"
+    ],
+    "checkpoint_count": 3,
+    "preprocessor_files": [],
+    "policy_config_files": [
+      "/tmp/v61-train-smoke/checkpoints/000002/pretrained_model/config.json"
+    ],
+    "training_state_files": []
+  },
+  "code": {
+    "lerobot": "0.3.3",
+    "train_entry": "lerobot.scripts.train.train",
+    "ddp_repo_commit": "c5f78be8fe37090cfe6ee5adf8e6942173da1df3"
+  },
+  "not_claimed": [
+    "训练收敛性（仅 2 步）",
+    "GPU 性能（无 CUDA；MPS 未在本轮使用）",
+    "策略可用性（2 步权重不具备可用性）"
+  ]
+}
