@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.domain.episodes.enums import EpisodeStatus
 from app.domain.episodes.models import Episode, Segmentation
 from app.domain.episodes.state_machines import allowed_episode_actions
+from app.infrastructure.repositories.video_frames import VideoFrameItem, VideoFramePage
 
 _SEGMENTATION_METHOD_PATTERN = "^(MANUAL_TIME_RANGE|RULE)$"
 _QUALITY_STATUS_PATTERN = "^(PASS|WARN|FAIL)$"
@@ -218,6 +219,72 @@ EPISODE_ACTION_MAP: dict[str, str] = {
     "invalidate": "invalidate",
 }
 _PUBLIC_ACTION_BY_DOMAIN = {internal: public for public, internal in EPISODE_ACTION_MAP.items()}
+
+
+class VideoFrameOut(BaseModel):
+    """单帧视频索引只读响应。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    frame_index: int
+    stream_id: str
+    pts_seconds: float | None
+    timestamp_raw: str | None
+    timestamp_normalized: float | None
+    normalize_method: str | None
+    time_base: str | None
+    is_keyframe: bool
+    decode_status: str
+    error_message: str | None
+
+    @classmethod
+    def from_record(cls, record: VideoFrameItem) -> VideoFrameOut:
+        return cls(
+            frame_index=record.frame_index,
+            stream_id=record.stream_id,
+            pts_seconds=(float(record.pts_seconds) if record.pts_seconds is not None else None),
+            timestamp_raw=record.timestamp_raw,
+            timestamp_normalized=(
+                float(record.timestamp_normalized_seconds)
+                if record.timestamp_normalized_seconds is not None
+                else None
+            ),
+            normalize_method=record.normalize_method,
+            time_base=record.time_base,
+            is_keyframe=record.is_keyframe,
+            decode_status=record.decode_status,
+            error_message=record.error_message,
+        )
+
+
+class EpisodeVideoFramesOut(BaseModel):
+    """Episode 视频帧索引分页与汇总响应。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    episode_id: UUID
+    raw_asset_ids: list[UUID]
+    total_frames: int
+    decoded_count: int
+    failed_count: int
+    normalized_count: int
+    limit: int
+    offset: int
+    items: list[VideoFrameOut]
+
+    @classmethod
+    def from_page(cls, page: VideoFramePage) -> EpisodeVideoFramesOut:
+        return cls(
+            episode_id=page.episode_id,
+            raw_asset_ids=list(page.raw_asset_ids),
+            total_frames=page.summary.total_frames,
+            decoded_count=page.summary.decoded_count,
+            failed_count=page.summary.failed_count,
+            normalized_count=page.summary.normalized_count,
+            limit=page.limit,
+            offset=page.offset,
+            items=[VideoFrameOut.from_record(item) for item in page.items],
+        )
 
 
 def _value(value: object) -> str:

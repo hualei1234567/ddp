@@ -16,6 +16,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import CollectionStatusTag from "../../components/collection/CollectionStatusTag";
 import EpisodeActionPanel from "../../components/episodes/EpisodeActionPanel";
 import EpisodeRevisionPanel from "../../components/episodes/EpisodeRevisionPanel";
+import EpisodeVideoFramesPanel from "../../components/episodes/EpisodeVideoFramesPanel";
 import EpisodeQcEvidenceSection from "../../components/quality/EpisodeQcEvidenceSection";
 import EpisodeQualityPanel from "../../components/quality/EpisodeQualityPanel";
 import LineagePanel from "../../components/episodes/LineagePanel";
@@ -370,6 +371,11 @@ function EpisodeDetailBody({
       </Card>
 
       <EpisodeQualityPanel
+        projectId={projectId}
+        episodeId={episode.episode_id}
+      />
+
+      <EpisodeVideoFramesPanel
         projectId={projectId}
         episodeId={episode.episode_id}
       />

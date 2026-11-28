@@ -36,6 +36,7 @@ from app.infrastructure.repositories.raw_assets import SqlRawAssetRepository
 from app.infrastructure.repositories.session_provenance import (
     SqlSessionProvenanceRepository,
 )
+from app.infrastructure.repositories.video_frames import SqlVideoFrameRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,7 @@ class EpisodeUseCases:
     # 上传会话是只读投影节点：图查询以它为根之前，必须先用权威仓储确认
     # "这个会话存在且属于当前项目"，否则跨项目探测会变成存在性探针。
     sessions: SqlSessionProvenanceRepository | None = None
+    video_frames: SqlVideoFrameRepository | None = None
 
 
 def build_lineage_service(session: DbSession) -> LineageService:
@@ -107,6 +109,7 @@ def get_episode_use_cases(
             url_ttl_seconds=settings.download_url_ttl_seconds,
         ),
         sessions=SqlSessionProvenanceRepository(session),
+        video_frames=SqlVideoFrameRepository(session),
     )
 
 

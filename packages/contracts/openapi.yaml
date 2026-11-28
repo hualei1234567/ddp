@@ -734,6 +734,8 @@ paths:
     $ref: "./fragments/paths.stage2.yaml#/episodes"
   /api/v1/projects/{project_id}/episodes/{episode_id}:
     $ref: "./fragments/paths.stage2.yaml#/episodeDetail"
+  /api/v1/projects/{project_id}/episodes/{episode_id}/video-frames:
+    $ref: "./fragments/paths.stage2.yaml#/episodeVideoFrames"
   /api/v1/projects/{project_id}/episodes/{episode_id}/actions/{action}:
     $ref: "./fragments/paths.stage2.yaml#/episodeActions"
   /api/v1/projects/{project_id}/episodes/{episode_id}/revisions:
@@ -1456,6 +1458,8 @@ components:
     EpisodeRevisionCreate: {$ref: "./fragments/schemas.stage2.yaml#/EpisodeRevisionCreate"}
     MaterializedEpisode: {$ref: "./fragments/schemas.stage2.yaml#/MaterializedEpisode"}
     EpisodePage: {$ref: "./fragments/schemas.stage2.yaml#/EpisodePage"}
+    VideoFrame: {$ref: "./fragments/schemas.stage2.yaml#/VideoFrame"}
+    EpisodeVideoFramesResponse: {$ref: "./fragments/schemas.stage2.yaml#/EpisodeVideoFramesResponse"}
     IngestionJobType: {$ref: "./fragments/schemas.stage2.yaml#/IngestionJobType"}
     IngestionJobStatus: {$ref: "./fragments/schemas.stage2.yaml#/IngestionJobStatus"}
     IngestionJob: {$ref: "./fragments/schemas.stage2.yaml#/IngestionJob"}
