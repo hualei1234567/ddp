@@ -1298,9 +1298,7 @@ def _register_source(client, project_id: object, **overrides: object) -> dict:
 
 
 def _post_import(client, project_id: object, source_id: str, **overrides: object):
-    return client.post(
-        _url(project_id, f"/{source_id}/imports"), json=_import_payload(**overrides)
-    )
+    return client.post(_url(project_id, f"/{source_id}/imports"), json=_import_payload(**overrides))
 
 
 def test_gated_source_import_requires_licence_acknowledgement(api_db) -> None:

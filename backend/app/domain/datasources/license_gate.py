@@ -108,8 +108,7 @@ def evaluate_license_gate(
     elif LicenseGateReason.RESTRICTED_LICENSE in reasons:
         parts.append(f"数据源许可为 {normalized_license}，不属于宽松许可白名单")
     message = (
-        "；".join(parts)
-        + "。导入前请核对数据集卡片的许可与访问条件；确认后请在请求中显式传 "
+        "；".join(parts) + "。导入前请核对数据集卡片的许可与访问条件；确认后请在请求中显式传 "
         "license_acknowledged=true（该确认会写入审计留痕）。"
     )
     return LicenseGateDecision(

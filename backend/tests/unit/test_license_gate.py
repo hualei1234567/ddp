@@ -36,9 +36,7 @@ def test_permissive_license_without_gate_is_allowed(license_name: str) -> None:
 
 
 def test_gated_access_requires_acknowledgement() -> None:
-    decision = evaluate_license_gate(
-        license_name="mit", access_condition="GATED", is_gated=True
-    )
+    decision = evaluate_license_gate(license_name="mit", access_condition="GATED", is_gated=True)
 
     assert decision.requires_acknowledgement is True
     assert decision.reasons == (LicenseGateReason.GATED_ACCESS,)
