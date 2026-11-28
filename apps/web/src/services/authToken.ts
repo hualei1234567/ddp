@@ -26,8 +26,15 @@ export function readAccessToken(): string | null {
   }
 }
 
+export function normalizeBearerToken(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^bearer(?:\s+|$)/i, "")
+    .trim();
+}
+
 export function storeAccessToken(token: string): string | null {
-  const trimmed = token.trim();
+  const trimmed = normalizeBearerToken(token);
   const storage = session();
   if (trimmed === "" || !storage) {
     return null;

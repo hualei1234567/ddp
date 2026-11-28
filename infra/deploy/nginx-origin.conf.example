@@ -1,0 +1,67 @@
+# 公网 VPS Nginx 反向代理配置模板 (/etc/nginx/conf.d/ddp-online.conf)
+#
+# 子域分工：
+# 1. api.ddp.online（Cloudflare DNS 开启橙云 Proxied） -> FastAPI 127.0.0.1:8000
+# 2. s3.ddp.online （Cloudflare DNS 设为灰云 DNS Only + Certbot 证书） -> MinIO 127.0.0.1:9000
+#    为什么 s3 必须灰云直连：规避 Cloudflare 免费版单次请求 100MB 限制及大体积非网页缓存条款限制，
+#    让 >10GB 具身轨迹分片直传跑满 VPS 带宽。
+
+server {
+    listen 443 ssl http2;
+    server_name api.ddp.online;
+
+    ssl_certificate     /etc/letsencrypt/live/ddp.online/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ddp.online/privkey.pem;
+
+    client_max_body_size 32m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name s3.ddp.online;
+
+    ssl_certificate     /etc/letsencrypt/live/s3.ddp.online/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/s3.ddp.online/privkey.pem;
+
+    # MinIO S3 SigV4 预签名直传关键参数：保留原始头、关闭请求缓冲、放宽分片体积
+    ignore_invalid_headers off;
+    client_max_body_size 512m;
+    proxy_buffering off;
+    proxy_request_buffering off;
+
+    location / {
+        # 浏览器跨域分片上传 (https://www.ddp.online -> https://s3.ddp.online) 预检放行
+        if ($request_method = OPTIONS) {
+            add_header Access-Control-Allow-Origin "https://www.ddp.online" always;
+            add_header Access-Control-Allow-Methods "GET, PUT, HEAD, POST, DELETE, OPTIONS" always;
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, Content-Length, x-amz-checksum-sha256, x-amz-content-sha256, x-amz-date, x-amz-user-agent" always;
+            add_header Access-Control-Expose-Headers "ETag, x-amz-checksum-sha256" always;
+            add_header Access-Control-Max-Age 3600 always;
+            return 204;
+        }
+
+        add_header Access-Control-Allow-Origin "https://www.ddp.online" always;
+        add_header Access-Control-Expose-Headers "ETag, x-amz-checksum-sha256" always;
+
+        # Host 必须与 boto3 签发预签名 URL 时的域名严格一致（s3.ddp.online）
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_connect_timeout 300;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        chunked_transfer_encoding off;
+
+        proxy_pass http://127.0.0.1:9000;
+    }
+}
