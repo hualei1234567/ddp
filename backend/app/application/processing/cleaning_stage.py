@@ -38,6 +38,12 @@ from app.application.processing.stages import (
 )
 from app.application.processing.stream_extraction_stage import STREAM_SCHEMA_VERSION
 from app.domain.processing.artifacts import ProcessingArtifact, ProcessingArtifactKind
+from app.domain.processing.cleaning_actions import (
+    TRANSFORM_SCHEMA_VERSION,
+    CleaningActionResult,
+    TransformedSlice,
+    apply_cleaning_actions,
+)
 from app.domain.processing.cleaning_rules import (
     CLEANING_RULESET_VERSION,
     DEFAULT_CLEANING_RULESET,
@@ -68,6 +74,11 @@ def cleaning_report_key(project_id: UUID, run_id: UUID) -> str:
     return f"processing-run/{project_id}/{run_id}/cleaning/report.json"
 
 
+def cleaning_transformed_key(project_id: UUID, run_id: UUID, index: int) -> str:
+    """服务端生成的衍生 TRANSFORM 流产物 Key（不覆盖原始资产与上游流）。"""
+    return f"processing-run/{project_id}/{run_id}/cleaning/transformed-{index:03d}.ndjson"
+
+
 class DataCleaningHandler:
     """消费同一运行的 ``STREAM_EXTRACTION`` 产物并生成确定性清洗报告。"""
 
@@ -80,6 +91,8 @@ class DataCleaningHandler:
         ruleset_version: str = CLEANING_RULESET_VERSION,
         thresholds: CleaningThresholds = DEFAULT_CLEANING_THRESHOLDS,
         disabled_rule_ids: AbstractSet[str] | Sequence[str] = (),
+        quarantine_rule_ids: AbstractSet[str] | Sequence[str] = (),
+        transform_rule_ids: AbstractSet[str] | Sequence[str] = (),
         max_stream_artifact_bytes: int = DEFAULT_MAX_STREAM_ARTIFACT_BYTES,
         max_report_bytes: int = DEFAULT_MAX_CLEANING_REPORT_BYTES,
     ) -> None:
@@ -91,6 +104,8 @@ class DataCleaningHandler:
         self._ruleset_version = ruleset_version
         self._thresholds = thresholds
         self._disabled_rule_ids = frozenset(disabled_rule_ids)
+        self._quarantine_rule_ids = frozenset(quarantine_rule_ids)
+        self._transform_rule_ids = frozenset(transform_rule_ids)
         self._max_stream_artifact_bytes = max_stream_artifact_bytes
         self._max_report_bytes = max_report_bytes
 
@@ -111,21 +126,39 @@ class DataCleaningHandler:
                 thresholds=self._thresholds,
                 disabled_rule_ids=self._disabled_rule_ids,
             )
+            action_result = apply_cleaning_actions(
+                slices,
+                evaluation,
+                thresholds=self._thresholds,
+                quarantine_rule_ids=self._quarantine_rule_ids,
+                transform_rule_ids=self._transform_rule_ids,
+            )
         except DomainValidationError as exc:
             raise StageFailure("cleaning_config_invalid", str(exc), retryable=False) from exc
 
+        transformed_artifacts = self._write_transformed_slices(
+            context.run.project_id, context.run.run_id, action_result.transformed_slices
+        )
         report_ref = cleaning_report_key(context.run.project_id, context.run.run_id)
-        document = self._build_report_document(context.run.run_id, stream_artifacts, evaluation)
-        artifact = self._write_report(report_ref, document, stream_artifacts)
+        document = self._build_report_document(
+            context.run.run_id,
+            stream_artifacts,
+            evaluation,
+            action_result=action_result,
+            transformed_refs=[item.object_key for item in transformed_artifacts],
+        )
+        report_artifact = self._write_report(report_ref, document, stream_artifacts)
+        all_artifacts = (report_artifact, *transformed_artifacts)
         return StageOutcome(
             status=ProcessingStepStatus.SUCCEEDED.value,
             log_summary=(
                 f"确定性清洗完成（规则集 {evaluation.ruleset_version}）："
                 f"评估 {len(slices)} 个流产物，启用规则 {len(evaluation.evaluated_rule_ids)} 条，"
-                f"命中 {len(evaluation.hits)} 条，原始资产零改动"
+                f"命中 {len(evaluation.hits)} 条，隔离 {len(action_result.quarantined)} 个，"
+                f"衍生变换 {len(transformed_artifacts)} 个，原始资产零改动"
             ),
-            output_refs=(report_ref,),
-            artifacts=(artifact,),
+            output_refs=tuple(item.object_key for item in all_artifacts),
+            artifacts=all_artifacts,
         )
 
     def _select_stream_artifacts(self, context: StageContext) -> list[ProcessingArtifact]:
@@ -198,7 +231,15 @@ class DataCleaningHandler:
         run_id: UUID,
         stream_artifacts: Sequence[ProcessingArtifact],
         evaluation,
+        *,
+        action_result: CleaningActionResult,
+        transformed_refs: Sequence[str],
     ) -> dict[str, object]:
+        payload = evaluation.to_payload()
+        # 若衍生动作实际修改了衍生数据，如实上浮标志（原始资产始终 False）。
+        payload["derived_data_mutated"] = bool(
+            payload.get("derived_data_mutated") or action_result.derived_data_mutated
+        )
         return {
             "schema_version": CLEANING_REPORT_SCHEMA_VERSION,
             "run_id": str(run_id),
@@ -211,8 +252,92 @@ class DataCleaningHandler:
                 for item in stream_artifacts
             ],
             "evaluation_sha256": evaluation.deterministic_sha256(),
-            **evaluation.to_payload(),
+            "quarantined_targets": [item.to_dict() for item in action_result.quarantined],
+            "transformed_artifacts": [
+                {
+                    "object_key": ref,
+                    "source_target_ref": slice_item.target_ref,
+                    "source_ref": slice_item.source_ref,
+                    "provenance": slice_item.transform_provenance,
+                }
+                for ref, slice_item in zip(
+                    transformed_refs, action_result.transformed_slices, strict=True
+                )
+            ],
+            **payload,
         }
+
+    def _write_transformed_slices(
+        self,
+        project_id: UUID,
+        run_id: UUID,
+        transformed_slices: Sequence[TransformedSlice],
+    ) -> list[StageArtifact]:
+        artifacts: list[StageArtifact] = []
+        for idx, item in enumerate(transformed_slices):
+            ref = cleaning_transformed_key(project_id, run_id, idx)
+            lines = [
+                json.dumps(
+                    {
+                        "_meta": {
+                            "schema_version": TRANSFORM_SCHEMA_VERSION,
+                            "source_target_ref": item.target_ref,
+                            "provenance": item.transform_provenance,
+                        }
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+            ]
+            for obs in item.observations:
+                lines.append(
+                    json.dumps(
+                        {
+                            "type": "observation",
+                            "observation_id": obs.record_id,
+                            "frame_index": obs.frame_index,
+                            "timestamp_ns": obs.timestamp_ns,
+                            "values": list(obs.values),
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                )
+            for act in item.actions:
+                lines.append(
+                    json.dumps(
+                        {
+                            "type": "action",
+                            "action_id": act.record_id,
+                            "frame_index": act.frame_index,
+                            "timestamp_ns": act.timestamp_ns,
+                            "values": list(act.values),
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                )
+            data = ("\n".join(lines) + "\n").encode("utf-8")
+            try:
+                self._artifacts.put_bytes(ref, data)
+            except ObjectInspectionError as exc:
+                raise StageFailure(
+                    "object_storage_unavailable",
+                    "对象存储不可用，无法写入衍生清洗流产物",
+                    retryable=True,
+                ) from exc
+            artifacts.append(
+                StageArtifact(
+                    kind=ProcessingArtifactKind.CANONICAL,
+                    object_key=ref,
+                    schema_version=TRANSFORM_SCHEMA_VERSION,
+                    content_type="application/x-ndjson",
+                    size_bytes=len(data),
+                    checksum_sha256=hashlib.sha256(data).hexdigest(),
+                    source_ref=item.source_ref,
+                )
+            )
+        return artifacts
 
     def _write_report(
         self,
@@ -341,4 +466,5 @@ __all__ = [
     "DEFAULT_MAX_STREAM_ARTIFACT_BYTES",
     "DataCleaningHandler",
     "cleaning_report_key",
+    "cleaning_transformed_key",
 ]

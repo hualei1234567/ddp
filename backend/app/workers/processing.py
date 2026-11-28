@@ -373,11 +373,13 @@ class ProcessingRunWorker:
             self._artifacts,
             max_hdf5_bytes=self._settings.processing_metadata_max_object_bytes,
         )
-        # V51-006：消费当前运行 STREAM_EXTRACTION 产物执行确定性 FLAG 清洗，
-        # 只生成版本化报告，不篡改原始资产与上游流产物。
+        # V51-006 + V61-015/016：消费当前运行 STREAM_EXTRACTION 产物执行确定性
+        # 清洗；隔离/变换动作按部署配置显式启用，默认全空保持 FLAG-only 行为。
         data_cleaning = DataCleaningHandler(
             artifact_catalog,
             self._artifacts,
+            quarantine_rule_ids=self._settings.processing_cleaning_quarantine_rule_ids,
+            transform_rule_ids=self._settings.processing_cleaning_transform_rule_ids,
         )
         # V6.1 视频链（V61-005/007）：ffprobe 逐帧解码 → video_frames 落库，
         # 再由 TIMESTAMP_NORMALIZE 填归一化列。两个阶段都真实接线——
